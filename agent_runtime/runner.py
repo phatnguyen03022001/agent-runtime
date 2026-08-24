@@ -114,6 +114,7 @@ def _terminal_state(
     verification_ok = bool(
         exit_code == 0
         and not timed_out
+        and failure_kind is None
         and all(post.values())
     )
     if timed_out:
@@ -302,8 +303,8 @@ class AgentRuntime:
     def get_head(self, project: str) -> dict[str, Any]:
         try:
             profile = self._profile(project)
-        except ConfigError as exc:
-            return {"ok": False, "project": project, "error": str(exc)}
+        except ConfigError:
+            return {"ok": False, "error": "Unknown project ID."}
         store = StateStore(self.config.state_dir, profile.project_id)
         state = inspect_repository(profile)
         busy, lock_error = _lock_busy(store)
@@ -320,30 +321,30 @@ class AgentRuntime:
             "busy": busy,
             "ok": state.get("ok") is True and lock_error is None,
         }
-        if state.get("error"):
-            result["error"] = state["error"]
-        if lock_error:
-            result["lock_error"] = lock_error
+        if state.get("ok") is not True:
+            result["error"] = state.get("error", "Repository inspection failed.")
+        elif lock_error:
+            result["error"] = "Runtime state unavailable."
         return result
 
     def sync(self, project: str) -> dict[str, Any]:
         try:
             profile = self._profile(project)
-        except ConfigError as exc:
-            return {"ok": False, "busy": False, "project": project, "error": str(exc)}
+        except ConfigError:
+            return {"ok": False, "busy": False, "error": "Unknown project ID."}
         store = StateStore(self.config.state_dir, profile.project_id)
         try:
             lock_fd = _try_acquire_lock(store)
-        except OSError as exc:
-            return {"ok": False, "busy": False, "error": f"Unable to acquire project lock: {exc}"}
+        except OSError:
+            return {"ok": False, "busy": False, "error": "Runtime state unavailable."}
         if lock_fd is None:
             return {"ok": False, "busy": True, "error": "Project is busy with an active operation."}
         try:
             try:
                 recovery = _recover_stale_locked(store, profile)
                 state = sync_checkout(profile)
-            except (GitError, OSError, ValueError) as exc:
-                return {"ok": False, "busy": False, "error": str(exc)}
+            except (GitError, OSError, ValueError):
+                return {"ok": False, "busy": False, "error": "Repository synchronization failed."}
             result = {
                 "ok": True,
                 "busy": False,
@@ -365,13 +366,13 @@ class AgentRuntime:
     def run_verify(self, project: str) -> dict[str, Any]:
         try:
             profile = self._profile(project)
-        except ConfigError as exc:
-            return {"ok": False, "accepted": False, "busy": False, "project": project, "error": str(exc)}
+        except ConfigError:
+            return {"ok": False, "accepted": False, "busy": False, "error": "Unknown project ID."}
         store = StateStore(self.config.state_dir, profile.project_id)
         try:
             lock_fd = _try_acquire_lock(store)
-        except OSError as exc:
-            return {"ok": False, "accepted": False, "busy": False, "error": f"Unable to acquire project lock: {exc}"}
+        except OSError:
+            return {"ok": False, "accepted": False, "busy": False, "error": "Runtime state unavailable."}
         if lock_fd is None:
             return {"ok": False, "accepted": False, "busy": True, "error": "Project is busy with an active operation."}
 
@@ -379,12 +380,17 @@ class AgentRuntime:
         try:
             try:
                 recovery = _recover_stale_locked(store, profile)
-            except (OSError, ValueError) as exc:
-                return {"ok": False, "accepted": False, "busy": False, "error": f"Unable to recover stale state: {exc}"}
+            except (OSError, ValueError):
+                return {"ok": False, "accepted": False, "busy": False, "error": "Unable to recover stale verification state."}
 
             before = inspect_repository(profile)
             if not before.get("ok"):
-                return {"ok": False, "accepted": False, "busy": False, "error": before.get("error", "Repository validation failed.")}
+                return {
+                    "ok": False,
+                    "accepted": False,
+                    "busy": False,
+                    "error": before.get("error", "Repository inspection failed."),
+                }
             if before.get("current_branch") != profile.branch:
                 return {"ok": False, "accepted": False, "busy": False, "error": "Checkout is on the wrong configured branch."}
             if before.get("clean") is not True:
@@ -421,7 +427,7 @@ class AgentRuntime:
                     "head": head,
                     "verification_ok": False,
                     "failure_kind": "state_or_log_prepare_failed",
-                    "error": str(exc),
+                    "error": "Unable to initialize verification state.",
                 }
 
             try:
@@ -469,7 +475,7 @@ class AgentRuntime:
                     store.commit_terminal_with_log(terminal)
                 except (OSError, ValueError):
                     pass
-                return {"ok": False, "accepted": False, "busy": False, "status": "LAUNCH_FAILED", "error": str(exc)}
+                return {"ok": False, "accepted": False, "busy": False, "status": "LAUNCH_FAILED", "error": "Unable to launch verification worker."}
 
             try:
                 threading.Thread(
@@ -507,8 +513,8 @@ class AgentRuntime:
     def get_last_log(self, project: str) -> dict[str, Any]:
         try:
             profile = self._profile(project)
-        except ConfigError as exc:
-            return {"ok": False, "project": project, "error": str(exc), "status": "UNKNOWN", "verification_ok": False}
+        except ConfigError:
+            return {"ok": False, "error": "Unknown project ID.", "status": "UNKNOWN", "verification_ok": False}
         store = StateStore(self.config.state_dir, profile.project_id)
         state, state_error = store.read_state()
         recorded = state.get("status") if state else None
@@ -578,10 +584,8 @@ class AgentRuntime:
             result["recorded_status"] = recorded
         if busy is not None:
             result["busy"] = busy
-        if state_error:
-            result["state_error"] = state_error
-        if lock_error:
-            result["lock_error"] = lock_error
+        if state_error or lock_error:
+            result["error"] = "Runtime state unavailable."
         if state is None and log_result is None:
             result["error"] = "No readable verification state or log exists yet."
         return result
@@ -716,6 +720,7 @@ def _run_verify_worker(
             return 70
 
         timed_out = False
+        process_group_failure: str | None = None
         try:
             exit_code = verify_process.wait(timeout=profile.timeout_seconds)
         except subprocess.TimeoutExpired:
@@ -730,6 +735,16 @@ def _run_verify_worker(
                 pass
             _terminate_process_group(verify_process, pgid)
             exit_code = 124
+        else:
+            if _process_group_exists(pgid):
+                process_group_failure = "verifier_process_group_survived"
+                try:
+                    log_handle.write(b"\nVERIFY PROCESS GROUP SURVIVED LEADER EXIT\n")
+                    log_handle.flush()
+                    os.fsync(log_handle.fileno())
+                except OSError:
+                    pass
+                _terminate_process_group(verify_process, pgid)
 
         log_handle.flush()
         os.fsync(log_handle.fileno())
@@ -740,6 +755,7 @@ def _run_verify_worker(
             expected_head=expected_head,
             exit_code=exit_code,
             timed_out=timed_out,
+            failure_kind=process_group_failure,
         )
         store.commit_terminal_with_log(terminal)
         return 0 if terminal.get("status") == "PASS" else 1

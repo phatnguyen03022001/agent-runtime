@@ -74,6 +74,10 @@ def _require_absolute_path(value: Any, field: str) -> Path:
     return path.resolve(strict=False)
 
 
+def _paths_overlap(first: Path, second: Path) -> bool:
+    return first == second or first in second.parents or second in first.parents
+
+
 def _parse_profile(project_id: str, raw: Any) -> ProjectProfile:
     if not _PROJECT_ID_RE.fullmatch(project_id):
         raise ConfigError(
@@ -136,8 +140,10 @@ def load_config(path: str | Path) -> RuntimeConfig:
     try:
         with config_path.open("rb") as handle:
             raw = tomllib.load(handle)
-    except (OSError, tomllib.TOMLDecodeError) as exc:
-        raise ConfigError(f"Unable to load runtime config: {type(exc).__name__}: {exc}") from exc
+    except OSError as exc:
+        raise ConfigError("Unable to load runtime config.") from exc
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigError("Malformed runtime config.") from exc
 
     if not isinstance(raw, dict):
         raise ConfigError("Runtime config root must be a TOML table.")
@@ -159,4 +165,21 @@ def load_config(path: str | Path) -> RuntimeConfig:
         project_id: _parse_profile(project_id, profile_raw)
         for project_id, profile_raw in projects_raw.items()
     }
+
+    folded_ids: set[str] = set()
+    for project_id in projects:
+        folded = project_id.casefold()
+        if folded in folded_ids:
+            raise ConfigError("Project IDs must be unique when case-folded.")
+        folded_ids.add(folded)
+
+    profiles = list(projects.values())
+    for profile in profiles:
+        if _paths_overlap(state_dir, profile.checkout):
+            raise ConfigError("state_dir must not overlap a project checkout.")
+    for index, first in enumerate(profiles):
+        for second in profiles[index + 1 :]:
+            if _paths_overlap(first.checkout, second.checkout):
+                raise ConfigError("Project checkouts must not overlap.")
+
     return RuntimeConfig(path=config_path, state_dir=state_dir, projects=projects)

@@ -95,12 +95,17 @@ def inspect_repository(profile: ProjectProfile, *, require_remote_identity: bool
         if require_remote_identity:
             validate_remote_identity(profile)
     except GitError as exc:
+        remote_mismatch = "remote identity" in str(exc).lower()
         return {
             "ok": False,
             "repository": profile.repository,
             "configured_branch": profile.branch,
-            "error": str(exc),
-            "remote_identity_ok": False if "remote identity" in str(exc).lower() else None,
+            "error": (
+                "Repository remote identity validation failed."
+                if remote_mismatch
+                else "Repository inspection failed."
+            ),
+            "remote_identity_ok": False if remote_mismatch else None,
         }
 
     return {
@@ -123,7 +128,7 @@ def sync_checkout(profile: ProjectProfile) -> dict[str, Any]:
     validate_remote_identity(profile)
     commands = [
         (["fetch", profile.remote, profile.branch, "--prune"], GIT_FETCH_TIMEOUT_SECONDS),
-        (["switch", profile.branch], GIT_LOCAL_TIMEOUT_SECONDS),
+        (["switch", "--no-guess", profile.branch], GIT_LOCAL_TIMEOUT_SECONDS),
         (["reset", "--hard", f"{profile.remote}/{profile.branch}"], GIT_LOCAL_TIMEOUT_SECONDS),
         (["clean", "-fd"], GIT_LOCAL_TIMEOUT_SECONDS),
     ]
