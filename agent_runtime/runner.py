@@ -16,10 +16,70 @@ from typing import Any
 
 from .config import ConfigError, ProjectProfile, RuntimeConfig, load_config
 from .git_ops import GitError, inspect_repository, sync_checkout
-from .state import ACTIVE_STATES, TERMINAL_STATES, STATE_VERSION, StateStore
+from .state import (
+    ACTIVE_STATES,
+    MAX_VERIFY_LOG_BYTES,
+    TERMINAL_STATES,
+    STATE_VERSION,
+    StateStore,
+)
 
 VERIFY_TERMINATION_GRACE_SECONDS = 5.0
+VERIFY_LOG_READ_CHUNK_BYTES = 64 * 1024
+VERIFY_LOG_LIMIT_MARKER = b"\nVERIFY LOG LIMIT EXCEEDED\n"
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _verifier_environment() -> dict[str, str]:
+    return {"PATH": os.environ.get("PATH", os.defpath)}
+
+
+def _drain_verify_output(
+    pipe: Any,
+    log_handle: Any,
+    store: StateStore,
+    overflow_event: threading.Event,
+    write_error_event: threading.Event,
+) -> None:
+    discard = False
+    try:
+        while True:
+            chunk = pipe.read(VERIFY_LOG_READ_CHUNK_BYTES)
+            if not chunk:
+                break
+            if discard:
+                continue
+            try:
+                written = store.append_log_bytes(
+                    log_handle,
+                    chunk,
+                    reserve_bytes=len(VERIFY_LOG_LIMIT_MARKER),
+                )
+            except (OSError, ValueError):
+                write_error_event.set()
+                discard = True
+                continue
+            if written < len(chunk):
+                overflow_event.set()
+                discard = True
+    except OSError:
+        write_error_event.set()
+    finally:
+        try:
+            pipe.close()
+        except Exception:
+            pass
+
+
+def _join_verify_reader(reader: threading.Thread, pipe: Any) -> bool:
+    reader.join(timeout=VERIFY_TERMINATION_GRACE_SECONDS)
+    if reader.is_alive():
+        try:
+            pipe.close()
+        except Exception:
+            pass
+        reader.join(timeout=VERIFY_TERMINATION_GRACE_SECONDS)
+    return not reader.is_alive()
 
 
 def _utc_now() -> str:
@@ -263,7 +323,7 @@ def _process_group_exists(pgid: int) -> bool:
         return True
 
 
-def _terminate_process_group(process: subprocess.Popen[Any], pgid: int) -> None:
+def _terminate_process_group(process: subprocess.Popen[Any], pgid: int) -> bool:
     try:
         os.killpg(pgid, signal.SIGTERM)
     except ProcessLookupError:
@@ -279,7 +339,17 @@ def _terminate_process_group(process: subprocess.Popen[Any], pgid: int) -> None:
             os.killpg(pgid, signal.SIGKILL)
         except ProcessLookupError:
             pass
-    process.wait()
+        kill_deadline = time.monotonic() + VERIFY_TERMINATION_GRACE_SECONDS
+        while time.monotonic() < kill_deadline:
+            process.poll()
+            if not _process_group_exists(pgid):
+                break
+            time.sleep(0.05)
+    try:
+        process.wait(timeout=VERIFY_TERMINATION_GRACE_SECONDS)
+    except subprocess.TimeoutExpired:
+        pass
+    return not _process_group_exists(pgid)
 
 
 def _reap_detached_worker(process: subprocess.Popen[Any]) -> None:
@@ -519,7 +589,7 @@ class AgentRuntime:
         state, state_error = store.read_state()
         recorded = state.get("status") if state else None
         effective = recorded
-        verification_ok = state.get("verification_ok") if state else None
+        verification_ok = state.get("verification_ok") if state else (False if state_error else None)
         busy: bool | None = None
         lock_error: str | None = None
         if recorded in ACTIVE_STATES:
@@ -529,6 +599,7 @@ class AgentRuntime:
                 verification_ok = False
 
         log_result: dict[str, Any] | None = None
+        required_pass_log_unreadable = False
         if state is not None and state.get("log_run_id") == state.get("run_id"):
             if recorded in ACTIVE_STATES and state.get("log_finalized") is not True:
                 path = store.inprogress_log_path
@@ -540,8 +611,11 @@ class AgentRuntime:
                 try:
                     log_result = store.read_log_tail(path)
                 except FileNotFoundError:
-                    pass
+                    if recorded == "PASS":
+                        required_pass_log_unreadable = True
                 except OSError as exc:
+                    if recorded == "PASS":
+                        required_pass_log_unreadable = True
                     lock_error = lock_error or f"Unable to read log: {type(exc).__name__}: {exc}"
         elif state is None:
             for path in (store.inprogress_log_path, store.log_path):
@@ -554,8 +628,14 @@ class AgentRuntime:
                 except OSError:
                     continue
 
+        if recorded == "PASS" and log_result is None:
+            required_pass_log_unreadable = True
+        if required_pass_log_unreadable:
+            effective = "INTERRUPTED"
+            verification_ok = False
+
         result: dict[str, Any] = {
-            "ok": state_error is None and lock_error is None,
+            "ok": state_error is None and lock_error is None and not required_pass_log_unreadable,
             "project": profile.project_id,
             "status": effective or "UNKNOWN",
             "verification_ok": verification_ok,
@@ -584,7 +664,7 @@ class AgentRuntime:
             result["recorded_status"] = recorded
         if busy is not None:
             result["busy"] = busy
-        if state_error or lock_error:
+        if state_error or lock_error or required_pass_log_unreadable:
             result["error"] = "Runtime state unavailable."
         if state is None and log_result is None:
             result["error"] = "No readable verification state or log exists yet."
@@ -677,22 +757,49 @@ def _run_verify_worker(
         return 70
 
     verify_process: subprocess.Popen[Any] | None = None
+    owned_verify_pgid: int | None = None
+    reader_thread: threading.Thread | None = None
+    verify_pipe: Any | None = None
+    overflow_event = threading.Event()
+    write_error_event = threading.Event()
     try:
         try:
             verify_process = subprocess.Popen(
                 list(profile.verify_argv),
                 cwd=profile.checkout,
                 stdin=subprocess.DEVNULL,
-                stdout=log_handle,
+                stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                env=os.environ.copy(),
+                env=_verifier_environment(),
                 close_fds=True,
                 pass_fds=(lock_fd,),
                 start_new_session=True,
+                bufsize=0,
             )
-        except (OSError, ValueError) as exc:
+            owned_verify_pgid = verify_process.pid
+            verify_pipe = verify_process.stdout
+            if verify_pipe is None:
+                raise OSError("Verifier stdout pipe was not created.")
+            reader_thread = threading.Thread(
+                target=_drain_verify_output,
+                args=(verify_pipe, log_handle, store, overflow_event, write_error_event),
+                name="verify-log-reader",
+                daemon=True,
+            )
+            reader_thread.start()
+        except (OSError, ValueError, RuntimeError) as exc:
             try:
-                log_handle.write(f"\nVERIFY LAUNCH FAILED: {type(exc).__name__}: {exc}\n".encode("utf-8", errors="replace"))
+                if verify_process is not None and owned_verify_pgid is not None:
+                    if _terminate_process_group(verify_process, owned_verify_pgid):
+                        owned_verify_pgid = None
+                if reader_thread is not None and verify_pipe is not None:
+                    _join_verify_reader(reader_thread, verify_pipe)
+                store.append_log_bytes(
+                    log_handle,
+                    f"\nVERIFY LAUNCH FAILED: {type(exc).__name__}: {exc}\n".encode(
+                        "utf-8", errors="replace"
+                    ),
+                )
                 log_handle.flush()
                 os.fsync(log_handle.fileno())
                 log_handle.close()
@@ -721,30 +828,62 @@ def _run_verify_worker(
 
         timed_out = False
         process_group_failure: str | None = None
-        try:
-            exit_code = verify_process.wait(timeout=profile.timeout_seconds)
-        except subprocess.TimeoutExpired:
-            timed_out = True
+        exit_code: int | None = None
+        deadline = time.monotonic() + profile.timeout_seconds
+        while exit_code is None:
+            if overflow_event.is_set():
+                process_group_failure = "verify_log_limit_exceeded"
+                if _terminate_process_group(verify_process, pgid):
+                    owned_verify_pgid = None
+                exit_code = verify_process.returncode
+                if exit_code is None:
+                    exit_code = 1
+                break
+            if write_error_event.is_set():
+                if _terminate_process_group(verify_process, pgid):
+                    owned_verify_pgid = None
+                exit_code = verify_process.returncode
+                break
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                if overflow_event.is_set():
+                    continue
+                timed_out = True
+                if _terminate_process_group(verify_process, pgid):
+                    owned_verify_pgid = None
+                exit_code = 124
+                break
             try:
-                log_handle.write(
-                    f"\nVERIFY TIMED OUT AFTER {profile.timeout_seconds} SECONDS\n".encode("utf-8")
-                )
-                log_handle.flush()
-                os.fsync(log_handle.fileno())
-            except OSError:
-                pass
-            _terminate_process_group(verify_process, pgid)
-            exit_code = 124
-        else:
-            if _process_group_exists(pgid):
+                exit_code = verify_process.wait(timeout=min(0.05, remaining))
+            except subprocess.TimeoutExpired:
+                continue
+
+        if process_group_failure != "verify_log_limit_exceeded" and _process_group_exists(pgid):
+            if overflow_event.is_set():
+                process_group_failure = "verify_log_limit_exceeded"
+            else:
                 process_group_failure = "verifier_process_group_survived"
-                try:
-                    log_handle.write(b"\nVERIFY PROCESS GROUP SURVIVED LEADER EXIT\n")
-                    log_handle.flush()
-                    os.fsync(log_handle.fileno())
-                except OSError:
-                    pass
-                _terminate_process_group(verify_process, pgid)
+            if _terminate_process_group(verify_process, pgid):
+                owned_verify_pgid = None
+        elif not _process_group_exists(pgid):
+            owned_verify_pgid = None
+
+        if reader_thread is None or verify_pipe is None or not _join_verify_reader(reader_thread, verify_pipe):
+            return 70
+        if overflow_event.is_set():
+            timed_out = False
+            process_group_failure = "verify_log_limit_exceeded"
+            store.append_log_bytes(log_handle, VERIFY_LOG_LIMIT_MARKER)
+        elif timed_out:
+            store.append_log_bytes(
+                log_handle,
+                f"\nVERIFY TIMED OUT AFTER {profile.timeout_seconds} SECONDS\n".encode("utf-8"),
+            )
+        elif process_group_failure == "verifier_process_group_survived":
+            store.append_log_bytes(log_handle, b"\nVERIFY PROCESS GROUP SURVIVED LEADER EXIT\n")
+
+        if write_error_event.is_set():
+            return 70
 
         log_handle.flush()
         os.fsync(log_handle.fileno())
@@ -762,6 +901,11 @@ def _run_verify_worker(
     except (OSError, ValueError):
         return 70
     finally:
+        if verify_process is not None and owned_verify_pgid is not None:
+            if _terminate_process_group(verify_process, owned_verify_pgid):
+                owned_verify_pgid = None
+        if reader_thread is not None and verify_pipe is not None and reader_thread.is_alive():
+            _join_verify_reader(reader_thread, verify_pipe)
         try:
             if not log_handle.closed:
                 log_handle.close()

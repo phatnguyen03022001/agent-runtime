@@ -77,6 +77,8 @@ Tracked changes and non-ignored untracked files are discarded. Ignored files sur
 
 The verifier argv comes only from trusted configuration and is executed as a subprocess argv array, never through `shell=True`. The verifier runs in a POSIX process group with a bounded timeout. On timeout, the whole verifier process group is terminated before terminal state is finalized.
 
+The verifier is trusted target executable code; `agent-runtime` is not an OS-effect sandbox, and hostile `setsid()`/daemon escape is outside the current threat model. The verifier receives only the runtime-selected `PATH` environment (`{"PATH": os.environ.get("PATH", os.defpath)}`); unrelated parent runtime variables, tunnel credentials, cloud tokens, and shell secrets are not inherited, and MCP/model input cannot select verifier environment variables. The verifier can still read target files and emit data it legitimately obtains itself.
+
 Verifier exit code `0` is necessary but insufficient for PASS. PASS additionally requires the final HEAD to equal the captured HEAD, the configured branch still active, a clean worktree, exact synchronization with the cached configured remote branch, matching remote identity, and no timeout/interruption. Any failed postcondition produces FAIL rather than manufactured success.
 
 ## Local state and logs
@@ -92,11 +94,11 @@ State lives only under the configured external `state_dir`:
   last-verify.log.inprogress
 ```
 
-State writes are serialized JSON capped at 256 KiB and committed with temp-file + `os.replace`. Only the latest current/completed log paths are kept; `get_last_log` returns a bounded 64 KiB tail. Active state whose lock is no longer held is reported as `INTERRUPTED`, never PASS. Guarded stale/corrupt-state recovery occurs only while the mutation lock is held. Do not blindly delete lock files.
+State writes are serialized JSON capped at 256 KiB and committed with temp-file + `os.replace`. Only the latest current/completed log paths are kept. The entire persisted in-progress/final diagnostic log for one verification run is capped at exactly 1 MiB (1,048,576 bytes), including runtime markers; overflow terminates verification and yields `failure_kind = "verify_log_limit_exceeded"`. `get_last_log` still returns at most a 64 KiB diagnostic log tail. Active state whose lock is no longer held is reported as `INTERRUPTED`, never PASS. Guarded stale/corrupt-state recovery occurs only while the mutation lock is held. Do not blindly delete lock files.
 
 ## Python setup
 
-Python 3.11+ is recommended.
+Python 3.11+ is required.
 
 ```bash
 python3 -m venv .venv
