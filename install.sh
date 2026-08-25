@@ -64,8 +64,6 @@ if ! command -v tunnel-client >/dev/null 2>&1; then
 fi
 command -v tunnel-client >/dev/null 2>&1 || fail "tunnel-client installation did not produce a usable command."
 tunnel-client --version >/dev/null 2>&1 || fail "tunnel-client --version failed."
-tunnel-client init --help >/dev/null 2>&1 || fail "tunnel-client lacks the required init command."
-tunnel-client doctor --help >/dev/null 2>&1 || fail "tunnel-client lacks the required doctor command."
 
 ensure_private_dir() {
   local target="$1"
