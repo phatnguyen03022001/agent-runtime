@@ -35,6 +35,23 @@ Exactly four public tools exist:
 
 There is no shell/exec tool, arbitrary path/branch/verifier argument, Git push/commit/branch tool, filesystem mutation endpoint, environment mutation endpoint, or profile mutation endpoint.
 
+## Install on macOS
+
+For the ChatGPT-to-local tunnel use case, the supported bootstrap flow is:
+
+```bash
+git clone https://github.com/phatnguyen03022001/agent-runtime.git
+cd agent-runtime
+./install.sh
+./start.sh
+```
+
+`install.sh` is fail-closed and does not start the long-lived tunnel daemon. It requires macOS, Git, Python 3.11+, and Homebrew only when `tunnel-client` is missing. A missing tunnel client is installed only from the official OpenAI Homebrew formula `openai/tools/tunnel-client`.
+
+The installer creates or validates the local `.venv`, runs `./verify`, prepares private machine-local runtime state/configuration, creates a separate disposable self-verification checkout, updates only installer-owned non-secret `.env` values, creates the `agent-runtime` tunnel profile only when absent, and requires `tunnel-client doctor` to pass. Unknown or incompatible pre-existing local state is preserved and blocks rather than being reset or deleted.
+
+`CONTROL_PLANE_API_KEY` and `CONTROL_PLANE_TUNNEL_ID` remain operator-supplied secrets. Put them in the ignored `.env` file or export them before rerunning `./install.sh`. The installer never prints their literal values. `./start.sh` remains the explicit foreground daemon start path.
+
 ## Trusted project profiles
 
 Copy `config/profiles.example.toml` to a machine-local path such as `runtime.local.toml` and keep it out of Git. Configuration uses Python's stdlib `tomllib` and fails closed on unsupported versions, unknown fields, invalid project IDs, relative state/checkout paths, invalid verifier argv, non-boolean `disposable`, or timeout outside `1..3600` seconds.
@@ -119,7 +136,7 @@ python -m agent_runtime.server
 
 ## Start through tunnel-client
 
-Copy `.env.example` to `.env`, set `AGENT_RUNTIME_CONFIG`, and configure the external tunnel-client profile. `AGENT_RUNTIME_TUNNEL_PROFILE` defaults to `agent-runtime`.
+The recommended macOS path is `./install.sh` once, then `./start.sh` whenever the tunnel should run. For manual setup, copy `.env.example` to `.env`, set `AGENT_RUNTIME_CONFIG`, and configure the external tunnel-client profile. `AGENT_RUNTIME_TUNNEL_PROFILE` defaults to `agent-runtime`.
 
 ```bash
 ./start.sh
