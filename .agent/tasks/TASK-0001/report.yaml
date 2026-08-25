@@ -1,0 +1,192 @@
+protocol_version: 3
+
+task_id: TASK-0001
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0001/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+  authorized_base_head: "6cd8ec3bfcbbef2bc7832e4fb6d098262c65fd99"
+  pre_execution_head: "6cd8ec3bfcbbef2bc7832e4fb6d098262c65fd99"
+  final_execution_head: "e3c2374fbeffd2e43e91158c743be47d0da60b0b"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "d506f5caef3808fc2f7356172b5b648be78b628f"
+  observed_revision: "d506f5caef3808fc2f7356172b5b648be78b628f"
+
+execution_skills_used:
+  required:
+    - executor
+    - simplicity
+    - verification
+    - github-dev-main-workflow
+  recommended:
+    - reliability
+    - security-review
+  external:
+    - superpowers:test-driven-development
+    - superpowers:systematic-debugging
+    - superpowers:verification-before-completion
+
+pre_execution_checks:
+  protocol_version_supported: true
+  handoff_type_confirmed: false
+  task_at_base_confirmed: true
+  task_identity_confirmed: true
+  architect_binding_confirmed: true
+  repository_confirmed: true
+  branch_confirmed: true
+  base_head_confirmed: true
+  skill_revision_confirmed: true
+  required_execution_skills_available: true
+  structure_authority_confirmed: true
+  working_tree_clean: true
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - repository_content_write
+    - exact_remote_ref_read
+    - isolated_test_execution
+  available:
+    - repository_content_write
+    - exact_remote_ref_read
+    - isolated_test_execution
+  missing: []
+  passed: true
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: ""
+  evidence: "Task does not require a separate authoritative verifier. Executor/native checks were run on the exact final execution candidate."
+
+local_hygiene:
+  result: PASS
+  run_root: "tests/test_install.py uses isolated TemporaryDirectory roots; native smoke uses intentional runtime-owned machine-local state under HOME"
+  cleanup_performed: true
+  retained: []
+  evidence: "Temporary test HOME/PATH roots are context-managed and cleaned after each test. Native smoke intentionally retained runtime-owned config/state/disposable checkout and tunnel profile; these are product state, not temporary cleanup targets. No current-run temporary artifact remained."
+
+changed_files:
+  - path: tests/test_install.py
+    summary: "Adds isolated macOS installer regression tests for Homebrew tunnel-client install, profile idempotence, missing-credential fail-closed behavior, and unknown disposable-checkout preservation."
+    new_file: true
+    in_scope: true
+    structure_authorized: true
+  - path: install.sh
+    summary: "Adds fail-closed idempotent macOS bootstrap for Python environment, official tunnel-client availability, trusted runtime config/state, disposable checkout, .env non-secret values, tunnel profile initialization, and doctor readiness without daemon auto-start."
+    new_file: true
+    in_scope: true
+    structure_authorized: true
+  - path: README.md
+    summary: "Documents clone/install/start flow and preserves manual setup as reference."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+
+commits_created:
+  - sha: "25ea1920c9dab1d93a62f63343011f5637c6338f"
+    message: "test(install): define new-machine bootstrap contract"
+  - sha: "6aeb6ef05668f0ede582424130c5bb48b1b9664d"
+    message: "feat(install): add fail-closed macOS bootstrap"
+  - sha: "805f5a4870232e802cb16188032b4a4ec38b14f9"
+    message: "noop"
+  - sha: "c9926984574366e50ec361450142cbbe3594e84d"
+    message: "chore: remove accidental probe artifact"
+  - sha: "26f9715fda1d6a6a2c35ef287b052b4026d33b60"
+    message: "noop"
+  - sha: "69ceb881db903eb065ea9d66668b2bbf4ef775f0"
+    message: "chore: remove second accidental probe artifact"
+  - sha: "ed3ea8d241748e63a026a5f1c815353b16107652"
+    message: "fix(install): defer tunnel subcommands until authorized phases"
+  - sha: "52b0f19bfd088eef0af0d9deb1ae930d55ce0477"
+    message: "docs(install): document one-command macOS bootstrap"
+  - sha: "0827a1ef7c7f5f8bc82e55facab7b7a05f664075"
+    message: "docs(install): preserve bootstrap docs while executable mode commit is prepared"
+  - sha: "f28e8ea6aeed0a504c623c7d32c435ce1ac1287b"
+    message: "docs(install): keep documented bootstrap flow"
+  - sha: "5a1a997a180b4a78d941d76e8d963fa2ee2d388b"
+    message: "docs(install): no-op"
+  - sha: "2290f0be6c0b3802d2fbefb438ff870ab42a1fba"
+    message: "docs(install): no-op 2"
+  - sha: "5cc636bb0f5b48e91ca7e764781c5bf569b8c9d0"
+    message: "docs(install): no-op 3"
+  - sha: "a1283cff16d8833d02d872a99eeaa2b4556bddcf"
+    message: "docs(install): no-op 4"
+  - sha: "e3c2374fbeffd2e43e91158c743be47d0da60b0b"
+    message: "chore(install): make bootstrap executable"
+
+pushed: true
+promoted_to_main: false
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PROVEN
+    evidence: "README documents ./install.sh once then ./start.sh; remote tree at final execution head records install.sh mode 100755."
+  - criterion_id: AC-2
+    status: PROVEN
+    evidence: "Focused installer tests prove missing tunnel-client invokes only brew install openai/tools/tunnel-client, existing binary is reused, and no daemon run occurs."
+  - criterion_id: AC-3
+    status: PROVEN
+    evidence: "install.sh creates/reuses .venv, installs requirements.txt, and invokes ./verify; native smoke on final execution head ran full verifier with 53 tests OK."
+  - criterion_id: AC-4
+    status: PROVEN
+    evidence: "Installer creates HOME-scoped trusted config/state/disposable checkout and focused test proves an unknown pre-existing checkout is preserved and blocks. Native smoke completed against the existing real machine setup."
+  - criterion_id: AC-5
+    status: PROVEN
+    evidence: "Focused test proves missing credentials stop before profile creation/doctor and output excludes literal test credentials; installer only rewrites installer-owned non-secret .env fields."
+  - criterion_id: AC-6
+    status: PROVEN
+    evidence: "Focused tests prove an existing profile is preserved across reruns, doctor runs, init is skipped when profile exists, and tunnel-client run is never invoked. Native smoke reached doctor-ready installation."
+  - criterion_id: AC-7
+    status: PROVEN
+    evidence: "Baseline 0d72ea6..final execution e3c2374 compare contains only task authority, README.md, install.sh, and tests/test_install.py. Runtime modules, requirements.txt, workflows, public MCP surface, and main are unchanged."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Before implementation, remote branches were exactly {dev, main}; planning base was exact 6cd8ec3 with main still at 0d72ea6. Repository content write, exact remote-ref read, and isolated tests were available. Canonical handoff-envelope materialization was not completed and is recorded as a deviation."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "Observed RED: python -m unittest tests.test_install ran 4 tests and failed all 4 because install.sh did not exist."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "After fix, python -m unittest tests.test_install ran 4 tests in 1.596s and returned OK."
+  - check_id: CHECK-4
+    result: PASS
+    evidence: "On exact final execution candidate, ./verify ran 53 tests in 9.681s and returned OK."
+  - check_id: CHECK-5
+    result: PASS
+    evidence: "bash -n install.sh start.sh verify, git diff --check, and git status --short completed with no reported errors/output after the full gate."
+  - check_id: CHECK-6
+    result: PASS
+    evidence: "Exact baseline-to-final compare shows only task authority, README.md, install.sh, and tests/test_install.py in final tree. install.sh is 100755. requirements/runtime/workflows/main were unchanged. Accidental intermediate probe/no-op commits are disclosed below."
+  - check_id: CHECK-7
+    result: PASS
+    evidence: "Native macOS smoke on exact final execution head ran ./install.sh through [1/6]..[6/6], retained the expected runtime config/project/profile, preserved clean exact HEAD, and printed NATIVE_SMOKE: PASS."
+
+discovered_gaps: []
+structural_observations: []
+
+deviations_from_task:
+  - "A canonical protocol-v3 handoff envelope was not explicitly materialized/confirmed before the first Executor mutation. Execution nevertheless started from the exact planning commit 6cd8ec3 under the same bounded user-authorized session. This is disclosed for independent Architect judgment; Executor does not self-waive it."
+  - "Two out-of-scope probe files were accidentally created while testing GitHub mutation primitives: README.md.tmp-ignore and THIS_SHOULD_NOT_BE_CALLED. Each was immediately removed by a following corrective commit. Neither exists in the final tree."
+  - "Six README content-no-op commits were created while the operator/tool routing repeatedly selected the contents API instead of a mode/ref primitive. Their trees preserve the already-approved README content; no force-push or history rewrite was used."
+  - "Several unattached commit objects were also created while attempting a mode-only Git update; no branch/tag ref was moved to those objects, and they do not affect the final branch tree or compare result."
+
+blockers: []
+
+working_tree_after:
+  clean: true
+  summary: "Native smoke postcondition proved exact final execution HEAD and empty git status; remote dev remained exact e3c2374 before report creation."
+
+result: NEEDS_REVIEW
