@@ -1,0 +1,221 @@
+protocol_version: 3
+
+task_id: TASK-0001
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: user_request
+  task_id: ""
+  gap_id: ""
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "d506f5caef3808fc2f7356172b5b648be78b628f"
+
+architect_analysis_skills:
+  - architect
+  - simplicity
+  - verification
+  - reliability
+  - github-dev-main-workflow
+
+execution_skills:
+  required:
+    - executor
+    - simplicity
+    - verification
+    - github-dev-main-workflow
+  recommended:
+    - reliability
+    - security-review
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "User-approved bounded design in the Architect session: provide one fail-closed, idempotent new-machine installer because ChatGPT-to-local agent-runtime use requires tunnel-client plus the trusted runtime setup."
+    role: user_objective
+    precedence: 1
+  - source: "README.md@0d72ea6bf626436e8c3f236404af13cfa8c93fe8"
+    role: current_runtime_contract
+    precedence: 2
+  - source: "config/profiles.example.toml@0d72ea6bf626436e8c3f236404af13cfa8c93fe8"
+    role: current_profile_schema_example
+    precedence: 3
+  - source: "openai/tunnel-client README.md blob e109318d8067c2a64c3e69aa7d3220bf4ae41860"
+    role: upstream_install_and_quickstart_contract
+    precedence: 4
+  - source: "phatnguyen03022001/agent-skills protocols/TASK_PROTOCOL.md@d506f5caef3808fc2f7356172b5b648be78b628f"
+    role: governance
+    precedence: 5
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing root shell entrypoints, README, tests directory, .env.example, and runtime profile schema."
+  rationale: "The capability belongs in one root install.sh plus focused tests and a concise README update. No installer framework, package manager abstraction, daemon, new Python runtime module, or new service is needed."
+
+objective: "Make a fresh macOS clone of agent-runtime reproducibly installable for the ChatGPT-to-local tunnel use case with one bounded installer that establishes Python runtime dependencies, trusted local runtime state/config, a disposable self-verification checkout, required tunnel-client availability/profile, and doctor readiness without overwriting unknown local state or starting the daemon automatically."
+
+scope:
+  required_changes:
+    - "Add root install.sh as the single new-machine bootstrap entrypoint."
+    - "Require macOS, Git, Python >=3.11, and Homebrew when tunnel-client is absent; install missing tunnel-client only through the official OpenAI Homebrew formula openai/tools/tunnel-client, then verify required CLI capabilities."
+    - "Create/reuse .venv, install requirements.txt, and run ./verify before declaring repository runtime setup usable."
+    - "Create machine-local runtime config/state/checkouts under HOME using fail-closed ownership/identity checks; never reset/delete an unknown pre-existing path."
+    - "Generate a self-verification project profile from the exact current repository remote/branch using a separate explicitly disposable checkout and verify exact remote identity."
+    - "Create/update .env only for non-secret installer-owned values; never overwrite non-empty CONTROL_PLANE_API_KEY or CONTROL_PLANE_TUNNEL_ID and never print their literal values. If credentials are absent, stop with clear rerun instructions."
+    - "Create the agent-runtime tunnel-client profile only when absent using tunnel-client init; if present, validate rather than overwrite. Run tunnel-client doctor and do not automatically start the long-lived tunnel daemon."
+    - "Update README setup flow to clone -> ./install.sh -> ./start.sh and retain manual configuration details as reference."
+    - "Add focused regression tests for installer safety/idempotence/required tunnel behavior using isolated temporary HOME/PATH fixtures."
+  allowed_existing_files_or_components:
+    - README.md
+    - .env.example
+    - requirements.txt
+    - start.sh
+    - verify
+    - config/profiles.example.toml
+    - tests/
+    - .agent/tasks/TASK-0001/report.yaml
+  expected_files_are_restrictive: true
+
+invariants:
+  - "Public MCP surface remains exactly get_head(project), sync(project), run_verify(project), get_last_log(project)."
+  - "No runtime Python public API, config schema, sync semantics, verifier semantics, or state/log semantics change."
+  - "Installer never modifies main, creates branches, pushes target changes outside authorized dev commits, tags, releases, or repository metadata."
+  - "Installer never deletes or hard-resets the primary clone or any unknown pre-existing local path."
+  - "Installer never stores secrets in tracked files, prints literal secrets, or overwrites non-empty user credentials."
+  - "Installer never automatically starts tunnel-client run or another long-lived daemon."
+  - "Existing compatible machine-local setup is reused only after identity/shape validation; incompatible or ambiguous existing state fails closed."
+  - "Official tunnel-client install mechanism is Homebrew formula openai/tools/tunnel-client; no curl-pipe-shell or vendored binary download."
+  - "No new dependency in requirements.txt and no installer framework or extra package manager abstraction."
+
+forbidden_changes:
+  - "Do not redesign agent-runtime or add MCP tools."
+  - "Do not add Docker, launchd, system services, schedulers, background supervisors, auto-update logic, or a generic package-manager abstraction."
+  - "Do not use curl|sh, download an arbitrary tunnel-client binary, or pin secrets into files."
+  - "Do not overwrite an existing tunnel-client profile, runtime config, disposable checkout, .env secret, or unknown machine-local path without validation."
+  - "Do not mutate main or release/tag/publish."
+  - "Do not add or modify GitHub Actions workflows."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - install.sh
+    - tests/test_install.py
+    - .agent/tasks/TASK-0001/report.yaml
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: ""
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions:
+    - BLOCKED
+    - STALE_STATE
+    - AUTHORITY_REQUIRED
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    - REVIEW_REQUIRED
+    - REVERIFY_REQUIRED
+    - USER_STOP
+
+capability_requirements:
+  EXECUTION:
+    - repository_content_write
+    - exact_remote_ref_read
+    - isolated_test_execution
+  REVIEW:
+    - exact_commit_report_resolution
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "A fresh macOS clone has one documented ./install.sh bootstrap path and ./start.sh remains the explicit daemon start path."
+    evidence_required: "install.sh + README + regression tests."
+  - id: AC-2
+    requirement: "Missing tunnel-client is installed only with brew install openai/tools/tunnel-client; an existing usable tunnel-client is reused; incompatible/missing Homebrew state fails closed."
+    evidence_required: "Installer behavior tests with fake PATH plus source inspection."
+  - id: AC-3
+    requirement: "Installer creates/reuses .venv, installs pinned Python requirements, and runs the repository verifier before readiness."
+    evidence_required: "Installer source/test assertions plus final ./verify PASS."
+  - id: AC-4
+    requirement: "Machine-local runtime config/state/disposable self-checkout are created under HOME with exact remote/branch validation and no destructive treatment of unknown pre-existing paths."
+    evidence_required: "Focused isolated fixture tests and source inspection."
+  - id: AC-5
+    requirement: ".env handling never overwrites non-empty credentials or prints secret values; missing credentials cause a clear fail-closed stop that can be resolved by editing/exporting and rerunning."
+    evidence_required: "Regression tests covering absent/present credentials and output redaction."
+  - id: AC-6
+    requirement: "Tunnel profile creation is non-overwriting, doctor is required, and installer never invokes tunnel-client run."
+    evidence_required: "Regression tests plus exact command/source inspection."
+  - id: AC-7
+    requirement: "No MCP/runtime/config-schema/dependency/workflow/main/release scope drift occurs."
+    evidence_required: "Exact base..final diff inventory, requirements unchanged, public tool surface unchanged, git diff --check."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Before implementation mutation, refresh dev and require exact handoff base, branches exactly {dev, main}, main still 0d72ea6bf626436e8c3f236404af13cfa8c93fe8, and isolated test execution available."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Use TDD: add tests/test_install.py first and observe focused RED caused by missing install.sh / missing required installer behavior before production installer changes."
+      required: true
+    - id: CHECK-3
+      command_or_check: "python3 -m unittest tests.test_install"
+      required: true
+    - id: CHECK-4
+      command_or_check: "./verify"
+      required: true
+    - id: CHECK-5
+      command_or_check: "bash -n install.sh start.sh verify && git diff --check"
+      required: true
+    - id: CHECK-6
+      command_or_check: "Inspect exact base..final_execution_head diff and prove only install.sh, tests/test_install.py, README.md, and the task report changed during execution; requirements.txt, runtime modules, public MCP surface, workflows, main, tags, releases, and metadata did not change."
+      required: true
+    - id: CHECK-7
+      command_or_check: "Run a native macOS smoke on the exact final execution candidate before acceptance: existing valid setup must be safely recognized/reused or a fresh isolated HOME fixture must progress through supported installer gates without secret disclosure or auto-starting the tunnel."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
