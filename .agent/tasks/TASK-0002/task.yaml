@@ -1,0 +1,215 @@
+protocol_version: 3
+
+task_id: TASK-0002
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: follow_up
+  task_id: TASK-0001
+  gap_id: ""
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "d506f5caef3808fc2f7356172b5b648be78b628f"
+
+architect_analysis_skills:
+  - architect
+  - verification
+  - reliability
+  - github-dev-main-workflow
+
+execution_skills:
+  required:
+    - executor
+    - verification
+    - github-dev-main-workflow
+  recommended:
+    - reliability
+    - security-review
+
+external_skills:
+  architect_analysis:
+    - superpowers:receiving-code-review
+  execution_required:
+    - superpowers:verification-before-completion
+  execution_recommended: []
+
+authority_sources:
+  - source: "User-approved bounded protocol repair in the Architect session: preserve the existing installer implementation and re-execute only the missing protocol-compliant Executor evidence path."
+    role: user_objective
+    precedence: 1
+  - source: "External independent review of TASK-0001 report commit 74bc7a85d56807baf2e8688fea30ef6290bd8bdf: implementation evidence acceptable, but missing confirmed canonical EXECUTOR handoff is BLOCKING and requires re-execution."
+    role: prior_review_finding
+    precedence: 2
+  - source: "TASK-0001 final implementation e3c2374fbeffd2e43e91158c743be47d0da60b0b"
+    role: adopted_existing_implementation
+    precedence: 3
+  - source: "phatnguyen03022001/agent-skills protocols/TASK_PROTOCOL.md@d506f5caef3808fc2f7356172b5b648be78b628f"
+    role: governance
+    precedence: 4
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing .agent/tasks/TASK-0002 task/report layout and existing installer implementation."
+  rationale: "This task authorizes no production/source structure change. The only expected new tracked file after planning is the canonical Executor report under the existing task directory."
+
+objective: "Re-establish protocol-v3 compliance for the already-implemented macOS installer by launching a fresh Executor from an exact canonical EXECUTOR handoff, independently revalidating the existing implementation without changing production content, and producing a new reviewable report."
+
+scope:
+  required_changes:
+    - "Perform a fresh Executor pre-mutation gate from the exact canonical handoff emitted after this task planning commit, including handoff_type == EXECUTOR and exact base/task/repository/branch/skill/capability/authority checks."
+    - "Treat the current installer implementation as existing target state. Do not replay, rewrite, refactor, or otherwise change README.md, install.sh, tests/test_install.py, runtime modules, requirements, workflows, or prior TASK-0001 artifacts."
+    - "Re-run focused installer tests, the full repository verifier, shell syntax/diff checks, exact tree/history inspection, and bounded installer security/fail-closed review."
+    - "Use prior native macOS smoke evidence only as supporting evidence; if the current execution surface can safely reproduce an isolated or native smoke without mutating unknown user state, it may do so. Lack of a new native smoke does not authorize manufacturing evidence."
+    - "If any real implementation defect, stale authority, unexpected ref drift, or acceptance failure is discovered, stop and report BLOCKING/NEEDS_REVISION; do not fix production code under this task."
+    - "Produce and commit/push .agent/tasks/TASK-0002/report.yaml as Executor-owned evidence only after all required checks complete."
+  allowed_existing_files_or_components:
+    - .agent/tasks/TASK-0001/task.yaml
+    - .agent/tasks/TASK-0001/report.yaml
+    - .agent/tasks/TASK-0002/task.yaml
+    - README.md
+    - install.sh
+    - tests/test_install.py
+    - start.sh
+    - verify
+    - requirements.txt
+    - agent_runtime/
+    - config/
+  expected_files_are_restrictive: true
+
+invariants:
+  - "Production/runtime content remains byte-for-byte and mode-for-mode unchanged throughout TASK-0002 execution."
+  - "TASK-0001 task/report remain immutable historical evidence; do not revise or delete them."
+  - "Public MCP surface remains exactly get_head(project), sync(project), run_verify(project), get_last_log(project)."
+  - "No branch creation, force push, history rewrite, main mutation, tag, release, repository metadata mutation, or workflow change."
+  - "No implementation defect may be fixed under this task; defects return to Architect for new authority."
+  - "The canonical EXECUTOR handoff must be confirmed before any Executor mutation, including creation/commit of report evidence."
+
+forbidden_changes:
+  - "Do not modify README.md, install.sh, tests/test_install.py, start.sh, verify, requirements.txt, agent_runtime/, config/, workflows, or any other production/test/documentation content."
+  - "Do not modify TASK-0001 artifacts."
+  - "Do not create any tracked file except .agent/tasks/TASK-0002/report.yaml."
+  - "Do not create branches, reset/rebase/squash/rewrite history, force-update refs, mutate main, tag, release, or mutate repository metadata."
+  - "Do not repair a discovered bug in-place; stop with exact evidence."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - .agent/tasks/TASK-0002/report.yaml
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: ""
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions:
+    - BLOCKED
+    - STALE_STATE
+    - AUTHORITY_REQUIRED
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    - REVIEW_REQUIRED
+    - REVERIFY_REQUIRED
+    - USER_STOP
+
+capability_requirements:
+  EXECUTION:
+    - exact_remote_ref_read
+    - isolated_test_execution
+    - repository_content_write
+  REVIEW:
+    - exact_commit_report_resolution
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Executor proves before mutation that the canonical handoff is protocol v3, handoff_type EXECUTOR, TASK-0002 revision 1, exact target repository/branch, and live dev equals the handoff base HEAD."
+    evidence_required: "Report records all handoff/pre-execution checks true with exact SHAs."
+  - id: AC-2
+    requirement: "No production/test/documentation or prior TASK-0001 content changes during TASK-0002 execution."
+    evidence_required: "Exact handoff-base..final_execution_head diff is empty; report commit changes only TASK-0002/report.yaml."
+  - id: AC-3
+    requirement: "Existing installer focused tests remain green."
+    evidence_required: "Fresh python3 -m unittest tests.test_install result with 4 tests and zero failures/errors."
+  - id: AC-4
+    requirement: "Full agent-runtime verifier remains green on the exact revalidated implementation state."
+    evidence_required: "Fresh ./verify result with zero failures/errors and exact tested HEAD recorded."
+  - id: AC-5
+    requirement: "Shell syntax, diff hygiene, executable mode, branch/main identity, and restricted final tree remain correct."
+    evidence_required: "bash -n install.sh start.sh verify; git diff --check; install.sh mode 100755; branches exactly {dev, main}; main unchanged at 0d72ea6bf626436e8c3f236404af13cfa8c93fe8."
+  - id: AC-6
+    requirement: "Source/security inspection finds no material contradiction to the previously demonstrated installer contract: fail-closed unknown state, credential gating/redaction, existing-profile preservation, official Homebrew tunnel-client install, and no daemon auto-start."
+    evidence_required: "Read-only source/test inspection with any material finding explicitly reported."
+  - id: AC-7
+    requirement: "Executor publishes one canonical TASK-0002 report whose final_execution_head equals the exact handoff base because no implementation mutation occurred."
+    evidence_required: "Committed report is a single-parent child of final_execution_head and is remotely resolvable for independent review."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Before any mutation, verify exact canonical handoff fields, dev == handoff base, main == 0d72ea6bf626436e8c3f236404af13cfa8c93fe8, branches exactly {dev, main}, exact task identity, pinned skill revision, and required EXECUTION capabilities."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Record exact HEAD and prove git diff / tree state is clean before verification."
+      required: true
+    - id: CHECK-3
+      command_or_check: "python3 -m unittest tests.test_install"
+      required: true
+    - id: CHECK-4
+      command_or_check: "./verify"
+      required: true
+    - id: CHECK-5
+      command_or_check: "bash -n install.sh start.sh verify && git diff --check"
+      required: true
+    - id: CHECK-6
+      command_or_check: "Inspect install.sh/tests and verify the bounded security/fail-closed contract without tracked mutation."
+      required: true
+    - id: CHECK-7
+      command_or_check: "Immediately before report creation, refresh refs and prove dev still equals the handoff base, main unchanged, branches exactly {dev, main}, working tree clean, and no tracked implementation mutation occurred."
+      required: true
+    - id: CHECK-8
+      command_or_check: "After committing/pushing report.yaml, verify the report commit has exactly one parent equal to final_execution_head, changes only .agent/tasks/TASK-0002/report.yaml, and main remains unchanged."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
