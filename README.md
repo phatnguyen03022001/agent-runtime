@@ -148,7 +148,7 @@ The recommended macOS path is `./install.sh` once, then `./start.sh` whenever th
 
 Changes to runtime code, `.env` values loaded by `start.sh`, `AGENT_RUNTIME_CONFIG`, or trusted project profile files are not adopted by an already-running runtime/tunnel process. Restart or reload that process before relying on the new configuration. A shell or terminal reset is not required merely because configuration changed unless the active setup depends on shell-exported environment outside `.env`.
 
-After restarting, open a fresh ChatGPT conversation before treating developer-MCP capability availability as current; an existing conversation may retain stale capability exposure. Smoke-test the expected project with `get_head(project)`. If the disposable local checkout is behind canonical GitHub state, use `sync(project)` before local verification. When local verification evidence matters, confirm the final state with `run_verify(project)` followed by `get_last_log(project)` before relying on it.
+After restarting, use a fresh-capability context when runtime/config/profile changed and current capability exposure is absent, plausibly stale, or ambiguous, or when the current conversation has not yet proven the restarted runtime callable. Use `get_head(project)` as the first runtime smoke/preflight action. A successful `get_head(project)` in the current conversation after the latest relevant change is sufficient callability evidence when no later runtime-changing event occurred; do not open a fresh chat merely as ceremony. Use `sync(project)` only when the disposable local checkout must be synchronized, and use `run_verify(project)` with `get_last_log(project)` only when local verification evidence materially matters.
 
 ## Verify agent-runtime itself
 
