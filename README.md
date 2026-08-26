@@ -144,6 +144,12 @@ The recommended macOS path is `./install.sh` once, then `./start.sh` whenever th
 
 `start.sh` derives its own repository directory, loads `.env`, runs `tunnel-client doctor --profile <profile> --explain`, and only then executes `tunnel-client run --profile <profile>`. The tunnel client and networking/control plane remain external to this repository.
 
+## Reload after runtime or profile changes
+
+Changes to runtime code, `.env` values loaded by `start.sh`, `AGENT_RUNTIME_CONFIG`, or trusted project profile files are not adopted by an already-running runtime/tunnel process. Restart or reload that process before relying on the new configuration. A shell or terminal reset is not required merely because configuration changed unless the active setup depends on shell-exported environment outside `.env`.
+
+After restarting, open a fresh ChatGPT conversation before treating developer-MCP capability availability as current; an existing conversation may retain stale capability exposure. Smoke-test the expected project with `get_head(project)`. If the disposable local checkout is behind canonical GitHub state, use `sync(project)` before local verification. When local verification evidence matters, confirm the final state with `run_verify(project)` followed by `get_last_log(project)` before relying on it.
+
 ## Verify agent-runtime itself
 
 ```bash
