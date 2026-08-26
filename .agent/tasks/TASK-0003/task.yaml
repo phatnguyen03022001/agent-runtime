@@ -1,0 +1,193 @@
+protocol_version: 3
+
+task_id: TASK-0003
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: user_request
+  task_id: ""
+  gap_id: ""
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "0a57fbfd39b96494f22fea1f7847aab1d5c8bbf1"
+
+architect_analysis_skills:
+  - architect
+  - verification
+  - github-workflow
+
+execution_skills:
+  required:
+    - executor
+    - verification
+    - github-workflow
+  recommended: []
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "Current user-approved decision in the governing Architect session: runtime/config/profile changes or plausibly stale capability exposure require fresh-capability proof before local evidence is trusted, but a fresh ChatGPT conversation is not ceremonial and is unnecessary when the current conversation has already demonstrated current runtime callability after the latest relevant change."
+    role: user_objective
+    precedence: 1
+  - source: "README.md pending dev-only commit 1bd373ecb85360f24b21575823c592707c72dad9. This is pre-existing target state to inspect and reconcile, not prior task authority."
+    role: existing_target_state
+    precedence: 2
+  - source: "start.sh and current runtime/config implementation at the TASK-0003 handoff base."
+    role: implementation_truth
+    precedence: 3
+  - source: "phatnguyen03022001/agent-skills@0a57fbfd39b96494f22fea1f7847aab1d5c8bbf1"
+    role: governance
+    precedence: 4
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing README.md and repository structure."
+  rationale: "This is a bounded operational-documentation correction. No production/runtime/test/config structure change is needed."
+
+objective: "Reconcile the pending README runtime reload guidance with actual startup behavior and the approved condition-based capability-freshness rule, without changing agent-runtime behavior or public contracts."
+
+scope:
+  required_changes:
+    - "Before mutation, confirm dev contains exactly the known pending README-only commit relative to main, branches are exactly {dev, main}, and no existing TASK-0001/TASK-0002 authority is retrofitted to the README delta."
+    - "Inspect README.md, start.sh, and only the minimum relevant runtime/config source needed to distinguish process reload requirements from ChatGPT capability-exposure freshness."
+    - "Update only README.md so runtime/config/profile changes are documented as requiring the runtime/tunnel process to restart or reload before new runtime configuration is trusted when the running process would otherwise retain old state. Preserve the existing clarification that a shell/terminal reset is not inherently required unless the setup depends on shell-exported environment outside .env."
+    - "Replace the unconditional fresh-chat instruction with the approved condition-based rule: use a fresh-capability context when runtime/config/profile changed, current capability exposure is absent/plausibly stale/ambiguous, or current conversation has not proven the restarted runtime callable. A successful get_head(project) in the current conversation after the latest relevant change is sufficient callability evidence when no later runtime-changing event occurred; do not require a fresh chat merely as ceremony."
+    - "Keep get_head(project) as the first runtime smoke/preflight action; mention sync(project), run_verify(project), and get_last_log(project) only when their evidence is materially needed. Do not turn README guidance into a requirement to call every runtime tool every time."
+    - "Run the repository verifier and deterministic documentation/diff checks on the exact final implementation state, then create/update and commit/push .agent/tasks/TASK-0003/report.yaml as Executor-owned evidence."
+  allowed_existing_files_or_components:
+    - README.md
+    - start.sh
+    - verify
+    - agent_runtime/
+    - config/
+    - .agent/tasks/TASK-0003/task.yaml
+  expected_files_are_restrictive: true
+
+invariants:
+  - "Public MCP surface remains exactly get_head(project), sync(project), run_verify(project), get_last_log(project)."
+  - "No runtime behavior, startup script behavior, config schema, tests, dependencies, workflows, installer behavior, or public API is changed."
+  - "The README must distinguish process/config reload from ChatGPT capability-exposure freshness; fresh conversation is condition-based, not ceremonial."
+  - "Installed/known/mentioned capability is not evidence of current callability; evidence must come from an actual successful current capability invocation when local runtime evidence matters."
+  - "TASK-0001 and TASK-0002 artifacts remain immutable historical evidence."
+  - "Long-lived branches remain exactly {dev, main}; main remains read-only during execution."
+
+forbidden_changes:
+  - "Do not modify start.sh, verify, agent_runtime/, config/, tests/, requirements, workflows, installer files, or any production/runtime code."
+  - "Do not modify TASK-0001 or TASK-0002 artifacts."
+  - "Do not create a new skill, framework, capability registry, reload subsystem, plugin abstraction, or runtime feature."
+  - "Do not require a fresh ChatGPT conversation when current callability has already been proven after the latest relevant runtime/config/profile change."
+  - "Do not create branches, mutate main, force-push, rewrite history, tag, release, promote, or mutate repository metadata."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - .agent/tasks/TASK-0003/report.yaml
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: ""
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions:
+    - BLOCKED
+    - STALE_STATE
+    - AUTHORITY_REQUIRED
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    - REVIEW_REQUIRED
+    - REVERIFY_REQUIRED
+    - USER_STOP
+
+capability_requirements:
+  EXECUTION:
+    - exact_remote_ref_read
+    - repository_content_write
+    - isolated_test_execution
+  REVIEW:
+    - exact_commit_report_resolution
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "README reload guidance accurately separates runtime process/config reload from ChatGPT capability freshness and removes unconditional fresh-chat ceremony."
+    evidence_required: "Exact final README inspection against user-approved semantics and relevant startup/config source."
+  - id: AC-2
+    requirement: "Current-callability proof is condition-based: get_head(project) first, with sync/run_verify/get_last_log only as needed, and a successful post-change get_head in the same conversation can satisfy callability when no later runtime-changing event occurred."
+    evidence_required: "Exact final README text contains the narrow rule without ritual all-tool invocation."
+  - id: AC-3
+    requirement: "No runtime/public-contract/source behavior changes occur."
+    evidence_required: "Exact handoff-base-to-final implementation diff changes only README.md."
+  - id: AC-4
+    requirement: "Repository verification remains green on the exact final implementation state."
+    evidence_required: "Fresh ./verify and git diff --check results with exact final_execution_head."
+  - id: AC-5
+    requirement: "Git lineage remains bounded: main unchanged, branches exactly {dev, main}, and report commit is the sole report-only child after final_execution_head."
+    evidence_required: "Fresh refs plus report parent/diff verification."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Before mutation, resolve TASK-0003 revision 1 under pinned agent-skills authority 0a57fbfd39b96494f22fea1f7847aab1d5c8bbf1; require live dev == handoff base, main == 7d0dde6c5535bfc7e29e8010c32235403e7da860, branches exactly {dev, main}, and required EXECUTION capabilities. Confirm the pre-planning dev/main difference was the single README-only commit 1bd373ecb85360f24b21575823c592707c72dad9."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Inspect the current README reload section plus start.sh and only minimum relevant config/runtime source. Reproduce the unconditional-fresh-chat mismatch before editing."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Modify only README.md with the smallest wording correction implementing condition-based fresh-capability semantics and preserving actual process reload behavior."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Run ./verify and git diff --check on the exact final implementation HEAD; both must exit 0."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Inspect the exact handoff-base-to-final diff and prove README.md is the only implementation file changed; prove runtime code, scripts, config, tests, workflows, dependencies, and TASK-0001/TASK-0002 are unchanged."
+      required: true
+    - id: CHECK-6
+      command_or_check: "Immediately before report creation refresh refs and require dev == final_execution_head, main unchanged, branches exactly {dev, main}, and exact authorized diff. After committing/pushing report.yaml, verify the report commit has exactly one parent equal to final_execution_head, changes only .agent/tasks/TASK-0003/report.yaml, and main/branch set remain unchanged."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
