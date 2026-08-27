@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+from pathlib import Path
 from typing import Any
 
 from .config import ProjectProfile
@@ -69,6 +70,20 @@ def _git_value(profile: ProjectProfile, args: list[str], *, timeout: int) -> str
     return result.stdout.strip()
 
 
+def validate_checkout_root(profile: ProjectProfile) -> Path:
+    actual = Path(
+        _git_value(
+            profile,
+            ["rev-parse", "--show-toplevel"],
+            timeout=GIT_INSPECT_TIMEOUT_SECONDS,
+        )
+    ).resolve(strict=False)
+    expected = profile.checkout.resolve(strict=False)
+    if actual != expected:
+        raise GitError("Configured checkout is not the exact Git worktree root.")
+    return actual
+
+
 def validate_remote_identity(profile: ProjectProfile) -> str:
     actual = _git_value(
         profile,
@@ -82,6 +97,7 @@ def validate_remote_identity(profile: ProjectProfile) -> str:
 
 def inspect_repository(profile: ProjectProfile, *, require_remote_identity: bool = True) -> dict[str, Any]:
     try:
+        validate_checkout_root(profile)
         head = _git_value(profile, ["rev-parse", "HEAD"], timeout=GIT_INSPECT_TIMEOUT_SECONDS)
         branch = _git_value(
             profile, ["branch", "--show-current"], timeout=GIT_INSPECT_TIMEOUT_SECONDS
@@ -125,6 +141,7 @@ def sync_checkout(profile: ProjectProfile) -> dict[str, Any]:
     if profile.disposable is not True:
         raise GitError("Destructive sync requires disposable = true in the trusted profile.")
 
+    validate_checkout_root(profile)
     validate_remote_identity(profile)
     commands = [
         (["fetch", profile.remote, profile.branch, "--prune"], GIT_FETCH_TIMEOUT_SECONDS),
@@ -142,6 +159,7 @@ def sync_checkout(profile: ProjectProfile) -> dict[str, Any]:
                 f"output={_bounded(result.stdout)!r}"
             )
 
+    validate_checkout_root(profile)
     validate_remote_identity(profile)
     state = inspect_repository(profile)
     if not (

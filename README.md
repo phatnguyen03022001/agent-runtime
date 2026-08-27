@@ -73,7 +73,7 @@ timeout_seconds = 3600
 disposable = true
 ```
 
-The configured Git remote URL is checked exactly before destructive sync and verification. Finding a Git repository at a path is not sufficient proof of identity.
+The configured Git remote URL is checked exactly before destructive sync and verification. Finding a Git repository at a path is not sufficient proof of identity. The configured checkout must also resolve to exactly the Git worktree top level reported by `git rev-parse --show-toplevel`; a subdirectory of a larger repository fails closed before destructive sync or trusted verification use. An exact linked-worktree top level remains supported.
 
 ## Destructive sync warning
 
@@ -90,7 +90,9 @@ Tracked changes and non-ignored untracked files are discarded. Ignored files sur
 
 ## Verification semantics
 
-`run_verify(project)` requires the expected remote identity, configured branch, clean worktree, and exact equality between local HEAD and the cached configured remote branch. It captures that verification HEAD and launches a detached worker while transferring the same `fcntl.flock` lock descriptor, so there is no unlocked handoff window.
+`run_verify(project)` requires the expected remote identity, exact configured worktree root, configured branch, clean worktree, and exact equality between local HEAD and the cached configured remote branch. It also requires the on-disk trusted config bytes and worker-relevant runtime source to match the immutable generation captured when `AgentRuntime` loaded; generation drift is refused until the runtime is restarted/reloaded. It captures the verification HEAD and launches a detached worker while transferring the same `fcntl.flock` lock descriptor, so there is no unlocked handoff window.
+
+The detached worker receives the same expected config/runtime generation identity, revalidates it before resolving the verifier profile, and checks it again immediately before verifier execution. It therefore cannot silently adopt a newer `verify_argv`, profile, or worker-relevant runtime source after the launcher accepted an older generation.
 
 The verifier argv comes only from trusted configuration and is executed as a subprocess argv array, never through `shell=True`. The verifier runs in a POSIX process group with a bounded timeout. On timeout, the whole verifier process group is terminated before terminal state is finalized.
 
@@ -111,7 +113,7 @@ State lives only under the configured external `state_dir`:
   last-verify.log.inprogress
 ```
 
-State writes are serialized JSON capped at 256 KiB and committed with temp-file + `os.replace`. Only the latest current/completed log paths are kept. The entire persisted in-progress/final diagnostic log for one verification run is capped at exactly 1 MiB (1,048,576 bytes), including runtime markers; overflow terminates verification and yields `failure_kind = "verify_log_limit_exceeded"`. `get_last_log` still returns at most a 64 KiB diagnostic log tail. Active state whose lock is no longer held is reported as `INTERRUPTED`, never PASS. Guarded stale/corrupt-state recovery occurs only while the mutation lock is held. Do not blindly delete lock files.
+State writes are serialized JSON capped at 256 KiB and committed with temp-file + `os.replace`. Only the latest current/completed log paths are kept. The entire persisted in-progress/final diagnostic log for one verification run is capped at exactly 1 MiB (1,048,576 bytes), including runtime markers; overflow terminates verification and yields `failure_kind = "verify_log_limit_exceeded"`. `get_last_log` still returns at most a 64 KiB diagnostic log tail. Active state whose lock is no longer held is reread before interruption is synthesized, so a concurrently committed terminal state and its finalized log win; a still-active free-lock state remains `INTERRUPTED`, never PASS. Guarded stale/corrupt-state recovery occurs only while the mutation lock is held. Do not blindly delete lock files.
 
 ## Python setup
 
@@ -146,7 +148,7 @@ The recommended macOS path is `./install.sh` once, then `./start.sh` whenever th
 
 ## Reload after runtime or profile changes
 
-Changes to runtime code, `.env` values loaded by `start.sh`, `AGENT_RUNTIME_CONFIG`, or trusted project profile files are not adopted by an already-running runtime/tunnel process. Restart or reload that process before relying on the new configuration. A shell or terminal reset is not required merely because configuration changed unless the active setup depends on shell-exported environment outside `.env`.
+Changes to runtime code, `.env` values loaded by `start.sh`, `AGENT_RUNTIME_CONFIG`, or trusted project profile files are not adopted by an already-running runtime/tunnel process. Restart or reload that process before relying on the new configuration. For `run_verify`, the runtime enforces this boundary by comparing the current config bytes and worker-relevant runtime source generation with the identity captured at runtime load, and the detached worker revalidates the same identity before executing the verifier. A shell or terminal reset is not required merely because configuration changed unless the active setup depends on shell-exported environment outside `.env`.
 
 After restarting, use a fresh-capability context when runtime/config/profile changed and current capability exposure is absent, plausibly stale, or ambiguous, or when the current conversation has not yet proven the restarted runtime callable. Use `get_head(project)` as the first runtime smoke/preflight action. A successful `get_head(project)` in the current conversation after the latest relevant change is sufficient callability evidence when no later runtime-changing event occurred; do not open a fresh chat merely as ceremony. Use `sync(project)` only when the disposable local checkout must be synchronized, and use `run_verify(project)` with `get_last_log(project)` only when local verification evidence materially matters.
 

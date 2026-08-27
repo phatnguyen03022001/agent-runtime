@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import errno
 import fcntl
+import hashlib
 import os
 import signal
 import subprocess
@@ -28,6 +29,39 @@ VERIFY_TERMINATION_GRACE_SECONDS = 5.0
 VERIFY_LOG_READ_CHUNK_BYTES = 64 * 1024
 VERIFY_LOG_LIMIT_MARKER = b"\nVERIFY LOG LIMIT EXCEEDED\n"
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+_RUNTIME_GENERATION_FILES = tuple(
+    PACKAGE_ROOT / "agent_runtime" / name
+    for name in ("runner.py", "config.py", "git_ops.py", "state.py")
+)
+
+
+def _file_generation(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _runtime_source_generation() -> str:
+    digest = hashlib.sha256()
+    for path in _RUNTIME_GENERATION_FILES:
+        relative = path.relative_to(PACKAGE_ROOT).as_posix().encode("utf-8")
+        digest.update(relative)
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def _generation_matches(
+    config_path: Path,
+    expected_config_generation: str,
+    expected_runtime_generation: str,
+) -> bool:
+    try:
+        return (
+            _file_generation(config_path) == expected_config_generation
+            and _runtime_source_generation() == expected_runtime_generation
+        )
+    except OSError:
+        return False
 
 
 def _verifier_environment() -> dict[str, str]:
@@ -361,7 +395,21 @@ def _reap_detached_worker(process: subprocess.Popen[Any]) -> None:
 
 class AgentRuntime:
     def __init__(self, config_path: str | Path):
-        self.config: RuntimeConfig = load_config(config_path)
+        resolved_config_path = Path(config_path).expanduser().resolve(strict=False)
+        try:
+            config_generation_before = _file_generation(resolved_config_path)
+        except OSError as exc:
+            raise ConfigError("Unable to load runtime config.") from exc
+        self.config: RuntimeConfig = load_config(resolved_config_path)
+        try:
+            config_generation_after = _file_generation(self.config.path)
+            runtime_generation = _runtime_source_generation()
+        except OSError as exc:
+            raise ConfigError("Unable to capture runtime generation.") from exc
+        if config_generation_before != config_generation_after:
+            raise ConfigError("Runtime config changed while loading.")
+        self._config_generation = config_generation_after
+        self._runtime_generation = runtime_generation
 
     def _profile(self, project: str) -> ProjectProfile:
         return self.config.resolve(project)
@@ -448,6 +496,18 @@ class AgentRuntime:
 
         started_monotonic = time.monotonic()
         try:
+            if not _generation_matches(
+                self.config.path,
+                self._config_generation,
+                self._runtime_generation,
+            ):
+                return {
+                    "ok": False,
+                    "accepted": False,
+                    "busy": False,
+                    "error": "Runtime/config generation changed; restart required.",
+                }
+
             try:
                 recovery = _recover_stale_locked(store, profile)
             except (OSError, ValueError):
@@ -519,6 +579,10 @@ class AgentRuntime:
                         head,
                         "--started-at",
                         started_at,
+                        "--config-generation",
+                        self._config_generation,
+                        "--runtime-generation",
+                        self._runtime_generation,
                     ],
                     cwd=PACKAGE_ROOT,
                     stdin=subprocess.DEVNULL,
@@ -595,8 +659,24 @@ class AgentRuntime:
         if recorded in ACTIVE_STATES:
             busy, lock_error = _lock_busy(store)
             if busy is False:
-                effective = "INTERRUPTED"
-                verification_ok = False
+                reread_state, reread_error = store.read_state()
+                if reread_error is not None:
+                    state_error = reread_error
+                    effective = "INTERRUPTED"
+                    verification_ok = False
+                elif reread_state is None:
+                    state = None
+                    recorded = None
+                    effective = "INTERRUPTED"
+                    verification_ok = False
+                else:
+                    state = reread_state
+                    recorded = state.get("status")
+                    effective = recorded
+                    verification_ok = state.get("verification_ok")
+                    if recorded in ACTIVE_STATES:
+                        effective = "INTERRUPTED"
+                        verification_ok = False
 
         log_result: dict[str, Any] | None = None
         required_pass_log_unreadable = False
@@ -679,9 +759,24 @@ def _run_verify_worker(
     run_id: str,
     expected_head: str,
     started_at: str,
+    expected_config_generation: str,
+    expected_runtime_generation: str,
 ) -> int:
+    config_path = config_path.expanduser().resolve(strict=False)
     try:
+        if not _generation_matches(
+            config_path,
+            expected_config_generation,
+            expected_runtime_generation,
+        ):
+            raise ConfigError("Runtime/config generation changed before worker resolution.")
         config = load_config(config_path)
+        if not _generation_matches(
+            config.path,
+            expected_config_generation,
+            expected_runtime_generation,
+        ):
+            raise ConfigError("Runtime/config generation changed during worker resolution.")
         profile = config.resolve(project)
         store = StateStore(config.state_dir, profile.project_id)
         _validate_inherited_lock_fd(store, lock_fd)
@@ -764,6 +859,12 @@ def _run_verify_worker(
     write_error_event = threading.Event()
     try:
         try:
+            if not _generation_matches(
+                config.path,
+                expected_config_generation,
+                expected_runtime_generation,
+            ):
+                raise RuntimeError("Runtime/config generation changed before verifier launch.")
             verify_process = subprocess.Popen(
                 list(profile.verify_argv),
                 cwd=profile.checkout,
@@ -923,6 +1024,8 @@ def _worker_parser() -> argparse.ArgumentParser:
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--head", required=True)
     parser.add_argument("--started-at", required=True)
+    parser.add_argument("--config-generation", required=True)
+    parser.add_argument("--runtime-generation", required=True)
     return parser
 
 
@@ -937,6 +1040,8 @@ def _main() -> int:
         run_id=args.run_id,
         expected_head=args.head,
         started_at=args.started_at,
+        expected_config_generation=args.config_generation,
+        expected_runtime_generation=args.runtime_generation,
     )
 
 
