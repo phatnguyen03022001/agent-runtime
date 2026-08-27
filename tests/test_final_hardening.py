@@ -270,6 +270,8 @@ class FinalHardeningTests(unittest.TestCase):
                     run_id=run_id,
                     expected_head=head,
                     started_at=started_at,
+                    expected_config_generation=fx.runtime._config_generation,
+                    expected_runtime_generation=fx.runtime._runtime_generation,
                 )
             self.assertNotEqual(rc, 0)
             leader_pid = int((fx.checkout / "leader.pid").read_text().strip())
@@ -311,6 +313,8 @@ class FinalHardeningTests(unittest.TestCase):
                 run_id=run_id,
                 expected_head=head,
                 started_at=started_at,
+                expected_config_generation=fx.runtime._config_generation,
+                expected_runtime_generation=fx.runtime._runtime_generation,
             )
         self.assertNotEqual(rc, 0)
         state, _ = fx.store.read_state()
