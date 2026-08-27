@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import fcntl
+import inspect
 import json
 import os
 import signal
@@ -146,6 +147,52 @@ class RunnerTests(unittest.TestCase):
         )
         self.assertFalse(launch["accepted"])
         self.assertIn("restart", launch["error"].lower())
+
+    def test_worker_revalidates_expected_generation_before_verifier_execution(self) -> None:
+        fx = RuntimeFixture(
+            self,
+            "#!/usr/bin/env bash\necho worker-ran > ignored.tmp\nexit 0\n",
+        )
+        params = inspect.signature(runner_module._run_verify_worker).parameters
+        self.assertIn("expected_config_generation", params)
+        self.assertIn("expected_runtime_generation", params)
+
+        store = fx.runtime._store("example-main")
+        lock_fd = runner_module._try_acquire_lock(store)
+        self.assertIsNotNone(lock_fd)
+        assert lock_fd is not None
+        run_id = "worker-generation-mismatch"
+        started_at = runner_module._utc_now()
+        head = run(fx.checkout, "git", "rev-parse", "HEAD").stdout.strip()
+        starting = runner_module._state_template(
+            project="example-main",
+            run_id=run_id,
+            status="STARTING",
+            head=head,
+            started_at=started_at,
+            timeout_seconds=fx.runtime._profile("example-main").timeout_seconds,
+            launcher_pid=os.getpid(),
+        )
+        store.write_state(starting)
+        store.prepare_log()
+        starting["log_run_id"] = run_id
+        store.write_state(starting)
+        rc = runner_module._run_verify_worker(
+            config_path=fx.config,
+            project="example-main",
+            lock_fd=lock_fd,
+            run_id=run_id,
+            expected_head=head,
+            started_at=started_at,
+            expected_config_generation="0" * 64,
+            expected_runtime_generation="0" * 64,
+        )
+        print(
+            "AR01_WORKER_DIAGNOSTIC",
+            {"rc": rc, "changed_verifier_ran": (fx.checkout / "ignored.tmp").exists()},
+        )
+        self.assertEqual(rc, 70)
+        self.assertFalse((fx.checkout / "ignored.tmp").exists())
 
     def test_verifier_exit_zero_with_valid_postconditions_passes(self) -> None:
         fx = RuntimeFixture(self)
