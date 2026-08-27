@@ -1,0 +1,249 @@
+protocol_version: 3
+
+task_id: TASK-0004
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0004/task.yaml
+
+handoff:
+  type: EXECUTOR
+  type_confirmed: true
+  repository: phatnguyen03022001/agent-runtime
+  branch: dev
+  base_head: "7a618edd77f322ec819e3462bd61e8ed2b0c3c82"
+  continuation_head: "ef8cbcf20eefcfca1fd0198744947c7d27fafe3f"
+  main_head: "12172419c08c1f069c7d6cf2ef8842ed2838e0bb"
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+  authorized_base_head: "7a618edd77f322ec819e3462bd61e8ed2b0c3c82"
+  pre_execution_head: "7a618edd77f322ec819e3462bd61e8ed2b0c3c82"
+  final_execution_head: "dea07008a6a0733919fb87e717d4281f573e081b"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "0a57fbfd39b96494f22fea1f7847aab1d5c8bbf1"
+  observed_revision: "0a57fbfd39b96494f22fea1f7847aab1d5c8bbf1"
+
+execution_skills_used:
+  required:
+    - executor
+    - reliability
+    - security-review
+    - verification
+    - simplicity
+  recommended: []
+  external:
+    - superpowers:using-superpowers
+    - superpowers:systematic-debugging
+    - superpowers:test-driven-development
+    - superpowers:verification-before-completion
+
+pre_execution_checks:
+  protocol_version_supported: true
+  handoff_type_confirmed: true
+  task_at_base_confirmed: true
+  task_identity_confirmed: true
+  architect_binding_confirmed: true
+  repository_confirmed: true
+  branch_confirmed: true
+  base_head_confirmed: true
+  skill_revision_confirmed: true
+  required_execution_skills_available: true
+  structure_authority_confirmed: true
+  working_tree_clean: true
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - deterministic_python_test_execution
+  available:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - deterministic_python_test_execution
+  missing: []
+  passed: true
+
+causal_tdd:
+  repeated_in_continuation: false
+  evidence:
+    - commit: "efc5553140ac19e9320a13c5a0aac1cfea53a324"
+      result: RED
+      tests_run: 58
+      intended_failures: 4
+      evidence: "Causal regressions reproduced AR-02 exact-worktree-root absence, AR-01 config-generation drift acceptance, AR-01 runtime-generation drift acceptance, and AR-04 stale ACTIVE/free-lock false INTERRUPTED. AR01_CONFIG_DIAGNOSTIC accepted=True terminal=PASS changed_verifier_ran=True; AR01_RUNTIME_DIAGNOSTIC accepted=True terminal=PASS; AR04_DIAGNOSTIC status=INTERRUPTED recorded_status=RUNNING verification_ok=False."
+    - commit: "e2a67b62cfb3501d056f9983d51c2501314a739c"
+      result: RED
+      tests_run: 59
+      intended_failures: 5
+      evidence: "Added the detached-worker generation-binding regression. The prior four causal failures remained and the new worker test failed because _run_verify_worker did not yet require expected_config_generation / expected_runtime_generation."
+
+focused_verification:
+  required: true
+  performed: true
+  result: PASS
+  tests_run: 9
+  exact_tree: "ef8cbcf20eefcfca1fd0198744947c7d27fafe3f tree with only tests/test_final_hardening.py replaced by blob 5d9f46a5ebe23912b4b75c7285452286ba4c829c; this is the tree committed as dea07008a6a0733919fb87e717d4281f573e081b."
+  evidence: "Nine explicit final tests passed: the two corrected H2 direct-worker call sites; AR-01 config drift refusal; AR-01 runtime-source drift refusal; AR-01 worker generation mismatch refusal; AR-04 terminal reread; unchanged-generation verifier PASS; AR-02 subdirectory rejection before destructive mutation; and exact linked-worktree root compatibility. Diagnostics: H2 rc=70 with process group gone and lock reacquired; AR01_CONFIG accepted=False changed_verifier_ran=False; AR01_RUNTIME accepted=False; AR01_WORKER rc=70 changed_verifier_ran=False; AR04 status=PASS verification_ok=True; AR02 rejected=True tracked_preserved=True."
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: PASS
+  evidence: "Repository-owned ./verify exited 0 on the exact final implementation/test tree before publication. 59 tests ran and all passed in 13.971s; py_compile passed for all six agent_runtime modules; the shell=True guard passed; the git clean -fdx guard passed. Final diagnostics also showed H1=[], H2 cleanup/lock PASS, H3 PATH-only environment PASS, M1 1 MiB log cap fail-closed behavior PASS, AR-01/AR-02/AR-04 PASS."
+
+object_evidence:
+  implementation_tree: "82e56bfe5749afa958f449b67d3b5b43a1c2e9a9"
+  corrected_test_blob: "5d9f46a5ebe23912b4b75c7285452286ba4c829c"
+  original_test_blob: "34a68de1bed682b0ce0344974a7dc2a03769c861"
+  production_runner_blob: "1eee28aae9a37df1617617206c276db96d218aa8"
+  production_git_ops_blob: "d2dc6361c8edf5b1cde46407c2f57b8bd549dbfa"
+  server_surface_blob: "1a7cbcc88b7487df1bcfa3259dad47a70ad8ecc1"
+  verifier_blob: "92a882611aa8bf5570bd9a281037c42c2962f990"
+  manifest_check: "PASS: 18/18 runtime/test/script verifier inputs matched immutable Git blob identities; the only intentional substitution from ef8cbcf was test_final_hardening.py -> 5d9f46a."
+
+local_hygiene:
+  result: PASS
+  run_root: "/tmp/task0004-verify"
+  cleanup_performed: true
+  retained: []
+  evidence: "Scratch verifier tree was explicitly owned by this TASK-0004 execution, realpath-checked as /tmp/task0004-verify, confirmed non-symlink, and removed after final evidence capture."
+
+changed_files:
+  - path: README.md
+    summary: "Document exact-worktree-root enforcement and runtime/config generation binding/restart semantics."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: agent_runtime/git_ops.py
+    summary: "Enforce configured checkout equals Git worktree top level before destructive sync and trusted repository inspection, preserving linked-worktree roots and clean -fd semantics."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: agent_runtime/runner.py
+    summary: "Bind launcher and detached worker to immutable config/runtime generation identities and reread stale ACTIVE state after free-lock observation before INTERRUPTED synthesis."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: tests/test_git_ops.py
+    summary: "Causal/final AR-02 regressions for subdirectory rejection and exact linked-worktree compatibility."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: tests/test_runner.py
+    summary: "Causal/final AR-01 launcher/worker generation regressions and AR-04 stale ACTIVE/free-lock terminal-reread regression."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: tests/test_final_hardening.py
+    summary: "Compatibility-only update to two existing direct private _run_verify_worker calls, passing the RuntimeFixture-owned config/runtime generation identities."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: .agent/tasks/TASK-0004/report.yaml
+    summary: "Executor-owned protocol-v3 evidence for TASK-0004 revision 1."
+    new_file: true
+    in_scope: true
+    structure_authorized: true
+
+commits_created:
+  - sha: "efc5553140ac19e9320a13c5a0aac1cfea53a324"
+    message: "test(runtime): reproduce TASK-0004 binding defects"
+  - sha: "e2a67b62cfb3501d056f9983d51c2501314a739c"
+    message: "test(runtime): pin worker generation mismatch"
+  - sha: "ef8cbcf20eefcfca1fd0198744947c7d27fafe3f"
+    message: "fix(runtime): bind verification generation and worktree root"
+  - sha: "dea07008a6a0733919fb87e717d4281f573e081b"
+    message: "test(runtime): pass worker generation identity in hardening tests"
+
+pushed: true
+promoted_to_main: false
+
+continuation_history:
+  - sequence: 1
+    result: INCOMPLETE_EXECUTION
+    evidence: "Initial execution published causal tests and production implementation through ef8cbcf20eefcfca1fd0198744947c7d27fafe3f. ./verify on ef8cbcf ran 59 tests; all new AR regressions were green, but two pre-existing tests/test_final_hardening.py direct private-worker calls errored with TypeError because they still used the old _run_verify_worker argument list. No report was created."
+  - sequence: 2
+    result: BLOCKED
+    evidence: "During the first completion continuation, an Executor capability-probe mistake created unauthorized branch x-should-not-create at ef8cbcf20eefcfca1fd0198744947c7d27fafe3f. Executor immediately failed closed and performed no further TASK mutation. The available connector did not expose branch deletion. The operator/Governing Architect removed the branch and independently re-established dev=ef8cbcf, main=12172419, branches exactly {dev, main}."
+  - sequence: 3
+    result: INCOMPLETE_EXECUTION
+    evidence: "A later continuation independently materialized the compatibility correction as exact blob 5d9f46a5ebe23912b4b75c7285452286ba4c829c but stopped before final focused/root verification or remote publication. dev remained ef8cbcf and report.yaml remained absent."
+  - sequence: 4
+    result: COMPLETED_TO_REVIEW_BOUNDARY
+    evidence: "Current continuation rebound exact authority/topology, object-checked the verifier tree, passed 9 focused tests and repository-owned ./verify with 59/59 tests, created compatibility commit dea07008 as a non-force fast-forward, verified the complete base-to-dea diff, and proceeded to this separate report-only commit."
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PROVEN
+    evidence: "Causal RED at efc555 proved config/runtime drift was accepted pre-fix. Final focused tests on the exact dea07008 tree prove both config-byte drift and worker-relevant runtime-source drift cause run_verify refusal with restart required, while unchanged-generation verification passes."
+  - criterion_id: AC-2
+    status: PROVEN
+    evidence: "Causal worker regression at e2a67 failed before expected generation parameters existed. Final focused worker mismatch test passed with rc=70 and changed_verifier_ran=False; launcher passes immutable config/runtime generations to the worker and worker revalidates before profile resolution and verifier launch."
+  - criterion_id: AC-3
+    status: PROVEN
+    evidence: "Final AR02_DIAGNOSTIC proves a configured subdirectory is rejected and tracked enclosing-worktree content is preserved before destructive mutation; the exact linked-worktree-root regression also passes. git_ops keeps clean -fd, not -fdx."
+  - criterion_id: AC-4
+    status: PROVEN
+    evidence: "Final deterministic stale ACTIVE/free-lock race returns the concurrently committed terminal PASS and finalized diagnostic log after authoritative reread instead of transient INTERRUPTED; genuine stale active/free-lock fail-closed behavior remains covered by the full suite."
+  - criterion_id: AC-5
+    status: PROVEN
+    evidence: "Repository-owned ./verify passed all 59 tests, including public four-tool/project-only server surface, disposable gate, remote identity, flock handoff, process-group cleanup, bounded state/logs, strict PASS semantics, PATH-only verifier environment, clean -fd, and fail-closed recovery. server.py remained unchanged at blob 1a7cbcc88b7487df1bcfa3259dad47a70ad8ecc1."
+  - criterion_id: AC-6
+    status: PROVEN
+    evidence: "./verify exited 0 on the object-checked exact final implementation tree later committed as dea07008a6a0733919fb87e717d4281f573e081b: 59 tests PASS, py_compile PASS, shell=True guard PASS, clean -fdx guard PASS."
+  - criterion_id: AC-7
+    status: PROVEN
+    evidence: "Original base 7a618edd..dea07008 is exactly four commits changing only six authorized existing files: README.md, agent_runtime/git_ops.py, agent_runtime/runner.py, tests/test_git_ops.py, tests/test_runner.py, tests/test_final_hardening.py. The final compatibility commit is exactly one file +4/-0. Immediately before report creation dev=dea07008, main=12172419, branches exactly {dev, main}; report parent/diff/ref proof is performed immediately after this self-referential report commit."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Original execution bound TASK-0004 revision 1 to base 7a618edd and pinned agent-skills@0a57fbfd39b96494f22fea1f7847aab1d5c8bbf1 with all required EXECUTION capabilities. Current continuation refreshed again before mutation and required dev=ef8cbcf, main=12172419, branches exactly {dev, main}, task rev 1 APPROVED, pinned skill SHA resolvable, and no report.yaml."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "Causal RED remains attributable to existing commits efc555 and e2a67; it was not repeated during continuation. The first had 58 tests with four intended AR-01/02/04 failures; the second had 59 tests with five intended failures including detached-worker generation binding."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "Production correction is confined to existing README.md, agent_runtime/git_ops.py, and agent_runtime/runner.py. No new module, config/state schema, watcher, registry, orchestration layer, get_head redesign, or unrelated audit observation was introduced."
+  - check_id: CHECK-4
+    result: PASS
+    evidence: "Nine focused final tests passed on the exact corrected tree, including both compatibility H2 calls and all required generation/root/race classes plus normal unchanged-generation success."
+  - check_id: CHECK-5
+    result: PASS
+    evidence: "Repository-owned ./verify exited 0 with 59/59 tests. test_server_surface proved the public MCP tool set remains exactly get_head(project), sync(project), run_verify(project), get_last_log(project). test_git_ops plus the root grep guard prove clean -fd remains and clean -fdx is absent."
+  - check_id: CHECK-6
+    result: PASS
+    evidence: "ef8cbcf..dea07008 is exactly one authorized file, tests/test_final_hardening.py, +4/-0; dea07008 was published to dev with force=false. Complete 7a618edd..dea07008 is exactly four commits and the six authorized files listed in changed_files, with no unrelated scope."
+  - check_id: CHECK-7
+    result: PENDING_POST_COMMIT
+    evidence: "Pre-report half passed: immediately before report creation dev=dea07008a6a0733919fb87e717d4281f573e081b, main=12172419c08c1f069c7d6cf2ef8842ed2838e0bb, branches exactly {dev, main}, report.yaml absent, and implementation diff bounded. Post-report sole-parent/report-only-diff/ref/topology verification is intentionally performed after this self-referential report commit and recorded in the Executor terminal result."
+
+discovered_gaps: []
+structural_observations: []
+
+deviations_from_task:
+  - deviation_id: DEV-001
+    type: unauthorized_branch_creation
+    description: "An Executor capability-probe mistake in an earlier continuation created branch x-should-not-create at ef8cbcf despite TASK-0004 create_branch=false and required topology {dev, main}."
+    impact: "Temporary branch-topology violation only; dev and main were not moved by the incident and no task implementation/report mutation followed while topology was invalid."
+    resolution: "Executor stopped fail-closed. Operator/Governing Architect removed the branch using an external authorized surface, then independently confirmed dev=ef8cbcf, main=12172419, branches exactly {dev, main} before execution resumed."
+    blocks_current_task: false
+
+blockers: []
+
+working_tree_after:
+  clean: true
+  summary: "Owned scratch verification tree was removed after PASS evidence capture. Canonical implementation state before this report commit was remote dev=dea07008a6a0733919fb87e717d4281f573e081b with main unchanged and topology exactly {dev, main}."
+
+result: NEEDS_REVIEW
