@@ -1,0 +1,222 @@
+protocol_version: 3
+
+task_id: TASK-0004
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: follow_up
+  task_id: ""
+  gap_id: "ECOSYSTEM_RUNTIME_AUDIT"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "0a57fbfd39b96494f22fea1f7847aab1d5c8bbf1"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - security-review
+  - verification
+  - simplicity
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - security-review
+    - verification
+    - simplicity
+  recommended: []
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "Governing Architect cross-repository synthesis after the independent agent-runtime audit bound to 12172419c08c1f069c7d6cf2ef8842ed2838e0bb."
+    role: "Architect judgment that AR-01, AR-02, and AR-04 are reproducible PROVEN_DEFECT findings requiring one bounded correction."
+    precedence: 1
+  - source: "agent-runtime source at 12172419c08c1f069c7d6cf2ef8842ed2838e0bb"
+    role: "Exact implementation subject reproducing the three defects."
+    precedence: 2
+  - source: "README.md at 12172419c08c1f069c7d6cf2ef8842ed2838e0bb"
+    role: "Current documented reload, disposable-checkout, and runtime trust boundary."
+    precedence: 3
+  - source: "phatnguyen03022001/agent-skills@0a57fbfd39b96494f22fea1f7847aab1d5c8bbf1"
+    role: "Pinned protocol v3 governance."
+    precedence: 4
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing agent_runtime runtime modules, README, and test suite."
+  rationale: "All three corrections fit the current modules and existing tests. No new module, process layer, state schema, config schema, registry, orchestration abstraction, or public tool is justified."
+
+objective: "Close the three proven runtime binding defects: prevent detached verification from crossing the long-lived runtime/config generation boundary, bind every configured checkout to the exact Git worktree root before destructive synchronization or verification reliance, and eliminate the get_last_log ACTIVE-state/lock TOCTOU false-INTERRUPTED result, while preserving the narrow four-tool architecture and existing explicit trust boundaries."
+
+scope:
+  required_changes:
+    - "Use causal TDD on the exact authorized base. Before production changes, add focused regressions that reproduce AR-01, AR-02, and AR-04 against the pre-fix implementation and record the causal failing evidence."
+    - "AR-01: bind run_verify to the long-lived AgentRuntime generation. AgentRuntime must capture an immutable launch-time identity for the trusted config bytes and worker-relevant runtime source generation. Before accepting a verification launch, refuse if the current on-disk config/runtime generation no longer matches that cached identity. The detached worker must receive enough expected generation identity to revalidate the same binding before it resolves/executes the verifier, so launch-to-worker drift cannot silently adopt a newer verify_argv/profile or runtime source. A reload/restart remains the mechanism for adopting changed runtime/config/profile state."
+    - "Keep the generation binding local and deterministic. A small digest/fingerprint helper in an existing module is acceptable. Do not add a daemon, watcher, reload subsystem, manifest, registry, generated artifact, config field, or persistent generation database. Do not persist new state fields unless a concrete existing invariant makes persistence strictly necessary; if a state-schema change appears necessary, stop for revised authority rather than expanding automatically."
+    - "AR-02: add an exact checkout-root invariant using Git's own worktree identity. Before destructive sync and before runtime verification relies on repository identity, require the configured resolved checkout to equal the resolved `git rev-parse --show-toplevel` result for that checkout. A configured subdirectory of a larger repository must fail closed even when remote URL/branch otherwise match. Preserve linked-worktree support when the configured path is exactly that worktree's top level."
+    - "Ensure sync checks the exact worktree-root invariant before fetch/switch/reset/clean can perform destructive mutation. The regression must prove a subdirectory profile cannot cause reset/clean effects in its enclosing worktree. Preserve the existing disposable=true gate and exact remote identity checks."
+    - "AR-04: make get_last_log observation internally consistent without serializing ordinary reads behind the active verifier. If the first persisted sample is ACTIVE but the subsequent lock probe reports free, reread authoritative state before synthesizing INTERRUPTED. If the reread is terminal, return that terminal state and its correctly associated finalized log. Only synthesize the existing interrupted interpretation when authoritative reread still justifies it."
+    - "Do not expand AR-04 into a get_head redesign. The weaker get_head sampling observation remains outside this bounded task unless implementation mechanically shares a tiny helper without changing get_head semantics."
+    - "Update README.md only if needed to make the now-enforced runtime-generation and exact-worktree-root behavior explicit. Preserve the existing condition-based capability-freshness guidance from TASK-0003."
+    - "Run focused regressions plus the repository-owned root verifier on the exact final implementation. Produce canonical TASK-0004 report evidence in a separate report-only commit and stop at the Governing Architect review boundary."
+  allowed_existing_files_or_components:
+    - agent_runtime/runner.py
+    - agent_runtime/git_ops.py
+    - agent_runtime/config.py
+    - README.md
+    - tests/test_runner.py
+    - tests/test_git_ops.py
+    - tests/test_final_hardening.py
+    - tests/test_release_blockers.py
+    - verify
+    - .agent/tasks/TASK-0004/task.yaml
+  expected_files_are_restrictive: true
+
+invariants:
+  - "Public MCP surface remains exactly get_head(project), sync(project), run_verify(project), get_last_log(project); no fifth tool or signature expansion is introduced."
+  - "Long-lived runtime/config/profile changes are adopted only after the runtime generation is reloaded/restarted; a detached worker cannot silently cross that boundary."
+  - "The configured checkout is the exact Git worktree top level before destructive sync or trusted verification use. disposable=true remains necessary but is not sufficient by itself."
+  - "get_last_log never manufactures PASS and no longer returns a false terminal INTERRUPTED merely because an ACTIVE sample became stale before a free-lock observation."
+  - "Existing strict PASS requirements remain: verifier exit zero, no timeout/failure, same HEAD, configured branch, clean tree, cached-remote synchronization, and exact remote identity."
+  - "Ignored state remains intentionally preserved by git clean -fd; do not change to -fdx and do not claim hermetic verification."
+  - "Dependency/verifier argv remains trusted profile input; this task binds its generation but does not sandbox verifier OS effects."
+  - "Per-project flock serialization, inherited zero-gap lock handoff, process-group cleanup, bounded logs, atomic state, and fail-closed corruption/recovery behavior remain intact."
+  - "repository remains an operator-facing label while expected_remote_url remains the verified Git remote identity; AR-06 is not authorized for renaming or schema change here."
+  - "MCP tool annotation compatibility behavior and run_verify destructiveHint are unchanged; AR-03/AR-07 are not implementation authority in this task."
+  - "Branches remain exactly {dev, main}; main is not mutated."
+
+forbidden_changes:
+  - "Do not modify the four-tool public API, add shell/exec/path/command/profile mutation capability, add orchestration, scheduling, container, GitHub-writing, or multi-tenant machinery."
+  - "Do not change config schema/version or add required trusted-profile fields."
+  - "Do not add a runtime reload watcher/hot-reload system, global generation registry, new persistent state database, new state schema, or new top-level/module structure."
+  - "Do not change clean -fd to clean -fdx or delete ignored files/state."
+  - "Do not redesign verifier environment inheritance, remote freshness semantics, fixed Git timeouts, repository label semantics, MCP annotation compatibility machinery, or historical IELTS prose."
+  - "Do not modify install.sh, start.sh, requirements.txt, .env.example, released branch main, prior task/report artifacts, tags, releases, repository metadata, or branch topology."
+  - "Do not force-push, rebase, rewrite history, promote, tag, release, or create review.yaml."
+  - "Do not perform unrelated cleanup or split runner.py merely for style."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - .agent/tasks/TASK-0004/report.yaml
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: ""
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions:
+    - BLOCKED
+    - STALE_STATE
+    - AUTHORITY_REQUIRED
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    - REVIEW_REQUIRED
+    - REVERIFY_REQUIRED
+    - USER_STOP
+
+capability_requirements:
+  EXECUTION:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - deterministic_python_test_execution
+  REVIEW:
+    - exact_commit_report_resolution
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "AR-01 is closed: a long-lived AgentRuntime cannot launch a verifier using changed config/profile or changed worker-relevant runtime source until runtime reload/restart establishes a new generation."
+    evidence_required: "Causal focused regressions reproduce pre-fix config-generation and runtime-generation drift, then prove final launch refusal/revalidation on exact changed generations and normal launch success when generation is unchanged."
+  - id: AC-2
+    requirement: "Detached worker execution is bound to the same generation accepted by the launcher rather than independently adopting a newer configuration/runtime generation."
+    evidence_required: "Focused worker/launcher test proves expected generation identity is checked before verifier execution and a mismatch cannot execute the changed verifier."
+  - id: AC-3
+    requirement: "AR-02 is closed: configured checkout must equal the exact Git worktree root and a subdirectory profile cannot trigger destructive mutation of its enclosing repository."
+    evidence_required: "Focused Git fixture demonstrates subdirectory rejection before destructive effects and exact-root/linked-worktree-compatible behavior remains valid."
+  - id: AC-4
+    requirement: "AR-04 is closed: stale ACTIVE plus newly free lock rereads state before INTERRUPTED synthesis and returns a concurrently committed terminal state when present."
+    evidence_required: "Deterministic race regression controls state reads/lock transition and proves PASS/FAIL terminal reread is returned instead of transient INTERRUPTED; genuine active-with-free-lock stale case retains fail-closed interruption behavior."
+  - id: AC-5
+    requirement: "Existing narrow runtime safety and PASS semantics do not regress."
+    evidence_required: "All existing tests plus new regressions pass; four-tool surface, disposable gate, remote identity, flock handoff, process-group cleanup, bounded logs, strict PASS, clean -fd, and PATH-only verifier environment remain covered."
+  - id: AC-6
+    requirement: "Repository-owned verification passes on the exact final implementation."
+    evidence_required: "`./verify` exits 0 on the exact implementation commit with unittest, py_compile, shell=True guard, and clean -fdx guard all passing."
+  - id: AC-7
+    requirement: "Execution/publication remains bounded."
+    evidence_required: "Implementation commit changes only authorized existing runtime/README/test files actually needed; separate report commit changes only .agent/tasks/TASK-0004/report.yaml; main and branch topology remain unchanged."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "At execution start refresh refs and require dev equals the exact TASK-0004 handoff base, main equals 12172419c08c1f069c7d6cf2ef8842ed2838e0bb, branches exactly {dev, main}, TASK-0004 revision 1 resolves at the handoff base, and pinned agent-skills 0a57fbfd39b96494f22fea1f7847aab1d5c8bbf1 is available. Preflight all required EXECUTION capabilities before mutation."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Causal RED: on the exact base, reproduce one decisive failing regression for each AR-01 generation drift class, AR-02 subdirectory destructive-boundary class, and AR-04 stale ACTIVE/free-lock race before changing production code."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Implement the smallest correction inside the existing modules. No new module/config/state schema/framework is permitted."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Run the focused tests covering generation binding, exact worktree-root binding, and get_last_log reread/race behavior; require all focused tests PASS on final code."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Run ./verify on the exact final implementation and require exit 0. Explicitly verify the public tool set/signatures remain unchanged and git clean -fdx remains absent."
+      required: true
+    - id: CHECK-6
+      command_or_check: "Before implementation commit, prove the diff is restricted to authorized files and no unrelated audit observation was implemented. Commit/push implementation non-force to dev."
+      required: true
+    - id: CHECK-7
+      command_or_check: "Create .agent/tasks/TASK-0004/report.yaml with causal, focused, full-verification, exact-object, diff, lineage, and continuation evidence. Commit/push it separately, then verify its sole parent is the implementation commit, its diff is report-only, dev equals the report commit, main remains unchanged, and branches remain exactly {dev, main}."
+      required: true
+  authoritative_verification:
+    required: true
+    mechanism: "./verify"
+    expected_signal: "exit 0"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
