@@ -83,6 +83,45 @@ class GitOpsTests(unittest.TestCase):
         with self.assertRaises(GitError):
             sync_checkout(safe)
 
+    def test_sync_rejects_configured_subdirectory_before_destructive_mutation(self) -> None:
+        fx = GitFixture(self)
+        nested = fx.checkout / "nested"
+        nested.mkdir()
+        (fx.checkout / "tracked.txt").write_text("must survive rejected sync\n", encoding="utf-8")
+        nested_profile = ProjectProfile(
+            **{**fx.profile.__dict__, "checkout": nested.resolve()}
+        )
+        with self.assertRaises(GitError):
+            sync_checkout(nested_profile)
+        self.assertEqual(
+            (fx.checkout / "tracked.txt").read_text(encoding="utf-8"),
+            "must survive rejected sync\n",
+        )
+        print(
+            "AR02_DIAGNOSTIC",
+            {"rejected": True, "tracked_preserved": True},
+        )
+
+    def test_exact_linked_worktree_root_remains_supported(self) -> None:
+        fx = GitFixture(self)
+        linked = Path(fx.temp.name) / "linked"
+        run(fx.checkout, "git", "branch", "linked")
+        run(fx.checkout, "git", "push", "origin", "linked")
+        run(fx.checkout, "git", "worktree", "add", str(linked), "linked")
+        linked_profile = ProjectProfile(
+            **{
+                **fx.profile.__dict__,
+                "checkout": linked.resolve(),
+                "branch": "linked",
+            }
+        )
+        state = inspect_repository(linked_profile)
+        self.assertTrue(state["ok"])
+        self.assertEqual(state["current_branch"], "linked")
+        self.assertTrue(state["in_sync"])
+        synced = sync_checkout(linked_profile)
+        self.assertTrue(synced["ok"])
+
     def test_runtime_git_api_contains_no_push_commit_branch_creation_or_fdx(self) -> None:
         source = (Path(__file__).parents[1] / "agent_runtime" / "git_ops.py").read_text(encoding="utf-8")
         self.assertNotIn('"push"', source)

@@ -9,7 +9,9 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
+import agent_runtime.runner as runner_module
 from agent_runtime.runner import AgentRuntime
 
 
@@ -100,6 +102,51 @@ class RunnerTests(unittest.TestCase):
         self.assertFalse(result["accepted"])
         self.assertIn("remote", result["error"].lower())
 
+    def test_config_generation_change_requires_restart_before_verify(self) -> None:
+        fx = RuntimeFixture(self)
+        changed = fx.config.read_text(encoding="utf-8").replace(
+            'verify_argv = ["./verify"]',
+            'verify_argv = ["bash", "-lc", "echo generation-drift > ignored.tmp; exit 0"]',
+        )
+        fx.config.write_text(changed, encoding="utf-8")
+        launch = fx.runtime.run_verify("example-main")
+        terminal = fx.wait_terminal() if launch.get("accepted") else None
+        print(
+            "AR01_CONFIG_DIAGNOSTIC",
+            {
+                "accepted": launch.get("accepted"),
+                "terminal": terminal.get("status") if terminal else None,
+                "changed_verifier_ran": (fx.checkout / "ignored.tmp").exists(),
+            },
+        )
+        self.assertFalse(launch["accepted"])
+        self.assertIn("restart", launch["error"].lower())
+        self.assertFalse((fx.checkout / "ignored.tmp").exists())
+
+    def test_runtime_source_generation_change_requires_restart_before_verify(self) -> None:
+        fx = RuntimeFixture(self)
+        original_read_bytes = Path.read_bytes
+        runner_path = Path(runner_module.__file__).resolve()
+
+        def drifted_read_bytes(path: Path) -> bytes:
+            data = original_read_bytes(path)
+            if path.resolve() == runner_path:
+                return data + b"\n# simulated runtime generation drift\n"
+            return data
+
+        with mock.patch.object(Path, "read_bytes", new=drifted_read_bytes):
+            launch = fx.runtime.run_verify("example-main")
+        terminal = fx.wait_terminal() if launch.get("accepted") else None
+        print(
+            "AR01_RUNTIME_DIAGNOSTIC",
+            {
+                "accepted": launch.get("accepted"),
+                "terminal": terminal.get("status") if terminal else None,
+            },
+        )
+        self.assertFalse(launch["accepted"])
+        self.assertIn("restart", launch["error"].lower())
+
     def test_verifier_exit_zero_with_valid_postconditions_passes(self) -> None:
         fx = RuntimeFixture(self)
         launch = fx.runtime.run_verify("example-main")
@@ -188,6 +235,87 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(state["status"], "INTERRUPTED")
         self.assertFalse(state["verification_ok"])
         self.assertIn("partial diagnostics", store.log_path.read_text())
+
+    def test_stale_active_free_lock_rereads_concurrent_terminal_state(self) -> None:
+        fx = RuntimeFixture(self)
+        store = fx.runtime._store("example-main")
+        store.ensure_directory()
+        run_id = "race-terminal"
+        head = run(fx.checkout, "git", "rev-parse", "HEAD").stdout.strip()
+        active = {
+            "version": 1,
+            "project": "example-main",
+            "run_id": run_id,
+            "status": "RUNNING",
+            "head": head,
+            "launcher_pid": 101,
+            "worker_pid": 102,
+            "verify_pid": 103,
+            "verify_pgid": 103,
+            "timeout_seconds": 10,
+            "started_at": "2026-08-27T00:00:00+00:00",
+            "finished_at": None,
+            "duration_seconds": None,
+            "exit_code": None,
+            "timed_out": False,
+            "verification_ok": None,
+            "failure_kind": None,
+            "working_tree_after": None,
+            "postconditions": {
+                "same_head": None,
+                "configured_branch": None,
+                "clean": None,
+                "in_sync": None,
+                "remote_identity": None,
+            },
+            "log_run_id": run_id,
+            "log_finalized": False,
+        }
+        terminal = dict(active)
+        terminal.update(
+            {
+                "status": "PASS",
+                "finished_at": "2026-08-27T00:00:01+00:00",
+                "duration_seconds": 1.0,
+                "exit_code": 0,
+                "verification_ok": True,
+                "working_tree_after": {
+                    "ok": True,
+                    "head": head,
+                    "cached_remote_head": head,
+                    "configured_branch": "main",
+                    "current_branch": "main",
+                    "clean": True,
+                    "in_sync": True,
+                    "remote_identity_ok": True,
+                },
+                "postconditions": {
+                    "same_head": True,
+                    "configured_branch": True,
+                    "clean": True,
+                    "in_sync": True,
+                    "remote_identity": True,
+                },
+                "log_finalized": True,
+            }
+        )
+        store.log_path.write_text("terminal diagnostics\n", encoding="utf-8")
+        with (
+            mock.patch.object(runner_module.StateStore, "read_state", side_effect=[(active, None), (terminal, None)]),
+            mock.patch.object(runner_module, "_lock_busy", return_value=(False, None)),
+        ):
+            observed = fx.runtime.get_last_log("example-main")
+        print(
+            "AR04_DIAGNOSTIC",
+            {
+                "status": observed.get("status"),
+                "recorded_status": observed.get("recorded_status"),
+                "verification_ok": observed.get("verification_ok"),
+            },
+        )
+        self.assertEqual(observed["status"], "PASS")
+        self.assertTrue(observed["verification_ok"])
+        self.assertIn("terminal diagnostics", observed["log_tail"])
 
     def test_corrupt_state_recovery_never_manufactures_pass(self) -> None:
         fx = RuntimeFixture(self)
