@@ -1,0 +1,229 @@
+protocol_version: 3
+
+task_id: TASK-0011
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: maintainer_objective_change
+  task_id: "TASK-0010"
+  gap_id: "RESTORE_OPTIONAL_LOCAL_TERMINAL_PLUGIN_HOST"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "33f138c56dee6a2a1e8b8a6dc52b1399452ef177"
+
+architect_analysis_skills:
+  - architect
+  - simplicity
+  - security-review
+  - verification
+
+execution_skills:
+  required:
+    - executor
+    - simplicity
+    - security-review
+    - verification
+  recommended: []
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "Explicit current operator decision on 2026-08-28: retain agent-runtime as an optional manually-started Mac capability. The existing ChatGPT plugin identity remains fixed; when ./start.sh is running and that plugin is live/refreshed, ChatGPT may use whatever tools the current source exposes. When it is off or not useful, normal ChatGPT/GitHub Executor capability remains the fallback."
+    role: "Current durable maintainer objective replacing the prior deletion objective."
+    precedence: 1
+  - source: "Explicit current operator safety objective: when the optional host is live, ChatGPT should be able to run local Terminal work without operator copy/paste, with modest bounded safety rather than a new sandbox/orchestration platform."
+    role: "Defines the new product responsibility and proportional safety target."
+    precedence: 2
+  - source: "phatnguyen03022001/agent-runtime TASK-0008 revision 2 accepted review at b52cdc73b0589d9e14adfbb3647fcccdb0ee65ab"
+    role: "Historical accepted retirement evidence; active implementation was removed and obsolete local profile/state machinery was cleaned."
+    precedence: 3
+  - source: "phatnguyen03022001/agent-runtime TASK-0009 revision 1 accepted review at 5f8cef4efafea1925a711aee73874b9c4ec95a3a"
+    role: "Historical accepted tombstone promotion evidence."
+    precedence: 4
+  - source: "phatnguyen03022001/agent-runtime TASK-0010 revision 3 at d8480574277de93c6cc4b1c2f15878fc9eba7219"
+    role: "Cancelled checkout-deletion authority after operator clarified true foreground activation semantics."
+    precedence: 5
+  - source: "phatnguyen03022001/agent-runtime@a754666018483e7b78e3be4878e18210cf4f777b"
+    role: "Historical working implementation reference for tunnel-client foreground start/install mechanics only; its four-tool profile/sync/runner/state design is not restoration authority."
+    precedence: 6
+  - source: "phatnguyen03022001/agent-skills@33f138c56dee6a2a1e8b8a6dc52b1399452ef177"
+    role: "Current authority/capability/consequence and simplicity governance."
+    precedence: 7
+
+structure_authority:
+  status: RESOLVED
+  source: "Current operator objective plus historical foreground tunnel mechanics and accepted subtraction evidence."
+  rationale: "The smallest useful responsibility is an optional manually-started local MCP host exposing one generic bounded Terminal execution tool. Reintroducing trusted project profiles, disposable checkout sync, detached verification state, four project-ID tools, orchestration, command-specific governance, or a hard sandbox would recreate complexity not justified by the new trusted-agent objective."
+
+objective: "Restore agent-runtime on dev as a small optional manually-started macOS local plugin host. It exposes one generic terminal_exec capability sufficient for normal local engineering work when ./start.sh is foreground-live, while normal ChatGPT/GitHub execution remains fully valid when the plugin is off. Provide modest mechanical safety without claiming hard filesystem confinement or making agent-runtime an authority/governance root."
+
+scope:
+  required_changes:
+    - "Replace the retired README tombstone with concise active documentation describing agent-runtime as an optional local accelerator, never a required workflow dependency: operator starts ./start.sh in a foreground Terminal; while that process/tunnel and the existing ChatGPT plugin exposure are live, ChatGPT may use the current source tool surface; when off/unavailable/not useful, ordinary ChatGPT/GitHub Executor capability is the fallback."
+    - "Implement exactly one public MCP tool named terminal_exec. Do not restore get_head, sync, run_verify, get_last_log, trusted project profiles, disposable checkout management, verification state/log machinery, or runtime generation/locking systems."
+    - "terminal_exec accepts a non-empty argv list of strings, an absolute cwd, and a bounded timeout. Execute argv directly with shell=False; do not accept a shell command string and do not implicitly wrap with sh/bash/zsh."
+    - "Require AGENT_RUNTIME_WORKSPACE_ROOT to be an absolute existing directory. terminal_exec cwd must resolve to an existing directory at or below that root. Refuse a cwd outside the root after realpath resolution. This is a cwd/path-selection guard only; document explicitly that arbitrary executable arguments can still access host paths and this is not a mechanical filesystem sandbox."
+    - "Launch child commands non-interactively with stdin disconnected, in a dedicated process group/session suitable for bounded timeout cleanup. On timeout, terminate the child process group and return a timeout result; do not leave a detached child intentionally."
+    - "Use a minimal child environment rather than inheriting tunnel/runtime secrets wholesale. Preserve only ordinary execution variables needed for local tools (at minimum PATH, HOME, USER, TMPDIR when present, LANG/LC_* when present) plus no CONTROL_PLANE_*, AGENT_RUNTIME_*, token/key/credential variables by default. Do not expose an API for caller-selected environment variables."
+    - "Bound stdout/stderr capture and return explicit truncation metadata. Avoid unbounded memory/log growth. Return structured cwd, argv, exit_code, timed_out, stdout, stderr, and truncation signals without manufacturing success."
+    - "Mark the generic Terminal tool conservatively in MCP annotations as non-read-only/destructive-capable/open-world when the installed MCP version supports annotations. Do not claim command safety from annotations."
+    - "Restore a minimal macOS install/start surface. ./start.sh remains foreground and execs tunnel-client run for the configured profile; no daemon, LaunchAgent, background service, autostart, watcher, scheduler, or automatic restart is authorized."
+    - "install.sh may prepare only the primary checkout .venv, Python dependency, ignored .env, and exact agent-runtime tunnel-client profile needed to launch the current MCP server. It may reuse the existing CONTROL_PLANE_API_KEY / CONTROL_PLANE_TUNNEL_ID from operator-supplied environment or existing .env without printing literal values. It must derive AGENT_RUNTIME_WORKSPACE_ROOT from the parent directory of the exact bound checkout and set the agent-runtime tunnel profile to execute the current .venv Python module."
+    - "Do not recreate ~/.config/agent-runtime, ~/.local/state/agent-runtime, ~/.local/share/agent-runtime, trusted TOML project profiles, disposable verification checkouts, or old runtime state/log files."
+    - "Preserve all existing .agent/tasks/** historical evidence byte-for-byte except TASK-0011 task/report and later Architect review. Preserve LICENSE."
+    - "Add focused deterministic tests for exact one-tool public surface, argv validation, workspace-root/cwd realpath guard, shell=False/direct argv semantics, minimal environment stripping, non-interactive execution, output bounds, timeout/process cleanup, and foreground start/install structure where feasible without requiring a live tunnel/control-plane secret."
+    - "Provide a root verify entry point that runs the focused test suite and cheap compile/static checks. Verification must not require live tunnel credentials or a live ChatGPT plugin."
+    - "After implementation verification, publish TASK-0011/report.yaml as a separate report-only commit and stop at Governing Architect review. Do not promote main in this task."
+
+  allowed_existing_files_or_components:
+    - .agent/tasks/**
+    - LICENSE
+    - README.md
+    - .gitignore
+    - .env.example
+    - agent_runtime/**
+    - tests/**
+    - install.sh
+    - start.sh
+    - requirements.txt
+    - verify
+  expected_files_are_restrictive: true
+
+invariants:
+  - "agent-runtime is optional capability, never workflow authority or required dependency."
+  - "Plugin/offline absence is normal; fallback to ordinary ChatGPT/GitHub execution requires no runtime-specific ceremony."
+  - "The only public MCP tool is terminal_exec."
+  - "No shell command string interface, caller-controlled child environment, daemon/autostart, project registry/profile system, sync primitive, verifier state engine, orchestrator, queue, database, sandbox, or policy broker is introduced."
+  - "AGENT_RUNTIME_WORKSPACE_ROOT/cwd validation is not described as hard confinement; authority and secret discipline remain behavioral governance outside the runtime."
+  - "Tunnel/control-plane secret values are never printed or committed."
+  - "Historical .agent/tasks evidence remains immutable."
+  - "main remains b52cdc73b0589d9e14adfbb3647fcccdb0ee65ab and branches remain exactly {dev, main}."
+
+forbidden_changes:
+  - "Do not restore historical agent_runtime/config.py, git_ops.py, runner.py, state.py behavior or any equivalent project-profile/sync/verify/state architecture."
+  - "Do not expose get_head, sync, run_verify, get_last_log, arbitrary environment mutation, interactive stdin/TTY, daemon control, plugin-management, GitHub mutation, or task/governance tools through agent-runtime."
+  - "Do not create a command allowlist/denylist framework, per-command governance schema, approval broker, capability registry, filesystem virtualization, container/sandbox layer, orchestration service, shared mutable authority state, or another runtime generation."
+  - "Do not hard-code operator secrets, plugin IDs, tunnel credentials, or username-specific absolute paths in tracked source."
+  - "Do not read or print existing .env secret values during verification."
+  - "Do not mutate main, other repositories, branches, tags, releases, repository metadata, or GitHub repository archive/delete state."
+  - "Do not start a long-lived tunnel as part of deterministic verification or leave background processes running."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: authorized_removal_and_replacement
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - .agent/tasks/TASK-0011/report.yaml
+  unlisted_new_files:
+    allowed: true
+    max: 12
+    within:
+      - agent_runtime/
+      - tests/
+    purpose: "Small implementation/test files needed for the one-tool optional terminal host."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions:
+    - BLOCKED
+    - STALE_STATE
+    - AUTHORITY_REQUIRED
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    - REVIEW_REQUIRED
+    - REVERIFY_REQUIRED
+    - USER_STOP
+
+capability_requirements:
+  EXECUTION:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+  REVIEW:
+    - exact_commit_report_resolution
+    - repository_content_write
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "The restored product matches the new optional-host responsibility rather than resurrecting the retired runtime architecture."
+    evidence_required: "Final public MCP surface is exactly {terminal_exec}; no old four-tool/profile/sync/runner/state machinery is present; README states foreground/manual activation and normal offline fallback."
+  - id: AC-2
+    requirement: "terminal_exec provides useful generic local execution with proportional mechanical safety."
+    evidence_required: "Tests prove direct argv/shell=False execution, required absolute workspace root, cwd realpath containment, non-interactive stdin, bounded timeout/process cleanup, bounded output/truncation, minimal child environment, and structured truthful results."
+  - id: AC-3
+    requirement: "The runtime does not overclaim confinement or absorb governance authority."
+    evidence_required: "README/source make clear cwd guard is not filesystem sandboxing; no policy broker, command allowlist framework, caller env injection, task authority, or orchestration subsystem exists."
+  - id: AC-4
+    requirement: "Manual foreground lifecycle preserves operator control and existing plugin/tunnel identity model."
+    evidence_required: "start.sh runs tunnel-client foreground for the configured profile with no daemon/autostart; installer creates/reuses only .venv/.env/exact tunnel profile and does not recreate old runtime config/state/share/profile machinery."
+  - id: AC-5
+    requirement: "Deterministic repository verification is complete without requiring live operator secrets or plugin exposure."
+    evidence_required: "Focused tests plus root verify/compile checks PASS on the exact final implementation state; no live tunnel is left running by verification."
+  - id: AC-6
+    requirement: "Repository publication and historical boundaries are exact."
+    evidence_required: "Implementation is a direct child of exact execution base; historical task evidence and LICENSE unchanged; report is a separate direct report-only child; final dev is report commit, main unchanged, topology exactly {dev, main}."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Refresh GitHub truth; require exact handoff base, main=b52cdc73b0589d9e14adfbb3647fcccdb0ee65ab, branches exactly {dev, main}; resolve TASK-0011, accepted predecessor evidence, historical a754666... implementation reference, and pinned agent-skills; preflight required capabilities."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Implement the smallest one-tool optional terminal host. Use historical start/install mechanics only where they still serve foreground tunnel lifecycle; do not restore old runtime architecture."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Run focused deterministic tests for terminal_exec safety/behavior and install/start structure, then run root verify and compile/static checks on the exact final implementation tree."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Inspect exact final recursive tree/diff: public tool exactly terminal_exec; old profile/sync/verify/state source absent; README semantics exact; historical .agent/tasks and LICENSE unchanged; no unexpected files/dependencies."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Refresh dev immediately before implementation publication; require exact base; publish one implementation commit to dev only and verify its parent/diff/tree."
+      required: true
+    - id: CHECK-6
+      command_or_check: "Create/push only TASK-0011/report.yaml as a separate direct report-only child; verify report-only diff, final dev, unchanged main, exact {dev, main}, and stop at Governing Architect review."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
