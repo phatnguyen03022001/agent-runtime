@@ -1,15 +1,22 @@
 from __future__ import annotations
 
+import errno
 import json
 import os
+import signal
 import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
-from agent_runtime.executor import MAX_OUTPUT_BYTES, execute_terminal
+from agent_runtime.executor import (
+    MAX_OUTPUT_BYTES,
+    _process_group_exists,
+    _terminate_process_group,
+    execute_terminal,
+)
 
 
 class TerminalExecTests(unittest.TestCase):
@@ -141,6 +148,38 @@ class TerminalExecTests(unittest.TestCase):
         self.assertTrue(result["stderr_truncated"])
         self.assertLessEqual(len(result["stdout"].encode("utf-8")), MAX_OUTPUT_BYTES)
         self.assertLessEqual(len(result["stderr"].encode("utf-8")), MAX_OUTPUT_BYTES)
+
+    def test_process_group_probe_distinguishes_esrch_from_eperm(self) -> None:
+        with patch(
+            "agent_runtime.executor.os.killpg",
+            side_effect=ProcessLookupError(errno.ESRCH, os.strerror(errno.ESRCH)),
+        ):
+            self.assertFalse(_process_group_exists(12345))
+
+        with patch(
+            "agent_runtime.executor.os.killpg",
+            side_effect=PermissionError(errno.EPERM, os.strerror(errno.EPERM)),
+        ):
+            self.assertTrue(_process_group_exists(12345))
+
+    def test_process_group_termination_permission_errors_are_not_swallowed(self) -> None:
+        process = Mock(pid=12345)
+        process.poll.return_value = None
+
+        for denied_signal in (signal.SIGTERM, signal.SIGKILL):
+            with self.subTest(denied_signal=denied_signal):
+                def killpg(_pgid: int, sent_signal: int) -> None:
+                    if sent_signal == 0:
+                        return None
+                    if sent_signal == denied_signal:
+                        raise PermissionError(errno.EPERM, os.strerror(errno.EPERM))
+
+                with (
+                    patch("agent_runtime.executor.os.killpg", side_effect=killpg),
+                    patch("agent_runtime.executor._TERMINATE_GRACE_SECONDS", 0.0),
+                ):
+                    with self.assertRaises(PermissionError):
+                        _terminate_process_group(process)
 
     def test_timeout_terminates_process_group_and_returns_truthful_timeout(self) -> None:
         marker = self.cwd / "grandchild-survived"
