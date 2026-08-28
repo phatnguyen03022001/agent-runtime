@@ -1,0 +1,173 @@
+protocol_version: 3
+
+task_id: TASK-0013
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0013/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+  authorized_base_head: "8cceb37df21a764a5752703fdd07fb1ac5ba1f1b"
+  pre_execution_head: "8cceb37df21a764a5752703fdd07fb1ac5ba1f1b"
+  final_execution_head: "f7354caa4c0655ed61357be7012cebdc9cd203b7"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "33f138c56dee6a2a1e8b8a6dc52b1399452ef177"
+  observed_revision: "33f138c56dee6a2a1e8b8a6dc52b1399452ef177"
+
+execution_skills_used:
+  required:
+    - executor
+    - reliability
+    - verification
+    - simplicity
+  external:
+    - superpowers:systematic-debugging
+    - superpowers:test-driven-development
+    - superpowers:verification-before-completion
+
+pre_execution_checks:
+  protocol_version_supported: true
+  handoff_type_confirmed: true
+  task_at_base_confirmed: true
+  task_identity_confirmed: true
+  architect_binding_confirmed: true
+  repository_confirmed: true
+  branch_confirmed: true
+  base_head_confirmed: true
+  skill_revision_confirmed: true
+  required_execution_skills_available: true
+  structure_authority_confirmed: true
+  working_tree_clean: true
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - deterministic_python_test_execution
+    - operator_mac_verify_bridge_if_direct_mac_unavailable
+  available:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - deterministic_python_test_execution
+    - operator_mac_verify_bridge_if_direct_mac_unavailable
+  missing: []
+  passed: true
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: PASS
+  evidence: "Operator supplied the bounded final macOS verification for exact candidate f7354caa4c0655ed61357be7012cebdc9cd203b7. The bundle fetched origin/dev, required origin/dev to equal the exact candidate, archived that exact commit into an isolated temporary directory, and ran ./verify. Result: Ran 19 tests in 3.356s, OK; no ResourceWarning or leaked-child warning was reported."
+
+local_hygiene:
+  result: PASS
+  run_root: "isolated Executor scratch plus operator mktemp archive for bounded macOS verification"
+  cleanup_performed: true
+  retained: []
+  evidence: "Executor verification used isolated reconstructed candidate content; operator verification used mktemp with trap cleanup. No persistent task-owned temporary repository state was retained."
+
+implementation:
+  initial_commit: "8e6e11fac0ba93cf0e5ed121c20ce8bb7198f169"
+  correction_commit: "f7354caa4c0655ed61357be7012cebdc9cd203b7"
+  base_parent: "8cceb37df21a764a5752703fdd07fb1ac5ba1f1b"
+  public_tool_surface:
+    - terminal_exec
+  architecture_changed: false
+  install_start_lifecycle_changed: false
+  main_mutated: false
+
+verification:
+  causal_red:
+    original_operator_failure: "Canonical operator-supplied macOS/Python 3.14.6 evidence at the authorized base showed timeout cleanup raising PermissionError [Errno 1] from os.killpg(pgid, 0), followed by ResourceWarning for a still-running child."
+    deterministic_probe_regression: "A deterministic regression established ESRCH => process group absent and EPERM from signal-0 => process group still exists; the EPERM case failed before the probe fix and passed after it."
+    operator_candidate_failure: "Mandatory Mac verification of initial candidate 8e6e11fac0ba93cf0e5ed121c20ce8bb7198f169 passed the probe regression but failed the real timeout path at SIGKILL with PermissionError [Errno 1], again reporting a still-running subprocess."
+    deterministic_cleanup_regression: "A same-scope regression reproduced the lifecycle condition in which reaping the terminated leader makes the process group absent before escalation; it failed before the correction and passed after the correction."
+  final_focused_tests: "13/13 PASS"
+  final_root_verify_executor: "19/19 PASS plus Python compile and shell syntax checks"
+  final_operator_mac_verify: "19/19 PASS on exact candidate f7354caa4c0655ed61357be7012cebdc9cd203b7; no ResourceWarning/leaked-child warning"
+  public_surface: "tests/test_surface_and_scripts.py confirms public MCP surface exactly {terminal_exec}; server/install/start files were unchanged by TASK-0013 implementation."
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PROVEN
+    evidence: "Regression proves ProcessLookupError/ESRCH from signal-0 means absent while PermissionError/EPERM means the group exists. Final focused tests and root verification pass."
+  - criterion_id: AC-2
+    status: PROVEN
+    evidence: "Existing timeout and successful-leader descendant-leak regressions pass. Cleanup now polls/reaps the leader during the bounded grace period before deciding escalation, while PermissionError from actual SIGTERM or SIGKILL remains explicit and is not swallowed."
+  - criterion_id: AC-3
+    status: PROVEN
+    evidence: "Only agent_runtime/executor.py and tests/test_terminal_exec.py changed across implementation lineage. Public MCP surface remains exactly terminal_exec; install.sh, start.sh, server.py, dependency pins, and one-tool architecture are unchanged."
+  - criterion_id: AC-4
+    status: PROVEN
+    evidence: "Operator Mac verified exact candidate f7354caa4c0655ed61357be7012cebdc9cd203b7 via isolated git archive and ./verify: 19 tests ran, all OK, with no ResourceWarning or leaked-child warning."
+  - criterion_id: AC-5
+    status: PROVEN
+    evidence: "Net implementation diff from exact base to final_execution_head is restricted to agent_runtime/executor.py and tests/test_terminal_exec.py. main remained 8428d698f803250e62c9b387a100f71eb2ef73bb; topology remained exactly {dev, main}; this report is published separately after final implementation."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Before mutation, dev equaled exact base 8cceb37df21a764a5752703fdd07fb1ac5ba1f1b, main equaled 8428d698f803250e62c9b387a100f71eb2ef73bb, topology was exactly {dev, main}, TASK-0013 revision 1 resolved at the base, and pinned agent-skills revision 33f138c56dee6a2a1e8b8a6dc52b1399452ef177 plus required skills were resolved."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "Causal regressions cover ESRCH vs EPERM signal-0 semantics, actual termination-signal permission failure truthfulness, and leader reaping before escalation."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "Final focused terminal_exec suite: 13/13 PASS. Final Executor root ./verify on exact reconstructed candidate: 19/19 PASS plus compile and shell syntax checks."
+  - check_id: CHECK-4
+    result: PASS
+    evidence: "Bounded operator-Mac ./verify on exact candidate f7354caa4c0655ed61357be7012cebdc9cd203b7: 19/19 PASS, no ResourceWarning/leaked-child warning."
+  - check_id: CHECK-5
+    result: PENDING_POST_COMMIT
+    evidence: "Implementation net diff is already proven restricted to the two authorized runtime/test files; final report-only parent/diff, dev/main refs, exact topology, and lineage are verified after this report commit is published."
+
+changed_files:
+  - path: agent_runtime/executor.py
+    summary: "Treat EPERM from process-group signal-0 probe as existence and reap the terminated leader during the bounded grace window before deciding SIGKILL escalation."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: tests/test_terminal_exec.py
+    summary: "Add deterministic ESRCH/EPERM probe, actual-signal permission-failure, and leader-reaping-before-escalation regressions while preserving descendant leak coverage."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+
+commits_created:
+  - sha: "8e6e11fac0ba93cf0e5ed121c20ce8bb7198f169"
+    message: "fix(runtime): handle EPERM process-group probes"
+  - sha: "f7354caa4c0655ed61357be7012cebdc9cd203b7"
+    message: "fix(runtime): reap leader before process-group escalation"
+
+pushed: true
+promoted_to_main: false
+
+discovered_gaps: []
+structural_observations: []
+
+deviations_from_task:
+  - id: DEV-001
+    requirement: "Publish one implementation commit on dev before the separate report-only commit."
+    actual: "The initial implementation commit 8e6e11fac0ba93cf0e5ed121c20ce8bb7198f169 had to be published so the mandatory operator-Mac verification could bind and fetch the exact candidate. That verification exposed a second same-path Darwin cleanup defect. A minimal authorized correction was therefore published as non-force child f7354caa4c0655ed61357be7012cebdc9cd203b7."
+    reason: "Required platform verification supplied new causal evidence after the first candidate was remotely reachable; rewriting published history would have hidden evidence and required a force ref update not authorized by the task."
+    impact: "No scope, architecture, dependency, public-surface, main, or topology expansion occurred. Final net implementation remains only the two authorized files. Governing Architect must judge this publication-shape deviation."
+    blocks_current_task: false
+
+blockers: []
+
+working_tree_after:
+  clean: true
+  summary: "No persistent Executor-owned local checkout was used as repository authority; final remote state and report lineage are verified from GitHub after report publication."
+
+result: NEEDS_REVIEW
