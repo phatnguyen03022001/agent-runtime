@@ -162,6 +162,36 @@ class TerminalExecTests(unittest.TestCase):
         ):
             self.assertTrue(_process_group_exists(12345))
 
+    def test_process_group_termination_reaps_leader_before_escalation(self) -> None:
+        process = Mock(pid=12345)
+        leader_reaped = False
+
+        def poll() -> int:
+            nonlocal leader_reaped
+            leader_reaped = True
+            return -signal.SIGTERM
+
+        process.poll.side_effect = poll
+
+        def killpg(_pgid: int, sent_signal: int) -> None:
+            if sent_signal == signal.SIGTERM:
+                return None
+            if sent_signal == 0:
+                if leader_reaped:
+                    raise ProcessLookupError(errno.ESRCH, os.strerror(errno.ESRCH))
+                raise PermissionError(errno.EPERM, os.strerror(errno.EPERM))
+            if sent_signal == signal.SIGKILL:
+                raise AssertionError("SIGKILL must not run after reaping makes the group absent")
+            raise AssertionError(sent_signal)
+
+        with (
+            patch("agent_runtime.executor.os.killpg", side_effect=killpg),
+            patch("agent_runtime.executor.time.sleep", return_value=None),
+        ):
+            _terminate_process_group(process)
+
+        self.assertGreaterEqual(process.poll.call_count, 1)
+
     def test_process_group_termination_permission_errors_are_not_swallowed(self) -> None:
         process = Mock(pid=12345)
         process.poll.return_value = None

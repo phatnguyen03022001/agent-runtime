@@ -131,9 +131,13 @@ def _terminate_process_group(process: subprocess.Popen[bytes]) -> None:
         return
 
     deadline = time.monotonic() + _TERMINATE_GRACE_SECONDS
-    while _process_group_exists(process_group_id) and time.monotonic() < deadline:
+    while time.monotonic() < deadline:
+        process.poll()
+        if not _process_group_exists(process_group_id):
+            break
         time.sleep(0.02)
 
+    process.poll()
     if _process_group_exists(process_group_id):
         try:
             os.killpg(process_group_id, signal.SIGKILL)
