@@ -1,0 +1,200 @@
+protocol_version: 3
+
+task_id: TASK-0007
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: discovered_gap
+  task_id: TASK-0006
+  gap_id: "PRE_DELETION_COMPATIBILITY_CLOSURE"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "33f138c56dee6a2a1e8b8a6dc52b1399452ef177"
+
+architect_analysis_skills:
+  - architect
+  - executor
+  - simplicity
+  - security-review
+  - verification
+
+execution_skills:
+  required:
+    - executor
+    - simplicity
+    - security-review
+    - verification
+  recommended: []
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "phatnguyen03022001/agent-runtime TASK-0006 revision 2 accepted review at 74063e7b4a1fd328693ff1453da89b3a075b78ee."
+    role: "Accepted DELETE_CANDIDATE assessment and exact unresolved pre-deletion questions Q-1..Q-3."
+    precedence: 1
+  - source: "phatnguyen03022001/agent-skills@33f138c56dee6a2a1e8b8a6dc52b1399452ef177"
+    role: "Accepted protocol-v3 durable-review, authority/capability/consequence, trusted generic execution, and bounded evidence semantics."
+    precedence: 2
+  - source: "phatnguyen03022001/architect-profile@d80e30401c44dc256b01b69c1911a9797e53af3c"
+    role: "Accepted operator-specific direct Terminal, exact target binding, behavioral workspace, scratch, secret-discipline, and consequence-guard policy."
+    precedence: 3
+  - source: "phatnguyen03022001/agent-runtime@a69c9a0765d097e92997d1c7b2b275f2b883cff0 install/runtime contract"
+    role: "Exact runtime subject and installer-defined machine-local support paths whose current existence/use must be classified before deletion."
+    precedence: 4
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing agent-runtime task/report/review structure only."
+  rationale: "This is a bounded pre-deletion evidence-closure task. No runtime, cross-repository, machine-local, tunnel, profile, config, process, or documentation mutation is authorized. The only Executor mutation is TASK-0007/report.yaml."
+
+objective: "Resolve exactly the three pre-deletion questions accepted from TASK-0006: whether any live consumer still depends on agent-runtime's four-tool interface; which installer-created machine-local runtime/tunnel/config/state artifacts currently exist and whether they are active/runtime-owned/ambiguous; and which canonical cross-repository references would become stale if agent-runtime is deleted. Produce sufficient exact evidence for the Governing Architect to decide whether a later deletion task may be authorized."
+
+scope:
+  required_changes:
+    - "Resolve Q-1 using bounded read-only evidence only. Search canonical known ecosystem references and the operator-authorized /Users/tienphat/Developer workspace for concrete live references to agent-runtime or the distinctive public interface get_head/sync/run_verify/get_last_log. Workspace search must return candidate paths first and avoid dumping file contents broadly. Exclude .git, .agent-scratch, dependency/build/cache/virtualenv directories, and obvious generated artifacts."
+    - "Candidate files under sibling repositories may be inspected read-only only as necessary to classify an exact consumer reference; no sibling repository becomes an active mutation target and no sibling Git state may be changed. Secret-bearing files such as .env, credential/key files, SSH material, keychains, token stores, or shell-history databases must not be opened merely because a path search finds them. Record only safe path/existence metadata for such candidates and classify unresolved if needed."
+    - "Resolve Q-2 by read-only inspection of only the installer-defined agent-runtime machine-local support surface and current process/use evidence. Authorized exact support paths are: $HOME/.config/agent-runtime/runtime.local.toml; $HOME/.config/agent-runtime/; $HOME/.local/state/agent-runtime/; $HOME/.local/share/agent-runtime/checkouts/; $HOME/.config/tunnel-client/agent-runtime.yaml; and the bound agent-runtime checkout's .env existence/metadata only. These exact paths are authorized only for bounded decommission evidence; this does not authorize broad HOME enumeration."
+    - "For Q-2, do not print or expose CONTROL_PLANE_API_KEY, CONTROL_PLANE_TUNNEL_ID, arbitrary environment values, .env contents, keychain data, private keys, or tunnel credentials. Do not use env/printenv or broad secret discovery. Safe evidence may include path existence/type/owner/mode/mtime, non-secret runtime config fields defined by install.sh (version, state_dir, project id, repository, checkout, remote, expected_remote_url, branch, verify argv, timeout, disposable), bounded state filenames/status metadata, checkout repository identity/branch/cleanliness, and boolean current-process/profile-use checks that do not print secret-bearing command lines."
+    - "Do not stop, restart, signal, delete, clean, edit, migrate, reload, doctor-repair, reinitialize, or otherwise mutate any runtime/tunnel process, config, state, checkout, profile, .env, Homebrew package, or local filesystem artifact. This task is inspection only."
+    - "Resolve Q-3 by exact read-only GitHub search/inspection of agent-skills, architect-profile, agent-documents, agent-standards, and agent-runtime for canonical references that would become stale after deletion. Record exact repository/path and the semantic reason each reference must be removed, rewritten, or deliberately retained as historical evidence. Do not mutate those repositories."
+    - "Distinguish current live compatibility obligations from historical references. Historical task/report/review evidence is not a consumer and must not be rewritten merely because runtime is later deleted."
+    - "Return exactly one closure disposition in the report: READY_FOR_DELETION_PLANNING, LIVE_COMPATIBILITY_OBLIGATION, or INSUFFICIENT_EVIDENCE. READY_FOR_DELETION_PLANNING requires no concrete live four-tool consumer found in the authorized search scope, machine-local state classified sufficiently to avoid guess-deletion, and an exact bounded cross-repository reconciliation inventory."
+    - "If a live consumer is found, identify only the minimum compatibility fact needed for Architect judgment; do not migrate or disable it. If machine-local ownership/use remains ambiguous, identify the exact ambiguity; do not guess cleanup authority."
+    - "Commit/push only .agent/tasks/TASK-0007/report.yaml as a report-only commit after refreshing exact dev/main/topology. Then verify sole parent, report-only diff, final refs/topology and stop at Governing Architect review."
+
+  allowed_existing_files_or_components:
+    - .agent/tasks/TASK-0007/task.yaml
+  expected_files_are_restrictive: true
+
+invariants:
+  - "Runtime implementation, docs, tests, config examples, workflows, branches, main, external repositories, and machine-local state remain unchanged."
+  - "No cleanup/deletion/deprecation/migration is authorized."
+  - "No broad HOME scan, shell-history scan, env dump, keychain query, secret-file content read, or credential disclosure."
+  - "No runtime-v2, replacement broker, sandbox, wrapper, registry, orchestrator, or migration subsystem is designed."
+  - "Historical task/report/review evidence remains immutable historical evidence and is not classified as a live consumer."
+  - "Absence of evidence is stated only for the exact authorized search scope."
+  - "Branches remain exactly {dev, main}; main remains unchanged."
+
+forbidden_changes:
+  - "Do not modify any file other than the new .agent/tasks/TASK-0007/report.yaml."
+  - "Do not mutate agent_runtime/*, tests/*, README.md, install.sh, start.sh, verify, requirements.txt, config/*, .github/*, prior task/report/review artifacts, or repository metadata."
+  - "Do not mutate architect-profile, agent-skills, agent-documents, agent-standards, or any target repository discovered during consumer search."
+  - "Do not delete or alter ~/.config/agent-runtime, ~/.local/state/agent-runtime, ~/.local/share/agent-runtime, ~/.config/tunnel-client/agent-runtime.yaml, repository .env, processes, tunnel profiles, Homebrew packages, or disposable checkouts."
+  - "Do not create branches, mutate main, promote, tag, release, force-push, rebase, rewrite history, or change permissions."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - .agent/tasks/TASK-0007/report.yaml
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: ""
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions:
+    - BLOCKED
+    - STALE_STATE
+    - AUTHORITY_REQUIRED
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    - REVIEW_REQUIRED
+    - REVERIFY_REQUIRED
+    - USER_STOP
+
+capability_requirements:
+  EXECUTION:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - bounded_local_read_only_execution
+    - bounded_github_cross_repository_read
+  REVIEW:
+    - exact_commit_report_resolution
+    - repository_content_write
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Q-1 live-consumer risk is bounded with attributable evidence."
+    evidence_required: "Report identifies exact GitHub/workspace search scope, concrete candidate references inspected, any live consumer found, and remaining uncertainty without overstating absence as universal proof."
+  - id: AC-2
+    requirement: "Q-2 machine-local runtime state is classified without secret exposure or mutation."
+    evidence_required: "Report records exact installer-defined support paths inspected, existence/type/runtime ownership and safe current-use evidence, while proving no broad HOME/secret dump or local mutation occurred."
+  - id: AC-3
+    requirement: "Q-3 cross-repository reconciliation inventory is exact and minimal."
+    evidence_required: "Report lists exact current canonical repository/path references that a later deletion task must reconcile and distinguishes them from historical evidence that must remain."
+  - id: AC-4
+    requirement: "No decommission mutation occurs in closure."
+    evidence_required: "Only TASK-0007/report.yaml changes; runtime, external repositories, local support state/processes, main, and topology remain unchanged."
+  - id: AC-5
+    requirement: "Closure produces a decision-useful result without inventing architecture."
+    evidence_required: "Exactly one closure disposition is emitted and any remaining blocker/compatibility obligation is concrete and minimal; no replacement runtime or migration framework is proposed."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Refresh GitHub truth; require dev equals the exact handoff base, main equals 12172419c08c1f069c7d6cf2ef8842ed2838e0bb, branches exactly {dev, main}; resolve TASK-0007 revision 1, accepted TASK-0006 review, pinned agent-skills/profile authorities; preflight all EXECUTION capabilities."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Resolve Q-1 with bounded canonical GitHub and /Users/tienphat/Developer path-first token search. Inspect only exact candidate files needed for classification, never secret-bearing file contents. Record scope and uncertainty."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Resolve Q-2 by read-only inspection of only installer-defined support paths and safe boolean/current-use evidence. Never print secret values or broad process/environment output; perform no local mutation."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Resolve Q-3 with exact canonical GitHub reference inventory across agent-skills, architect-profile, agent-documents, agent-standards, and agent-runtime; separate current stale-after-deletion references from historical evidence."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Produce exactly one closure disposition and explicitly state whether later deletion planning is evidence-ready. Do not delete, migrate, deactivate, reconcile, or design replacement machinery."
+      required: true
+    - id: CHECK-6
+      command_or_check: "Before report publication refresh dev/main/topology; create/push only TASK-0007/report.yaml non-force to dev; verify sole parent, report-only diff, final dev, unchanged main, exact {dev, main}; stop at Governing Architect review."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
