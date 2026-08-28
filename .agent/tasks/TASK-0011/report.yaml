@@ -1,0 +1,141 @@
+protocol_version: 3
+
+task_id: TASK-0011
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0011/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+  authorized_base_head: "e6d6ec13486b094a02283ef79a141cc8d44909d6"
+  pre_execution_head: "e6d6ec13486b094a02283ef79a141cc8d44909d6"
+  final_execution_head: "d65e19bdfc2d46a59e030691ad83507ab16b1e8e"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "33f138c56dee6a2a1e8b8a6dc52b1399452ef177"
+  observed_revision: "33f138c56dee6a2a1e8b8a6dc52b1399452ef177"
+
+execution_skills_used:
+  required:
+    - executor
+    - simplicity
+    - security-review
+    - verification
+  external:
+    - superpowers:test-driven-development
+    - superpowers:systematic-debugging
+    - superpowers:verification-before-completion
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+  available:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+  missing: []
+  passed: true
+
+implementation:
+  commit: "d65e19bdfc2d46a59e030691ad83507ab16b1e8e"
+  parent: "e6d6ec13486b094a02283ef79a141cc8d44909d6"
+  public_tool_surface:
+    - terminal_exec
+  old_runtime_architecture_restored: false
+  main_mutated: false
+
+verification:
+  causal_tdd: PASS
+  final_focused_tests: "16/16 PASS"
+  python_compile: PASS
+  shell_syntax: PASS
+  live_tunnel_required: false
+  live_plugin_required: false
+  incident:
+    classification: transient_scratch_scheduling
+    evidence: "During repeated scratch verification, short-lived child tests using a 5-second helper bound transiently exceeded that bound under executor scheduling/load. Investigation reproduced the target path successfully standalone and in sequence; no leaked child process or source-semantic defect was established. No source change was made after implementation publication. The final exact implementation verification completed 16/16 PASS plus compile and shell-syntax PASS."
+  dependency_note: "The deterministic scratch environment could not install mcp from the network, so MCP registration was verified with a deterministic stub matching the historical MCPServer/ToolAnnotations API while requirements.txt retained the exact historical mcp==2.0.0 pin."
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PROVEN
+    evidence: "Final MCP surface is exactly {terminal_exec}; README documents optional manual foreground lifecycle and normal ChatGPT/GitHub fallback; retired get_head/sync/run_verify/get_last_log and profile/sync/runner/state architecture are absent."
+  - criterion_id: AC-2
+    status: PROVEN
+    evidence: "Focused tests cover literal argv with shell=False, absolute workspace root and cwd realpath containment, disconnected stdin, bounded timeout/process-group cleanup including surviving descendants, bounded stdout/stderr with truncation metadata, minimal child environment, and truthful structured result fields."
+  - criterion_id: AC-3
+    status: PROVEN
+    evidence: "README/source explicitly state cwd validation is not filesystem confinement; no command policy broker, allowlist framework, caller environment injection, task authority, or orchestration subsystem exists."
+  - criterion_id: AC-4
+    status: PROVEN
+    evidence: "start.sh remains foreground tunnel-client doctor/run; installer is limited to checkout .venv/.env and exact agent-runtime tunnel profile and does not recreate ~/.config/agent-runtime or old runtime state/share/profile machinery."
+  - criterion_id: AC-5
+    status: PROVEN
+    evidence: "Final exact implementation verification: 16/16 tests PASS, Python compile PASS, shell syntax PASS; no live tunnel/plugin credentials required or background tunnel left running."
+  - criterion_id: AC-6
+    status: PROVEN_PENDING_REPORT_COMMIT
+    evidence: "Implementation d65e19bd... is direct child of exact base e6d6ec13..., .agent/tasks historical subtree and LICENSE are unchanged, main remains b52cdc73..., and this report is constructed as the sole report-only child of the implementation. Final ref/topology proof follows publication."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Exact task/base/main/topology, predecessor evidence, historical implementation reference, pinned skills, and execution capabilities resolved before mutation."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "Implemented the smallest one-tool optional terminal host without restoring retired runtime architecture."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "Causal TDD and final deterministic verification completed; final exact implementation result was 16/16 PASS plus compile and shell-syntax PASS."
+  - check_id: CHECK-4
+    result: PASS
+    evidence: "Exact implementation tree/diff shows only authorized runtime/support/test files; public tool is terminal_exec; .agent historical subtree and LICENSE unchanged; old runtime modules absent."
+  - check_id: CHECK-5
+    result: PASS
+    evidence: "Implementation commit d65e19bd... is a non-force published direct child of exact execution base e6d6ec13... on dev; main unchanged."
+  - check_id: CHECK-6
+    result: PENDING_POST_COMMIT
+    evidence: "This report is being published as a direct report-only child of the implementation; final parent/diff/ref/topology checks follow publication."
+
+changed_files:
+  - path: README.md
+    summary: "Replace retired tombstone with optional-host lifecycle and safety documentation."
+  - path: agent_runtime/executor.py
+    summary: "Implement bounded direct-argv terminal execution."
+  - path: agent_runtime/server.py
+    summary: "Expose exactly terminal_exec over MCP."
+  - path: install.sh
+    summary: "Prepare minimal local .venv/.env/tunnel profile only."
+  - path: start.sh
+    summary: "Run tunnel-client in foreground only."
+  - path: tests/
+    summary: "Focused deterministic behavior/surface/script tests."
+  - path: verify
+    summary: "Run tests, compile checks, and shell syntax checks."
+
+commits_created:
+  - sha: "d65e19bdfc2d46a59e030691ad83507ab16b1e8e"
+    message: "feat(runtime): restore optional terminal plugin host"
+
+pushed: true
+promoted_to_main: false
+
+discovered_gaps: []
+structural_observations: []
+deviations_from_task: []
+blockers: []
+
+working_tree_after:
+  clean: false
+  summary: "No persistent Executor-owned local checkout was used as repository authority; deterministic verification ran in isolated scratch against exact candidate blobs."
+
+result: NEEDS_REVIEW
