@@ -1,0 +1,200 @@
+protocol_version: 3
+
+task_id: TASK-0005
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0005/task.yaml
+
+handoff:
+  type: EXECUTOR
+  type_confirmed: true
+  repository: phatnguyen03022001/agent-runtime
+  branch: dev
+  base_head: "c60e3a7ac6cdd629e13f8989668fe371447471cd"
+  main_head: "12172419c08c1f069c7d6cf2ef8842ed2838e0bb"
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+  authorized_base_head: "c60e3a7ac6cdd629e13f8989668fe371447471cd"
+  pre_execution_head: "c60e3a7ac6cdd629e13f8989668fe371447471cd"
+  final_execution_head: "46860c4be6ed6ced62a9b35c0ff59e70665330f6"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "fe3fd6de46c6e2220edbcadfb27f12c8dd23b2d6"
+  observed_revision: "fe3fd6de46c6e2220edbcadfb27f12c8dd23b2d6"
+
+execution_skills_used:
+  required:
+    - executor
+    - security-review
+    - reliability
+    - verification
+    - simplicity
+  recommended: []
+  external:
+    - superpowers:using-superpowers
+    - superpowers:systematic-debugging
+    - superpowers:test-driven-development
+    - superpowers:verification-before-completion
+
+pre_execution_checks:
+  protocol_version_supported: true
+  handoff_type_confirmed: true
+  task_at_base_confirmed: true
+  task_identity_confirmed: true
+  architect_binding_confirmed: true
+  repository_confirmed: true
+  branch_confirmed: true
+  base_head_confirmed: true
+  skill_revision_confirmed: true
+  required_execution_skills_available: true
+  structure_authority_confirmed: true
+  working_tree_clean: true
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - deterministic_python_test_execution
+  available:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - deterministic_python_test_execution
+  missing: []
+  passed: true
+
+causal_tdd:
+  repeated_in_continuation: false
+  evidence:
+    - base: "c60e3a7ac6cdd629e13f8989668fe371447471cd"
+      result: RED
+      tests_run: 3
+      intended_failures: 3
+      evidence: "Three isolated disposable regressions failed against the exact pre-fix git_ops behavior before production mutation: poisoned parent GIT_DIR made trusted inspection return the foreign repository HEAD while --show-toplevel still resolved to the configured checkout; the same poisoning redirected destructive sync metadata and changed the foreign repository HEAD; and _automation_env retained repository/config control variables instead of removing them. No live sibling repository was used."
+
+focused_verification:
+  required: true
+  performed: true
+  result: PASS
+  tests_run: 10
+  exact_candidate_blobs:
+    git_ops: "368d340004bf00a839df88a5292122fb367d8dba"
+    test_git_ops: "26d21caac33899825991b579cdba2e3757b86488"
+  evidence: "Focused test_git_ops verification passed 10/10 in the isolated run-owned fixture before publication. The two GIT_DIR regressions proved polluted parent repository identity cannot redirect inspection or destructive sync; the environment-policy regression proved repository-discovery/worktree/index/object/ref/history/config controls plus complete GIT_CONFIG_KEY_*/GIT_CONFIG_VALUE_* families are removed while GIT_SSH_COMMAND, GIT_ASKPASS, HTTPS_PROXY, and PATH are preserved. Existing remote mismatch, disposable gate, clean -fd behavior, ignored-file preservation, exact-root rejection, and linked-worktree compatibility remained green. The two exact candidate blob hashes matched the GitHub blobs later committed as the final implementation."
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: PASS
+  evidence: "Trusted project agent-runtime-dev was synchronized to exact implementation 46860c4be6ed6ced62a9b35c0ff59e70665330f6, then run_id 2bdd8364a59d4d919cf4519e45760504 executed repository-owned ./verify. Terminal status PASS, verification_ok=true, exit_code=0, timed_out=false; 62 tests ran in 12.016s and all passed. Final postconditions were clean=true, configured_branch=true, in_sync=true, remote_identity=true, same_head=true. py_compile and the repository shell=True / clean -fdx guards are part of ./verify and therefore also passed."
+
+object_evidence:
+  base_tree: "2d73887ee56c45c78eb814ae833230dac8843d78"
+  implementation_tree: "2d4aeaf6e21cf3d643615172d31e3f1a802bb52b"
+  base_git_ops_blob: "d2dc6361c8edf5b1cde46407c2f57b8bd549dbfa"
+  implementation_git_ops_blob: "368d340004bf00a839df88a5292122fb367d8dba"
+  base_test_git_ops_blob: "20511d22bf2d6b51c1e9923fec6505a98db5638b"
+  implementation_test_git_ops_blob: "26d21caac33899825991b579cdba2e3757b86488"
+  unchanged_server_surface_blob: "1a7cbcc88b7487df1bcfa3259dad47a70ad8ecc1"
+  unchanged_verifier_blob: "92a882611aa8bf5570bd9a281037c42c2962f990"
+  diff_check: "PASS: c60e3a7..46860c4b is exactly one commit ahead with merge base equal to c60e3a7 and exactly two modified authorized files: agent_runtime/git_ops.py (+30/-1) and tests/test_git_ops.py (+101/-1)."
+
+local_hygiene:
+  result: PASS
+  run_root: "/tmp/task0005-executor.21IlcQ"
+  cleanup_performed: true
+  retained: []
+  evidence: "Primary run-owned scratch root plus three earlier run-owned isolated diagnostic roots (/tmp/task0005-causal-manual, /tmp/task0005-config-poison, /tmp/task0005-config-poison2) were individually proven to be exact non-symlink directories under /tmp, not filesystem/home/repository roots, then removed and verified absent. No live sibling repository or unknown local state was deleted or adopted."
+
+changed_files:
+  - path: agent_runtime/git_ops.py
+    summary: "Scrub only parent Git variables that can control repository discovery/worktree, index/object/ref/history identity or inject Git configuration, including complete numbered config families; preserve ordinary authentication/network/process environment and existing non-interactive overrides."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: tests/test_git_ops.py
+    summary: "Add isolated GIT_DIR inspection/sync regressions and bounded environment-policy coverage while retaining all existing Git fixture behavior checks."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: .agent/tasks/TASK-0005/report.yaml
+    summary: "Executor-owned protocol-v3 evidence for TASK-0005 revision 1."
+    new_file: true
+    in_scope: true
+    structure_authorized: true
+
+commits_created:
+  - sha: "46860c4be6ed6ced62a9b35c0ff59e70665330f6"
+    message: "fix(runtime): isolate git control environment"
+
+pushed: true
+promoted_to_main: false
+
+continuation_history:
+  - sequence: 1
+    result: COMPLETED_TO_REVIEW_BOUNDARY
+    evidence: "Execution bound the exact base and pinned governance authority, reproduced causal RED without repository mutation, published one bounded implementation commit, synchronized the trusted disposable self-verification checkout to that exact SHA, passed focused and repository-owned verification, cleaned all run-owned scratch state, and proceeded to this separate report-only commit."
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PROVEN
+    evidence: "Causal RED proved GIT_DIR could make exact-root validation observe the configured checkout while subsequent Git metadata came from a foreign isolated repository. Final focused inspection/sync tests pass with the same parent pollution and preserve the foreign repository HEAD."
+  - criterion_id: AC-2
+    status: PROVEN
+    evidence: "_automation_env now removes a bounded semantic set covering repository discovery/worktree, index, object database, namespace/ref/history controls, system/global/runtime config injection, and every GIT_CONFIG_KEY_*/GIT_CONFIG_VALUE_* member regardless of numeric suffix. It does not mechanically remove all GIT_* variables."
+  - criterion_id: AC-3
+    status: PROVEN
+    evidence: "Focused 10/10 and full 62/62 verification remain green. GIT_SSH_COMMAND, GIT_ASKPASS, HTTPS_PROXY, and PATH are explicitly preserved by the policy test; GIT_TERMINAL_PROMPT=0 and GCM_INTERACTIVE=Never remain enforced."
+  - criterion_id: AC-4
+    status: PROVEN
+    evidence: "Only git_ops.py and test_git_ops.py changed in the implementation. server.py, runner.py, config schema, verifier selection/environment, exact root/remote checks, disposable gate, clean -fd, generation binding, strict PASS, and no-shell boundaries remain unchanged; full repository verification passed."
+  - criterion_id: AC-5
+    status: PROVEN
+    evidence: "Repository-owned ./verify passed on exact implementation 46860c4be6ed6ced62a9b35c0ff59e70665330f6 with exit 0 and 62/62 tests; trusted postconditions confirm exact same HEAD, clean worktree, configured dev branch, in-sync remote, and matching remote identity."
+  - criterion_id: AC-6
+    status: PROVEN
+    evidence: "Implementation is one non-force fast-forward child of exact base c60e3a7 and changes only the two authorized existing files. Immediately before report creation dev=46860c4b, main=12172419, branches exactly {dev, main}, report.yaml absent; this report is the only new authorized file and is committed separately."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "At execution start and again immediately before first repository mutation, GitHub truth was dev=c60e3a7ac6cdd629e13f8989668fe371447471cd, main=12172419c08c1f069c7d6cf2ef8842ed2838e0bb, branches exactly {dev, main}; TASK-0005 revision 1 resolved at that base; pinned agent-skills@fe3fd6de46c6e2220edbcadfb27f12c8dd23b2d6 and all five required skills resolved. exact_remote_ref_read, repository_content_read/write, and deterministic Python test execution were available. The native agent-runtime project agent-runtime-dev was callable; its initial disposable checkout was clean but stale at ef8cbcf and was not adopted as canonical authority before synchronization."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "Before production mutation, three isolated causal tests reproduced the GIT_DIR repository-redirection class and all failed for the intended defect. Fixtures were disposable /tmp repositories only; no live sibling repository was touched."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "Implementation changes only existing _automation_env plus two adjacent constants. The scrub set was classified by semantic control effect rather than GIT_* prefix: repository discovery/worktree, index/object/ref/history, and config injection are removed; SSH/askpass/proxy/PATH remain inherited. No remote-URL, verifier, profile, schema, or unrelated cleanup change was made."
+  - check_id: CHECK-4
+    result: PASS
+    evidence: "Focused test_git_ops passed 10/10 with exact candidate blobs later committed. Poisoned GIT_DIR cannot redirect inspection/sync; numbered config families are removed atomically; normal exact-root/remote/sync and linked-worktree behavior remains green."
+  - check_id: CHECK-5
+    result: PASS
+    evidence: "Repository-owned ./verify on exact 46860c4b exited 0 with 62/62 tests and all strict postconditions true. Implementation compare proves public server surface was untouched; root verifier's server-surface tests passed and its guards prove shell=True and clean -fdx remain absent."
+  - check_id: CHECK-6
+    result: PASS
+    evidence: "Before dev mutation, unreferenced implementation 46860c4b was verified as exactly one child of c60e3a7 with merge base c60e3a7 and exactly two authorized files. GitHub dev was re-read still at c60e3a7 immediately before update_ref; dev was then advanced to 46860c4b with force=false. No branch/main/tag/release/metadata mutation occurred."
+  - check_id: CHECK-7
+    result: PENDING_POST_COMMIT
+    evidence: "Pre-report half passed: immediately before report creation dev=46860c4be6ed6ced62a9b35c0ff59e70665330f6, main=12172419c08c1f069c7d6cf2ef8842ed2838e0bb, branches exactly {dev, main}, report.yaml absent, implementation diff bounded, focused/root verification PASS, and local hygiene PASS. Post-report sole-parent/report-only-diff/dev-main-topology verification is intentionally performed after this self-referential report commit and recorded in the Executor terminal result."
+
+discovered_gaps: []
+structural_observations: []
+deviations_from_task: []
+blockers: []
+
+working_tree_after:
+  clean: true
+  summary: "Trusted disposable verification checkout is clean, on dev, exact implementation 46860c4be6ed6ced62a9b35c0ff59e70665330f6, synchronized to origin/dev with matching remote identity after authoritative verification."
+
+result: NEEDS_REVIEW
