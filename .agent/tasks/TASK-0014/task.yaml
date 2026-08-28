@@ -1,0 +1,176 @@
+protocol_version: 3
+
+task_id: TASK-0014
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: accepted_defect_fix_requires_promotion
+  task_id: TASK-0013
+  gap_id: PROMOTE_MACOS_CLEANUP_FIX_TO_MAIN
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "33f138c56dee6a2a1e8b8a6dc52b1399452ef177"
+
+architect_analysis_skills:
+  - architect
+  - verification
+  - simplicity
+
+execution_skills:
+  required:
+    - executor
+    - verification
+  recommended:
+    - simplicity
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0013/review.yaml@d15bda58cad974d94b50406a3e4b247fc5fe95b1"
+    role: "Durable ACCEPTED Architect judgment for exact TASK-0013 report 7a5e0b5be3cf6a9ac7537d524b8df2d30a0ce0b9."
+    precedence: 1
+  - source: "phatnguyen03022001/agent-skills/protocols/TASK_PROTOCOL.md@33f138c56dee6a2a1e8b8a6dc52b1399452ef177"
+    role: "Canonical accepted-lineage rule: promotion_candidate_head is the reviewed report or its single-parent direct child containing only the expected Architect review artifact."
+    precedence: 2
+  - source: "GitHub compare 7a5e0b5be3cf6a9ac7537d524b8df2d30a0ce0b9..d15bda58cad974d94b50406a3e4b247fc5fe95b1"
+    role: "Proves d15bda58cad974d94b50406a3e4b247fc5fe95b1 is exactly one direct-child review-only commit after the accepted report."
+    precedence: 3
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing TASK_PROTOCOL promotion/report lifecycle"
+  rationale: "Promotion-only task requires no implementation or architecture change; only TASK-0014 report evidence is added on dev."
+
+objective: "Promote the exact accepted TASK-0013 lineage candidate to main using non-force fast-forward semantics so the released optional terminal host includes the verified macOS/Python 3.14 cleanup correction, without promoting TASK-0014 planning/report state or performing local plugin/tunnel actions."
+
+promotion:
+  reviewed_report_commit: "7a5e0b5be3cf6a9ac7537d524b8df2d30a0ce0b9"
+  accepted_review_commit: "d15bda58cad974d94b50406a3e4b247fc5fe95b1"
+  promotion_candidate_head: "d15bda58cad974d94b50406a3e4b247fc5fe95b1"
+  promotion_target_ref: "refs/heads/main"
+  expected_old_target: "8428d698f803250e62c9b387a100f71eb2ef73bb"
+  force: false
+  note: "The noncanonical candidate_commit hint inside TASK-0013 review is not promotion authority. TASK_PROTOCOL canonical accepted-lineage semantics select the direct-child review commit d15bda58... as the exact candidate."
+
+scope:
+  required_changes:
+    - "Refresh exact GitHub refs and require dev equals the TASK-0014 handoff base, main equals 8428d698f803250e62c9b387a100f71eb2ef73bb, and branch topology exactly {dev, main}."
+    - "Resolve TASK-0013 report 7a5e0b5be3cf6a9ac7537d524b8df2d30a0ce0b9 and ACCEPTED review d15bda58cad974d94b50406a3e4b247fc5fe95b1. Prove the accepted review is the single-parent direct-child review-only artifact of the reviewed report."
+    - "Require candidate d15bda58cad974d94b50406a3e4b247fc5fe95b1 to be a strict fast-forward descendant of current main with merge base exactly current main and behind_by=0."
+    - "Move only refs/heads/main to exact candidate d15bda58cad974d94b50406a3e4b247fc5fe95b1 using force=false."
+    - "Publish only .agent/tasks/TASK-0014/report.yaml on dev after promotion and stop at Governing Architect review."
+  allowed_existing_files_or_components:
+    - .agent/tasks/TASK-0014/task.yaml
+  expected_files_are_restrictive: true
+
+invariants:
+  - "main is updated only to d15bda58cad974d94b50406a3e4b247fc5fe95b1, never to TASK-0014 planning/report state."
+  - "No implementation file changes occur."
+  - "No local Mac checkout, install.sh, start.sh, tunnel, plugin-management, credential, or secret state is touched."
+  - "No branch creation/deletion, force update, tag, release, repository metadata, workflow, dependency, or other-repository mutation occurs."
+  - "Branch topology remains exactly {dev, main}."
+
+forbidden_changes:
+  - "Do not promote implementation-only f7354caa4c0655ed61357be7012cebdc9cd203b7 as the candidate; canonical accepted-lineage identity is d15bda58cad974d94b50406a3e4b247fc5fe95b1."
+  - "Do not modify TASK-0013 artifacts or implementation."
+  - "Do not promote TASK-0014 task/report state."
+  - "Do not perform local runtime activation or plugin/tunnel actions."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - .agent/tasks/TASK-0014/report.yaml
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: ""
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions:
+    - BLOCKED
+    - STALE_STATE
+    - AUTHORITY_REQUIRED
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    - REVIEW_REQUIRED
+    - USER_STOP
+
+capability_requirements:
+  PROMOTION:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - non_force_ref_update
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact accepted-lineage identity is proven."
+    evidence_required: "TASK-0013 review is ACCEPTED for report 7a5e0b5b... and d15bda58... is exactly its direct-child review-only commit."
+  - id: AC-2
+    requirement: "Promotion is strict non-force fast-forward from the expected old main."
+    evidence_required: "Before mutation candidate is ahead-only from 8428d698..., behind 0, merge base exact old main; update uses force=false."
+  - id: AC-3
+    requirement: "Only the stable main ref is promoted to the exact candidate."
+    evidence_required: "Post-update main=d15bda58..., TASK-0014 planning/report state absent from main, no implementation/local/plugin/tag/release/metadata mutation."
+  - id: AC-4
+    requirement: "Report publication and final topology are bounded."
+    evidence_required: "TASK-0014 report is a separate report-only child on dev; final branches exactly {dev, main}."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Refresh refs and resolve TASK-0014 plus accepted TASK-0013 report/review identity."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Compare current main to exact candidate and require strict fast-forward identity."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Update only main to exact candidate with force=false and refresh refs immediately afterward."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Publish TASK-0014 report only on dev and verify report-only lineage plus final refs/topology."
+      required: true
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: true
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
