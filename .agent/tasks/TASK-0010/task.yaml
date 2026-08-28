@@ -1,7 +1,7 @@
 protocol_version: 3
 
 task_id: TASK-0010
-task_revision: 1
+task_revision: 2
 state: APPROVED
 
 origin:
@@ -21,6 +21,18 @@ execution_base:
   mode: handoff_snapshot
   capture: after_final_planning_commit
   require_exact_match: true
+
+continuation_from_revision_1:
+  status: BLOCKED_WITHOUT_MUTATION
+  revision_1_base: "a68b940407d3271202cc96cdc869e74032eae195"
+  report_published: false
+  checkout_deleted: false
+  local_mutation_proven: false
+  prior_blocker: "The task-authorized narrower operator follow-up terminated at interactive input() with EOFError before destructive execution. PID 7070 had previously been observed with cwd=/Users/tienphat/Developer/agent-runtime but was not revalidated after that failure."
+  rules:
+    - "Do not treat revision-1 bridge output as proof that PID 7070 is still alive, still has the same cwd, or has any particular identity; revalidate current state."
+    - "Do not repeat already-resolved GitHub decommission/promotion work."
+    - "Revision 2 grants a fresh operator-bridge allowance solely because revision 1 exhausted its bridge before the unresolved local guard could be revalidated."
 
 skill_library:
   repository: phatnguyen03022001/agent-skills
@@ -54,20 +66,23 @@ structure_authority:
   source: "Accepted decommission/promotion reviews and exact known operator checkout path."
   rationale: "The active runtime, process, tunnel profile, runtime config/state/share, and main repository surface are already retired. The remaining primary checkout is stale local residue containing runnable historical code plus local ignored files such as .env/.venv. Removing that exact checkout reduces residual executable/secret-bearing state while preserving canonical GitHub history. GitHub repository deletion/archive and unrelated local state remain out of scope."
 
-objective: "Remove the exact retired operator-Mac primary checkout /Users/tienphat/Developer/agent-runtime after proving repository/path identity, absence of active process use, and absence of uncommitted/non-ignored local work; do not read secret contents; preserve the canonical GitHub tombstone/history and all unrelated local state; publish only canonical cleanup evidence on dev."
+objective: "Finish removal of the exact retired operator-Mac primary checkout /Users/tienphat/Developer/agent-runtime after fresh exact identity, process-use, and local-work guards; use a non-interactive bounded operator bridge when direct Mac access is unavailable; preserve canonical GitHub tombstone/history and unrelated local state; publish only canonical cleanup evidence on dev."
 
 scope:
   required_changes:
-    - "Refresh GitHub truth and require dev equals the exact handoff base, main equals b52cdc73b0589d9e14adfbb3647fcccdb0ee65ab, and branches exactly {dev, main}. Resolve accepted TASK-0008 and TASK-0009 reviews."
-    - "Use direct authorized operator-Mac execution when available; otherwise use one bounded OPERATOR_SUPPLIED Terminal bundle, with at most one narrower follow-up for one concrete unresolved fact."
+    - "Refresh GitHub truth and require dev equals the exact revision-2 handoff base, main equals b52cdc73b0589d9e14adfbb3647fcccdb0ee65ab, and branches exactly {dev, main}. Resolve accepted TASK-0008 and TASK-0009 reviews."
+    - "Use direct authorized operator-Mac execution when available; otherwise revision 2 authorizes one fresh bounded OPERATOR_SUPPLIED Terminal bundle and at most one narrower non-destructive follow-up for one concrete unresolved fact. Revision-1 bridge usage does not consume revision-2 allowance."
+    - "Every operator bundle must be non-interactive: no input(), read prompt, confirmation prompt, sudo prompt, password prompt, or command that requires stdin. If a required operation cannot be performed non-interactively under existing operator permissions, stop CURRENT_PHASE_CAPABILITY_UNAVAILABLE or BLOCKED as applicable rather than consuming a prompt that cannot complete."
+    - "The operator bundle must first change its own working directory to /Users/tienphat/Developer before inspecting checkout-attributed process cwd, so the evidence script cannot count its own execution shell merely because it started inside the retired checkout."
     - "Bind exactly /Users/tienphat/Developer/agent-runtime: lexical path and realpath must both equal that exact path; the checkout root itself must not be a symlink; git rev-parse --show-toplevel must equal the same exact path; canonical remote identity must normalize to phatnguyen03022001/agent-runtime."
-    - "Before deletion, prove no active process has cwd/executable/module attribution to the checkout or agent-runtime server/tunnel. Do not stop or signal anything in this task; any active/ambiguous process blocks deletion."
+    - "Freshly revalidate all processes attributable to the exact checkout path or agent-runtime server/tunnel. Record only bounded safe metadata needed to classify a match: PID, executable basename/path when non-secret, cwd, and bounded command/module signature. Do not dump full process environments or broad process listings."
+    - "No process may be stopped, signaled, restarted, or launched in this task. If any process other than the bounded evidence command itself still has cwd inside the exact checkout or is positively/ambiguously attributable to agent-runtime server/tunnel, stop BLOCKED before deletion. Do not assume historical PID 7070 still exists or retains identity."
     - "Before deletion, inspect only Git metadata/status and safe top-level path metadata. Do not read .env contents, keychain, arbitrary environment, SSH material, shell history, or tunnel credentials."
-    - "Require no tracked modifications and no non-ignored untracked files in the checkout. If any such local work exists, stop BLOCKED and report the bounded paths/status only; do not delete or auto-clean it. Ignored/local files inside this exact checkout, including .env and .venv, are explicitly authorized for deletion with the checkout and must not be read merely to delete them."
-    - "Delete exactly /Users/tienphat/Developer/agent-runtime and all contents only after all identity/process/local-work guards pass. Refuse path escape, symlinked checkout root, identity mismatch, or ambiguity."
-    - "After deletion, verify the exact checkout path is absent and that /Users/tienphat/Developer still exists. Make no absence claim beyond the exact authorized checkout."
+    - "Require no tracked modifications and no non-ignored untracked files in the checkout. If any such local work exists, stop BLOCKED and report bounded paths/status only; do not delete or auto-clean it. Ignored/local files inside this exact checkout, including .env and .venv, are explicitly authorized for deletion with the checkout and must not be read merely to delete them."
+    - "Delete exactly /Users/tienphat/Developer/agent-runtime and all contents only after all identity/process/local-work guards pass. Use an exact literal/quoted path with containment checks; refuse path escape, a symlinked checkout root, identity mismatch, or ambiguity. No glob or parent-directory deletion is authorized."
+    - "After deletion, verify the exact checkout path is absent and /Users/tienphat/Developer still exists. Make no absence claim beyond the exact authorized checkout."
     - "Do not delete/archive/rename the GitHub repository; do not mutate main, branches, tags, releases, repository metadata, tunnel-client installation, unrelated tunnel profiles/state, sibling repositories, or other Developer paths."
-    - "Create/push only .agent/tasks/TASK-0010/report.yaml as a separate report-only commit on dev after local deletion succeeds. Record Mac evidence provenance truthfully, verify final refs/topology, and stop at Governing Architect review."
+    - "Create/push only .agent/tasks/TASK-0010/report.yaml as a separate report-only commit on dev after local deletion succeeds. Record revision-1 BLOCKED provenance and revision-2 Mac evidence provenance truthfully, verify final refs/topology, and stop at Governing Architect review."
 
   allowed_existing_files_or_components:
     - .agent/tasks/**
@@ -80,19 +95,21 @@ invariants:
   - "GitHub repository and historical evidence remain intact."
   - "Only exact local checkout /Users/tienphat/Developer/agent-runtime is deleted."
   - "No active process is stopped/signaled."
+  - "No interactive operator prompt is used in the revision-2 bridge."
   - "No .env or other secret content is read or printed."
   - "Local tracked modifications or non-ignored untracked work block deletion rather than being discarded."
   - "Sibling repositories and unrelated local state remain untouched."
   - "Final branches remain exactly {dev, main}."
 
 forbidden_changes:
-  - "Do not mutate implementation/tombstone content, main, existing historical task/report/review artifacts, other repositories, tags, releases, archive state, or repository metadata."
+  - "Do not mutate implementation/tombstone content, main, existing historical task/report/review artifacts other than revising TASK-0010 task authority and later adding its report/review, other repositories, tags, releases, archive state, or repository metadata."
   - "Do not delete or archive the GitHub repository."
   - "Do not delete any path other than /Users/tienphat/Developer/agent-runtime."
   - "Do not read/print .env contents, secrets, arbitrary environment, keychain, SSH material, shell history, or tunnel credentials."
   - "Do not use rm patterns/globs whose resolved target can exceed the exact checkout; do not follow a symlinked checkout root."
   - "Do not use git reset/clean to erase local work as a prelude to deletion."
-  - "Do not stop, signal, restart, or launch agent-runtime/tunnel processes."
+  - "Do not stop, signal, restart, or launch agent-runtime/tunnel/checkout-attributed processes."
+  - "Do not use input(), shell read prompts, sudo prompts, password prompts, or any other interactive bridge step."
 
 gap_policy:
   local_auto_fix: false
@@ -136,10 +153,10 @@ capability_requirements:
 acceptance_criteria:
   - id: AC-1
     requirement: "The deleted path is exactly the retired agent-runtime primary checkout."
-    evidence_required: "Bounded evidence proves exact lexical path, realpath, non-symlink root, git top-level, and remote owner/repo identity before deletion."
+    evidence_required: "Fresh bounded evidence proves exact lexical path, realpath, non-symlink root, git top-level, and remote owner/repo identity before deletion."
   - id: AC-2
     requirement: "Deletion does not discard live process use or uncommitted canonicalizable local work."
-    evidence_required: "No active/ambiguous agent-runtime or checkout-attributed process; git status has no tracked modifications and no non-ignored untracked files before deletion."
+    evidence_required: "After the evidence bundle moves itself outside the checkout, no other active/ambiguous agent-runtime or checkout-attributed process remains; git status has no tracked modifications and no non-ignored untracked files before deletion."
   - id: AC-3
     requirement: "Secret-bearing/local ignored residue is removed without secret inspection."
     evidence_required: "Exact checkout becomes absent; report records deletion of checkout including ignored local residue such as .env/.venv without printing or reading secret contents."
@@ -147,22 +164,22 @@ acceptance_criteria:
     requirement: "Canonical/history boundaries remain intact."
     evidence_required: "main remains b52cdc73..., GitHub repository remains present, branches {dev, main}, no other repo/metadata/tag/release/local sibling mutation."
   - id: AC-5
-    requirement: "Evidence provenance is truthful and bounded."
-    evidence_required: "Direct Mac evidence is identified as such when available; otherwise operator Terminal output is labeled OPERATOR_SUPPLIED; only safe identity/status/path metadata is recorded."
+    requirement: "Evidence provenance is truthful, bounded, and non-interactive."
+    evidence_required: "Direct Mac evidence is identified as such when available; otherwise operator Terminal output is labeled OPERATOR_SUPPLIED; bridge used no interactive prompt and recorded only safe identity/status/path metadata."
   - id: AC-6
     requirement: "Report publication is exact."
-    evidence_required: "TASK-0010/report.yaml is the only repository content mutation after planning, direct child of exact execution base, final dev is report commit, main unchanged, topology {dev, main}."
+    evidence_required: "TASK-0010/report.yaml is the only repository content mutation after revision-2 planning, direct child of exact execution base, final dev is report commit, main unchanged, topology {dev, main}."
 
 verification:
   executor_checks:
     - id: CHECK-1
-      command_or_check: "Refresh refs/topology, require exact handoff base and main tombstone, resolve TASK-0010 plus accepted predecessor reviews, preflight required capabilities."
+      command_or_check: "Refresh refs/topology, require exact revision-2 handoff base and main tombstone, resolve TASK-0010 revision 2 plus accepted predecessor reviews, preflight required capabilities."
       required: true
     - id: CHECK-2
-      command_or_check: "Bound exact local checkout identity and process/local-work guards using safe metadata only. Any mismatch, active/ambiguous process, tracked modification, or non-ignored untracked path => BLOCKED before deletion."
+      command_or_check: "Using direct Mac capability or one fresh non-interactive operator bundle, first move the evidence shell to /Users/tienphat/Developer, then bind exact checkout identity and freshly revalidate bounded process/local-work guards. Any mismatch, remaining active/ambiguous process, tracked modification, or non-ignored untracked path => BLOCKED before deletion."
       required: true
     - id: CHECK-3
-      command_or_check: "Delete exactly /Users/tienphat/Developer/agent-runtime without following a symlinked root; verify exact path absent and Developer root still present."
+      command_or_check: "Delete exactly /Users/tienphat/Developer/agent-runtime without following a symlinked root or using globs; verify exact path absent and Developer root still present."
       required: true
     - id: CHECK-4
       command_or_check: "Refresh canonical GitHub refs after local deletion; require main/repository/topology unchanged and no unexpected repo mutation."
