@@ -1,0 +1,174 @@
+protocol_version: 3
+
+task_id: TASK-0009
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: maintainer_objective_change
+  gap_id: "PROMOTE_RETIRED_AGENT_RUNTIME_TO_MAIN"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "33f138c56dee6a2a1e8b8a6dc52b1399452ef177"
+
+execution_skills:
+  required:
+    - executor
+    - verification
+  recommended:
+    - simplicity
+
+external_skills:
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "phatnguyen03022001/agent-runtime TASK-0008 revision 2 accepted review at b52cdc73b0589d9e14adfbb3647fcccdb0ee65ab"
+    role: "Accepted completed decommission and exact promotion-ready candidate."
+    precedence: 1
+  - source: "phatnguyen03022001/agent-skills@33f138c56dee6a2a1e8b8a6dc52b1399452ef177"
+    role: "Current protocol-v3 promotion/review authority semantics."
+    precedence: 2
+
+promotion:
+  candidate_head: "b52cdc73b0589d9e14adfbb3647fcccdb0ee65ab"
+  target_ref: main
+  expected_target_head: "12172419c08c1f069c7d6cf2ef8842ed2838e0bb"
+  method: FAST_FORWARD_ONLY
+
+structure_authority:
+  status: RESOLVED
+  source: "Accepted TASK-0008 review and current two-branch topology."
+  rationale: "This is promotion-only authority. The accepted retired candidate is already a fast-forward descendant of current main. No implementation, local cleanup, repository metadata, release, archive, or deletion work is authorized."
+
+objective: "Promote the exact accepted retired agent-runtime candidate b52cdc73b0589d9e14adfbb3647fcccdb0ee65ab to main by non-force fast-forward only, preserve dev as the task/report evidence branch, record exact promotion evidence, and stop at Governing Architect review."
+
+scope:
+  required_changes:
+    - "Refresh canonical refs/topology and require dev equals the exact handoff base, main equals 12172419c08c1f069c7d6cf2ef8842ed2838e0bb, and branches exactly {dev, main}."
+    - "Resolve TASK-0008/review.yaml at b52cdc73b0589d9e14adfbb3647fcccdb0ee65ab and require state ACCEPTED, exact reviewed report 0f8f1435ffa5d7045cb3bcb2900041b750b98d10, and promotion_readiness.eligible_for_candidate_capture true."
+    - "Require promotion candidate b52cdc73b0589d9e14adfbb3647fcccdb0ee65ab to be a strict fast-forward descendant of current main with merge base exactly current main. Do not promote the TASK-0009 planning commit or any later dev commit."
+    - "Update only refs/heads/main to b52cdc73b0589d9e14adfbb3647fcccdb0ee65ab using non-force fast-forward semantics."
+    - "After promotion, verify main equals the exact accepted candidate, dev still equals the TASK-0009 execution base until report publication, topology remains exactly {dev, main}, and no tags/releases/metadata/local state/other repositories changed."
+    - "Create/push only .agent/tasks/TASK-0009/report.yaml as a separate direct report-only child on dev. Verify final dev is that report commit, main remains the exact accepted candidate, and topology remains {dev, main}. Stop at Governing Architect review."
+
+  allowed_existing_files_or_components:
+    - .agent/tasks/**
+    - LICENSE
+    - README.md
+  expected_files_are_restrictive: true
+
+invariants:
+  - "Promotion candidate is exactly b52cdc73b0589d9e14adfbb3647fcccdb0ee65ab; planning/report commits must never be promoted by this task."
+  - "main moves only by non-force fast-forward from 12172419c08c1f069c7d6cf2ef8842ed2838e0bb to the exact accepted candidate."
+  - "Retired repository content and historical evidence are not modified during promotion."
+  - "No local Mac cleanup or process action occurs; TASK-0008 already closed decommission."
+  - "Branches remain exactly {dev, main}."
+
+forbidden_changes:
+  - "Do not modify README.md, LICENSE, historical .agent/tasks artifacts, runtime content, or any non-report file."
+  - "Do not promote the TASK-0009 planning commit or report commit to main."
+  - "Do not force-push, merge, rebase, rewrite history, create/delete branches, create tags/releases, archive/delete the repository, mutate repository metadata, or mutate any other repository."
+  - "Do not delete the primary local checkout, .env, .venv, or perform any further machine-local cleanup."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - .agent/tasks/TASK-0009/report.yaml
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: ""
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions:
+    - BLOCKED
+    - STALE_STATE
+    - AUTHORITY_REQUIRED
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    - REVIEW_REQUIRED
+    - USER_STOP
+
+capability_requirements:
+  EXECUTION:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - non_force_ref_update
+  REVIEW:
+    - exact_commit_report_resolution
+    - repository_content_write
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Only the exact accepted retired candidate is promoted."
+    evidence_required: "Accepted TASK-0008 review resolves at b52cdc73..., candidate identity is exact, and main is updated to exactly that SHA rather than TASK-0009 planning/report state."
+  - id: AC-2
+    requirement: "Promotion is stale-safe and fast-forward only."
+    evidence_required: "Fresh pre-promotion refs match expected identities; merge base equals old main; main update is non-force; final main equals candidate."
+  - id: AC-3
+    requirement: "Promotion does not expand scope."
+    evidence_required: "No implementation/local/cross-repo/metadata/tag/release/archive/delete mutation occurs; topology remains {dev, main}."
+  - id: AC-4
+    requirement: "Promotion evidence is durable and exact."
+    evidence_required: "TASK-0009/report.yaml is a direct report-only child on dev and records exact before/after refs and candidate identity; final dev is report commit and main remains candidate."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Refresh refs/topology; require exact execution base on dev, main=12172419c08c1f069c7d6cf2ef8842ed2838e0bb, branches exactly {dev, main}; resolve TASK-0009 and accepted TASK-0008 review/candidate."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Compare main to promotion candidate and require candidate is ahead-only with merge base exactly main; prove candidate is b52cdc73b0589d9e14adfbb3647fcccdb0ee65ab."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Immediately before ref mutation refresh main/dev again; non-force update only main to exact candidate; verify main=candidate and dev unchanged."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Create/push only TASK-0009/report.yaml on dev; verify direct report-only lineage, final dev/report, main exact candidate, and branches exactly {dev, main}; stop at Governing Architect review."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: true
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
