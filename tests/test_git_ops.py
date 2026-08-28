@@ -5,9 +5,10 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from agent_runtime.config import ProjectProfile
-from agent_runtime.git_ops import GitError, inspect_repository, sync_checkout
+from agent_runtime.git_ops import GitError, _automation_env, inspect_repository, sync_checkout
 
 
 def run(cwd: Path, *args: str) -> str:
@@ -46,6 +47,18 @@ class GitFixture:
             disposable=True,
         )
 
+    def foreign_git_dir(self) -> tuple[Path, str]:
+        foreign = Path(self.temp.name) / "foreign"
+        run(Path(self.temp.name), "git", "init", "-b", "main", str(foreign))
+        run(foreign, "git", "config", "user.name", "Runtime Tests")
+        run(foreign, "git", "config", "user.email", "runtime@example.invalid")
+        (foreign / "foreign.txt").write_text("foreign\n", encoding="utf-8")
+        run(foreign, "git", "add", ".")
+        run(foreign, "git", "commit", "-m", "foreign")
+        run(foreign, "git", "remote", "add", "origin", str(self.remote))
+        run(foreign, "git", "fetch", "origin", "main")
+        return foreign / ".git", run(foreign, "git", "rev-parse", "HEAD")
+
 
 class GitOpsTests(unittest.TestCase):
     def test_inspect_reports_head_branch_clean_and_cached_remote(self) -> None:
@@ -58,6 +71,93 @@ class GitOpsTests(unittest.TestCase):
         self.assertTrue(state["in_sync"])
         self.assertTrue(state["remote_identity_ok"])
         self.assertNotIn(str(fx.checkout), repr(state))
+
+    def test_parent_git_dir_cannot_redirect_repository_inspection(self) -> None:
+        fx = GitFixture(self)
+        expected_head = run(fx.checkout, "git", "rev-parse", "HEAD")
+        foreign_git_dir, foreign_head = fx.foreign_git_dir()
+        self.assertNotEqual(expected_head, foreign_head)
+        with patch.dict(os.environ, {"GIT_DIR": str(foreign_git_dir)}, clear=False):
+            state = inspect_repository(fx.profile)
+        self.assertTrue(state["ok"])
+        self.assertEqual(state["head"], expected_head)
+        self.assertTrue(state["clean"])
+
+    def test_parent_git_dir_cannot_redirect_destructive_sync(self) -> None:
+        fx = GitFixture(self)
+        foreign_git_dir, foreign_head = fx.foreign_git_dir()
+        (fx.checkout / "tracked.txt").write_text("changed\n", encoding="utf-8")
+        with patch.dict(os.environ, {"GIT_DIR": str(foreign_git_dir)}, clear=False):
+            state = sync_checkout(fx.profile)
+        self.assertTrue(state["ok"])
+        self.assertEqual(run(foreign_git_dir.parent, "git", "rev-parse", "HEAD"), foreign_head)
+        self.assertEqual((fx.checkout / "tracked.txt").read_text(encoding="utf-8"), "base\n")
+
+    def test_automation_env_scrubs_repository_ref_object_and_config_controls_only(self) -> None:
+        poisoned = {
+            "GIT_DIR": "/foreign/repo.git",
+            "GIT_CEILING_DIRECTORIES": "/foreign",
+            "GIT_DISCOVERY_ACROSS_FILESYSTEM": "1",
+            "GIT_IMPLICIT_WORK_TREE": "0",
+            "GIT_WORK_TREE": "/foreign/worktree",
+            "GIT_COMMON_DIR": "/foreign/common",
+            "GIT_INDEX_FILE": "/foreign/index",
+            "GIT_OBJECT_DIRECTORY": "/foreign/objects",
+            "GIT_ALTERNATE_OBJECT_DIRECTORIES": "/foreign/alternate",
+            "GIT_NAMESPACE": "foreign",
+            "GIT_REFERENCE_BACKEND": "foreign",
+            "GIT_REPLACE_REF_BASE": "refs/foreign/replace/",
+            "GIT_NO_REPLACE_OBJECTS": "1",
+            "GIT_SHALLOW_FILE": "/foreign/shallow",
+            "GIT_GRAFT_FILE": "/foreign/grafts",
+            "GIT_CONFIG_SYSTEM": "/foreign/system-config",
+            "GIT_CONFIG_GLOBAL": "/foreign/global-config",
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_PARAMETERS": "'core.worktree=/foreign'",
+            "GIT_CONFIG_COUNT": "2",
+            "GIT_CONFIG_KEY_0": "core.worktree",
+            "GIT_CONFIG_VALUE_0": "/foreign",
+            "GIT_CONFIG_KEY_1": "safe.directory",
+            "GIT_CONFIG_VALUE_1": "*",
+            "GIT_CONFIG_KEY_999": "still.must.be.removed",
+            "GIT_CONFIG_VALUE_999": "regardless-of-count",
+            "GIT_SSH_COMMAND": "ssh -F /trusted/ssh-config",
+            "GIT_ASKPASS": "/trusted/askpass",
+            "HTTPS_PROXY": "http://trusted-proxy.invalid:8080",
+            "PATH": os.environ.get("PATH", ""),
+        }
+        with patch.dict(os.environ, poisoned, clear=False):
+            env = _automation_env()
+        for key in poisoned:
+            if key.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")) or key in {
+                "GIT_DIR",
+                "GIT_CEILING_DIRECTORIES",
+                "GIT_DISCOVERY_ACROSS_FILESYSTEM",
+                "GIT_IMPLICIT_WORK_TREE",
+                "GIT_WORK_TREE",
+                "GIT_COMMON_DIR",
+                "GIT_INDEX_FILE",
+                "GIT_OBJECT_DIRECTORY",
+                "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+                "GIT_NAMESPACE",
+                "GIT_REFERENCE_BACKEND",
+                "GIT_REPLACE_REF_BASE",
+                "GIT_NO_REPLACE_OBJECTS",
+                "GIT_SHALLOW_FILE",
+                "GIT_GRAFT_FILE",
+                "GIT_CONFIG_SYSTEM",
+                "GIT_CONFIG_GLOBAL",
+                "GIT_CONFIG_NOSYSTEM",
+                "GIT_CONFIG_PARAMETERS",
+                "GIT_CONFIG_COUNT",
+            }:
+                self.assertNotIn(key, env)
+        self.assertEqual(env["GIT_SSH_COMMAND"], poisoned["GIT_SSH_COMMAND"])
+        self.assertEqual(env["GIT_ASKPASS"], poisoned["GIT_ASKPASS"])
+        self.assertEqual(env["HTTPS_PROXY"], poisoned["HTTPS_PROXY"])
+        self.assertEqual(env["PATH"], poisoned["PATH"])
+        self.assertEqual(env["GIT_TERMINAL_PROMPT"], "0")
+        self.assertEqual(env["GCM_INTERACTIVE"], "Never")
 
     def test_remote_mismatch_rejected(self) -> None:
         fx = GitFixture(self)

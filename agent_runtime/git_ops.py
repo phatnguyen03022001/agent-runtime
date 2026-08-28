@@ -11,6 +11,31 @@ GIT_FETCH_TIMEOUT_SECONDS = 75
 GIT_LOCAL_TIMEOUT_SECONDS = 30
 GIT_INSPECT_TIMEOUT_SECONDS = 15
 MAX_COMMAND_OUTPUT_CHARS = 4000
+_GIT_CONTROL_ENV = frozenset(
+    {
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_CEILING_DIRECTORIES",
+        "GIT_COMMON_DIR",
+        "GIT_CONFIG_COUNT",
+        "GIT_CONFIG_GLOBAL",
+        "GIT_CONFIG_NOSYSTEM",
+        "GIT_CONFIG_PARAMETERS",
+        "GIT_CONFIG_SYSTEM",
+        "GIT_DIR",
+        "GIT_DISCOVERY_ACROSS_FILESYSTEM",
+        "GIT_GRAFT_FILE",
+        "GIT_IMPLICIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_NAMESPACE",
+        "GIT_NO_REPLACE_OBJECTS",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_REFERENCE_BACKEND",
+        "GIT_REPLACE_REF_BASE",
+        "GIT_SHALLOW_FILE",
+        "GIT_WORK_TREE",
+    }
+)
+_GIT_NUMBERED_CONFIG_PREFIXES = ("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")
 
 
 class GitError(RuntimeError):
@@ -18,7 +43,11 @@ class GitError(RuntimeError):
 
 
 def _automation_env() -> dict[str, str]:
-    env = os.environ.copy()
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if key not in _GIT_CONTROL_ENV and not key.startswith(_GIT_NUMBERED_CONFIG_PREFIXES)
+    }
     env["GIT_TERMINAL_PROMPT"] = "0"
     env["GCM_INTERACTIVE"] = "Never"
     return env
