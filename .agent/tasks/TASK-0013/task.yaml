@@ -1,0 +1,180 @@
+protocol_version: 3
+
+task_id: TASK-0013
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: reproduced_defect
+  gap_id: MACOS_PROCESS_GROUP_PROBE_EPERM
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "33f138c56dee6a2a1e8b8a6dc52b1399452ef177"
+
+architect_analysis_skills:
+  - architect
+  - simplicity
+  - reliability
+  - verification
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - verification
+    - simplicity
+  recommended: []
+
+authority_sources:
+  - source: "Operator-supplied macOS execution evidence on 2026-08-28 from /Users/tienphat/Developer/agent-runtime after fast-forwarding local main to 8428d698f803250e62c9b387a100f71eb2ef73bb and running ./install.sh."
+    role: "Causal production-platform reproduction. install.sh reached repository ./verify; 15 tests passed and test_timeout_terminates_process_group_and_returns_truthful_timeout errored. execute_terminal timed out as expected, _terminate_process_group sent SIGTERM, then _process_group_exists called os.killpg(process_group_id, 0) and macOS/Python 3.14.6 raised PermissionError [Errno 1] Operation not permitted. A ResourceWarning reported the child subprocess still running. Because ./verify failed, ./start.sh did not execute and the plugin remained off."
+    precedence: 1
+  - source: "phatnguyen03022001/agent-runtime@8428d698f803250e62c9b387a100f71eb2ef73bb"
+    role: "Released optional one-tool terminal host implementation containing the reproduced defect."
+    precedence: 2
+  - source: "phatnguyen03022001/agent-runtime TASK-0011 accepted review at 8428d698f803250e62c9b387a100f71eb2ef73bb"
+    role: "Preserves one-tool optional-host architecture and safety boundaries."
+    precedence: 3
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing agent_runtime/executor.py and tests/test_terminal_exec.py"
+  rationale: "This is a bounded reliability defect in process-group cleanup/probing. No architecture, public tool surface, installer lifecycle, or policy change is justified."
+
+objective: "Fix the reproduced macOS/Python 3.14 process-group cleanup failure so terminal_exec timeout cleanup handles POSIX process-group existence probing truthfully, does not leak child processes, and ./verify can pass on the operator Mac, without weakening cleanup guarantees or changing the one-tool host architecture."
+
+scope:
+  required_changes:
+    - "Use the operator-supplied macOS/Python 3.14.6 failure as causal RED evidence. Add a deterministic regression that reproduces the relevant errno/PermissionError semantics without requiring macOS when possible."
+    - "Correct process-group existence/probe handling using POSIX semantics: distinguish ESRCH/non-existence from EPERM/existence-without-permission. Do not interpret EPERM as group absence."
+    - "Preserve truthful cleanup behavior: timeout must still attempt bounded SIGTERM then SIGKILL escalation as needed, reap the leader, avoid intentional detached descendants, and return timed_out=true only after cleanup handling completes."
+    - "If an actual SIGTERM/SIGKILL operation itself is denied rather than only the signal-0 probe, fail explicitly rather than manufacturing successful cleanup."
+    - "Keep public MCP surface exactly {terminal_exec}; do not modify install/start lifecycle except if a test-only or documentation correction is strictly required by the defect."
+    - "Run focused deterministic tests and root ./verify in the Executor environment. Because the causal failure is Darwin-specific, obtain one final operator-Mac verification of ./verify on the exact candidate implementation before reporting PASS. If direct Mac capability is unavailable, one bounded operator-supplied verification bundle is authorized for this exact command/result only; do not ask for secrets or broad diagnostics."
+    - "Publish one implementation commit on dev, then a separate report-only .agent/tasks/TASK-0013/report.yaml commit; stop at Governing Architect review. Do not promote main in this task."
+
+  allowed_existing_files_or_components:
+    - agent_runtime/executor.py
+    - tests/test_terminal_exec.py
+    - tests/test_surface_and_scripts.py
+    - README.md
+    - verify
+    - .agent/tasks/TASK-0013/task.yaml
+  expected_files_are_restrictive: true
+
+invariants:
+  - "The only public MCP tool remains terminal_exec."
+  - "No project registry, sync engine, verifier state engine, command ACL, sandbox, daemon, autostart, policy broker, or orchestration machinery is introduced."
+  - "Direct argv/shell=False, cwd realpath guard, minimal child environment, disconnected stdin, bounded output, and bounded timeout/process-group cleanup remain intact."
+  - "main remains 8428d698f803250e62c9b387a100f71eb2ef73bb during this task and branches remain exactly {dev, main}."
+  - "Historical .agent/tasks evidence remains unchanged except TASK-0013 task/report and later review."
+
+forbidden_changes:
+  - "Do not treat PermissionError/EPERM from a signal-0 existence probe as proof that the process group is gone."
+  - "Do not swallow permission errors from actual termination signals and claim successful cleanup."
+  - "Do not weaken or remove the descendant-leak regression merely to make the suite green."
+  - "Do not change MCP surface, dependency versions, tunnel/plugin credentials, local secret files, main, tags, releases, repository metadata, other repositories, or branch topology."
+  - "Do not add command-specific policy or platform abstraction frameworks."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - .agent/tasks/TASK-0013/report.yaml
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: ""
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions:
+    - BLOCKED
+    - STALE_STATE
+    - AUTHORITY_REQUIRED
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    - REVIEW_REQUIRED
+    - REVERIFY_REQUIRED
+    - USER_STOP
+
+capability_requirements:
+  EXECUTION:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - deterministic_python_test_execution
+    - operator_mac_verify_bridge_if_direct_mac_unavailable
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "The reproduced EPERM probe failure is closed without misclassifying group existence."
+    evidence_required: "Regression proves ESRCH means absent while EPERM from the signal-0 probe means the group still exists; focused tests pass."
+  - id: AC-2
+    requirement: "Timeout cleanup remains truthful and leak-resistant."
+    evidence_required: "Existing timeout/descendant cleanup regressions pass; actual termination permission failure is not reported as successful cleanup."
+  - id: AC-3
+    requirement: "No architecture or public-surface regression occurs."
+    evidence_required: "Public MCP surface exactly terminal_exec and current start/install/host boundaries unchanged."
+  - id: AC-4
+    requirement: "The fix is verified on the platform that reproduced the defect."
+    evidence_required: "Operator Mac on exact candidate implementation runs ./verify successfully with all tests PASS and no ResourceWarning/leaked test child attributable to this path."
+  - id: AC-5
+    requirement: "Publication remains bounded."
+    evidence_required: "Implementation changes only authorized runtime/test files; report is separate report-only child; final dev/main/topology and lineage verified."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Refresh refs and require exact handoff base, unchanged main=8428d698f803250e62c9b387a100f71eb2ef73bb, topology exactly {dev, main}; resolve TASK-0013 and pinned skills."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Add/execute causal regression for ESRCH vs EPERM signal-0 probe semantics and preserve actual-signal failure truthfulness."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Run focused terminal_exec tests plus root ./verify on exact candidate implementation."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Obtain exact operator-Mac ./verify PASS on the candidate implementation using the bounded bridge if direct local capability is unavailable."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Verify implementation diff, public one-tool surface, report-only lineage, unchanged main, and exact {dev, main} topology."
+      required: true
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
