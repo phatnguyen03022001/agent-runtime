@@ -14,8 +14,13 @@ except ImportError:
     _ToolAnnotations = None
 
 from .executor import execute_terminal
+from .session import (
+    control_terminal as _control_terminal,
+    poll_terminal as _poll_terminal,
+    start_terminal as _start_terminal,
+)
 
-PUBLIC_TOOL_NAMES = ("terminal_exec",)
+PUBLIC_TOOL_NAMES = ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control")
 mcp = MCPServer("Agent Runtime")
 
 
@@ -127,6 +132,37 @@ def terminal_exec(
     """Run one literal local argv; this capability may modify the host."""
 
     return execute_terminal(argv, cwd, timeout_seconds)
+
+
+@_tool(read_only=False, destructive=True, idempotent=False, open_world=True)
+def terminal_start(argv: list[str], cwd: str) -> dict[str, Any]:
+    """Start one literal argv in a bounded persistent PTY session."""
+
+    return _start_terminal(argv, cwd)
+
+
+@_tool(read_only=False, destructive=False, idempotent=False, open_world=False)
+def terminal_poll(
+    session_id: str,
+    cursor: int = 0,
+    wait_ms: int = 0,
+) -> dict[str, Any]:
+    """Read bounded incremental PTY output and current session status."""
+
+    return _poll_terminal(session_id, cursor, wait_ms)
+
+
+@_tool(read_only=False, destructive=True, idempotent=False, open_world=True)
+def terminal_control(
+    session_id: str,
+    action: str,
+    data: str | None = None,
+    rows: int | None = None,
+    cols: int | None = None,
+) -> dict[str, Any]:
+    """Write, interrupt, terminate, or resize one persistent PTY session."""
+
+    return _control_terminal(session_id, action, data, rows, cols)
 
 
 def _main() -> int:

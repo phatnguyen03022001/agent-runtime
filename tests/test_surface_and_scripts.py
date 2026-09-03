@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class SurfaceAndScriptsTests(unittest.TestCase):
-    def test_public_mcp_surface_is_exactly_terminal_exec(self) -> None:
+    def test_public_mcp_surface_is_exactly_four_terminal_tools(self) -> None:
         source = (ROOT / "agent_runtime/server.py").read_text()
         tree = ast.parse(source)
         assigned = {}
@@ -25,12 +25,16 @@ class SurfaceAndScriptsTests(unittest.TestCase):
             elif isinstance(node, ast.FunctionDef):
                 functions.add(node.name)
 
-        self.assertEqual(assigned.get("PUBLIC_TOOL_NAMES"), ("terminal_exec",))
-        self.assertIn("terminal_exec", functions)
+        self.assertEqual(
+            assigned.get("PUBLIC_TOOL_NAMES"),
+            ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control"),
+        )
+        for name in assigned["PUBLIC_TOOL_NAMES"]:
+            self.assertIn(name, functions)
         for retired in ("get_head", "sync", "run_verify", "get_last_log"):
             self.assertNotIn(f"def {retired}(", source)
 
-    def test_supported_mcp_registration_exposes_one_destructive_open_world_tool(self) -> None:
+    def test_supported_mcp_registration_exposes_exact_four_tools_with_conservative_annotations(self) -> None:
         class FakeAnnotations:
             __annotations__ = {
                 "readOnlyHint": bool,
@@ -71,18 +75,28 @@ class SurfaceAndScriptsTests(unittest.TestCase):
             sys.modules["mcp.types"] = types_module
             sys.modules.pop("agent_runtime.server", None)
             module = importlib.import_module("agent_runtime.server")
-            self.assertEqual(tuple(module.mcp.tools), ("terminal_exec",))
-            _, annotations = module.mcp.tools["terminal_exec"]
-            self.assertIsNotNone(annotations)
             self.assertEqual(
-                annotations.values,
-                {
-                    "readOnlyHint": False,
-                    "destructiveHint": True,
-                    "idempotentHint": False,
-                    "openWorldHint": True,
-                },
+                tuple(module.mcp.tools),
+                ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control"),
             )
+            expected = {
+                "terminal_exec": (False, True, False, True),
+                "terminal_start": (False, True, False, True),
+                "terminal_poll": (False, False, False, False),
+                "terminal_control": (False, True, False, True),
+            }
+            for name, values in expected.items():
+                _, annotations = module.mcp.tools[name]
+                self.assertIsNotNone(annotations)
+                self.assertEqual(
+                    annotations.values,
+                    {
+                        "readOnlyHint": values[0],
+                        "destructiveHint": values[1],
+                        "idempotentHint": values[2],
+                        "openWorldHint": values[3],
+                    },
+                )
         finally:
             for name, value in saved.items():
                 if value is None:
@@ -95,13 +109,29 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertIn("read_only=False", source)
         self.assertIn("destructive=True", source)
         self.assertIn("open_world=True", source)
-        function = next(
-            node
+        functions = {
+            node.name: node
             for node in ast.parse(source).body
-            if isinstance(node, ast.FunctionDef) and node.name == "terminal_exec"
+            if isinstance(node, ast.FunctionDef)
+        }
+        self.assertEqual(
+            [arg.arg for arg in functions["terminal_exec"].args.args],
+            ["argv", "cwd", "timeout_seconds"],
         )
-        arg_names = [arg.arg for arg in function.args.args]
-        self.assertEqual(arg_names, ["argv", "cwd", "timeout_seconds"])
+        self.assertEqual(
+            [arg.arg for arg in functions["terminal_start"].args.args],
+            ["argv", "cwd"],
+        )
+        self.assertEqual(
+            [arg.arg for arg in functions["terminal_poll"].args.args],
+            ["session_id", "cursor", "wait_ms"],
+        )
+        self.assertEqual(
+            [arg.arg for arg in functions["terminal_control"].args.args],
+            ["session_id", "action", "data", "rows", "cols"],
+        )
+        for function in functions.values():
+            self.assertNotIn("env", [arg.arg for arg in function.args.args])
 
     def test_start_is_foreground_tunnel_only(self) -> None:
         text = (ROOT / "start.sh").read_text()
