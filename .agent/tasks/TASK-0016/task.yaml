@@ -1,0 +1,202 @@
+protocol_version: 3
+
+task_id: TASK-0016
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: accepted_capability_requires_live_plugin_validation
+  task_id: TASK-0015
+  gap_id: LIVE_CHATGPT_PLUGIN_VALIDATION_AND_PROMOTION
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "76f2d3877d1698f91eb5a6117e2301ed49480379"
+
+architect_analysis_skills:
+  - architect
+  - simplicity
+  - reliability
+  - verification
+
+execution_skills:
+  required:
+    - executor
+    - simplicity
+    - reliability
+    - verification
+  recommended: []
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0015/review.yaml@9d5320d5afbc9aff20834801bfd6695b27cf2a0e"
+    role: "Durable ACCEPTED Architect judgment for TASK-0015 report 17370ef23645a3a70d12328fc9cf4326596171ff."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0015/report.yaml@17370ef23645a3a70d12328fc9cf4326596171ff"
+    role: "Exact Executor evidence for implementation 9b5c534a17d9a90cb975223fea5e4f8ee3eb001f, including native macOS PTY verification and local latency measurements."
+    precedence: 2
+  - source: "phatnguyen03022001/agent-skills@76f2d3877d1698f91eb5a6117e2301ed49480379"
+    role: "Pinned reusable execution, verification, simplicity, reliability, and task-governance authority."
+    precedence: 3
+
+structure_authority:
+  status: RESOLVED
+  source: "TASK-0015 accepted lineage plus existing promotion/report lifecycle"
+  rationale: "TASK-0016 is integration-validation and promotion-only. It requires no implementation architecture change and may add only its canonical report artifact on dev."
+
+objective: "After the operator restarts ./start.sh, refreshes the Agent Runtime ChatGPT plugin, and opens a NEW CHAT so the updated MCP schema is active, prove the accepted TASK-0015 four-tool surface works end-to-end through ChatGPT -> plugin -> tunnel -> operator Mac, clean up all live smoke resources, then promote exactly the accepted TASK-0015 review lineage to main using non-force fast-forward semantics and publish only TASK-0016 report evidence on dev."
+
+promotion:
+  reviewed_report_commit: "17370ef23645a3a70d12328fc9cf4326596171ff"
+  accepted_review_commit: "9d5320d5afbc9aff20834801bfd6695b27cf2a0e"
+  promotion_candidate_head: "9d5320d5afbc9aff20834801bfd6695b27cf2a0e"
+  promotion_target_ref: "refs/heads/main"
+  expected_old_target: "d15bda58cad974d94b50406a3e4b247fc5fe95b1"
+  force: false
+
+scope:
+  required_changes:
+    - "Preflight fresh GitHub refs and require live dev equals the TASK-0016 handoff base, main equals d15bda58cad974d94b50406a3e4b247fc5fe95b1, and topology is exactly {dev, main}."
+    - "Resolve exact TASK-0015 report 17370ef23645a3a70d12328fc9cf4326596171ff and ACCEPTED review 9d5320d5afbc9aff20834801bfd6695b27cf2a0e; require the report/review lineage to be exact and unchanged."
+    - "Require execution from a NEW CHAT after the operator has restarted ./start.sh and refreshed/updated the Agent Runtime ChatGPT plugin. Do not infer updated plugin capability from repository code alone."
+    - "Preflight the actual ChatGPT Agent Runtime tool surface and require exactly terminal_exec, terminal_start, terminal_poll, and terminal_control to be available through the refreshed plugin/tunnel path. If any new tool is unavailable, stale, or differently shaped, stop CURRENT_PHASE_CAPABILITY_UNAVAILABLE without main mutation."
+    - "Run a bounded end-to-end live smoke through the public MCP tools, not direct Python wrappers: start a deliberately long-running harmless process under /Users/tienphat/Developer/agent-runtime, observe incremental output via terminal_poll, exercise UTF-8 terminal_control write, exercise resize, then interrupt or terminate and prove the session reaches terminal state."
+    - "Use terminal_exec as a separate one-shot regression smoke and prove it still returns normally after the persistent-session smoke."
+    - "Ensure every session/process created by the live smoke is explicitly terminated or has naturally exited before promotion. Do not leave dev servers, watchers, shells, temporary runtime state, benchmark artifacts, or operator-Mac garbage behind."
+    - "Do not create files outside /Users/tienphat/Developer/ as part of the smoke. Ordinary temporary command effects, if any, must stay inside the agent-runtime checkout and be removed before promotion. Prefer commands that create no files."
+    - "Require candidate 9d5320d5afbc9aff20834801bfd6695b27cf2a0e to remain a strict fast-forward descendant of current main with merge base exactly current main and behind_by=0."
+    - "Only after all live plugin checks pass, move refs/heads/main to exact candidate 9d5320d5afbc9aff20834801bfd6695b27cf2a0e with force=false."
+    - "Publish only .agent/tasks/TASK-0016/report.yaml on dev after promotion and stop at Governing Architect review."
+  allowed_existing_files_or_components:
+    - .agent/tasks/TASK-0016/task.yaml
+  expected_files_are_restrictive: true
+
+invariants:
+  - "No implementation file changes occur in TASK-0016."
+  - "The live smoke uses the refreshed ChatGPT plugin/tunnel tool surface; repository-native unit wrappers alone cannot satisfy the integration gate."
+  - "Public live tool surface is exactly {terminal_exec, terminal_start, terminal_poll, terminal_control}."
+  - "All live smoke processes/sessions are reclaimed before main mutation."
+  - "No Apple Sandbox, container, daemon, supervisor, PM2, launchd, database, cache, registry, browser, subagent, or new dependency is introduced."
+  - "No secret, credential, environment override, tunnel configuration, plugin configuration content, or operator account data is persisted to the repository."
+  - "Promotion target is exactly 9d5320d5afbc9aff20834801bfd6695b27cf2a0e with force=false. TASK-0016 planning/report state is not promoted to main."
+  - "Branch topology remains exactly {dev, main}."
+
+forbidden_changes:
+  - "Do not modify TASK-0015 implementation, report, or review artifacts."
+  - "Do not patch around a stale/missing plugin tool surface. Restart/refresh/new-chat capability is a hard integration precondition."
+  - "Do not use direct local Python imports as substitute evidence for the ChatGPT plugin/tunnel smoke."
+  - "Do not promote if any live session cannot be cleanly reclaimed or if terminal_exec regression smoke fails."
+  - "Do not force update main, create/delete branches, create tags/releases, mutate repository metadata, or touch another repository."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - .agent/tasks/TASK-0016/report.yaml
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: ""
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions:
+    - BLOCKED
+    - STALE_STATE
+    - AUTHORITY_REQUIRED
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    - REVIEW_REQUIRED
+    - USER_STOP
+
+capability_requirements:
+  EXECUTION:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - refreshed_chatgpt_agent_runtime_plugin
+    - terminal_exec
+    - terminal_start
+    - terminal_poll
+    - terminal_control
+    - non_force_ref_update
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "The refreshed ChatGPT plugin exposes the exact accepted four-tool MCP surface in a new chat."
+    evidence_required: "Executor invokes the real Agent Runtime plugin after operator restart/refresh and identifies exactly terminal_exec, terminal_start, terminal_poll, terminal_control with no stale one-tool schema."
+  - id: AC-2
+    requirement: "Persistent PTY capability works end-to-end through ChatGPT and the tunnel."
+    evidence_required: "A harmless long-running process is started via terminal_start, incremental output is observed with terminal_poll, UTF-8 write and PTY resize are exercised via terminal_control, and interrupt/terminate reaches truthful terminal state."
+  - id: AC-3
+    requirement: "Live smoke leaves no runtime garbage and one-shot execution remains usable."
+    evidence_required: "All smoke sessions/processes are reclaimed; terminal_exec succeeds afterward; no smoke-created persistent file/process/session remains."
+  - id: AC-4
+    requirement: "Promotion is strict and exact."
+    evidence_required: "Before mutation candidate 9d5320d5... is ahead-only from d15bda58..., behind 0, merge base exact old main; main is moved only to exact candidate using force=false."
+  - id: AC-5
+    requirement: "Report publication and final topology are bounded."
+    evidence_required: "TASK-0016 report is a separate report-only child on dev; main equals exact accepted TASK-0015 review candidate; TASK-0016 task/report are absent from main; final branches exactly {dev, main}."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Refresh refs, resolve TASK-0016 and accepted TASK-0015 report/review lineage, and preflight actual refreshed plugin capability in a NEW CHAT."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Run the bounded public-tool live PTY start/poll/write/resize/interrupt-or-terminate smoke through Agent Runtime."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Prove all live smoke resources are reclaimed and terminal_exec still succeeds."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Compare current main to exact accepted candidate and require strict fast-forward identity."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Update only main to exact candidate with force=false, refresh refs immediately, then publish TASK-0016 report only on dev and verify report-only lineage plus final topology."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: true
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
