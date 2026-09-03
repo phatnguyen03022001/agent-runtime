@@ -1,0 +1,215 @@
+protocol_version: 3
+
+task_id: TASK-0015
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: operator_approved_capability_expansion
+  task_id: ""
+  gap_id: PERSISTENT_TERMINAL_SESSION_PRIMITIVE
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "76f2d3877d1698f91eb5a6117e2301ed49480379"
+
+architect_analysis_skills:
+  - architect
+  - simplicity
+  - reliability
+  - verification
+
+execution_skills:
+  required:
+    - executor
+    - simplicity
+    - reliability
+    - verification
+  recommended: []
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "Operator-approved Agent Runtime vNext direction on 2026-09-03"
+    role: "Durable product intent: ChatGPT should use the operator Mac as a near-realtime developer workstation without turning agent-runtime into an agent, sandbox framework, orchestration system, or persistent local platform."
+    precedence: 1
+  - source: "phatnguyen03022001/agent-runtime@a256e24c63f76195a228e285aab6561f1ce1f80c"
+    role: "Current canonical dev state before TASK-0015 planning. Existing runtime exposes only bounded terminal_exec and preserves minimal child environment, workspace-root cwd guard, bounded output, and process-group cleanup."
+    precedence: 2
+  - source: "phatnguyen03022001/agent-skills@76f2d3877d1698f91eb5a6117e2301ed49480379"
+    role: "Pinned reusable Architect, Executor, simplicity, reliability, verification, and Task Protocol authority."
+    precedence: 3
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing agent_runtime/executor.py + agent_runtime/server.py one-tool host architecture, extended by at most one cohesive persistent-session module."
+  rationale: "The current bounded executor is intentionally stateless and kills descendants after each command. Persistent PTY state is a real separate ownership boundary, but does not justify a service, database, registry framework, scheduler, sandbox, or orchestration layer."
+
+objective: "Add the smallest persistent PTY/session capability that lets ChatGPT start, observe, interact with, and terminate long-running local developer processes with near-realtime incremental output while preserving terminal_exec semantics, the existing secret/workspace safety boundary, low idle resource cost, and zero runtime-owned persistent session garbage."
+
+scope:
+  required_changes:
+    - "Preserve terminal_exec as the default bounded one-shot primitive with its current literal argv, shell=False, disconnected stdin, minimal child environment, workspace-root cwd validation, bounded stdout/stderr, timeout, and process-group cleanup semantics. Do not route terminal_exec through the new persistent-session machinery merely for code reuse."
+    - "Add public terminal_start(argv, cwd). It must validate literal argv and cwd using the same safety semantics as terminal_exec, start one PTY-backed process group without shell interpolation, return promptly while the child may still be running, and return a compact session identity plus current status, bounded initial output, and cursor information."
+    - "Add public terminal_poll(session_id, cursor=0, wait_ms=0). It must return only output newer than the supplied cursor, current status, next cursor, and exit code when terminal. wait_ms must be bounded to at most 1000 ms so ChatGPT can near-realtime long-poll without holding a tool call indefinitely. Output retention and each response must be bounded; if requested output has already been evicted, return truthful cursor-expired/dropped-output evidence rather than silently pretending completeness."
+    - "Add public terminal_control(session_id, action, data/rows/cols as applicable) with exactly four actions: write UTF-8 input to the PTY, interrupt the process group, terminate using bounded TERM-to-KILL cleanup semantics, and resize the PTY. Invalid action-specific arguments must fail explicitly."
+    - "Keep persistent session state in memory only. Do not write session metadata, logs, cursor state, PID registries, databases, caches, or recovery artifacts to disk. Agent Runtime itself must leave no persistent session garbage when sessions end or the runtime shuts down normally."
+    - "Bound resource ownership: at most three active sessions, a fixed 10-minute session idle TTL, bounded retained output per session, and deterministic cleanup of PTY file descriptors and process groups on explicit termination, natural exit, idle expiry, and normal runtime shutdown. A hard SIGKILL/crash is not required to provide impossible cleanup guarantees and must not justify adding a supervisor daemon."
+    - "Idle expiry may use one small in-process reaper mechanism only if required to ensure unused sessions are actually reclaimed without a later tool call. Do not add PM2, launchd, a worker service, scheduler framework, persistent supervisor, or another process solely for cleanup."
+    - "Preserve the current workspace model: Agent Runtime-owned cwd/session operations are rooted by AGENT_RUNTIME_WORKSPACE_ROOT, expected on the operator Mac to resolve to /Users/tienphat/Developer. Do not claim generic executable filesystem confinement; child commands continue to run with the operator account's ordinary macOS permissions."
+    - "Preserve secret isolation. Persistent child processes receive the same minimal environment policy as terminal_exec. Do not add an env override parameter and do not expose control-plane/runtime credentials or ambient token/key variables to child processes."
+    - "Use Python standard library plus the already-pinned mcp dependency only. PTY/session support must not introduce a new runtime dependency, Apple Sandbox profile, container, command allowlist, permission DSL, project registry, filesystem index, browser automation, GUI control, subagent, model router, or workflow authority."
+    - "Update README only enough to describe the four-tool surface, near-realtime polling model, workspace/security boundary, resource bounds, idle cleanup, and non-sandbox truthfully."
+    - "Measure local session overhead on the exact operator Mac candidate. Capture p50/p95 for non-wait terminal_poll over repeated calls and a start-return smoke proving terminal_start does not wait for a long-running child. Record measurements as evidence, not as a new persistent benchmark framework or invented universal SLO."
+    - "Publish one bounded implementation lineage on dev followed by a separate .agent/tasks/TASK-0015/report.yaml evidence commit, then stop at Governing Architect review. Do not promote main in this task."
+  allowed_existing_files_or_components:
+    - agent_runtime/executor.py
+    - agent_runtime/server.py
+    - tests/test_terminal_exec.py
+    - tests/test_surface_and_scripts.py
+    - README.md
+    - verify
+    - .agent/tasks/TASK-0015/task.yaml
+  expected_files_are_restrictive: true
+
+invariants:
+  - "Public MCP surface after implementation is exactly {terminal_exec, terminal_start, terminal_poll, terminal_control}."
+  - "terminal_exec behavior remains backward-compatible and remains the preferred one-shot primitive."
+  - "No command is wrapped in bash -lc, zsh -lc, or another shell by the runtime; argv remains literal."
+  - "Persistent sessions use no runtime-owned disk persistence and no session survives explicit cleanup or normal runtime shutdown by design."
+  - "Maximum active persistent sessions is 3 and fixed idle TTL is 600 seconds."
+  - "Persistent child environment preserves the current minimal-env/secret-isolation boundary and exposes no caller-supplied env override."
+  - "AGENT_RUNTIME_WORKSPACE_ROOT continues to guard cwd selection through realpath validation; the runtime does not misrepresent that guard as host filesystem sandboxing."
+  - "No daemon, autostart, scheduler, PM2, launchd service, Apple Sandbox, container, database, project registry, filesystem index, browser/computer-use, subagent, or orchestration machinery is introduced."
+  - "requirements.txt remains mcp==2.0.0 only unless a revised task explicitly authorizes dependency change."
+  - "Branch topology remains exactly {dev, main}; main remains d15bda58cad974d94b50406a3e4b247fc5fe95b1 during TASK-0015 execution."
+
+forbidden_changes:
+  - "Do not replace or weaken terminal_exec cleanup semantics to make long-running sessions possible; persistent behavior belongs only to the new session primitives."
+  - "Do not add generic file read/write/search tools, apply_patch, Git-specific tools, test-specific tools, repo/project abstractions, or command aliases in TASK-0015."
+  - "Do not expose arbitrary environment variables, secrets, tunnel credentials, or a caller-controlled env map to child processes."
+  - "Do not claim hard filesystem confinement outside AGENT_RUNTIME_WORKSPACE_ROOT; do not add Apple Sandbox/container machinery to manufacture that claim."
+  - "Do not persist session state or logs under HOME, Library, /tmp, the repository, or another runtime-owned path. Ordinary files created intentionally by user commands are outside this runtime-owned-garbage invariant."
+  - "Do not add recovery machinery for SIGKILL/power-loss orphan guarantees beyond bounded process-group design; reproduce a real residual defect before adding supervision complexity."
+  - "Do not change tunnel-client profile semantics, install lifecycle, autostart behavior, credentials, main, tags, releases, repository metadata, other repositories, or branch topology."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - agent_runtime/session.py
+    - tests/test_terminal_session.py
+    - .agent/tasks/TASK-0015/report.yaml
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: ""
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions:
+    - BLOCKED
+    - STALE_STATE
+    - AUTHORITY_REQUIRED
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    - REVIEW_REQUIRED
+    - REVERIFY_REQUIRED
+    - USER_STOP
+
+capability_requirements:
+  EXECUTION:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - deterministic_python_test_execution
+    - native_macos_pty_execution
+    - non_force_git_push
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "ChatGPT can start and observe a long-running PTY process without blocking until that process exits."
+    evidence_required: "Focused native test starts a long-running child, terminal_start returns while status is running, initial output is available or subsequently observable, and the child remains controllable by session_id."
+  - id: AC-2
+    requirement: "Incremental polling is bounded, truthful, and suitable for near-realtime agent use."
+    evidence_required: "Tests prove cursor-based no-duplicate output, bounded wait_ms <= 1000 ms, bounded retained/returned output, truthful cursor-expiry/drop behavior, natural-exit status, and exact candidate Mac p50/p95 no-wait poll measurements are recorded."
+  - id: AC-3
+    requirement: "Interactive PTY control works without introducing shell interpolation or env leakage."
+    evidence_required: "Native tests prove write input round-trip, SIGINT/interrupt, terminate cleanup, PTY resize, literal argv behavior, workspace cwd validation, and the same minimal child environment/secret stripping as terminal_exec."
+  - id: AC-4
+    requirement: "Unused runtime resources are bounded and reclaimed without persistent garbage."
+    evidence_required: "Tests prove maximum three active sessions, fourth-session rejection, deterministic idle-expiry using controlled time, explicit/natural/shutdown cleanup of process groups and PTY FDs, descendant-leak resistance, and no runtime-owned session files/logs/state are created."
+  - id: AC-5
+    requirement: "Existing one-shot execution remains stable."
+    evidence_required: "Existing terminal_exec regressions pass unchanged in meaning and root ./verify passes on the exact candidate."
+  - id: AC-6
+    requirement: "Architecture stays intentionally small."
+    evidence_required: "Final dependency graph remains mcp==2.0.0 only; public surface is exactly four tools; implementation introduces at most the authorized session module/test file and no forbidden platform/orchestration machinery."
+  - id: AC-7
+    requirement: "Publication is bounded and reviewable."
+    evidence_required: "Implementation changes only authorized files/new files, report is a separate report-only child on dev, main remains d15bda58..., and topology remains exactly {dev, main}."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Refresh refs; require exact TASK-0015 handoff base, unchanged main=d15bda58cad974d94b50406a3e4b247fc5fe95b1, topology exactly {dev, main}; resolve TASK-0015 and pinned skills."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Add focused causal tests for PTY start/poll/control, literal argv, cursor bounds/expiry, environment isolation, workspace guard, max-session bound, idle cleanup, shutdown cleanup, and descendant cleanup."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Run focused terminal session tests plus all existing terminal_exec/surface tests during development."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Run root ./verify on the exact implementation candidate on the operator Mac."
+      required: true
+    - id: CHECK-5
+      command_or_check: "On the exact candidate Mac, record a small local benchmark of no-wait terminal_poll p50/p95 and prove terminal_start returns before a deliberately long-running child exits. Do not add benchmark infrastructure to the repository unless required for deterministic tests."
+      required: true
+    - id: CHECK-6
+      command_or_check: "Verify exact final public tool names, dependency file, implementation diff, no runtime-owned persistent session artifacts, report-only lineage, unchanged main, and exact {dev, main} topology."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
