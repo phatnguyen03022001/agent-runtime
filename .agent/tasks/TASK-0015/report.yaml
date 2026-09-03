@@ -1,0 +1,205 @@
+protocol_version: 3
+
+task_id: TASK-0015
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0015/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+  authorized_base_head: "cd8b9f1f6c58f4b58f1997266f298507f6fafde9"
+  pre_execution_head: "cd8b9f1f6c58f4b58f1997266f298507f6fafde9"
+  final_execution_head: "9b5c534a17d9a90cb975223fea5e4f8ee3eb001f"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "76f2d3877d1698f91eb5a6117e2301ed49480379"
+  observed_revision: "76f2d3877d1698f91eb5a6117e2301ed49480379"
+
+execution_skills_used:
+  required:
+    - executor
+    - simplicity
+    - reliability
+    - verification
+  recommended: []
+  external:
+    - superpowers:brainstorming
+    - superpowers:test-driven-development
+    - superpowers:systematic-debugging
+    - superpowers:verification-before-completion
+
+pre_execution_checks:
+  protocol_version_supported: true
+  handoff_type_confirmed: true
+  task_at_base_confirmed: true
+  task_identity_confirmed: true
+  architect_binding_confirmed: true
+  repository_confirmed: true
+  branch_confirmed: true
+  base_head_confirmed: true
+  skill_revision_confirmed: true
+  required_execution_skills_available: true
+  structure_authority_confirmed: true
+  working_tree_clean: true
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - deterministic_python_test_execution
+    - native_macos_pty_execution
+    - non_force_git_push
+  available:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - deterministic_python_test_execution
+    - native_macos_pty_execution
+    - non_force_git_push
+  missing: []
+  passed: true
+
+operational_timing:
+  started_at_utc: "2026-09-03T02:44:41Z"
+  terminal_decision_at_utc: "2026-09-03T03:00:14Z"
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: ""
+  evidence: "TASK-0015 requires Executor-native macOS verification and Governing Architect review, but designates no separate authoritative verifier mechanism."
+
+implementation:
+  commit: "9b5c534a17d9a90cb975223fea5e4f8ee3eb001f"
+  base_parent: "cd8b9f1f6c58f4b58f1997266f298507f6fafde9"
+  public_tool_surface:
+    - terminal_exec
+    - terminal_start
+    - terminal_poll
+    - terminal_control
+  terminal_exec_modified: false
+  max_active_sessions: 3
+  idle_ttl_seconds: 600
+  max_retained_output_bytes: 65536
+  max_poll_output_bytes: 16384
+  max_wait_ms: 1000
+  runtime_dependency: "mcp==2.0.0"
+  session_persistence: memory_only
+  main_mutated: false
+
+verification:
+  causal_red:
+    initial_capability: "The first focused session test failed because agent_runtime.session did not exist, proving the new persistent-session behavior was absent before implementation."
+    bounded_behavior: "Expanded focused tests then failed on missing write/interrupt/resize actions, wait bounds, output-retention/cursor-expiry semantics, max-session enforcement, idle reaping, and cleanup ownership before those behaviors were implemented."
+    concurrency_regression: "A four-thread concurrent-start regression reproduced a real capacity race: all four starts succeeded and the test failed with 4 != 3 before the start/register critical section was corrected."
+  final_focused_session_tests: "14/14 PASS"
+  final_full_unittest_suite: "33/33 PASS"
+  final_root_verify: "33/33 PASS plus Python compile and shell syntax checks on exact candidate 9b5c534a17d9a90cb975223fea5e4f8ee3eb001f"
+  operator_mac: "macOS 26.6.2 at /Users/tienphat/Developer/agent-runtime"
+  local_public_wrapper_benchmark:
+    samples: 300
+    start_return_ms: 4.8581
+    start_status: running
+    status_after_poll_benchmark: running
+    poll_p50_ms: 0.0009
+    poll_p95_ms: 0.0010
+    interpretation: "Evidence for this exact operator Mac candidate only; not a universal SLO."
+  public_surface: "AST and registration tests prove the public MCP surface is exactly {terminal_exec, terminal_start, terminal_poll, terminal_control}; no caller-controlled env API was added."
+  dependency_and_persistence: "requirements.txt remains exactly mcp==2.0.0; runtime session metadata/output/cursors remain in memory only, and focused tests prove no runtime-owned session files are created."
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PROVEN
+    evidence: "Focused native test starts a five-second PTY child, terminal_start returns in under one second with status running, output is observable by session_id, and the exact-candidate public-wrapper smoke measured 4.8581 ms start return while the child remained running."
+  - criterion_id: AC-2
+    status: PROVEN
+    evidence: "Focused tests prove incremental cursor polling without duplicate output, integer wait_ms bounded to 0..1000, 64 KiB retained output, 16 KiB maximum poll response, truthful cursor_expired and dropped_output_bytes evidence, natural-exit status/exit code, and exact-candidate macOS no-wait poll p50=0.0009 ms and p95=0.0010 ms over 300 public-wrapper calls."
+  - criterion_id: AC-3
+    status: PROVEN
+    evidence: "Native PTY tests prove UTF-8 write round-trip, process-group SIGINT, bounded terminate cleanup, PTY resize, literal argv with no shell interpolation, realpath workspace cwd rejection outside AGENT_RUNTIME_WORKSPACE_ROOT, and the same minimal child environment with ambient runtime/key/token values stripped."
+  - criterion_id: AC-4
+    status: PROVEN
+    evidence: "Tests prove the active-session cap of three including concurrent starts, fixed 600-second idle TTL, autonomous in-process idle reaping plus controlled-time expiry, PTY descriptor cleanup, explicit/natural/shutdown process-group cleanup with descendant-leak resistance, and no runtime-owned session files/logs/state."
+  - criterion_id: AC-5
+    status: PROVEN
+    evidence: "Existing terminal_exec regressions remain unchanged in meaning and pass 13/13 inside the final 33-test suite. Root ./verify passes on the exact operator-Mac implementation candidate. agent_runtime/executor.py is absent from the base-to-candidate diff."
+  - criterion_id: AC-6
+    status: PROVEN
+    evidence: "Final dependency remains mcp==2.0.0 only. Public surface is exactly four tools. The implementation adds only the authorized cohesive agent_runtime/session.py module and tests/test_terminal_session.py test file and introduces no daemon, service, scheduler framework, sandbox, container, database, registry, filesystem index, browser/computer-use, subagent, or orchestration machinery."
+  - criterion_id: AC-7
+    status: PROVEN_PENDING_REPORT_COMMIT
+    evidence: "Implementation candidate 9b5c534a17d9a90cb975223fea5e4f8ee3eb001f is a single non-force child of the exact base and is published on dev. Its net diff is restricted to five authorized implementation/documentation/test paths. Immediately before report creation, remote main remained d15bda58cad974d94b50406a3e4b247fc5fe95b1 and topology remained exactly {dev, main}. This report is the sole intended subsequent report-only child; final lineage is verified after publication."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Fresh pre-mutation refs proved dev=cd8b9f1f6c58f4b58f1997266f298507f6fafde9, main=d15bda58cad974d94b50406a3e4b247fc5fe95b1, and topology exactly {dev, main}. TASK-0015 revision 1 was APPROVED and execution_ready at that base, pinned agent-skills revision 76f2d3877d1698f91eb5a6117e2301ed49480379 was resolved, and all required execution capabilities passed preflight on the operator Mac."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "Focused causal tests cover PTY start/poll/control, literal argv, cursor bounds/expiry, environment isolation, workspace guard, max-session capacity including concurrency, idle cleanup, shutdown cleanup, PTY FD cleanup, and descendant cleanup."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "Final focused terminal-session suite: 14/14 PASS. Final full unittest suite: 33/33 PASS, including all existing terminal_exec and surface regressions."
+  - check_id: CHECK-4
+    result: PASS
+    evidence: "Root ./verify ran on exact implementation candidate 9b5c534a17d9a90cb975223fea5e4f8ee3eb001f on the operator Mac and passed 33/33 tests plus Python compile and shell syntax checks."
+  - check_id: CHECK-5
+    result: PASS
+    evidence: "On macOS 26.6.2 using the repository .venv public server wrappers, terminal_start returned in 4.8581 ms while a two-second child remained running. Across 300 terminal_poll(session_id, cursor, 0) calls, p50 was 0.0009 ms and p95 was 0.0010 ms. No benchmark framework or repository artifact was added."
+  - check_id: CHECK-6
+    result: PENDING_POST_COMMIT
+    evidence: "Before report publication: public tools are exactly the four authorized names, requirements.txt is exactly mcp==2.0.0, implementation diff contains only the five authorized paths, no runtime-owned persistent session artifact was found or created by tests, main is unchanged, and topology is exactly {dev, main}. Final report-only direct-child lineage and post-publication refs are verified after this report commit."
+
+changed_files:
+  - path: README.md
+    summary: "Document the four-tool terminal surface, near-realtime polling model, resource bounds, cleanup behavior, workspace/security boundary, and non-sandbox truth."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: agent_runtime/server.py
+    summary: "Expose exactly terminal_exec, terminal_start, terminal_poll, and terminal_control with conservative MCP annotations while preserving terminal_exec implementation routing."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: agent_runtime/session.py
+    summary: "Implement bounded in-memory PTY session lifecycle, incremental output cursors, four control actions, capacity/idle limits, and deterministic process-group/PTY cleanup."
+    new_file: true
+    in_scope: true
+    structure_authorized: true
+  - path: tests/test_surface_and_scripts.py
+    summary: "Update public-surface and signature/annotation regressions for the exact four-tool contract and no env override API."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: tests/test_terminal_session.py
+    summary: "Add causal native PTY regressions for interaction, cursor/output bounds, safety inheritance, resource limits, concurrent capacity, idle reaping, and cleanup."
+    new_file: true
+    in_scope: true
+    structure_authorized: true
+
+commits_created:
+  - sha: "9b5c534a17d9a90cb975223fea5e4f8ee3eb001f"
+    message: "feat(TASK-0015): add persistent terminal sessions"
+
+pushed: true
+promoted_to_main: false
+
+discovered_gaps: []
+structural_observations: []
+deviations_from_task: []
+blockers: []
+
+working_tree_after:
+  clean: true
+  summary: "The implementation candidate was clean before report creation. No run-owned scratch repository, persistent benchmark artifact, or runtime session state was retained; this report is committed separately as the sole subsequent repository mutation."
+
+result: NEEDS_REVIEW
