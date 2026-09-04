@@ -1,0 +1,224 @@
+protocol_version: 3
+
+task_id: TASK-0017
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0017/task.yaml
+  canonical_base: "3cd46e492df0f775fb41ce2e7b193552f699ff1c"
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+  authorized_base_head: "3cd46e492df0f775fb41ce2e7b193552f699ff1c"
+  pre_execution_head: "3cd46e492df0f775fb41ce2e7b193552f699ff1c"
+  implementation_candidate: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  report_parent: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "ac2f213095e339dafa96825d89a6f6de164792bc"
+  observed_revision: "ac2f213095e339dafa96825d89a6f6de164792bc"
+
+execution_skills_used:
+  required:
+    - executor
+    - verification
+    - simplicity
+    - github-workflow
+  external:
+    - superpowers:using-superpowers
+    - superpowers:writing-plans
+    - superpowers:test-driven-development
+    - superpowers:executing-plans
+    - superpowers:verification-before-completion
+  availability_note: "The named execution skill files were not exposed as local SKILL.md entries; their canonical task requirements were executed directly with the available verification process skills."
+
+pre_execution_checks:
+  task_at_base_confirmed: true
+  task_identity_confirmed: true
+  repository_confirmed: true
+  branch_confirmed: true
+  base_head_confirmed: true
+  structure_authority_confirmed: true
+  working_tree_clean_before_reconciliation: true
+  reconciliation: "Fetched origin/dev and fast-forwarded dev from 59f53fc1b092aede20ac9e2003510e54f64ecd1b to the exact canonical base."
+  main_before_execution: "9d5320d5afbc9aff20834801bfd6695b27cf2a0e"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - installed_mcp_2_0_0_api
+    - deterministic_python_test_execution
+    - native_macos_pty_execution
+    - non_force_git_push
+  available:
+    - exact_remote_ref_read
+    - repository_content_read
+    - repository_content_write
+    - installed_mcp_2_0_0_api
+    - deterministic_python_test_execution
+    - native_macos_pty_execution
+    - non_force_git_push
+  missing: []
+  passed: true
+
+implementation:
+  commit: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  base_parent: "3cd46e492df0f775fb41ce2e7b193552f699ff1c"
+  public_tool_surface:
+    - terminal_exec
+    - terminal_start
+    - terminal_poll
+    - terminal_control
+  runtime_dependency: "mcp==2.0.0"
+  middleware_surface: "MCPServer.middleware"
+  diagnostics_destination: stderr
+  diagnostics_protocol: json_lines
+  process_kinds:
+    - one_shot
+    - persistent_pty
+  persistence: memory_only
+  main_mutated: false
+
+verification:
+  focused_suite: "44/44 PASS"
+  repository_verify: "./verify with PYTHON=.venv/bin/python: 44/44 PASS, py_compile PASS, bash -n PASS"
+  diff_check: PASS
+  mcp_api: "Installed metadata version 2.0.0; exactly four registered tools; exact public signatures; timing middleware installed."
+  stdio_smoke: "A real MCP stdio server tools/call returned JSON-RPC on stdout only; request, tool, and process timing records were JSON lines on stderr."
+  concurrent_correlation: "Two deliberately different async durations with repeated raw request ID 17 produced two runtime_call_id values and three correctly correlated event kinds per call."
+  privacy: "Captured diagnostics omitted tool arguments, control data, argv, cwd, environment values, stdout/stderr bodies, exception text, and sentinels."
+  benchmark:
+    command: ".venv/bin/python /private/tmp/TASK-0017-benchmark.py --repo /Users/tienphat/Developer/agent-runtime --samples 800 --tool-samples 2000 --warmup 100"
+    source_baseline: "git archive 3cd46e492df0f775fb41ce2e7b193552f699ff1c"
+    alternating: true
+    warmed: true
+    tool_observer:
+      baseline_samples: 2000
+      candidate_samples: 2000
+      baseline_median_ms: 0.000208
+      candidate_median_ms: 0.007125
+      added_median_ms: 0.006917
+      baseline_p99_ms: 0.0005
+      candidate_p99_ms: 0.017583
+      added_p99_ms: 0.017083
+      predicates_pass: true
+    terminal_exec:
+      baseline_samples: 800
+      candidate_samples: 800
+      baseline_median_ms: 37.907125
+      candidate_median_ms: 37.7986245
+      median_delta_percent: -0.2862271934365851
+      predicate_pass: true
+    acceptance: "AC-7 predicates were established without fabricated precision."
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PROVEN
+    evidence: "The exact base-to-candidate diff contains only agent_runtime timing changes and directly related tests, including one internal timing helper. Real MCP registration and regression checks prove the exact four-tool surface and unchanged signatures."
+  - criterion_id: AC-2
+    status: PROVEN
+    evidence: "MCP 2.0.0 middleware emits request start/end with raw request ID value/type and opaque runtime_call_id; wrapped tool bodies emit separate timing. Error/cancellation, repeated-ID, stderr privacy, and real stdio protocol checks pass."
+  - criterion_id: AC-3
+    status: PROVEN
+    evidence: "terminal_exec process events cover successful completion and timeout after process-group cleanup; validation-before-start remains event-free, while existing truncation, result, timeout, and cleanup regressions remain green."
+  - criterion_id: AC-4
+    status: PROVEN
+    evidence: "Persistent PTY tests cover natural exit, explicit terminate, idle reap, shutdown, originating correlation, and duplicate-finalization prevention while preserving poll/control and session limits."
+  - criterion_id: AC-5
+    status: PROVEN
+    evidence: "Captured stderr JSON assertions and the real stdio smoke contain only allowlisted timing/correlation fields; supplied payload and exception/output sentinels are absent."
+  - criterion_id: AC-6
+    status: PROVEN
+    evidence: "Concurrent deliberately different durations with repeated raw ID 17 remain independently attributable by distinct runtime_call_id values; assertions do not use chronology as the join key."
+  - criterion_id: AC-7
+    status: PROVEN
+    evidence: "Alternating warmed immutable-base benchmark used 2,000 tool samples and 800 terminal_exec samples. Added tool-observer median/p99 were 0.006917/0.017083 ms; terminal_exec median delta was -0.286227%."
+  - criterion_id: AC-8
+    status: PROVEN_PENDING_REPORT_COMMIT
+    evidence: "Implementation candidate c49d777 was non-force pushed to dev after fresh verification; post-push remote observation resolved dev=c49d777 and main=9d5320d. This report is the intended report-only direct child; final report commit and clean-state observation follow publication."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Exact TASK-0017 revision 1 was resolved at canonical base 3cd46e4; repository, branch, remote refs, MCP 2.0.0 API, and agent-skills authority revision ac2f213 were freshly observed."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "The smallest runtime-boundary observer uses MCPServer.middleware, a contextvar, signature-preserving wrappers, and existing executor/session cleanup paths; public surface and stdout protocol checks pass."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "Focused and full repository-native verification both pass 44/44 with compile, shell syntax, and diff checks."
+  - check_id: CHECK-4
+    result: PASS
+    evidence: "The reproducible alternating warmed benchmark compares immutable exact-base bytes with candidate bytes and satisfies all AC-7 thresholds."
+  - check_id: CHECK-5
+    result: PENDING_POST_COMMIT
+    evidence: "Candidate push and post-push remote observation passed. The report-only child, final dev/main refs, exact topology, and local hygiene are verified immediately after report publication."
+
+changed_files:
+  - path: agent_runtime/executor.py
+    summary: "Measure one-shot process lifetime around existing bounded process-group cleanup."
+    new_file: false
+    in_scope: true
+  - path: agent_runtime/server.py
+    summary: "Install MCP middleware and preserve public tool signatures through timing wrappers."
+    new_file: false
+    in_scope: true
+  - path: agent_runtime/session.py
+    summary: "Retain originating timing context and emit one persistent PTY end event from existing finalization."
+    new_file: false
+    in_scope: true
+  - path: agent_runtime/timing.py
+    summary: "Provide opaque call context, bounded structured stderr events, request middleware, and tool timing."
+    new_file: true
+    in_scope: true
+  - path: tests/test_terminal_exec.py
+    summary: "Verify one-shot timing, timeout state, privacy, and validation behavior."
+    new_file: false
+    in_scope: true
+  - path: tests/test_terminal_session.py
+    summary: "Verify persistent PTY timing across all finalization paths and duplicate prevention."
+    new_file: false
+    in_scope: true
+  - path: tests/test_timing.py
+    summary: "Verify middleware correlation, cancellation, privacy, real MCP registration, and signature preservation."
+    new_file: true
+    in_scope: true
+  - path: .agent/tasks/TASK-0017/report.yaml
+    summary: "Record implementation, verification, benchmark, publication, and topology evidence."
+    new_file: true
+    in_scope: true
+
+publication:
+  candidate_pushed: true
+  report_pushed: pending
+  promoted_to_main: false
+  remote_dev_observed: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  remote_main_observed: "9d5320d5afbc9aff20834801bfd6695b27cf2a0e"
+  topology: "{dev, main}"
+  force_update: false
+
+commits_created:
+  - sha: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+    message: "feat(TASK-0017): instrument runtime latency boundaries"
+
+discovered_gaps: []
+structural_observations: []
+deviations_from_task:
+  - "The named execution skill files were unavailable as local SKILL.md entries; no dependency, scope, public-contract, branch, or main-topology deviation was made."
+blockers: []
+
+working_tree_after:
+  clean: pending_report_commit
+  retained_runtime_state: none
+  evidence: "Candidate working tree was clean before report creation; the report commit and final clean-state check are the remaining publication steps."
+
+result: NEEDS_REVIEW
