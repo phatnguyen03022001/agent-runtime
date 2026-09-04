@@ -1,0 +1,225 @@
+protocol_version: 3
+
+task_id: TASK-0017
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: user_request
+  task_id: ""
+  gap_id: "CHATGPT_LOCAL_LATENCY_ATTRIBUTION"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "ac2f213095e339dafa96825d89a6f6de164792bc"
+
+architect_analysis_skills: []
+
+execution_skills:
+  required:
+    - executor
+    - verification
+    - simplicity
+    - github-workflow
+  recommended: []
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "architect-profile/main@6fc6b6fddc3ee481ab154d1358ec8c4e12daf3ee"
+    role: "active ecosystem authority set"
+    precedence: 1
+  - source: "agent-runtime/main@9d5320d5afbc9aff20834801bfd6695b27cf2a0e"
+    role: "stable runtime implementation and public four-tool transport contract"
+    precedence: 2
+  - source: "agent-runtime/agent_runtime/server.py@9d5320d5afbc9aff20834801bfd6695b27cf2a0e"
+    role: "current MCP tool registration surface"
+    precedence: 3
+  - source: "agent-runtime/agent_runtime/executor.py@9d5320d5afbc9aff20834801bfd6695b27cf2a0e"
+    role: "current one-shot subprocess lifecycle"
+    precedence: 4
+  - source: "agent-runtime/agent_runtime/session.py@9d5320d5afbc9aff20834801bfd6695b27cf2a0e"
+    role: "current persistent PTY lifecycle"
+    precedence: 5
+
+structure_authority:
+  status: RESOLVED
+  source: "existing agent_runtime package and existing tests package"
+  rationale: >-
+    This task adds observability to the existing MCP/tool/process lifecycle only. Keep the existing
+    agent_runtime package, four public tools, and tests structure. A tiny internal helper inside the
+    existing package is allowed only if needed to avoid circular coupling or duplicated safe logging;
+    no new top-level component, service, daemon, transport, scheduler, registry, or backend is authorized.
+
+objective: >-
+  Add the smallest source-level timing instrumentation needed to attribute CHATGPT_LOCAL wall-clock latency
+  across MCP request ingress/completion, runtime tool execution, one-shot subprocess lifetime, and persistent
+  PTY process lifetime, while preserving Agent Runtime's transport-only semantics, public tool contract,
+  stdout protocol behavior, bounded execution guarantees, and secret boundary.
+
+scope:
+  required_changes:
+    - >-
+      Observe MCP tools/call request ingress and completion using the installed MCP 2.0.0 middleware/context
+      surface without changing the four public tool signatures or schemas. Record the raw JSON-RPC request ID
+      value and type when present plus one opaque runtime_call_id generated per call.
+    - >-
+      Measure runtime tool-body execution separately from MCP request lifetime using the smallest implementation
+      that preserves current tool signatures and result semantics. Do not patch or vendor the third-party MCP SDK.
+    - >-
+      Measure one-shot subprocess lifetime in execute_terminal from successful process start through bounded
+      process-group completion, separately from surrounding tool/runtime overhead.
+    - >-
+      Measure persistent PTY process lifetime from successful process start through exactly one existing
+      finalization path; retain the originating runtime_call_id for asynchronous process-end attribution without
+      making it external authority.
+    - >-
+      Emit compact structured diagnostics to stderr/application logging only. stdout must remain MCP JSON-RPC only.
+      The log schema must include only event kind, opaque runtime_call_id, raw_request_id, request_id_type,
+      allowlisted public tool name when applicable, wall-clock boundary timestamps, monotonic durations,
+      bounded outcome/termination state, and process kind when applicable.
+    - >-
+      Verify the instrumentation under concurrent calls and repeated JSON-RPC IDs. Do not assume chronological
+      correlation is sufficient under shared-tunnel concurrency. A repeated raw request ID must remain safely
+      distinguishable inside Agent Runtime by runtime_call_id.
+    - >-
+      Measure instrumentation overhead against the exact stable baseline with warmed alternating runs. The
+      measurement is observational only and must not alter task acceptance semantics beyond proving the added
+      instrumentation is materially negligible.
+  allowed_existing_files_or_components:
+    - "agent_runtime/server.py"
+    - "agent_runtime/executor.py"
+    - "agent_runtime/session.py"
+    - "agent_runtime/"
+    - "tests/test_surface_and_scripts.py"
+    - "tests/test_terminal_exec.py"
+    - "tests/test_terminal_session.py"
+    - "tests/"
+
+invariants:
+  - "Public MCP tool set remains exactly terminal_exec, terminal_start, terminal_poll, terminal_control."
+  - "Public tool names, handler signatures, schemas, annotations, return payloads, timeout behavior, output caps, session limit, idle reaping, and process-group cleanup semantics remain unchanged."
+  - "Agent Runtime remains a dumb local execution transport; instrumentation creates no workflow authority, planner, scheduler, callback path, queue, registry, database, cache, tracing backend, telemetry service, or persistent control-plane state."
+  - "Diagnostics never travel on MCP stdout and never use MCP log notifications."
+  - "Wall-clock timestamps are only for cross-process alignment; elapsed durations use a monotonic clock."
+  - "Raw JSON-RPC request ID is observational correlation evidence only. It is not assumed globally unique and does not become task/session authority."
+  - "The tunnel-client remains out of scope. No claim of pure controller/model time is allowed unless external response-delivery evidence later proves that boundary. Until then the residual interval is named post-runtime gap."
+  - "Topology remains exactly {dev, main}; main is not mutated by this task."
+
+forbidden_changes:
+  - "Do not modify tunnel-client, architect-profile, agent-skills, agent-standards, agent-documents, provider configuration, or support-repo locks."
+  - "Do not add or change dependencies, MCP version, transport protocol, tool arguments, tool results, public schemas, or public tool signatures."
+  - "Do not log argv, cwd, environment names or values, stdout/stderr bodies, tool arguments, control data, exception messages, filesystem content, secrets, operator text, or session data beyond the explicitly allowlisted timing fields."
+  - "Do not add telemetry services, databases, tracing backends, exporters, queues, registries, callbacks, schedulers, daemons, dashboards, or transaction abstractions."
+  - "Do not use chronological order as the sole correctness key in concurrent tests."
+  - "Do not create, delete, or rename branches, tags, or releases; do not promote main."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: >-
+      Exact base-to-candidate diff is limited to existing runtime timing instrumentation, directly related tests,
+      and at most one tiny internal helper inside agent_runtime if structurally necessary; public tool surface is byte/behavior compatible.
+    evidence_required: "Exact diff plus public tool names/signatures/schema/annotation regression proof."
+  - id: AC-2
+    requirement: >-
+      A tools/call produces attributable request ingress/completion and tool-execution timing with raw request ID
+      value+type and a unique opaque runtime_call_id, while stdout remains protocol-only and no tool/operator payload is logged.
+    evidence_required: "Focused middleware/tool timing tests including repeated request IDs and error/cancellation paths."
+  - id: AC-3
+    requirement: >-
+      terminal_exec emits one-shot process timing that separates child/process-group lifetime from surrounding tool timing
+      without changing timeout, cleanup, truncation, result, or failure semantics.
+    evidence_required: "Success, validation failure, timeout, truncation, and cleanup regression tests with timing-event assertions."
+  - id: AC-4
+    requirement: >-
+      terminal_start sessions retain originating runtime_call_id and emit exactly one persistent-process end event for
+      natural exit, explicit terminate, idle reap, and shutdown; poll/control behavior and the three-session limit remain unchanged.
+    evidence_required: "PTY lifecycle regression tests covering all existing finalization paths and duplicate-finalization prevention."
+  - id: AC-5
+    requirement: >-
+      Synthetic sentinel tests prove timing diagnostics contain none of argv, cwd, environment data, stdout/stderr,
+      tool arguments/control data, exception messages, secrets, or operator-supplied payloads.
+    evidence_required: "Captured stderr/log assertions against explicit sentinels."
+  - id: AC-6
+    requirement: >-
+      Concurrent tool calls with deliberately different durations remain independently attributable even when raw JSON-RPC
+      request IDs repeat; completion order may differ from start order without corrupting correlation.
+    evidence_required: "Deterministic concurrency test proving runtime_call_id correlation rather than chronology."
+  - id: AC-7
+    requirement: >-
+      Instrumentation overhead is measured with alternating warmed baseline/candidate local runs. Added no-op/tool-observer
+      median overhead is <= 0.5 ms and p99 added overhead is <= 2 ms, and ordinary terminal_exec median latency does not
+      regress by more than 1%; if the measurement cannot truthfully establish these predicates, fail closed rather than fabricate precision.
+    evidence_required: "Reproducible benchmark command, sample counts, baseline/candidate distributions, and derived deltas."
+  - id: AC-8
+    requirement: >-
+      Repository verification remains green and the candidate plus compact report are published on dev only; main remains
+      exactly 9d5320d5afbc9aff20834801bfd6695b27cf2a0e and final local tracked/index state is clean.
+    evidence_required: "Full repository-native verify/test/compile/diff checks, exact candidate/report commits, fresh refs/topology, and local closure."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: >-
+        Fresh-resolve exact task/base, active authority set, agent-runtime main/dev/topology, current local checkout identity,
+        installed MCP 2.0.0 API actually available in the designated environment, and required execution capabilities before mutation.
+      required: true
+    - id: CHECK-2
+      command_or_check: >-
+        Implement the smallest timing observer inside the existing runtime boundary; prove public tool surface/schema/signature
+        identity and stdout protocol purity before broader regression execution.
+      required: true
+    - id: CHECK-3
+      command_or_check: >-
+        Run focused timing/correlation/privacy tests, then the full repository-native verification suite, py_compile as applicable,
+        and git diff --check in bounded deterministic execution bundles with compact attributable JOIN output.
+      required: true
+    - id: CHECK-4
+      command_or_check: >-
+        Run alternating warmed baseline-versus-candidate overhead measurement from immutable bytes without mutating canonical refs;
+        report truthful distributions/deltas and fail closed if the predeclared overhead predicates cannot be established.
+      required: true
+    - id: CHECK-5
+      command_or_check: >-
+        Publish exact candidate and report-only child on dev, then freshly prove final dev/main/topology and local hygiene; report
+        must not self-attest its own publication commit before post-push observation.
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
