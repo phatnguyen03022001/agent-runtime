@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import errno
+import io
 import json
 import os
 import signal
@@ -17,6 +18,7 @@ from agent_runtime.executor import (
     _terminate_process_group,
     execute_terminal,
 )
+from agent_runtime.timing import bind_call_context, reset_call_context
 
 
 class TerminalExecTests(unittest.TestCase):
@@ -244,6 +246,60 @@ class TerminalExecTests(unittest.TestCase):
             with self.subTest(invalid=invalid):
                 with self.assertRaisesRegex(ValueError, "timeout"):
                     self.run_exec([sys.executable, "-c", "pass"], timeout=invalid)
+
+    def test_success_emits_one_shot_process_timing_without_payloads(self) -> None:
+        output = io.StringIO()
+        context, token = bind_call_context("repeated-request-id")
+        try:
+            with patch("agent_runtime.timing.sys.stderr", output):
+                result = self.run_exec(
+                    [sys.executable, "-c", "print('child-output-sentinel')"]
+                )
+        finally:
+            reset_call_context(token)
+
+        events = [json.loads(line) for line in output.getvalue().splitlines()]
+        process_events = [event for event in events if event["event_kind"] == "process_end"]
+        self.assertEqual(len(process_events), 1)
+        event = process_events[0]
+        self.assertEqual(event["runtime_call_id"], context.runtime_call_id)
+        self.assertEqual(event["raw_request_id"], "repeated-request-id")
+        self.assertEqual(event["request_id_type"], "str")
+        self.assertEqual(event["tool_name"], "terminal_exec")
+        self.assertEqual(event["process_kind"], "one_shot")
+        self.assertEqual(event["termination_state"], "completed")
+        self.assertGreaterEqual(event["monotonic_duration_ms"], 0.0)
+        self.assertNotIn("child-output-sentinel", output.getvalue())
+
+    def test_timeout_emits_bounded_process_termination_state(self) -> None:
+        output = io.StringIO()
+        _, token = bind_call_context(22)
+        try:
+            with patch("agent_runtime.timing.sys.stderr", output):
+                result = self.run_exec(
+                    [sys.executable, "-c", "import time; time.sleep(5)"],
+                    timeout=0.1,
+                )
+        finally:
+            reset_call_context(token)
+
+        self.assertTrue(result["timed_out"])
+        events = [json.loads(line) for line in output.getvalue().splitlines()]
+        process_events = [event for event in events if event["event_kind"] == "process_end"]
+        self.assertEqual(len(process_events), 1)
+        self.assertEqual(process_events[0]["termination_state"], "timed_out")
+
+    def test_validation_failure_has_no_process_event(self) -> None:
+        output = io.StringIO()
+        _, token = bind_call_context(23)
+        try:
+            with patch("agent_runtime.timing.sys.stderr", output):
+                with self.assertRaises(ValueError):
+                    self.run_exec([])
+        finally:
+            reset_call_context(token)
+
+        self.assertEqual(output.getvalue(), "")
 
 
 def shutil_rmtree(path: Path) -> None:

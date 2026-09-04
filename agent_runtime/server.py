@@ -19,6 +19,7 @@ from .session import (
     poll_terminal as _poll_terminal,
     start_terminal as _start_terminal,
 )
+from .timing import timed_tool_wrapper, timing_middleware
 
 PUBLIC_TOOL_NAMES = ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control")
 mcp = MCPServer("Agent Runtime")
@@ -113,12 +114,13 @@ def _tool(
     )
 
     def decorator(function: Callable[..., Any]) -> Callable[..., Any]:
+        observed_function = timed_tool_wrapper(function.__name__, function)
         if annotations is not None:
             try:
-                return mcp.tool(annotations=annotations)(function)
+                return mcp.tool(annotations=annotations)(observed_function)
             except (TypeError, ValueError):
                 pass
-        return mcp.tool()(function)
+        return mcp.tool()(observed_function)
 
     return decorator
 
@@ -163,6 +165,15 @@ def terminal_control(
     """Write, interrupt, terminate, or resize one persistent PTY session."""
 
     return _control_terminal(session_id, action, data, rows, cols)
+
+
+def _install_timing_middleware() -> None:
+    append = getattr(getattr(mcp, "middleware", None), "append", None)
+    if append is not None:
+        append(timing_middleware)
+
+
+_install_timing_middleware()
 
 
 def _main() -> int:

@@ -8,6 +8,8 @@ import time
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from .timing import current_call_context, emit_process_end
+
 WORKSPACE_ROOT_ENV = "AGENT_RUNTIME_WORKSPACE_ROOT"
 MAX_TIMEOUT_SECONDS = 3600.0
 MAX_OUTPUT_BYTES = 64 * 1024
@@ -175,6 +177,10 @@ def execute_terminal(
         shell=False,
         start_new_session=True,
     )
+    process_context = current_call_context()
+    process_started_wall = time.time()
+    process_started_mono = time.monotonic()
+    process_event_emitted = False
     assert process.stdout is not None
     assert process.stderr is not None
 
@@ -193,31 +199,53 @@ def execute_terminal(
     stdout_thread.start()
     stderr_thread.start()
 
-    timed_out = False
     try:
-        process.wait(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        timed_out = True
-        _terminate_process_group(process)
-    else:
-        _terminate_process_group(process)
+        timed_out = False
+        try:
+            process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            _terminate_process_group(process)
+        else:
+            _terminate_process_group(process)
 
-    stdout_thread.join(timeout=1.0)
-    stderr_thread.join(timeout=1.0)
-    if stdout_thread.is_alive():
-        process.stdout.close()
+        process_termination = "timed_out" if timed_out else "completed"
+        emit_process_end(
+            process_context,
+            tool_name="terminal_exec",
+            process_kind="one_shot",
+            started_wall=process_started_wall,
+            started_mono=process_started_mono,
+            termination_state=process_termination,
+        )
+        process_event_emitted = True
+
         stdout_thread.join(timeout=1.0)
-    if stderr_thread.is_alive():
-        process.stderr.close()
         stderr_thread.join(timeout=1.0)
+        if stdout_thread.is_alive():
+            process.stdout.close()
+            stdout_thread.join(timeout=1.0)
+        if stderr_thread.is_alive():
+            process.stderr.close()
+            stderr_thread.join(timeout=1.0)
 
-    return {
-        "cwd": str(checked_cwd),
-        "argv": checked_argv,
-        "exit_code": process.returncode,
-        "timed_out": timed_out,
-        "stdout": stdout_capture.text(),
-        "stderr": stderr_capture.text(),
-        "stdout_truncated": stdout_capture.truncated,
-        "stderr_truncated": stderr_capture.truncated,
-    }
+        return {
+            "cwd": str(checked_cwd),
+            "argv": checked_argv,
+            "exit_code": process.returncode,
+            "timed_out": timed_out,
+            "stdout": stdout_capture.text(),
+            "stderr": stderr_capture.text(),
+            "stdout_truncated": stdout_capture.truncated,
+            "stderr_truncated": stderr_capture.truncated,
+        }
+    finally:
+        if not process_event_emitted:
+            emit_process_end(
+                process_context,
+                tool_name="terminal_exec",
+                process_kind="one_shot",
+                started_wall=process_started_wall,
+                started_mono=process_started_mono,
+                termination_state="error",
+            )

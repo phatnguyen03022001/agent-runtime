@@ -22,6 +22,7 @@ from .executor import (
     _validated_cwd,
     _workspace_root,
 )
+from .timing import TimingContext, current_call_context, emit_process_end
 
 MAX_ACTIVE_SESSIONS = 3
 IDLE_TTL_SECONDS = 600.0
@@ -50,6 +51,9 @@ class _Session:
     changed: threading.Condition = field(init=False)
     cleanup_lock: threading.Lock = field(default_factory=threading.Lock)
     reader_done: threading.Event = field(default_factory=threading.Event)
+    timing_context: TimingContext | None = None
+    process_started_wall: float = 0.0
+    process_started_mono: float = 0.0
 
     def __post_init__(self) -> None:
         self.changed = threading.Condition(self.lock)
@@ -114,6 +118,9 @@ class TerminalSessionManager:
                 cwd=str(checked_cwd),
                 argv=checked_argv,
                 last_activity=self._clock(),
+                timing_context=current_call_context(),
+                process_started_wall=time.time(),
+                process_started_mono=time.monotonic(),
             )
             self._sessions[session.session_id] = session
 
@@ -206,7 +213,7 @@ class TerminalSessionManager:
 
         if action == "terminate":
             self._require_no_arguments(data, rows, cols)
-            self._cleanup_process(session)
+            self._cleanup_process(session, "explicit_terminate")
             result = self._control_result(session)
             with self._lock:
                 self._sessions.pop(session.session_id, None)
@@ -248,7 +255,7 @@ class TerminalSessionManager:
                 session = self._sessions.get(session_id)
             if session is None:
                 continue
-            self._cleanup_process(session)
+            self._cleanup_process(session, "idle_reap")
             with self._lock:
                 if self._sessions.pop(session_id, None) is not None:
                     expired.append(session_id)
@@ -266,7 +273,7 @@ class TerminalSessionManager:
         with self._lock:
             sessions = list(self._sessions.values())
         for session in sessions:
-            self._cleanup_process(session)
+            self._cleanup_process(session, "shutdown")
         with self._lock:
             self._sessions.clear()
 
@@ -304,9 +311,9 @@ class TerminalSessionManager:
 
     def _monitor(self, session: _Session) -> None:
         session.process.wait()
-        self._cleanup_process(session)
+        self._cleanup_process(session, "natural_exit")
 
-    def _cleanup_process(self, session: _Session) -> None:
+    def _cleanup_process(self, session: _Session, termination_state: str = "natural_exit") -> None:
         with session.cleanup_lock:
             if session.finalized:
                 return
@@ -322,6 +329,14 @@ class TerminalSessionManager:
                         pass
                     session.finalized = True
                     session.changed.notify_all()
+            emit_process_end(
+                session.timing_context,
+                tool_name="terminal_start",
+                process_kind="persistent_pty",
+                started_wall=session.process_started_wall,
+                started_mono=session.process_started_mono,
+                termination_state=termination_state,
+            )
 
     def _touch(self, session: _Session) -> None:
         with session.changed:

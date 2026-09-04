@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import io
 import os
 import signal
 import sys
@@ -11,7 +12,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_runtime.session import control_terminal, poll_terminal, start_terminal
+from agent_runtime.session import TerminalSessionManager, control_terminal, poll_terminal, start_terminal
+from agent_runtime.timing import bind_call_context, reset_call_context
 
 
 class TerminalSessionTests(unittest.TestCase):
@@ -343,6 +345,79 @@ class TerminalSessionTests(unittest.TestCase):
         self.assertFalse(marker_shutdown.exists())
         final_files = {p.relative_to(self.root) for p in self.root.rglob("*") if p.is_file()}
         self.assertEqual(final_files, initial_files)
+
+    def test_natural_exit_emits_one_persistent_process_event(self) -> None:
+        output = io.StringIO()
+        context, token = bind_call_context(31)
+        try:
+            with patch("agent_runtime.timing.sys.stderr", output):
+                result = self.start([sys.executable, "-u", "-c", "print('ready')"])
+                final, _ = self.poll_until(
+                    str(result["session_id"]), lambda r, _out: r["status"] != "running"
+                )
+        finally:
+            reset_call_context(token)
+
+        self.assertEqual(final["exit_code"], 0)
+        events = [json.loads(line) for line in output.getvalue().splitlines()]
+        process_events = [event for event in events if event["event_kind"] == "process_end"]
+        self.assertEqual(len(process_events), 1)
+        event = process_events[0]
+        self.assertEqual(event["runtime_call_id"], context.runtime_call_id)
+        self.assertEqual(event["raw_request_id"], 31)
+        self.assertEqual(event["request_id_type"], "int")
+        self.assertEqual(event["tool_name"], "terminal_start")
+        self.assertEqual(event["process_kind"], "persistent_pty")
+        self.assertEqual(event["termination_state"], "natural_exit")
+
+    def test_explicit_terminate_emits_only_one_persistent_process_event(self) -> None:
+        output = io.StringIO()
+        context, token = bind_call_context(32)
+        try:
+            with patch("agent_runtime.timing.sys.stderr", output):
+                result = self.start([sys.executable, "-u", "-c", "import time; time.sleep(5)"])
+                control_terminal(str(result["session_id"]), "terminate")
+        finally:
+            reset_call_context(token)
+
+        events = [json.loads(line) for line in output.getvalue().splitlines()]
+        process_events = [event for event in events if event["event_kind"] == "process_end"]
+        self.assertEqual(len(process_events), 1)
+        self.assertEqual(process_events[0]["runtime_call_id"], context.runtime_call_id)
+        self.assertEqual(process_events[0]["termination_state"], "explicit_terminate")
+
+    def test_idle_reap_and_shutdown_emit_bounded_persistent_process_events(self) -> None:
+        output = io.StringIO()
+        now = [100.0]
+        manager = TerminalSessionManager(clock=lambda: now[0], start_reaper=False)
+        self.addCleanup(manager.shutdown)
+
+        context, token = bind_call_context(33)
+        try:
+            with patch("agent_runtime.timing.sys.stderr", output):
+                managed = manager.start(
+                    [sys.executable, "-u", "-c", "import time; time.sleep(5)"],
+                    str(self.cwd),
+                )
+                now[0] += 601.0
+                self.assertEqual(manager.reap_idle_once(), [str(managed["session_id"])])
+
+                manager.start(
+                    [sys.executable, "-u", "-c", "import time; time.sleep(5)"],
+                    str(self.cwd),
+                )
+                manager.shutdown()
+        finally:
+            reset_call_context(token)
+
+        events = [json.loads(line) for line in output.getvalue().splitlines()]
+        process_events = [event for event in events if event["event_kind"] == "process_end"]
+        self.assertEqual(len(process_events), 2)
+        self.assertEqual({event["runtime_call_id"] for event in process_events}, {context.runtime_call_id})
+        self.assertEqual(
+            {event["termination_state"] for event in process_events},
+            {"idle_reap", "shutdown"},
+        )
 
 
 def shutil_rmtree(path: Path) -> None:
