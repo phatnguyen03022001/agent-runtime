@@ -1,0 +1,82 @@
+protocol_version: 3
+
+task_id: TASK-0022
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0022/task.yaml
+  commit: "0dd6bc4b04ed3f037836b5d2d71ec5508d53e037"
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+  authorized_base_head: "0dd6bc4b04ed3f037836b5d2d71ec5508d53e037"
+  final_execution_head: "0dd6bc4b04ed3f037836b5d2d71ec5508d53e037"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "ed8d9fb35bb8b052530ca879e68a227d77e4a8a6"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - repository_content_write
+    - verification_execution
+    - git_history_read
+    - git_commit
+    - exact_remote_ref_read
+    - non_force_git_push
+  available:
+    - repository_content_write
+    - verification_execution
+    - git_history_read
+    - git_commit
+    - exact_remote_ref_read
+    - non_force_git_push
+  missing: []
+  passed: true
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: NOT_REQUIRED
+  evidence: "TASK-0022 designates no separate authoritative verifier."
+
+local_hygiene:
+  result: RETAINED_FOR_EVIDENCE
+  run_root: /private/tmp/agent-runtime-task0022-backup
+  cleanup_performed: false
+  retained:
+    - identity: /private/tmp/agent-runtime-task0022-backup
+      reason: "Private run-owned backup retaining the binary tracked-WIP patch, confinement.py copy, and non-secret manifest for approved recovery."
+  evidence: "No backup source was adopted or published. The original checkout retained .env and .venv unchanged; no values are recorded."
+
+pushed: true
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "Before mutation, expected tracked paths and no staged work were proven. Private backup /private/tmp/agent-runtime-task0022-backup retains withdrawn-task0019.patch SHA-256 15f0df353bbb90e97816b27e627f4637126696594cf95d9a6777ed38a0e71b96 and confinement.py SHA-256 da41ca3238a3249799e63136b822598f138a246cc27c4d45b4a99b6a06502843, each matching the pre-mutation source."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "Only the proven tracked WIP paths were restored to original HEAD and only the backed-up untracked confinement.py was removed. The original checkout fast-forwarded to 0dd6bc4b04ed3f037836b5d2d71ec5508d53e037 with clean tracked/index state; .env and .venv identities remained unchanged and pre-existing .agent-runtime state was preserved."
+  - criterion_id: AC-3
+    status: NOT_PROVEN
+    evidence: "PYTHONDONTWRITEBYTECODE=1 ./verify passed all 47 tests with compile and shell checks in the reconciled original checkout. This sole report-only child and final exact remote/local closure occur after report authorship."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Original remote identity, dev branch, expected dirty paths, no staged work, exact WIP hashes, backup bytes, and planning base were proven before mutation."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "Bounded restore/removal and fast-forward reached the exact task planning head; ignored operator state remained in place and original-checkout verification passed."
+  - check_id: CHECK-3
+    result: NOT_PROVEN
+    evidence: "Actual report schema validation and report-only publication/final ref proof follow this report commit."
+
+result: NEEDS_REVIEW
