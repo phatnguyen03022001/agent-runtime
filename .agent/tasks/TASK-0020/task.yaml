@@ -1,0 +1,81 @@
+protocol_version: 3
+task_id: TASK-0020
+task_revision: 1
+state: APPROVED
+origin:
+  type: user_request
+  task_id: ""
+  gap_id: RUNTIME_VERIFY_HERMETICITY
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "ed8d9fb35bb8b052530ca879e68a227d77e4a8a6"
+execution_skills:
+  required: [executor, verification, simplicity, github-workflow]
+authority_sources:
+  - source: current operator instruction
+    role: "Dev-only debt closure; this session is governing Architect, delegated CODEX_LOCAL Executor is Terra/high."
+    precedence: 1
+  - source: "agent-runtime/dev@daf4ac34eb81c3e52c8dcbed7bf48d1e8caead43"
+    role: "Current implementation and TASK-0019 rev2 withdrawal."
+    precedence: 2
+structure_authority:
+  status: RESOLVED
+  source: "Existing root verify and tests/test_surface_and_scripts.py."
+  rationale: "Interpreter selection is a small existing script correction, not an environment manager."
+objective: "Make bare verification use an available executable repository .venv interpreter while honoring a nonempty explicit PYTHON and preserving the existing python3 fallback when no usable repo interpreter exists."
+scope:
+  required_changes:
+    - "Correct verifier interpreter selection and add causal behavioral coverage for default, override and fallback, including invocation from outside the repository."
+    - "Use a clean GitHub clone with a task-owned virtual environment for exact candidate verification and publication. The previously prepared patch may be reused after exact diff review; it is not prior canonical evidence."
+  allowed_existing_files_or_components: [verify, tests/test_surface_and_scripts.py]
+invariants:
+  - "Install/start/tunnel, runtime source, dependencies, four-tool surface and bundling semantics remain unchanged."
+  - "Execute only in /private/tmp/agent-debt-runtime. Preserve all original /Users/tienphat/Developer/agent-runtime tracked WIP and untracked confinement.py bytes; do not reset, stash, clean, move, overwrite, adopt or publish that WIP."
+  - "Original runtime checkout is retained for TASK-0019 evidence and suspended as an execution copy; this task proves clean publication in its explicitly designated isolated copy and does not claim the original mirror is reconciled."
+  - "Tracked WIP patch SHA-256 is 15f0df353bbb90e97816b27e627f4637126696594cf95d9a6777ed38a0e71b96; confinement.py SHA-256 is da41ca3238a3249799e63136b822598f138a246cc27c4d45b4a99b6a06502843."
+forbidden_changes:
+  - "No confinement, framework, sync engine, .gitignore change, dependency change, original-checkout execution or operator environment modification."
+  - "No branch creation, main/staging changes, release or force push."
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Default repo interpreter, explicit nonempty override and absent-venv fallback behave as specified."
+    evidence_required: "Causal baseline failure and passing behavioral fixture tests."
+  - id: AC-2
+    requirement: "Bare ./verify and PYTHON=.venv/bin/python ./verify are materially equivalent on the exact candidate."
+    evidence_required: "Both full gates exit zero in the task-owned environment; imports resolve to candidate source."
+  - id: AC-3
+    requirement: "Exact scope, preserved WIP and linear dev candidate/report publication are independently reconstructible."
+    evidence_required: "Exact Git base/candidate/report lineage, changed paths, whitespace check, fresh refs and unchanged original WIP hashes."
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Resolve canonical task/base, capabilities, target clone identity and preserved original WIP hashes."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Prove behavioral RED/GREEN and both full verifier invocation forms on the exact candidate; verify scope and whitespace."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Publish candidate then report-only child non-force to dev; externally prove final refs and task-copy hygiene."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+blocking_decisions: []
+execution_ready: true
