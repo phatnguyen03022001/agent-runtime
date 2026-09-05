@@ -1,0 +1,84 @@
+protocol_version: 3
+
+task_id: TASK-0020
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0020/task.yaml
+  canonical_base: "2f2855772f31e7b28834aa6485b095da60284d1a"
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+  authorized_base_head: "2f2855772f31e7b28834aa6485b095da60284d1a"
+  final_execution_head: "eb3ea9256c1b15eb76f6390bddcc0731dc73616e"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "ed8d9fb35bb8b052530ca879e68a227d77e4a8a6"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - repository_content_write
+    - repository_content_read
+    - verification_execution
+    - git_history_read
+    - git_commit
+    - exact_remote_ref_read
+    - non_force_git_push
+  available:
+    - repository_content_write
+    - repository_content_read
+    - verification_execution
+    - git_history_read
+    - git_commit
+    - exact_remote_ref_read
+    - non_force_git_push
+  missing: []
+  passed: true
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: NOT_REQUIRED
+  evidence: "TASK-0020 requires executor-owned behavioral and full verifier evidence; it designates no separate authoritative verifier."
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PROVEN
+    evidence: "On base 2f2855772f31e7b28834aa6485b095da60284d1a, the added fixture failed only for default selection: it observed PATH python3 instead of fixture-repo/.venv/bin/python when invoked outside the repository. On candidate eb3ea9256c1b15eb76f6390bddcc0731dc73616e all three fixture cases passed: checkout .venv default, nonempty explicit PYTHON, and absent-venv PATH python3 fallback."
+  - criterion_id: AC-2
+    status: PROVEN
+    evidence: "On exact candidate eb3ea9256c1b15eb76f6390bddcc0731dc73616e in the clone-owned .venv, both ./verify and PYTHON=.venv/bin/python ./verify passed all 47 tests plus compile and shell syntax checks. Candidate import proof resolved agent_runtime to /private/tmp/agent-debt-runtime/agent_runtime/__init__.py."
+  - criterion_id: AC-3
+    status: PROVEN_PENDING_REPORT_COMMIT
+    evidence: "The clean isolated clone began at exact dev base 2f2855772f31e7b28834aa6485b095da60284d1a. Candidate eb3ea9256c1b15eb76f6390bddcc0731dc73616e changes only verify and tests/test_surface_and_scripts.py; git diff --check passed. Fresh non-force publication guard observed dev at base, then post-push remote proof resolved dev to candidate. The withdrawn checkout tracked-WIP SHA-256 remained 15f0df353bbb90e97816b27e627f4637126696594cf95d9a6777ed38a0e71b96 and confinement.py SHA-256 remained da41ca3238a3249799e63136b822598f138a246cc27c4d45b4a99b6a06502843. The report-only child and fresh final remote/local proof follow this commit."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Resolved TASK-0020 revision 1 from the exact base in /private/tmp/agent-debt-runtime; target remote is phatnguyen03022001/agent-runtime, branch dev, and fresh remote dev was the authorized base before candidate publication. Required pinned executor, verification, simplicity, and github-workflow authority was read at ed8d9fb35bb8b052530ca879e68a227d77e4a8a6."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "Causal RED and GREEN fixture evidence passed as mapped to AC-1. The focused suite passed 9 tests; ./verify and PYTHON=.venv/bin/python ./verify each passed 47 tests with compile and shell syntax checks; whitespace check passed."
+  - check_id: CHECK-3
+    result: PENDING_POST_COMMIT
+    evidence: "Candidate eb3ea9256c1b15eb76f6390bddcc0731dc73616e was published to dev through a fresh guard, non-force dry run, non-force push, and fresh post-push exact-ref proof. The report-only child, final remote dev identity, linear ancestry, tracked working-tree state, and retained task-owned environment are proven after this report commit."
+
+local_hygiene:
+  result: RETAINED_FOR_EVIDENCE
+  run_root: /private/tmp/agent-debt-runtime
+  cleanup_performed: false
+  retained:
+    - path: /private/tmp/agent-debt-runtime/.venv
+      reason: "Task-owned verification environment retained under explicit governing-Architect instruction pending later hygiene; it is ignored and outside the committed candidate/report scope."
+  evidence: "No original-checkout file was executed, changed, reset, stashed, cleaned, moved, overwritten, adopted, or published. The isolated clone's tracked/index state and report-only publication lineage are refreshed after this report commit."
+
+pushed: true
+
+result: NEEDS_REVIEW
