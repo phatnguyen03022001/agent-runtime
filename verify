@@ -3,7 +3,13 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 cd "$ROOT"
-PYTHON="${PYTHON:-python3}"
+if [[ -n "${PYTHON:-}" ]]; then
+  PYTHON="$PYTHON"
+elif [[ -x "$ROOT/.venv/bin/python" ]]; then
+  PYTHON="$ROOT/.venv/bin/python"
+else
+  PYTHON="python3"
+fi
 
 PYTHONPATH="$ROOT" "$PYTHON" -m unittest discover -s tests -v
 "$PYTHON" -m py_compile agent_runtime/*.py tests/*.py

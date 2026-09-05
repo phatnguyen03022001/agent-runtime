@@ -3,7 +3,9 @@ from __future__ import annotations
 import ast
 import importlib
 import os
+import subprocess
 import sys
+import tempfile
 import types
 import unittest
 from pathlib import Path
@@ -12,6 +14,96 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class SurfaceAndScriptsTests(unittest.TestCase):
+    def _verify_fixture(self, temp: Path, *, with_venv: bool) -> tuple[Path, Path, Path]:
+        repo = temp / "fixture-repo"
+        repo.mkdir()
+        outside = temp / "outside"
+        outside.mkdir()
+        (repo / "verify").write_text((ROOT / "verify").read_text())
+        (repo / "verify").chmod(0o700)
+        for name in ("install.sh", "start.sh"):
+            (repo / name).write_text("#!/usr/bin/env bash\n")
+        (repo / "agent_runtime").mkdir()
+        (repo / "agent_runtime" / "module.py").write_text("")
+        (repo / "tests").mkdir()
+        (repo / "tests" / "test_module.py").write_text("")
+        log = temp / "interpreter.log"
+
+        def fake_interpreter(path: Path) -> None:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("#!/usr/bin/env bash\nprintf '%s|%s\\n' \"$0\" \"$*\" >> \"$FAKE_LOG\"\n")
+            path.chmod(0o700)
+
+        if with_venv:
+            fake_interpreter(repo / ".venv" / "bin" / "python")
+        fake_interpreter(temp / "bin" / "python3")
+        fake_interpreter(temp / "explicit-python")
+        return repo, outside, log
+
+    def _run_fixture_verify(
+        self, repo: Path, outside: Path, log: Path, temp: Path, *, python: str | None = None
+    ) -> subprocess.CompletedProcess[str]:
+        env = {"PATH": f"{temp / 'bin'}:{os.environ['PATH']}", "FAKE_LOG": str(log)}
+        if python is not None:
+            env["PYTHON"] = python
+        return subprocess.run(
+            [str(repo / "verify")],
+            cwd=outside,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def test_verify_uses_checkout_venv_by_default_outside_the_repo(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw).resolve()
+            repo, outside, log = self._verify_fixture(temp, with_venv=True)
+
+            result = self._run_fixture_verify(repo, outside, log, temp)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                log.read_text().splitlines(),
+                [
+                    f"{repo / '.venv' / 'bin' / 'python'}|-m unittest discover -s tests -v",
+                    f"{repo / '.venv' / 'bin' / 'python'}|-m py_compile agent_runtime/module.py tests/test_module.py",
+                ],
+            )
+
+    def test_verify_honors_a_nonempty_explicit_python_override(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw).resolve()
+            repo, outside, log = self._verify_fixture(temp, with_venv=True)
+            explicit = temp / "explicit-python"
+
+            result = self._run_fixture_verify(repo, outside, log, temp, python=str(explicit))
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                log.read_text().splitlines(),
+                [
+                    f"{explicit}|-m unittest discover -s tests -v",
+                    f"{explicit}|-m py_compile agent_runtime/module.py tests/test_module.py",
+                ],
+            )
+
+    def test_verify_falls_back_to_path_python3_when_the_checkout_venv_is_absent(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw).resolve()
+            repo, outside, log = self._verify_fixture(temp, with_venv=False)
+
+            result = self._run_fixture_verify(repo, outside, log, temp)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                log.read_text().splitlines(),
+                [
+                    f"{temp / 'bin' / 'python3'}|-m unittest discover -s tests -v",
+                    f"{temp / 'bin' / 'python3'}|-m py_compile agent_runtime/module.py tests/test_module.py",
+                ],
+            )
+
     def test_public_mcp_surface_is_exactly_four_terminal_tools(self) -> None:
         source = (ROOT / "agent_runtime/server.py").read_text()
         tree = ast.parse(source)
