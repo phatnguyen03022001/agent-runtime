@@ -1,8 +1,8 @@
 protocol_version: 3
 
 task_id: TASK-0019
-task_revision: 1
-state: APPROVED
+task_revision: 2
+state: DRAFT
 
 origin:
   type: user_request
@@ -66,12 +66,10 @@ structure_authority:
     cannot satisfy the contract. No argv/path-string filtering or insecure fallback is permitted.
 
 objective: >-
-  Replace Agent Runtime's cwd-only guard with real per-repository filesystem confinement for every spawned one-shot or PTY
-  command and all descendants. A call whose cwd is /Users/tienphat/Developer/<repo>/... derives exactly that first-level
-  repository directory as its execution root; user/project filesystem reads and writes outside that root must be denied by
-  the OS sandbox even for bash/zsh/Python/Node/nested children, while a minimal explicit read-only system/toolchain support
-  surface and the existing network behavior may remain available. Preserve the four-tool MCP API and fail closed rather than
-  weakening confinement for compatibility.
+  Withdraw TASK-0019 revision 1 execution authority because subsequent latency and execution-compliance evidence invalidated
+  the problem framing that justified a runtime filesystem-confinement redesign. Preserve the interrupted dirty task-owned
+  implementation state exactly for evidence; do not continue, adopt, clean, reset, stash, publish, or treat those bytes as
+  canonical implementation. Any future runtime security-boundary work requires a new explicit Architect design decision.
 
 scope:
   required_changes:
@@ -239,9 +237,15 @@ verification:
 
 git_authority:
   create_branch: false
-  commit: true
-  push: true
+  commit: false
+  push: false
   promote_to_main: false
 
-blocking_decisions: []
-execution_ready: true
+blocking_decisions:
+  - id: WITHDRAW_REV1_EXECUTION_AUTHORITY
+    decision: >-
+      Revision 1 is intentionally non-executable. Deep-dive evidence places the material multi-minute latency outside local
+      child execution and Agent Runtime implementation, while current agent-skills bundle semantics are sufficient and the
+      remaining issue is Executor/controller compliance. Therefore the prior confinement redesign is not admitted as the next
+      corrective action. Preserve the interrupted dirty state without mutation until separately dispositioned.
+execution_ready: false
