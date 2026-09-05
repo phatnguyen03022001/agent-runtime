@@ -1,0 +1,247 @@
+protocol_version: 3
+
+task_id: TASK-0019
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: user_request
+  task_id: ""
+  gap_id: "PER_REPOSITORY_FILESYSTEM_CONFINEMENT"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "ed8d9fb35bb8b052530ca879e68a227d77e4a8a6"
+
+execution_skills:
+  required:
+    - executor
+    - verification
+    - simplicity
+    - github-workflow
+
+authority_sources:
+  - source: "current operator request"
+    role: "explicit requirement that Agent Runtime spawned commands access user/project filesystem only inside /Users/tienphat/Developer/<repo> while retaining safe shell execution"
+    precedence: 1
+  - source: "architect-profile/main@d47114404c97fcfd74b0f37f646586ec46de6987"
+    role: "ecosystem-active authority generation"
+    precedence: 2
+  - source: "agent-skills/main@ed8d9fb35bb8b052530ca879e68a227d77e4a8a6"
+    role: "active task protocol, security/simplicity, TDD, and deterministic bundle semantics"
+    precedence: 3
+  - source: "agent-runtime/dev@8f56cb2f270136da357ddb17badfbe01a36291b5"
+    role: "exact current development state reproducing cwd-only path selection rather than filesystem confinement"
+    precedence: 4
+  - source: "agent-runtime/main@c49d777efa09db7f6c51bd8d8616db4623499fb8"
+    role: "currently stable runtime implementation pinned by the active ecosystem"
+    precedence: 5
+  - source: ".agent/tasks/TASK-0018/review.yaml@b72256a67ac09fe61bd561e5fb12c98d38c048ab"
+    role: "accepted prior runtime activation lineage"
+    precedence: 6
+
+structure_authority:
+  status: RESOLVED
+  source: "existing executor/session shared cwd guard, current four-tool MCP surface, and operator Mac capability evidence"
+  rationale: >-
+    The current executor validates only cwd and explicitly permits child commands to access other host paths. The smallest
+    architecture that preserves arbitrary literal argv and shell workflows while enforcing the requested boundary is one
+    shared per-invocation OS-level confinement wrapper used by terminal_exec and terminal_start. On the current operator Mac,
+    /usr/bin/sandbox-exec exists; because sandbox-exec/SBPL is deprecated/private Apple surface, this task treats it as a
+    current-machine internal mechanism only, requires adversarial proof, and fails closed if it is unavailable, aborts, or
+    cannot satisfy the contract. No argv/path-string filtering or insecure fallback is permitted.
+
+objective: >-
+  Replace Agent Runtime's cwd-only guard with real per-repository filesystem confinement for every spawned one-shot or PTY
+  command and all descendants. A call whose cwd is /Users/tienphat/Developer/<repo>/... derives exactly that first-level
+  repository directory as its execution root; user/project filesystem reads and writes outside that root must be denied by
+  the OS sandbox even for bash/zsh/Python/Node/nested children, while a minimal explicit read-only system/toolchain support
+  surface and the existing network behavior may remain available. Preserve the four-tool MCP API and fail closed rather than
+  weakening confinement for compatibility.
+
+scope:
+  required_changes:
+    - >-
+      Add one small shared confinement module used by both terminal_exec and terminal_start. Derive execution_root from the
+      first realpath component below AGENT_RUNTIME_WORKSPACE_ROOT; reject cwd equal to the workspace root, paths outside it,
+      symlink escapes, missing/non-directory roots, and any ambiguous root identity.
+    - >-
+      Wrap the actual child process with /usr/bin/sandbox-exec using a deny-by-default dynamically parameterized profile.
+      The profile may grant read-write access only to execution_root for user/project data. Non-repository filesystem grants
+      must be an explicit minimal read-only system/toolchain allowlist required to execute macOS binaries/interpreters and
+      perform current network behavior; do not grant blanket /Users, /private, /Applications, /Library, or HOME access.
+    - >-
+      Ensure confinement is inherited by nested shells, subprocesses, grandchildren, and persistent PTY sessions. shell=False
+      remains the host launch rule; callers may still deliberately execute bash/zsh with -c/-lc inside the sandbox.
+    - >-
+      Give children a repository-local private HOME and TMPDIR below <execution_root>/.agent-runtime/, with containment,
+      symlink/type, and 0700 guards. Add only the ignore rule required for this owned runtime-local directory. Do not expose
+      the operator's real HOME through child environment variables as an accessible filesystem capability.
+    - >-
+      Preserve network semantics as currently open-world, but do not add Keychain/securityd/home-config access merely to make
+      authenticated Git work. Prove git status and unauthenticated Git/network behavior where available. Also run git push
+      --dry-run against the bound repository as a compatibility gate: if it cannot work without broadening filesystem or
+      credential access, stop BLOCKED and report the exact compatibility gap for separate Architect treatment.
+    - >-
+      Update README security semantics so it no longer states that executable arguments can access arbitrary host paths.
+      Document precisely: repository user-data confinement, read-only system/toolchain exceptions, unchanged network scope,
+      current macOS sandbox-exec dependency/fail-closed behavior, and no claim of container/VM isolation or cross-version
+      sandbox-exec support.
+    - >-
+      Follow TDD strictly: add focused causal RED tests first and observe them fail on the exact base because sibling/outside
+      access currently succeeds; implement the smallest shared confinement; observe focused GREEN; then run the full suite.
+    - >-
+      Publish one exact implementation candidate on dev and one report-only child. Main remains unchanged. This task does not
+      activate the candidate ecosystem-wide; promotion and architect-profile lock activation require later accepted authority.
+  allowed_existing_files_or_components:
+    - "agent_runtime/executor.py"
+    - "agent_runtime/session.py"
+    - "agent_runtime/server.py"
+    - "agent_runtime/confinement.py"
+    - "tests/test_terminal_exec.py"
+    - "tests/test_terminal_session.py"
+    - "tests/test_surface_and_scripts.py"
+    - ".gitignore"
+    - "README.md"
+    - ".agent/tasks/TASK-0019/report.yaml"
+
+invariants:
+  - "Public MCP tool names and signatures remain exactly terminal_exec, terminal_start, terminal_poll, terminal_control."
+  - "Tool annotations remain truthful: exec/start/control are mutating/destructive/open-world as applicable; poll remains non-mutating in effect."
+  - "For cwd /Users/tienphat/Developer/<repo>/..., user/project filesystem read-write authority is exactly /Users/tienphat/Developer/<repo> after realpath resolution."
+  - "Sibling repositories, the operator home outside the exact repo, Desktop/Documents/Downloads/Pictures/Movies/Music/Photos-library paths, arbitrary /Users paths, and synthetic outside sentinels are not readable or writable by sandboxed descendants."
+  - "A symlink inside the repo pointing outside the repo does not expand access."
+  - "The system/toolchain exception surface is read-only, explicit, code-reviewed, and contains no blanket user-data subtree."
+  - "No argv parser, shell parser, command allowlist, regex denylist, path-token scan, or cooperative-only convention is accepted as filesystem confinement."
+  - "No sandbox-exec failure, absence, unsupported behavior, profile compilation failure, child abort, or ambiguous postcondition falls back to unsandboxed execution."
+  - "Network policy is not expanded or redesigned by this task."
+  - "No secret values, real home file contents, Keychain values, Photos/media contents, SSH keys, or unrelated repository contents are read or printed during verification."
+  - "Main remains c49d777efa09db7f6c51bd8d8616db4623499fb8 and topology remains exactly {dev, main}."
+
+forbidden_changes:
+  - "Do not implement confinement by inspecting or filtering argv/path strings alone."
+  - "Do not add Docker/OrbStack containers, VMs, App Sandbox/Xcode app bundles, Endpoint Security extensions, launch daemons, privileged helpers, root/sudo requirements, or new services in this task."
+  - "Do not allow blanket read access to /Users/tienphat, HOME, sibling repositories, /private, /Applications, or /Library."
+  - "Do not add Keychain/securityd access, credential export, token files, SSH-key access, or secret forwarding to rescue Git authentication."
+  - "Do not change bare ./verify interpreter semantics in this task; the known hermeticity defect remains the next separate item. Use PYTHON=.venv/bin/python ./verify for this task's full gate."
+  - "Do not change dependencies, MCP tool signatures, timing protocol, session limits/TTL, output bounds, timeout/process-group cleanup, tunnel profile architecture, install/start lifecycle, repository settings, tags, releases, or main."
+
+capability_requirements:
+  EXECUTION:
+    - repository_content_read
+    - repository_content_write
+    - native_repository_execution
+    - git_history_read
+    - git_commit
+    - git_push
+    - remote_ref_read
+    - macos_sandbox_exec
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: authorized_only_as_described
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: >-
+      Causal RED proves the exact base is cwd-guard-only: focused tests using synthetic test-owned sibling/outside sentinels
+      demonstrate that a child or nested shell can currently read/write outside the derived repository root while cwd itself
+      remains admitted. No sensitive real user file is used as the sentinel.
+    evidence_required: "Exact failing focused tests on the base with expected outside-access symptom and no unrelated error."
+  - id: AC-2
+    requirement: >-
+      terminal_exec and terminal_start share one OS-enforced per-repository confinement implementation; direct, shell-nested,
+      Python-nested, subprocess/grandchild, PTY, and symlink-escape attempts cannot read or write synthetic sibling/outside
+      sentinels, while normal repo-local read/write remains functional.
+    evidence_required: "Focused GREEN adversarial suite covering one-shot and PTY descendants plus symlink escape."
+  - id: AC-3
+    requirement: >-
+      The sandbox profile is deny-by-default, has only exact repo read-write plus minimal enumerated read-only system/toolchain
+      support, has no blanket user-data grants, and fails closed on sandbox-exec absence/abort/profile error. Repo-local HOME/TMPDIR
+      are contained, non-symlink private directories and no real HOME filesystem access is required.
+    evidence_required: "Source inspection, profile/allowlist assertions, failure-path tests, directory mode/type/containment tests."
+  - id: AC-4
+    requirement: >-
+      Current intended developer workflows still work inside confinement: bash -lc with repo-local commands, git status, the
+      repository .venv Python, focused/full tests, and network behavior needed for ordinary remote reads. Authenticated
+      git push --dry-run must also pass without broad home/Keychain/credential access; otherwise the task stops BLOCKED rather
+      than weakening the sandbox.
+    evidence_required: "Operator-Mac sandboxed compatibility smoke with no secret output plus exact git push --dry-run result."
+  - id: AC-5
+    requirement: >-
+      README and MCP metadata describe the actual risk boundary without overstating sandbox strength. The four public tools,
+      signatures, annotations, terminal timeout/output/session semantics, network scope, and tunnel architecture remain unchanged
+      except for the new filesystem confinement guarantee.
+    evidence_required: "Exact surface tests, README/source comparison, and diff inspection."
+  - id: AC-6
+    requirement: >-
+      PYTHON=.venv/bin/python ./verify, py_compile/shell checks included by that gate, git diff --check, exact scope, candidate
+      lineage, report-only lineage, final clean local state, unchanged main, and exact {dev, main} topology all pass.
+    evidence_required: "Fresh exact-candidate and post-report Git/verification evidence."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: >-
+        Fresh-resolve exact task/base, active authority set, dev/main/topology, local clean state, current cwd-only source contract,
+        /usr/bin/sandbox-exec presence, and required capabilities. Do not use hostname as authority.
+      required: true
+    - id: CHECK-2
+      command_or_check: >-
+        TDD RED first: add only focused synthetic confinement regressions, run them against base behavior, and require expected
+        failure because outside sibling access succeeds. If the RED does not causally reproduce, stop before implementation.
+      required: true
+    - id: CHECK-3
+      command_or_check: >-
+        Implement the smallest shared confinement module and integration in terminal_exec/terminal_start, then run focused GREEN
+        adversarial tests for direct/shell/nested/grandchild/PTY/symlink cases, sandbox failure paths, repo-local HOME/TMPDIR,
+        and public surface preservation.
+      required: true
+    - id: CHECK-4
+      command_or_check: >-
+        On the operator Mac, run bounded sandbox compatibility smoke without sensitive file contents: repo read/write, bash -lc,
+        git status, .venv Python, ordinary remote read, and git push --dry-run. Any need to broaden user-data/credential access is
+        a BLOCKED gap, not auto-fix authority.
+      required: true
+    - id: CHECK-5
+      command_or_check: >-
+        Run PYTHON=.venv/bin/python ./verify on the exact candidate, git diff --check, exact allowed-path/scope inspection,
+        no blanket user-data allowlist proof, no secret-bearing output, and final hygiene. Reuse no stale result for the candidate.
+      required: true
+    - id: CHECK-6
+      command_or_check: >-
+        Publish exact candidate non-force to dev, freshly prove it, author/publish only TASK-0019 report as direct child, and
+        freshly prove final dev/main/topology/local closure before NEEDS_REVIEW.
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
