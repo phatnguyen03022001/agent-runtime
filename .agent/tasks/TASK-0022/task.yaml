@@ -1,0 +1,84 @@
+protocol_version: 3
+task_id: TASK-0022
+task_revision: 1
+state: APPROVED
+origin:
+  type: user_request
+  task_id: ""
+  gap_id: WITHDRAWN_WIP_DISPOSITION
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "ed8d9fb35bb8b052530ca879e68a227d77e4a8a6"
+execution_skills:
+  required:
+    - executor
+    - verification
+    - github-workflow
+authority_sources:
+  - source: current explicit operator approval
+    role: "Backup withdrawn WIP with verified hashes, then remove those WIP edits from the original checkout and fast-forward to accepted dev; preserve .env and .venv. This explicitly supersedes the earlier preservation-in-place restriction for this disposition only."
+    precedence: 1
+structure_authority:
+  status: RESOLVED
+  source: "Existing Git checkout, ignored operator state and task evidence."
+  rationale: "One bounded non-destructive backup/reconciliation operation; no sync engine or source implementation."
+objective: "Restore the designated original runtime checkout to GitHub dev while retaining exact recoverable withdrawn TASK-0019 WIP outside the active checkout."
+scope:
+  required_changes:
+    - "Before changing the original checkout, confirm remote identity, branch, expected dirty paths, no unexpected staged work, tracked patch SHA-256 15f0df353bbb90e97816b27e627f4637126696594cf95d9a6777ed38a0e71b96 and untracked confinement.py SHA-256 da41ca3238a3249799e63136b822598f138a246cc27c4d45b4a99b6a06502843."
+    - "Retain an exact binary patch and confinement.py copy in a private run-owned backup directory under /private/tmp; verify byte hashes before any removal from original checkout and record backup identity."
+    - "Restore only the proven tracked WIP paths to the original HEAD, remove only the backed-up untracked confinement.py from the active checkout, then fetch and fast-forward original dev to the current exact task planning base. No reset/clean sweep or stash."
+    - "Preserve .env, .venv and all other pre-existing ignored/operator state. If pre-existing .agent-runtime state becomes visible after accepted .gitignore changes, preserve it and add only a local .git/info/exclude entry for that exact retained directory."
+    - "Use the planning HEAD as final_execution_head because there is no source implementation change. Publish a report-only child from the reconciled original checkout and prove final remote/local equality."
+  allowed_existing_files_or_components:
+    - "Proven withdrawn tracked WIP paths and backed-up untracked agent_runtime/confinement.py, local Git refs/index and narrowly necessary local exclude metadata."
+    - ".agent/tasks/TASK-0022/report.yaml"
+invariants:
+  - "No .env values are shown to model/log/report, and .env/.venv remain in place without installation or configuration changes."
+  - "No source WIP is adopted or published; final tracked source is exactly canonical dev."
+  - "Backup remains RETAINED_FOR_EVIDENCE; it is not another repository or source of authority."
+forbidden_changes:
+  - "No unproven deletion, reset/clean/stash, directory move, secret output, runtime restart, dependency install, new framework, branch creation, main/staging, force push or release."
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Withdrawn WIP is recoverable byte-exact from the retained backup."
+    evidence_required: "Pre/post backup hashes and manifest identify original base and exact retained files; no secret values."
+  - id: AC-2
+    requirement: "Original checkout is a clean tracked mirror of canonical dev, with operator state preserved."
+    evidence_required: "Fresh remote/local HEAD equality, clean tracked/index state, preserved env/venv identity and no unexpected untracked source."
+  - id: AC-3
+    requirement: "Bare verifier works in the reconciled original checkout and report publication is reconstructible."
+    evidence_required: "Full ./verify with bytecode caching disabled for imported dependencies, valid actual report schema and fresh report-only dev lineage."
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Guard exact WIP/base/identity and prove backup before any original-checkout mutation."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Perform bounded recovery, prove env/venv preservation and clean mirror, and run original-checkout ./verify."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Validate actual report and publish report-only child, then prove final original checkout/remote refs externally."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+blocking_decisions: []
+execution_ready: true
