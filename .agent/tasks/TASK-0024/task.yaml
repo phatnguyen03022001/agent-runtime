@@ -1,0 +1,182 @@
+protocol_version: 3
+
+task_id: TASK-0024
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: user_request
+  task_id: ""
+  gap_id: RUNTIME_SIGTERM_SESSION_GROUP_CLEANUP
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "de060ab9c61627eeec02937519eddfffd8bc1e26"
+
+architect_analysis_skills:
+  - architect
+  - verification
+  - simplicity
+  - github-workflow
+
+execution_skills:
+  required:
+    - executor
+    - verification
+    - simplicity
+    - github-workflow
+  recommended: []
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "Current operator post-freeze remediation instruction"
+    role: "Authorizes the smallest forward fix for the freshly reproduced runtime SIGTERM process-group cleanup defect and its repository-local evidence."
+    precedence: 1
+  - source: "phatnguyen03022001/architect-profile@b0a1e5f54f0704c0c1332835bedd9b2524be851f:.agent/bootstrap/authority.lock.json"
+    role: "Pins the active agent-runtime authority at 69c4760ab07e9cb04263eae36d95f39887f31c23, where the reproduced source bytes were verified equal to current dev runtime and test bytes."
+    precedence: 2
+  - source: "phatnguyen03022001/agent-skills@de060ab9c61627eeec02937519eddfffd8bc1e26:protocols/TASK_PROTOCOL.md"
+    role: "Defines the repository-local Architect to Executor task and independent review lifecycle."
+    precedence: 3
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing agent_runtime server entrypoint and TerminalSessionManager shutdown implementation"
+  rationale: "Use the existing singleton session manager and its TERM to bounded grace to KILL process-group cleanup. No new process manager, supervisor, registry, service, or persistent state is authorized."
+
+objective: "Ensure a normally signal-terminated runtime invokes existing terminal-session cleanup before exit, so persistent session process groups do not outlive SIGTERM or SIGINT runtime termination."
+
+scope:
+  required_changes:
+    - "Fresh-bind TASK-0024 revision 1 at its exact handoff base, resolve remote dev and main immediately before mutation, and prove clean exact target identity and required execution capability."
+    - "Use the existing server lifecycle and TerminalSessionManager shutdown path to make runtime SIGTERM and SIGINT termination invoke process-group cleanup before the runtime exits. Preserve TERM to bounded grace to KILL semantics and ordinary termination behavior."
+    - "Add an exact subprocess regression boundary that creates a persistent session with a descendant, signals the runtime process with SIGTERM and SIGINT separately, and proves the descendant process group cannot survive either catchable termination path. Keep normal child completion, explicit terminal_control terminate, and manager shutdown coverage truthful."
+    - "Run the repository-native verification suite and the exact new signal regression. Validate the actual report, publish the candidate and report-only direct child non-force to dev, then stop at NEEDS_REVIEW."
+  allowed_existing_files_or_components:
+    - "agent_runtime/server.py"
+    - "agent_runtime/session.py"
+    - "tests/test_terminal_session.py"
+    - ".agent/tasks/TASK-0024/report.yaml"
+  expected_files_are_restrictive: true
+
+invariants:
+  - "Persistent terminal sessions remain memory-only and use the existing single TerminalSessionManager."
+  - "The runtime does not introduce a daemon supervisor, persistent process registry, process database, sandbox, container, scheduler, retry engine, orchestration layer, watchdog, or custom init system."
+  - "Explicit terminal_control terminate and manager shutdown retain their existing cleanup semantics."
+  - "SIGKILL remains an uncatchable boundary and is not represented as cleanup success."
+  - "No branch, main ref, tag, release, repository metadata, dependency, workflow, authority lock, or sibling repository is mutated."
+
+forbidden_changes:
+  - "Do not create a duplicate process manager or broaden the public MCP tool surface."
+  - "Do not weaken workspace confinement, terminal argument validation, or process-group cleanup failure handling."
+  - "Do not add CI, background services, databases, registries, migration machinery, new top-level directories, dependencies, or unrelated cleanup."
+  - "Do not force-push, rewrite history, create a branch, promote to main, create tags or releases, or modify prior task/report/review artifacts."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0024/report.yaml"
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "No unlisted files are authorized."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Runtime catchable termination reuses the existing manager shutdown path without creating another lifecycle owner."
+    evidence_required: "Exact source diff and focused regression prove SIGTERM and SIGINT each invoke cleanup before runtime exit while existing process-group TERM to grace to KILL behavior remains in use."
+  - id: AC-2
+    requirement: "A persistent session descendant cannot survive a SIGTERM or SIGINT delivered to the runtime process."
+    evidence_required: "A subprocess regression starts a session and descendant, sends each signal in a separate case, and demonstrates no surviving descendant/process group after bounded observation."
+  - id: AC-3
+    requirement: "Existing terminal lifecycle behavior remains correct."
+    evidence_required: "Repository-native verification passes, including normal child completion, explicit termination, manager shutdown, and the new signal boundary."
+  - id: AC-4
+    requirement: "The candidate and evidence publication are bounded and reconstructible."
+    evidence_required: "Actual task/report validation, git diff check, candidate and report-only direct-child lineage, non-force dev publication, and fresh remote dev/main proof."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Freshly prove exact task/base/remote identity, clean local target state, selected-authority relationship, and current execution capability before any mutation."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Run the exact SIGTERM and SIGINT descendant-survival regression plus repository-native verification and diff checks against the candidate."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Validate the actual report, publish only authorized commits non-force to dev, then refresh remote dev/main and candidate/report lineage proof before NEEDS_REVIEW."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions:
+    - BLOCKED
+    - STALE_STATE
+    - AUTHORITY_REQUIRED
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    - REVIEW_REQUIRED
+    - REVERIFY_REQUIRED
+    - USER_STOP
+
+capability_requirements:
+  EXECUTION:
+    - repository_content_read
+    - repository_content_write
+    - native_repository_execution
+    - process_signal_lifecycle_execution
+    - git_history_read
+    - git_commit
+    - non_force_git_push
+    - remote_ref_read
+  REVIEW:
+    - repository_content_read
+    - native_repository_execution
+    - git_history_read
+    - remote_ref_read
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
