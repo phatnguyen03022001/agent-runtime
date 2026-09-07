@@ -4,6 +4,7 @@ import json
 import io
 import os
 import signal
+import subprocess
 import sys
 import tempfile
 import threading
@@ -345,6 +346,113 @@ class TerminalSessionTests(unittest.TestCase):
         self.assertFalse(marker_shutdown.exists())
         final_files = {p.relative_to(self.root) for p in self.root.rglob("*") if p.is_file()}
         self.assertEqual(final_files, initial_files)
+
+    def test_runtime_signals_cleanup_persistent_descendant_before_default_exit(self) -> None:
+        runtime_root = Path(__file__).resolve().parents[1]
+
+        for signum in (signal.SIGTERM, signal.SIGINT):
+            with self.subTest(signal=signal.Signals(signum).name):
+                case_root = self.root / signal.Signals(signum).name
+                case_root.mkdir()
+                ready = case_root / "runtime-ready"
+                descendant_pid = case_root / "descendant-pid"
+                session_pgid = case_root / "session-pgid"
+                marker = case_root / "descendant-survived"
+                descendant_code = (
+                    "import pathlib,time; "
+                    "time.sleep(1.0); "
+                    f"pathlib.Path({str(marker)!r}).write_text('alive')"
+                )
+                session_code = (
+                    "import os,pathlib,subprocess,sys,time; "
+                    f"descendant=subprocess.Popen([sys.executable,'-c',{descendant_code!r}]); "
+                    f"pathlib.Path({str(descendant_pid)!r}).write_text(str(descendant.pid)); "
+                    f"pathlib.Path({str(session_pgid)!r}).write_text(str(os.getpid())); "
+                    "time.sleep(30)"
+                )
+                runtime_code = f"""
+import pathlib, sys, time, types
+
+class FakeMCPServer:
+    def __init__(self, _name):
+        self.middleware = []
+
+    def tool(self, annotations=None):
+        def decorate(function):
+            return function
+        return decorate
+
+    def run(self):
+        ready = pathlib.Path({str(ready)!r})
+        descendant_pid = pathlib.Path({str(descendant_pid)!r})
+        deadline = time.monotonic() + 5
+        while not descendant_pid.exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        ready.write_text('ready')
+        while True:
+            time.sleep(1)
+
+mcp_package = types.ModuleType('mcp')
+mcp_package.__path__ = []
+mcp_server = types.ModuleType('mcp.server')
+mcp_server.MCPServer = FakeMCPServer
+sys.modules['mcp'] = mcp_package
+sys.modules['mcp.server'] = mcp_server
+
+from agent_runtime import server
+from agent_runtime.session import start_terminal
+
+start_terminal(
+    [sys.executable, '-u', '-c', {session_code!r}],
+    {str(self.cwd)!r},
+)
+server._main()
+"""
+                env = os.environ.copy()
+                env["PYTHONPATH"] = os.pathsep.join(
+                    value for value in (str(runtime_root), env.get("PYTHONPATH", "")) if value
+                )
+                process = subprocess.Popen(
+                    [sys.executable, "-u", "-c", runtime_code],
+                    cwd=str(runtime_root),
+                    env=env,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                try:
+                    deadline = time.monotonic() + 5
+                    while not ready.exists() and time.monotonic() < deadline:
+                        if process.poll() is not None:
+                            break
+                        time.sleep(0.01)
+                    if not ready.exists():
+                        stderr = process.communicate(timeout=1)[1]
+                        self.fail(
+                            f"runtime did not become ready for {signal.Signals(signum).name}: "
+                            f"returncode={process.returncode!r} stderr={stderr!r}"
+                        )
+
+                    process.send_signal(signum)
+                    returncode = process.wait(timeout=5)
+                    assert process.stderr is not None
+                    process.stderr.close()
+                    time.sleep(1.2)
+                    self.assertEqual(returncode, -signum)
+                    self.assertFalse(marker.exists())
+                finally:
+                    if process.poll() is None:
+                        process.kill()
+                        process.wait(timeout=2)
+                    if process.stderr is not None and not process.stderr.closed:
+                        process.stderr.close()
+                    if session_pgid.exists():
+                        try:
+                            pgid = int(session_pgid.read_text())
+                            if os.getpgid(pgid) == pgid:
+                                os.killpg(pgid, signal.SIGKILL)
+                        except (ProcessLookupError, ValueError):
+                            pass
 
     def test_natural_exit_emits_one_persistent_process_event(self) -> None:
         output = io.StringIO()

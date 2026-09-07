@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import inspect
+import os
+import signal
 from typing import Any, Callable
 
 try:
@@ -17,6 +19,7 @@ from .executor import execute_terminal
 from .session import (
     control_terminal as _control_terminal,
     poll_terminal as _poll_terminal,
+    shutdown_terminal_sessions,
     start_terminal as _start_terminal,
 )
 from .timing import timed_tool_wrapper, timing_middleware
@@ -176,7 +179,23 @@ def _install_timing_middleware() -> None:
 _install_timing_middleware()
 
 
+def _handle_termination_signal(signum: int, _frame: Any) -> None:
+    """Clean up persistent sessions before preserving the signal's default exit."""
+
+    try:
+        shutdown_terminal_sessions()
+    finally:
+        signal.signal(signum, signal.SIG_DFL)
+        os.kill(os.getpid(), signum)
+
+
+def _install_termination_handlers() -> None:
+    for signum in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(signum, _handle_termination_signal)
+
+
 def _main() -> int:
+    _install_termination_handlers()
     mcp.run()
     return 0
 
