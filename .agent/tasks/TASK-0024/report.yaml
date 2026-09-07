@@ -1,0 +1,91 @@
+protocol_version: 3
+
+task_id: TASK-0024
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0024/task.yaml
+  commit: "c7877dda23d79863d229fa20eb0af1df1c61fe40"
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+  authorized_base_head: "c7877dda23d79863d229fa20eb0af1df1c61fe40"
+  final_execution_head: "a9e79a1bb1e6d442d17bbfea2f8083116fc49359"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "de060ab9c61627eeec02937519eddfffd8bc1e26"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - repository_content_read
+    - repository_content_write
+    - native_repository_execution
+    - process_signal_lifecycle_execution
+    - git_history_read
+    - git_commit
+    - non_force_git_push
+    - remote_ref_read
+  available:
+    - repository_content_read
+    - repository_content_write
+    - native_repository_execution
+    - process_signal_lifecycle_execution
+    - git_history_read
+    - git_commit
+    - non_force_git_push
+    - remote_ref_read
+  missing: []
+  passed: true
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: NOT_REQUIRED
+  evidence: "TASK-0024 declares no separate authoritative verification mechanism."
+
+local_hygiene:
+  result: RETAINED_FOR_EVIDENCE
+  run_root: /private/tmp/task0024-mcp.cinXUF
+  cleanup_performed: false
+  retained:
+    - identity: /private/tmp/task0024-mcp.cinXUF
+      reason: "Isolated mcp==2.0.0 environment used to run the repository-native verifier without changing repository dependencies."
+    - identity: /private/tmp/task0024-python-wrapper
+      reason: "Run-owned interpreter wrapper used only to expose the isolated verifier dependency path."
+  evidence: "No temporary artifact was added to the repository or candidate/report commits."
+
+pushed: true
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PROVEN
+    evidence: "Candidate a9e79a1bb1e6d442d17bbfea2f8083116fc49359 adds server-entrypoint SIGTERM/SIGINT handlers that call the existing singleton shutdown_terminal_sessions path, restore SIG_DFL, and re-deliver the original signal. Existing session cleanup remains _terminate_process_group with TERM, bounded grace, then KILL."
+  - criterion_id: AC-2
+    status: PROVEN
+    evidence: "The exact subprocess regression test starts a runtime process, a persistent terminal session, and a same-process-group descendant, then independently sends SIGTERM and SIGINT. Each case exits with the original signal status (-15/-2), waits past the descendant marker deadline, and proves the descendant-survived marker is absent."
+  - criterion_id: AC-3
+    status: PROVEN
+    evidence: "PYTHON=/private/tmp/task0024-python-wrapper ./verify passed all 48 tests, py_compile for agent_runtime/*.py and tests/*.py, and bash -n for install.sh/start.sh/verify. The existing natural-exit, explicit-terminate, idle-reap, manager-shutdown, and process-group cleanup tests remained green."
+  - criterion_id: AC-4
+    status: NOT_PROVEN
+    evidence: "Candidate publication was guarded by fresh remote dev/main reads, pushed non-force to dev, and resolved to a9e79a1bb1e6d442d17bbfea2f8083116fc49359. This report was validated before its own commit; report-only direct-child publication and final post-report remote proof are established after report authorship rather than predicted here."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Fresh pre-mutation proof resolved remote origin to phatnguyen03022001/agent-runtime, dev=c7877dda23d79863d229fa20eb0af1df1c61fe40, main=c49d777efa09db7f6c51bd8d8616db4623499fb8, local HEAD equal to the exact base, clean worktree, TASK-0024 revision 1 validation OK, skill authority HEAD equal to de060ab9c61627eeec02937519eddfffd8bc1e26, and all required EXECUTION capabilities available."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "The focused SIGTERM/SIGINT descendant regression passed. PYTHON=/private/tmp/task0024-python-wrapper ./verify passed 48 tests plus bytecode compilation and shell syntax checks; git diff --check passed and the candidate diff was limited to agent_runtime/server.py and tests/test_terminal_session.py."
+  - check_id: CHECK-3
+    result: NOT_PROVEN
+    evidence: "The report validator and pre-report diff checks are run before this report commit. Candidate a9e79a1bb1e6d442d17bbfea2f8083116fc49359 was pushed non-force to dev after a fresh dev guard; the report-only direct child, final remote dev/main proof, and local post-report hygiene are verified after this report commit."
+
+result: NEEDS_REVIEW
