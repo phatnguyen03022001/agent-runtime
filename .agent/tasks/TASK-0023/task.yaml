@@ -1,0 +1,194 @@
+protocol_version: 3
+
+task_id: TASK-0023
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: user_request
+  task_id: ""
+  gap_id: MECHANICAL_REF_INTEGRITY_AGENT_RUNTIME
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "ed8d9fb35bb8b052530ca879e68a227d77e4a8a6"
+
+architect_analysis_skills:
+  - architect
+  - verification
+  - simplicity
+
+execution_skills:
+  required: [executor, verification, simplicity]
+  recommended: []
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "Current operator FINAL FREEZE / STABLE ACTIVATION instruction."
+    role: "Explicitly authorizes minimal mechanical ref-integrity hardening across the five repositories and later stable activation after all required predicates pass. This task uses only the agent-runtime repository-local metadata portion."
+    precedence: 1
+  - source: "phatnguyen03022001/architect-profile@3f016cdb5b610bb8ed6be6203e2b790138ab3447:.agent/tasks/TASK-0037/review.yaml"
+    role: "Accepted architect-profile repository-local ref-integrity closure."
+    precedence: 2
+  - source: "phatnguyen03022001/agent-skills@6be8048b85225fb26c02c9eaadb8b229300c114e:.agent/tasks/TASK-0050/review.yaml"
+    role: "Accepted agent-skills repository-local ref-integrity closure; selected immutable agent-skills authority remains de060ab9c61627eeec02937519eddfffd8bc1e26."
+    precedence: 3
+  - source: "phatnguyen03022001/agent-documents@ff135cde2dbebbffcd0c33415a7abaf1b2e2c4ec:.agent/tasks/TASK-0009/review.yaml"
+    role: "Accepted agent-documents repository-local ref-integrity closure; selected immutable agent-documents authority remains 6a087c7559235b47cfa365bd78c351b3a52b1e82."
+    precedence: 4
+  - source: "phatnguyen03022001/agent-standards@4eb149686329b3a5ad74d66a6fce050d930ada39:.agent/tasks/TASK-0014/review.yaml"
+    role: "Accepted agent-standards repository-local ref-integrity closure; selected immutable agent-standards authority remains 1141b9dbfce0110d6623f5a877c2d04843caa6eb."
+    precedence: 5
+  - source: "phatnguyen03022001/architect-profile@3f016cdb5b610bb8ed6be6203e2b790138ab3447:.agent/bootstrap/authority.lock.json"
+    role: "Selected immutable authority set pins agent-runtime exactly at 69c4760ab07e9cb04263eae36d95f39887f31c23. The selected authority identity must not change."
+    precedence: 6
+  - source: "phatnguyen03022001/agent-runtime@69c4760ab07e9cb04263eae36d95f39887f31c23"
+    role: "Exact accepted selected agent-runtime authority revision and pre-task dev head. This task may add lifecycle evidence descendants but may not alter or relabel the selected authority SHA."
+    precedence: 7
+  - source: "Fresh GitHub repository metadata at planning boundary"
+    role: "agent-runtime topology is exactly dev/main, both branches are currently unprotected, repository rulesets are empty, open issues/pull requests are zero, and main c49d777efa09db7f6c51bd8d8616db4623499fb8 is an ancestor of dev. Mutable metadata must be refreshed again immediately before and after mutation."
+    precedence: 8
+
+structure_authority:
+  status: RESOLVED
+  source: "Current operator mechanical-freeze requirement plus current GitHub repository-ruleset semantics."
+  rationale: "Use one active repository-level branch ruleset targeting exactly refs/heads/dev and refs/heads/main, with no bypass actors and exactly deletion plus non_fast_forward. This is the smallest sufficient policy that blocks branch deletion and destructive rewrite while preserving normal fast-forward evolution."
+
+objective: "Mechanically protect agent-runtime dev/main ref integrity while preserving exact selected immutable authority commit 69c4760ab07e9cb04263eae36d95f39887f31c23 and making no source, main, tag, release or sibling-repository change."
+
+scope:
+  required_changes:
+    - "Before metadata mutation, fresh-bind this exact task/base and prove the only repository-content change after selected authority commit 69c4760ab07e9cb04263eae36d95f39887f31c23 is this TASK-0023 planning artifact. No runtime source, execution-surface, transport, dependency, workflow or prior-task bytes may differ from the selected authority revision."
+    - "Fresh-resolve the selected support identities plus ilets accepted natural-pilot identity, accepted architect-profile TASK-0037, agent-skills TASK-0050, agent-documents TASK-0009 and agent-standards TASK-0014 reviews, architect-profile authority.lock equality, exact locked Case Router, all nine bootstrap capability routes, agent-runtime main ancestor of current dev, topology exactly dev/main, zero activation-affecting open issue/PR, and current agent-runtime metadata/ruleset state. Stop on material drift or contradiction."
+    - "Before metadata mutation, run the current architect-profile consequence-boundary verification from exact accepted architect-profile revision 3f016cdb5b610bb8ed6be6203e2b790138ab3447: python3 -B .agent/bootstrap/validate.py ; python3 -B .agent/bootstrap/validate.py --remote ; python3 -B -m unittest discover -s .agent/bootstrap -p 'test_*.py' ; python3 -B -m py_compile .agent/bootstrap/validate.py .agent/bootstrap/test_bootstrap.py. All must PASS."
+    - "Fresh-preflight GitHub repository metadata read/write capability sufficient to create and independently read repository rulesets. If unavailable, stop before metadata mutation with CURRENT_PHASE_CAPABILITY_UNAVAILABLE or MECHANICAL_FREEZE_BLOCKED."
+    - "Create exactly one active repository-level branch ruleset named dev-main-ref-integrity for phatnguyen03022001/agent-runtime, targeting exactly refs/heads/dev and refs/heads/main, excludes none, bypass list empty, and rules exactly deletion plus non_fast_forward."
+    - "Fresh-read GitHub after metadata mutation and prove the effective configuration exactly matches the authorized policy, with no extra/default rules or bypass actor. Ordinary non-force fast-forward publication to dev must remain possible."
+    - "Publish only .agent/tasks/TASK-0023/report.yaml as the Executor-authored repository-content mutation after the planning commit. Validate the actual report with the current artifact validator, run git diff --check, push the report-only direct child non-force to dev, fresh-prove final refs/topology/ruleset and selected-authority reachability, then stop at NEEDS_REVIEW."
+  allowed_existing_files_or_components: []
+  expected_files_are_restrictive: true
+
+invariants:
+  - "Selected immutable agent-runtime authority remains exactly 69c4760ab07e9cb04263eae36d95f39887f31c23. TASK-0023 task/report/review descendants are evidence-plane lifecycle commits and do not replace that authority identity."
+  - "No agent-runtime source, README, execution transport semantics, workflow, dependency or prior task content changes."
+  - "agent-runtime main remains exactly c49d777efa09db7f6c51bd8d8616db4623499fb8 throughout TASK-0023. No stable promotion occurs."
+  - "Topology remains exactly dev/main. No branch creation, deletion or rename."
+  - "The ruleset grants no bypass actor and contains only deletion and non_fast_forward."
+  - "No required pull request, reviewer, CODEOWNERS, status check, signed commit, deployment, merge queue, release workflow, dependency bot, registry, scheduler, queue, service, controller or new governance mechanism."
+  - "No mutation to architect-profile, agent-skills, agent-documents, agent-standards or ilets."
+  - "If this task is ACCEPTED and all four prior repository-local closures remain effective, system MECHANICAL_FREEZE may become PASS only after Governing Architect freshly verifies all five exact policies together. STABLE_ACTIVATION remains NOT_ACTIVATED until separately authorized architect-profile activation."
+
+forbidden_changes:
+  - "Do not mutate agent-runtime/main, promote, merge, rebase, force-push or rewrite history."
+  - "Do not create/delete/rename branches or tags, publish/mutate releases, or mutate repository settings unrelated to this one ruleset."
+  - "Do not modify runtime source, transport behavior or execution-surface semantics."
+  - "Do not add overlapping classic branch protection when the repository ruleset succeeds."
+  - "Do not use a freeze tag alternative unless the exact ruleset capability is rejected and the Governing Architect separately authorizes that alternative after reviewing the truthful blocker."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions:
+    - BLOCKED
+    - STALE_STATE
+    - AUTHORITY_REQUIRED
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    - REVIEW_REQUIRED
+    - REVERIFY_REQUIRED
+    - USER_STOP
+
+capability_requirements:
+  EXECUTION:
+    - repository_content_read
+    - repository_content_write
+    - native_repository_execution
+    - git_history_read
+    - git_commit
+    - git_push
+    - remote_ref_read
+    - repository_metadata_read
+    - repository_metadata_write
+  REVIEW:
+    - repository_content_read
+    - repository_content_write
+    - git_history_read
+    - git_commit
+    - git_push
+    - remote_ref_read
+    - repository_metadata_read
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "The selected agent-runtime authority remains exact and the current consequence boundary is valid before metadata mutation."
+    evidence_required: "Exact selected-authority-to-task-base comparison proves only TASK-0023/task.yaml was added; fresh support/ilets refs, accepted prior ref-integrity reviews, exact lock/router/9 routes, main ancestry/topology/open-work proof and all four architect-profile bootstrap commands PASS."
+  - id: AC-2
+    requirement: "agent-runtime has one minimal effective ref-integrity policy for dev/main."
+    evidence_required: "Fresh post-write GitHub ruleset read proves active target branch; includes exactly dev/main; excludes none; bypass_actors empty; current user cannot bypass; rules exactly deletion and non_fast_forward; collection contains no overlapping added policy."
+  - id: AC-3
+    requirement: "The policy prevents destructive ref mutation without imposing unrelated development process."
+    evidence_required: "No PR/reviewer/status/signing/deployment/queue rule exists and normal report-only non-force fast-forward publication to dev succeeds."
+  - id: AC-4
+    requirement: "TASK-0023 publication remains evidence-only and preserves selected authority plus repository boundaries."
+    evidence_required: "Report commit is sole direct child of exact planning base and adds only TASK-0023/report.yaml; selected authority 69c4760ab07e9cb04263eae36d95f39887f31c23 remains an immutable ancestor/reachable commit; main stays c49d777efa09db7f6c51bd8d8616db4623499fb8; topology dev/main; no tag/release/sibling mutation."
+  - id: AC-5
+    requirement: "No stable activation or system freeze claim is made early."
+    evidence_required: "Report may mark AGENT_RUNTIME_REF_INTEGRITY PASS but keeps STABLE_ACTIVATION NOT_ACTIVATED and SYSTEM_FREEZE NOT_FROZEN. MECHANICAL_FREEZE remains pending Governing Architect five-repository aggregate verification."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Fresh-bind TASK-0023 revision 1 at exact handoff base; require local dev=origin/dev=remote dev=base, clean tree, report absent, main=c49d777efa09db7f6c51bd8d8616db4623499fb8, topology dev/main, selected authority 69c4760ab07e9cb04263eae36d95f39887f31c23 reachable with only this task artifact after it, and all required EXECUTION capabilities available before metadata mutation."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Refresh selected refs, accepted prior ref-integrity reviews, rulesets/protection/open-work state and run the four exact architect-profile bootstrap commands at 3f016cdb5b610bb8ed6be6203e2b790138ab3447. Stop on any failure or material drift."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Create only the exact active agent-runtime dev/main ruleset with empty bypass list and deletion plus non_fast_forward; fresh-read the effective configuration and reject any extra/default rule or bypass."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Author and validate report_revision 1, git diff --check, commit/push report-only direct child non-force to dev, then fresh-prove ruleset effectiveness, selected authority reachability, final refs/topology, main unchanged and no sibling/tag/release mutation; stop NEEDS_REVIEW."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: true
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
