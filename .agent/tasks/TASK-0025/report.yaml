@@ -1,0 +1,111 @@
+protocol_version: 3
+
+task_id: TASK-0025
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0025/task.yaml
+  commit: "3086c3247d8b81cad3eb6734fb7d00855ae6fdcc"
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+  authorized_base_head: "3086c3247d8b81cad3eb6734fb7d00855ae6fdcc"
+  final_execution_head: "ebd62a2090ecf20759773061abcbc885677c0fb6"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "3c4a31598da4c4e12cb0925bee1b471f160d3b4e"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - repository_content_read
+    - repository_content_write
+    - native_repository_execution
+    - process_signal_lifecycle_execution
+    - git_history_read
+    - git_commit
+    - non_force_git_push
+    - remote_ref_read
+    - repository_metadata_read
+  available:
+    - repository_content_read
+    - repository_content_write
+    - native_repository_execution
+    - process_signal_lifecycle_execution
+    - git_history_read
+    - git_commit
+    - non_force_git_push
+    - remote_ref_read
+    - repository_metadata_read
+  missing: []
+  passed: true
+  evidence: "Fresh GitHub ref reads, exact owner/repository remote identity, local Git history, native process/signal execution, and successful non-force candidate publication were available."
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: NOT_REQUIRED
+  evidence: "TASK-0025 declares no separate authoritative verification mechanism."
+
+local_hygiene:
+  result: RETAINED_FOR_EVIDENCE
+  run_root: ""
+  cleanup_performed: false
+  retained:
+    - identity: /Users/tienphat/Documents/Codex/2026-09-08/superpowers-github-agent-runtime-role-temporary-2/work/agent-runtime-task/.venv
+      reason: "Ignored checkout-local environment containing only the unmodified requirements.txt dependency mcp==2.0.0, used for repository-native verification."
+    - identity: /private/tmp/agent-skills-task0025.GEV3JC
+      reason: "Temporary exact-SHA agent-skills checkout used to read the locked protocol and required skills."
+    - identity: /private/tmp/architect-profile-task0025.wlVzCr
+      reason: "Temporary exact-SHA architect-profile checkout used to resolve the selected agent-runtime authority lock."
+  evidence: "No retained environment or temporary checkout is tracked or included in the candidate/report diff."
+
+pushed: true
+
+changed_files:
+  - path: agent_runtime/session.py
+    summary: "Adds a fixed 16-record completed-session bound and evicts the oldest completed records while preserving recent exited sessions."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: tests/test_terminal_session.py
+    summary: "Adds a deterministic natural-exit retention regression covering the cap, recent polling, truthful eviction, controlled time, and repeated exited-session polling."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PROVEN
+    evidence: "Candidate ebd62a2090ecf20759773061abcbc885677c0fb6 defines MAX_RETAINED_COMPLETED_SESSIONS=16 and enforces it in the existing TerminalSessionManager. The focused regression creates 20 sequential natural exits, proves zero running records, and asserts retained records are at most 16."
+  - criterion_id: AC-2
+    status: PROVEN
+    evidence: "The regression repeatedly polls every exited ID without changing retention, proves the newest exited ID remains pollable with status exited, and proves the oldest deterministically evicted ID raises unknown-or-expired behavior."
+  - criterion_id: AC-3
+    status: PROVEN
+    evidence: "The focused terminal-session suite passed all 19 tests and repository-native ./verify passed all 49 tests, py_compile, and bash -n. Existing active-cap, natural-exit PTY close, explicit terminate, idle reap, shutdown, bounded output, and SIGTERM/SIGINT cleanup checks remained green."
+  - criterion_id: AC-4
+    status: PROVEN
+    evidence: "The candidate changes only agent_runtime/session.py and tests/test_terminal_session.py. MAX_ACTIVE_SESSIONS remains exactly 3; requirements.txt, server.py, executor.py, scripts, public MCP registration, persistence boundaries, and repository metadata are unchanged."
+  - criterion_id: AC-5
+    status: NOT_PROVEN
+    evidence: "The source candidate was non-force pushed to dev after a fresh remote guard. This report was validated before its own commit; report-only direct-child lineage, final remote dev identity, unchanged main, and final topology are verified after report publication rather than predicted here."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Fresh resolution proved origin=phatnguyen03022001/agent-runtime, dev=3086c3247d8b81cad3eb6734fb7d00855ae6fdcc, main=c49d777efa09db7f6c51bd8d8616db4623499fb8, local HEAD equal to the exact base, task revision 1 at that base, selected authority a9e79a1bb1e6d442d17bbfea2f8083116fc49359, accepted TASK-0024 review, and agent-skills revision 3c4a31598da4c4e12cb0925bee1b471f160d3b4e. Read-only reproduction created 40 natural exits with active=0, retained_records=40, and 40 closed PTYs before the regression was added."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "The new regression failed on the exact base with AssertionError: retained count 20 was not <=16. After the bounded correction it passed, the focused suite passed 19 tests, and .venv/bin/python ./verify passed 49 tests plus compilation and shell syntax checks."
+  - check_id: CHECK-3
+    result: NOT_PROVEN
+    evidence: "Candidate ebd62a2090ecf20759773061abcbc885677c0fb6 was published non-force to dev after a fresh dev=3086c3247d8b81cad3eb6734fb7d00855ae6fdcc and main=c49d777efa09db7f6c51bd8d8616db4623499fb8 guard. The report-only child and final remote proof are intentionally performed after this report commit."
+
+result: NEEDS_REVIEW
