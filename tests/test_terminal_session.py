@@ -236,6 +236,49 @@ class TerminalSessionTests(unittest.TestCase):
         with self.assertRaises(OSError):
             os.fstat(session.master_fd)
 
+    def test_natural_exit_retention_is_bounded_and_eviction_is_truthful(self) -> None:
+        from agent_runtime.session import TerminalSessionManager
+
+        retention_bound = 16
+        now = [100.0]
+        manager = TerminalSessionManager(clock=lambda: now[0], start_reaper=False)
+        self.addCleanup(manager.shutdown)
+        session_ids: list[str] = []
+
+        for index in range(retention_bound + 4):
+            result = manager.start(
+                [sys.executable, "-u", "-c", f"print('exit-{index}', flush=True)"],
+                str(self.cwd),
+            )
+            session_id = str(result["session_id"])
+            session_ids.append(session_id)
+            deadline = time.monotonic() + 3.0
+            while True:
+                final = manager.poll(session_id, cursor=0, wait_ms=100)
+                if final["status"] != "running":
+                    break
+                if time.monotonic() >= deadline:
+                    self.fail(f"natural exit timeout for {session_id}")
+            self.assertEqual(final["exit_code"], 0)
+
+        self.assertEqual(
+            sum(session.status == "running" for session in manager._sessions.values()),
+            0,
+        )
+        retained_count = len(manager._sessions)
+
+        for session_id in session_ids:
+            for _ in range(3):
+                try:
+                    manager.poll(session_id, cursor=0, wait_ms=0)
+                except ValueError as exc:
+                    self.assertRegex(str(exc), "unknown|expired")
+
+        self.assertLessEqual(retained_count, retention_bound)
+        self.assertEqual(manager.poll(session_ids[-1], cursor=0, wait_ms=0)["status"], "exited")
+        with self.assertRaisesRegex(ValueError, "unknown|expired"):
+            manager.poll(session_ids[0], cursor=0, wait_ms=0)
+
     def test_concurrent_starts_cannot_exceed_three_active_sessions(self) -> None:
         barrier = threading.Barrier(4)
         results: list[str] = []

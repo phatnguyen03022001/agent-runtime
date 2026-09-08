@@ -28,6 +28,7 @@ MAX_ACTIVE_SESSIONS = 3
 IDLE_TTL_SECONDS = 600.0
 MAX_RETAINED_OUTPUT_BYTES = 64 * 1024
 MAX_POLL_OUTPUT_BYTES = 16 * 1024
+MAX_RETAINED_COMPLETED_SESSIONS = 16
 MAX_WAIT_MS = 1000
 _READ_CHUNK_BYTES = 8192
 _READER_DRAIN_SECONDS = 0.2
@@ -328,6 +329,7 @@ class TerminalSessionManager:
                     except OSError:
                         pass
                     session.finalized = True
+                    self._retain_completed_session(session)
                     session.changed.notify_all()
             emit_process_end(
                 session.timing_context,
@@ -337,6 +339,21 @@ class TerminalSessionManager:
                 started_mono=session.process_started_mono,
                 termination_state=termination_state,
             )
+
+    def _retain_completed_session(self, session: _Session) -> None:
+        with self._lock:
+            if self._sessions.get(session.session_id) is not session:
+                return
+            self._sessions.pop(session.session_id)
+            self._sessions[session.session_id] = session
+            completed_ids = [
+                session_id
+                for session_id, retained in self._sessions.items()
+                if retained.status == "exited"
+            ]
+            excess = len(completed_ids) - MAX_RETAINED_COMPLETED_SESSIONS
+            for session_id in completed_ids[:max(0, excess)]:
+                self._sessions.pop(session_id, None)
 
     def _touch(self, session: _Session) -> None:
         with session.changed:
