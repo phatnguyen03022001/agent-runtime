@@ -13,6 +13,8 @@ cd "$ROOT"
 command -v git >/dev/null 2>&1 || fail "git is required."
 command -v python3 >/dev/null 2>&1 || fail "Python 3.11+ is required."
 command -v tunnel-client >/dev/null 2>&1 || fail "tunnel-client is required; install the official OpenAI tunnel-client first."
+command -v xcrun >/dev/null 2>&1 || fail "Xcode command-line tools are required for the native menu-bar app."
+xcrun --find swift >/dev/null 2>&1 || fail "Swift is required for the native menu-bar app."
 
 python3 - <<'PY' || exit 2
 import sys
@@ -40,7 +42,7 @@ PROFILE="$HOME/.config/tunnel-client/$PROFILE_NAME.yaml"
 ENV_FILE="$ROOT/.env"
 
 if [[ ! -e "$ROOT/.venv" ]]; then
-  echo "[1/5] Creating local Python environment..."
+  echo "[1/7] Creating local Python environment..."
   python3 -m venv "$ROOT/.venv"
 fi
 [[ -d "$ROOT/.venv" && ! -L "$ROOT/.venv" && -x "$ROOT/.venv/bin/python" ]] \
@@ -52,7 +54,7 @@ PYTHON="$ROOT/.venv/bin/python" "$ROOT/verify"
 if [[ -e "$ENV_FILE" || -L "$ENV_FILE" ]]; then
   [[ -f "$ENV_FILE" && ! -L "$ENV_FILE" ]] || fail "existing .env is not a regular file."
 else
-  echo "[2/5] Creating ignored local environment file..."
+  echo "[2/7] Creating ignored local environment file..."
   cp "$ROOT/.env.example" "$ENV_FILE"
 fi
 chmod 600 "$ENV_FILE"
@@ -112,7 +114,7 @@ path.write_text("\n".join(out) + "\n")
 PY
 chmod 600 "$ENV_FILE"
 
-echo "[3/5] Preparing exact agent-runtime tunnel profile..."
+echo "[3/7] Preparing exact agent-runtime tunnel profile..."
 mkdir -p "$HOME/.config/tunnel-client"
 chmod 700 "$HOME/.config/tunnel-client"
 if [[ -e "$PROFILE" || -L "$PROFILE" ]]; then
@@ -129,11 +131,67 @@ fi
 
 [[ -f "$PROFILE" && ! -L "$PROFILE" ]] || fail "agent-runtime tunnel profile is unavailable."
 
-echo "[4/5] Checking tunnel profile..."
-tunnel-client doctor --profile "$PROFILE_NAME" --explain >/dev/null 2>&1 \
+echo "[4/7] Checking tunnel profile..."
+tunnel-client doctor --profile "$PROFILE_NAME" --health.listen-addr 127.0.0.1:0 --explain >/dev/null 2>&1 \
   || fail "tunnel-client doctor failed; no tunnel was started."
 
-echo "[5/5] Installation ready."
+echo "[5/7] Building native menu-bar app..."
+"$ROOT/macos/package_app.sh" >/dev/null
+SOURCE_APP="$ROOT/build/Agent Runtime.app"
+TARGET_APPS="$HOME/Applications"
+TARGET_APP="$TARGET_APPS/Agent Runtime.app"
+mkdir -p "$TARGET_APPS"
+if [[ -L "$TARGET_APP" ]]; then
+  fail "existing $TARGET_APP must not be a symlink."
+fi
+if [[ -e "$TARGET_APP" ]]; then
+  EXISTING_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$TARGET_APP/Contents/Info.plist" 2>/dev/null || true)"
+  [[ "$EXISTING_ID" == "com.picmao.agent-runtime" ]] \
+    || fail "existing $TARGET_APP is not owned by agent-runtime."
+  rm -rf "$TARGET_APP"
+fi
+/usr/bin/ditto "$SOURCE_APP" "$TARGET_APP"
+/usr/bin/codesign --verify --deep --strict "$TARGET_APP" \
+  || fail "installed Agent Runtime.app failed code-signature verification."
+
+echo "[6/7] Installing UI-only login launch configuration..."
+LOGIN_DIR="$HOME/Library/LaunchAgents"
+LOGIN_PLIST="$LOGIN_DIR/com.picmao.agent-runtime-ui.plist"
+mkdir -p "$LOGIN_DIR"
+if [[ -L "$LOGIN_PLIST" ]]; then
+  fail "existing login launch configuration must not be a symlink."
+fi
+if [[ -e "$LOGIN_PLIST" && ! -f "$LOGIN_PLIST" ]]; then
+  fail "existing login launch configuration must be a regular file."
+fi
+cat > "$LOGIN_PLIST" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.picmao.agent-runtime-ui</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$TARGET_APP/Contents/MacOS/AgentRuntimeMenuBar</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+    <key>ProcessType</key>
+    <string>Interactive</string>
+</dict>
+</plist>
+PLIST
+/usr/bin/plutil -lint "$LOGIN_PLIST" >/dev/null \
+  || fail "login launch configuration is invalid."
+
+# Deliberately do not bootstrap the LaunchAgent here. The installer must not
+# start the UI or Runtime as a side effect; the UI will start on the next login.
+echo "[7/7] Installation ready."
 echo "Workspace root: $WORKSPACE_ROOT"
 echo "Tunnel profile: $PROFILE_NAME"
-echo "Next step: keep ./start.sh running in a foreground Terminal when local execution is wanted."
+echo "Native app: $TARGET_APP"
+echo "Login behavior: UI only; Runtime never auto-starts."
+echo "Open Agent Runtime.app and press Start, or use ./start.sh as the CLI fallback."

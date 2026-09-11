@@ -31,5 +31,5 @@ echo "[1/2] Checking agent-runtime tunnel profile..."
 tunnel-client doctor --profile "$PROFILE" --explain
 
 echo
-echo "[2/2] Starting agent-runtime in this foreground Terminal..."
+echo "[2/2] Starting agent-runtime in the foreground..."
 exec tunnel-client run --profile "$PROFILE"

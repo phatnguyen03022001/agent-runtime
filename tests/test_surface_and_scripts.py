@@ -261,5 +261,26 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertNotIn("CONTROL_PLANE_API_KEY", text)
 
 
+    def test_native_app_bundle_is_menu_bar_only(self) -> None:
+        import plistlib
+
+        info = plistlib.loads((ROOT / "macos" / "AppBundle" / "Info.plist").read_bytes())
+        self.assertEqual(info["CFBundleIdentifier"], "com.picmao.agent-runtime")
+        self.assertIs(info["LSUIElement"], True)
+        self.assertEqual(info["CFBundleExecutable"], "AgentRuntimeMenuBar")
+
+    def test_installer_adds_ui_only_login_launch_without_bootstrap_or_runtime_autostart(self) -> None:
+        text = (ROOT / "install.sh").read_text()
+        self.assertIn("com.picmao.agent-runtime-ui", text)
+        self.assertIn("<key>RunAtLoad</key>", text)
+        self.assertIn("<key>KeepAlive</key>", text)
+        self.assertIn("<false/>", text)
+        self.assertIn("Agent Runtime.app", text)
+        self.assertIn("--health.listen-addr 127.0.0.1:0", text)
+        self.assertNotIn("launchctl", text)
+        self.assertNotIn("tunnel-client run", text)
+
+
+
 if __name__ == "__main__":
     unittest.main()
