@@ -1,0 +1,214 @@
+protocol_version: 3
+
+task_id: TASK-0028
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: user_request
+  task_id: ""
+  gap_id: LIVE_TUNNEL_403_CLOSURE
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+architect_analysis_skills:
+  - architect
+  - simplicity
+  - verification
+  - github-workflow
+
+execution_skills:
+  required:
+    - executor
+    - simplicity
+    - verification
+    - github-workflow
+  recommended: []
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "Current operator request: one Executor task must close the Agent Runtime tunnel/403 failure on the current Mac installation, not split it into more implementation tasks."
+    role: "Primary current operator authority for one bounded live-closure task."
+    precedence: 1
+  - source: "phatnguyen03022001/agent-runtime@05dca4a7ffeda3ef12fce540d2bfb674444fdd5f:.agent/tasks/TASK-0027/review.yaml"
+    role: "Accepted stable tunnel-identity and native-discovery implementation. Repository product behavior is accepted; remaining work is current-installation reconciliation plus restart acceptance."
+    precedence: 2
+  - source: "Current-machine read-only evidence captured immediately before this task: Agent Runtime is stopped, port 8080 has no listener, local .env still contains legacy CONTROL_PLANE_TUNNEL_ID and AGENT_RUNTIME_TUNNEL_PROFILE, canonical profile exists, and the legacy .env tunnel identity differs from the canonical profile identity."
+    role: "Volatile starting-state evidence requiring fresh Executor revalidation before mutation."
+    precedence: 3
+  - source: "Operator-provided historical startup/runtime log from 2026-09-11 showing the legacy .env-selected tunnel successfully fetched metadata as Agent Runtime and successfully forwarded terminal_exec calls from ChatGPT."
+    role: "Historical binding evidence for migration-target selection; must be combined with fresh control-plane read-only evidence rather than trusted alone."
+    precedence: 4
+  - source: "phatnguyen03022001/agent-skills@1826d33bd1e467896c133109b37db8b0656b3276:protocols/TASK_PROTOCOL.md"
+    role: "Protocol-v3 execution/evidence/review authority."
+    precedence: 5
+
+structure_authority:
+  status: RESOLVED
+  source: "Accepted TASK-0027 architecture plus current installed ~/.config/tunnel-client/agent-runtime.yaml and repository-local .env"
+  rationale: "No new architecture is required. This task performs one live reconciliation of legacy split-brain state, proves canonical stable identity, and performs restart acceptance."
+
+objective: "Eliminate the current installation's split-brain tunnel identity, restore Agent Runtime startup using the already-accepted canonical profile-file design, and prove that the same ChatGPT conversation can call Agent Runtime before and after one controlled restart without a restart-induced 403."
+
+scope:
+  required_changes:
+    - "Fresh-bind exact TASK-0028 revision 1 and exact dev/main state. Re-resolve accepted TASK-0027 review, current start.sh/install.sh semantics, live .env, canonical ~/.config/tunnel-client/agent-runtime.yaml, current process tree, port 8080, and current control-plane reachability before mutation."
+    - "Use redacted values or fingerprints in evidence. Never print API keys or full secret-bearing configuration. Tunnel IDs may be compared internally but reports should prefer stable short fingerprints unless an exact ID is materially required for operator recovery."
+    - "Determine the one-time migration target fail-closed. The legacy .env tunnel identity may become canonical only if fresh read-only control-plane metadata using the current Runtime key resolves that tunnel as the intended Agent Runtime and this is consistent with the historical successful ChatGPT tool traffic. Read-only-check the currently configured canonical-profile tunnel as well. If evidence is ambiguous or contradicts the expected target, do not mutate either identity; stop BLOCKED with exact redacted evidence."
+    - "When the migration target is proven, atomically update ~/.config/tunnel-client/agent-runtime.yaml so control_plane.tunnel_id equals that proven existing tunnel identity. Preserve all unrelated profile settings and permissions. Do not create, delete, rotate, rename, or clone a tunnel."
+    - "After profile identity is proven correct, remove legacy CONTROL_PLANE_TUNNEL_ID and AGENT_RUNTIME_TUNNEL_PROFILE entries from repository-local .env while preserving CONTROL_PLANE_API_KEY, AGENT_RUNTIME_WORKSPACE_ROOT, unrelated configuration, and mode 0600. This is convergence, not deletion of the tunnel identity: the canonical profile becomes the sole persistent tunnel-ID owner."
+    - "Run the accepted start path exactly through ./start.sh and prove it uses --profile-file ~/.config/tunnel-client/agent-runtime.yaml, starts exactly one tunnel-client and one MCP server, owns one listener on 127.0.0.1:8080, and reaches /healthz=200 plus /readyz=200."
+    - "Use an out-of-band local execution surface that remains available while Agent Runtime is stopped, preferably Remote Desktop Commander, for lifecycle commands and evidence. Do not use Agent Runtime to terminate or restart itself."
+    - "After initial restored startup, in the same ChatGPT conversation invoke one harmless read-only Agent Runtime terminal_exec probe and record success. Then perform exactly one controlled Agent Runtime restart cycle using the already-accepted lifecycle/start path and the out-of-band surface. Do not restart unrelated processes or services."
+    - "After that restart, in the same ChatGPT conversation invoke the same harmless Agent Runtime probe again without reconnecting, recreating, refreshing, or replacing the ChatGPT app/connector/tunnel. PASS requires the call to reach the same logical tunnel identity and complete successfully without 403."
+    - "Prove the canonical tunnel-ID fingerprint is unchanged across the restart, exactly one Runtime/tunnel instance exists afterward, health/readiness are green, the four-tool MCP surface is unchanged, and .env no longer owns tunnel identity."
+    - "If the post-restart call fails with a ChatGPT/developer-MCP capability or authorization 403 while canonical tunnel identity, control-plane authorization, process health, and tool schema remain stable, capture the exact error and classify it as outside the local split-brain mechanism. Do not hide it by recreating the app, connector, tunnel, or API key; stop BLOCKED for Architect judgment."
+    - "Repository product source changes are not expected. If fresh execution proves another product-code defect is required, do not broaden scope locally; stop BLOCKED with minimal reproducer. If no product change is needed, do not manufacture a no-op implementation commit."
+    - "Write .agent/tasks/TASK-0028/report.yaml in English with exact before/after fingerprints, mutation evidence, initial-start proof, same-chat pre/post restart probe result, final process/port/health state, and git state. Publish the report non-force to dev and stop at NEEDS_REVIEW only if all acceptance criteria pass."
+  allowed_existing_files_or_components:
+    - ".agent/tasks/TASK-0028/report.yaml"
+    - "repository-local .env on the authorized current installation"
+    - "~/.config/tunnel-client/agent-runtime.yaml on the authorized current installation"
+    - "current Agent Runtime/tunnel processes solely for the bounded start/restart acceptance described above"
+  expected_files_are_restrictive: true
+
+invariants:
+  - "The intended existing ChatGPT Agent Runtime tunnel is preserved; no tunnel ID rotation, recreation, fallback identity, or alternate tunnel is introduced."
+  - "After convergence, ~/.config/tunnel-client/agent-runtime.yaml is the sole persistent owner of tunnel identity; repository .env contains no CONTROL_PLANE_TUNNEL_ID and no AGENT_RUNTIME_TUNNEL_PROFILE selector."
+  - "CONTROL_PLANE_API_KEY and AGENT_RUNTIME_WORKSPACE_ROOT remain configured and are never printed in report evidence."
+  - "Canonical startup remains `tunnel-client run --profile-file ~/.config/tunnel-client/agent-runtime.yaml` through ./start.sh."
+  - "Exactly one tunnel-client Runtime and one agent_runtime.server serve the installation after acceptance; port 8080 has one intended listener."
+  - "The same logical tunnel identity survives the authorized restart cycle unchanged."
+  - "Same-chat Agent Runtime tool access must survive the restart without connector/app recreation for PASS."
+  - "TASK-0027 accepted production code, native lifecycle safety, Python MCP semantics, and exactly four public tools remain unchanged."
+  - "No daemon, watchdog, Docker/OrbStack manager, alternate process supervisor, database, registry, reconnect loop, or automatic connector repair is introduced."
+  - "main, tags, releases, repository metadata, sibling repositories, ChatGPT app identity, connector binding, API keys, and control-plane tunnel objects are not mutated."
+
+forbidden_changes:
+  - "Do not create/delete/rotate/rename/clone tunnels, Runtime keys, ChatGPT apps/connectors, app versions, or permissions."
+  - "Do not change the ChatGPT connector/app binding merely to make acceptance pass. No disconnect/reconnect, Refresh, recreate, reauthorize, or alternate app is allowed during the same-chat restart proof."
+  - "Do not change start.sh, install.sh, .env.example, README.md, Swift/Python production source, requirements, dependencies, tests, prior tasks/reports/reviews, or product architecture in this task."
+  - "Do not restart or signal unrelated processes/services. The only lifecycle authority is the bounded Agent Runtime start needed to restore service and exactly one controlled Agent Runtime restart cycle for acceptance."
+  - "Do not use Agent Runtime itself as the sole control channel for its own restart."
+  - "Do not expose API keys, secrets, or private operator data in terminal output, report.yaml, commit messages, or chat."
+  - "Do not force-push, rewrite history, create branches, move main, create tags/releases, or mutate sibling repositories."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0028/report.yaml"
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "Operational closure only; no new product structure."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Migration target is proven rather than guessed."
+    evidence_required: "Fresh redacted/fingerprint comparison of legacy .env identity and canonical profile identity plus read-only control-plane metadata for both; selected target must resolve as the intended Agent Runtime and align with prior successful ChatGPT traffic."
+  - id: AC-2
+    requirement: "Current installation is converged to one persistent tunnel identity owner."
+    evidence_required: "After atomic migration, canonical profile contains the proven existing tunnel identity; .env contains neither CONTROL_PLANE_TUNNEL_ID nor AGENT_RUNTIME_TUNNEL_PROFILE; API key/workspace configuration remain present; permissions are preserved."
+  - id: AC-3
+    requirement: "Agent Runtime starts cleanly through the accepted canonical path."
+    evidence_required: "./start.sh succeeds with --profile-file; exactly one tunnel-client and one MCP server are present; one 127.0.0.1:8080 listener exists; /healthz and /readyz return 200; control-plane metadata remains the intended Agent Runtime."
+  - id: AC-4
+    requirement: "Same-chat pre-restart Agent Runtime access works."
+    evidence_required: "One harmless terminal_exec probe from the active Executor conversation completes successfully after restored startup before the restart cycle."
+  - id: AC-5
+    requirement: "Restart no longer causes the historical 403 for the same conversation."
+    evidence_required: "Using an out-of-band control surface, perform exactly one controlled Agent Runtime restart. Without connector/app refresh or recreation, the same ChatGPT conversation successfully invokes the same harmless Agent Runtime probe afterward."
+  - id: AC-6
+    requirement: "Identity and topology are stable across restart."
+    evidence_required: "Canonical tunnel-ID fingerprint before and after restart is identical; final state has exactly one tunnel-client, one MCP server, one intended 8080 listener, healthy/readiness 200, and exact four-tool surface unchanged."
+  - id: AC-7
+    requirement: "No hidden platform-side workaround or unrelated mutation occurred."
+    evidence_required: "Explicit evidence that no ChatGPT connector/app, tunnel object, API key, main/tag/release, dependency, or product source was mutated. If post-restart 403 persists despite stable local evidence, result is BLOCKED rather than masked by reconnect/recreate actions."
+  - id: AC-8
+    requirement: "Operational evidence is durable and reviewable."
+    evidence_required: "TASK-0028 report validates under the pinned protocol, binds the exact task/base, records redacted before/after evidence and same-chat restart outcome, is the only repository change after the task base, is published non-force to dev, main remains unchanged, and result is NEEDS_REVIEW only when AC-1 through AC-7 pass."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Fresh-prove exact task/base/dev/main, accepted TASK-0027 review, clean repository state, current stopped/running Runtime state, port 8080 state, legacy .env identity fingerprint, canonical profile identity fingerprint, and required out-of-band control capability before any live mutation."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Read-only resolve both candidate tunnel identities with the current Runtime key and prove the migration target. If ambiguous, stop BLOCKED before mutation."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Perform one-time atomic profile/.env convergence, verify permissions and sole-owner invariant, then restore startup through ./start.sh and prove process/port/health/control-plane state."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Same-chat harmless Agent Runtime probe succeeds; out-of-band perform exactly one controlled restart; same-chat probe succeeds again with unchanged tunnel fingerprint and no connector/app refresh."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Prove final exact four-tool surface, single-instance topology, healthy/readiness state, no forbidden mutations, report validation/publication, final dev, unchanged main, and NEEDS_REVIEW."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+
+capability_requirements:
+  EXECUTION:
+    - repository_content_read
+    - repository_content_write
+    - local_file_read
+    - local_file_write
+    - local_process_read
+    - local_process_control
+    - local_network_read
+    - out_of_band_local_execution
+    - agent_runtime_tool_call
+    - git_history_read
+    - git_commit
+    - non_force_git_push
+    - remote_ref_read
+    - repository_metadata_read
+  REVIEW:
+    - repository_content_read
+    - git_history_read
+    - remote_ref_read
+    - repository_metadata_read
+    - repository_content_write
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
