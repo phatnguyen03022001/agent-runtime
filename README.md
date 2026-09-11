@@ -4,7 +4,7 @@
 
 ## Lifecycle
 
-Run `./install.sh` once to prepare the checkout-local `.venv` and `.env`, preserve the existing `agent-runtime` tunnel-client profile, build/install `~/Applications/Agent Runtime.app`, and write a UI-only login LaunchAgent. Installation does not start, stop, restart, signal, replace, or rebind Runtime.
+Run `./install.sh` once to prepare the checkout-local `.venv` and `.env`, preserve the canonical `~/.config/tunnel-client/agent-runtime.yaml` profile, build/install `~/Applications/Agent Runtime.app`, and write a UI-only login LaunchAgent. The canonical YAML profile is the sole persistent owner of the tunnel identity; `.env` stores only the runtime API key and workspace root. Installation does not start, stop, restart, signal, replace, or rebind Runtime.
 
 Normal use is the menu-bar app:
 
@@ -13,11 +13,13 @@ Normal use is the menu-bar app:
 - **Restart** is the same explicit owned Stop followed by Start.
 - App launch, login launch, status refresh, relaunch, timers, health observation, and error handling never start or repair Runtime automatically.
 
-The login LaunchAgent starts only `Agent Runtime.app` at the next macOS login and has `KeepAlive=false`. It never starts the tunnel or MCP runtime. `./start.sh` remains a supported foreground CLI fallback and rollback path.
+The login LaunchAgent starts only `Agent Runtime.app` at the next macOS login and has `KeepAlive=false`. It never starts the tunnel or MCP runtime. `./start.sh` remains a supported foreground CLI fallback and rollback path. Both doctor and run use the exact canonical profile file under a sanitized child environment, so ambient tunnel/config/profile selectors cannot redirect the effective identity.
 
 If an `agent-runtime` tunnel is already running outside the app, the menu-bar UI reports it as **Running externally** and disables destructive lifecycle controls. The app never adopts, signals, kills, restarts, or reclaims that process. A listener, PID, or process-name match alone is never destructive ownership proof.
 
 For app-owned Runtime instances, ownership is revalidated from a persisted record containing the exact PID, process-group ID, process start time, executable path, tunnel profile, and checkout root. PID reuse or stale/ambiguous metadata fails closed. No control-plane credentials are copied into Swift preferences, plist files, logs, or ownership metadata.
+
+Legacy installations converge deterministically: a matching `.env` tunnel ID is removed, a mismatched `.env`/profile pair fails closed and requires an explicit migration decision, and a missing canonical profile may be bootstrapped only from one unambiguous identity during installation. Existing valid canonical profile bytes are preserved across reinstall/update.
 
 ## Tool surface
 

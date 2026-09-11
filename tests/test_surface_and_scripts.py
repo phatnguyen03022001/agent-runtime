@@ -227,7 +227,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
 
     def test_start_is_foreground_tunnel_only(self) -> None:
         text = (ROOT / "start.sh").read_text()
-        self.assertIn('exec tunnel-client run --profile "$PROFILE"', text)
+        self.assertIn('exec "${TUNNEL_ENV[@]}" "$TUNNEL_CLIENT" run --profile-file "$PROFILE_FILE"', text)
         for forbidden in ("nohup", "launchctl", "LaunchAgent", "daemon"):
             self.assertNotIn(forbidden, text)
         for line in text.splitlines():
