@@ -6,12 +6,19 @@ public protocol RuntimeDiscovering: AnyObject {
 
 public final class PSRuntimeDiscovery: RuntimeDiscovering, @unchecked Sendable {
     private let inspector: ProcessInspecting
+    private let processListProvider: () throws -> String
 
     public init(inspector: ProcessInspecting) {
         self.inspector = inspector
+        self.processListProvider = Self.readProcessList
     }
 
-    public func matchingRuntimePIDs(profile: String) throws -> [Int32] {
+    init(inspector: ProcessInspecting, processListProvider: @escaping () throws -> String) {
+        self.inspector = inspector
+        self.processListProvider = processListProvider
+    }
+
+    private static func readProcessList() throws -> String {
         let process = Process()
         let pipe = Pipe()
         process.executableURL = URL(fileURLWithPath: "/bin/ps")
@@ -29,20 +36,32 @@ public final class PSRuntimeDiscovery: RuntimeDiscovering, @unchecked Sendable {
         }
 
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(decoding: data, as: UTF8.self)
-        let marker = "tunnel-client run --profile \(profile)"
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    public func matchingRuntimePIDs(profile: String) throws -> [Int32] {
+        let output = try processListProvider()
         return output.split(whereSeparator: \.isNewline).compactMap { rawLine in
             let line = rawLine.trimmingCharacters(in: .whitespaces)
             guard let separator = line.firstIndex(where: { $0.isWhitespace }) else { return nil }
             guard let pid = Int32(line[..<separator]) else { return nil }
             let command = line[separator...].trimmingCharacters(in: .whitespaces)
-            guard command.contains(marker),
+            guard Self.matchesRuntimeCommand(command, profile: profile),
                   let identity = inspector.snapshot(pid: pid),
                   URL(fileURLWithPath: identity.executablePath).lastPathComponent == "tunnel-client" else {
                 return nil
             }
             return pid
         }.sorted()
+    }
+
+    private static func matchesRuntimeCommand(_ command: String, profile: String) -> Bool {
+        guard let separator = command.firstIndex(where: { $0.isWhitespace }) else { return false }
+        let arguments = command[separator...].trimmingCharacters(in: .whitespaces)
+        let canonicalProfileFile = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/tunnel-client/\(profile).yaml").path
+        return arguments == "run --profile-file \(canonicalProfileFile)"
+            || arguments == "run --profile \(profile)"
     }
 }
 

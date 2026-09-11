@@ -57,6 +57,154 @@ final class OwnershipTests: XCTestCase {
         XCTAssertTrue(signaler.signals.isEmpty)
     }
 
+    func testProductionDiscoveryRecognizesCanonicalProfileFileInvocation() throws {
+        let pid: Int32 = 9002
+        let profilePath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/tunnel-client/agent-runtime.yaml").path
+        let inspector = FakeInspector(snapshot: ProcessIdentity(
+            pid: pid,
+            processGroupID: pid,
+            startSeconds: 1,
+            startMicroseconds: 1,
+            executablePath: "/opt/homebrew/bin/tunnel-client"
+        ))
+        let discovery = PSRuntimeDiscovery(
+            inspector: inspector,
+            processListProvider: { "\(pid) /opt/homebrew/bin/tunnel-client run --profile-file \(profilePath)\n" }
+        )
+
+        XCTAssertEqual(try discovery.matchingRuntimePIDs(profile: "agent-runtime"), [pid])
+    }
+
+    func testProductionDiscoveryRejectsDifferentProfileFilePath() throws {
+        let pid: Int32 = 9003
+        let inspector = FakeInspector(snapshot: ProcessIdentity(
+            pid: pid,
+            processGroupID: pid,
+            startSeconds: 1,
+            startMicroseconds: 1,
+            executablePath: "/opt/homebrew/bin/tunnel-client"
+        ))
+        let discovery = PSRuntimeDiscovery(
+            inspector: inspector,
+            processListProvider: { "\(pid) /opt/homebrew/bin/tunnel-client run --profile-file /tmp/other.yaml\n" }
+        )
+
+        XCTAssertEqual(try discovery.matchingRuntimePIDs(profile: "agent-runtime"), [])
+    }
+
+    func testProductionDiscoveryRejectsDifferentLegacyProfile() throws {
+        let pid: Int32 = 9007
+        let inspector = FakeInspector(snapshot: ProcessIdentity(
+            pid: pid,
+            processGroupID: pid,
+            startSeconds: 1,
+            startMicroseconds: 1,
+            executablePath: "/opt/homebrew/bin/tunnel-client"
+        ))
+        let discovery = PSRuntimeDiscovery(
+            inspector: inspector,
+            processListProvider: { "\(pid) /opt/homebrew/bin/tunnel-client run --profile other-profile\n" }
+        )
+
+        XCTAssertEqual(try discovery.matchingRuntimePIDs(profile: "agent-runtime"), [])
+    }
+
+    func testProductionDiscoveryRejectsUnrelatedTunnelClientCommand() throws {
+        let pid: Int32 = 9004
+        let profilePath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/tunnel-client/agent-runtime.yaml").path
+        let inspector = FakeInspector(snapshot: ProcessIdentity(
+            pid: pid,
+            processGroupID: pid,
+            startSeconds: 1,
+            startMicroseconds: 1,
+            executablePath: "/opt/homebrew/bin/tunnel-client"
+        ))
+        let discovery = PSRuntimeDiscovery(
+            inspector: inspector,
+            processListProvider: { "\(pid) /opt/homebrew/bin/tunnel-client doctor --profile-file \(profilePath)\n" }
+        )
+
+        XCTAssertEqual(try discovery.matchingRuntimePIDs(profile: "agent-runtime"), [])
+    }
+
+    func testProductionDiscoveryRequiresTunnelClientExecutableIdentity() throws {
+        let pid: Int32 = 9005
+        let profilePath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/tunnel-client/agent-runtime.yaml").path
+        let inspector = FakeInspector(snapshot: ProcessIdentity(
+            pid: pid,
+            processGroupID: pid,
+            startSeconds: 1,
+            startMicroseconds: 1,
+            executablePath: "/usr/bin/python3"
+        ))
+        let discovery = PSRuntimeDiscovery(
+            inspector: inspector,
+            processListProvider: { "\(pid) /tmp/tunnel-client run --profile-file \(profilePath)\n" }
+        )
+
+        XCTAssertEqual(try discovery.matchingRuntimePIDs(profile: "agent-runtime"), [])
+    }
+
+    func testCanonicalExternalDiscoveryIsReadOnlyAndCannotDoubleStart() throws {
+        let pid: Int32 = 9006
+        let profilePath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/tunnel-client/agent-runtime.yaml").path
+        let identity = ProcessIdentity(
+            pid: pid,
+            processGroupID: pid,
+            startSeconds: 1,
+            startMicroseconds: 1,
+            executablePath: "/opt/homebrew/bin/tunnel-client"
+        )
+        let inspector = FakeInspector(snapshot: identity)
+        let signaler = RecordingSignaler()
+        let store = MemoryStore(record: nil)
+        let supervisor = OwnedProcessSupervisor(
+            inspector: inspector,
+            signaler: signaler,
+            store: store,
+            launcher: FailingLauncher()
+        )
+        let discovery = PSRuntimeDiscovery(
+            inspector: inspector,
+            processListProvider: { "\(pid) /opt/homebrew/bin/tunnel-client run --profile-file \(profilePath)\n" }
+        )
+        let backend = NativeRuntimeBackend(
+            configuration: RuntimeConfiguration(checkoutRoot: "/tmp/fixture", profile: "agent-runtime"),
+            inspector: inspector,
+            store: store,
+            supervisor: supervisor,
+            discovery: discovery
+        )
+        let controller = RuntimeController(backend: backend)
+
+        XCTAssertEqual(controller.refresh(), .external([pid]))
+        XCTAssertEqual(controller.start(), .failure(.actionUnavailable("Start is unavailable for the current Runtime state.")))
+        XCTAssertEqual(controller.stop(), .failure(.actionUnavailable("Stop is available only for a positively app-owned Runtime.")))
+        XCTAssertEqual(controller.restart(), .failure(.actionUnavailable("Restart is available only for a positively app-owned Runtime.")))
+        XCTAssertTrue(signaler.signals.isEmpty)
+    }
+
+    func testProductionDiscoveryRecognizesLegacyExactProfileInvocation() throws {
+        let pid: Int32 = 9001
+        let inspector = FakeInspector(snapshot: ProcessIdentity(
+            pid: pid,
+            processGroupID: pid,
+            startSeconds: 1,
+            startMicroseconds: 1,
+            executablePath: "/opt/homebrew/bin/tunnel-client"
+        ))
+        let discovery = PSRuntimeDiscovery(
+            inspector: inspector,
+            processListProvider: { "\(pid) /opt/homebrew/bin/tunnel-client run --profile agent-runtime\n" }
+        )
+
+        XCTAssertEqual(try discovery.matchingRuntimePIDs(profile: "agent-runtime"), [pid])
+    }
+
     func testStaleRecordWithObservedExternalRuntimeRemainsReadOnly() throws {
         let original = identity(pid: 777, seconds: 100)
         let reused = identity(pid: 777, seconds: 101)
