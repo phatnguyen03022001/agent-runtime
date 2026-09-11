@@ -1,0 +1,98 @@
+protocol_version: 3
+
+task_id: TASK-0026
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0026/task.yaml
+  commit: "98a8bc0d758d07d75b75e8e6587084580fc4b2f5"
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+  authorized_base_head: "98a8bc0d758d07d75b75e8e6587084580fc4b2f5"
+  final_execution_head: "d055e9eaf8eb39c57b2d9e09f684f356f42cb3ba"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - repository_content_read
+    - repository_content_write
+    - native_repository_execution
+    - native_macos_swift_build
+    - local_process_fixture_execution
+    - local_app_bundle_inspection
+    - git_history_read
+    - git_commit
+    - non_force_git_push
+    - remote_ref_read
+    - repository_metadata_read
+  available:
+    - repository_content_read
+    - repository_content_write
+    - native_repository_execution
+    - native_macos_swift_build
+    - local_process_fixture_execution
+    - local_app_bundle_inspection
+    - git_history_read
+    - git_commit
+    - non_force_git_push
+    - remote_ref_read
+    - repository_metadata_read
+  missing: []
+  passed: true
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: NOT_REQUIRED
+  evidence: "TASK-0026 declares no separate authoritative verification mechanism."
+
+pushed: true
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PROVEN
+    evidence: "Candidate d055e9eaf8eb39c57b2d9e09f684f356f42cb3ba adds a dependency-free Swift/AppKit LSUIElement menu-bar app. Release build and macos/package_app.sh passed; build/Agent Runtime.app passed strict deep codesign verification. A bounded launch created only the task-owned menu-bar process PID 23303 while the pre-existing operator Runtime remained PID/PGID 11672 with the same Fri Sep 11 15:37:47 2026 start time; the task-owned app process was then terminated without signaling Runtime."
+  - criterion_id: AC-2
+    status: PROVEN
+    evidence: "RuntimeLifecycleTests prove refresh never mutates lifecycle, external Runtime refuses Start/Stop/Restart mutation, stopped Runtime changes only after explicit Start, and Restart is allowed only for app-owned state. AppDelegate timers call refresh only; lifecycle methods are reachable only from direct UI button actions."
+  - criterion_id: AC-3
+    status: PROVEN
+    evidence: "Ownership uses PID, PGID, process start time, exact executable path, profile, and checkout root. Native tests prove matching persisted identity revalidates after app relaunch, PID reuse/stale identity never signals, externally observed Runtime remains read-only, and a synthetic two-process owned group is fully terminated with ownership metadata removed. TERM-to-KILL escalation refuses newly ambiguous group members."
+  - criterion_id: AC-4
+    status: PROVEN
+    evidence: "Repository-native ./verify passed 51 Python tests plus py_compile/bash syntax. Static AST proof still resolves exactly terminal_exec, terminal_start, terminal_poll, terminal_control; git diff proved agent_runtime/, requirements.txt, and verify are unchanged. No Python MCP lifecycle tool or semantic-core change was introduced."
+  - criterion_id: AC-5
+    status: PROVEN
+    evidence: "macos/package_app.sh reproducibly builds/signs the app. ./install.sh passed end-to-end while the live Runtime stayed untouched, installed ~/Applications/Agent Runtime.app with valid signature, and wrote ~/Library/LaunchAgents/com.picmao.agent-runtime-ui.plist with RunAtLoad=true and KeepAlive=false. Installer validation uses a loopback ephemeral health port so it never requires stopping the live Runtime on canonical 8080. start.sh remains the supported CLI fallback with unchanged tunnel launch semantics."
+  - criterion_id: AC-6
+    status: PROVEN
+    evidence: "macos/Package.swift has no third-party package dependency. Static source checks found no launchctl control, AppleScript, NWListener/server surface, desired-running/reconcile loop, secret names, or KeepAlive behavior in Swift. Runtime detection of externally started tunnel-client is observation-only and cannot grant destructive ownership."
+  - criterion_id: AC-7
+    status: NOT_PROVEN
+    evidence: "Implementation candidate d055e9eaf8eb39c57b2d9e09f684f356f42cb3ba was non-force pushed after a fresh dev=98a8bc0d758d07d75b75e8e6587084580fc4b2f5 guard and post-push remote dev resolved to the candidate while main remained c49d777efa09db7f6c51bd8d8616db4623499fb8. This report is validated before its own commit; report-only direct-child lineage, final report publication, final dev identity, and unchanged main are intentionally proven after report publication rather than self-attested here."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Fresh binding proved owner/repo phatnguyen03022001/agent-runtime, branch dev, exact base 98a8bc0d758d07d75b75e8e6587084580fc4b2f5, main c49d777efa09db7f6c51bd8d8616db4623499fb8, TASK-0026 revision 1, and locked agent-skills revision 1826d33bd1e467896c133109b37db8b0656b3276. Live operator Runtime PID 11672 was classified as protected infrastructure and was never used as a lifecycle fixture."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "xcrun swift test --package-path macos passed 9 tests; xcrun swift build --package-path macos -c release passed; macos/package_app.sh and strict bundle signature checks passed; ./verify passed all 51 Python tests; shell syntax and git diff --check passed. Actual installer execution also passed without lifecycle mutation of the live Runtime."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "Static proof confirms the exact four MCP tools/signatures remain registered, runtime core/requirements/verify have no diff, SwiftPM has no external dependencies, packaged Info.plist has LSUIElement=true, login launch has KeepAlive=false, and forbidden control/secret surfaces are absent from native source."
+  - check_id: CHECK-4
+    result: NOT_PROVEN
+    evidence: "The implementation candidate is already remote-visible on dev and main is unchanged. The report is validated before its own commit; report-only direct-child parentage and final remote dev/main proof are intentionally resolved after this report commit is published."
+
+result: NEEDS_REVIEW
