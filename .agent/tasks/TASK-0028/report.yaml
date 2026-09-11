@@ -1,0 +1,110 @@
+protocol_version: 3
+
+task_id: TASK-0028
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0028/task.yaml
+  commit: "960fe518b44687daad2967488e9c9f5a6bb36723"
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+  authorized_base_head: "960fe518b44687daad2967488e9c9f5a6bb36723"
+  final_execution_head: "960fe518b44687daad2967488e9c9f5a6bb36723"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - repository_content_read
+    - repository_content_write
+    - local_file_read
+    - local_file_write
+    - local_process_read
+    - local_process_control
+    - local_network_read
+    - out_of_band_local_execution
+    - agent_runtime_tool_call
+    - git_history_read
+    - git_commit
+    - non_force_git_push
+    - remote_ref_read
+    - repository_metadata_read
+  available:
+    - repository_content_read
+    - repository_content_write
+    - local_file_read
+    - local_file_write
+    - local_process_read
+    - local_process_control
+    - local_network_read
+    - out_of_band_local_execution
+    - agent_runtime_tool_call
+    - git_history_read
+    - git_commit
+    - non_force_git_push
+    - remote_ref_read
+    - repository_metadata_read
+  missing: []
+  passed: true
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: NOT_REQUIRED
+  evidence: "TASK-0028 revision 1 declares no separate authoritative verifier."
+
+pushed: false
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PROVEN
+    evidence: "Fresh pre-mutation comparison found legacy .env fingerprint 6aa2b81d6dd8 and canonical-profile fingerprint 4411a0901366. Read-only control-plane metadata with the existing Runtime credential returned HTTP 200 for 6aa2b81d6dd8 with name 'Agent Runtime' and description 'Tunnel and Plugin for ChatGPT', while 4411a0901366 returned HTTP 403. The selected target therefore preserved the existing tunnel already consistent with successful ChatGPT tool traffic rather than guessing or creating a new identity."
+  - criterion_id: AC-2
+    status: PROVEN
+    evidence: "The canonical profile was atomically converged to fingerprint 6aa2b81d6dd8 while preserving unrelated settings and mode 0600. Repository .env now contains neither CONTROL_PLANE_TUNNEL_ID nor AGENT_RUNTIME_TUNNEL_PROFILE, keeps CONTROL_PLANE_API_KEY and AGENT_RUNTIME_WORKSPACE_ROOT configured without disclosure, and remains mode 0600."
+  - criterion_id: AC-3
+    status: PROVEN
+    evidence: "Accepted ./start.sh launched tunnel-client with `run --profile-file /Users/tienphat/.config/tunnel-client/agent-runtime.yaml`. Startup metadata resolved the intended Agent Runtime tunnel; one tunnel-client, one child `python -m agent_runtime.server`, and one 127.0.0.1:8080 listener were observed; /healthz and /readyz returned 200. Repository-native ./verify passed 60/60, including the exact four-tool public MCP surface and canonical profile-file startup tests."
+  - criterion_id: AC-4
+    status: PROVEN
+    evidence: "Before restart, this same Executor conversation invoked Agent Runtime terminal_exec with the harmless literal argv `/usr/bin/printf same-chat-probe\\n`; the call reached Agent Runtime and completed with exit_code 0, stdout `same-chat-probe`. No developer-MCP binding rejection occurred."
+  - criterion_id: AC-5
+    status: PROVEN
+    evidence: "Using Remote Desktop Commander, the exact serving tunnel-client PID and its MCP child were identified before signaling. Exactly one controlled restart cycle was performed: the task-owned tunnel process was terminated, its MCP child exited, port 8080 cleared, then ./start.sh restored the service. Without reconnecting, refreshing, recreating, replacing, or reauthorizing any ChatGPT app/connector/tunnel/key, the same conversation invoked the same harmless Agent Runtime terminal_exec probe again and received exit_code 0 with stdout `same-chat-probe`. Classification: RESTART_403_ROOT_CAUSE_CLOSED."
+  - criterion_id: AC-6
+    status: PROVEN
+    evidence: "Canonical tunnel fingerprint remained 6aa2b81d6dd8 across the restart. Final live proof shows one tunnel-client PID 64974, one child MCP server PID 64984 running `python -m agent_runtime.server`, one 127.0.0.1:8080 listener, /healthz=200, /readyz=200, and repository verification 60/60 proving the exact four-tool MCP surface remains unchanged."
+  - criterion_id: AC-7
+    status: PROVEN
+    evidence: "No ChatGPT connector/app/app-version, control-plane tunnel object, Runtime/API key, public MCP tool, dependency, product source, main ref, tag, release, repository metadata, sibling repository, Docker/OrbStack service, or unrelated process was mutated. Secure MCP Tunnel and tunnel-client remain the intended ChatGPT-to-local transport. No reconnect/recreate/refresh workaround was used."
+  - criterion_id: AC-8
+    status: NOT_PROVEN
+    evidence: "Before this report commit, HEAD and remote dev remain exact authorized base 960fe518b44687daad2967488e9c9f5a6bb36723, remote main remains c49d777efa09db7f6c51bd8d8616db4623499fb8, and this report is the only repository change. The report is validated before its own commit; report-only direct-child lineage, final remote dev identity, unchanged main, and final publication are proven after publication rather than self-attested inside the commit that contains this report."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Fresh binding proved local/remote dev at exact base 960fe518b44687daad2967488e9c9f5a6bb36723, main c49d777efa09db7f6c51bd8d8616db4623499fb8, TASK-0028 revision 1, accepted TASK-0027 review, canonical start.sh semantics, live profile/.env/process/port state, and out-of-band Remote Desktop Commander lifecycle capability before mutation."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "Read-only control-plane comparison distinguished the two identities: legacy fingerprint 6aa2b81d6dd8 resolved HTTP 200 as the intended Agent Runtime, while old profile fingerprint 4411a0901366 returned HTTP 403; migration target was therefore unambiguous."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "One-time convergence preserved profile/.env permissions and made the canonical profile the sole persistent tunnel-ID owner. ./start.sh restored service through the accepted profile-file path with intended control-plane metadata, one tunnel-client, one MCP server, one 8080 listener, and green health/readiness."
+  - check_id: CHECK-4
+    result: PASS
+    evidence: "Same-chat Agent Runtime probe succeeded before restart; exactly one out-of-band controlled restart was performed; the identical same-chat probe succeeded afterward with unchanged fingerprint 6aa2b81d6dd8 and no connector/app refresh or replacement."
+  - check_id: CHECK-5
+    result: NOT_PROVEN
+    evidence: "Final live state already proves one tunnel-client, one MCP child, one intended 8080 listener, health/readiness 200, exact four-tool surface via ./verify 60/60, no forbidden workaround, and report-only local diff. Report validation, non-force publication, final dev identity, and unchanged main are resolved immediately after this report authorship."
+
+result: NEEDS_REVIEW
