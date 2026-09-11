@@ -1,0 +1,209 @@
+protocol_version: 3
+
+task_id: TASK-0027
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: user_request
+  task_id: ""
+  gap_id: STABLE_TUNNEL_IDENTITY_CHATGPT_403
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+architect_analysis_skills:
+  - architect
+  - simplicity
+  - verification
+  - github-workflow
+
+execution_skills:
+  required:
+    - executor
+    - simplicity
+    - verification
+    - github-workflow
+  recommended: []
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "Current operator request: normal Agent Runtime restart, reboot, repository update, rebuild, reinstall, or native-app lifecycle must preserve one logical OpenAI tunnel identity and must not require ChatGPT connector recreation when MCP contract and authorization are unchanged."
+    role: "Primary product authority for stable tunnel identity, lifecycle invariants, fail-closed migration, and separation of implementation restart from MCP contract change."
+    precedence: 1
+  - source: "Architect read-only reproduction on 2026-09-11 against tunnel-client 0.0.11: checkout .env and ~/.config/tunnel-client/agent-runtime.yaml held different tunnel IDs; start.sh exported the .env ID; the running tunnel-client inherited that ID; config precedence is flags > environment > YAML > defaults; the .env identity was readable by the current runtime key and the YAML identity returned 403."
+    role: "Freshly reproduced defect evidence establishing split-brain identity ownership and effective environment override. Executor must independently reproduce the relevant predicates before mutation without printing secret or tunnel-ID literals into task evidence."
+    precedence: 2
+  - source: "phatnguyen03022001/agent-runtime@6b8218925f16b602159784f8334d77e68d2311ac:.agent/tasks/TASK-0026/review.yaml"
+    role: "Accepted native menu-bar lifecycle boundary. Preserve explicit operator actions, external Runtime read-only behavior, positive ownership checks, UI-only login launch, and the existing live Runtime protection boundary."
+    precedence: 3
+  - source: "phatnguyen03022001/agent-runtime@6b8218925f16b602159784f8334d77e68d2311ac:start.sh"
+    role: "Current canonical CLI/native-app startup path whose environment/profile selection permits the reproduced split-brain identity."
+    precedence: 4
+  - source: "phatnguyen03022001/agent-runtime@6b8218925f16b602159784f8334d77e68d2311ac:install.sh"
+    role: "Current installer persists CONTROL_PLANE_TUNNEL_ID into .env while preserving an existing profile, allowing identity divergence and validating under the overriding environment."
+    precedence: 5
+  - source: "phatnguyen03022001/agent-skills@1826d33bd1e467896c133109b37db8b0656b3276:protocols/TASK_PROTOCOL.md"
+    role: "Exact protocol-v3 task, evidence, execution, publication, and review authority."
+    precedence: 6
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing start.sh/install.sh configuration boundary plus one focused regression module"
+  rationale: "The defect is duplicate ownership and precedence leakage, not missing infrastructure. Correct the existing shell/configuration path directly; keep the native Swift app delegating to start.sh and introduce no daemon, database, connector manager, tunnel abstraction, service, or dependency."
+
+objective: "Make ~/.config/tunnel-client/agent-runtime.yaml the sole persistent owner of Agent Runtime's tunnel identity, remove repository-local and ambient environment paths that can silently replace that identity, preserve the exact identity across normal lifecycle/update/reinstall operations, and provide deterministic fail-closed handling for legacy split-brain installations without mutating the currently serving Runtime or guessing a migration target."
+
+scope:
+  required_changes:
+    - "Fresh-bind TASK-0027 revision 1 at its exact handoff base. Before mutation, fresh-resolve dev/main, TASK-0026 accepted review, current start/install/.env.example behavior, tunnel-client version/help relevant to config precedence, clean target state, and required local execution capability. Reproduce the split-brain class using redacted/hash-only identity evidence; never print API-key literals or full tunnel IDs into report evidence."
+    - "Establish the product-fixed canonical tunnel profile name `agent-runtime` and canonical profile location under the operator HOME configuration directory. The profile YAML becomes the only persistent owner of `control_plane.tunnel_id`; repository .env must no longer store or independently select the tunnel ID or profile identity."
+    - "Change startup so both `tunnel-client doctor` and `tunnel-client run` execute from the same sanitized, explicitly constructed environment and exact canonical profile selection. Ambient configuration/identity selectors, including CONTROL_PLANE_TUNNEL_ID, TUNNEL_CLIENT_CONFIG, TUNNEL_CLIENT_PROFILE, TUNNEL_CLIENT_PROFILE_FILE, TUNNEL_CLIENT_PROFILE_DIR, XDG_CONFIG_HOME, and equivalent currently documented precedence paths, must not silently redirect effective tunnel identity or profile source."
+    - "Keep runtime secrets and checkout-local configuration narrow. Runtime startup must obtain the control-plane runtime API key from the installed checkout configuration rather than depending on arbitrary ambient shell inheritance, and must preserve the existing absolute workspace-root validation. Do not log, echo, export to reports, or persist new copies of secret values."
+    - "Correct install behavior so an existing valid canonical profile is preserved exactly during ordinary install/reinstall/update. Ordinary installation must never create another tunnel identity, replace the canonical tunnel ID, persist a second tunnel ID in .env, or validate one identity while the profile contains another."
+    - "Define deterministic legacy convergence. If a legacy .env tunnel ID equals the canonical profile ID, converge by removing the duplicate repository-local identity while preserving the profile. If both exist and differ, fail closed before identity mutation and return a clear migration-required result; do not choose either ID automatically. If the canonical profile is missing, permit only explicit first-time bootstrap from one unambiguous operator-supplied/legacy identity under existing install authority; if identity is absent or ambiguous, fail clearly. Malformed/non-regular/symlink profile state must fail closed."
+    - "Do not perform the current machine's live legacy A/B tunnel migration under this task. The known serving Runtime, canonical profile bytes, ChatGPT connector binding, and live .env tunnel identity are read-only production state during execution. This task implements and verifies safe future behavior and migration detection only; choosing/mutating the current canonical tunnel ID requires separate explicit operator authorization after implementation review."
+    - "Preserve TASK-0026 native lifecycle architecture. The native app must continue to launch the exact checkout start.sh path with a narrow child environment; UI launch, login launch, refresh, timers, install, health checks, and app rebuild/reinstall must not start/stop/restart/signal Runtime except through existing explicit operator lifecycle actions. No production Swift change is required unless Executor proves one is necessary to satisfy a TASK-0027 acceptance predicate."
+    - "Keep ./start.sh as the CLI fallback and keep the Python MCP core/public tool surface unchanged. Implementation-only code changes that do not alter MCP tool names or schemas must not rotate or recreate the tunnel identity."
+    - "Add deterministic regression coverage using isolated fixtures/fake tunnel-client capture where appropriate. Tests must prove effective argv/environment/profile selection, not merely static file text, and must not require live OpenAI credentials or mutation of the operator's live Runtime/profile."
+    - "Run focused regressions, Swift verification needed to preserve TASK-0026 integration, repository-native ./verify, shell syntax, diff checks, and exact four-tool surface proof. Publish the implementation candidate and report-only direct child non-force to dev, prove main unchanged, then stop at NEEDS_REVIEW."
+  allowed_existing_files_or_components:
+    - "start.sh"
+    - "install.sh"
+    - ".env.example"
+    - "README.md"
+    - "tests/test_surface_and_scripts.py"
+    - "macos/Tests/AgentRuntimeCoreTests/RuntimeLifecycleTests.swift"
+  expected_files_are_restrictive: true
+
+invariants:
+  - "One logical Agent Runtime installation has exactly one persistent tunnel identity, owned by ~/.config/tunnel-client/agent-runtime.yaml. Normal stop/start, restart, Mac reboot, native-app restart, code update, dependency reinstall, app rebuild, and reinstall do not rotate it."
+  - "Repository .env does not persist CONTROL_PLANE_TUNNEL_ID and does not own a mutable tunnel profile selector after convergence."
+  - "Ambient shell/app environment cannot silently redirect canonical tunnel identity, profile file/directory, config file, or equivalent source-selection precedence."
+  - "Ordinary install/reinstall preserves an existing canonical profile and never performs tunnel migration as a side effect."
+  - "A legacy profile/.env mismatch is a migration boundary: normal startup/install fails closed and does not guess, replace, recreate, or rotate identity."
+  - "The current serving Runtime and its tunnel/ChatGPT connector are protected read-only infrastructure for this execution; no stop, restart, signal, profile mutation, connector mutation, or live identity migration is authorized."
+  - "TASK-0026 lifecycle behavior remains intact: UI-only login launch, no Runtime autostart/watchdog/reconcile loop, external Runtime read-only, and destructive lifecycle only for positively revalidated app ownership after explicit operator action."
+  - "Python MCP semantics and exactly four public tools remain unchanged: terminal_exec, terminal_start, terminal_poll, terminal_control."
+  - "No new runtime dependency, daemon, database, queue, registry, connector manager, Docker component, orchestration service, retry-based identity fallback, or second tunnel abstraction is introduced."
+  - "No main promotion, tag, release, connector recreation, tunnel deletion/creation, or sibling-repository mutation is authorized."
+
+forbidden_changes:
+  - "Do not stop, restart, kill, signal, reconfigure, replace, or otherwise lifecycle-manage the currently serving Agent Runtime/tunnel or port 8080 during this task."
+  - "Do not edit the operator's live ~/.config/tunnel-client/agent-runtime.yaml, live .env tunnel identity, ChatGPT connector/app binding, control-plane tunnel object, Runtime API key, or permissions as part of execution or testing."
+  - "Do not solve the defect by reconnecting/re-authorizing ChatGPT on every restart, recreating the connector, rotating tunnel IDs, retrying against alternate identities, or adding automatic repair/reconciliation."
+  - "Do not add a new daemon, service, database, persistent registry, Docker/OrbStack control path, web control API, socket control plane, or tunnel wrapper abstraction."
+  - "Do not modify agent_runtime/server.py, agent_runtime/executor.py, agent_runtime/session.py, requirements.txt, verify, macOS production source, prior task/report/review artifacts, or files outside the authorized list except the new TASK-0027 report and one focused regression test file allowed below."
+  - "Do not force-push, rewrite history, create a branch, move main, create a tag/release, mutate repository metadata/rulesets, or modify sibling repositories."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - "tests/test_tunnel_identity.py"
+    - ".agent/tasks/TASK-0027/report.yaml"
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "No additional source/configuration/component boundary is authorized."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "The canonical agent-runtime YAML profile is the sole persistent tunnel-identity owner, and effective startup cannot be silently redirected by repository-local or ambient identity/config-source overrides."
+    evidence_required: "Focused fixture tests capture effective tunnel-client argv/environment for doctor and run, prove the same exact canonical profile source is selected, prove CONTROL_PLANE_TUNNEL_ID and documented config/profile selector overrides cannot replace it, and prove .env.example/current installer no longer persist a second tunnel identity."
+  - id: AC-2
+    requirement: "Normal lifecycle and implementation operations preserve one tunnel identity without connector recreation."
+    evidence_required: "Deterministic tests simulate repeated start/restart, reinstall, code/update-state changes, and native-app delegation while proving the canonical profile identity bytes/fingerprint remain unchanged and no identity-creation/migration path is invoked."
+  - id: AC-3
+    requirement: "Legacy state converges deterministically without guessing."
+    evidence_required: "Tests cover: matching legacy .env/profile identity converges by removing the duplicate local identity; mismatched identities fail closed with no profile mutation; missing profile plus one unambiguous bootstrap identity creates exactly one canonical profile; missing/ambiguous identity fails; malformed/symlink/non-regular profile fails; missing API key fails without identity mutation."
+  - id: AC-4
+    requirement: "CLI, native app, and login behavior share the same stable identity path without weakening TASK-0026 lifecycle boundaries."
+    evidence_required: "Source/integration proof shows native Start still delegates to checkout start.sh under a narrow child environment, login remains UI-only/KeepAlive=false, and no background UI/timer/install path performs Runtime lifecycle mutation or introduces an alternate tunnel identity source."
+  - id: AC-5
+    requirement: "MCP runtime contract and dependency/topology boundaries remain unchanged."
+    evidence_required: "Repository-native ./verify plus exact diff/surface proof show exactly four existing MCP tools/signatures, unchanged Python runtime modules and requirements, no new runtime dependency/service/persistence/control-plane abstraction, and no macOS production change unless explicitly justified by a failing acceptance predicate."
+  - id: AC-6
+    requirement: "The implementation is production-safe for the currently serving installation."
+    evidence_required: "Execution evidence proves all tests used isolated fixtures/redacted identifiers, the live Runtime PID/process start identity remained untouched, live profile/.env/connector/control-plane objects were not mutated, and no port-8080 lifecycle action occurred."
+  - id: AC-7
+    requirement: "Candidate/report publication is exact and reconstructible."
+    evidence_required: "Task/report YAML validation, implementation candidate direct-child lineage from exact handoff base, report-only direct child, restrictive changed-path proof, non-force dev publication, fresh final dev/main proof, and stop at NEEDS_REVIEW."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Freshly prove exact task/base/dev/main/review binding, tunnel-client 0.0.11-or-current installed precedence evidence, clean target state, required execution capability, and redacted split-brain reproduction before mutation."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Demonstrate the focused regression suite fails on the exact base for duplicate identity/precedence leakage, then passes after the smallest correction across fresh install, restart, reinstall, update, legacy equal/mismatch, missing/malformed profile, missing API key, and ambient override cases."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Run required Swift integration tests, repository-native ./verify, shell syntax, git diff --check, exact four-tool surface proof, and explicit no-live-runtime/profile/connector mutation proof."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Validate and publish only the authorized implementation and TASK-0027 report commits non-force to dev, then fresh-prove candidate/report parentage, restrictive diff scope, final dev, and unchanged main before NEEDS_REVIEW."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+
+capability_requirements:
+  EXECUTION:
+    - repository_content_read
+    - repository_content_write
+    - native_repository_execution
+    - local_process_fixture_execution
+    - native_macos_swift_build
+    - git_history_read
+    - git_commit
+    - non_force_git_push
+    - remote_ref_read
+    - repository_metadata_read
+  REVIEW:
+    - repository_content_read
+    - native_repository_execution
+    - local_process_fixture_execution
+    - native_macos_swift_build
+    - git_history_read
+    - remote_ref_read
+    - repository_metadata_read
+    - repository_content_write
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+execution_ready: true
