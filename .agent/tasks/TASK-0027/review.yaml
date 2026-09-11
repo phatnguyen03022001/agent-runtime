@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0027
-task_revision: 2
-review_revision: 1
-state: REVISION_REQUIRED
+task_revision: 3
+review_revision: 2
+state: ACCEPTED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0027/report.yaml
-  commit: "7c6e2eb4dc61a4a718799f000222a46d194817bd"
-  report_revision: 2
+  commit: "bc723470da3866865bf03c64781b3cc4f8cb3d7f"
+  report_revision: 3
 
 independence:
   reviewer_role: ARCHITECT
@@ -24,13 +24,14 @@ contract_compliance:
   scope: PASS
   structure_policy: PASS
   git_authority: PASS
-  acceptance_criteria: FAIL
+  acceptance_criteria: PASS
   verifier_evidence: NOT_REQUIRED
 
 notes:
-  - "Revision 2 successfully repaired the protocol serialization blocker: the pinned task/report validator passes, report 7c6e2eb4dc61a4a718799f000222a46d194817bd is the direct child of exact base b324bc9abc003381e962ab42d79f090fefc5ae5c, and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
-  - "Tunnel-identity ownership, sanitized profile selection, legacy fail-closed behavior, four-tool MCP surface, and live-state non-mutation evidence remain materially valid."
-  - "AC-4 is not actually proven. Current start.sh launches `tunnel-client run --profile-file ~/.config/tunnel-client/agent-runtime.yaml`, while production PSRuntimeDiscovery in NativeRuntimeBackend.swift still searches only for `tunnel-client run --profile agent-runtime`. An externally running Runtime started by the new canonical CLI path can therefore be misclassified as stopped, allowing the native app to attempt a second instance."
-  - "The existing Swift lifecycle tests mock RuntimeBackend/RuntimeDiscovering behavior and do not exercise the production process-discovery command contract, so the current 9/9 Swift PASS does not cover this cross-component regression."
-  - "Required revision is narrow: make production runtime discovery recognize the canonical profile-file invocation without weakening executable/process identity checks or external-Runtime read-only behavior, and add deterministic test coverage for the real discovery matching contract. No tunnel redesign or current-machine migration is required."
-  - "Current-machine legacy tunnel A/B reconciliation remains intentionally outside this review and still requires separate explicit operator authorization after product implementation acceptance."
+  - "Revision 3 closes the P0 native discovery regression identified in revision 2. Candidate 059208072f251881434fb3f736395d986b571e67 is the direct child of exact revision-3 base c968c6c5863877e3b79a19cd8b392b32826e2594 and changes only macos/Sources/AgentRuntimeCore/NativeRuntimeBackend.swift plus macos/Tests/AgentRuntimeCoreTests/OwnershipTests.swift."
+  - "Production PSRuntimeDiscovery now recognizes the exact canonical `tunnel-client run --profile-file ~/.config/tunnel-client/agent-runtime.yaml` invocation while retaining exact legacy `--profile agent-runtime` compatibility. Matching remains fail-closed through exact argument-tail checks plus inspected executable basename tunnel-client."
+  - "Deterministic Swift coverage proves canonical profile-file discovery, rejection of wrong profile-file/profile/unrelated command/non-tunnel-client executable, and external Runtime read-only behavior preventing duplicate Start. Executor reports Swift 16/16 PASS with focused OwnershipTests 12/12 PASS."
+  - "Stable tunnel-identity semantics from the revision-1 candidate remain unchanged: canonical YAML profile is the persistent tunnel-ID owner, startup uses sanitized profile-file selection, ambient identity/config selectors cannot override it, legacy mismatch fails closed, and focused tunnel regressions remain 9/9 PASS."
+  - "Repository-native verification remains green: ./verify 60/60, shell syntax PASS, git diff --check PASS, exact four-tool MCP surface unchanged, Python runtime/dependencies unchanged, and report bc723470da3866865bf03c64781b3cc4f8cb3d7f is a report-only direct child of candidate 059208072f251881434fb3f736395d986b571e67."
+  - "Live Runtime/tunnel/profile/.env/ChatGPT connector/port 8080 were not lifecycle-mutated during execution. Current-machine legacy A/B tunnel reconciliation remains intentionally outside TASK-0027 and still requires separate explicit operator authorization before mutation."
+  - "TASK-0027 is technically accepted for implementation and governance closure. This acceptance does not perform or imply main promotion, release, tunnel migration, connector recreation, or live restart acceptance."
