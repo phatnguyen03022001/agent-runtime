@@ -1,0 +1,195 @@
+protocol_version: 3
+
+task_id: TASK-0026
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: user_request
+  task_id: ""
+  gap_id: NATIVE_MACOS_MENU_BAR_RUNTIME_CONTROL
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+architect_analysis_skills:
+  - architect
+  - simplicity
+
+execution_skills:
+  required:
+    - executor
+    - verification
+    - simplicity
+    - github-workflow
+  recommended: []
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "Current operator request: update agent-runtime using the native macOS menu-bar interaction pattern observed in /Users/tienphat/Developer/portbar, while keeping Agent Runtime lifecycle under direct operator control."
+    role: "Primary product authority for replacing foreground-Terminal dependency with a native menu-bar operator surface. The local PortBar checkout is a design reference only; this task serializes the governing target semantics and does not make PortBar cross-repository authority."
+    precedence: 1
+  - source: "phatnguyen03022001/agent-runtime@4f205ca1cffdd17687406883e3d7e195b78b5ce3:README.md"
+    role: "Exact current runtime contract: optional local accelerator, exactly four MCP tools, memory-only session state, bounded execution, workspace-path guard, filtered child environment, and no orchestration layer."
+    precedence: 2
+  - source: "phatnguyen03022001/agent-runtime@4f205ca1cffdd17687406883e3d7e195b78b5ce3:start.sh"
+    role: "Exact current foreground lifecycle entrypoint and tunnel-profile launch behavior to preserve as a CLI fallback and reuse rather than duplicate where practical."
+    precedence: 3
+  - source: "phatnguyen03022001/agent-runtime@4f205ca1cffdd17687406883e3d7e195b78b5ce3:install.sh"
+    role: "Exact current installation, checkout identity, .venv/.env, workspace-root, credential-file, and tunnel-profile preparation behavior."
+    precedence: 4
+  - source: "phatnguyen03022001/agent-skills@1826d33bd1e467896c133109b37db8b0656b3276:protocols/TASK_PROTOCOL.md"
+    role: "Exact task, evidence, lifecycle, publication, and review semantics."
+    precedence: 5
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing Python runtime core plus one shallow native macOS application component, modeled on the proven PortBar Swift/AppKit split without importing PortBar source or creating another service layer."
+  rationale: "The present requirement is one operator-facing native controller around the existing runtime lifecycle. Keep agent_runtime as the unchanged MCP core; add one isolated macOS Swift package/application boundary for UI and process ownership. Do not introduce Electron, a web UI, a control API, a supervisor service, a socket, a registry, or a new runtime daemon."
+
+objective: "Eliminate the foreground-Terminal dependency for normal operator use by adding a native macOS menu-bar Agent Runtime application that can explicitly start, stop, and restart the existing tunnel/runtime only from direct operator UI actions, while preserving the existing MCP core, four-tool public surface, security/environment boundaries, and a CLI rollback path."
+
+scope:
+  required_changes:
+    - "Fresh-bind TASK-0026 revision 1 at its exact handoff base and fresh-prove dev/main identity, clean target state, current task authority, required execution capability, and absence of unexpected target drift before mutation."
+    - "Add one native macOS menu-bar application implemented with Swift/AppKit and no third-party GUI/runtime dependency. It must be LSUIElement/menu-bar only with no Dock icon and use a shallow, independently testable Swift package structure rather than mixing UI code into the Python MCP package."
+    - "The menu-bar surface must expose concise Runtime status plus explicit Start, Stop, and Restart actions. Starting the menu-bar app, login, refresh/polling, health checks, app relaunch, error recovery, or background timers must never automatically start, stop, restart, signal, or repair Agent Runtime. Only a direct human UI action may request Runtime lifecycle mutation."
+    - "The application may be configured to launch its UI at macOS login, but login launch must start only the menu-bar controller, never the Runtime/tunnel. Do not create a KeepAlive runtime service, watchdog, auto-restart loop, reconcile loop, or supervisor daemon."
+    - "Preserve and reuse the existing agent-runtime tunnel profile, checkout-local .env/.venv preparation, workspace-root semantics, and existing launch path rather than duplicating credential/configuration ownership. The native app must not persist, display, duplicate, export, or log CONTROL_PLANE_API_KEY or equivalent secret values."
+    - "Introduce positive process ownership semantics. A Runtime instance started by the native app may be manually stopped/restarted by the app after ownership is positively revalidated. A Runtime/tunnel already running outside the app must be classified as external/read-only: show it as running, disable destructive lifecycle actions against it, and never adopt, signal, kill, reclaim, or restart it automatically. PID existence, port 8080 alone, or process-name substring alone is insufficient ownership proof."
+    - "Manual Stop/Restart for an app-owned Runtime must clean up the owned tunnel process and its spawned MCP child/process group without leaving live child processes, PTYs, or a stale ownership record. App crash/relaunch handling must fail closed: stale or ambiguous ownership metadata must never authorize signaling an unrelated or PID-reused process."
+    - "Keep ./start.sh as a supported manual CLI fallback/rollback path. Update its user-facing wording only as needed so it is not semantically tied to a foreground Terminal. Do not remove direct CLI operation merely because the native app exists."
+    - "Update installation/packaging so the existing installer continues preparing .venv, .env, workspace root, and the exact tunnel profile, and additionally produces/installs the native menu-bar app plus any minimal login-launch artifact required for UI-only login startup. Installation must not start, stop, restart, signal, replace, or rebind a currently running Runtime."
+    - "Update README and minimal operator documentation to make the native app the normal UX, preserve ./start.sh as fallback, state the external-instance behavior, and state explicitly that app/login launch does not imply Runtime autostart."
+    - "Add deterministic native tests for state/ownership/lifecycle decision logic using synthetic child processes or isolated fixtures that do not use the live port 8080, live tunnel credentials, the live agent-runtime profile, or the operator's running Runtime. Prove external-instance refusal, explicit-action-only mutation, stale/PID-reuse fail-closed behavior, and owned process-tree cleanup."
+    - "Run the existing Python ./verify unchanged in meaning, native Swift tests/build, package/bundle verification, and focused static proof that the public MCP surface remains exactly four tools. No acceptance test may stop/restart the operator's live Runtime or mutate its protected port/sentinel; live lifecycle acceptance remains a direct operator action after Executor completion."
+    - "Publish the implementation candidate and TASK-0026 report non-force to dev, fresh-prove exact candidate/report lineage and unchanged main, then stop at NEEDS_REVIEW."
+  allowed_existing_files_or_components:
+    - "README.md"
+    - "install.sh"
+    - "start.sh"
+    - "verify"
+    - ".gitignore"
+    - "tests/ only where needed for preservation/contract checks"
+    - "one new shallow macOS Swift package/application subtree"
+    - "minimal packaging/install scripts or plist/template source required solely for Agent Runtime.app"
+    - ".agent/tasks/TASK-0026/report.yaml"
+  expected_files_are_restrictive: false
+
+invariants:
+  - "The Python agent_runtime MCP implementation remains the semantic runtime core and retains exactly terminal_exec, terminal_start, terminal_poll, and terminal_control as the four public tools with unchanged signatures and behavior."
+  - "Persistent MCP session state remains memory-only with the existing active/completed-session bounds, process-group/PTY cleanup, workspace-root guard, literal argv behavior, output bounds, and filtered child environment."
+  - "Runtime lifecycle remains operator-owned. Agents, background timers, login launch, health monitoring, watchdog logic, installation, verification, and error recovery receive no automatic authority to start, stop, restart, kill, signal, repair, free, or rebind the live Runtime or protected port 8080."
+  - "No public machine-control surface is added for Runtime lifecycle: no MCP lifecycle tool, HTTP endpoint, URL scheme intended for control, local control socket, AppleScript command surface, Docker socket, or equivalent automation API."
+  - "External/non-app-owned Runtime processes are read-only observations and must never be signalled by the app. Ownership ambiguity fails closed."
+  - "The existing tunnel-client profile and checkout-local credential/configuration ownership remain canonical; secrets are not migrated into Swift preferences, plist files, logs, or new stores."
+  - "No Docker/OrbStack container, health sentinel, port 8080 binding, unrelated process/service, sibling repository, authority lock, workflow, main ref, tag, or release is mutated by this task."
+  - "No Electron, web server/UI, third-party Swift package, new Python dependency, database, registry, queue, scheduler, supervisor daemon, or orchestration framework is introduced."
+
+forbidden_changes:
+  - "Do not modify the behavior or signatures of agent_runtime/server.py, agent_runtime/executor.py, agent_runtime/session.py, or the four public MCP tools unless a blocking integration defect is first reported as BLOCKED for Architect revision; this task does not authorize MCP-core redesign."
+  - "Do not auto-start Runtime at login or app launch, auto-restart it after failure, implement desiredRunning/reconcile behavior, or add KeepAlive semantics for the Runtime process."
+  - "Do not stop, restart, signal, kill, probe-destructively, replace, or rebind the operator's currently running Agent Runtime, tunnel, port 8080 listener, or agent-runtime sentinel during execution or verification."
+  - "Do not treat a listener on port 8080, a matching process name, or a PID file by itself as sufficient destructive ownership authority."
+  - "Do not copy PortBar source into this repository or create a shared cross-repository library merely to reuse UI/process-control code. Reuse the design pattern, not source ownership."
+  - "Do not create branches, force-push, promote main, create a tag/release, change repository metadata/rulesets, or modify another repository."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Normal operator use no longer requires keeping ./start.sh open in a Terminal: a native menu-bar Agent Runtime.app provides status plus explicit Start, Stop, and Restart controls."
+    evidence_required: "Native build/package proof plus UI/controller tests and local non-destructive launch proof show an LSUIElement app with the required states/actions and no Dock presence."
+  - id: AC-2
+    requirement: "Runtime lifecycle is strictly explicit-action-only and fail-closed for non-owned processes."
+    evidence_required: "Deterministic tests prove app launch/login/refresh/relaunch/error paths perform no lifecycle mutation, an external Runtime is read-only, and only positively owned synthetic processes respond to explicit Start/Stop/Restart paths."
+  - id: AC-3
+    requirement: "Owned lifecycle cleanup is correct across normal stop/restart and app relaunch without permitting stale/PID-reused ownership to signal an unrelated process."
+    evidence_required: "Synthetic process-tree tests prove child cleanup and ownership invalidation/revalidation, including stale metadata and PID-reuse-equivalent negative cases."
+  - id: AC-4
+    requirement: "The existing MCP runtime contract and security/environment boundaries are unchanged."
+    evidence_required: "./verify passes, exact four-tool surface proof passes, Python runtime-core diff is absent or limited only to Architect-approved blocking revision, requirements remain unchanged, and workspace/env/session bounds remain covered by existing tests."
+  - id: AC-5
+    requirement: "Installation and login integration add only the native UI lifecycle surface and preserve the CLI rollback path."
+    evidence_required: "Installer/package tests or bounded local proof show Agent Runtime.app plus UI-only login launch are reproducible, ./start.sh remains usable, login does not start Runtime, and no live Runtime lifecycle mutation occurred during installation/verification."
+  - id: AC-6
+    requirement: "No new control plane, service framework, secret store, persistence engine, third-party dependency, or cross-repository coupling is introduced."
+    evidence_required: "Exact candidate diff/dependency inspection plus bundle/runtime inspection prove the allowed native component boundary and absence of prohibited mechanisms."
+  - id: AC-7
+    requirement: "Publication and evidence remain reconstructible and bounded."
+    evidence_required: "Task/report validation, exact changed-path proof, non-force dev publication, candidate/report parentage proof, fresh dev/main resolution, and unchanged main proof."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Fresh-prove exact task/base/remote identity, clean target state, required native execution capability, and current live-runtime protection before mutation."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Run deterministic Swift lifecycle/ownership tests against synthetic processes only, then Swift release build/package verification and the existing Python ./verify suite."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Prove exact four-tool MCP surface, unchanged requirements/runtime-core semantics, no automatic Runtime lifecycle path, no forbidden machine-control surface, and no Docker/OrbStack/8080 mutation."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Validate TASK-0026 report, publish only authorized implementation/report commits non-force to dev, then fresh-prove candidate/report lineage, final dev, and unchanged main before NEEDS_REVIEW."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+
+capability_requirements:
+  EXECUTION:
+    - repository_content_read
+    - repository_content_write
+    - native_repository_execution
+    - native_macos_swift_build
+    - local_process_fixture_execution
+    - local_app_bundle_inspection
+    - git_history_read
+    - git_commit
+    - non_force_git_push
+    - remote_ref_read
+    - repository_metadata_read
+  REVIEW:
+    - repository_content_read
+    - native_repository_execution
+    - local_app_bundle_inspection
+    - git_history_read
+    - remote_ref_read
+    - repository_metadata_read
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
