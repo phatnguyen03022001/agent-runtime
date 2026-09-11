@@ -1,13 +1,13 @@
 protocol_version: 3
 
 task_id: TASK-0027
-task_revision: 2
+task_revision: 3
 state: APPROVED
 
 origin:
   type: user_request
   task_id: ""
-  gap_id: STABLE_TUNNEL_IDENTITY_CHATGPT_403
+  gap_id: STABLE_TUNNEL_IDENTITY_NATIVE_DISCOVERY_COMPATIBILITY
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -47,74 +47,67 @@ external_skills:
   execution_recommended: []
 
 authority_sources:
-  - source: "Current operator request: normal Agent Runtime restart, reboot, repository update, rebuild, reinstall, or native-app lifecycle must preserve one logical OpenAI tunnel identity and must not require ChatGPT connector recreation when MCP contract and authorization are unchanged."
-    role: "Primary product authority for stable tunnel identity, lifecycle invariants, fail-closed migration, and separation of implementation restart from MCP contract change."
+  - source: "Current operator objective: normal Agent Runtime restart/reboot/update/reinstall/native lifecycle must preserve one logical OpenAI tunnel identity while the native menu-bar app must correctly observe the Runtime started through the canonical CLI path."
+    role: "Primary product authority for stable identity plus cross-component lifecycle compatibility."
     precedence: 1
-  - source: "Architect read-only reproduction on 2026-09-11 against tunnel-client 0.0.11: checkout .env and ~/.config/tunnel-client/agent-runtime.yaml held different tunnel IDs; start.sh exported the .env ID; the running tunnel-client inherited that ID; config precedence is flags > environment > YAML > defaults; the .env identity was readable by the current runtime key and the YAML identity returned 403."
-    role: "Freshly reproduced defect evidence establishing split-brain identity ownership and effective environment override. Executor must independently reproduce the relevant predicates before mutation without printing secret or tunnel-ID literals into task evidence."
+  - source: "phatnguyen03022001/agent-runtime@6dcaaeb6b8b4a594dc7d486d277ee566f7b97299:.agent/tasks/TASK-0027/review.yaml"
+    role: "Architect revision-required judgment. It confirms tunnel identity work remains valid but AC-4 fails because production PSRuntimeDiscovery recognizes only `--profile agent-runtime` while start.sh now launches `--profile-file ~/.config/tunnel-client/agent-runtime.yaml`."
     precedence: 2
-  - source: "phatnguyen03022001/agent-runtime@290ad0b8546b3715a0f52be91efa5ca28941e2b4:.agent/tasks/TASK-0027/report.yaml"
-    role: "Revision-1 execution evidence. Product implementation candidate 5938c45b5d5f6516293f8ab7cef0fbce2cd2ecbe and all implementation verification passed; execution stopped only because the Architect-owned task artifact omitted the validator-required blocking_decisions path. Revision 2 is a protocol-recovery continuation and must reuse this immutable implementation evidence after fresh identity re-resolution rather than manufacture a replacement implementation commit."
+  - source: "phatnguyen03022001/agent-runtime@7c6e2eb4dc61a4a718799f000222a46d194817bd:.agent/tasks/TASK-0027/report.yaml"
+    role: "Revision-2 execution evidence. Protocol recovery and all non-native-discovery predicates passed; immutable tunnel-identity implementation evidence remains reusable after fresh re-resolution."
     precedence: 3
-  - source: "phatnguyen03022001/agent-runtime@6b8218925f16b602159784f8334d77e68d2311ac:.agent/tasks/TASK-0026/review.yaml"
-    role: "Accepted native menu-bar lifecycle boundary. Preserve explicit operator actions, external Runtime read-only behavior, positive ownership checks, UI-only login launch, and the existing live Runtime protection boundary."
+  - source: "phatnguyen03022001/agent-runtime@5938c45b5d5f6516293f8ab7cef0fbce2cd2ecbe"
+    role: "Published stable tunnel-identity implementation candidate whose shell/config semantics remain governing unless contradicted by revision-3 verification."
     precedence: 4
-  - source: "phatnguyen03022001/agent-runtime@6b8218925f16b602159784f8334d77e68d2311ac:start.sh"
-    role: "Pre-fix canonical CLI/native-app startup path whose environment/profile selection permitted the reproduced split-brain identity."
+  - source: "phatnguyen03022001/agent-runtime@6b8218925f16b602159784f8334d77e68d2311ac:.agent/tasks/TASK-0026/review.yaml"
+    role: "Accepted native lifecycle boundary: explicit operator actions only, external Runtime read-only, positive ownership checks, UI-only login launch, no automatic Runtime lifecycle mutation."
     precedence: 5
-  - source: "phatnguyen03022001/agent-runtime@6b8218925f16b602159784f8334d77e68d2311ac:install.sh"
-    role: "Pre-fix installer behavior that persisted CONTROL_PLANE_TUNNEL_ID into .env while preserving an existing profile, allowing identity divergence and validating under the overriding environment."
-    precedence: 6
   - source: "phatnguyen03022001/agent-skills@1826d33bd1e467896c133109b37db8b0656b3276:protocols/TASK_PROTOCOL.md"
-    role: "Exact protocol-v3 task, evidence, execution, publication, revision, and review authority, including reuse of freshly re-resolved immutable evidence when it still covers the exact predicate."
-    precedence: 7
+    role: "Exact protocol-v3 execution, evidence, publication, revision, and review authority."
+    precedence: 6
 
 structure_authority:
   status: RESOLVED
-  source: "Existing start.sh/install.sh configuration boundary plus one focused regression module"
-  rationale: "The defect is duplicate ownership and precedence leakage, not missing infrastructure. Revision 1 already implemented the bounded correction. Revision 2 changes no product design and exists only to repair Architect-owned task serialization and complete validation/reporting against the already-published implementation."
+  source: "Existing PSRuntimeDiscovery in NativeRuntimeBackend.swift plus existing AgentRuntimeCore test target"
+  rationale: "The remaining defect is one cross-component process-discovery contract mismatch. Correct the existing discovery boundary and add deterministic regression coverage; no new component or architecture is required."
 
-objective: "Make ~/.config/tunnel-client/agent-runtime.yaml the sole persistent owner of Agent Runtime's tunnel identity, remove repository-local and ambient environment paths that can silently replace that identity, preserve the exact identity across normal lifecycle/update/reinstall operations, and provide deterministic fail-closed handling for legacy split-brain installations without mutating the currently serving Runtime or guessing a migration target."
+objective: "Close TASK-0027 by making the native macOS Runtime discovery contract compatible with the canonical `tunnel-client run --profile-file ~/.config/tunnel-client/agent-runtime.yaml` startup path, while preserving the accepted tunnel-identity architecture and TASK-0026 lifecycle safety boundaries."
 
 scope:
   required_changes:
-    - "Fresh-bind TASK-0027 revision 2 at its exact handoff base. Fresh-resolve dev/main, this exact task revision, the revision-1 blocked report, implementation candidate 5938c45b5d5f6516293f8ab7cef0fbce2cd2ecbe, TASK-0026 accepted review, clean target state, and required execution capability. Re-establish the exact immutable revision-1 evidence before relying on it."
-    - "Treat revision 2 as protocol-recovery continuation, not a product redesign or reimplementation. The exact base already contains the revision-1 implementation. Do not create a synthetic/no-op replacement implementation commit merely to reconstruct rev1 lineage. If fresh verification contradicts the rev1 implementation evidence, stop BLOCKED and report the contradiction rather than expanding scope."
-    - "Re-run the current validator against this revision-2 task and prove the task now passes the pinned agent-skills serialization gate, including the required blocking_decisions path."
-    - "Re-run the focused tunnel regression suite, repository-native ./verify, required Swift integration tests, shell syntax, git diff --check, exact four-tool surface proof, restrictive product-diff proof, and live-state non-mutation checks needed to show the rev1 implementation remains valid under the new binding."
-    - "Preserve the product semantics already implemented in revision 1: canonical fixed profile `agent-runtime`; YAML profile as sole persistent tunnel-ID owner; sanitized and identical profile selection for doctor/run; no ambient identity/config-source override; existing profile preserved on ordinary install/reinstall; deterministic equal/mismatch/missing/malformed legacy handling; no current-machine A/B migration."
-    - "Do not perform the current machine's live legacy A/B tunnel migration. The serving Runtime, canonical profile bytes, ChatGPT connector binding, and live .env tunnel identity remain read-only production state."
-    - "Preserve TASK-0026 native lifecycle architecture and exact Python MCP surface. No production implementation change is authorized or required in revision 2 unless an existing acceptance predicate is freshly disproven; such a contradiction must be returned BLOCKED for Architect action rather than silently changing scope."
-    - "Update the existing TASK-0027 report as report revision 2, bind it to this exact task revision/base, explicitly identify candidate 5938c45b5d5f6516293f8ab7cef0fbce2cd2ecbe as the reused product implementation evidence, record the rev1 protocol blocker as resolved, publish the report-only direct child non-force to dev, prove main unchanged, and stop at NEEDS_REVIEW."
+    - "Fresh-bind TASK-0027 revision 3 at its exact handoff base. Fresh-resolve dev/main, this task revision, revision-2 report/review, implementation candidate 5938c45b5d5f6516293f8ab7cef0fbce2cd2ecbe, TASK-0026 accepted review, clean target state, and required execution capability before mutation."
+    - "Preserve all accepted revision-1/revision-2 tunnel identity semantics: canonical YAML profile as sole persistent tunnel-ID owner, sanitized doctor/run environment, deterministic legacy convergence/fail-closed behavior, no ambient identity/config-source override, no automatic current-machine A/B migration."
+    - "Correct production PSRuntimeDiscovery so a Runtime launched by the canonical current start.sh command form using `tunnel-client run --profile-file ~/.config/tunnel-client/agent-runtime.yaml` is observed as external/active rather than stopped."
+    - "Keep process identification fail-closed. Discovery must still require the inspected executable identity to resolve to tunnel-client and must not treat arbitrary profile-file paths, another profile, or unrelated command text as the Agent Runtime. Retaining recognition of the legacy exact `--profile agent-runtime` form for transition compatibility is allowed, but it must not weaken canonical matching."
+    - "Add deterministic Swift coverage for the production discovery command contract, not only mocked RuntimeDiscovering behavior. The tests must prove canonical profile-file invocation matches, wrong/other profile selection does not match, and the resulting backend/controller treats a detected external Runtime as read-only so explicit Start cannot create a second instance."
+    - "Use the smallest repo-native implementation. A bounded extraction/injection inside the existing discovery component for deterministic parsing/testing is allowed; no new runtime service, daemon, wrapper, registry, process manager, dependency, or control plane is authorized."
+    - "Do not start, stop, restart, signal, migrate, or otherwise mutate the operator's live Runtime/tunnel, live profile, live .env identity, ChatGPT connector/app binding, or port 8080 during execution. Use source/fixture/synthetic test evidence only."
+    - "Run focused Swift discovery tests, the full Swift test suite, focused tunnel identity regressions, repository-native ./verify, shell syntax, git diff --check, exact four-tool MCP surface proof, and restrictive diff/lineage checks."
+    - "Publish one implementation candidate non-force to dev, then update TASK-0027/report.yaml as report revision 3 in a report-only direct child, fresh-prove final dev/main and lineage, and stop at NEEDS_REVIEW."
   allowed_existing_files_or_components:
-    - ".agent/tasks/TASK-0027/report.yaml"
-    - "start.sh"
-    - "install.sh"
-    - ".env.example"
-    - "README.md"
-    - "tests/test_surface_and_scripts.py"
-    - "tests/test_tunnel_identity.py"
+    - "macos/Sources/AgentRuntimeCore/NativeRuntimeBackend.swift"
+    - "macos/Tests/AgentRuntimeCoreTests/OwnershipTests.swift"
     - "macos/Tests/AgentRuntimeCoreTests/RuntimeLifecycleTests.swift"
+    - ".agent/tasks/TASK-0027/report.yaml"
   expected_files_are_restrictive: true
 
 invariants:
-  - "One logical Agent Runtime installation has exactly one persistent tunnel identity, owned by ~/.config/tunnel-client/agent-runtime.yaml. Normal stop/start, restart, Mac reboot, native-app restart, code update, dependency reinstall, app rebuild, and reinstall do not rotate it."
-  - "Repository .env does not persist CONTROL_PLANE_TUNNEL_ID and does not own a mutable tunnel profile selector after convergence."
-  - "Ambient shell/app environment cannot silently redirect canonical tunnel identity, profile file/directory, config file, or equivalent source-selection precedence."
-  - "Ordinary install/reinstall preserves an existing canonical profile and never performs tunnel migration as a side effect."
-  - "A legacy profile/.env mismatch is a migration boundary: normal startup/install fails closed and does not guess, replace, recreate, or rotate identity."
-  - "The current serving Runtime and its tunnel/ChatGPT connector are protected read-only infrastructure for this execution; no stop, restart, signal, profile mutation, connector mutation, or live identity migration is authorized."
-  - "TASK-0026 lifecycle behavior remains intact: UI-only login launch, no Runtime autostart/watchdog/reconcile loop, external Runtime read-only, and destructive lifecycle only for positively revalidated app ownership after explicit operator action."
+  - "Canonical tunnel startup remains `tunnel-client run --profile-file ~/.config/tunnel-client/agent-runtime.yaml` under the sanitized environment established by the revision-1 candidate."
+  - "Native observation of the canonical CLI-started Runtime returns external/active state rather than stopped; external Runtime remains strictly read-only to the app."
+  - "A native explicit Start cannot proceed when the canonical external Runtime is already running."
+  - "Discovery continues to require tunnel-client executable identity and exact Agent Runtime profile selection; unrelated tunnel-client instances and arbitrary command substrings do not match."
+  - "The stable tunnel identity architecture, legacy fail-closed migration semantics, and current-machine no-migration boundary remain unchanged."
+  - "TASK-0026 remains intact: UI-only login launch, no Runtime autostart/watchdog/reconciliation, destructive lifecycle only for positively revalidated app ownership after explicit operator action."
   - "Python MCP semantics and exactly four public tools remain unchanged: terminal_exec, terminal_start, terminal_poll, terminal_control."
-  - "No new runtime dependency, daemon, database, queue, registry, connector manager, Docker component, orchestration service, retry-based identity fallback, or second tunnel abstraction is introduced."
-  - "No main promotion, tag, release, connector recreation, tunnel deletion/creation, sibling-repository mutation, or synthetic implementation commit is authorized."
+  - "No new dependency, service, daemon, database, registry, Docker/OrbStack control path, connector manager, retry identity fallback, or second tunnel abstraction is introduced."
+  - "No main promotion, tag, release, connector recreation, tunnel creation/deletion, current-machine identity migration, or sibling-repository mutation is authorized."
 
 forbidden_changes:
-  - "Do not stop, restart, kill, signal, reconfigure, replace, or otherwise lifecycle-manage the currently serving Agent Runtime/tunnel or port 8080 during this task."
-  - "Do not edit the operator's live ~/.config/tunnel-client/agent-runtime.yaml, live .env tunnel identity, ChatGPT connector/app binding, control-plane tunnel object, Runtime API key, or permissions as part of execution or testing."
-  - "Do not solve the defect by reconnecting/re-authorizing ChatGPT on every restart, recreating the connector, rotating tunnel IDs, retrying against alternate identities, or adding automatic repair/reconciliation."
-  - "Do not add a new daemon, service, database, persistent registry, Docker/OrbStack control path, web control API, socket control plane, or tunnel wrapper abstraction."
-  - "Do not modify product/runtime source, dependencies, production Swift, prior TASK-0026 artifacts, or the TASK-0027 task artifact. Revision-2 Executor mutation is limited to the existing TASK-0027 report artifact unless a fresh contradiction is found, in which case stop BLOCKED."
+  - "Do not stop, restart, kill, signal, reconfigure, replace, or otherwise lifecycle-manage the currently serving Agent Runtime/tunnel or port 8080."
+  - "Do not edit live ~/.config/tunnel-client/agent-runtime.yaml, live .env identity, control-plane tunnel object, Runtime API key, ChatGPT connector/app binding, or permissions."
+  - "Do not change start.sh, install.sh, .env.example, README.md, Python runtime core, requirements.txt, verify, production menu-bar UI source, process ownership semantics, prior task/report/review history, or any file outside the restrictive revision-3 list."
+  - "Do not solve discovery by broad substring matching that could classify arbitrary tunnel-client commands as Agent Runtime."
+  - "Do not add automatic repair/reconnect/re-authorize/recreate behavior."
   - "Do not force-push, rewrite history, create a branch, move main, create a tag/release, mutate repository metadata/rulesets, or modify sibling repositories."
 
 gap_policy:
@@ -132,46 +125,43 @@ structure_policy:
     allowed: false
     max: 0
     within: []
-    purpose: "Revision 2 is verification/report-only protocol recovery."
+    purpose: "Revision 3 is a bounded compatibility patch inside existing production/test components."
   allow_new_top_level_directories: false
   allow_new_shared_modules: false
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "The canonical agent-runtime YAML profile is the sole persistent tunnel-identity owner, and effective startup cannot be silently redirected by repository-local or ambient identity/config-source overrides."
-    evidence_required: "Freshly re-resolved revision-1 candidate plus rerun focused fixture tests capture effective tunnel-client argv/environment for doctor and run, prove the same exact canonical profile source is selected, prove CONTROL_PLANE_TUNNEL_ID and documented config/profile selector overrides cannot replace it, and prove .env.example/current installer no longer persist a second tunnel identity."
+    requirement: "Production Runtime discovery recognizes the canonical profile-file startup contract exactly enough to prevent false Stopped state and duplicate Start attempts."
+    evidence_required: "Deterministic Swift test exercises production discovery matching logic with a canonical `tunnel-client run --profile-file <HOME>/.config/tunnel-client/agent-runtime.yaml` command and proves it resolves to the expected external PID/state."
   - id: AC-2
-    requirement: "Normal lifecycle and implementation operations preserve one tunnel identity without connector recreation."
-    evidence_required: "Rerun deterministic tests simulate repeated start/restart, reinstall, code/update-state changes, and native-app delegation while proving the canonical profile identity bytes/fingerprint remain unchanged and no identity-creation/migration path is invoked."
+    requirement: "Discovery remains bounded and fail-closed."
+    evidence_required: "Tests prove a different profile-file path/profile and unrelated command text do not match, and executable identity must still be tunnel-client. If legacy `--profile agent-runtime` recognition is retained, test it separately from the canonical form."
   - id: AC-3
-    requirement: "Legacy state converges deterministically without guessing."
-    evidence_required: "Rerun tests cover matching legacy .env/profile identity convergence; mismatched identities fail closed with no profile mutation; missing profile plus one unambiguous bootstrap identity creates exactly one canonical profile; missing/ambiguous identity fails; malformed/symlink/non-regular profile fails; missing API key fails without identity mutation."
+    requirement: "Canonical externally started Runtime remains read-only and cannot be double-started by the native app."
+    evidence_required: "Integration/unit proof drives backend/controller from production-compatible discovery result to external state and proves Start/Stop/Restart do not mutate or signal that external Runtime."
   - id: AC-4
-    requirement: "CLI, native app, and login behavior share the same stable identity path without weakening TASK-0026 lifecycle boundaries."
-    evidence_required: "Fresh source/integration proof shows native Start still delegates to checkout start.sh under a narrow child environment, login remains UI-only/KeepAlive=false, and no background UI/timer/install path performs Runtime lifecycle mutation or introduces an alternate tunnel identity source."
+    requirement: "Tunnel identity behavior from the revision-1 candidate remains unchanged and regression-free."
+    evidence_required: "Focused tunnel identity suite passes unchanged, exact diff proves no shell/config identity file changed, and canonical startup invocation remains the fixed profile-file form."
   - id: AC-5
-    requirement: "MCP runtime contract and dependency/topology boundaries remain unchanged."
-    evidence_required: "Repository-native ./verify plus exact diff/surface proof show exactly four existing MCP tools/signatures, unchanged Python runtime modules and requirements relative to the accepted pre-task baseline, no new runtime dependency/service/persistence/control-plane abstraction, and no macOS production change."
+    requirement: "MCP/runtime/lifecycle topology remains unchanged outside the narrow native discovery patch."
+    evidence_required: "Full Swift tests, repository-native ./verify, exact four-tool surface proof, unchanged Python runtime/dependencies, shell syntax, git diff --check, restrictive changed-path proof, and no live Runtime/profile/connector/port-8080 mutation evidence."
   - id: AC-6
-    requirement: "The implementation is production-safe for the currently serving installation."
-    evidence_required: "Fresh execution evidence proves all rerun tests use isolated fixtures/redacted identifiers, the live Runtime process identity remains untouched, live profile/.env/connector/control-plane objects remain unmodified, and no port-8080 lifecycle action occurs."
-  - id: AC-7
-    requirement: "Revision-2 protocol recovery and report publication are exact and reconstructible without manufacturing a replacement implementation commit."
-    evidence_required: "Pinned validator passes the exact revision-2 task; candidate 5938c45b5d5f6516293f8ab7cef0fbce2cd2ecbe and rev1 report 290ad0b8546b3715a0f52be91efa5ca28941e2b4 are freshly re-resolved as immutable evidence; the revision-2 report is the sole Executor mutation and direct child of the exact revision-2 handoff base; report validation passes; final dev resolves to the report commit; main remains unchanged; result stops at NEEDS_REVIEW."
+    requirement: "Revision-3 publication is exact and reviewable."
+    evidence_required: "Pinned task/report validation passes; implementation candidate is direct child of exact revision-3 base and changes only authorized production/test files; report revision 3 is a report-only direct child; non-force final dev resolves to report commit; main remains unchanged; result stops at NEEDS_REVIEW."
 
 verification:
   executor_checks:
     - id: CHECK-1
-      command_or_check: "Freshly prove exact revision-2 task/base/dev/main binding, rev1 report/candidate identities, TASK-0026 accepted review, clean target state, and required execution capability; validate the exact revision-2 task with the pinned validator before any Executor mutation."
+      command_or_check: "Freshly prove exact revision-3 task/base/dev/main/review binding, accepted immutable tunnel candidate, clean target state, and required capabilities; validate exact task before mutation."
       required: true
     - id: CHECK-2
-      command_or_check: "Freshly rerun focused tunnel identity regressions against the already-published candidate and prove all revision-1 product acceptance predicates still pass without product-source mutation."
+      command_or_check: "Demonstrate the native discovery regression on the exact base using deterministic testable production matching behavior, then make the smallest authorized correction and prove canonical/negative/external-read-only cases PASS."
       required: true
     - id: CHECK-3
-      command_or_check: "Run required Swift integration tests, repository-native ./verify, shell syntax, git diff --check, exact four-tool surface proof, restrictive diff proof, and explicit no-live-runtime/profile/connector mutation proof."
+      command_or_check: "Run full Swift tests, focused tunnel identity regressions, repository-native ./verify, bash syntax, git diff --check, exact four-tool proof, restrictive diff proof, and explicit no-live-state mutation checks."
       required: true
     - id: CHECK-4
-      command_or_check: "Publish only TASK-0027 report revision 2 non-force to dev as the direct child of the exact revision-2 handoff base, then fresh-prove report validation, restrictive one-file diff, final dev, unchanged main, and NEEDS_REVIEW."
+      command_or_check: "Publish implementation candidate and report revision 3 non-force to dev, then fresh-prove candidate/report parentage, report-only child, final dev, unchanged main, and NEEDS_REVIEW."
       required: true
   authoritative_verification:
     required: false
