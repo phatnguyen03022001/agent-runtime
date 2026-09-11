@@ -1,0 +1,36 @@
+protocol_version: 3
+
+task_id: TASK-0027
+task_revision: 2
+review_revision: 1
+state: REVISION_REQUIRED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0027/report.yaml
+  commit: "7c6e2eb4dc61a4a718799f000222a46d194817bd"
+  report_revision: 2
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  skill_rules: PASS
+  scope: PASS
+  structure_policy: PASS
+  git_authority: PASS
+  acceptance_criteria: FAIL
+  verifier_evidence: NOT_REQUIRED
+
+notes:
+  - "Revision 2 successfully repaired the protocol serialization blocker: the pinned task/report validator passes, report 7c6e2eb4dc61a4a718799f000222a46d194817bd is the direct child of exact base b324bc9abc003381e962ab42d79f090fefc5ae5c, and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "Tunnel-identity ownership, sanitized profile selection, legacy fail-closed behavior, four-tool MCP surface, and live-state non-mutation evidence remain materially valid."
+  - "AC-4 is not actually proven. Current start.sh launches `tunnel-client run --profile-file ~/.config/tunnel-client/agent-runtime.yaml`, while production PSRuntimeDiscovery in NativeRuntimeBackend.swift still searches only for `tunnel-client run --profile agent-runtime`. An externally running Runtime started by the new canonical CLI path can therefore be misclassified as stopped, allowing the native app to attempt a second instance."
+  - "The existing Swift lifecycle tests mock RuntimeBackend/RuntimeDiscovering behavior and do not exercise the production process-discovery command contract, so the current 9/9 Swift PASS does not cover this cross-component regression."
+  - "Required revision is narrow: make production runtime discovery recognize the canonical profile-file invocation without weakening executable/process identity checks or external-Runtime read-only behavior, and add deterministic test coverage for the real discovery matching contract. No tunnel redesign or current-machine migration is required."
+  - "Current-machine legacy tunnel A/B reconciliation remains intentionally outside this review and still requires separate explicit operator authorization after product implementation acceptance."
