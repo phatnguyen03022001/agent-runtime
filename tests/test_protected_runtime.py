@@ -98,6 +98,15 @@ class ProtectedRuntimeGuardTests(unittest.TestCase):
             self.assert_denied(guard, ["./start.sh", "start"], "canonical_service_lifecycle")
             guard.check(["launchctl", "print", "gui/501/com.apple.WindowServer"], tool_name="terminal_exec")
 
+    def test_read_only_lsof_on_protected_port_is_allowed(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            guard = self.make_guard(Path(raw))
+            guard.check(["lsof", "-nP", "-iTCP:8080", "-sTCP:LISTEN"], tool_name="terminal_exec")
+            guard.check(
+                ["/bin/zsh", "-lc", "lsof -nP -iTCP:8080 -sTCP:LISTEN"],
+                tool_name="terminal_exec",
+            )
+
     def test_explicit_port_8080_free_or_rebind_attempts_are_denied(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             guard = self.make_guard(Path(raw))

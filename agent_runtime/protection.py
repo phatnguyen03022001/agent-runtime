@@ -272,7 +272,7 @@ class ProtectedRuntimeGuard:
         lowered = text.lower()
         if "8080" not in lowered:
             return False
-        destructive = ("kill", "pkill", "killall", "fuser", "bootout", "launchctl kill", "lsof")
+        destructive = ("kill", "pkill", "killall", "fuser", "bootout", "launchctl kill")
         return any(token in lowered for token in destructive)
 
     @staticmethod
