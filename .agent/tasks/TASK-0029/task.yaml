@@ -1,12 +1,12 @@
 protocol_version: 3
 
 task_id: TASK-0029
-task_revision: 14
+task_revision: 15
 state: APPROVED
 
 origin:
   type: user_request
-  gap_id: COMPACT_NATIVE_UX_AND_BOUNDED_PROTECTION_HISTORY
+  gap_id: MINIMAL_TWO_COLUMN_MENU_UX
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -31,49 +31,52 @@ execution_skills:
 
 authority_sources:
   - source: "phatnguyen03022001/agent-runtime@777cb24dd5d563811fa8001ae456783e9c373094:.agent/tasks/TASK-0029/review.yaml"
-    role: "Revision-13 Architect judgment requiring a UX correction."
+    role: "Revision-13 Architect judgment requiring UX correction."
     precedence: 1
-  - source: "phatnguyen03022001/agent-runtime@f9c739890060197f58c12ae53d8cf61df019a9b9:.agent/tasks/TASK-0029/report.yaml"
-    role: "Revision-13 activation and runtime evidence."
+  - source: "operator_current_feedback"
+    role: "Supersedes revision 14 presentation details: no Restart in UI; one green/red status icon; right column flush right; one centered full-width Start/Stop action."
     precedence: 2
-  - source: "operator_current_visual_feedback"
-    role: "Activated popover has excessive vertical whitespace, weak control hierarchy and overly prominent historical protection text."
+  - source: "phatnguyen03022001/agent-runtime@f9c739890060197f58c12ae53d8cf61df019a9b9:.agent/tasks/TASK-0029/report.yaml"
+    role: "Revision-13 activation/runtime evidence to preserve."
     precedence: 3
 
 structure_authority:
   status: RESOLVED
   source: "Existing AppKit menu-bar implementation and existing protection audit storage."
-  rationale: "Revision 14 is source-only. Live Runtime state is out of mutation scope."
+  rationale: "Revision 15 is source-only and replaces revision 14 before execution."
 
-objective: "Produce a compact native menu-bar candidate with content-fit layout, state-adaptive lifecycle controls and bounded protection-history presentation while preserving existing Runtime, tunnel and MCP behavior."
+objective: "Produce a minimal, balanced two-column macOS menu-bar candidate with a single state action, green/red tunnel status icon and bounded tertiary protection history while preserving Runtime, tunnel and MCP behavior."
 
 scope:
   required_changes:
-    - "Fresh-bind exact base and preserve revision-13 evidence, unchanged main and frozen TASK-0030."
-    - "Remove excess vertical whitespace. Current condition, endpoint/PID and live/ready facts must form one compact scan path."
-    - "Do not repeat the same condition as a separate oversized heading."
-    - "Keep session capacity and protection history tertiary and visually quiet. Internal protection category identifiers must not be prominent user-facing text."
-    - "Make lifecycle controls state-adaptive while keeping RuntimePolicy authoritative: connected presents Stop plus secondary Restart; stopped presents Start; external or unavailable state presents no enabled mutation; busy state suppresses mutation until completion."
-    - "Keep Quit visually secondary."
-    - "Bound protection history to the existing maximum of 20 retained events. Persisted and displayed blocked_count must represent retained history, not an unbounded lifetime total. Do not add a manual clear/settings surface."
-    - "Do not change protection decision behavior; only audit-history accounting and presentation may change."
-    - "Preserve accepted icon, notification sound and one-shot offline audio behavior."
-    - "Add focused tests for presentation states and audit rollover beyond 20 events."
+    - "Fresh-bind exact base; preserve revision-13 evidence, unchanged main and frozen TASK-0030."
+    - "Use a compact content-fit popover with deliberate row/column alignment and no excess vertical stretch."
+    - "Header presents Agent Runtime at left and one status icon at right. Do not add a separate CONNECTED/OFFLINE headline."
+    - "Status icon uses green only when the canonical tunnel/runtime is serving and health/readiness are confirmed; otherwise use red. Tooltip and accessibility text must still state the condition so color is not the sole signal."
+    - "Facts use a two-column grid: labels left-aligned in the left column; values right-aligned and pushed flush toward the right content edge with stable row spacing."
+    - "Keep endpoint, PID, health/readiness, session capacity and bounded protection history concise. Protection stays tertiary and must not expose raw internal category identifiers as prominent text."
+    - "Expose exactly one lifecycle button in the popover: Stop when the Runtime is operator-owned/running and stoppable; Start when stopped and startable. Do not expose Restart in the UI. External/unavailable states expose no enabled lifecycle action. Backend compatibility may retain restart behavior outside the popover."
+    - "The single Start/Stop button row spans the available content width; the button title is centered and the surrounding button frame/container stretches symmetrically toward both content edges."
+    - "Keep Quit visually secondary below a separator."
+    - "Bound protection history to at most 20 retained events. Persisted/displayed blocked_count represents retained history, not an unbounded lifetime total. No manual clear control."
+    - "Preserve accepted application icon, notification sound and one-shot offline audio behavior."
+    - "Add focused deterministic tests for two-column alignment contract, single-action state presentation, green/red status mapping, accessibility text, and audit rollover beyond 20 events."
     - "Run applicable Swift tests/build, protection tests, full repository verification, package/codesign, exact four-tool MCP contract and diff/scope checks."
-    - "Publish candidate and report non-force to dev, then stop for Architect review. Do not install the candidate in revision 14."
+    - "Publish candidate and report non-force to dev, then stop for Architect review. Do not install or activate the candidate in revision 15."
     - "Do not modify TASK-0030."
 
 invariants:
-  - "Live Runtime remains unchanged during revision 14."
-  - "RuntimeStatus and RuntimePolicy remain authoritative."
-  - "Protection decision behavior is unchanged; retained audit history is capped at 20."
+  - "Live Runtime remains unchanged during revision 15."
+  - "RuntimeStatus and RuntimePolicy remain authoritative for state and action availability."
+  - "Protection decision/classifier behavior is unchanged; only bounded audit-history accounting/presentation may change."
   - "Public MCP surface remains terminal_exec, terminal_start, terminal_poll and terminal_control."
   - "Accepted icon/audio resources remain unchanged."
   - "No new dependency, framework, service, branch, worktree, clone, main promotion, tag or release."
 
 forbidden_changes:
   - "No live installation or Runtime lifecycle mutation."
-  - "No Runtime backend/server/RuntimePolicy/public-MCP/tunnel/env/port-ownership change."
+  - "No Restart control in the popover."
+  - "No Runtime backend/server/RuntimePolicy/public-MCP/tunnel/env/port-ownership behavior change."
   - "No TCC workaround and no TASK-0030 mutation."
 
 gap_policy:
@@ -86,31 +89,34 @@ gap_policy:
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "Popover is compact and content-fit."
-    evidence_required: "Presentation tests and source inspection prove no excess vertical gap and a compact state-to-endpoint-to-health hierarchy."
+    requirement: "Popover is compact, content-fit and visually balanced."
+    evidence_required: "Presentation tests/source inspection prove stable rows, left labels, right-flush values and no stretch gap."
   - id: AC-2
-    requirement: "Lifecycle controls adapt to RuntimeStatus while preserving RuntimePolicy authority."
-    evidence_required: "Tests cover connected, stopped, external, unavailable and busy presentation."
+    requirement: "Status presentation is one green/red icon with non-color tooltip/accessibility semantics."
+    evidence_required: "Tests cover healthy serving versus every non-serving/unconfirmed state."
   - id: AC-3
-    requirement: "Protection history is bounded and tertiary."
-    evidence_required: "Audit tests prove event history and blocked_count remain at or below 20 through rollover; UI avoids prominent raw internal category text."
+    requirement: "Exactly one lifecycle action is exposed when applicable."
+    evidence_required: "Connected shows one centered full-width Stop; stopped shows one centered full-width Start; Restart is absent; external/unavailable expose no enabled action."
   - id: AC-4
-    requirement: "Existing behavior remains preserved."
-    evidence_required: "Focused tests, Swift build/tests, full verify, package/codesign and exact four-tool checks pass with bounded diff."
+    requirement: "Protection history is bounded and tertiary."
+    evidence_required: "Audit tests prove retained events and displayed blocked_count never exceed 20 and enforcement decisions are unchanged."
   - id: AC-5
+    requirement: "Existing Runtime/MCP/resource behavior remains preserved."
+    evidence_required: "Focused tests, Swift build/tests, full verify, package/codesign and exact four-tool checks pass with bounded diff."
+  - id: AC-6
     requirement: "Publication is reconstructible."
     evidence_required: "Exact base/candidate/report lineage, non-force dev publication, unchanged main, clean checkout and no auxiliary worktree."
 
 verification:
   executor_checks:
     - id: CHECK-1
-      command_or_check: "Bind exact base and prove revision-13 lineage plus zero live Runtime mutation."
+      command_or_check: "Bind exact revision-15 base and prove zero live Runtime mutation."
       required: true
     - id: CHECK-2
-      command_or_check: "Implement compact state-adaptive presentation and bounded audit-history accounting only."
+      command_or_check: "Implement only the minimal two-column/single-action/status-icon UX plus bounded audit-history accounting."
       required: true
     - id: CHECK-3
-      command_or_check: "Run focused presentation/audit tests and full repository verification."
+      command_or_check: "Run focused presentation/audit tests and full repository verification/package checks."
       required: true
     - id: CHECK-4
       command_or_check: "Publish candidate/report without activation and stop for Architect review."
