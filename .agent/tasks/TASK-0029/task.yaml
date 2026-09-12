@@ -1,7 +1,7 @@
 protocol_version: 3
 
 task_id: TASK-0029
-task_revision: 1
+task_revision: 2
 state: APPROVED
 
 origin:
@@ -75,7 +75,7 @@ objective: "Make Agent Runtime operationally persistent and collision-safe on th
 
 scope:
   required_changes:
-    - "Fresh-bind TASK-0029 revision 1 at the exact handoff base. Fresh-prove dev/main identity, accepted TASK-0028 review, clean target state, current live Runtime/process/port state, current menu-bar package state, and required execution capability before mutation."
+    - "Fresh-bind TASK-0029 revision 2 at the exact handoff base while preserving the existing revision-1 WIP and its deterministic evidence. Fresh-prove dev/main identity, accepted TASK-0028 review, clean target state, current live Runtime/process/port state, current menu-bar package state, and required execution capability before mutation."
     - "Define one canonical protected resource identity for the installation: Agent Runtime's canonical tunnel-client launch through start.sh/profile-file, its MCP child, and protected listener 127.0.0.1:8080. Do not protect unrelated processes merely because they use a similar name."
     - "Implement a single-instance guarantee that is safe under concurrent starts. Ten simultaneous start attempts must converge to one serving Runtime or one already-running result, never multiple tunnel-client/MCP instances. Use an atomic OS/filesystem/process primitive appropriate for macOS; PID existence or port occupancy alone is not sufficient authority."
     - "Add one minimal macOS-native supervisor/KeepAlive path for the canonical Runtime. While operator desired state is RUNNING, accidental termination of the canonical Runtime/tunnel must be recovered automatically without rotating tunnel identity, changing connector/app binding, creating a second instance, or requiring a chat reconnect. This supersedes TASK-0026's prior prohibition on Runtime KeepAlive only to the extent required by this task."
@@ -84,12 +84,12 @@ scope:
     - "Add Agent Runtime self-protection at the terminal execution boundary so commands executed through Agent Runtime cannot intentionally or accidentally terminate, signal, launchctl-stop/bootout, replace, rebind, or free the protected Runtime/tunnel/port 8080. Detection must be semantic and conservative enough to block clear destructive targets while avoiding a broad shell blacklist. Return a stable machine-readable/user-readable denial such as PROTECTED_RUNTIME rather than executing the destructive action."
     - "The self-protection boundary must cover at minimum direct PID/process-group kill or signal of the canonical tunnel/MCP processes, pkill/killall patterns that resolve to those canonical processes, lifecycle operations against the canonical launchd service if one is introduced, and explicit attempts to terminate/free/rebind the protected 8080 listener through Agent Runtime. It must not claim to control arbitrary out-of-band root/sudo shells or third-party local tools outside this repository."
     - "Record bounded blocked-attempt audit events without secrets/private command payload leakage beyond what is required to explain the denial. The native menu-bar app must surface a concise warning/count/last-event state so the operator can see that an unauthorized/protected lifecycle attempt was blocked. Do not create a database or unbounded log."
-    - "Handle stale historical Runtime instances safely. A canonical current instance may be reused. A positively identified stale instance owned by this installation may be cleaned up only through the bounded migration/install path with strong identity proof. A foreign or ambiguous process on port 8080 must fail closed and surface an operator error; never kill it merely to free the port."
+    - "Handle stale historical Runtime instances safely. Revision 2 authorizes one bounded repository-owned migration path for the observed live drift: a positively identified canonical Runtime is serving unsupervised while desired state is STOPPED and the canonical launchd label is loaded from a non-serving isolated-test fixture. Before mutation, prove canonical executable/argv/profile identity, process-tree/listener ownership, accepted tunnel fingerprint, exact launchd label, temporary-fixture provenance, and non-serving stale-job state. Any ambiguity is BLOCKED. The migration may remove only that proven stale fixture registration, install/register exactly one canonical service definition, and perform one controlled cutover of the proven canonical unsupervised Runtime if required. Foreign or ambiguous 8080 owners remain fail-closed. STOPPED remains STOPPED until an explicit operator-style Start."
     - "Preserve TASK-0028 tunnel convergence: ~/.config/tunnel-client/agent-runtime.yaml remains the sole persistent owner of tunnel identity; .env must not regain CONTROL_PLANE_TUNNEL_ID or AGENT_RUNTIME_TUNNEL_PROFILE; start path remains canonical --profile-file; no tunnel/app/key recreation or rotation is allowed."
     - "Preserve exactly four public MCP tools and existing MCP signatures. Self-protection may change terminal execution outcome only for commands that materially target the protected Runtime lifecycle/resource; ordinary terminal behavior must remain compatible."
-    - "Update installer/packaging/uninstall behavior only as needed for the supervised singleton and menu-bar integration. Installation/update must be idempotent and must not create duplicate launchd jobs or duplicate live Runtime instances. Uninstall/recovery must be explicit and must not silently destroy unrelated processes or user data."
+    - "Update installer/packaging/uninstall behavior only as needed for the supervised singleton and menu-bar integration. Revision 2 may add a bounded service-recovery mode that reconciles only the canonical runtime service registration and does not require replacing the preserved .venv symlink, rebuilding the Python environment, or performing a generic reinstall. Installation/update/migration must be idempotent and must not create duplicate launchd jobs or duplicate live Runtime instances. Uninstall/recovery must be explicit and must not affect unrelated processes or user data."
     - "Add deterministic tests for: concurrent start collapse; desired RUNNING/STOPPED semantics; accidental-death recovery; intentional Stop suppressing recovery; one controlled Restart; stale/foreign 8080 fail-closed behavior; exact tunnel identity preservation; self-protection denial cases; ordinary-command non-regression; bounded audit behavior; menu-bar warning presentation; and installer idempotence. Use isolated ports/process fixtures for tests; do not repeatedly kill the operator's live Runtime during unit/integration suites."
-    - "Perform one bounded live acceptance only after deterministic verification is green and only through an out-of-band local control surface. Prove the existing canonical Runtime stays on the same tunnel identity, accidental termination recovers to one instance, explicit operator-style Stop suppresses resurrection, explicit Start restores one instance, and no other service/process is touched. Do not perform more lifecycle mutations than acceptance requires."
+    - "Perform one bounded live migration/acceptance only after deterministic verification is green and only through an out-of-band local control surface. First prove the revision-2 stale-live preconditions and converge only through the repository-owned migration path. Prove the existing canonical Runtime stays on the same tunnel identity, accidental termination recovers to one instance, explicit operator-style Stop suppresses resurrection, explicit Start restores one instance, and no other service/process is touched. Do not perform more lifecycle mutations than acceptance requires."
     - "Run ./verify, Swift tests, release build/package/signature verification, shell syntax/diff checks, exact four-tool proof, and focused protected-runtime tests. Publish implementation candidate and report non-force to dev, prove lineage and unchanged main, then stop at NEEDS_REVIEW."
   allowed_existing_files_or_components:
     - "start.sh"
@@ -168,7 +168,7 @@ acceptance_criteria:
     evidence_required: "Focused tests prove direct kill/signal, matching pkill/killall, canonical launchd stop/bootout if applicable, and protected-port destructive attempts are denied with stable PROTECTED_RUNTIME-style evidence, while ordinary terminal commands continue to work."
   - id: AC-5
     requirement: "Stale and foreign process handling is safe."
-    evidence_required: "Tests prove only positively identified stale instances of this installation may be cleaned during bounded migration; foreign/ambiguous 8080 listeners are never killed and instead produce a fail-closed operator-visible error."
+    evidence_required: "Tests and live proof show foreign/ambiguous 8080 remains fail-closed; stale fixture provenance and non-serving state are positively proven before removal; the canonical unsupervised Runtime is positively proven before one controlled cutover; STOPPED remains STOPPED through migration; explicit Start establishes exactly one supervised canonical instance; rerunning migration is idempotent."
   - id: AC-6
     requirement: "Tunnel identity remains stable and split-brain cannot regress."
     evidence_required: "Profile/.env/static/startup proof shows one canonical profile-file identity owner, unchanged tunnel fingerprint across supervised recovery/restart, no legacy .env selectors, and no connector/tunnel/key recreation."
@@ -180,7 +180,7 @@ acceptance_criteria:
     evidence_required: "./verify passes, exact four-tool surface is unchanged, ordinary terminal execution tests pass, no unrelated Python runtime semantics or dependencies change, and release Swift build/package/signature checks pass."
   - id: AC-9
     requirement: "Install/update is idempotent and does not create duplicate services or instances."
-    evidence_required: "Repeated isolated install/package verification proves one canonical launchd/supervisor registration, one menu-bar app, no duplicate Runtime, and no mutation of unrelated services."
+    evidence_required: "Repeated isolated install/package/migration verification proves one canonical launchd/supervisor registration, one menu-bar app, no duplicate Runtime, no mutation of unrelated services, and fixture tests cannot register or overwrite the production Runtime launchd label."
   - id: AC-10
     requirement: "Publication is bounded and reconstructible."
     evidence_required: "Task/report validation, exact changed-path/dependency proof, candidate/report direct lineage, non-force dev publication, final dev proof, unchanged main proof, and clean worktree."
@@ -188,7 +188,7 @@ acceptance_criteria:
 verification:
   executor_checks:
     - id: CHECK-1
-      command_or_check: "Fresh-prove exact task/base/dev/main, accepted TASK-0028 review, current canonical tunnel identity contract, current menu-bar/native lifecycle implementation, live Runtime protection state, and required out-of-band capability before mutation."
+      command_or_check: "Fresh-prove exact revision-2 task/base/dev/main, preserved revision-1 WIP integrity, accepted TASK-0028 tunnel contract, exact live drift preconditions, and required out-of-band capability before mutation."
       required: true
     - id: CHECK-2
       command_or_check: "Run deterministic isolated tests for 10-way concurrent start, desired-state recovery/stop/restart, stale/foreign port behavior, self-protection denial, audit bounds, installer idempotence, and ordinary terminal non-regression."
@@ -197,7 +197,7 @@ verification:
       command_or_check: "Run ./verify, Swift tests, release build/package/signature, shell syntax/diff checks, exact four-tool surface proof, dependency inspection, and static proof of no remote/public lifecycle control surface or tunnel-identity regression."
       required: true
     - id: CHECK-4
-      command_or_check: "Perform one minimal out-of-band live acceptance after deterministic gates: prove accidental-death auto-recovery to one instance with same tunnel identity; explicit Stop suppresses resurrection; explicit Start restores one instance; health/readiness green; no unrelated process/service touched."
+      command_or_check: "Perform one minimal out-of-band live migration/acceptance after deterministic gates: prove revision-2 preconditions and converge through the repository-owned migration path; then prove accidental-death auto-recovery to one instance with same tunnel identity; explicit Stop suppresses resurrection; explicit Start restores one instance; health/readiness green; no unrelated process/service touched."
       required: true
     - id: CHECK-5
       command_or_check: "Validate report, publish candidate/report non-force to dev, fresh-prove candidate/report lineage, final dev, unchanged main, clean worktree, and NEEDS_REVIEW."
