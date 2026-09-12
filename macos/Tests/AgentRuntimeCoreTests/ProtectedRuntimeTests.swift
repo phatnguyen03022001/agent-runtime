@@ -13,9 +13,32 @@ final class ProtectedRuntimeTests: XCTestCase {
 
         let snapshot = ProtectionAuditReader(url: file).read()
 
-        XCTAssertEqual(snapshot.blockedCount, 7)
+        XCTAssertEqual(snapshot.blockedCount, 1)
         XCTAssertEqual(snapshot.lastCategory, "canonical_process_signal")
         XCTAssertEqual(snapshot.lastAt, "2026-09-11T12:00:00Z")
+    }
+
+    func testProtectionAuditReaderCapsRetainedHistoryAtTwentyEvents() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("agent-runtime-audit-rollover-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let file = root.appendingPathComponent("protected-attempts.json")
+        let events = (0..<25).map { index in
+            [
+                "at": "2026-09-13T00:00:\(String(format: "%02d", index))Z",
+                "category": "category-\(index)",
+                "tool": "terminal_exec",
+            ]
+        }
+        let object: [String: Any] = ["version": 1, "blocked_count": 25, "events": events]
+        try JSONSerialization.data(withJSONObject: object).write(to: file)
+
+        let snapshot = ProtectionAuditReader(url: file).read()
+
+        XCTAssertEqual(snapshot.blockedCount, ProtectionAuditSnapshot.maxRetainedEvents)
+        XCTAssertEqual(snapshot.lastCategory, "category-24")
+        XCTAssertEqual(snapshot.lastAt, "2026-09-13T00:00:24Z")
     }
 
     func testNativeBackendUsesExplicitLifecycleScriptActionsAndDesiredState() throws {

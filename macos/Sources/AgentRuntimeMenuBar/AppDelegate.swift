@@ -254,35 +254,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateStatusItem(for status: RuntimeStatus) {
         guard let button = statusItem.button else { return }
-        let symbol: String
-        switch status {
-        case .owned: symbol = "bolt.horizontal.circle.fill"
-        case .external: symbol = "lock.circle"
-        case .stopped: symbol = "bolt.horizontal.circle"
-        case .ambiguous: symbol = "exclamationmark.circle"
-        }
+        let indicator = RuntimeStatusIndicator(status: status)
         let configuration = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
-        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Agent Runtime")?
+        let image = NSImage(systemSymbolName: indicator.symbolName, accessibilityDescription: indicator.accessibilityLabel)?
             .withSymbolConfiguration(configuration)
         image?.isTemplate = true
         button.image = image
-        let summary = accessibilitySummary(for: status)
+        button.contentTintColor = indicator.color
+        let summary = RuntimePopoverPresentation.accessibilitySummary(for: status)
         button.toolTip = summary
         button.setAccessibilityValue(summary)
-    }
-
-    private func accessibilitySummary(for status: RuntimeStatus) -> String {
-        switch status {
-        case .stopped:
-            return "Offline; desired state STOPPED"
-        case .owned(let identity):
-            return "Connected; endpoint 127.0.0.1:8080; PID \(identity.pid); live and ready"
-        case .external(let pids):
-            let identities = pids.map(String.init).joined(separator: ", ")
-            return "External; endpoint 127.0.0.1:8080; PID(s) \(identities); read-only"
-        case .ambiguous(let message):
-            return "Attention; unavailable; \(message)"
-        }
     }
 
     private func showError(_ message: String) {

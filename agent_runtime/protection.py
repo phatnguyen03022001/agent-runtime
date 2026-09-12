@@ -298,7 +298,6 @@ class ProtectedRuntimeGuard:
             current = json.loads(path.read_text()) if path.exists() else {}
         except (OSError, json.JSONDecodeError, TypeError):
             current = {}
-        count = int(current.get("blocked_count", 0)) + 1
         events = current.get("events")
         if not isinstance(events, list):
             events = []
@@ -310,7 +309,7 @@ class ProtectedRuntimeGuard:
                 "tool": tool_name,
             }
         )
-        payload = {"version": 1, "blocked_count": count, "events": events}
+        payload = {"version": 1, "blocked_count": len(events), "events": events}
         fd, temp_name = tempfile.mkstemp(prefix=".protected-attempts-", dir=path.parent)
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:

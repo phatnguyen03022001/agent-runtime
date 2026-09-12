@@ -1,12 +1,14 @@
 import Foundation
 
 public struct ProtectionAuditSnapshot: Equatable, Sendable {
+    public static let maxRetainedEvents = 20
+
     public let blockedCount: Int
     public let lastCategory: String?
     public let lastAt: String?
 
     public init(blockedCount: Int = 0, lastCategory: String? = nil, lastAt: String? = nil) {
-        self.blockedCount = blockedCount
+        self.blockedCount = min(max(blockedCount, 0), Self.maxRetainedEvents)
         self.lastCategory = lastCategory
         self.lastAt = lastAt
     }
@@ -30,11 +32,10 @@ public struct ProtectionAuditReader: Sendable {
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return ProtectionAuditSnapshot()
         }
-        let count = object["blocked_count"] as? Int ?? 0
-        let events = object["events"] as? [[String: Any]] ?? []
+        let events = (object["events"] as? [[String: Any]] ?? []).suffix(ProtectionAuditSnapshot.maxRetainedEvents)
         let last = events.last
         return ProtectionAuditSnapshot(
-            blockedCount: count,
+            blockedCount: events.count,
             lastCategory: last?["category"] as? String,
             lastAt: last?["at"] as? String
         )

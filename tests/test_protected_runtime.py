@@ -131,7 +131,7 @@ class ProtectedRuntimeGuardTests(unittest.TestCase):
                     guard.check(["/bin/zsh", "-lc", f"kill -TERM 410 # secret-{index}"], tool_name="terminal_exec")
             payload = json.loads((root / "protected-attempts.json").read_text())
             self.assertEqual(payload["version"], 1)
-            self.assertEqual(payload["blocked_count"], 30)
+            self.assertEqual(payload["blocked_count"], 20)
             self.assertLessEqual(len(payload["events"]), 20)
             serialized = json.dumps(payload)
             self.assertNotIn("secret-", serialized)

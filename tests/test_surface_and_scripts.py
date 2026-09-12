@@ -284,8 +284,8 @@ class SurfaceAndScriptsTests(unittest.TestCase):
 
     def test_menu_bar_surfaces_protection_warning_and_docs_state_enforcement_boundary(self) -> None:
         source = (ROOT / "macos" / "Sources" / "AgentRuntimeMenuBar" / "ControlPanelController.swift").read_text()
-        self.assertIn("Protection:", source)
-        self.assertIn("blocked · last:", source)
+        self.assertIn("retained", source)
+        self.assertNotIn("blocked · last:", source)
         docs = (ROOT / "README.md").read_text()
         self.assertIn("protected singleton", docs)
         self.assertIn("root/sudo", docs)
