@@ -1,12 +1,12 @@
 protocol_version: 3
 
 task_id: TASK-0029
-task_revision: 16
+task_revision: 17
 state: APPROVED
 
 origin:
-  type: architect_review_followup
-  gap_id: HEADER_STATUS_TRAILING_ALIGNMENT
+  type: operator_correction
+  gap_id: RESTORE_MENU_ICON_AND_PERSISTENT_ACTION_SLOT
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -30,46 +30,53 @@ execution_skills:
   required: [executor, simplicity, verification, github-workflow]
 
 authority_sources:
-  - source: "phatnguyen03022001/agent-runtime@9e9aacf0a7ddccb49f9e4fab8582b734838edeed:.agent/tasks/TASK-0029/review.yaml"
-    role: "Revision-15 Architect judgment."
+  - source: "operator_current_correction"
+    role: "Revision-16 is superseded before execution. Preserve the prior Agent Runtime menu-bar glyph; only tint it green/red. Do not allow the Start/Stop slot to disappear from the popover."
     precedence: 1
+  - source: "phatnguyen03022001/agent-runtime@9e9aacf0a7ddccb49f9e4fab8582b734838edeed:.agent/tasks/TASK-0029/review.yaml"
+    role: "Revision-15 Architect review; header trailing alignment remains required."
+    precedence: 2
   - source: "phatnguyen03022001/agent-runtime@4892a7440c3214cea03b1d60c4aa9af7e0ca5621:.agent/tasks/TASK-0029/report.yaml"
     role: "Revision-15 execution evidence."
-    precedence: 2
-  - source: "phatnguyen03022001/agent-runtime@9c2c856f1447e302650cab40d724b1e8416e7b31"
-    role: "Revision-15 candidate to preserve except for the bounded header-layout correction."
     precedence: 3
+  - source: "phatnguyen03022001/agent-runtime@9c2c856f1447e302650cab40d724b1e8416e7b31"
+    role: "Revision-15 candidate to preserve except for the bounded corrections below."
+    precedence: 4
 
 structure_authority:
   status: RESOLVED
-  source: "Revision-15 AppKit presentation."
-  rationale: "Revision 16 is a source-only one-defect correction; no redesign or lifecycle change is authorized."
+  source: "Existing AppKit menu-bar implementation plus RuntimePolicy."
+  rationale: "Revision 17 is source-only. It corrects presentation without changing lifecycle authority or backend behavior."
 
-objective: "Correct the revision-15 header so Agent Runtime remains leading and the single green/red status indicator occupies the trailing right content edge, without changing any already-accepted presentation, Runtime, protection, resource or MCP behavior."
+objective: "Restore the established Agent Runtime menu-bar glyph, use green/red tint for serving state, keep a stable single Start/Stop action slot, and place the popover status indicator at the trailing edge while preserving all accepted revision-15 behavior."
 
 scope:
   required_changes:
-    - "Fresh-bind exact base and preserve revision-15 candidate/report/review lineage, unchanged main and frozen TASK-0030."
-    - "Make the header span the same available content width as the facts grid and divider."
-    - "Anchor Agent Runtime at the leading edge and the single status indicator at the trailing right content edge; the indicator must not collapse immediately beside the title."
-    - "Add a focused deterministic layout assertion that fails if the header does not span full content width or the indicator is not trailing."
-    - "Preserve right-flush fact values, compact content-fit spacing, exactly one full-width Start/Stop action, no Restart control, green/red semantics, accessibility summaries and bounded protection history exactly as accepted from revision 15."
-    - "Run focused Swift presentation tests plus applicable full verification/package/codesign/diff checks."
-    - "Publish candidate and report non-force to dev, then stop for Architect review. Do not install or activate the candidate in revision 16."
+    - "Fresh-bind exact base; preserve revision-15 candidate/report/review lineage, unchanged main and frozen TASK-0030."
+    - "Menu-bar status item must use the established Agent Runtime glyph used before revision 15; do not replace it with a generic circle. Use the same glyph shape across states and change only tint/accessible state: green for positively owned serving live/ready, red otherwise."
+    - "Popover header spans the full content width: title leading, single status indicator trailing at the right content edge."
+    - "Popover keeps one full-width lifecycle-button slot visible at all times so layout does not collapse. RuntimePolicy remains authoritative: owned shows enabled Stop; stopped shows enabled Start; external/ambiguous show visible Stop but disabled. Do not enable an action when RuntimePolicy forbids it."
+    - "Do not expose Restart in the popover."
+    - "Preserve two-column facts with values right-aligned at the right content edge, compact spacing, secondary Quit, bounded protection history, accepted app icon/audio resources and one-shot offline audio behavior."
+    - "Add focused deterministic tests proving menu-bar glyph preservation, green/red tint mapping, full-width trailing header indicator, persistent Start/Stop slot, correct enabled/disabled mapping, and existing bounded audit behavior."
+    - "Run applicable Swift tests/build, protection tests, full repository verification, package/codesign, exact four-tool MCP contract and bounded diff checks."
+    - "Publish candidate and report non-force to dev, then stop for Architect review. Do not install or activate the candidate in revision 17."
     - "Do not modify TASK-0030."
 
 invariants:
-  - "Live Runtime remains unchanged during revision 16."
-  - "RuntimeStatus and RuntimePolicy behavior remain unchanged."
+  - "Live Runtime remains unchanged during revision 17."
+  - "RuntimeStatus and RuntimePolicy decision behavior remain unchanged."
   - "Protection persistence/decision behavior remains unchanged from revision 15."
   - "Public MCP surface remains terminal_exec, terminal_start, terminal_poll and terminal_control."
-  - "Accepted icon/audio resources remain unchanged."
+  - "Accepted application icon/audio resources remain unchanged."
   - "No new dependency, framework, service, branch, worktree, clone, main promotion, tag or release."
 
 forbidden_changes:
   - "No live installation or Runtime lifecycle mutation."
+  - "No generic circle replacement for the established menu-bar glyph."
+  - "No hidden/missing lifecycle-button row solely because status is external or ambiguous."
   - "No Restart control in the popover."
-  - "No changes outside the minimal header-layout correction, its focused tests, and canonical report artifact."
+  - "No Runtime backend/server/RuntimePolicy/public-MCP/tunnel/env/port-ownership behavior change."
   - "No TCC workaround and no TASK-0030 mutation."
 
 gap_policy:
@@ -82,25 +89,28 @@ gap_policy:
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "Header spans full content width with title leading and status indicator trailing at the right content edge."
-    evidence_required: "Source inspection plus deterministic layout test prove the header cannot collapse to intrinsic title-plus-icon width."
+    requirement: "Menu-bar identity is preserved while state is represented by tint."
+    evidence_required: "Source/tests prove the established pre-revision-15 glyph is used for all states; green only for positively owned serving live/ready and red otherwise; tooltip/AX text remains non-color state evidence."
   - id: AC-2
-    requirement: "Revision-15 accepted presentation behavior is preserved."
-    evidence_required: "Existing two-column, single-action, status semantics, accessibility and bounded-audit tests remain green."
+    requirement: "Header and fact grid are visually aligned."
+    evidence_required: "Source/tests prove header full-width with title leading and indicator trailing, facts values right-flush, and compact content-fit spacing."
   - id: AC-3
-    requirement: "Existing Runtime/MCP/resource behavior remains preserved."
-    evidence_required: "Focused/full verification, package/codesign and bounded diff pass with zero live mutation."
+    requirement: "Exactly one stable lifecycle-button slot is always visible without violating RuntimePolicy."
+    evidence_required: "Owned = enabled Stop; stopped = enabled Start; external/ambiguous = visible disabled Stop; Restart absent; button row remains full-width."
   - id: AC-4
+    requirement: "Revision-15 accepted protection/resources/runtime/MCP behavior remains preserved."
+    evidence_required: "Focused tests, full verify, package/codesign, exact four-tool checks and bounded diff pass with zero live mutation."
+  - id: AC-5
     requirement: "Publication is reconstructible."
     evidence_required: "Exact base/candidate/report lineage, non-force dev publication, unchanged main, clean checkout and no auxiliary worktree."
 
 verification:
   executor_checks:
     - id: CHECK-1
-      command_or_check: "Bind exact revision-16 base and prove zero live Runtime mutation."
+      command_or_check: "Bind exact revision-17 base and prove zero live Runtime mutation."
       required: true
     - id: CHECK-2
-      command_or_check: "Implement only the full-width header/trailing-indicator correction and focused regression test."
+      command_or_check: "Implement only glyph restoration/tinting, trailing header alignment and stable single-action-slot presentation plus focused tests."
       required: true
     - id: CHECK-3
       command_or_check: "Run focused presentation tests and applicable full repository/package checks."
