@@ -128,7 +128,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         button.action = #selector(togglePopover)
         button.toolTip = "Agent Runtime"
         button.setAccessibilityLabel("Agent Runtime")
-        updateStatusItem(for: .stopped)
+        updateStatusItem(for: .ambiguous("Refreshing Runtime status…"))
     }
 
     private func configurePopover() {

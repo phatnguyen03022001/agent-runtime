@@ -74,6 +74,77 @@ final class OwnershipTests: XCTestCase {
         XCTAssertEqual(try discovery.matchingRuntimePIDs(checkoutRoot: "/tmp/fixture"), [pid])
     }
 
+    func testProductionDiscoveryDrainsLargeProcessOutputAndFollowingActionCompletes() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("agent-runtime-large-discovery-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let pid: Int32 = 9010
+        let identity = ProcessIdentity(
+            pid: pid,
+            processGroupID: pid,
+            startSeconds: 1,
+            startMicroseconds: 1,
+            executablePath: "/opt/homebrew/bin/tunnel-client"
+        )
+        let desired = root.appendingPathComponent("protected-runtime-running")
+        FileManager.default.createFile(atPath: desired.path, contents: nil)
+        let script = root.appendingPathComponent("start.sh")
+        try """
+        #!/bin/bash
+        set -e
+        case "$1" in
+          restart) touch "\(desired.path)" ;;
+          *) exit 2 ;;
+        esac
+        """.write(to: script, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: script.path)
+
+        let processListCommand = """
+        /usr/bin/head -c 131072 /dev/zero
+        printf '\\n\(pid) /opt/homebrew/bin/tunnel-client run --control-plane.poll-channel main --mcp.command command=\(root.path)/.venv/bin/python -m agent_runtime.server,channel=main --health.listen-addr 127.0.0.1:8080\\n'
+        """
+        let fixtureOutput = try PSRuntimeDiscovery.readProcessList(
+            executableURL: URL(fileURLWithPath: "/bin/sh"),
+            arguments: ["-c", processListCommand]
+        )
+        XCTAssertGreaterThanOrEqual(fixtureOutput.utf8.count, 131072)
+
+        let inspector = FakeInspector(snapshot: identity)
+        let discovery = PSRuntimeDiscovery(
+            inspector: inspector,
+            processListProvider: {
+                try PSRuntimeDiscovery.readProcessList(
+                    executableURL: URL(fileURLWithPath: "/bin/sh"),
+                    arguments: ["-c", processListCommand]
+                )
+            }
+        )
+        let backend = NativeRuntimeBackend(
+            configuration: RuntimeConfiguration(
+                checkoutRoot: root.path,
+                desiredStateURL: desired,
+                transitionTimeout: 2
+            ),
+            inspector: inspector,
+            discovery: discovery
+        )
+        let controller = RuntimeController(backend: backend)
+        let queue = DispatchQueue(label: "agent-runtime.large-discovery-fixture")
+        let finished = expectation(description: "large discovery refresh and restart finish")
+        let resultBox = ResultBox<RuntimeStatus, RuntimeLifecycleError>()
+
+        queue.async {
+            _ = controller.refresh()
+            resultBox.store(controller.restart())
+            finished.fulfill()
+        }
+
+        wait(for: [finished], timeout: 5)
+        XCTAssertEqual(resultBox.load(), .success(.owned(identity)))
+    }
+
     func testProductionDiscoveryRejectsDifferentRuntimePath() throws {
         let pid: Int32 = 9003
         let inspector = FakeInspector(snapshot: ProcessIdentity(
@@ -284,6 +355,23 @@ private final class FakeInspector: ProcessInspecting {
     func groupMembers(processGroupID: Int32) -> [ProcessIdentity] {
         guard let current, current.processGroupID == processGroupID else { return [] }
         return [current]
+    }
+}
+
+private final class ResultBox<Value: Sendable, Failure: Error & Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Result<Value, Failure>?
+
+    func store(_ value: Result<Value, Failure>) {
+        lock.lock()
+        self.value = value
+        lock.unlock()
+    }
+
+    func load() -> Result<Value, Failure>? {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
     }
 }
 

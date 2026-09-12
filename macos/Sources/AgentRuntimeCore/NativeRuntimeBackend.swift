@@ -1,4 +1,41 @@
+import Darwin
 import Foundation
+
+private final class ProcessOutputCapture: @unchecked Sendable {
+    private let pipe: Pipe
+    private let lock = NSLock()
+    private var data = Data()
+    private let drainGroup = DispatchGroup()
+
+    init(pipe: Pipe) {
+        self.pipe = pipe
+    }
+
+    func startDraining() {
+        drainGroup.enter()
+        DispatchQueue.global(qos: .userInitiated).async { [self] in
+            let captured = pipe.fileHandleForReading.readDataToEndOfFile()
+            lock.lock()
+            data = captured
+            lock.unlock()
+            drainGroup.leave()
+        }
+    }
+
+    func waitForDrain(timeout: TimeInterval) -> Bool {
+        drainGroup.wait(timeout: .now() + max(0, timeout)) == .success
+    }
+
+    func snapshot() -> Data {
+        lock.lock()
+        defer { lock.unlock() }
+        return data
+    }
+
+    func closeReader() {
+        try? pipe.fileHandleForReading.close()
+    }
+}
 
 public protocol RuntimeDiscovering: AnyObject {
     func matchingRuntimePIDs(checkoutRoot: String) throws -> [Int32]
@@ -19,23 +56,58 @@ public final class PSRuntimeDiscovery: RuntimeDiscovering, @unchecked Sendable {
     }
 
     private static func readProcessList() throws -> String {
+        try readProcessList(
+            executableURL: URL(fileURLWithPath: "/bin/ps"),
+            arguments: ["-ax", "-o", "pid=,command="]
+        )
+    }
+
+    static func readProcessList(
+        executableURL: URL,
+        arguments: [String],
+        timeout: TimeInterval = 2
+    ) throws -> String {
         let process = Process()
         let pipe = Pipe()
-        process.executableURL = URL(fileURLWithPath: "/bin/ps")
-        process.arguments = ["-ax", "-o", "pid=,command="]
+        let output = ProcessOutputCapture(pipe: pipe)
+        process.executableURL = executableURL
+        process.arguments = arguments
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
         do {
             try process.run()
-            process.waitUntilExit()
         } catch {
             throw RuntimeLifecycleError.operationFailed("Could not inspect Runtime processes: \(error.localizedDescription)")
+        }
+
+        // Drain while the child is running. Waiting for exit before reading a
+        // Pipe deadlocks as soon as process-list output exceeds the pipe
+        // buffer, leaving the menu-bar lifecycle queue permanently blocked.
+        output.startDraining()
+        let deadline = Date().addingTimeInterval(max(0, timeout))
+        while process.isRunning && Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.01)
+        }
+        let timedOut = process.isRunning
+        if timedOut {
+            process.terminate()
+            if process.isRunning {
+                _ = kill(process.processIdentifier, SIGKILL)
+            }
+        }
+        process.waitUntilExit()
+        guard output.waitForDrain(timeout: 1) else {
+            output.closeReader()
+            throw RuntimeLifecycleError.operationFailed("Could not inspect Runtime processes before the bounded read deadline.")
+        }
+        output.closeReader()
+        guard !timedOut else {
+            throw RuntimeLifecycleError.operationFailed("Could not inspect Runtime processes before the bounded read deadline.")
         }
         guard process.terminationStatus == 0 else {
             throw RuntimeLifecycleError.operationFailed("Could not inspect Runtime processes.")
         }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        return String(decoding: data, as: UTF8.self)
+        return String(decoding: output.snapshot(), as: UTF8.self)
     }
 
     public func matchingRuntimePIDs(checkoutRoot: String) throws -> [Int32] {

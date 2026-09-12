@@ -5,8 +5,8 @@ import AppKit
 final class ControlPanelController: NSViewController {
     private let performAction: (RuntimeAction) -> Void
     private let quit: () -> Void
-    private let statusLabel = NSTextField(labelWithString: "Stopped")
-    private let detailLabel = NSTextField(labelWithString: "")
+    private let statusLabel = NSTextField(labelWithString: "Checking…")
+    private let detailLabel = NSTextField(labelWithString: "Refreshing Runtime status…")
     private let capacityLabel = NSTextField(labelWithString: "Persistent sessions: 64")
     private let protectionLabel = NSTextField(labelWithString: "Protection: no blocked attempts")
     private let startButton = NSButton()
@@ -51,6 +51,9 @@ final class ControlPanelController: NSViewController {
         configure(startButton, title: "Start", action: #selector(startPressed))
         configure(stopButton, title: "Stop", action: #selector(stopPressed))
         configure(restartButton, title: "Restart", action: #selector(restartPressed))
+        startButton.isEnabled = false
+        stopButton.isEnabled = false
+        restartButton.isEnabled = false
         let controls = NSStackView(views: [startButton, stopButton, restartButton])
         controls.orientation = .horizontal
         controls.alignment = .centerY
@@ -99,9 +102,9 @@ final class ControlPanelController: NSViewController {
         case .stopped:
             statusLabel.stringValue = "Stopped"
             detailLabel.stringValue = "Desired state STOPPED · supervisor recovery is suppressed."
-        case .owned:
+        case .owned(let identity):
             statusLabel.stringValue = "Running"
-            detailLabel.stringValue = "Protected singleton · supervisor recovery is active."
+            detailLabel.stringValue = "PID \(identity.pid) · 127.0.0.1:8080 · live/ready"
         case .external:
             statusLabel.stringValue = "Running externally"
             detailLabel.stringValue = "Read-only · lifecycle controls are disabled."
