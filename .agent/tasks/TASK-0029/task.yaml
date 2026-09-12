@@ -1,7 +1,7 @@
 protocol_version: 3
 
 task_id: TASK-0029
-task_revision: 2
+task_revision: 3
 state: APPROVED
 
 origin:
@@ -47,24 +47,27 @@ external_skills:
   execution_recommended: []
 
 authority_sources:
-  - source: "Current operator request: make Agent Runtime a protected singleton that stays alive, make the native menu-bar app the normal lifecycle authority, prevent accidental/concurrent Executors from killing/rebinding the Runtime or port 8080, and surface blocked attempts to the operator."
-    role: "Primary current product and lifecycle authority. This intentionally supersedes TASK-0026's no-supervisor/no-auto-restart restriction for the live Runtime while preserving its direct-human-control principle for intentional Stop/Restart."
+  - source: "Current operator correction: .env is the sole persistent owner of CONTROL_PLANE_TUNNEL_ID; ~/.config/tunnel-client/agent-runtime.yaml must not exist or be recreated; Agent Runtime must launch tunnel-client directly from .env-backed configuration; the native LaunchAgent must resolve Homebrew tunnel-client under launchd and Start must not report RUNNING unless the service is actually healthy."
+    role: "Highest current authority. This supersedes TASK-0027/TASK-0028 only for tunnel-identity/config ownership and startup transport configuration. Stable tunnel identity, no rotation, protected singleton, and operator-only intentional lifecycle remain required."
     precedence: 1
-  - source: "phatnguyen03022001/agent-runtime@b1a33f9b091ca8b7aac2fd4fae0860e46a6e31ab:.agent/tasks/TASK-0028/review.yaml"
-    role: "Accepted live tunnel closure. Preserve the canonical tunnel profile as the sole persistent tunnel-ID owner and do not reintroduce split-brain identity."
+  - source: "Current operator request: make Agent Runtime a protected singleton that stays alive, make the native menu-bar app the normal lifecycle authority, prevent accidental/concurrent Executors from killing/rebinding the Runtime or port 8080, and surface blocked attempts to the operator."
+    role: "Protected singleton and operator-lifecycle authority retained from revision 1/2."
     precedence: 2
-  - source: "phatnguyen03022001/agent-runtime@b1a33f9b091ca8b7aac2fd4fae0860e46a6e31ab:start.sh"
-    role: "Current canonical startup path using Secure MCP Tunnel and --profile-file. Reuse this launch contract rather than inventing another tunnel identity/config source."
+  - source: "phatnguyen03022001/agent-runtime@b1a33f9b091ca8b7aac2fd4fae0860e46a6e31ab:.agent/tasks/TASK-0028/review.yaml"
+    role: "Accepted evidence for the stable tunnel identity/fingerprint and restart-induced 403 closure. Its former profile-file ownership choice is explicitly superseded by the current operator correction; the tunnel identity itself must remain unchanged."
     precedence: 3
+  - source: "phatnguyen03022001/agent-runtime@b1a33f9b091ca8b7aac2fd4fae0860e46a6e31ab:start.sh"
+    role: "Historical startup baseline to be corrected in revision 3: remove profile-file dependency, consume the .env tunnel ID directly, and preserve the same MCP command/health behavior."
+    precedence: 4
   - source: "phatnguyen03022001/agent-runtime@b1a33f9b091ca8b7aac2fd4fae0860e46a6e31ab:macos/Sources/AgentRuntimeCore/NativeRuntimeBackend.swift"
     role: "Current native menu-bar lifecycle/discovery baseline. It presently starts through start.sh and treats externally discovered Runtime instances read-only."
-    precedence: 4
+    precedence: 5
   - source: "phatnguyen03022001/agent-runtime@b1a33f9b091ca8b7aac2fd4fae0860e46a6e31ab:.agent/tasks/TASK-0026/task.yaml"
     role: "Historical menu-bar contract retained except where explicitly superseded here: current operator authority now allows a bounded supervisor/KeepAlive mechanism and self-protection policy so accidental termination is non-persistent."
-    precedence: 5
+    precedence: 6
   - source: "phatnguyen03022001/agent-skills@1826d33bd1e467896c133109b37db8b0656b3276:protocols/TASK_PROTOCOL.md"
     role: "Protocol-v3 execution/evidence/review authority."
-    precedence: 6
+    precedence: 7
 
 structure_authority:
   status: RESOLVED
@@ -75,8 +78,8 @@ objective: "Make Agent Runtime operationally persistent and collision-safe on th
 
 scope:
   required_changes:
-    - "Fresh-bind TASK-0029 revision 2 at the exact handoff base while preserving the existing revision-1 WIP and its deterministic evidence. Fresh-prove dev/main identity, accepted TASK-0028 review, clean target state, current live Runtime/process/port state, current menu-bar package state, and required execution capability before mutation."
-    - "Define one canonical protected resource identity for the installation: Agent Runtime's canonical tunnel-client launch through start.sh/profile-file, its MCP child, and protected listener 127.0.0.1:8080. Do not protect unrelated processes merely because they use a similar name."
+    - "Fresh-bind TASK-0029 revision 3 at the exact handoff base while preserving all existing revision-1/revision-2 WIP and deterministic evidence. Fresh-prove dev/main identity, current live Runtime/process/port/launchd state, local .env identity ownership, absence of ~/.config/tunnel-client/agent-runtime.yaml, current menu-bar package state, and required execution capability before mutation."
+    - "Define one canonical protected resource identity for the installation: Agent Runtime's canonical tunnel-client launch through start.sh using the .env-owned CONTROL_PLANE_TUNNEL_ID, its MCP child, and protected listener 127.0.0.1:8080. Do not protect unrelated processes merely because they use a similar name."
     - "Implement a single-instance guarantee that is safe under concurrent starts. Ten simultaneous start attempts must converge to one serving Runtime or one already-running result, never multiple tunnel-client/MCP instances. Use an atomic OS/filesystem/process primitive appropriate for macOS; PID existence or port occupancy alone is not sufficient authority."
     - "Add one minimal macOS-native supervisor/KeepAlive path for the canonical Runtime. While operator desired state is RUNNING, accidental termination of the canonical Runtime/tunnel must be recovered automatically without rotating tunnel identity, changing connector/app binding, creating a second instance, or requiring a chat reconnect. This supersedes TASK-0026's prior prohibition on Runtime KeepAlive only to the extent required by this task."
     - "Desired lifecycle state must remain operator-owned. The native menu-bar app is the normal control surface for explicit Start, Stop, and Restart. Start changes desired state to RUNNING and ensures the singleton exists; Stop changes desired state to STOPPED and prevents supervisor resurrection; Restart performs one intentional bounded restart and returns desired state to RUNNING. UI launch, polling, health refresh, repository updates, install verification, Executor activity, or app relaunch must not silently change desired state."
@@ -84,8 +87,11 @@ scope:
     - "Add Agent Runtime self-protection at the terminal execution boundary so commands executed through Agent Runtime cannot intentionally or accidentally terminate, signal, launchctl-stop/bootout, replace, rebind, or free the protected Runtime/tunnel/port 8080. Detection must be semantic and conservative enough to block clear destructive targets while avoiding a broad shell blacklist. Return a stable machine-readable/user-readable denial such as PROTECTED_RUNTIME rather than executing the destructive action."
     - "The self-protection boundary must cover at minimum direct PID/process-group kill or signal of the canonical tunnel/MCP processes, pkill/killall patterns that resolve to those canonical processes, lifecycle operations against the canonical launchd service if one is introduced, and explicit attempts to terminate/free/rebind the protected 8080 listener through Agent Runtime. It must not claim to control arbitrary out-of-band root/sudo shells or third-party local tools outside this repository."
     - "Record bounded blocked-attempt audit events without secrets/private command payload leakage beyond what is required to explain the denial. The native menu-bar app must surface a concise warning/count/last-event state so the operator can see that an unauthorized/protected lifecycle attempt was blocked. Do not create a database or unbounded log."
-    - "Handle stale historical Runtime instances safely. Revision 2 authorizes one bounded repository-owned migration path for the observed live drift: a positively identified canonical Runtime is serving unsupervised while desired state is STOPPED and the canonical launchd label is loaded from a non-serving isolated-test fixture. Before mutation, prove canonical executable/argv/profile identity, process-tree/listener ownership, accepted tunnel fingerprint, exact launchd label, temporary-fixture provenance, and non-serving stale-job state. Any ambiguity is BLOCKED. The migration may remove only that proven stale fixture registration, install/register exactly one canonical service definition, and perform one controlled cutover of the proven canonical unsupervised Runtime if required. Foreign or ambiguous 8080 owners remain fail-closed. STOPPED remains STOPPED until an explicit operator-style Start."
-    - "Preserve TASK-0028 tunnel convergence: ~/.config/tunnel-client/agent-runtime.yaml remains the sole persistent owner of tunnel identity; .env must not regain CONTROL_PLANE_TUNNEL_ID or AGENT_RUNTIME_TUNNEL_PROFILE; start path remains canonical --profile-file; no tunnel/app/key recreation or rotation is allowed."
+    - "Handle stale historical Runtime instances safely. The bounded recovery path must prove canonical executable/argv/.env tunnel identity, process-tree/listener ownership, expected tunnel fingerprint, exact launchd label, temporary-fixture provenance where applicable, and service state before mutation. Any ambiguity is BLOCKED. Foreign or ambiguous 8080 owners remain fail-closed. Recovery must understand the revision-3 no-profile canonical command and remain idempotent."
+    - "Revision 3 reverses the prior profile-file ownership decision. The checkout-local .env is the sole persistent owner of CONTROL_PLANE_API_KEY, CONTROL_PLANE_TUNNEL_ID, and AGENT_RUNTIME_WORKSPACE_ROOT. ~/.config/tunnel-client/agent-runtime.yaml must remain absent and must not be recreated by install/start/recovery. Launch tunnel-client directly from sanitized environment/explicit CLI configuration while preserving the same tunnel identity, MCP stdio command, loopback health listener on 127.0.0.1:8080, and no connector/app/key/tunnel recreation or rotation."
+    - "Fix the native LaunchAgent execution environment so canonical Runtime startup resolves the installed tunnel-client under launchd without depending on an interactive shell PATH. The implementation may use a verified absolute tunnel-client path or a deterministic PATH including standard Homebrew locations plus system paths; tests must prove launchd-like PATH behavior on Apple Silicon and fail closed if the binary is unavailable."
+    - "Start/Restart must not report success merely because desired state was written or launchd kickstart returned. After an explicit operator Start/Restart, perform a bounded readiness check and return success only when exactly one canonical Runtime owns 127.0.0.1:8080 and health/readiness is green. On startup failure return nonzero with a useful bounded diagnostic; do not mask launchd exit failures as RUNNING."
+    - "Update .env.example/documentation so CONTROL_PLANE_TUNNEL_ID is explicitly present as an operator-owned secret/config placeholder. Never write the real ID into Git or logs."
     - "Preserve exactly four public MCP tools and existing MCP signatures. Self-protection may change terminal execution outcome only for commands that materially target the protected Runtime lifecycle/resource; ordinary terminal behavior must remain compatible."
     - "Update installer/packaging/uninstall behavior only as needed for the supervised singleton and menu-bar integration. Revision 2 may add a bounded service-recovery mode that reconciles only the canonical runtime service registration and does not require replacing the preserved .venv symlink, rebuilding the Python environment, or performing a generic reinstall. Installation/update/migration must be idempotent and must not create duplicate launchd jobs or duplicate live Runtime instances. Uninstall/recovery must be explicit and must not affect unrelated processes or user data."
     - "Add deterministic tests for: concurrent start collapse; desired RUNNING/STOPPED semantics; accidental-death recovery; intentional Stop suppressing recovery; one controlled Restart; stale/foreign 8080 fail-closed behavior; exact tunnel identity preservation; self-protection denial cases; ordinary-command non-regression; bounded audit behavior; menu-bar warning presentation; and installer idempotence. Use isolated ports/process fixtures for tests; do not repeatedly kill the operator's live Runtime during unit/integration suites."
@@ -96,6 +102,7 @@ scope:
     - "install.sh"
     - "verify"
     - "README.md"
+    - ".env.example"
     - ".gitignore"
     - "existing macos/ Swift package/app sources and tests"
     - "agent_runtime terminal execution boundary only where required for protected-runtime self-defense"
@@ -107,7 +114,7 @@ scope:
 
 invariants:
   - "Secure MCP Tunnel remains the transport. No remote MCP gateway redesign is introduced."
-  - "Canonical tunnel identity remains unchanged and profile-file-owned according to accepted TASK-0028 semantics."
+  - "Canonical tunnel identity remains unchanged but is now .env-owned. CONTROL_PLANE_TUNNEL_ID in checkout-local .env is the sole persistent tunnel-ID authority; no persistent tunnel profile is allowed."
   - "Exactly one canonical Agent Runtime tunnel-client and one MCP child may serve the installation while desired state is RUNNING."
   - "Port 8080 is a protected Agent Runtime resource, but port occupancy alone never grants authority to kill a process."
   - "Direct human operator intent controls desired lifecycle state. Background recovery may restore RUNNING after accidental death, but may never override an explicit STOPPED state."
@@ -122,7 +129,7 @@ invariants:
 forbidden_changes:
   - "Do not remove Secure MCP Tunnel or expose Agent Runtime as a public remote MCP server."
   - "Do not create/rotate/delete/rename/clone tunnels, Runtime/API keys, ChatGPT apps/connectors, or app versions."
-  - "Do not reintroduce CONTROL_PLANE_TUNNEL_ID or AGENT_RUNTIME_TUNNEL_PROFILE as persistent .env identity owners."
+  - "Do not remove CONTROL_PLANE_TUNNEL_ID from .env, recreate ~/.config/tunnel-client/agent-runtime.yaml, or add another persistent tunnel-ID/config authority."
   - "Do not implement kill-anything-on-8080 behavior. Foreign/ambiguous listeners fail closed."
   - "Do not add a broad arbitrary command blacklist unrelated to protected-runtime lifecycle."
   - "Do not add an MCP lifecycle tool, HTTP lifecycle endpoint, public local socket, URL scheme, AppleScript surface, or other automation API for Start/Stop/Restart."
@@ -171,13 +178,13 @@ acceptance_criteria:
     evidence_required: "Tests and live proof show foreign/ambiguous 8080 remains fail-closed; stale fixture provenance and non-serving state are positively proven before removal; the canonical unsupervised Runtime is positively proven before one controlled cutover; STOPPED remains STOPPED through migration; explicit Start establishes exactly one supervised canonical instance; rerunning migration is idempotent."
   - id: AC-6
     requirement: "Tunnel identity remains stable and split-brain cannot regress."
-    evidence_required: "Profile/.env/static/startup proof shows one canonical profile-file identity owner, unchanged tunnel fingerprint across supervised recovery/restart, no legacy .env selectors, and no connector/tunnel/key recreation."
+    evidence_required: "Static/runtime proof shows exactly one persistent tunnel-ID owner in checkout-local .env, CONTROL_PLANE_TUNNEL_ID fingerprint remains unchanged, ~/.config/tunnel-client/agent-runtime.yaml is absent, startup/recovery use the .env identity directly, and no connector/tunnel/key recreation occurs."
   - id: AC-7
     requirement: "Protection/audit is bounded and truthful."
     evidence_required: "Inspection proves bounded storage/no database/no secret leakage, menu-bar warning reflects denied attempts, and documentation explicitly states the enforcement boundary does not defeat root/sudo or malicious out-of-band administrators."
   - id: AC-8
     requirement: "Existing runtime contract remains compatible."
-    evidence_required: "./verify passes, exact four-tool surface is unchanged, ordinary terminal execution tests pass, no unrelated Python runtime semantics or dependencies change, and release Swift build/package/signature checks pass."
+    evidence_required: "./verify passes, exact four-tool surface is unchanged, ordinary terminal execution tests pass, launchd-like clean-environment startup resolves tunnel-client correctly, Start/Restart only report RUNNING after bounded health/readiness proof, no unrelated Python runtime semantics or dependencies change, and release Swift build/package/signature checks pass."
   - id: AC-9
     requirement: "Install/update is idempotent and does not create duplicate services or instances."
     evidence_required: "Repeated isolated install/package/migration verification proves one canonical launchd/supervisor registration, one menu-bar app, no duplicate Runtime, no mutation of unrelated services, and fixture tests cannot register or overwrite the production Runtime launchd label."
@@ -188,16 +195,16 @@ acceptance_criteria:
 verification:
   executor_checks:
     - id: CHECK-1
-      command_or_check: "Fresh-prove exact revision-2 task/base/dev/main, preserved revision-1 WIP integrity, accepted TASK-0028 tunnel contract, exact live drift preconditions, and required out-of-band capability before mutation."
+      command_or_check: "Fresh-prove exact revision-3 task/base/dev/main, preserved WIP integrity, .env-owned tunnel identity fingerprint, absence of the deleted profile file, current launchd PATH failure evidence, and required out-of-band capability before mutation."
       required: true
     - id: CHECK-2
       command_or_check: "Run deterministic isolated tests for 10-way concurrent start, desired-state recovery/stop/restart, stale/foreign port behavior, self-protection denial, audit bounds, installer idempotence, and ordinary terminal non-regression."
       required: true
     - id: CHECK-3
-      command_or_check: "Run ./verify, Swift tests, release build/package/signature, shell syntax/diff checks, exact four-tool surface proof, dependency inspection, and static proof of no remote/public lifecycle control surface or tunnel-identity regression."
+      command_or_check: "Run ./verify, Swift tests, release build/package/signature, shell syntax/diff checks, exact four-tool surface proof, dependency inspection, no-profile/.env-SSOT proof, launchd-like PATH startup tests, bounded readiness-success tests, and static proof of no remote/public lifecycle control surface or tunnel-identity regression."
       required: true
     - id: CHECK-4
-      command_or_check: "Perform one minimal out-of-band live migration/acceptance after deterministic gates: prove revision-2 preconditions and converge through the repository-owned migration path; then prove accidental-death auto-recovery to one instance with same tunnel identity; explicit Stop suppresses resurrection; explicit Start restores one instance; health/readiness green; no unrelated process/service touched."
+      command_or_check: "Perform one minimal out-of-band live recovery/acceptance after deterministic gates: prove .env is the sole tunnel-ID owner and the persistent profile remains absent; prove launchd starts the canonical Runtime with the same identity; explicit Start reaches health/readiness before reporting success; accidental-death auto-recovery returns to one instance; explicit Stop suppresses resurrection; explicit Start restores one instance; no unrelated process/service is touched."
       required: true
     - id: CHECK-5
       command_or_check: "Validate report, publish candidate/report non-force to dev, fresh-prove candidate/report lineage, final dev, unchanged main, clean worktree, and NEEDS_REVIEW."
