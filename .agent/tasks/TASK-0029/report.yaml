@@ -1,22 +1,32 @@
 protocol_version: 3
 
 task_id: TASK-0029
-task_revision: 9
-report_revision: 5
-state: REPORTED
+task_revision: 10
+report_revision: 6
+state: BLOCKED
 
 task_source:
   path: .agent/tasks/TASK-0029/task.yaml
-  commit: "27e440fbcdec956fa64574aa8748a4dc055f22f7"
+  commit: "c957d98d9cd5f7b87b9f84555502ff2118cffad8"
 
 execution:
   repository: phatnguyen03022001/agent-runtime
   branch:
     name: dev
     role: integration
-  authorized_base_head: "27e440fbcdec956fa64574aa8748a4dc055f22f7"
-  pre_execution_head: "27e440fbcdec956fa64574aa8748a4dc055f22f7"
-  final_execution_head: "37d4420022d4aa10550e605ac1d60f81d4418dfa"
+  authorized_base_head: "c957d98d9cd5f7b87b9f84555502ff2118cffad8"
+  pre_execution_head: "c957d98d9cd5f7b87b9f84555502ff2118cffad8"
+  final_execution_head: "c957d98d9cd5f7b87b9f84555502ff2118cffad8"
+  reviewed_product_candidate: "37d4420022d4aa10550e605ac1d60f81d4418dfa"
+
+authority_binding:
+  remote_dev_before_report: "c957d98d9cd5f7b87b9f84555502ff2118cffad8"
+  remote_main_before_report: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  revision_9_report: "17a776e13393955263d467dd156170ae617c4cc4"
+  revision_9_review: "1edc07e56dfd3c469ceb0aa8ac0fc71e6464e00f"
+  task_0030_historical_only: true
+  canonical_checkout: /Users/tienphat/Developer/agent-runtime
+  auxiliary_worktrees: 0
 
 skill_library:
   repository: phatnguyen03022001/agent-skills
@@ -30,6 +40,10 @@ capability_preflight:
     - native_repository_execution
     - local_file_read
     - local_file_write
+    - local_process_read
+    - local_network_read
+    - local_app_bundle_inspection
+    - native_current_login_ui_accessibility
     - git_history_read
     - git_commit
     - non_force_git_push
@@ -41,110 +55,130 @@ capability_preflight:
     - native_repository_execution
     - local_file_read
     - local_file_write
+    - local_process_read
+    - local_network_read
+    - local_app_bundle_inspection
     - git_history_read
     - git_commit
     - non_force_git_push
     - remote_ref_read
     - repository_metadata_read
-  missing: []
-  passed: true
+  missing:
+    - native_current_login_ui_accessibility
+  passed: false
 
-authoritative_verification:
-  required: false
-  performed: false
-  result: NOT_REQUIRED
-  evidence: "TASK-0029 revision 9 does not designate a separate authoritative verifier."
+candidate_integrity:
+  reviewed_candidate_ancestor_of_base: true
+  product_source_drift_after_candidate: false
+  product_paths_changed_after_candidate:
+    - .agent/tasks/TASK-0029/task.yaml
+    - .agent/tasks/TASK-0029/report.yaml
+    - .agent/tasks/TASK-0029/review.yaml
+  product_source_paths_changed_after_candidate: []
+  product_candidate_activation_attempted: false
 
-pushed: true
+preflight_live_baseline:
+  desired_state: RUNNING
+  runtime_launch_agent: running
+  menu_bar_launch_agent: running
+  menu_bar_pid: 49219
+  tunnel_pid: 49283
+  mcp_pid: 49293
+  listener: 127.0.0.1:8080
+  health: live
+  ready: ready
+  accepted_tunnel_fingerprint: NOT_PRINTED
+  tunnel_identity_mutated: false
+  installed_app: /Users/tienphat/Applications/Agent Runtime.app
+  installed_bundle_id: com.picmao.agent-runtime
+  installed_manifest_revision: f74844c47754f88a926315ac9aa1bde0f27d0654
+  installed_start_sha256: 38ca090300dc0b78c390c8bd3e0d1f43c5e29c218457241551d3f4053bb8304b
+  installed_server_sha256: 1f28817bc0089e632e2d82b513e7193eb7eaad172e9b42f72ce55641657cf24d
+  installed_env_authority: checkout-local .env via package env-path.txt
+  legacy_profile_present: false
+  evidence_scope: read_only
 
-revision_8_lineage:
-  report_commit: "61b98345107a24b65399ab24f5e31c12616eea08"
-  review_commit: "ba4243721aa11d4f83eaddd093319f8b02980cb4"
-  reviewed_report_matches: true
-  review_state: REVISION_REQUIRED
-  task_0030_historical_only: true
+native_ui_preflight:
+  status: BLOCKED
+  target: AgentRuntimeMenuBar
+  current_login_host: CODEX_LOCAL
+  cua_native_app_surface: unavailable
+  cua_apps_observed: 0
+  ax_probe_result: -25211
+  ax_probe: "AXUIElementCopyAttributeValue against the live AgentRuntimeMenuBar returned macOS Accessibility/TCC error -25211."
+  status_item_proven: false
+  popover_proven: false
+  operator_action_required: "Grant Accessibility to the exact CODEX_LOCAL host named by macOS, then rerun TASK-0029 revision 10 preflight."
+  activation_gate: CLOSED
 
-implementation:
-  root_cause: "The protected-port lifecycle text classifier treated lsof itself as destructive whenever command text also contained 8080, so direct and shell-wrapped read-only listener inspection was denied before semantic shell segmentation."
-  correction: "Removed only lsof from the destructive protected-port marker set. Existing destructive markers still classify compositions that use lsof output as input to a lifecycle action."
-  changed_paths:
-    - agent_runtime/protection.py
-    - tests/test_protected_runtime.py
-  dependencies_changed: false
-  public_mcp_surface_changed: false
-
-regression_evidence:
-  red_reproduction: PASS
-  red_evidence: "Before the production correction, the new read-only lsof regression test failed with PROTECTED_RUNTIME: protected_port_lifecycle on direct TCP 8080 listener inspection."
-  direct_read_only_lsof: PASS
-  shell_wrapped_read_only_lsof: PASS
-  destructive_lsof_derived_composition: PASS
-  destructive_evidence: "The existing focused protected-port negative case remains denied after the correction because the destructive lifecycle marker is still present in the composition."
+activation:
+  explicit_operator_confirmation_received: false
+  installer_invoked: false
+  package_cutover_performed: false
+  runtime_lifecycle_action_performed: false
+  manual_stop_restart_signal_rebind_performed: false
+  tunnel_rotation_performed: false
+  live_runtime_impact: none
+  evidence: "The executor stopped at the native Accessibility preflight gate. Only read-only process, listener, health, launchd, bundle, and AX probes were performed."
 
 verification_evidence:
-  python_compile: PASS
-  diff_check: PASS
-  focused_protection_tests: PASS
-  focused_protection_test_count: 10
-  full_verify: PASS
-  full_verify_test_count: 110
-  exact_four_tool_contract: PASS
-  exact_four_tool_contract_evidence: "The full repository verification passed the public MCP surface tests that require exactly terminal_exec, terminal_start, terminal_poll, and terminal_control."
-
-runtime_continuity:
-  result: PASS
-  preflight_health: live
-  preflight_ready: ready
-  final_health: live
-  final_ready: ready
-  final_status: RUNNING
-  final_listener_pid: 49283
-  final_listener: 127.0.0.1:8080
-  final_mcp_pid: 49293
-  final_menu_bar_pid: 49219
-  live_candidate_activation_performed: false
-  lifecycle_transition_attributable_to_revision_9: false
-  evidence: "No install, update, reload, Stop, Restart, signal, replacement, rebind, or cutover action was performed. The source candidate was not activated; pre/post read-only health remained live/ready."
-
-remaining_closure:
-  native_ui_accessibility: BLOCKED
-  evidence: "Revision-8 Architect review records macOS TCC Assistive Access denial (-25211). Revision 9 neither changes nor bypasses that requirement; native UI/AX acceptance remains for a later closure after candidate activation and Architect review."
+  exact_base_bind: PASS
+  current_dev_identity: PASS
+  current_main_identity: PASS
+  revision_9_report_review_lineage: PASS
+  task_0030_frozen_historical_status: PASS
+  canonical_single_checkout: PASS
+  product_source_drift_check: PASS
+  live_baseline_read_only: PASS
+  native_current_login_accessibility: BLOCKED
+  repository_product_tests: NOT_RUN
+  installed_candidate_equivalence: NOT_RUN
+  post_activation_continuity: NOT_RUN
+  native_ui_acceptance: NOT_RUN
+  live_mcp_closure: DEFERRED
 
 acceptance_evidence:
   - criterion_id: AC-1
-    status: PROVEN
-    evidence: "The new focused read-only lsof test was run before the fix and failed with protected_port_lifecycle on the current classifier."
+    status: NOT_PROVEN
+    evidence: "The checkout has no product-source drift after reviewed candidate 37d4420022d4aa10550e605ac1d60f81d4418dfa, but activation was blocked before installed candidate-equivalence proof."
   - criterion_id: AC-2
-    status: PROVEN
-    evidence: "Focused tests now allow both direct and zsh-wrapped read-only lsof inspection of TCP 8080."
+    status: BLOCKED
+    evidence: "The required native current-login Accessibility/AX preflight returned -25211, so the executor did not reach the explicit confirmation boundary or installer activation."
   - criterion_id: AC-3
-    status: PROVEN
-    evidence: "Focused protection tests remain green for canonical process/service lifecycle actions, protected-port rebind, and destructive lsof-derived composition."
+    status: NOT_RUN
+    evidence: "Post-activation continuity was not attempted. The read-only preflight baseline was healthy: RUNNING, one listener on 127.0.0.1:8080, health=live, ready=ready."
   - criterion_id: AC-4
-    status: PROVEN
-    evidence: "The candidate changes only protection.py and its existing regression test file; Python compile, diff check, 10 focused tests, and 110 full verification tests pass with no dependency or four-tool contract change."
+    status: BLOCKED
+    evidence: "Native status-item/popover truthfulness and responsiveness could not be proven because AX access is denied and no native-app CUA surface is available."
   - criterion_id: AC-5
     status: PROVEN
-    evidence: "No live Runtime activation or lifecycle command was executed; pre/post health and readiness remain live/ready and the final serving tree remains RUNNING."
+    evidence: "No installer, install/update/reload, Stop/Restart, signal, rebind, tunnel rotation, or other Runtime lifecycle action was performed."
   - criterion_id: AC-6
     status: NOT_PROVEN
-    evidence: "The implementation candidate is already published non-force, but this report's own commit/publication, final dev identity, unchanged main, and final clean checkout are publication-boundary predicates verified after report authorship."
+    evidence: "This report records the exact base and pre-publication identities; final report commit, non-force dev publication, unchanged main, and post-publication clean-checkout proof remain publication-boundary checks."
 
 executor_checks:
   - check_id: CHECK-1
     result: PASS
-    evidence: "Revision 9 was bound at exact base 27e440fbcdec956fa64574aa8748a4dc055f22f7; remote dev matched, main was c49d777efa09db7f6c51bd8d8616db4623499fb8, the canonical checkout was clean with one worktree, and revision-8 review/report lineage was resolved."
+    evidence: "Revision 10 was bound at exact base c957d98d9cd5f7b87b9f84555502ff2118cffad8; dev/main identities, revision-9 lineage, one canonical worktree, candidate ancestry, product-source no-drift, TASK-0030 historical status, and read-only live baseline were proven."
   - check_id: CHECK-2
-    result: PASS
-    evidence: "The false-positive was reproduced RED, corrected by the minimal classifier edit, and covered by direct/shell read-only allow evidence plus preserved destructive-composition denial."
+    result: BLOCKED
+    evidence: "Native current-login AX preflight returned -25211. The executor stopped before the consequence boundary; no activation confirmation was requested and no installer was invoked."
   - check_id: CHECK-3
-    result: PASS
-    evidence: "Python compile, git diff check, focused protection tests 10/10, full repository verification 110/110, and exact four-tool contract tests passed."
+    result: NOT_RUN
+    evidence: "Installed candidate-equivalence and post-activation continuity checks require a successful AX preflight and explicit operator confirmation."
   - check_id: CHECK-4
-    result: PASS
-    evidence: "Revision 9 performed no live install/update/reload/lifecycle transition. Native UI/TCC remains deferred closure evidence and was not bypassed."
+    result: BLOCKED
+    evidence: "Native UI/AX evidence cannot be collected while the actual CODEX_LOCAL host lacks Accessibility authorization; no TCC bypass or synthetic UI evidence was attempted."
   - check_id: CHECK-5
-    result: NOT_PROVEN
-    evidence: "Final report publication and post-publication remote/local proof occur after this report commit and are not self-attested here."
+    result: BLOCKED
+    evidence: "The bounded report is prepared for non-force dev publication, but final publication-boundary proof follows the report commit. TASK-0030 remains untouched and live MCP closure remains deferred."
 
-result: NEEDS_REVIEW
+remaining_closure:
+  accessibility: BLOCKED
+  evidence: "macOS Accessibility/TCC error -25211 from the live AgentRuntimeMenuBar probe."
+  required_next_action: "Grant Accessibility to the exact host surfaced by macOS for CODEX_LOCAL, then rerun the revision-10 preflight."
+  live_mcp_closure: DEFERRED
+  task_0030: FROZEN_HISTORICAL_ONLY
+
+result: BLOCKED
