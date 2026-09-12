@@ -56,20 +56,22 @@ final class PresentationTests: XCTestCase {
         XCTAssertEqual(presentation.facts.map(\.value), ["127.0.0.1:8080", "42", "live", "ready", "64 max", "Clear"])
     }
 
-    func testLifecyclePresentationExposesExactlyOneStateAction() {
+    func testLifecyclePresentationKeepsOneStablePolicyControlledActionSlot() {
         let connected = RuntimePopoverPresentation.make(
             status: .owned(servingIdentity),
             audit: ProtectionAuditSnapshot(),
             sessionLimit: 64
         )
-        if case .stop? = connected.lifecycleAction {} else { XCTFail("connected Runtime should expose only Stop") }
+        if case .stop = connected.lifecycleSlot.action {} else { XCTFail("connected Runtime should expose Stop") }
+        XCTAssertTrue(connected.lifecycleSlot.isEnabled)
 
         let stopped = RuntimePopoverPresentation.make(
             status: .stopped,
             audit: ProtectionAuditSnapshot(),
             sessionLimit: 64
         )
-        if case .start? = stopped.lifecycleAction {} else { XCTFail("stopped Runtime should expose only Start") }
+        if case .start = stopped.lifecycleSlot.action {} else { XCTFail("stopped Runtime should expose Start") }
+        XCTAssertTrue(stopped.lifecycleSlot.isEnabled)
 
         for status in [RuntimeStatus.external([99]), .ambiguous("unavailable")] {
             let unavailable = RuntimePopoverPresentation.make(
@@ -77,15 +79,43 @@ final class PresentationTests: XCTestCase {
                 audit: ProtectionAuditSnapshot(),
                 sessionLimit: 64
             )
-            XCTAssertNil(unavailable.lifecycleAction)
+            if case .stop = unavailable.lifecycleSlot.action {} else { XCTFail("unavailable Runtime should retain a Stop slot") }
+            XCTAssertFalse(unavailable.lifecycleSlot.isEnabled)
         }
     }
 
-    func testStatusIndicatorUsesGreenOnlyForServingReadyRuntime() {
-        XCTAssertEqual(RuntimeStatusIndicator(status: .owned(servingIdentity)), .green)
-        XCTAssertEqual(RuntimeStatusIndicator(status: .stopped), .red)
-        XCTAssertEqual(RuntimeStatusIndicator(status: .external([99])), .red)
-        XCTAssertEqual(RuntimeStatusIndicator(status: .ambiguous("health unavailable")), .red)
+    func testMenuBarGlyphIsPreservedWhileTintMapsServingState() {
+        let indicators = [
+            RuntimeStatusIndicator(status: .owned(servingIdentity)),
+            RuntimeStatusIndicator(status: .stopped),
+            RuntimeStatusIndicator(status: .external([99])),
+            RuntimeStatusIndicator(status: .ambiguous("health unavailable")),
+        ]
+
+        XCTAssertEqual(indicators.map(\.symbolName), Array(repeating: "bolt.horizontal.circle.fill", count: indicators.count))
+        XCTAssertEqual(indicators[0], .green)
+        XCTAssertEqual(indicators[1], .red)
+        XCTAssertEqual(indicators[2], .red)
+        XCTAssertEqual(indicators[3], .red)
+    }
+
+    @MainActor
+    func testHeaderSpansContentWidthWithTrailingStatusIndicator() {
+        let controller = ControlPanelController(performAction: { _ in }, quit: {})
+        controller.loadView()
+
+        guard let rootStack = controller.header.superview as? NSStackView else {
+            return XCTFail("header should remain in the content stack")
+        }
+        XCTAssertEqual(controller.header.arrangedSubviews.count, 2)
+        XCTAssertTrue(controller.header.arrangedSubviews.last is NSImageView)
+        XCTAssertTrue(rootStack.constraints.contains { constraint in
+            constraint.isActive
+                && constraint.firstItem === controller.header
+                && constraint.secondItem === rootStack
+                && constraint.firstAttribute == .width
+                && constraint.secondAttribute == .width
+        })
     }
 
     func testAccessibilitySummaryCarriesStateWithoutDependingOnColor() {

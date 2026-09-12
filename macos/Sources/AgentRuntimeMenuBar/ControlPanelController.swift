@@ -18,7 +18,7 @@ enum RuntimeStatusIndicator: Equatable {
         }
     }
 
-    var symbolName: String { "circle.fill" }
+    var symbolName: String { "bolt.horizontal.circle.fill" }
 
     var color: NSColor {
         switch self {
@@ -35,6 +35,11 @@ enum RuntimeStatusIndicator: Equatable {
     }
 }
 
+struct RuntimeLifecycleSlot {
+    let action: RuntimeAction
+    let isEnabled: Bool
+}
+
 enum RuntimeFactLayout {
     static let labelColumn = 0
     static let valueColumn = 1
@@ -47,7 +52,7 @@ struct RuntimePopoverPresentation {
     let indicator: RuntimeStatusIndicator
     let accessibilitySummary: String
     let facts: [RuntimeFact]
-    let lifecycleAction: RuntimeAction?
+    let lifecycleSlot: RuntimeLifecycleSlot
 
     static func make(
         status: RuntimeStatus,
@@ -55,13 +60,13 @@ struct RuntimePopoverPresentation {
         sessionLimit: Int
     ) -> RuntimePopoverPresentation {
         let availability = RuntimePolicy.actions(for: status)
-        let lifecycleAction: RuntimeAction?
+        let lifecycleSlot: RuntimeLifecycleSlot
         if availability.canStop {
-            lifecycleAction = .stop
+            lifecycleSlot = RuntimeLifecycleSlot(action: .stop, isEnabled: true)
         } else if availability.canStart {
-            lifecycleAction = .start
+            lifecycleSlot = RuntimeLifecycleSlot(action: .start, isEnabled: true)
         } else {
-            lifecycleAction = nil
+            lifecycleSlot = RuntimeLifecycleSlot(action: .stop, isEnabled: false)
         }
 
         let protection = audit.blockedCount == 0 ? "Clear" : "\(audit.blockedCount) retained"
@@ -110,7 +115,7 @@ struct RuntimePopoverPresentation {
             indicator: RuntimeStatusIndicator(status: status),
             accessibilitySummary: accessibilitySummary(for: status),
             facts: facts,
-            lifecycleAction: lifecycleAction
+            lifecycleSlot: lifecycleSlot
         )
     }
 
@@ -139,6 +144,7 @@ final class ControlPanelController: NSViewController {
     private var factsGrid: NSGridView!
     private var factValueLabels: [NSTextField] = []
     private var lifecycleAction: RuntimeAction?
+    private(set) var header: NSStackView!
     private var rootStack: NSStackView!
 
     init(performAction: @escaping (RuntimeAction) -> Void, quit: @escaping () -> Void) {
@@ -170,7 +176,7 @@ final class ControlPanelController: NSViewController {
         statusIndicatorView.heightAnchor.constraint(equalToConstant: 14).isActive = true
         statusIndicatorView.setAccessibilityLabel("Runtime status")
 
-        let header = NSStackView(views: [title, statusIndicatorView])
+        header = NSStackView(views: [title, statusIndicatorView])
         header.orientation = .horizontal
         header.alignment = .centerY
         header.distribution = .fill
@@ -205,6 +211,7 @@ final class ControlPanelController: NSViewController {
             rootStack.topAnchor.constraint(equalTo: view.topAnchor, constant: 13),
             rootStack.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -10),
             factsGrid.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
+            header.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
             lifecycleButton.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
             divider.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
         ])
@@ -221,14 +228,12 @@ final class ControlPanelController: NSViewController {
             audit: audit,
             sessionLimit: sessionLimit
         )
-        lifecycleAction = presentation.lifecycleAction
-        lifecycleButton.isHidden = lifecycleAction == nil
-        lifecycleButton.isEnabled = lifecycleAction != nil
-        if let lifecycleAction {
-            let title = actionTitle(lifecycleAction)
-            lifecycleButton.title = title
-            lifecycleButton.setAccessibilityLabel(title + " Agent Runtime")
-        }
+        lifecycleAction = presentation.lifecycleSlot.action
+        lifecycleButton.isHidden = false
+        lifecycleButton.isEnabled = presentation.lifecycleSlot.isEnabled
+        let title = actionTitle(presentation.lifecycleSlot.action)
+        lifecycleButton.title = title
+        lifecycleButton.setAccessibilityLabel(title + " Agent Runtime")
 
         for (field, fact) in zip(factValueLabels, presentation.facts) {
             field.stringValue = fact.value
@@ -243,9 +248,9 @@ final class ControlPanelController: NSViewController {
         case .start, .stop:
             lifecycleAction = action
         case .restart:
-            lifecycleAction = nil
+            lifecycleAction = .stop
         }
-        lifecycleButton.isHidden = lifecycleAction == nil
+        lifecycleButton.isHidden = false
         lifecycleButton.isEnabled = false
         if let lifecycleAction {
             let title = actionTitle(lifecycleAction)
