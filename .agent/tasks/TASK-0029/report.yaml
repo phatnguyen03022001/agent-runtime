@@ -1,0 +1,165 @@
+protocol_version: 3
+task_id: TASK-0029
+task_revision: 5
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0029/task.yaml
+  commit: "affd220c00d59bd46bb897d97e5fe022b6443028"
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+  authorized_base_head: "affd220c00d59bd46bb897d97e5fe022b6443028"
+  final_execution_head: "d91f8908d47c898fb7c7baf989bf46b30bcbd72a"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - repository_content_read
+    - repository_content_write
+    - native_repository_execution
+    - native_macos_swift_build
+    - local_process_fixture_execution
+    - local_app_bundle_inspection
+    - local_process_read
+    - local_process_control
+    - local_network_read
+    - out_of_band_local_execution
+    - git_history_read
+    - git_commit
+    - non_force_git_push
+    - remote_ref_read
+    - repository_metadata_read
+  available:
+    - repository_content_read
+    - repository_content_write
+    - native_repository_execution
+    - native_macos_swift_build
+    - local_process_fixture_execution
+    - local_app_bundle_inspection
+    - local_process_read
+    - local_process_control
+    - local_network_read
+    - out_of_band_local_execution
+    - git_history_read
+    - git_commit
+    - non_force_git_push
+    - remote_ref_read
+    - repository_metadata_read
+  missing: []
+  passed: true
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: NOT_REQUIRED
+  evidence: "TASK-0029 does not designate a separate authoritative verifier."
+
+pushed: true
+
+wip_reconciliation:
+  result: PASS
+  canonical_checkout: /Users/tienphat/Developer/agent-runtime
+  source_test_superset_count: 22
+  source_test_superset_evidence: "Before auxiliary removal, every tracked or untracked TASK-0029 source/test path was compared file-by-file with the canonical checkout; all 22 selected paths matched byte-for-byte after deliberate reconciliation. The revision-4 configuration and service-recovery tests were present in the canonical checkout and executed there."
+  primary_base: "affd220c00d59bd46bb897d97e5fe022b6443028"
+  auxiliary_paths_reconciled:
+    - /private/tmp/agent-runtime-task-0029
+    - /Users/tienphat/.codex/worktrees/5a3d/agent-runtime
+    - /Users/tienphat/Developer/.agent-worktrees/agent-runtime-task-0029
+  manifest_digest: "3f84f82dc2c9f023ccd641da888e5246b28d70b051e71064116fc7f017a4bea2"
+  representative_hashes:
+    .env.example: "487d7cb872c7d3792269078db7b3770bd8e6345be7a069a8101c4b169d1eeb3c"
+    agent_runtime/protection.py: "2568aa946d0a8c0b5dcd40b772a2bcace04d3c10373ac7cc30b7d5cc6abcdf5f"
+    install.sh: "8e571d9f2158b4dee1b37f40887ba148f79a2d12a6d8855688bdd238a40f8e3b"
+    start.sh: "a02ae059f5cafd7becb16b2e13950d9e849024fd70935d58deb228d9062a1dc6"
+    macos/recover_runtime_service.py: "5787f35fd7bcd05702f2c5ba1e0349137a49c0a95c918e5bc8e44fa4524b3bba"
+    tests/test_revision4_runtime_config.py: "b14a22fb58055058358bc99442551d01cb891954df1e09ac0f52cd6d2a560754"
+    tests/test_service_recovery.py: "bfa9220e4609c017b4cc995178de739223cc8e7456f2a73af5d366b639107fc9"
+  removal_evidence: "Each exact registered auxiliary worktree was removed with git worktree remove after reconciliation, followed by git worktree prune; no replacement worktree was created."
+
+changed_files:
+  - .env.example
+  - README.md
+  - agent_runtime/executor.py
+  - agent_runtime/protection.py
+  - agent_runtime/session.py
+  - install.sh
+  - macos/Sources/AgentRuntimeCore/NativeRuntimeBackend.swift
+  - macos/Sources/AgentRuntimeCore/ProtectionAudit.swift
+  - macos/Sources/AgentRuntimeCore/RuntimeLifecycle.swift
+  - macos/Sources/AgentRuntimeMenuBar/AppDelegate.swift
+  - macos/Sources/AgentRuntimeMenuBar/ControlPanelController.swift
+  - macos/Tests/AgentRuntimeCoreTests/OwnershipTests.swift
+  - macos/Tests/AgentRuntimeCoreTests/ProtectedRuntimeTests.swift
+  - macos/Tests/AgentRuntimeCoreTests/RuntimeLifecycleTests.swift
+  - macos/recover_runtime_service.py
+  - start.sh
+  - tests/test_protected_runtime.py
+  - tests/test_revision4_runtime_config.py
+  - tests/test_service_recovery.py
+  - tests/test_supervised_lifecycle.py
+  - tests/test_surface_and_scripts.py
+  - tests/test_tunnel_identity.py
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PROVEN
+    evidence: "./verify passed 103/103 tests. The supervised lifecycle suite includes ten simultaneous starts and proves one canonical listener/process identity, no duplicate tunnel/MCP instance, and singleton restart convergence."
+  - criterion_id: AC-2
+    status: PROVEN
+    evidence: "Fixture recovery proves accidental canonical death returns exactly one serving instance while desired RUNNING; explicit Stop removes desired state and suppresses resurrection; explicit Start restores one healthy instance. Bounded live acceptance observed one controlled death/recovery transition and then Stop/Start restoration."
+  - criterion_id: AC-3
+    status: PROVEN
+    evidence: "Swift tests passed 19/19, including explicit Start/Stop/Restart ownership semantics, refresh non-mutation, and bounded operator-visible protection audit. Release build, menu-bar package, and strict deep signature verification passed."
+  - criterion_id: AC-4
+    status: PROVEN
+    evidence: "Protected-runtime tests passed 9/9 and are exercised by ./verify. Direct PID/group signals, matching pkill/killall, launchd/CLI lifecycle mutation, canonical relaunch, protected-port free/rebind, compound shells, wrappers, and fragmented PTY writes deny with PROTECTED_RUNTIME-style outcomes; ordinary terminal tests remain green."
+  - criterion_id: AC-5
+    status: PROVEN
+    evidence: "Service-recovery tests passed 22/22, including nested launchd parser handling, stale fixture provenance, wrong identity, multiple listeners, foreign 8080, and idempotent check/apply/noop behavior. Live recovery used only the canonical label and left foreign ownership fail-closed."
+  - criterion_id: AC-6
+    status: PROVEN
+    evidence: "The checkout-local .env is mode 0600 with exactly one non-empty CONTROL_PLANE_API_KEY, CONTROL_PLANE_TUNNEL_ID, and AGENT_RUNTIME_WORKSPACE_ROOT entry. The tunnel fingerprint is 6aa2b81d6dd8; ~/.config/tunnel-client/agent-runtime.yaml is absent. Current source, installer, startup, discovery, and recovery contain no profile-file authority."
+  - criterion_id: AC-7
+    status: PROVEN
+    evidence: "Protection audit storage is bounded and payload-free; Swift and Python tests cover the operator-visible warning summary. README states the enforcement boundary does not defeat root/sudo or malicious out-of-band administrators. No database, queue, or secret-bearing audit payload was added."
+  - criterion_id: AC-8
+    status: PROVEN
+    evidence: "./verify passed 103/103; Swift tests passed 19/19; release build, package, codesign --verify --deep --strict, shell syntax, git diff --check, requirements unchanged, launchd sterile-PATH tests, readiness success/failure tests, and exact four-tool proof all passed."
+  - criterion_id: AC-9
+    status: PROVEN
+    evidence: "Installer and recovery tests prove repeated install/recovery is idempotent, accepts the verified Homebrew symlink, registers one canonical LaunchAgent, does not change desired state, and never creates duplicate live instances."
+  - criterion_id: AC-10
+    status: NOT_PROVEN
+    evidence: "Implementation candidate d91f8908d47c898fb7c7baf989bf46b30bcbd72a is the direct child of the exact base. Report-only parentage, non-force remote publication, final dev identity, unchanged main, and final clean-topology proof are performed immediately after this report commit rather than self-attested inside it."
+  - criterion_id: AC-11
+    status: PROVEN
+    evidence: "The canonical checkout contains the complete reconciled source/test superset; the three registered auxiliary paths were removed and pruned. No auxiliary registration or /Users/tienphat/Developer/.agent-worktrees directory remains."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Fresh binding proved TASK-0029 revision 5, exact base affd220c00d59bd46bb897d97e5fe022b6443028, origin/dev at that base, main c49d777efa09db7f6c51bd8d8616db4623499fb8, the .env fingerprint, absent legacy YAML, and the reconciled 22-path WIP manifest before mutation."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "Focused protected-runtime, revision-4 configuration, service-recovery, supervised-lifecycle, tunnel-identity, and surface tests passed; ./verify passed 103/103 from the canonical checkout."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "Swift 19/19, release build, menu-bar package, strict codesign, shell syntax, diff check, dependency/requirements guard, exact four-tool surface, no-profile current-source scan, no-secret assignment scan, and sterile launchd PATH/readiness tests passed."
+  - check_id: CHECK-4
+    result: PASS
+    evidence: "Out-of-band live proof after bounded acceptance: launchd state running with canonical start.sh and deterministic PATH; desired RUNNING; exactly one tunnel-client PID 20184 and one MCP child PID 20208; one 127.0.0.1:8080 listener; health=live; ready=ready; tunnel fingerprint 6aa2b81d6dd8; legacy YAML absent. Earlier bounded acceptance also proved accidental death recovery, Stop suppression, and explicit Start restoration."
+  - check_id: CHECK-5
+    result: NOT_PROVEN
+    evidence: "Report validation and non-force publication closure are intentionally completed after this report commit, then final dev/main/worktree evidence is recorded for operator review."
+
+result: NEEDS_REVIEW
