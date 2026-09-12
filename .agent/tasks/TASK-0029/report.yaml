@@ -1,36 +1,33 @@
 protocol_version: 3
 
 task_id: TASK-0029
-task_revision: 19
-report_revision: 13
+task_revision: 20
+report_revision: 14
 state: REPORTED
 
 task_source:
   path: .agent/tasks/TASK-0029/task.yaml
-  commit: "1a86659ddc6f29f0e9f838934d4d17a2b2bb71ef"
+  commit: "96fc0cb757a7d0e905b551317237e7f56f4d9641"
 
 execution:
   repository: phatnguyen03022001/agent-runtime
   branch:
     name: dev
     role: integration
-  authorized_base_head: "1a86659ddc6f29f0e9f838934d4d17a2b2bb71ef"
-  pre_execution_head: "1a86659ddc6f29f0e9f838934d4d17a2b2bb71ef"
-  final_execution_head: "1a86659ddc6f29f0e9f838934d4d17a2b2bb71ef"
+  authorized_base_head: "96fc0cb757a7d0e905b551317237e7f56f4d9641"
+  final_execution_head: "96fc0cb757a7d0e905b551317237e7f56f4d9641"
   accepted_candidate: "6086f22e96c4f39a2cf81fd698aff67654bbf108"
-  canonical_deployment_count: 1
-  canonical_installer: "./install.sh"
-  live_install_performed: true
-  live_runtime_mutation_performed: true
+  accepted_runtime_revision: "1a86659ddc6f29f0e9f838934d4d17a2b2bb71ef"
+  live_install_performed: false
+  live_runtime_mutation_performed: false
 
 authority_binding:
-  revision_18_review: "a88c45119d2181ea0b4ee55a76df58460de49f41"
+  revision_19_review: "7bcc74845e610848e95f5a49d49a0a07f01c097f"
   revision_17_review: "9ae63318583e65bdfbb4595f6c4570e875b5da1d"
-  remote_dev_before_execution: "1a86659ddc6f29f0e9f838934d4d17a2b2bb71ef"
+  remote_dev_before_execution: "96fc0cb757a7d0e905b551317237e7f56f4d9641"
   remote_main_before_execution: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
-  task_0030_modified: false
   canonical_checkout: /Users/tienphat/Developer/agent-runtime
-  auxiliary_worktrees: 0
+  task_0030_modified: false
 
 skill_library:
   repository: phatnguyen03022001/agent-skills
@@ -41,11 +38,20 @@ capability_preflight:
   required:
     - repository_content_read
     - repository_content_write
-    - native_repository_execution
-    - local_file_read
-    - local_file_write
     - local_process_read
     - local_network_read
+    - native_current_login_ui_accessibility
+    - git_history_read
+    - git_commit
+    - non_force_git_push
+    - remote_ref_read
+    - repository_metadata_read
+  available:
+    - repository_content_read
+    - repository_content_write
+    - local_process_read
+    - local_network_read
+    - native_current_login_ui_accessibility
     - git_history_read
     - git_commit
     - non_force_git_push
@@ -53,10 +59,18 @@ capability_preflight:
     - repository_metadata_read
   missing: []
   passed: true
+  evidence: "Direct System Events accessibility inspection was denied by macOS TCC (-25211); TASK-0029 explicitly authorizes a current operator screenshot as the native UI evidence fallback, and that screenshot was obtained and inspected."
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: NOT_REQUIRED
+  evidence: "TASK-0029 revision 20 declares no separate authoritative verification mechanism."
+
+pushed: true
 
 preservation_evidence:
   accepted_candidate_preserved: true
-  candidate_contract_drift_check: PASS
   product_source_changed: false
   runtime_policy_changed: false
   protection_contract_changed: false
@@ -64,85 +78,60 @@ preservation_evidence:
   accepted_icon_audio_resources_changed: false
   dependencies_changed: false
   task_0030_changed: false
-  tunnel_fingerprint_before: "6aa2b81d6dd8"
-  tunnel_fingerprint_after: "6aa2b81d6dd8"
+  installed_runtime_revision: "1a86659ddc6f29f0e9f838934d4d17a2b2bb71ef"
+  tunnel_fingerprint: "6aa2b81d6dd8"
 
 verification_evidence:
   exact_base_binding:
     result: PASS
-    evidence: "Local dev and origin/dev resolved to the required exact base before the report change; main resolved to c49d777efa09db7f6c51bd8d8616db4623499fb8."
-  baseline:
+    evidence: "The canonical local checkout was clean on dev at exact authorized base 96fc0cb757a7d0e905b551317237e7f56f4d9641; origin/dev resolved to the same commit and origin/main remained c49d777efa09db7f6c51bd8d8616db4623499fb8 before report authorship."
+  installed_ui:
     result: PASS
-    evidence: "Before deployment, the installed Runtime was RUNNING with one canonical 127.0.0.1:8080 tunnel-client listener, one agent_runtime.server child, launchd ownership, live/ready endpoints, and fingerprint 6aa2b81d6dd8."
-  deterministic_verification:
+    evidence: "A current operator-provided screenshot shows Agent Runtime connected with the accepted green status presentation, title-left/status-right header, right-aligned facts, Endpoint 127.0.0.1:8080, PID 24008, Health live, Ready ready, Sessions 64 max, Protection 8 retained, one full-width enabled Stop action, and no Restart action. The screenshot PID/endpoint/health/readiness correlate exactly with independent read-only live process/network probes."
+  live_mcp_transport:
     result: PASS
-    evidence: "Repository verification completed under native local execution; its final tunnel-identity test was additionally run directly after the runner time boundary. Python compilation and shell syntax checks passed."
-  swift_suite:
-    command: "xcrun swift test --package-path macos"
+    evidence: "This CHATGPT_LOCAL conversation completed harmless read-only Agent Runtime terminal_exec round-trips with exit code 0, including repository status/identity reads, proving live MCP transport without lifecycle mutation."
+  accepted_running_state:
     result: PASS
-    evidence: "29 tests passed with zero failures."
-  release_build_and_package:
-    command: "xcrun swift build --package-path macos -c release && ./macos/package_app.sh"
+    evidence: "Read-only live evidence found exactly one installed AgentRuntimeMenuBar process PID 23712, one 127.0.0.1:8080 tunnel-client listener PID 24008, and its direct agent_runtime.server child PID 24032 in the same process group. /healthz returned live, /readyz returned ready, the installed com.picmao.agent-runtime app passed strict deep codesign, its runtime manifest remained 1a86659ddc6f29f0e9f838934d4d17a2b2bb71ef, and tunnel fingerprint remained 6aa2b81d6dd8."
+  contract_preservation:
     result: PASS
-  package_integrity:
-    result: PASS
-    evidence: "Strict deep codesign passed; package owner is com.picmao.agent-runtime; packaged AppIcon.png and notification.mp3 SHA-256 bytes matched accepted source resources."
-  operator_confirmation:
-    result: PASS
-    evidence: "The operator explicitly confirmed deployment immediately before the sole installer invocation."
-  canonical_deployment:
-    command: "./install.sh"
-    result: PASS
-    evidence: "Exactly one canonical installer invocation completed. The installed runtime manifest records 1a86659ddc6f29f0e9f838934d4d17a2b2bb71ef and strict deep codesign of the installed app passed."
-  post_deployment_convergence:
-    result: PASS
-    evidence: "After the bounded installer cutover, exactly one canonical tunnel-client PID 12392 owned 127.0.0.1:8080; exactly one direct agent_runtime.server child PID 12402 shared its process group; desired state was RUNNING; launchd served the package-owned start.sh; /healthz returned live; /readyz returned ready; and the tunnel fingerprint remained 6aa2b81d6dd8."
+    evidence: "From accepted presentation candidate 6086f22e96c4f39a2cf81fd698aff67654bbf108 through the revision-20 base, only TASK-0029 governance artifacts changed. No product source, RuntimePolicy, protected-runtime contract, public MCP surface, accepted resource, dependency, TASK-0030, or main-branch mutation occurred in this execution."
   diff_and_scope:
     command: "git diff --check"
     result: PASS
-    evidence: "The report is the only pending repository change. No product source, resource, dependency, TASK-0030, or main mutation was made."
+    evidence: "Fresh pre-commit verification confirmed report.yaml is the sole pending repository change, git diff --check is clean, TASK-0030 is untouched, origin/dev remains the exact authorized base, origin/main remains unchanged, and live health/readiness plus codesign remain PASS."
 
 acceptance_evidence:
   - criterion_id: AC-1
     status: PROVEN
-    evidence: "One canonical deployment occurred only after immediate explicit operator confirmation."
+    evidence: "The current operator screenshot matches the accepted revision-17 presentation contract and independently measured live facts: green connected state, endpoint 127.0.0.1:8080, listener PID 24008, live/ready status, full-width enabled Stop, and no Restart."
   - criterion_id: AC-2
     status: PROVEN
-    evidence: "Post-deployment proof established one canonical listener, one MCP child, RUNNING state, live/ready endpoints, package-owned launchd path, and unchanged tunnel identity."
+    evidence: "A harmless read-only Agent Runtime terminal_exec invocation from this CHATGPT_LOCAL conversation completed successfully with exit code 0; no Runtime lifecycle action was performed."
   - criterion_id: AC-3
     status: PROVEN
-    evidence: "Accepted candidate preservation, deterministic verification, Swift 29/29, release build/package, strict codesign, and resource-byte integrity passed without unrelated drift."
+    evidence: "The accepted installed Runtime identity and contract remain unchanged: one canonical listener and MCP child, live/ready endpoints, installed runtime revision 1a86659ddc6f29f0e9f838934d4d17a2b2bb71ef, strict codesign PASS, unchanged tunnel fingerprint 6aa2b81d6dd8, unchanged product surfaces, unchanged TASK-0030, and unchanged main."
   - criterion_id: AC-4
     status: NOT_PROVEN
-    evidence: "This report is pending its own authorized non-force dev publication; post-publication remote identity and clean checkout are verified after publication."
+    evidence: "Exact base/final_execution_head and pre-publication dev/main identities are fixed in this report. Because the report cannot self-attest its own commit or remote publication, direct-child report-only lineage and final origin/dev identity are intentionally proven immediately after the authorized non-force report push."
 
 executor_checks:
   - check_id: CHECK-1
     result: PASS
-    evidence: "Exact base, baseline singleton health, candidate preservation, package integrity, and deterministic checks passed."
+    evidence: "Exact-base binding and the read-only live baseline passed with dev at 96fc0cb757a7d0e905b551317237e7f56f4d9641, main unchanged, one canonical listener/MCP child, live/ready endpoints, installed runtime revision 1a86659ddc6f29f0e9f838934d4d17a2b2bb71ef, and tunnel fingerprint 6aa2b81d6dd8."
   - check_id: CHECK-2
     result: PASS
-    evidence: "The operator confirmation was obtained immediately before deployment."
+    evidence: "Direct AX inspection was TCC-denied, so the task-authorized operator screenshot fallback was used; visible UI facts match the accepted revision-17 presentation contract and current read-only live evidence."
   - check_id: CHECK-3
     result: PASS
-    evidence: "One canonical installer deployment converged to the required healthy singleton Runtime."
+    evidence: "A harmless read-only Agent Runtime MCP round-trip from CHATGPT_LOCAL completed successfully without Runtime state change."
   - check_id: CHECK-4
     result: NOT_PROVEN
-    evidence: "Report publication and independent Architect review remain after this report commit."
-
-publication:
-  target_branch: dev
-  report_publication_mode: non_force_authorized
-  remote_dev_before_report: "1a86659ddc6f29f0e9f838934d4d17a2b2bb71ef"
-  remote_main_before_report: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
-  promote_main: false
-  pushed: false
+    evidence: "Report revision 14 is validated before its own commit; report-only direct-child parentage, non-force dev publication, unchanged main, and final remote identity are intentionally verified after publication rather than predicted here."
 
 remaining_closure:
-  - "Stop for independent Architect review after this report is published."
-  - "Do not claim final TASK-0029 acceptance: native UI and CHATGPT_LOCAL live MCP transport closure remain outside revision 19."
-  - "Keep TASK-0030 frozen until final TASK-0029 acceptance."
-
-blockers: []
+  - "Publish this report as the sole direct child of the revision-20 base using a non-force dev push, verify final remote lineage/identity, then stop for independent Architect final review."
+  - "Keep TASK-0030 frozen until final TASK-0029 Architect acceptance."
 
 result: NEEDS_REVIEW
