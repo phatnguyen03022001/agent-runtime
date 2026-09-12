@@ -1,12 +1,12 @@
 protocol_version: 3
 
 task_id: TASK-0029
-task_revision: 15
+task_revision: 16
 state: APPROVED
 
 origin:
-  type: user_request
-  gap_id: MINIMAL_TWO_COLUMN_MENU_UX
+  type: architect_review_followup
+  gap_id: HEADER_STATUS_TRAILING_ALIGNMENT
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -30,45 +30,38 @@ execution_skills:
   required: [executor, simplicity, verification, github-workflow]
 
 authority_sources:
-  - source: "phatnguyen03022001/agent-runtime@777cb24dd5d563811fa8001ae456783e9c373094:.agent/tasks/TASK-0029/review.yaml"
-    role: "Revision-13 Architect judgment requiring UX correction."
+  - source: "phatnguyen03022001/agent-runtime@9e9aacf0a7ddccb49f9e4fab8582b734838edeed:.agent/tasks/TASK-0029/review.yaml"
+    role: "Revision-15 Architect judgment."
     precedence: 1
-  - source: "operator_current_feedback"
-    role: "Supersedes revision 14 presentation details: no Restart in UI; one green/red status icon; right column flush right; one centered full-width Start/Stop action."
+  - source: "phatnguyen03022001/agent-runtime@4892a7440c3214cea03b1d60c4aa9af7e0ca5621:.agent/tasks/TASK-0029/report.yaml"
+    role: "Revision-15 execution evidence."
     precedence: 2
-  - source: "phatnguyen03022001/agent-runtime@f9c739890060197f58c12ae53d8cf61df019a9b9:.agent/tasks/TASK-0029/report.yaml"
-    role: "Revision-13 activation/runtime evidence to preserve."
+  - source: "phatnguyen03022001/agent-runtime@9c2c856f1447e302650cab40d724b1e8416e7b31"
+    role: "Revision-15 candidate to preserve except for the bounded header-layout correction."
     precedence: 3
 
 structure_authority:
   status: RESOLVED
-  source: "Existing AppKit menu-bar implementation and existing protection audit storage."
-  rationale: "Revision 15 is source-only and replaces revision 14 before execution."
+  source: "Revision-15 AppKit presentation."
+  rationale: "Revision 16 is a source-only one-defect correction; no redesign or lifecycle change is authorized."
 
-objective: "Produce a minimal, balanced two-column macOS menu-bar candidate with a single state action, green/red tunnel status icon and bounded tertiary protection history while preserving Runtime, tunnel and MCP behavior."
+objective: "Correct the revision-15 header so Agent Runtime remains leading and the single green/red status indicator occupies the trailing right content edge, without changing any already-accepted presentation, Runtime, protection, resource or MCP behavior."
 
 scope:
   required_changes:
-    - "Fresh-bind exact base; preserve revision-13 evidence, unchanged main and frozen TASK-0030."
-    - "Use a compact content-fit popover with deliberate row/column alignment and no excess vertical stretch."
-    - "Header presents Agent Runtime at left and one status icon at right. Do not add a separate CONNECTED/OFFLINE headline."
-    - "Status icon uses green only when the canonical tunnel/runtime is serving and health/readiness are confirmed; otherwise use red. Tooltip and accessibility text must still state the condition so color is not the sole signal."
-    - "Facts use a two-column grid: labels left-aligned in the left column; values right-aligned and pushed flush toward the right content edge with stable row spacing."
-    - "Keep endpoint, PID, health/readiness, session capacity and bounded protection history concise. Protection stays tertiary and must not expose raw internal category identifiers as prominent text."
-    - "Expose exactly one lifecycle button in the popover: Stop when the Runtime is operator-owned/running and stoppable; Start when stopped and startable. Do not expose Restart in the UI. External/unavailable states expose no enabled lifecycle action. Backend compatibility may retain restart behavior outside the popover."
-    - "The single Start/Stop button row spans the available content width; the button title is centered and the surrounding button frame/container stretches symmetrically toward both content edges."
-    - "Keep Quit visually secondary below a separator."
-    - "Bound protection history to at most 20 retained events. Persisted/displayed blocked_count represents retained history, not an unbounded lifetime total. No manual clear control."
-    - "Preserve accepted application icon, notification sound and one-shot offline audio behavior."
-    - "Add focused deterministic tests for two-column alignment contract, single-action state presentation, green/red status mapping, accessibility text, and audit rollover beyond 20 events."
-    - "Run applicable Swift tests/build, protection tests, full repository verification, package/codesign, exact four-tool MCP contract and diff/scope checks."
-    - "Publish candidate and report non-force to dev, then stop for Architect review. Do not install or activate the candidate in revision 15."
+    - "Fresh-bind exact base and preserve revision-15 candidate/report/review lineage, unchanged main and frozen TASK-0030."
+    - "Make the header span the same available content width as the facts grid and divider."
+    - "Anchor Agent Runtime at the leading edge and the single status indicator at the trailing right content edge; the indicator must not collapse immediately beside the title."
+    - "Add a focused deterministic layout assertion that fails if the header does not span full content width or the indicator is not trailing."
+    - "Preserve right-flush fact values, compact content-fit spacing, exactly one full-width Start/Stop action, no Restart control, green/red semantics, accessibility summaries and bounded protection history exactly as accepted from revision 15."
+    - "Run focused Swift presentation tests plus applicable full verification/package/codesign/diff checks."
+    - "Publish candidate and report non-force to dev, then stop for Architect review. Do not install or activate the candidate in revision 16."
     - "Do not modify TASK-0030."
 
 invariants:
-  - "Live Runtime remains unchanged during revision 15."
-  - "RuntimeStatus and RuntimePolicy remain authoritative for state and action availability."
-  - "Protection decision/classifier behavior is unchanged; only bounded audit-history accounting/presentation may change."
+  - "Live Runtime remains unchanged during revision 16."
+  - "RuntimeStatus and RuntimePolicy behavior remain unchanged."
+  - "Protection persistence/decision behavior remains unchanged from revision 15."
   - "Public MCP surface remains terminal_exec, terminal_start, terminal_poll and terminal_control."
   - "Accepted icon/audio resources remain unchanged."
   - "No new dependency, framework, service, branch, worktree, clone, main promotion, tag or release."
@@ -76,7 +69,7 @@ invariants:
 forbidden_changes:
   - "No live installation or Runtime lifecycle mutation."
   - "No Restart control in the popover."
-  - "No Runtime backend/server/RuntimePolicy/public-MCP/tunnel/env/port-ownership behavior change."
+  - "No changes outside the minimal header-layout correction, its focused tests, and canonical report artifact."
   - "No TCC workaround and no TASK-0030 mutation."
 
 gap_policy:
@@ -89,34 +82,28 @@ gap_policy:
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "Popover is compact, content-fit and visually balanced."
-    evidence_required: "Presentation tests/source inspection prove stable rows, left labels, right-flush values and no stretch gap."
+    requirement: "Header spans full content width with title leading and status indicator trailing at the right content edge."
+    evidence_required: "Source inspection plus deterministic layout test prove the header cannot collapse to intrinsic title-plus-icon width."
   - id: AC-2
-    requirement: "Status presentation is one green/red icon with non-color tooltip/accessibility semantics."
-    evidence_required: "Tests cover healthy serving versus every non-serving/unconfirmed state."
+    requirement: "Revision-15 accepted presentation behavior is preserved."
+    evidence_required: "Existing two-column, single-action, status semantics, accessibility and bounded-audit tests remain green."
   - id: AC-3
-    requirement: "Exactly one lifecycle action is exposed when applicable."
-    evidence_required: "Connected shows one centered full-width Stop; stopped shows one centered full-width Start; Restart is absent; external/unavailable expose no enabled action."
-  - id: AC-4
-    requirement: "Protection history is bounded and tertiary."
-    evidence_required: "Audit tests prove retained events and displayed blocked_count never exceed 20 and enforcement decisions are unchanged."
-  - id: AC-5
     requirement: "Existing Runtime/MCP/resource behavior remains preserved."
-    evidence_required: "Focused tests, Swift build/tests, full verify, package/codesign and exact four-tool checks pass with bounded diff."
-  - id: AC-6
+    evidence_required: "Focused/full verification, package/codesign and bounded diff pass with zero live mutation."
+  - id: AC-4
     requirement: "Publication is reconstructible."
     evidence_required: "Exact base/candidate/report lineage, non-force dev publication, unchanged main, clean checkout and no auxiliary worktree."
 
 verification:
   executor_checks:
     - id: CHECK-1
-      command_or_check: "Bind exact revision-15 base and prove zero live Runtime mutation."
+      command_or_check: "Bind exact revision-16 base and prove zero live Runtime mutation."
       required: true
     - id: CHECK-2
-      command_or_check: "Implement only the minimal two-column/single-action/status-icon UX plus bounded audit-history accounting."
+      command_or_check: "Implement only the full-width header/trailing-indicator correction and focused regression test."
       required: true
     - id: CHECK-3
-      command_or_check: "Run focused presentation/audit tests and full repository verification/package checks."
+      command_or_check: "Run focused presentation tests and applicable full repository/package checks."
       required: true
     - id: CHECK-4
       command_or_check: "Publish candidate/report without activation and stop for Architect review."
