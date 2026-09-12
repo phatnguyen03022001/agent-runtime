@@ -1,30 +1,31 @@
 protocol_version: 3
 
 task_id: TASK-0029
-task_revision: 17
-report_revision: 11
+task_revision: 18
+report_revision: 12
 state: REPORTED
 
 task_source:
   path: .agent/tasks/TASK-0029/task.yaml
-  commit: "5affe646cdfcf2b883678fb3f258695d472de211"
+  commit: "c74e4f6323a916c83eca83758bd33c9a997d26df"
 
 execution:
   repository: phatnguyen03022001/agent-runtime
   branch:
     name: dev
     role: integration
-  authorized_base_head: "5affe646cdfcf2b883678fb3f258695d472de211"
-  pre_execution_head: "5affe646cdfcf2b883678fb3f258695d472de211"
-  final_execution_head: "6086f22e96c4f39a2cf81fd698aff67654bbf108"
+  authorized_base_head: "c74e4f6323a916c83eca83758bd33c9a997d26df"
+  pre_execution_head: "c74e4f6323a916c83eca83758bd33c9a997d26df"
+  final_execution_head: "c74e4f6323a916c83eca83758bd33c9a997d26df"
+  accepted_candidate: "6086f22e96c4f39a2cf81fd698aff67654bbf108"
   live_install_performed: false
   live_runtime_mutation_performed: false
+  activation_count: 0
 
 authority_binding:
-  remote_dev_before_execution: "5affe646cdfcf2b883678fb3f258695d472de211"
+  accepted_revision_17_review: "9ae63318583e65bdfbb4595f6c4570e875b5da1d"
+  remote_dev_before_execution: "c74e4f6323a916c83eca83758bd33c9a997d26df"
   remote_main_before_execution: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
-  revision_15_report: "4892a7440c3214cea03b1d60c4aa9af7e0ca5621"
-  revision_15_review: "9e9aacf0a7ddccb49f9e4fab8582b734838edeed"
   task_0030_modified: false
   canonical_checkout: /Users/tienphat/Developer/agent-runtime
   auxiliary_worktrees: 0
@@ -41,122 +42,107 @@ capability_preflight:
     - native_repository_execution
     - local_file_read
     - local_file_write
+    - local_process_read
+    - local_network_read
+    - native_current_login_ui_accessibility
     - git_history_read
     - git_commit
     - non_force_git_push
     - remote_ref_read
     - repository_metadata_read
-  available:
-    - repository_content_read
-    - repository_content_write
-    - native_repository_execution
-    - local_file_read
-    - local_file_write
-    - git_history_read
-    - git_commit
-    - non_force_git_push
-    - remote_ref_read
-    - repository_metadata_read
-  missing: []
-  passed: true
+  missing:
+    - native_current_login_ui_accessibility
+  passed: false
+  evidence: "The available computer-use surface exposed browser tabs only. Its documented native App accessor was not implemented (`cua.getApp is not a function`), so no native menu-bar Accessibility tree could be read."
 
-implementation:
-  summary: "Restored the established Agent Runtime bolt glyph for every menu-bar state, tinting it green only for owned serving Runtime and red otherwise; constrained the popover header to the content width; and retained a single full-width disabled Stop slot when RuntimePolicy forbids lifecycle action."
-  candidate_commit: "6086f22e96c4f39a2cf81fd698aff67654bbf108"
-  candidate_is_direct_child_of_base: true
-  changed_files:
-    - macos/Sources/AgentRuntimeMenuBar/ControlPanelController.swift
-    - macos/Tests/AgentRuntimeMenuBarTests/PresentationTests.swift
-  runtime_backend_changed: false
+preservation_evidence:
+  accepted_candidate_preserved: true
+  product_source_changed: false
   runtime_policy_changed: false
+  protection_contract_changed: false
   public_mcp_surface_changed: false
   accepted_icon_audio_resources_changed: false
   dependencies_changed: false
   task_0030_changed: false
-  live_runtime_preserved: true
+  tunnel_fingerprint: "6aa2b81d6dd8"
 
 verification_evidence:
-  focused_swift_tests:
-    command: "xcrun swift test --package-path macos --filter PresentationTests"
+  exact_base_binding:
     result: PASS
-    test_count: 8
-    evidence: "Glyph/tint, header trailing-width, stable lifecycle slot, accessibility, facts, audio, and bounded-protection presentation tests passed."
-  swift_suite:
-    command: "xcrun swift test --package-path macos"
+    evidence: "Local dev was clean and fast-forwarded to the required exact base; a fresh remote ref read resolved origin/dev to the same SHA."
+  serving_baseline:
     result: PASS
-    test_count: 29
-    evidence: "AgentRuntimeCore and AgentRuntimeMenuBar tests passed."
-  focused_protection_tests:
-    command: "python3 -m unittest discover -s tests -p 'test_protected_runtime.py' -v"
-    result: PASS
-    test_count: 10
-    evidence: "Protected Runtime denial behavior and bounded audit history passed unchanged."
+    evidence: "Before any activation, the desired state was RUNNING; one canonical tunnel-client owned 127.0.0.1:8080, one direct agent_runtime.server child existed, launchd was running from the installed package-owned start.sh, /healthz returned live, /readyz returned ready, and the accepted tunnel fingerprint remained 6aa2b81d6dd8."
+  native_ui_accessibility:
+    result: BLOCKED
+    evidence: "No current-login native App/Accessibility control was available, so the installed menu-bar glyph, popover facts/actions/layout, and click-outside dismissal could not be observed truthfully."
   full_repository_verification:
     command: "./verify"
     result: PASS
-    evidence: "Repository Python tests, compilation, and shell syntax checks passed without invoking Runtime lifecycle commands."
+    evidence: "Python tests, compilation, and shell syntax checks passed under native local execution; no Runtime lifecycle command was invoked."
+  swift_suite:
+    command: "xcrun swift test --package-path macos"
+    result: PASS
   release_build:
     command: "xcrun swift build --package-path macos -c release"
     result: PASS
   package_and_codesign:
-    command: "bash macos/package_app.sh && /usr/bin/codesign --verify --deep --strict 'build/Agent Runtime.app'"
+    command: "./macos/package_app.sh && codesign --verify --deep --strict 'build/Agent Runtime.app'"
     result: PASS
-    evidence: "Release build, deterministic App bundle packaging, and strict deep ad-hoc codesign verification passed; no installer or lifecycle command was invoked."
-  exact_four_tool_contract:
-    result: PASS
-    evidence: "agent_runtime/server.py still declares exactly terminal_exec, terminal_start, terminal_poll, and terminal_control; full verifier surface tests passed."
+    evidence: "The package manifest records c74e4f6323a916c83eca83758bd33c9a997d26df; packaged AppIcon.png and notification.mp3 SHA-256 bytes matched their accepted source resources."
   diff_and_scope:
+    command: "git diff --check"
     result: PASS
-    evidence: "git diff --check passed; the candidate changes only the two authorized menu-bar source/test files; TASK-0030, Runtime backend/policy, resources, dependencies, and public MCP surface are unchanged."
+    evidence: "The report is the only pending repository change; no product source, resource, dependency, TASK-0030, or main mutation was made."
 
 acceptance_evidence:
   - criterion_id: AC-1
-    status: PROVEN
-    evidence: "RuntimeStatusIndicator uses bolt.horizontal.circle.fill for every state and maps only owned serving status to green; focused tests cover all green/red cases and the existing accessibility summaries remain non-color evidence."
+    status: NOT_PROVEN
+    evidence: "No immediate pre-activation operator confirmation was requested and no activation was performed; activation_count is zero."
   - criterion_id: AC-2
-    status: PROVEN
-    evidence: "ControlPanelController constrains the header to root content width while retaining its leading title/trailing indicator arrangement; focused layout test confirms full-width containment, and existing two-column right-aligned facts test remains green."
+    status: BASELINE_PROVEN
+    evidence: "The pre-activation installed Runtime was already a healthy canonical singleton, but no revision-18 activation/convergence occurred."
   - criterion_id: AC-3
-    status: PROVEN
-    evidence: "RuntimePopoverPresentation derives one slot from RuntimePolicy: owned enabled Stop, stopped enabled Start, and external/ambiguous visible disabled Stop; no Restart action is exposed and the existing full-width button constraint remains."
+    status: BLOCKED
+    evidence: "Native UI/AX capability was unavailable, therefore installed UI truth cannot be claimed."
   - criterion_id: AC-4
     status: PROVEN
-    evidence: "Swift 29/29, protected-runtime 10/10, full repository verification, release build, package/codesign, and exact four-tool checks passed with no live Runtime mutation."
+    evidence: "Fresh full verification, Swift suite, release build, packaging, strict codesign, resource-byte comparison, and scope check passed without contract drift."
   - criterion_id: AC-5
     status: NOT_PROVEN
-    evidence: "Candidate and report are prepared for authorized non-force dev publication; fresh post-publication remote identity and Architect review remain after the report commit."
+    evidence: "This report is pending its own authorized non-force dev publication; no publication has occurred."
 
 executor_checks:
   - check_id: CHECK-1
-    result: PASS
-    evidence: "Local dev was clean and fast-forwarded to exact remote base 5affe646cdfcf2b883678fb3f258695d472de211 before source mutation; no Runtime lifecycle or installation command was invoked."
+    result: BLOCKED
+    evidence: "Exact base and serving baseline passed, but the mandatory native UI/AX capability was unavailable."
   - check_id: CHECK-2
-    result: PASS
-    evidence: "Only the authorized glyph/tint, header-width, stable lifecycle-slot presentation, and focused tests changed; Runtime backend, RuntimePolicy decision behavior, protection persistence, resources, public MCP, and TASK-0030 were preserved."
+    result: NOT_REACHED
+    evidence: "The required immediate pre-activation confirmation is not requested after a blocking capability failure."
   - check_id: CHECK-3
-    result: PASS
-    evidence: "Focused and full Swift tests, protection tests, repository verifier, release build, package/codesign, four-tool inspection, and diff/scope checks passed."
+    result: NOT_RUN
+    evidence: "Activation is forbidden after the native UI/AX preflight failure."
   - check_id: CHECK-4
-    result: NOT_PROVEN
-    evidence: "Candidate commit is ready and no activation occurred. Report publication, fresh remote proof, and Architect review are the next lifecycle boundary."
+    result: BLOCKED
+    evidence: "Installed native acceptance cannot be performed without native UI/AX capability; this report records that bounded failure truthfully."
 
 publication:
-  candidate_commit: "6086f22e96c4f39a2cf81fd698aff67654bbf108"
   target_branch: dev
-  candidate_publication_mode: non_force_authorized
   report_publication_mode: non_force_authorized
-  remote_dev_before_report: "5affe646cdfcf2b883678fb3f258695d472de211"
+  remote_dev_before_report: "c74e4f6323a916c83eca83758bd33c9a997d26df"
   remote_main_before_report: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
   promote_main: false
-  activate_runtime: false
+  activated_runtime: false
+  pushed: false
 
-pushed: false
+blockers:
+  - id: NATIVE_CURRENT_LOGIN_UI_ACCESSIBILITY_UNAVAILABLE
+    disposition: BLOCKED
+    evidence: "The execution environment cannot inspect a native current-login application Accessibility tree. TASK-0029 explicitly requires BLOCKED without activation in this condition."
 
 remaining_closure:
-  - "Publish candidate and report to dev with one non-force push."
-  - "Refresh remote dev identity after publication and stop for Architect review."
-  - "Do not install or activate revision 17; do not modify TASK-0030."
+  - "Do not activate from this execution environment."
+  - "Resume only in an environment with verified native current-login UI/Accessibility capability, fresh baseline evidence, and an explicit confirmation immediately before the one permitted activation."
+  - "After native acceptance and Architect review, CHATGPT_LOCAL must still perform final live MCP transport closure."
 
-blockers: []
-
-result: NEEDS_REVIEW
+result: BLOCKED
