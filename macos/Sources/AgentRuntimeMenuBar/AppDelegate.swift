@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var timer: Timer?
     private var controller: RuntimeController?
     private var configurationError: String?
+    private let auditReader = ProtectionAuditReader()
     private lazy var controlPanel = makeControlPanel()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -38,19 +39,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             let checkoutRoot = try Self.checkoutRoot()
             let system = DarwinProcessSystem()
-            let store = FileOwnershipStore()
-            let launcher = POSIXProcessLauncher(inspector: system, signaler: system)
-            let supervisor = OwnedProcessSupervisor(
-                inspector: system,
-                signaler: system,
-                store: store,
-                launcher: launcher
-            )
             let backend = NativeRuntimeBackend(
                 configuration: RuntimeConfiguration(checkoutRoot: checkoutRoot),
                 inspector: system,
-                store: store,
-                supervisor: supervisor,
                 discovery: PSRuntimeDiscovery(inspector: system)
             )
             controller = RuntimeController(backend: backend)
@@ -116,14 +107,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func refreshStatus() {
         guard let controller else {
             let status = RuntimeStatus.ambiguous(configurationError ?? "Configuration unavailable")
-            controlPanel.apply(status: status)
+            controlPanel.apply(status: status, audit: auditReader.read())
             updateStatusItem(for: status)
             return
         }
         runtimeQueue.async { [weak self, controller] in
             let status = controller.refresh()
             DispatchQueue.main.async { [weak self] in
-                self?.controlPanel.apply(status: status)
+                self?.controlPanel.apply(status: status, audit: self?.auditReader.read() ?? ProtectionAuditSnapshot())
                 self?.updateStatusItem(for: status)
             }
         }
@@ -143,11 +134,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self else { return }
                 switch result {
                 case .success(let status):
-                    self.controlPanel.apply(status: status)
+                    self.controlPanel.apply(status: status, audit: self.auditReader.read())
                     self.updateStatusItem(for: status)
                 case .failure(let error):
                     let status = controller.refresh()
-                    self.controlPanel.apply(status: status)
+                    self.controlPanel.apply(status: status, audit: self.auditReader.read())
                     self.updateStatusItem(for: status)
                     self.showError(error.localizedDescription)
                 }

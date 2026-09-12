@@ -46,7 +46,7 @@ final class OwnershipTests: XCTestCase {
             launcher: FailingLauncher()
         )
         let backend = NativeRuntimeBackend(
-            configuration: RuntimeConfiguration(checkoutRoot: "/tmp/fixture", profile: "fixture"),
+            configuration: RuntimeConfiguration(checkoutRoot: "/tmp/fixture"),
             inspector: inspector,
             store: store,
             supervisor: supervisor,
@@ -57,10 +57,8 @@ final class OwnershipTests: XCTestCase {
         XCTAssertTrue(signaler.signals.isEmpty)
     }
 
-    func testProductionDiscoveryRecognizesCanonicalProfileFileInvocation() throws {
+    func testProductionDiscoveryRecognizesCanonicalEnvBackedInvocation() throws {
         let pid: Int32 = 9002
-        let profilePath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/tunnel-client/agent-runtime.yaml").path
         let inspector = FakeInspector(snapshot: ProcessIdentity(
             pid: pid,
             processGroupID: pid,
@@ -70,13 +68,13 @@ final class OwnershipTests: XCTestCase {
         ))
         let discovery = PSRuntimeDiscovery(
             inspector: inspector,
-            processListProvider: { "\(pid) /opt/homebrew/bin/tunnel-client run --profile-file \(profilePath)\n" }
+            processListProvider: { "\(pid) /opt/homebrew/bin/tunnel-client run --control-plane.poll-channel main --mcp.command command=/tmp/fixture/.venv/bin/python -m agent_runtime.server,channel=main --health.listen-addr 127.0.0.1:8080\n" }
         )
 
-        XCTAssertEqual(try discovery.matchingRuntimePIDs(profile: "agent-runtime"), [pid])
+        XCTAssertEqual(try discovery.matchingRuntimePIDs(checkoutRoot: "/tmp/fixture"), [pid])
     }
 
-    func testProductionDiscoveryRejectsDifferentProfileFilePath() throws {
+    func testProductionDiscoveryRejectsDifferentRuntimePath() throws {
         let pid: Int32 = 9003
         let inspector = FakeInspector(snapshot: ProcessIdentity(
             pid: pid,
@@ -87,13 +85,13 @@ final class OwnershipTests: XCTestCase {
         ))
         let discovery = PSRuntimeDiscovery(
             inspector: inspector,
-            processListProvider: { "\(pid) /opt/homebrew/bin/tunnel-client run --profile-file /tmp/other.yaml\n" }
+            processListProvider: { "\(pid) /opt/homebrew/bin/tunnel-client run --control-plane.poll-channel main --mcp.command command=/tmp/other/.venv/bin/python -m agent_runtime.server,channel=main --health.listen-addr 127.0.0.1:8080\n" }
         )
 
-        XCTAssertEqual(try discovery.matchingRuntimePIDs(profile: "agent-runtime"), [])
+        XCTAssertEqual(try discovery.matchingRuntimePIDs(checkoutRoot: "/tmp/fixture"), [])
     }
 
-    func testProductionDiscoveryRejectsDifferentLegacyProfile() throws {
+    func testProductionDiscoveryRejectsUnexpectedArguments() throws {
         let pid: Int32 = 9007
         let inspector = FakeInspector(snapshot: ProcessIdentity(
             pid: pid,
@@ -104,16 +102,14 @@ final class OwnershipTests: XCTestCase {
         ))
         let discovery = PSRuntimeDiscovery(
             inspector: inspector,
-            processListProvider: { "\(pid) /opt/homebrew/bin/tunnel-client run --profile other-profile\n" }
+            processListProvider: { "\(pid) /opt/homebrew/bin/tunnel-client run --control-plane.poll-channel other --mcp.command command=/tmp/fixture/.venv/bin/python -m agent_runtime.server,channel=main --health.listen-addr 127.0.0.1:8080\n" }
         )
 
-        XCTAssertEqual(try discovery.matchingRuntimePIDs(profile: "agent-runtime"), [])
+        XCTAssertEqual(try discovery.matchingRuntimePIDs(checkoutRoot: "/tmp/fixture"), [])
     }
 
     func testProductionDiscoveryRejectsUnrelatedTunnelClientCommand() throws {
         let pid: Int32 = 9004
-        let profilePath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/tunnel-client/agent-runtime.yaml").path
         let inspector = FakeInspector(snapshot: ProcessIdentity(
             pid: pid,
             processGroupID: pid,
@@ -123,16 +119,14 @@ final class OwnershipTests: XCTestCase {
         ))
         let discovery = PSRuntimeDiscovery(
             inspector: inspector,
-            processListProvider: { "\(pid) /opt/homebrew/bin/tunnel-client doctor --profile-file \(profilePath)\n" }
+            processListProvider: { "\(pid) /opt/homebrew/bin/tunnel-client doctor --control-plane.poll-channel main\n" }
         )
 
-        XCTAssertEqual(try discovery.matchingRuntimePIDs(profile: "agent-runtime"), [])
+        XCTAssertEqual(try discovery.matchingRuntimePIDs(checkoutRoot: "/tmp/fixture"), [])
     }
 
     func testProductionDiscoveryRequiresTunnelClientExecutableIdentity() throws {
         let pid: Int32 = 9005
-        let profilePath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/tunnel-client/agent-runtime.yaml").path
         let inspector = FakeInspector(snapshot: ProcessIdentity(
             pid: pid,
             processGroupID: pid,
@@ -142,16 +136,14 @@ final class OwnershipTests: XCTestCase {
         ))
         let discovery = PSRuntimeDiscovery(
             inspector: inspector,
-            processListProvider: { "\(pid) /tmp/tunnel-client run --profile-file \(profilePath)\n" }
+            processListProvider: { "\(pid) /tmp/tunnel-client run --control-plane.poll-channel main --mcp.command command=/tmp/fixture/.venv/bin/python -m agent_runtime.server,channel=main --health.listen-addr 127.0.0.1:8080\n" }
         )
 
-        XCTAssertEqual(try discovery.matchingRuntimePIDs(profile: "agent-runtime"), [])
+        XCTAssertEqual(try discovery.matchingRuntimePIDs(checkoutRoot: "/tmp/fixture"), [])
     }
 
     func testCanonicalExternalDiscoveryIsReadOnlyAndCannotDoubleStart() throws {
         let pid: Int32 = 9006
-        let profilePath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/tunnel-client/agent-runtime.yaml").path
         let identity = ProcessIdentity(
             pid: pid,
             processGroupID: pid,
@@ -170,10 +162,10 @@ final class OwnershipTests: XCTestCase {
         )
         let discovery = PSRuntimeDiscovery(
             inspector: inspector,
-            processListProvider: { "\(pid) /opt/homebrew/bin/tunnel-client run --profile-file \(profilePath)\n" }
+            processListProvider: { "\(pid) /opt/homebrew/bin/tunnel-client run --control-plane.poll-channel main --mcp.command command=/tmp/fixture/.venv/bin/python -m agent_runtime.server,channel=main --health.listen-addr 127.0.0.1:8080\n" }
         )
         let backend = NativeRuntimeBackend(
-            configuration: RuntimeConfiguration(checkoutRoot: "/tmp/fixture", profile: "agent-runtime"),
+            configuration: RuntimeConfiguration(checkoutRoot: "/tmp/fixture"),
             inspector: inspector,
             store: store,
             supervisor: supervisor,
@@ -188,7 +180,7 @@ final class OwnershipTests: XCTestCase {
         XCTAssertTrue(signaler.signals.isEmpty)
     }
 
-    func testProductionDiscoveryRecognizesLegacyExactProfileInvocation() throws {
+    func testProductionDiscoveryRejectsWrongHealthListener() throws {
         let pid: Int32 = 9001
         let inspector = FakeInspector(snapshot: ProcessIdentity(
             pid: pid,
@@ -199,10 +191,10 @@ final class OwnershipTests: XCTestCase {
         ))
         let discovery = PSRuntimeDiscovery(
             inspector: inspector,
-            processListProvider: { "\(pid) /opt/homebrew/bin/tunnel-client run --profile agent-runtime\n" }
+            processListProvider: { "\(pid) /opt/homebrew/bin/tunnel-client run --control-plane.poll-channel main --mcp.command command=/tmp/fixture/.venv/bin/python -m agent_runtime.server,channel=main --health.listen-addr 127.0.0.1:9090\n" }
         )
 
-        XCTAssertEqual(try discovery.matchingRuntimePIDs(profile: "agent-runtime"), [pid])
+        XCTAssertEqual(try discovery.matchingRuntimePIDs(checkoutRoot: "/tmp/fixture"), [])
     }
 
     func testStaleRecordWithObservedExternalRuntimeRemainsReadOnly() throws {
@@ -220,7 +212,7 @@ final class OwnershipTests: XCTestCase {
             launcher: FailingLauncher()
         )
         let backend = NativeRuntimeBackend(
-            configuration: RuntimeConfiguration(checkoutRoot: "/tmp/fixture", profile: "fixture"),
+            configuration: RuntimeConfiguration(checkoutRoot: "/tmp/fixture"),
             inspector: inspector,
             store: store,
             supervisor: supervisor,
@@ -314,5 +306,5 @@ private final class FailingLauncher: ProcessLaunching {
 private final class FakeDiscovery: RuntimeDiscovering {
     let pids: [Int32]
     init(pids: [Int32]) { self.pids = pids }
-    func matchingRuntimePIDs(profile: String) throws -> [Int32] { pids }
+    func matchingRuntimePIDs(checkoutRoot: String) throws -> [Int32] { pids }
 }

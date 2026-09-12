@@ -1,7 +1,7 @@
 import Foundation
 
 public protocol RuntimeDiscovering: AnyObject {
-    func matchingRuntimePIDs(profile: String) throws -> [Int32]
+    func matchingRuntimePIDs(checkoutRoot: String) throws -> [Int32]
 }
 
 public final class PSRuntimeDiscovery: RuntimeDiscovering, @unchecked Sendable {
@@ -34,19 +34,18 @@ public final class PSRuntimeDiscovery: RuntimeDiscovering, @unchecked Sendable {
         guard process.terminationStatus == 0 else {
             throw RuntimeLifecycleError.operationFailed("Could not inspect Runtime processes.")
         }
-
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         return String(decoding: data, as: UTF8.self)
     }
 
-    public func matchingRuntimePIDs(profile: String) throws -> [Int32] {
+    public func matchingRuntimePIDs(checkoutRoot: String) throws -> [Int32] {
         let output = try processListProvider()
         return output.split(whereSeparator: \.isNewline).compactMap { rawLine in
             let line = rawLine.trimmingCharacters(in: .whitespaces)
             guard let separator = line.firstIndex(where: { $0.isWhitespace }) else { return nil }
             guard let pid = Int32(line[..<separator]) else { return nil }
             let command = line[separator...].trimmingCharacters(in: .whitespaces)
-            guard Self.matchesRuntimeCommand(command, profile: profile),
+            guard Self.matchesRuntimeCommand(command, checkoutRoot: checkoutRoot),
                   let identity = inspector.snapshot(pid: pid),
                   URL(fileURLWithPath: identity.executablePath).lastPathComponent == "tunnel-client" else {
                 return nil
@@ -55,32 +54,49 @@ public final class PSRuntimeDiscovery: RuntimeDiscovering, @unchecked Sendable {
         }.sorted()
     }
 
-    private static func matchesRuntimeCommand(_ command: String, profile: String) -> Bool {
+    private static func matchesRuntimeCommand(_ command: String, checkoutRoot: String) -> Bool {
         guard let separator = command.firstIndex(where: { $0.isWhitespace }) else { return false }
         let arguments = command[separator...].trimmingCharacters(in: .whitespaces)
-        let canonicalProfileFile = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/tunnel-client/\(profile).yaml").path
-        return arguments == "run --profile-file \(canonicalProfileFile)"
-            || arguments == "run --profile \(profile)"
+        return arguments == "run --control-plane.poll-channel main --mcp.command command=\(checkoutRoot)/.venv/bin/python -m agent_runtime.server,channel=main --health.listen-addr 127.0.0.1:8080"
     }
 }
 
 public struct RuntimeConfiguration: Sendable {
     public let checkoutRoot: String
-    public let profile: String
+    public let desiredStateURL: URL
+    public let transitionTimeout: TimeInterval
 
-    public init(checkoutRoot: String, profile: String = "agent-runtime") {
+    public init(
+        checkoutRoot: String,
+        desiredStateURL: URL? = nil,
+        transitionTimeout: TimeInterval = 10
+    ) {
         self.checkoutRoot = checkoutRoot
-        self.profile = profile
+        self.desiredStateURL = desiredStateURL ?? FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Agent Runtime", isDirectory: true)
+            .appendingPathComponent("protected-runtime-running", isDirectory: false)
+        self.transitionTimeout = transitionTimeout
     }
 }
 
 public final class NativeRuntimeBackend: RuntimeBackend, @unchecked Sendable {
     private let configuration: RuntimeConfiguration
     private let inspector: ProcessInspecting
-    private let store: OwnershipStoring
-    private let supervisor: OwnedProcessSupervisor
     private let discovery: RuntimeDiscovering
+    private let legacyStore: OwnershipStoring?
+    private let legacySupervisor: OwnedProcessSupervisor?
+
+    public init(
+        configuration: RuntimeConfiguration,
+        inspector: ProcessInspecting,
+        discovery: RuntimeDiscovering
+    ) {
+        self.configuration = configuration
+        self.inspector = inspector
+        self.discovery = discovery
+        self.legacyStore = nil
+        self.legacySupervisor = nil
+    }
 
     public init(
         configuration: RuntimeConfiguration,
@@ -91,54 +107,132 @@ public final class NativeRuntimeBackend: RuntimeBackend, @unchecked Sendable {
     ) {
         self.configuration = configuration
         self.inspector = inspector
-        self.store = store
-        self.supervisor = supervisor
         self.discovery = discovery
+        self.legacyStore = store
+        self.legacySupervisor = supervisor
     }
 
     public func observeStatus() throws -> RuntimeStatus {
-        if let record = try store.load(),
-           record.profile == configuration.profile,
-           record.checkoutRoot == configuration.checkoutRoot,
-           let current = inspector.snapshot(pid: record.rootProcess.pid),
-           record.matches(current) {
-            return .owned(current)
+        if let store = legacyStore {
+            if let record = try store.load(),
+               record.checkoutRoot == configuration.checkoutRoot,
+               let current = inspector.snapshot(pid: record.rootProcess.pid),
+               record.matches(current) {
+                return .owned(current)
+            }
+            let external = try discovery.matchingRuntimePIDs(checkoutRoot: configuration.checkoutRoot)
+            return external.isEmpty ? .stopped : .external(external)
         }
 
-        let external = try discovery.matchingRuntimePIDs(profile: configuration.profile)
-        if !external.isEmpty {
-            return .external(external)
+        let pids = try discovery.matchingRuntimePIDs(checkoutRoot: configuration.checkoutRoot)
+        let desiredRunning = FileManager.default.fileExists(atPath: configuration.desiredStateURL.path)
+        if !desiredRunning {
+            return pids.isEmpty ? .stopped : .external(pids)
         }
-        return .stopped
+        guard pids.count == 1 else {
+            if pids.isEmpty {
+                return .ambiguous("Desired state is RUNNING, but no canonical Runtime instance is serving.")
+            }
+            return .ambiguous("Multiple canonical Runtime instances were discovered; refusing lifecycle mutation.")
+        }
+        guard let identity = inspector.snapshot(pid: pids[0]) else {
+            return .ambiguous("Canonical Runtime identity changed during inspection.")
+        }
+        return .owned(identity)
     }
 
     public func startOwned() throws {
-        let current = try observeStatus()
-        guard case .stopped = current else {
-            throw RuntimeLifecycleError.actionUnavailable("Runtime is already active or ownership is not available.")
+        if let legacySupervisor {
+            let current = try observeStatus()
+            guard case .stopped = current else {
+                throw RuntimeLifecycleError.actionUnavailable("Runtime is already active or ownership is not available.")
+            }
+            let script = lifecycleScript()
+            let spec = LaunchSpec(
+                executablePath: "/bin/bash",
+                arguments: [script.path],
+                environment: Self.safeChildEnvironment(),
+                expectedExecutableName: "tunnel-client",
+                transitionTimeout: 10
+            )
+            _ = try legacySupervisor.start(
+                spec: spec,
+                profile: "protected-runtime",
+                checkoutRoot: configuration.checkoutRoot
+            )
+            return
         }
-        let script = URL(fileURLWithPath: configuration.checkoutRoot)
-            .appendingPathComponent("start.sh", isDirectory: false)
-        guard FileManager.default.isExecutableFile(atPath: script.path) else {
-            throw RuntimeLifecycleError.processLaunchFailed("start.sh is unavailable; run install.sh first")
-        }
-
-        let spec = LaunchSpec(
-            executablePath: "/bin/bash",
-            arguments: [script.path],
-            environment: Self.safeChildEnvironment(),
-            expectedExecutableName: "tunnel-client",
-            transitionTimeout: 10
-        )
-        _ = try supervisor.start(
-            spec: spec,
-            profile: configuration.profile,
-            checkoutRoot: configuration.checkoutRoot
-        )
+        try runLifecycle("start")
+        try waitFor(expectedRunning: true)
     }
 
     public func stopOwned() throws {
-        try supervisor.stopOwned()
+        if let legacySupervisor {
+            try legacySupervisor.stopOwned()
+            return
+        }
+        try runLifecycle("stop")
+        try waitFor(expectedRunning: false)
+    }
+
+    public func restartOwned() throws {
+        if legacySupervisor != nil {
+            try stopOwned()
+            try startOwned()
+            return
+        }
+        try runLifecycle("restart")
+        try waitFor(expectedRunning: true)
+    }
+
+    private func lifecycleScript() -> URL {
+        URL(fileURLWithPath: configuration.checkoutRoot)
+            .appendingPathComponent("start.sh", isDirectory: false)
+    }
+
+    private func runLifecycle(_ action: String) throws {
+        let script = lifecycleScript()
+        guard FileManager.default.isExecutableFile(atPath: script.path) else {
+            throw RuntimeLifecycleError.processLaunchFailed("start.sh is unavailable; run install.sh first")
+        }
+        let process = Process()
+        let stderr = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = [script.path, action]
+        process.environment = Self.safeChildEnvironment()
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = stderr
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            throw RuntimeLifecycleError.operationFailed("Could not run Runtime lifecycle action: \(error.localizedDescription)")
+        }
+        guard process.terminationStatus == 0 else {
+            let data = stderr.fileHandleForReading.readDataToEndOfFile()
+            let detail = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+            throw RuntimeLifecycleError.operationFailed(detail.isEmpty ? "Runtime lifecycle action failed." : detail)
+        }
+    }
+
+    private func waitFor(expectedRunning: Bool) throws {
+        let timeout = max(0, configuration.transitionTimeout)
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            let pids = try discovery.matchingRuntimePIDs(checkoutRoot: configuration.checkoutRoot)
+            if expectedRunning {
+                if pids.count == 1 { return }
+            } else if pids.isEmpty {
+                return
+            }
+            if timeout == 0 { break }
+            Thread.sleep(forTimeInterval: 0.05)
+        } while Date() < deadline
+        throw RuntimeLifecycleError.operationFailed(
+            expectedRunning
+                ? "Runtime did not converge to exactly one canonical instance."
+                : "Runtime did not stop within the bounded transition window."
+        )
     }
 
     private static func safeChildEnvironment() -> [String: String] {

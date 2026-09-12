@@ -118,6 +118,7 @@ public protocol RuntimeBackend: AnyObject {
     func observeStatus() throws -> RuntimeStatus
     func startOwned() throws
     func stopOwned() throws
+    func restartOwned() throws
 }
 
 public final class RuntimeController: @unchecked Sendable {
@@ -166,8 +167,7 @@ public final class RuntimeController: @unchecked Sendable {
                 guard availability.canRestart else {
                     throw RuntimeLifecycleError.actionUnavailable("Restart is available only for a positively app-owned Runtime.")
                 }
-                try backend.stopOwned()
-                try backend.startOwned()
+                try backend.restartOwned()
             }
             return .success(refresh())
         } catch let error as RuntimeLifecycleError {

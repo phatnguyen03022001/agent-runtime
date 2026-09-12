@@ -47,8 +47,9 @@ final class RuntimeLifecycleTests: XCTestCase {
         let controller = RuntimeController(backend: backend)
 
         if case .success(.owned) = controller.restart() {} else { XCTFail("owned Runtime should restart") }
-        XCTAssertEqual(backend.stopCount, 1)
-        XCTAssertEqual(backend.startCount, 1)
+        XCTAssertEqual(backend.restartCount, 1)
+        XCTAssertEqual(backend.stopCount, 0)
+        XCTAssertEqual(backend.startCount, 0)
     }
 
     private func assertFailure(_ result: Result<RuntimeStatus, RuntimeLifecycleError>) {
@@ -61,6 +62,7 @@ private final class FakeBackend: RuntimeBackend {
     let ownedIdentity: ProcessIdentity
     var startCount = 0
     var stopCount = 0
+    var restartCount = 0
 
     init(state: RuntimeStatus, ownedIdentity: ProcessIdentity) {
         self.state = state
@@ -77,5 +79,10 @@ private final class FakeBackend: RuntimeBackend {
     func stopOwned() throws {
         stopCount += 1
         state = .stopped
+    }
+
+    func restartOwned() throws {
+        restartCount += 1
+        state = .owned(ownedIdentity)
     }
 }

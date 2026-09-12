@@ -7,6 +7,7 @@ final class ControlPanelController: NSViewController {
     private let quit: () -> Void
     private let statusLabel = NSTextField(labelWithString: "Stopped")
     private let detailLabel = NSTextField(labelWithString: "")
+    private let protectionLabel = NSTextField(labelWithString: "Protection: no blocked attempts")
     private let startButton = NSButton()
     private let stopButton = NSButton()
     private let restartButton = NSButton()
@@ -15,7 +16,7 @@ final class ControlPanelController: NSViewController {
         self.performAction = performAction
         self.quit = quit
         super.init(nibName: nil, bundle: nil)
-        preferredContentSize = NSSize(width: 300, height: 164)
+        preferredContentSize = NSSize(width: 320, height: 194)
     }
 
     @available(*, unavailable)
@@ -24,7 +25,7 @@ final class ControlPanelController: NSViewController {
     }
 
     override func loadView() {
-        view = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 164))
+        view = NSView(frame: NSRect(x: 0, y: 0, width: 320, height: 194))
 
         let title = NSTextField(labelWithString: "Agent Runtime")
         title.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
@@ -35,6 +36,9 @@ final class ControlPanelController: NSViewController {
         detailLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         detailLabel.textColor = .secondaryLabelColor
         detailLabel.lineBreakMode = .byTruncatingTail
+        protectionLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        protectionLabel.textColor = .secondaryLabelColor
+        protectionLabel.lineBreakMode = .byTruncatingTail
 
         let statusStack = NSStackView(views: [statusLabel, detailLabel])
         statusStack.orientation = .vertical
@@ -55,7 +59,7 @@ final class ControlPanelController: NSViewController {
         quitButton.controlSize = .small
         quitButton.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
 
-        let root = NSStackView(views: [title, statusStack, controls, separator(), quitButton])
+        let root = NSStackView(views: [title, statusStack, protectionLabel, controls, separator(), quitButton])
         root.orientation = .vertical
         root.alignment = .leading
         root.spacing = 10
@@ -70,18 +74,26 @@ final class ControlPanelController: NSViewController {
         ])
     }
 
-    func apply(status: RuntimeStatus) {
+    func apply(status: RuntimeStatus, audit: ProtectionAuditSnapshot = ProtectionAuditSnapshot()) {
         let availability = RuntimePolicy.actions(for: status)
         startButton.isEnabled = availability.canStart
         stopButton.isEnabled = availability.canStop
         restartButton.isEnabled = availability.canRestart
+        if audit.blockedCount > 0 {
+            let category = audit.lastCategory ?? "protected lifecycle"
+            protectionLabel.stringValue = "Protection: \(audit.blockedCount) blocked · last: \(category)"
+            protectionLabel.textColor = .systemOrange
+        } else {
+            protectionLabel.stringValue = "Protection: no blocked attempts"
+            protectionLabel.textColor = .secondaryLabelColor
+        }
         switch status {
         case .stopped:
             statusLabel.stringValue = "Stopped"
-            detailLabel.stringValue = "Runtime starts only when you press Start."
+            detailLabel.stringValue = "Desired state STOPPED · supervisor recovery is suppressed."
         case .owned:
             statusLabel.stringValue = "Running"
-            detailLabel.stringValue = "App-owned · Stop and Restart are available."
+            detailLabel.stringValue = "Protected singleton · supervisor recovery is active."
         case .external:
             statusLabel.stringValue = "Running externally"
             detailLabel.stringValue = "Read-only · lifecycle controls are disabled."
@@ -101,10 +113,10 @@ final class ControlPanelController: NSViewController {
             detailLabel.stringValue = "Explicit operator action in progress."
         case .stop:
             statusLabel.stringValue = "Stopping…"
-            detailLabel.stringValue = "Cleaning up the owned process group."
+            detailLabel.stringValue = "Setting desired state STOPPED and stopping the singleton."
         case .restart:
             statusLabel.stringValue = "Restarting…"
-            detailLabel.stringValue = "Stopping and starting the owned Runtime."
+            detailLabel.stringValue = "Restarting the supervised singleton with desired state RUNNING."
         }
     }
 

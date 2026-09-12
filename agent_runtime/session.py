@@ -22,6 +22,7 @@ from .executor import (
     _validated_cwd,
     _workspace_root,
 )
+from .protection import _PROTECTED_GUARD
 from .timing import TimingContext, current_call_context, emit_process_end
 
 MAX_ACTIVE_SESSIONS = 3
@@ -55,6 +56,7 @@ class _Session:
     timing_context: TimingContext | None = None
     process_started_wall: float = 0.0
     process_started_mono: float = 0.0
+    protected_input_buffer: str = ""
 
     def __post_init__(self) -> None:
         self.changed = threading.Condition(self.lock)
@@ -86,6 +88,7 @@ class TerminalSessionManager:
 
     def start(self, argv: list[str], cwd: str) -> dict[str, Any]:
         checked_argv = _validated_argv(argv)
+        _PROTECTED_GUARD.check(checked_argv, tool_name="terminal_start")
         checked_cwd = _validated_cwd(cwd, _workspace_root())
 
         with self._lock:
@@ -193,12 +196,16 @@ class TerminalSessionManager:
             self._require_no_dimensions(rows, cols)
             if not isinstance(data, str):
                 raise ValueError("write action requires UTF-8 string data")
+            buffered = session.protected_input_buffer if isinstance(session.protected_input_buffer, str) else ""
+            pending = buffered + data
+            _PROTECTED_GUARD.check(["/bin/sh", "-c", pending], tool_name="terminal_control")
             self._require_running(session)
             payload = data.encode("utf-8")
             view = memoryview(payload)
             while view:
                 written = os.write(session.master_fd, view)
                 view = view[written:]
+            session.protected_input_buffer = self._pending_input_suffix(pending)
             self._touch(session)
             return self._control_result(session)
 
@@ -358,6 +365,13 @@ class TerminalSessionManager:
     def _touch(self, session: _Session) -> None:
         with session.changed:
             session.last_activity = self._clock()
+
+    @staticmethod
+    def _pending_input_suffix(text: str) -> str:
+        last_newline = max(text.rfind("\n"), text.rfind("\r"))
+        if last_newline >= 0:
+            return text[last_newline + 1 :]
+        return text
 
     @staticmethod
     def _validated_cursor(cursor: int) -> int:

@@ -225,14 +225,27 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         for function in functions.values():
             self.assertNotIn("env", [arg.arg for arg in function.args.args])
 
-    def test_start_is_foreground_tunnel_only(self) -> None:
+    def test_start_uses_launchd_singleton_and_canonical_env_backed_serve_mode(self) -> None:
         text = (ROOT / "start.sh").read_text()
-        self.assertIn('exec "${TUNNEL_ENV[@]}" "$TUNNEL_CLIENT" run --profile-file "$PROFILE_FILE"', text)
-        for forbidden in ("nohup", "launchctl", "LaunchAgent", "daemon"):
-            self.assertNotIn(forbidden, text)
-        for line in text.splitlines():
-            stripped = line.strip()
-            self.assertFalse(stripped.endswith("&") and not stripped.endswith(">&2"), stripped)
+        self.assertIn("com.picmao.agent-runtime-runtime", text)
+        self.assertIn("protected-runtime-running", text)
+        self.assertIn("lifecycle.lock", text)
+        self.assertIn("--serve", text)
+        self.assertIn("CONTROL_PLANE_TUNNEL_ID", text)
+        self.assertIn("--control-plane.poll-channel", text)
+        self.assertIn("--health.listen-addr", text)
+        self.assertIn("RUNTIME_PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin\"", text)
+        self.assertNotIn("--profile-file", text)
+        self.assertNotIn("TUNNEL_CLIENT_PROFILE_FILE", text)
+        self.assertNotIn("AGENT_RUNTIME_TUNNEL_PROFILE", text)
+
+    def test_installer_registers_one_runtime_launch_agent_without_changing_desired_state(self) -> None:
+        text = (ROOT / "install.sh").read_text()
+        self.assertIn("com.picmao.agent-runtime-runtime", text)
+        self.assertIn("<key>PathState</key>", text)
+        self.assertIn("protected-runtime-running", text)
+        self.assertIn("bootstrap", text)
+        self.assertNotIn("touch \"$DESIRED_STATE\"", text)
 
     def test_installer_is_narrow_and_derives_workspace_root_from_checkout_parent(self) -> None:
         text = (ROOT / "install.sh").read_text()
@@ -240,8 +253,11 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertIn('WORKSPACE_ROOT="$(dirname "$ROOT")"', text)
         self.assertIn(".venv", text)
         self.assertIn(".env", text)
-        self.assertIn("tunnel-client init", text)
-        self.assertIn('$ROOT/.venv/bin/python -m agent_runtime.server', text)
+        self.assertIn("CONTROL_PLANE_TUNNEL_ID", text)
+        self.assertIn("--control-plane.poll-channel", text)
+        self.assertIn("<key>EnvironmentVariables</key>", text)
+        self.assertIn("$TUNNEL_CLIENT", text)
+        self.assertIn('runtime_python + " -m agent_runtime.server,channel=main"', text)
         for retired in (
             ".config/agent-runtime",
             ".local/state/agent-runtime",
@@ -252,6 +268,8 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         ):
             self.assertNotIn(retired, text)
         self.assertNotIn("/Users/tienphat", text)
+        self.assertNotIn("--profile-file", text)
+        self.assertNotIn("tunnel-client init", text)
 
     def test_verify_is_deterministic_and_does_not_start_tunnel(self) -> None:
         text = (ROOT / "verify").read_text()
@@ -261,6 +279,16 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertNotIn("CONTROL_PLANE_API_KEY", text)
 
 
+    def test_menu_bar_surfaces_protection_warning_and_docs_state_enforcement_boundary(self) -> None:
+        source = (ROOT / "macos" / "Sources" / "AgentRuntimeMenuBar" / "ControlPanelController.swift").read_text()
+        self.assertIn("Protection:", source)
+        self.assertIn("blocked · last:", source)
+        docs = (ROOT / "README.md").read_text()
+        self.assertIn("protected singleton", docs)
+        self.assertIn("root/sudo", docs)
+        self.assertIn("malicious local administrator", docs)
+        self.assertIn("four public tools", docs)
+
     def test_native_app_bundle_is_menu_bar_only(self) -> None:
         import plistlib
 
@@ -269,15 +297,14 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertIs(info["LSUIElement"], True)
         self.assertEqual(info["CFBundleExecutable"], "AgentRuntimeMenuBar")
 
-    def test_installer_adds_ui_only_login_launch_without_bootstrap_or_runtime_autostart(self) -> None:
+    def test_installer_adds_ui_login_launch_without_runtime_autostart(self) -> None:
         text = (ROOT / "install.sh").read_text()
         self.assertIn("com.picmao.agent-runtime-ui", text)
         self.assertIn("<key>RunAtLoad</key>", text)
         self.assertIn("<key>KeepAlive</key>", text)
         self.assertIn("<false/>", text)
         self.assertIn("Agent Runtime.app", text)
-        self.assertIn("--health.listen-addr 127.0.0.1:0", text)
-        self.assertNotIn("launchctl", text)
+        self.assertIn("--health.listen-addr", text)
         self.assertNotIn("tunnel-client run", text)
 
 

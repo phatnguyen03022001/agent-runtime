@@ -84,11 +84,11 @@ fi
         repo.mkdir(); home.mkdir(); workspace.mkdir(); bin_dir.mkdir()
         shutil.copy2(ROOT / "start.sh", repo / "start.sh")
         (repo / "start.sh").chmod(0o700)
+        self._write(repo / ".venv/bin/python", "#!/bin/sh\nexit 0\n", 0o700)
         self._write(
             repo / ".env",
-            f"CONTROL_PLANE_API_KEY=test-key\nAGENT_RUNTIME_WORKSPACE_ROOT={workspace}\n",
+            f"CONTROL_PLANE_API_KEY=test-key\nCONTROL_PLANE_TUNNEL_ID=stable-test-id\nAGENT_RUNTIME_WORKSPACE_ROOT={workspace}\n",
         )
-        profile = self._profile(home)
         self._fake_tunnel_client(bin_dir)
         capture = bin_dir / "capture.log"
         return repo, home, bin_dir, capture
@@ -109,54 +109,55 @@ fi
             "XDG_CONFIG_HOME": "/tmp/wrong-xdg",
             "AGENT_RUNTIME_TUNNEL_PROFILE": "wrong-agent-profile",
         }
-        return subprocess.run([str(repo / "start.sh")], cwd=repo, env=env, text=True, capture_output=True, check=False)
+        desired = home / "Library" / "Application Support" / "Agent Runtime" / "protected-runtime-running"
+        desired.parent.mkdir(parents=True, exist_ok=True)
+        desired.write_text("")
+        return subprocess.run([str(repo / "start.sh"), "--serve", str(bin_dir / "tunnel-client")], cwd=repo, env=env, text=True, capture_output=True, check=False)
 
-    def test_start_uses_exact_canonical_profile_and_sanitized_environment(self) -> None:
+    def test_start_uses_env_identity_and_sanitized_environment(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             repo, home, bin_dir, capture = self._start_fixture(Path(raw))
             result = self._run_start(repo, home, bin_dir, capture)
             self.assertEqual(result.returncode, 0, result.stderr)
             lines = capture.read_text().splitlines()
-            profile = home / ".config" / "tunnel-client" / "agent-runtime.yaml"
+            resolved_repo = repo.resolve()
             self.assertEqual([line for line in lines if line.startswith("argv=")], [
-                f"argv=doctor --profile-file {profile} --explain",
-                f"argv=run --profile-file {profile}",
+                f"argv=doctor --control-plane.poll-channel main --mcp.command command={resolved_repo}/.venv/bin/python -m agent_runtime.server,channel=main --health.listen-addr 127.0.0.1:8080 --explain",
+                f"argv=run --control-plane.poll-channel main --mcp.command command={resolved_repo}/.venv/bin/python -m agent_runtime.server,channel=main --health.listen-addr 127.0.0.1:8080",
             ])
-            forbidden = ("CONTROL_PLANE_TUNNEL_ID", "TUNNEL_CLIENT_CONFIG", "TUNNEL_CLIENT_PROFILE=", "TUNNEL_CLIENT_PROFILE_FILE", "TUNNEL_CLIENT_PROFILE_DIR", "XDG_CONFIG_HOME", "AGENT_RUNTIME_TUNNEL_PROFILE")
-            for item in forbidden:
-                self.assertFalse(any(item in line for line in lines if line.startswith("env:")), item)
             self.assertEqual(sum(line == "env:CONTROL_PLANE_API_KEY=test-key" for line in lines), 2)
+            self.assertEqual(sum(line == "env:CONTROL_PLANE_TUNNEL_ID=stable-test-id" for line in lines), 2)
+            self.assertFalse((home / ".config/tunnel-client/agent-runtime.yaml").exists())
 
-    def test_repeated_start_does_not_mutate_canonical_profile(self) -> None:
+    def test_repeated_start_preserves_env_bytes_and_never_creates_legacy_configuration(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             repo, home, bin_dir, capture = self._start_fixture(Path(raw))
-            profile = home / ".config" / "tunnel-client" / "agent-runtime.yaml"
-            before = hashlib.sha256(profile.read_bytes()).digest()
+            env_file = repo / ".env"
+            before = hashlib.sha256(env_file.read_bytes()).digest()
             for _ in range(2):
                 result = self._run_start(repo, home, bin_dir, capture)
                 self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(hashlib.sha256(profile.read_bytes()).digest(), before)
+            self.assertEqual(hashlib.sha256(env_file.read_bytes()).digest(), before)
+            self.assertFalse((home / ".config/tunnel-client/agent-runtime.yaml").exists())
 
 
-    def test_start_matching_legacy_identity_converges_but_mismatch_fails_closed(self) -> None:
+    def test_start_rejects_duplicate_or_malformed_env_authority(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             repo, home, bin_dir, capture = self._start_fixture(Path(raw))
             env_file = repo / ".env"
-            env_file.write_text(env_file.read_text() + "CONTROL_PLANE_TUNNEL_ID=tunnel_profile\nAGENT_RUNTIME_TUNNEL_PROFILE=legacy\n")
-            result = self._run_start(repo, home, bin_dir, capture)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertNotIn("CONTROL_PLANE_TUNNEL_ID=", env_file.read_text())
-            self.assertNotIn("AGENT_RUNTIME_TUNNEL_PROFILE=", env_file.read_text())
-        with tempfile.TemporaryDirectory() as raw:
-            repo, home, bin_dir, capture = self._start_fixture(Path(raw))
-            env_file = repo / ".env"
-            env_file.write_text(env_file.read_text() + "CONTROL_PLANE_TUNNEL_ID=legacy-wrong\n")
-            profile = home / ".config/tunnel-client/agent-runtime.yaml"
-            before = profile.read_bytes()
+            env_file.write_text(env_file.read_text() + "CONTROL_PLANE_TUNNEL_ID=duplicate\n")
             result = self._run_start(repo, home, bin_dir, capture)
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("migration", result.stderr.lower())
-            self.assertEqual(profile.read_bytes(), before)
+            self.assertIn("duplicate", result.stderr.lower())
+            self.assertFalse(capture.exists())
+        with tempfile.TemporaryDirectory() as raw:
+            repo, home, bin_dir, capture = self._start_fixture(Path(raw))
+            env_file = repo / ".env"
+            env_file.write_text("not-an-env-entry\n")
+            result = self._run_start(repo, home, bin_dir, capture)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("malformed", result.stderr.lower())
+            self.assertFalse(capture.exists())
 
     def _install_fixture(self, temp: Path) -> tuple[Path, Path, Path, Path]:
         repo = temp / "agent-runtime"
@@ -191,6 +192,19 @@ chmod +x "$APP/Contents/MacOS/AgentRuntimeMenuBar"
 /usr/bin/codesign --force --sign - "$APP" >/dev/null 2>&1
 ''', 0o700)
         self._fake_tunnel_client(bin_dir)
+        self._write(
+            bin_dir / "launchctl",
+            r'''#!/usr/bin/env bash
+set -euo pipefail
+STATE="$(dirname "$0")/launchd-loaded"
+case "${1-}" in
+  print) [[ -f "$STATE" ]] ;;
+  bootstrap) : > "$STATE" ;;
+  *) exit 2 ;;
+esac
+''',
+            0o700,
+        )
         return repo, home, bin_dir, capture
 
     def _run_install(self, repo: Path, home: Path, bin_dir: Path, capture: Path, *, tunnel_id: str | None = None) -> subprocess.CompletedProcess[str]:
@@ -206,52 +220,64 @@ chmod +x "$APP/Contents/MacOS/AgentRuntimeMenuBar"
         path = repo / ".env"
         lines = [f"CONTROL_PLANE_API_KEY={api_key}"]
         if tunnel_id is not None: lines.append(f"CONTROL_PLANE_TUNNEL_ID={tunnel_id}")
-        lines += ["AGENT_RUNTIME_TUNNEL_PROFILE=legacy-profile", f"AGENT_RUNTIME_WORKSPACE_ROOT={repo.parent}"]
+        lines += [f"AGENT_RUNTIME_WORKSPACE_ROOT={repo.parent}"]
         self._write(path, "\n".join(lines) + "\n")
         return path
 
-    def test_install_matching_legacy_identity_converges_and_preserves_profile_bytes(self) -> None:
+    def test_install_preserves_env_owned_identity_and_registers_absolute_runtime_binary(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             repo, home, bin_dir, capture = self._install_fixture(Path(raw))
-            profile = self._profile(home, "same-id")
-            before = profile.read_bytes()
             env_file = self._env(repo, "same-id")
             result = self._run_install(repo, home, bin_dir, capture)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(profile.read_bytes(), before)
             text = env_file.read_text()
-            self.assertNotIn("CONTROL_PLANE_TUNNEL_ID=", text)
+            self.assertIn("CONTROL_PLANE_TUNNEL_ID=same-id", text)
             self.assertNotIn("AGENT_RUNTIME_TUNNEL_PROFILE=", text)
-            self.assertNotIn("argv=init ", capture.read_text())
+            self.assertFalse((home / ".config/tunnel-client/agent-runtime.yaml").exists())
+            self.assertIn("argv=doctor --control-plane.poll-channel main", capture.read_text())
+            plist = (home / "Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist").read_text()
+            self.assertIn(str(bin_dir / "tunnel-client"), plist)
+            self.assertIn("/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin", plist)
 
-    def test_install_mismatched_legacy_identity_fails_closed_without_profile_mutation(self) -> None:
+    def test_install_accepts_a_verified_homebrew_style_tunnel_symlink(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             repo, home, bin_dir, capture = self._install_fixture(Path(raw))
-            profile = self._profile(home, "profile-id")
-            before = profile.read_bytes()
-            self._env(repo, "legacy-id")
+            client = bin_dir / "tunnel-client"
+            target = bin_dir / "tunnel-client-cellar"
+            client.rename(target)
+            client.symlink_to(target.name)
+            self._env(repo, "same-id")
+            result = self._run_install(repo, home, bin_dir, capture)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(str(client), (home / "Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist").read_text())
+
+    def test_install_rejects_reappeared_legacy_configuration_without_starting_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            repo, home, bin_dir, capture = self._install_fixture(Path(raw))
+            legacy = self._profile(home, "forbidden")
+            before = legacy.read_bytes()
+            self._env(repo, "stable-id")
             result = self._run_install(repo, home, bin_dir, capture)
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("migration", result.stderr.lower())
-            self.assertEqual(profile.read_bytes(), before)
-            self.assertFalse(capture.exists() and "argv=init " in capture.read_text())
+            self.assertIn("legacy", result.stderr.lower())
+            self.assertEqual(legacy.read_bytes(), before)
+            self.assertFalse(capture.exists())
 
-    def test_install_missing_profile_bootstraps_once_from_one_unambiguous_legacy_identity(self) -> None:
+    def test_install_is_idempotent_without_legacy_configuration(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             repo, home, bin_dir, capture = self._install_fixture(Path(raw))
             env_file = self._env(repo, "bootstrap-id")
             first = self._run_install(repo, home, bin_dir, capture)
             self.assertEqual(first.returncode, 0, first.stderr)
-            profile = home / ".config" / "tunnel-client" / "agent-runtime.yaml"
-            first_bytes = profile.read_bytes()
-            self.assertIn("tunnel_id: bootstrap-id", first_bytes.decode())
-            self.assertNotIn("CONTROL_PLANE_TUNNEL_ID=", env_file.read_text())
+            first_bytes = env_file.read_bytes()
+            self.assertIn(b"CONTROL_PLANE_TUNNEL_ID=bootstrap-id", first_bytes)
+            self.assertFalse((home / ".config/tunnel-client/agent-runtime.yaml").exists())
             second = self._run_install(repo, home, bin_dir, capture)
             self.assertEqual(second.returncode, 0, second.stderr)
-            self.assertEqual(profile.read_bytes(), first_bytes)
-            self.assertEqual(capture.read_text().count("argv=init "), 1)
+            self.assertEqual(env_file.read_bytes(), first_bytes)
+            self.assertEqual(capture.read_text().count("argv=doctor "), 2)
 
-    def test_install_missing_profile_rejects_absent_or_ambiguous_identity(self) -> None:
+    def test_install_rejects_missing_or_duplicate_env_identity(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             repo, home, bin_dir, capture = self._install_fixture(Path(raw))
             self._env(repo, None)
@@ -261,21 +287,23 @@ chmod +x "$APP/Contents/MacOS/AgentRuntimeMenuBar"
         with tempfile.TemporaryDirectory() as raw:
             repo, home, bin_dir, capture = self._install_fixture(Path(raw))
             self._env(repo, "legacy-id")
-            result = self._run_install(repo, home, bin_dir, capture, tunnel_id="operator-id")
+            with (repo / ".env").open("a") as handle:
+                handle.write("CONTROL_PLANE_TUNNEL_ID=duplicate\n")
+            result = self._run_install(repo, home, bin_dir, capture)
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("ambiguous", result.stderr.lower())
+            self.assertIn("duplicate", result.stderr.lower())
             self.assertFalse((home / ".config/tunnel-client/agent-runtime.yaml").exists())
 
-    def test_install_rejects_malformed_symlink_or_nonregular_profile(self) -> None:
+    def test_install_rejects_legacy_path_in_every_form(self) -> None:
         for state in ("malformed", "symlink", "directory"):
             with self.subTest(state=state), tempfile.TemporaryDirectory() as raw:
                 repo, home, bin_dir, capture = self._install_fixture(Path(raw))
-                profile = home / ".config/tunnel-client/agent-runtime.yaml"
-                profile.parent.mkdir(parents=True)
-                if state == "malformed": self._write(profile, "control_plane:\n  tunnel_id:\n")
+                legacy = home / ".config/tunnel-client/agent-runtime.yaml"
+                legacy.parent.mkdir(parents=True)
+                if state == "malformed": self._write(legacy, "legacy\n")
                 elif state == "symlink":
-                    target = home / "target.yaml"; self._write(target, "control_plane:\n  tunnel_id: x\n"); profile.symlink_to(target)
-                else: profile.mkdir()
+                    target = home / "target.yaml"; self._write(target, "legacy\n"); legacy.symlink_to(target)
+                else: legacy.mkdir()
                 self._env(repo, "x")
                 result = self._run_install(repo, home, bin_dir, capture)
                 self.assertNotEqual(result.returncode, 0)

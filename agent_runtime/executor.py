@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from .protection import _PROTECTED_GUARD
 from .timing import current_call_context, emit_process_end
 
 WORKSPACE_ROOT_ENV = "AGENT_RUNTIME_WORKSPACE_ROOT"
@@ -163,6 +164,7 @@ def execute_terminal(
     """
 
     checked_argv = _validated_argv(argv)
+    _PROTECTED_GUARD.check(checked_argv, tool_name="terminal_exec")
     timeout = _validated_timeout(timeout_seconds)
     root = _workspace_root()
     checked_cwd = _validated_cwd(cwd, root)
