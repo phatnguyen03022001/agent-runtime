@@ -1,30 +1,32 @@
 protocol_version: 3
 
 task_id: TASK-0029
-task_revision: 18
-report_revision: 12
+task_revision: 19
+report_revision: 13
 state: REPORTED
 
 task_source:
   path: .agent/tasks/TASK-0029/task.yaml
-  commit: "c74e4f6323a916c83eca83758bd33c9a997d26df"
+  commit: "1a86659ddc6f29f0e9f838934d4d17a2b2bb71ef"
 
 execution:
   repository: phatnguyen03022001/agent-runtime
   branch:
     name: dev
     role: integration
-  authorized_base_head: "c74e4f6323a916c83eca83758bd33c9a997d26df"
-  pre_execution_head: "c74e4f6323a916c83eca83758bd33c9a997d26df"
-  final_execution_head: "c74e4f6323a916c83eca83758bd33c9a997d26df"
+  authorized_base_head: "1a86659ddc6f29f0e9f838934d4d17a2b2bb71ef"
+  pre_execution_head: "1a86659ddc6f29f0e9f838934d4d17a2b2bb71ef"
+  final_execution_head: "1a86659ddc6f29f0e9f838934d4d17a2b2bb71ef"
   accepted_candidate: "6086f22e96c4f39a2cf81fd698aff67654bbf108"
-  live_install_performed: false
-  live_runtime_mutation_performed: false
-  activation_count: 0
+  canonical_deployment_count: 1
+  canonical_installer: "./install.sh"
+  live_install_performed: true
+  live_runtime_mutation_performed: true
 
 authority_binding:
-  accepted_revision_17_review: "9ae63318583e65bdfbb4595f6c4570e875b5da1d"
-  remote_dev_before_execution: "c74e4f6323a916c83eca83758bd33c9a997d26df"
+  revision_18_review: "a88c45119d2181ea0b4ee55a76df58460de49f41"
+  revision_17_review: "9ae63318583e65bdfbb4595f6c4570e875b5da1d"
+  remote_dev_before_execution: "1a86659ddc6f29f0e9f838934d4d17a2b2bb71ef"
   remote_main_before_execution: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
   task_0030_modified: false
   canonical_checkout: /Users/tienphat/Developer/agent-runtime
@@ -44,19 +46,17 @@ capability_preflight:
     - local_file_write
     - local_process_read
     - local_network_read
-    - native_current_login_ui_accessibility
     - git_history_read
     - git_commit
     - non_force_git_push
     - remote_ref_read
     - repository_metadata_read
-  missing:
-    - native_current_login_ui_accessibility
-  passed: false
-  evidence: "The available computer-use surface exposed browser tabs only. Its documented native App accessor was not implemented (`cua.getApp is not a function`), so no native menu-bar Accessibility tree could be read."
+  missing: []
+  passed: true
 
 preservation_evidence:
   accepted_candidate_preserved: true
+  candidate_contract_drift_check: PASS
   product_source_changed: false
   runtime_policy_changed: false
   protection_contract_changed: false
@@ -64,85 +64,85 @@ preservation_evidence:
   accepted_icon_audio_resources_changed: false
   dependencies_changed: false
   task_0030_changed: false
-  tunnel_fingerprint: "6aa2b81d6dd8"
+  tunnel_fingerprint_before: "6aa2b81d6dd8"
+  tunnel_fingerprint_after: "6aa2b81d6dd8"
 
 verification_evidence:
   exact_base_binding:
     result: PASS
-    evidence: "Local dev was clean and fast-forwarded to the required exact base; a fresh remote ref read resolved origin/dev to the same SHA."
-  serving_baseline:
+    evidence: "Local dev and origin/dev resolved to the required exact base before the report change; main resolved to c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  baseline:
     result: PASS
-    evidence: "Before any activation, the desired state was RUNNING; one canonical tunnel-client owned 127.0.0.1:8080, one direct agent_runtime.server child existed, launchd was running from the installed package-owned start.sh, /healthz returned live, /readyz returned ready, and the accepted tunnel fingerprint remained 6aa2b81d6dd8."
-  native_ui_accessibility:
-    result: BLOCKED
-    evidence: "No current-login native App/Accessibility control was available, so the installed menu-bar glyph, popover facts/actions/layout, and click-outside dismissal could not be observed truthfully."
-  full_repository_verification:
-    command: "./verify"
+    evidence: "Before deployment, the installed Runtime was RUNNING with one canonical 127.0.0.1:8080 tunnel-client listener, one agent_runtime.server child, launchd ownership, live/ready endpoints, and fingerprint 6aa2b81d6dd8."
+  deterministic_verification:
     result: PASS
-    evidence: "Python tests, compilation, and shell syntax checks passed under native local execution; no Runtime lifecycle command was invoked."
+    evidence: "Repository verification completed under native local execution; its final tunnel-identity test was additionally run directly after the runner time boundary. Python compilation and shell syntax checks passed."
   swift_suite:
     command: "xcrun swift test --package-path macos"
     result: PASS
-  release_build:
-    command: "xcrun swift build --package-path macos -c release"
+    evidence: "29 tests passed with zero failures."
+  release_build_and_package:
+    command: "xcrun swift build --package-path macos -c release && ./macos/package_app.sh"
     result: PASS
-  package_and_codesign:
-    command: "./macos/package_app.sh && codesign --verify --deep --strict 'build/Agent Runtime.app'"
+  package_integrity:
     result: PASS
-    evidence: "The package manifest records c74e4f6323a916c83eca83758bd33c9a997d26df; packaged AppIcon.png and notification.mp3 SHA-256 bytes matched their accepted source resources."
+    evidence: "Strict deep codesign passed; package owner is com.picmao.agent-runtime; packaged AppIcon.png and notification.mp3 SHA-256 bytes matched accepted source resources."
+  operator_confirmation:
+    result: PASS
+    evidence: "The operator explicitly confirmed deployment immediately before the sole installer invocation."
+  canonical_deployment:
+    command: "./install.sh"
+    result: PASS
+    evidence: "Exactly one canonical installer invocation completed. The installed runtime manifest records 1a86659ddc6f29f0e9f838934d4d17a2b2bb71ef and strict deep codesign of the installed app passed."
+  post_deployment_convergence:
+    result: PASS
+    evidence: "After the bounded installer cutover, exactly one canonical tunnel-client PID 12392 owned 127.0.0.1:8080; exactly one direct agent_runtime.server child PID 12402 shared its process group; desired state was RUNNING; launchd served the package-owned start.sh; /healthz returned live; /readyz returned ready; and the tunnel fingerprint remained 6aa2b81d6dd8."
   diff_and_scope:
     command: "git diff --check"
     result: PASS
-    evidence: "The report is the only pending repository change; no product source, resource, dependency, TASK-0030, or main mutation was made."
+    evidence: "The report is the only pending repository change. No product source, resource, dependency, TASK-0030, or main mutation was made."
 
 acceptance_evidence:
   - criterion_id: AC-1
-    status: NOT_PROVEN
-    evidence: "No immediate pre-activation operator confirmation was requested and no activation was performed; activation_count is zero."
-  - criterion_id: AC-2
-    status: BASELINE_PROVEN
-    evidence: "The pre-activation installed Runtime was already a healthy canonical singleton, but no revision-18 activation/convergence occurred."
-  - criterion_id: AC-3
-    status: BLOCKED
-    evidence: "Native UI/AX capability was unavailable, therefore installed UI truth cannot be claimed."
-  - criterion_id: AC-4
     status: PROVEN
-    evidence: "Fresh full verification, Swift suite, release build, packaging, strict codesign, resource-byte comparison, and scope check passed without contract drift."
-  - criterion_id: AC-5
+    evidence: "One canonical deployment occurred only after immediate explicit operator confirmation."
+  - criterion_id: AC-2
+    status: PROVEN
+    evidence: "Post-deployment proof established one canonical listener, one MCP child, RUNNING state, live/ready endpoints, package-owned launchd path, and unchanged tunnel identity."
+  - criterion_id: AC-3
+    status: PROVEN
+    evidence: "Accepted candidate preservation, deterministic verification, Swift 29/29, release build/package, strict codesign, and resource-byte integrity passed without unrelated drift."
+  - criterion_id: AC-4
     status: NOT_PROVEN
-    evidence: "This report is pending its own authorized non-force dev publication; no publication has occurred."
+    evidence: "This report is pending its own authorized non-force dev publication; post-publication remote identity and clean checkout are verified after publication."
 
 executor_checks:
   - check_id: CHECK-1
-    result: BLOCKED
-    evidence: "Exact base and serving baseline passed, but the mandatory native UI/AX capability was unavailable."
+    result: PASS
+    evidence: "Exact base, baseline singleton health, candidate preservation, package integrity, and deterministic checks passed."
   - check_id: CHECK-2
-    result: NOT_REACHED
-    evidence: "The required immediate pre-activation confirmation is not requested after a blocking capability failure."
+    result: PASS
+    evidence: "The operator confirmation was obtained immediately before deployment."
   - check_id: CHECK-3
-    result: NOT_RUN
-    evidence: "Activation is forbidden after the native UI/AX preflight failure."
+    result: PASS
+    evidence: "One canonical installer deployment converged to the required healthy singleton Runtime."
   - check_id: CHECK-4
-    result: BLOCKED
-    evidence: "Installed native acceptance cannot be performed without native UI/AX capability; this report records that bounded failure truthfully."
+    result: NOT_PROVEN
+    evidence: "Report publication and independent Architect review remain after this report commit."
 
 publication:
   target_branch: dev
   report_publication_mode: non_force_authorized
-  remote_dev_before_report: "c74e4f6323a916c83eca83758bd33c9a997d26df"
+  remote_dev_before_report: "1a86659ddc6f29f0e9f838934d4d17a2b2bb71ef"
   remote_main_before_report: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
   promote_main: false
-  activated_runtime: false
   pushed: false
 
-blockers:
-  - id: NATIVE_CURRENT_LOGIN_UI_ACCESSIBILITY_UNAVAILABLE
-    disposition: BLOCKED
-    evidence: "The execution environment cannot inspect a native current-login application Accessibility tree. TASK-0029 explicitly requires BLOCKED without activation in this condition."
-
 remaining_closure:
-  - "Do not activate from this execution environment."
-  - "Resume only in an environment with verified native current-login UI/Accessibility capability, fresh baseline evidence, and an explicit confirmation immediately before the one permitted activation."
-  - "After native acceptance and Architect review, CHATGPT_LOCAL must still perform final live MCP transport closure."
+  - "Stop for independent Architect review after this report is published."
+  - "Do not claim final TASK-0029 acceptance: native UI and CHATGPT_LOCAL live MCP transport closure remain outside revision 19."
+  - "Keep TASK-0030 frozen until final TASK-0029 acceptance."
 
-result: BLOCKED
+blockers: []
+
+result: NEEDS_REVIEW
