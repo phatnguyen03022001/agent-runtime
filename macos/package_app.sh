@@ -35,10 +35,10 @@ cp "$NOTIFICATION_SOUND" "$RESOURCES/notification.mp3"
 # Re-sign below after this deterministic packaging transformation.
 /usr/bin/strip -S "$MACOS/AgentRuntimeMenuBar"
 
-# The installed Runtime receives a private copy of implementation bytes. The
-# only checkout path written into the bundle is the operator-owned .env file;
-# no checkout script, package, build output, or checkout path is executed after
-# installation.
+# The installed Runtime receives a private copy of implementation bytes. No
+# checkout path or credential pointer is written into the bundle; installed
+# execution derives its configuration from the per-user Application Support
+# file at runtime.
 cp "$REPO_ROOT/start.sh" "$RUNTIME/start.sh"
 find "$REPO_ROOT/agent_runtime" -maxdepth 1 -type f -name '*.py' -exec cp '{}' "$RUNTIME/agent_runtime/" \;
 # Dereference the checkout venv's interpreter links so the installed payload
@@ -74,12 +74,10 @@ cat > "$RESOURCES/runtime-manifest.json" <<MANIFEST
   "mcp_package": "runtime/agent_runtime",
   "start_sha256": "$START_SHA",
   "server_sha256": "$SERVER_SHA",
-  "checkout_dependency": "env-path.txt",
   "external_dependencies": ["official tunnel-client", "macOS launchd", "macOS system utilities"]
 }
 MANIFEST
-printf '%s\n' "$REPO_ROOT/.env" > "$RESOURCES/env-path.txt"
-chmod 600 "$RESOURCES/env-path.txt" "$RESOURCES/runtime-manifest.json"
+chmod 600 "$RESOURCES/runtime-manifest.json"
 
 /usr/bin/plutil -lint "$CONTENTS/Info.plist" >/dev/null
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$CONTENTS/Info.plist")" == "true" ]] \

@@ -53,6 +53,7 @@ WORKSPACE_ROOT="$(dirname "$ROOT")"
 [[ "$WORKSPACE_ROOT" == /* && -d "$WORKSPACE_ROOT" ]] || fail "derived workspace root must be an absolute existing directory."
 
 ENV_FILE="$ROOT/.env"
+CANONICAL_ENV_FILE="$HOME/Library/Application Support/Agent Runtime/runtime.env"
 LEGACY_CONFIG="$HOME/.config/tunnel-client/agent-runtime.yaml"
 RUNTIME_PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 [[ ! -e "$LEGACY_CONFIG" && ! -L "$LEGACY_CONFIG" ]] \
@@ -76,9 +77,11 @@ else
   echo "[2/8] Creating ignored local environment file..."
   cp "$ROOT/.env.example" "$ENV_FILE"
 fi
-chmod 600 "$ENV_FILE"
 
-echo "[3/8] Validating checkout-local tunnel authority..."
+echo "[3/8] Initializing canonical Runtime configuration..."
+/usr/bin/python3 "$ROOT/macos/runtime_config.py" "$ENV_FILE" "$CANONICAL_ENV_FILE"
+ENV_FILE="$CANONICAL_ENV_FILE"
+echo "Validating canonical Runtime configuration..."
 INSTALL_API_KEY="${CONTROL_PLANE_API_KEY-}" \
 INSTALL_TUNNEL_ID="${CONTROL_PLANE_TUNNEL_ID-}" \
 /usr/bin/python3 - "$ENV_FILE" "$TUNNEL_CLIENT" "$ROOT/.venv/bin/python" "$WORKSPACE_ROOT" "$HOME" "$RUNTIME_PATH" "$LAUNCHCTL" <<'PY'
@@ -202,20 +205,7 @@ if check.returncode != 0:
     if not (occupied_listener and service_loaded and existing_is_canonical and healthy):
         fail("tunnel-client configuration check failed; Runtime was not started.")
 
-payload = [
-    "CONTROL_PLANE_API_KEY=" + values["CONTROL_PLANE_API_KEY"],
-    "CONTROL_PLANE_TUNNEL_ID=" + values["CONTROL_PLANE_TUNNEL_ID"],
-    "AGENT_RUNTIME_WORKSPACE_ROOT=" + values["AGENT_RUNTIME_WORKSPACE_ROOT"],
-]
-if "AGENT_RUNTIME_MAX_ACTIVE_SESSIONS" in values:
-    payload.append("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS=" + values["AGENT_RUNTIME_MAX_ACTIVE_SESSIONS"])
-payload.extend(other)
-temporary = env_file.with_name("." + env_file.name + ".tmp")
-temporary.write_text("\n".join(payload).rstrip("\n") + "\n", encoding="utf-8")
-temporary.chmod(0o600)
-temporary.replace(env_file)
 PY
-chmod 600 "$ENV_FILE"
 
 echo "[4/8] Building package-owned Runtime payload and menu-bar app..."
 "$ROOT/macos/package_app.sh" >/dev/null
@@ -231,7 +221,7 @@ validate_package() {
     || fail "package CFBundleIdentifier is not owned by agent-runtime."
   /usr/bin/codesign --verify --deep --strict "$app" \
     || fail "package failed strict deep code-signature verification."
-/usr/bin/python3 - "$app" <<'PY'
+/usr/bin/python3 - "$app" "$ROOT" <<'PY'
 import hashlib
 import json
 import os
@@ -239,9 +229,9 @@ import sys
 from pathlib import Path
 
 app = Path(sys.argv[1])
+checkout_root = Path(sys.argv[2]).resolve()
 resources = app / "Contents/Resources"
 manifest_path = resources / "runtime-manifest.json"
-env_pointer = resources / "env-path.txt"
 if manifest_path.is_symlink() or not manifest_path.is_file():
     raise SystemExit("INSTALL ERROR: package manifest is missing or symlinked")
 try:
@@ -265,14 +255,8 @@ for relative, manifest_key in (("start.sh", "start_sha256"), ("agent_runtime/ser
     actual = hashlib.sha256(candidate.read_bytes()).hexdigest()
     if expected != actual:
         raise SystemExit("INSTALL ERROR: package Runtime payload hash does not match its manifest")
-if env_pointer.is_symlink() or not env_pointer.is_file():
-    raise SystemExit("INSTALL ERROR: package .env pointer is missing or symlinked")
-env_path = Path(env_pointer.read_text(encoding="utf-8").strip())
-if not env_path.is_absolute() or env_path.name != ".env":
-    raise SystemExit("INSTALL ERROR: package .env pointer is invalid")
-checkout_needle = str(env_path.parent).encode("utf-8")
 for candidate in app.rglob("*"):
-    if not candidate.is_file() or candidate == env_pointer:
+    if not candidate.is_file():
         continue
     if candidate.is_symlink():
         raise SystemExit("INSTALL ERROR: package contains a symlinked execution/resource file")
@@ -280,7 +264,7 @@ for candidate in app.rglob("*"):
         payload = candidate.read_bytes()
     except OSError as exc:
         raise SystemExit("INSTALL ERROR: package file cannot be inspected") from exc
-    if checkout_needle in payload:
+    if (b"env-" + b"path.txt") in payload or str(checkout_root).encode("utf-8") in payload:
         raise SystemExit("INSTALL ERROR: package contains a source-checkout implementation reference")
 PY
 }
@@ -359,7 +343,6 @@ RUNTIME_PLIST="$LOGIN_DIR/$RUNTIME_LABEL.plist"
 STATE_DIR="$HOME/Library/Application Support/Agent Runtime"
 DESIRED_STATE="$STATE_DIR/protected-runtime-running"
 RUNTIME_ROOT="$TARGET_APP/Contents/Resources/runtime"
-ENV_POINTER="$TARGET_APP/Contents/Resources/env-path.txt"
 mkdir -p "$STATE_DIR"
 DESIRED_STATE_WAS_PRESENT=0
 if [[ -e "$DESIRED_STATE" ]]; then
@@ -383,7 +366,6 @@ cat > "$RUNTIME_PLIST" <<PLIST
         <string>$RUNTIME_ROOT/start.sh</string>
         <string>--serve</string>
         <string>$TUNNEL_CLIENT</string>
-        <string>$ENV_POINTER</string>
     </array>
     <key>EnvironmentVariables</key>
     <dict>
@@ -391,8 +373,6 @@ cat > "$RUNTIME_PLIST" <<PLIST
         <string>$HOME</string>
         <key>PATH</key>
         <string>$RUNTIME_PATH</string>
-        <key>RUNTIME_ENV_FILE</key>
-        <string>$ENV_POINTER</string>
     </dict>
     <key>RunAtLoad</key>
     <false/>
@@ -455,21 +435,18 @@ plist_path, app_path, checkout_root = map(Path, sys.argv[1:])
 payload = plistlib.loads(plist_path.read_bytes())
 args = payload.get("ProgramArguments", [])
 runtime_root = app_path / "Contents/Resources/runtime"
-allowed_env = checkout_root / ".env"
 expected = [str(runtime_root / "start.sh"), "--serve"]
-if args[:2] != expected or not args[2].startswith("/") or args[3] != str(app_path / "Contents/Resources/env-path.txt"):
+if args[:2] != expected or len(args) != 3 or not args[2].startswith("/"):
     raise SystemExit("INSTALL ERROR: Runtime LaunchAgent does not point to installed payload")
 if str(runtime_root) in " ".join(args[2:]) and str(checkout_root / "start.sh") in " ".join(args):
     raise SystemExit("INSTALL ERROR: Runtime LaunchAgent references checkout implementation")
-if payload.get("EnvironmentVariables", {}).get("RUNTIME_ENV_FILE") != str(app_path / "Contents/Resources/env-path.txt"):
-    raise SystemExit("INSTALL ERROR: Runtime LaunchAgent .env authority is not package-declared")
-if Path(app_path / "Contents/Resources/env-path.txt").read_text(encoding="utf-8").strip() != str(allowed_env):
-    raise SystemExit("INSTALL ERROR: package .env authority changed")
+if "RUNTIME_ENV_FILE" in payload.get("EnvironmentVariables", {}):
+    raise SystemExit("INSTALL ERROR: Runtime LaunchAgent must derive canonical configuration")
 PY
 
 echo "[8/8] Installation ready."
 echo "Workspace root: $WORKSPACE_ROOT"
-echo "Tunnel authority: checkout-local .env"
+echo "Tunnel authority: per-user Application Support runtime.env"
 echo "Native app: $TARGET_APP"
 echo "Installed Runtime payload: $RUNTIME_ROOT"
 echo "Login behavior: menu-bar UI is registered now; Runtime follows explicit persisted desired state."

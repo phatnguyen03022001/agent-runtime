@@ -128,21 +128,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             throw RuntimeLifecycleError.metadata("installed Runtime payload is incomplete")
         }
 
-        let pointer = resources.appendingPathComponent("env-path.txt", isDirectory: false)
-        let pointerValues = try pointer.resourceValues(forKeys: [.isSymbolicLinkKey])
-        guard pointerValues.isSymbolicLink != true else {
-            throw RuntimeLifecycleError.metadata("installed .env pointer is a symlink")
-        }
-        let envPath = try String(contentsOf: pointer, encoding: .utf8)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let envURL = URL(fileURLWithPath: envPath)
-        guard envURL.path.hasPrefix("/"), envURL.lastPathComponent == ".env",
-              FileManager.default.fileExists(atPath: envURL.path) else {
-            throw RuntimeLifecycleError.metadata("checkout-local .env authority is unavailable")
-        }
+        let envURL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Agent Runtime/runtime.env", isDirectory: false)
         let values = try envURL.resourceValues(forKeys: [.isSymbolicLinkKey, .isRegularFileKey])
         guard values.isSymbolicLink != true, values.isRegularFile == true else {
-            throw RuntimeLifecycleError.metadata("checkout-local .env must be a regular non-symlink file")
+            throw RuntimeLifecycleError.metadata("canonical Runtime configuration is unavailable")
+        }
+        let attributes = try FileManager.default.attributesOfItem(atPath: envURL.path)
+        guard let permissions = attributes[.posixPermissions] as? NSNumber,
+              permissions.uint16Value == 0o600 else {
+            throw RuntimeLifecycleError.metadata("canonical Runtime configuration must have mode 0600")
         }
 
         return RuntimeConfiguration(

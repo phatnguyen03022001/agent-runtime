@@ -23,14 +23,11 @@ fi
 
 ROOT="$SOURCE_ROOT"
 cd "$ROOT"
-ENV_FILE="${RUNTIME_ENV_FILE:-$ROOT/.env}"
-ENV_POINTER="$ROOT/../env-path.txt"
-if [[ -n "${RUNTIME_ENV_FILE-}" && "$ENV_FILE" == */env-path.txt ]]; then
-  [[ -f "$ENV_FILE" && ! -L "$ENV_FILE" ]] || fail "Installed Runtime .env pointer is missing or invalid."
-  ENV_FILE="$(<"$ENV_FILE")"
-fi
-if [[ -z "${RUNTIME_ENV_FILE-}" && -f "$ENV_POINTER" && ! -L "$ENV_POINTER" ]]; then
-  ENV_FILE="$(<"$ENV_POINTER")"
+CANONICAL_ENV_FILE="$HOME/Library/Application Support/Agent Runtime/runtime.env"
+if [[ "$SOURCE_ROOT" == "$INSTALLED_RUNTIME_ROOT" ]]; then
+  ENV_FILE="$CANONICAL_ENV_FILE"
+else
+  ENV_FILE="${RUNTIME_ENV_FILE:-$ROOT/.env}"
 fi
 LEGACY_CONFIG="$HOME/.config/tunnel-client/agent-runtime.yaml"
 LABEL="com.picmao.agent-runtime-runtime"
@@ -186,11 +183,25 @@ wait_until_stopped() {
 serve() {
   local tunnel_client="${1:-}"
   local env_file="${2:-$ENV_FILE}"
-  if [[ "$env_file" == */env-path.txt ]]; then
-    [[ -f "$env_file" && ! -L "$env_file" ]] || fail "Installed Runtime .env pointer is missing or invalid."
-    env_file="$(<"$env_file")"
+  [[ "$SOURCE_ROOT" != "$INSTALLED_RUNTIME_ROOT" || "$env_file" == "$CANONICAL_ENV_FILE" ]] \
+    || fail "Installed Runtime configuration must use the canonical per-user file."
+  [[ -f "$env_file" && ! -L "$env_file" ]] || fail "Missing or invalid canonical Runtime configuration; run ./install.sh first."
+  if [[ "$SOURCE_ROOT" == "$INSTALLED_RUNTIME_ROOT" ]]; then
+    /usr/bin/python3 - "$env_file" <<'PY'
+import os
+import stat
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+try:
+    mode = stat.S_IMODE(path.stat().st_mode)
+except OSError as exc:
+    raise SystemExit("START ERROR: could not inspect Runtime configuration: " + str(exc))
+if mode != 0o600:
+    raise SystemExit("START ERROR: Runtime configuration must have mode 0600.")
+PY
   fi
-  [[ -f "$env_file" && ! -L "$env_file" ]] || fail "Missing or invalid checkout-local .env; run ./install.sh first."
   [[ ! -e "$LEGACY_CONFIG" && ! -L "$LEGACY_CONFIG" ]] \
     || fail "Legacy tunnel configuration must remain absent at $LEGACY_CONFIG."
   [[ "$tunnel_client" == /* && -x "$tunnel_client" && "${tunnel_client##*/}" == "tunnel-client" ]] \
@@ -218,7 +229,7 @@ def fail(message):
 try:
     lines = env_file.read_text(encoding="utf-8").splitlines()
 except OSError as exc:
-    fail("Could not read checkout-local .env: " + str(exc))
+    fail("Could not read canonical Runtime configuration: " + str(exc))
 
 required = {
     "CONTROL_PLANE_API_KEY",
@@ -232,16 +243,16 @@ for number, line in enumerate(lines, start=1):
         continue
     match = re.fullmatch(r"([A-Z_][A-Z0-9_]*)=(.*)", line)
     if match is None:
-        fail("Malformed .env entry at line " + str(number) + ".")
+        fail("Malformed Runtime configuration entry at line " + str(number) + ".")
     key, value = match.groups()
     if key in required or key in optional:
         if key in values:
-            fail("Duplicate " + key + " entry in .env.")
+            fail("Duplicate " + key + " entry in Runtime configuration.")
         values[key] = value
 
 missing = sorted(key for key in required if not values.get(key, ""))
 if missing:
-    fail("Missing non-empty .env value for " + ", ".join(missing) + ".")
+    fail("Missing non-empty Runtime configuration value for " + ", ".join(missing) + ".")
 workspace = Path(values["AGENT_RUNTIME_WORKSPACE_ROOT"])
 if not workspace.is_absolute() or not workspace.is_dir():
     fail("AGENT_RUNTIME_WORKSPACE_ROOT must be an absolute existing directory.")

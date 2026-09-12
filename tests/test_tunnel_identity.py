@@ -177,6 +177,9 @@ fi
         venv_python = repo / ".venv" / "bin" / "python"
         self._write(venv_python, "#!/usr/bin/env bash\nexit 0\n", 0o700)
         package = repo / "macos" / "package_app.sh"
+        config_helper = repo / "macos" / "runtime_config.py"
+        config_helper.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / "macos/runtime_config.py", config_helper)
         self._write(package, r'''#!/usr/bin/env bash
 set -euo pipefail
 APP="$PWD/build/Agent Runtime.app"
@@ -198,8 +201,7 @@ printf '# fixture runtime payload\n' > "$RUNTIME/agent_runtime/server.py"
 chmod +x "$RUNTIME/start.sh" "$RUNTIME/.venv/bin/python"
 START_SHA="$(shasum -a 256 "$RUNTIME/start.sh" | awk '{print $1}')"
 SERVER_SHA="$(shasum -a 256 "$RUNTIME/agent_runtime/server.py" | awk '{print $1}')"
-printf '{"schema":1,"owner":"com.picmao.agent-runtime","runtime_revision":"0000000000000000000000000000000000000000","entrypoint":"runtime/start.sh","python":"runtime/.venv/bin/python","mcp_package":"runtime/agent_runtime","start_sha256":"%s","server_sha256":"%s","checkout_dependency":"env-path.txt"}\n' "$START_SHA" "$SERVER_SHA" > "$APP/Contents/Resources/runtime-manifest.json"
-printf '%s\n' "$PWD/.env" > "$APP/Contents/Resources/env-path.txt"
+printf '{"schema":1,"owner":"com.picmao.agent-runtime","runtime_revision":"0000000000000000000000000000000000000000","entrypoint":"runtime/start.sh","python":"runtime/.venv/bin/python","mcp_package":"runtime/agent_runtime","start_sha256":"%s","server_sha256":"%s"}\n' "$START_SHA" "$SERVER_SHA" > "$APP/Contents/Resources/runtime-manifest.json"
 /usr/bin/codesign --force --sign - "$APP" >/dev/null 2>&1
 ''', 0o700)
         self._fake_tunnel_client(bin_dir)
@@ -252,6 +254,9 @@ esac
             plist = (home / "Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist").read_text()
             self.assertIn(str(bin_dir / "tunnel-client"), plist)
             self.assertIn("/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin", plist)
+            canonical = home / "Library/Application Support/Agent Runtime/runtime.env"
+            self.assertEqual(canonical.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(canonical.read_bytes(), env_file.read_bytes())
 
     def test_install_accepts_a_verified_homebrew_style_tunnel_symlink(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -290,6 +295,38 @@ esac
             self.assertEqual(second.returncode, 0, second.stderr)
             self.assertEqual(env_file.read_bytes(), first_bytes)
             self.assertEqual(capture.read_text().count("argv=doctor "), 2)
+
+    def test_install_preserves_existing_canonical_config_and_rejects_bad_mode_or_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            repo, home, bin_dir, capture = self._install_fixture(Path(raw))
+            source = self._env(repo, "source-id")
+            canonical = home / "Library/Application Support/Agent Runtime/runtime.env"
+            canonical.parent.mkdir(parents=True)
+            canonical.write_bytes(source.read_bytes().replace(b"source-id", b"canonical-id"))
+            canonical.chmod(0o600)
+            result = self._run_install(repo, home, bin_dir, capture)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(b"canonical-id", canonical.read_bytes())
+            self.assertNotIn(b"source-id", canonical.read_bytes())
+        with tempfile.TemporaryDirectory() as raw:
+            repo, home, bin_dir, capture = self._install_fixture(Path(raw))
+            self._env(repo, "mode-id")
+            canonical = home / "Library/Application Support/Agent Runtime/runtime.env"
+            canonical.parent.mkdir(parents=True)
+            canonical.write_bytes((repo / ".env").read_bytes())
+            canonical.chmod(0o644)
+            result = self._run_install(repo, home, bin_dir, capture)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("0600", result.stderr)
+        with tempfile.TemporaryDirectory() as raw:
+            repo, home, bin_dir, capture = self._install_fixture(Path(raw))
+            self._env(repo, "symlink-id")
+            canonical = home / "Library/Application Support/Agent Runtime/runtime.env"
+            canonical.parent.mkdir(parents=True)
+            canonical.symlink_to(repo / ".env")
+            result = self._run_install(repo, home, bin_dir, capture)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("regular non-symlink", result.stderr)
 
     def test_install_rejects_missing_or_duplicate_env_identity(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

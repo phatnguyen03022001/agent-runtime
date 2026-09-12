@@ -310,13 +310,14 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertIn("--health.listen-addr", text)
         self.assertNotIn("tunnel-client run", text)
 
-    def test_installed_runtime_is_package_owned_except_for_env_pointer(self) -> None:
+    def test_installed_runtime_is_package_owned_without_checkout_config_pointer(self) -> None:
         installer = (ROOT / "install.sh").read_text()
         package = (ROOT / "macos/package_app.sh").read_text()
         self.assertIn("$RUNTIME_ROOT/start.sh", installer)
         self.assertIn("Resources/runtime", installer)
         self.assertIn("runtime-manifest.json", installer)
-        self.assertIn("env-path.txt", installer)
+        self.assertIn("runtime.env", installer)
+        self.assertNotIn("env-path.txt", installer)
         self.assertNotIn('<string>$ROOT/start.sh</string>', installer)
         self.assertIn('cp "$REPO_ROOT/start.sh" "$RUNTIME/start.sh"', package)
         self.assertIn('cp -R -L "$REPO_ROOT/.venv" "$RUNTIME/.venv"', package)

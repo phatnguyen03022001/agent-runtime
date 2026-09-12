@@ -22,15 +22,21 @@ The installed Runtime executes package-owned bytes under:
 That payload contains the lifecycle helper, `agent_runtime` package, and the
 Runtime Python environment. The Runtime LaunchAgent and menu-bar lifecycle
 backend point into this installed payload. The checkout is not an installed
-implementation dependency. The only checkout path read by the installed
-product is the operator-owned:
+implementation or credential dependency. The installed product reads the
+operator-owned canonical configuration at:
 
 ```text
-/Users/tienphat/Developer/agent-runtime/.env
+~/Library/Application Support/Agent Runtime/runtime.env
 ```
 
+The canonical file must be a regular file with mode `0600`. It is authoritative
+for installed execution and is never replaced from the checkout after
+initialization. During future installation, an absent canonical file may be
+initialized atomically from the checkout `.env`; the checkout file remains
+available only as source development/bootstrap input.
+
 `CONTROL_PLANE_API_KEY`, `CONTROL_PLANE_TUNNEL_ID`, and
-`AGENT_RUNTIME_WORKSPACE_ROOT` are read from that file. The accepted tunnel
+`AGENT_RUNTIME_WORKSPACE_ROOT` are read from the canonical file. The accepted tunnel
 fingerprint is `6aa2b81d6dd8`. Never print the complete tunnel ID or API key.
 The historical `~/.config/tunnel-client/agent-runtime.yaml` profile must stay
 absent; installation, startup, and recovery fail closed if it reappears.
@@ -111,9 +117,9 @@ xcrun swift build --package-path macos -c release
 ```
 
 The package script verifies the menu-bar-only bundle, copies the implementation
-payload into the app, writes an ownership/version manifest, records only the
-checkout `.env` pointer, and ad-hoc signs the bundle. Installer activation is
-staged, validated, and rolled back on activation failure.
+payload into the app, writes an ownership/version manifest without checkout
+paths or credential pointers, and ad-hoc signs the bundle. Installer activation
+is staged, validated, and rolled back on activation failure.
 
 ## Verification
 
