@@ -126,8 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let button = statusItem.button else { return }
         button.target = self
         button.action = #selector(togglePopover)
-        button.toolTip = "Agent Runtime"
-        button.setAccessibilityLabel("Agent Runtime")
+        button.setAccessibilityLabel("Agent Runtime status")
         updateStatusItem(for: .ambiguous("Refreshing Runtime status…"))
     }
 
@@ -222,6 +221,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .withSymbolConfiguration(configuration)
         image?.isTemplate = true
         button.image = image
+        let summary = accessibilitySummary(for: status)
+        button.toolTip = summary
+        button.setAccessibilityValue(summary)
+    }
+
+    private func accessibilitySummary(for status: RuntimeStatus) -> String {
+        switch status {
+        case .stopped:
+            return "Stopped; desired state STOPPED"
+        case .owned(let identity):
+            return "Running; endpoint 127.0.0.1:8080; PID \(identity.pid); live and ready"
+        case .external(let pids):
+            let identities = pids.map(String.init).joined(separator: ", ")
+            return "Running externally; endpoint 127.0.0.1:8080; PID(s) \(identities); read-only"
+        case .ambiguous(let message):
+            return "Unavailable; \(message)"
+        }
     }
 
     private func showError(_ message: String) {
