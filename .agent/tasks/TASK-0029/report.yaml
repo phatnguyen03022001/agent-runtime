@@ -1,21 +1,21 @@
 protocol_version: 3
 task_id: TASK-0029
-task_revision: 6
-report_revision: 2
+task_revision: 7
+report_revision: 3
 state: REPORTED
 
 task_source:
   path: .agent/tasks/TASK-0029/task.yaml
-  commit: "94324772431b0a41ceaf0dee97acff116b180526"
+  commit: "44c49d81f5a0629325173ad68ddad395937e72c8"
 
 execution:
   repository: phatnguyen03022001/agent-runtime
   branch:
     name: dev
     role: integration
-  authorized_base_head: "94324772431b0a41ceaf0dee97acff116b180526"
-  pre_execution_head: "94324772431b0a41ceaf0dee97acff116b180526"
-  final_execution_head: "047937530a0145f2eff0d65eb311c0a7eb6d6aa4"
+  authorized_base_head: "44c49d81f5a0629325173ad68ddad395937e72c8"
+  pre_execution_head: "44c49d81f5a0629325173ad68ddad395937e72c8"
+  final_execution_head: "f74844c47754f88a926315ac9aa1bde0f27d0654"
 
 skill_library:
   repository: phatnguyen03022001/agent-skills
@@ -70,9 +70,9 @@ promoted_to_main: false
 wip_reconciliation:
   result: PASS
   canonical_checkout: /Users/tienphat/Developer/agent-runtime
-  primary_base: "94324772431b0a41ceaf0dee97acff116b180526"
+  primary_base: "44c49d81f5a0629325173ad68ddad395937e72c8"
   auxiliary_paths_reconciled: []
-  worktree_evidence: "Fresh topology checks and final local checks show only /Users/tienphat/Developer/agent-runtime in git worktree list; no replacement worktree, clone, or sibling checkout was created."
+  worktree_evidence: "The canonical checkout was clean at the revision-7 handoff base; final topology contains only /Users/tienphat/Developer/agent-runtime and no replacement worktree, clone, sibling checkout, or Codex worktree was created."
   developer_auxiliary_directory_absent: true
   checkout_initially_clean: true
 
@@ -80,7 +80,7 @@ installed_runtime:
   app: "/Users/tienphat/Applications/Agent Runtime.app"
   manifest: "/Users/tienphat/Applications/Agent Runtime.app/Contents/Resources/runtime-manifest.json"
   manifest_owner: com.picmao.agent-runtime
-  installed_revision: "047937530a0145f2eff0d65eb311c0a7eb6d6aa4"
+  installed_revision: "f74844c47754f88a926315ac9aa1bde0f27d0654"
   launchagent_entrypoint: "/Users/tienphat/Applications/Agent Runtime.app/Contents/Resources/runtime/start.sh"
   launchagent_env_pointer: "/Users/tienphat/Applications/Agent Runtime.app/Contents/Resources/env-path.txt"
   allowed_checkout_dependency: "/Users/tienphat/Developer/agent-runtime/.env"
@@ -92,34 +92,22 @@ installed_runtime:
   strict_deep_codesign_verified: true
 
 changed_files:
-  - .env.example
-  - README.md
-  - agent_runtime/session.py
-  - install.sh
-  - macos/AppBundle/Info.plist
   - macos/Sources/AgentRuntimeCore/NativeRuntimeBackend.swift
   - macos/Sources/AgentRuntimeMenuBar/AppDelegate.swift
   - macos/Sources/AgentRuntimeMenuBar/ControlPanelController.swift
-  - macos/Sources/AgentRuntimeMenuBar/SingleInstanceLock.swift
-  - macos/package_app.sh
-  - start.sh
-  - tests/test_pressure_concurrency.py
-  - tests/test_revision4_runtime_config.py
-  - tests/test_supervised_lifecycle.py
-  - tests/test_surface_and_scripts.py
-  - tests/test_terminal_session.py
-  - tests/test_tunnel_identity.py
+  - macos/Tests/AgentRuntimeCoreTests/OwnershipTests.swift
 
 deterministic_gates:
   repository_verify: PASS
-  repository_verify_evidence: "./install.sh ran the repository-owned verification gate after the final candidate amend: 109 tests passed, including lifecycle, protection, recovery, exact surface, source-independence, installer, 20-way terminal_exec, and 20-way concurrent terminal_start coverage."
+  repository_verify_evidence: "./verify passed 109/109 tests from the candidate commit, including singleton/recovery/protection, launchd sterile-environment startup, bounded readiness, installer/update idempotence, configurable session capacity, 20-way terminal_exec pressure, and 20-way PTY pressure."
   swift_tests: PASS
-  swift_tests_evidence: "xcrun swift test --package-path macos passed 19/19."
+  swift_tests_evidence: "xcrun swift test --package-path macos passed 20/20, including testProductionDiscoveryDrainsLargeProcessOutputAndFollowingActionCompletes."
   release_build: PASS
+  release_build_evidence: "xcrun swift build --package-path macos -c release completed from the candidate commit."
   package_build: PASS
-  package_evidence: "xcrun swift build --package-path macos -c release and ./macos/package_app.sh completed successfully."
+  package_evidence: "./macos/package_app.sh completed and produced the package-owned Agent Runtime.app; final installed manifest revision matches the candidate."
   codesign: PASS
-  codesign_evidence: "codesign --verify --strict --deep passed for both the build app and the installed app; the installed app remained valid after Runtime execution because the package now sets PYTHONDONTWRITEBYTECODE=1."
+  codesign_evidence: "Final installed app passed codesign --verify --strict --deep and both LaunchAgent plists passed plutil -lint."
   shell_syntax: PASS
   python_compile: PASS
   diff_check: PASS
@@ -130,6 +118,16 @@ deterministic_gates:
     - terminal_start
     - terminal_poll
     - terminal_control
+  process_discovery_large_output: PASS
+  process_discovery_large_output_evidence: "The Swift fixture generated 131072 bytes before a canonical process row; the production discovery helper drained concurrently, completed in the bounded test, and the following serial restart action completed."
+  immediate_ui_registration: PASS
+  installed_path_tests: PASS
+  installer_update_idempotence: PASS
+  configurable_session_limit: PASS
+  protected_runtime_regression: PASS
+  service_recovery_regression: PASS
+  launchd_sterile_environment: PASS
+  bounded_readiness: PASS
 
 tunnel_identity:
   source_authority: /Users/tienphat/Developer/agent-runtime/.env
@@ -140,106 +138,120 @@ tunnel_identity:
 
 concurrency:
   configured_limit: 64
-  effective_limit_command: "./start.sh session-limit"
+  effective_limit_command: "installed runtime start.sh session-limit"
   effective_limit_output: "AGENT_RUNTIME_MAX_ACTIVE_SESSIONS effective: 64"
   fallback: 64
   twenty_terminal_exec: PASS
   twenty_terminal_exec_evidence: "PressureConcurrencyTests completed 20 independent literal terminal_exec operations concurrently with distinct outputs and no lifecycle lock."
   twenty_terminal_start: PASS
-  twenty_terminal_start_evidence: "TerminalSessionTests.test_twenty_concurrent_terminal_start_calls_fill_configured_capacity completed 20 concurrent lightweight PTY starts with configured capacity 20; all 20 sessions were running concurrently."
+  twenty_terminal_start_evidence: "TerminalSessionTests completed 20 concurrent lightweight PTY starts with configured capacity 20; all 20 sessions were running concurrently."
   lifecycle_lock_conflict: NOT_OBSERVED
   transport_throughput_benchmark: NOT_PERFORMED
-  transport_throughput_note: "The available execution surface did not expose a callable remote MCP connector for a transport-level benchmark; no tunnel/MCP throughput number is claimed."
+  transport_throughput_note: "No callable Agent Runtime MCP connector/transport surface was exposed in the execution environment, so no transport throughput number is claimed. The reported pressure result is local Agent Runtime policy/execution evidence only."
 
 live_acceptance:
   launchagent_ui_registration: PASS
-  launchagent_ui_registration_evidence: "Current-login launchctl print shows gui/501/com.picmao.agent-runtime-ui loaded/running with ProgramArguments rooted at the installed app; independent process inspection found exactly one AgentRuntimeMenuBar process."
+  launchagent_ui_registration_evidence: "After three idempotent candidate install/update runs, current-login launchctl print shows com.picmao.agent-runtime-ui running from the installed app and native process inspection shows exactly one AgentRuntimeMenuBar process; no logout or reboot was used."
   installed_runtime_registration: PASS
-  installed_runtime_registration_evidence: "Current-login launchctl print shows com.picmao.agent-runtime-runtime running with the installed app start.sh, installed env-path.txt, and the package-owned service label."
+  installed_runtime_registration_evidence: "Current-login launchctl print shows com.picmao.agent-runtime-runtime running with ProgramArguments rooted at installed Resources/runtime/start.sh and env-path.txt; no source-checkout implementation path is executed."
   health_readiness: PASS
-  health_readiness_evidence: "Out-of-band checks returned health=live and ready=ready; exactly one 127.0.0.1:8080 listener and one canonical tunnel-client process remained."
+  health_readiness_evidence: "Final out-of-band inspection found one listener PID 49283 on 127.0.0.1:8080, one canonical tunnel-client, one MCP child PID 49293, healthz=live, readyz=ready, and ./start.sh status RUNNING."
+  process_discovery_refresh: PASS
+  process_discovery_refresh_evidence: "The installed UI process has no /bin/ps child after refresh; final process inspection found stuck_ps_child_count=0. The deterministic >128 KiB fixture and serial refresh/action test also pass."
+  truthful_ui_status_display: BLOCKED
+  truthful_ui_status_display_evidence: "The candidate UI code now presents the actual owned PID, 127.0.0.1:8080 and live/ready, and starts in Checking rather than false Stopped. However, the required live visual/AX observation was unavailable because cua_repl returned apps: []."
   ui_relaunch_desired_state: PASS
-  ui_relaunch_desired_state_evidence: "Out-of-band kickstart of the UI LaunchAgent left the desired marker mtime unchanged, retained one UI process, and left Runtime health intact."
+  ui_relaunch_desired_state_evidence: "Out-of-band kickstart of only the UI LaunchAgent left the desired marker mtime unchanged, kept the Runtime PID/listener unchanged, retained one UI process, and left health/readiness green."
+  repeated_install_update: PASS
+  repeated_install_update_evidence: "Three real install/update runs preserved the desired marker and ended with one UI registration/process, one Runtime registration, one tunnel, one MCP child and one listener; the third reinstall restored the sealed bundle after an acceptance probe generated bytecode."
   accidental_death_recovery: PASS
-  accidental_death_recovery_evidence: "SIGTERM was sent only to the positively identified canonical tunnel-client holding 127.0.0.1:8080; launchd recovered one tunnel/listener and health/readiness returned live/ready."
+  accidental_death_recovery_evidence: "SIGTERM was sent only to positively identified canonical tunnel-client PID 16187 holding 127.0.0.1:8080; launchd recovered one listener/tunnel/MCP tree after two bounded polls with live/ready health."
   explicit_stop_suppression: PASS
-  explicit_stop_suppression_evidence: "./start.sh stop removed the desired marker, reported zero listeners after the bounded wait, and no Runtime process remained; ./start.sh start restored one healthy instance."
-  menu_bar_click_acceptance: BLOCKED
-  menu_bar_click_acceptance_evidence: "The current cua_repl inventory returned apps: [] and no native App target was available. Therefore status-item visibility, popover opening, click-outside dismissal, real button enablement/transitional labels, and live error/warning presentation could not be observed truthfully."
+  explicit_stop_suppression_evidence: "Out-of-band ./start.sh stop removed the desired marker; after a bounded wait there was no listener or canonical process and launchctl reported the Runtime job not running."
+  explicit_cli_start_restore: PASS
+  explicit_cli_start_restore_evidence: "Out-of-band ./start.sh start restored desired RUNNING and bounded readiness; final state returned one healthy canonical Runtime."
+  menu_bar_start_action: BLOCKED
+  menu_bar_start_action_evidence: "No native App/AX target was available in cua_repl, so a real menu-bar Start click cannot be executed or claimed."
   agent_runtime_transport_denial: NOT_PERFORMED
-  agent_runtime_transport_denial_evidence: "The exact four-tool transport connector was not exposed in the current tool surface. Deterministic tests and direct installed-payload guard checks deny canonical lifecycle, launchd, and protected-port attempts, but this is not represented as a live MCP call."
+  agent_runtime_transport_denial_evidence: "The current tool surface exposed no callable Agent Runtime MCP connector. Deterministic tests and direct installed protection-guard checks denied canonical signal, service lifecycle and protected-port rebind attempts, but this is not claimed as a live MCP call."
+  no_unrelated_process_changes: PASS
+  no_unrelated_process_changes_evidence: "Live mutations targeted only the authorized Agent Runtime UI/Runtime LaunchAgents and the positively identified canonical Runtime lifecycle; no unrelated service/process was intentionally changed."
+
+probe_artifact_recovery:
+  result: PASS
+  evidence: "A direct installed-Python protection probe temporarily generated 335 pycache files and invalidated the sealed app because the probe omitted PYTHONDONTWRITEBYTECODE. The bundle was atomically reinstalled through install.sh; the final scan reports zero pycache files, zero symlinks, zero implementation checkout references, and strict/deep codesign PASS."
 
 acceptance_evidence:
   - criterion_id: AC-1
     status: PROVEN
-    evidence: "The supervised lifecycle suite, ten-way start collapse, and final 109-test verification prove one canonical Runtime/tunnel/MCP tree and one protected listener under concurrent starts."
+    evidence: "The supervised lifecycle suite, ten-way start collapse, final one-tunnel/one-MCP/one-listener inspection, and repeated install checks prove singleton convergence."
   - criterion_id: AC-2
     status: PROVEN
-    evidence: "Deterministic recovery and explicit Stop/Start tests pass; live SIGTERM recovery returned one healthy instance, and live Stop removed the marker and suppressed resurrection before explicit Start restored it."
+    evidence: "Deterministic recovery/Stop/Start tests pass; live canonical SIGTERM recovered one healthy instance and explicit Stop suppressed resurrection before explicit CLI Start restored it."
   - criterion_id: AC-3
     status: BLOCKED
-    evidence: "Swift 19/19 and package tests prove lifecycle policy, but current-login native status-item/popover/button acceptance could not be inspected because CUA exposed no native app surface."
+    evidence: "Swift tests and installed UI code prove lifecycle policy and truthful presentation logic, but live status-item/popover/button acceptance could not be observed with cua_repl apps: []."
   - criterion_id: AC-4
     status: PROVEN
-    evidence: "Protected-runtime tests pass for direct PID/process-group signals, pkill/killall, launchd/CLI lifecycle, protected-port free/rebind, shell wrappers, and PTY writes. Direct checks against the installed payload returned canonical_service_lifecycle and protected_port_rebind denials."
+    evidence: "Focused protection tests pass for direct signals, pkill/killall, launchd/CLI lifecycle and protected-port rebind; direct installed guard checks returned PROTECTED_RUNTIME categories. Live MCP transport denial is separately marked NOT_PERFORMED."
   - criterion_id: AC-5
     status: PROVEN
-    evidence: "Recovery tests cover foreign/ambiguous 8080, stale provenance, wrong identity, duplicate listeners, and idempotent migration; live acceptance observed only the canonical listener and controlled recovery."
+    evidence: "Recovery tests cover foreign/ambiguous 8080 and stale provenance; live acceptance observed exactly one positively identified canonical listener and controlled recovery."
   - criterion_id: AC-6
     status: PROVEN
-    evidence: "The sole persistent authority remains checkout-local .env, fingerprint is 6aa2b81d6dd8, the legacy YAML is absent, and the final installed/live path uses no profile-file architecture."
+    evidence: "The checkout-local .env remains the sole persistent identity authority, fingerprint is 6aa2b81d6dd8, the legacy YAML is absent, and no lifecycle action changed identity."
   - criterion_id: AC-7
     status: BLOCKED
-    evidence: "Bounded payload-free audit and warning presentation are covered by Python/Swift tests and documentation, but the live menu-bar warning/count could not be inspected without a native UI surface."
+    evidence: "Bounded payload-free audit and warning presentation are covered by tests and installed code, but the live native warning/count cannot be observed without a native UI surface."
   - criterion_id: AC-8
     status: PROVEN
-    evidence: "Repository verification passed 109/109, Swift 19/19, release/package/signature gates passed, shell/Python/diff/dependency gates passed, and the exact four-tool surface remains unchanged."
+    evidence: "109/109 repository tests, 20/20 Swift tests, release/package/signature, shell/Python/diff/dependency, exact four-tool, sterile-launchd and bounded-readiness gates pass."
   - criterion_id: AC-9
     status: PROVEN
-    evidence: "Repeated real installer runs are idempotent: the final run preserved RUNNING intent, bounded launchd registration retry restored the Runtime immediately, and final inspection found one UI process, one tunnel, and one listener."
+    evidence: "Three real installer/update runs are idempotent and final inspection found one UI registration/process, one Runtime registration, one tunnel, one MCP child and one listener."
   - criterion_id: AC-10
     status: NOT_PROVEN
-    evidence: "Candidate/report publication and final remote-ref closure are intentionally outside the report's self-referential pre-publication evidence and are not claimed here."
+    evidence: "Candidate/report publication, final remote dev identity and post-report lineage are verified after the report commit/push rather than self-attested inside this report."
   - criterion_id: AC-11
     status: PROVEN
-    evidence: "The canonical checkout started clean at the exact base; final git worktree list contains only /Users/tienphat/Developer/agent-runtime and no auxiliary worktree/clone was created."
+    evidence: "The canonical checkout is the only worktree, /Users/tienphat/Developer/.agent-worktrees is absent, the candidate worktree is clean before report authorship, and no replacement topology was created."
   - criterion_id: AC-12
     status: BLOCKED
-    evidence: "LaunchAgent registration and singleton process are proven, but the required real current-login status item, popover, click-outside, button-policy, transitional-state, error, and warning checks are unavailable because native CUA inventory is empty."
+    evidence: "Current-login registration and singleton process are proven, and the discovery deadlock fix is deterministic/live-process clean, but status-item visibility, popover, click-outside, actual displayed PID/endpoint/live-ready, button transitions/actions, error and warning presentation remain unavailable because cua_repl returned apps: []."
   - criterion_id: AC-13
     status: PROVEN
-    evidence: "Installed LaunchAgents execute app-bundle paths; runtime-manifest ownership/hashes match candidate; installed runtime has zero symlinks, zero pycache files, zero implementation references to the checkout, and env-path.txt is the sole allowed pointer to .env."
+    evidence: "Installed LaunchAgents execute app-bundle paths; final manifest/hash/codesign checks pass; installed runtime has zero symlinks, zero pycache files and zero implementation references to the checkout; env-path.txt is the sole source-checkout dependency."
   - criterion_id: AC-14
     status: NOT_PROVEN
-    evidence: "Local Agent Runtime policy proof passes 20 concurrent terminal_start sessions and 20 concurrent terminal_exec operations at effective capacity 64. A transport-level MCP throughput benchmark was not possible because no callable connector surface was exposed, so no transport ceiling is claimed."
+    evidence: "Local Agent Runtime policy proof passes configured capacity 64 with 20 concurrent terminal_start sessions and 20 concurrent terminal_exec operations. No callable MCP connector was available for a transport-level throughput measurement, so no transport ceiling is claimed."
 
 executor_checks:
   - check_id: CHECK-1
-    result: PASS
-    evidence: "Fresh binding matched TASK-0029 revision 6, exact base 94324772431b0a41ceaf0dee97acff116b180526, origin/dev at that base, main c49d777efa09db7f6c51bd8d8616db4623499fb8, canonical single-worktree topology, .env fingerprint, and absent legacy YAML before mutation."
+    result: BLOCKED
+    evidence: "Exact revision-7 binding, clean canonical topology, live identity/health, absent legacy profile, installed paths and the 131072-byte pipe deadlock reproduction were proven. Native placeholder/UI deadlock observation was not available because cua_repl exposed apps: []."
   - check_id: CHECK-2
     result: PASS
-    evidence: "Final repository verification passed 109 tests, including deterministic singleton, recovery, protection, immediate registration, installed-path, idempotence, 20-way terminal_exec, and 20-way concurrent terminal_start coverage."
+    evidence: "Final deterministic verification passed 109 Python tests and 20 Swift tests, including >128 KiB discovery output, no leaked discovery child, serial refresh followed by lifecycle action, PID/endpoint/live-ready presentation logic, pressure, protection, recovery and idempotence."
   - check_id: CHECK-3
     result: PASS
-    evidence: "Swift 19/19, release build/package, strict/deep codesign, shell syntax, Python compile, git diff --check, pip check, exact four-tool proof, source-reference scan, and installed manifest/hash checks passed."
+    evidence: "Final candidate gates passed full verify, Swift tests, release/package, strict/deep codesign, shell syntax, Python compile, diff check, dependency inspection, exact four-tool proof, installed source scan, launchd sterile-environment tests and bounded readiness tests."
   - check_id: CHECK-4
     result: BLOCKED
-    evidence: "Out-of-band live backend acceptance passed singleton, health/readiness, recovery, Stop suppression, CLI Start, installed ownership, identity, and UI registration. The required native menu-bar interaction proof and transport-level live tool denial were not available: cua_repl reported apps: []."
+    evidence: "Out-of-band live backend acceptance passed singleton, health/readiness, installed ownership, identity, repeated install, recovery, Stop suppression and CLI Start. Required native menu-bar interaction proof and live MCP tool-denial/transport throughput were unavailable: cua_repl apps: [] and no callable connector."
   - check_id: CHECK-5
     result: NOT_PROVEN
-    evidence: "The report is being committed as a truthful blocked revision-6 artifact. Non-force publication and final remote dev/main/topology proof occur after this report commit and cannot be self-attested inside it."
+    evidence: "This report is authored before its own report commit and non-force publication. Candidate/report lineage, final dev, unchanged main and final clean topology are post-publication predicates verified immediately after commit/push."
 
 blockers:
   - id: NATIVE_UI_SURFACE_UNAVAILABLE
     status: BLOCKED
-    evidence: "cua_repl current-login inventory returned apps: []; no native App/AX target was available for status-item, popover, click-outside, button, transitional-state, or warning acceptance."
+    evidence: "Final cua_repl inventory returned apps: []; no native App/AX target was available for status-item, popover, click-outside, button, transitional-state, error or warning acceptance."
   - id: TRANSPORT_LIVE_SURFACE_UNAVAILABLE
     status: BLOCKED
     evidence: "No callable Agent Runtime MCP connector was exposed in the current tool surface, so live tool-originated denial and transport throughput could not be independently exercised."
 
 deviations_from_task:
   - "The required real current-login menu-bar interaction acceptance remains unproven because the environment provided no native CUA surface; no UI PASS is claimed."
-  - "The requested transport-level concurrency measurement remains unperformed because no callable MCP connector was exposed; local policy/concurrency evidence is reported separately."
+  - "The requested live MCP transport denial and transport-level concurrency measurement remain unperformed because no callable Agent Runtime connector was exposed; deterministic/local installed-guard evidence is reported separately."
 
 result: BLOCKED
