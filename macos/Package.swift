@@ -18,5 +18,9 @@ let package = Package(
             name: "AgentRuntimeCoreTests",
             dependencies: ["AgentRuntimeCore"]
         ),
+        .testTarget(
+            name: "AgentRuntimeMenuBarTests",
+            dependencies: ["AgentRuntimeMenuBar", "AgentRuntimeCore"]
+        ),
     ]
 )

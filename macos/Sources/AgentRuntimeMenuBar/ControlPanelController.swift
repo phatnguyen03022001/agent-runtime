@@ -10,7 +10,7 @@ final class ControlPanelController: NSViewController {
     private let endpointLabel = NSTextField(labelWithString: "Endpoint unavailable")
     private let healthLabel = NSTextField(labelWithString: "Health — · Ready —")
     private let capacityLabel = NSTextField(labelWithString: "Session capacity 64")
-    private let protectionLabel = NSTextField(labelWithString: "Protection: clear")
+    private let protectionLabel = NSTextField(labelWithString: "Protection audit: clear")
     private let startButton = NSButton()
     private let stopButton = NSButton()
     private let restartButton = NSButton()
@@ -50,6 +50,7 @@ final class ControlPanelController: NSViewController {
         protectionLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         protectionLabel.textColor = .secondaryLabelColor
         protectionLabel.lineBreakMode = .byTruncatingTail
+        statusDetailLabel.isHidden = true
 
         setAccessibilityLabel("Runtime state", on: statusLabel)
         setAccessibilityLabel("Runtime state detail", on: statusDetailLabel)
@@ -115,25 +116,25 @@ final class ControlPanelController: NSViewController {
         startButton.isEnabled = availability.canStart
         stopButton.isEnabled = availability.canStop
         restartButton.isEnabled = availability.canRestart
-        capacityLabel.stringValue = "Session capacity \(sessionLimit)"
+        capacityLabel.stringValue = "Session capacity: \(sessionLimit)"
         if audit.blockedCount > 0 {
             let category = audit.lastCategory ?? "protected lifecycle"
-            protectionLabel.stringValue = "Protection: \(audit.blockedCount) blocked · last: \(category)"
-            protectionLabel.textColor = .systemOrange
+            protectionLabel.stringValue = "Protection: \(audit.blockedCount) blocked · last: \(category) · historical audit"
+            protectionLabel.textColor = .secondaryLabelColor
         } else {
-            protectionLabel.stringValue = "Protection: clear"
+            protectionLabel.stringValue = "Protection audit: clear"
             protectionLabel.textColor = .secondaryLabelColor
         }
         switch status {
         case .stopped:
-            setState(status: "STOPPED", detail: "Desired state STOPPED · recovery suppressed.", endpoint: "Endpoint unavailable", health: "Health — · Ready —")
+            setState(status: "OFFLINE", detail: "Desired state STOPPED · recovery suppressed.", endpoint: "Endpoint unavailable", health: "Health — · Ready —")
         case .owned(let identity):
-            setState(status: "RUNNING", detail: "Owned by Agent Runtime", endpoint: "Endpoint 127.0.0.1:8080 · PID \(identity.pid)", health: "Health live · Ready ready")
+            setState(status: "CONNECTED", detail: "", endpoint: "Endpoint 127.0.0.1:8080 · PID \(identity.pid)", health: "Health live · Ready ready")
         case .external(let pids):
             let identities = pids.map(String.init).joined(separator: ", ")
-            setState(status: "RUNNING · EXTERNAL", detail: "Read-only · lifecycle controls disabled.", endpoint: "Endpoint 127.0.0.1:8080 · PID(s) \(identities)", health: "Health unverified · Ready unverified")
+            setState(status: "EXTERNAL · READ-ONLY", detail: "Lifecycle controls disabled.", endpoint: "Endpoint 127.0.0.1:8080 · PID(s) \(identities)", health: "Health unverified · Ready unverified")
         case .ambiguous(let message):
-            setState(status: "UNAVAILABLE", detail: message, endpoint: "Endpoint unavailable", health: "Health unverified · Ready unverified")
+            setState(status: "ATTENTION", detail: "Runtime unavailable · \(message)", endpoint: "Endpoint unavailable", health: "Health unverified · Ready unverified")
         }
         refreshAccessibilityValues()
     }
@@ -153,6 +154,7 @@ final class ControlPanelController: NSViewController {
             statusLabel.stringValue = "RESTARTING…"
             statusDetailLabel.stringValue = "Restarting the supervised singleton with desired state RUNNING."
         }
+        statusDetailLabel.isHidden = false
         endpointLabel.stringValue = "Endpoint pending"
         healthLabel.stringValue = "Health pending · Ready pending"
         refreshAccessibilityValues()
@@ -177,6 +179,7 @@ final class ControlPanelController: NSViewController {
     private func setState(status: String, detail: String, endpoint: String, health: String) {
         statusLabel.stringValue = status
         statusDetailLabel.stringValue = detail
+        statusDetailLabel.isHidden = detail.isEmpty
         endpointLabel.stringValue = endpoint
         healthLabel.stringValue = health
     }

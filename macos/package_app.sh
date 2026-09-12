@@ -8,11 +8,17 @@ CONTENTS="$APP/Contents"
 MACOS="$CONTENTS/MacOS"
 RESOURCES="$CONTENTS/Resources"
 RUNTIME="$RESOURCES/runtime"
+APP_ICON="$PACKAGE_ROOT/AppBundle/Resources/AppIcon.png"
+NOTIFICATION_SOUND="$PACKAGE_ROOT/AppBundle/Resources/notification.mp3"
 
 [[ -d "$REPO_ROOT/.venv" && -x "$REPO_ROOT/.venv/bin/python" ]] \
   || { echo "PACKAGE ERROR: checkout .venv is required to package the installed Runtime" >&2; exit 2; }
 [[ -f "$REPO_ROOT/agent_runtime/server.py" ]] \
   || { echo "PACKAGE ERROR: checkout agent_runtime payload is incomplete" >&2; exit 2; }
+[[ -f "$APP_ICON" ]] \
+  || { echo "PACKAGE ERROR: approved application icon is missing" >&2; exit 2; }
+[[ -f "$NOTIFICATION_SOUND" ]] \
+  || { echo "PACKAGE ERROR: approved notification sound is missing" >&2; exit 2; }
 
 /usr/bin/xcrun swift build --package-path "$PACKAGE_ROOT" -c release
 BIN_DIR="$(/usr/bin/xcrun swift build --package-path "$PACKAGE_ROOT" -c release --show-bin-path)"
@@ -23,6 +29,8 @@ rm -rf "$APP"
 mkdir -p "$MACOS" "$RESOURCES" "$RUNTIME/agent_runtime"
 cp "$PACKAGE_ROOT/AppBundle/Info.plist" "$CONTENTS/Info.plist"
 cp "$BINARY" "$MACOS/AgentRuntimeMenuBar"
+cp "$APP_ICON" "$RESOURCES/AppIcon.png"
+cp "$NOTIFICATION_SOUND" "$RESOURCES/notification.mp3"
 # Release the executable without checkout-specific Swift debug/object paths.
 # Re-sign below after this deterministic packaging transformation.
 /usr/bin/strip -S "$MACOS/AgentRuntimeMenuBar"

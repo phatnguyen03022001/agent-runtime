@@ -2,6 +2,42 @@ import AgentRuntimeCore
 import AppKit
 import Foundation
 
+enum RuntimePresentationCondition: Equatable {
+    case connected
+    case offline
+    case external
+    case attention
+
+    init(status: RuntimeStatus) {
+        switch status {
+        case .owned: self = .connected
+        case .stopped: self = .offline
+        case .external: self = .external
+        case .ambiguous: self = .attention
+        }
+    }
+}
+
+struct OfflineAudioPolicy {
+    private var lastCondition: RuntimePresentationCondition?
+    private var hasObservedConnected = false
+
+    mutating func shouldPlay(for status: RuntimeStatus) -> Bool {
+        let nextCondition = RuntimePresentationCondition(status: status)
+        let nextIsOffline = nextCondition == .offline || nextCondition == .attention
+        let wasOffline = lastCondition == .offline || lastCondition == .attention
+        let shouldPlay = hasObservedConnected
+            && nextIsOffline
+            && !wasOffline
+
+        if nextCondition == .connected {
+            hasObservedConnected = true
+        }
+        lastCondition = nextCondition
+        return shouldPlay
+    }
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let runtimeQueue = DispatchQueue(label: "com.picmao.agent-runtime.lifecycle", qos: .userInitiated)
@@ -12,6 +48,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var runtimeConfiguration: RuntimeConfiguration?
     private var configurationError: String?
     private var instanceLock: MenuBarInstanceLock?
+    private var offlineAudioPolicy = OfflineAudioPolicy()
+    private var notificationSound: NSSound?
     private let auditReader = ProtectionAuditReader()
     private lazy var controlPanel = makeControlPanel()
 
@@ -155,20 +193,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let sessionLimit = runtimeConfiguration?.sessionLimit ?? RuntimeSessionCapacity.fallback
         guard let controller else {
             let status = RuntimeStatus.ambiguous(configurationError ?? "Configuration unavailable")
-            controlPanel.apply(status: status, audit: auditReader.read(), sessionLimit: sessionLimit)
-            updateStatusItem(for: status)
+            present(status, sessionLimit: sessionLimit)
             return
         }
         runtimeQueue.async { [weak self, controller] in
             let status = controller.refresh()
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
-                self.controlPanel.apply(
-                    status: status,
-                    audit: self.auditReader.read(),
-                    sessionLimit: self.runtimeConfiguration?.sessionLimit ?? RuntimeSessionCapacity.fallback
-                )
-                self.updateStatusItem(for: status)
+                self.present(status)
             }
         }
     }
@@ -187,24 +219,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self else { return }
                 switch result {
                 case .success(let status):
-                    self.controlPanel.apply(
-                        status: status,
-                        audit: self.auditReader.read(),
-                        sessionLimit: self.runtimeConfiguration?.sessionLimit ?? RuntimeSessionCapacity.fallback
-                    )
-                    self.updateStatusItem(for: status)
+                    self.present(status)
                 case .failure(let error):
                     let status = controller.refresh()
-                    self.controlPanel.apply(
-                        status: status,
-                        audit: self.auditReader.read(),
-                        sessionLimit: self.runtimeConfiguration?.sessionLimit ?? RuntimeSessionCapacity.fallback
-                    )
-                    self.updateStatusItem(for: status)
+                    self.present(status)
                     self.showError(error.localizedDescription)
                 }
             }
         }
+    }
+
+    private func present(
+        _ status: RuntimeStatus,
+        sessionLimit: Int? = nil
+    ) {
+        controlPanel.apply(
+            status: status,
+            audit: auditReader.read(),
+            sessionLimit: sessionLimit ?? runtimeConfiguration?.sessionLimit ?? RuntimeSessionCapacity.fallback
+        )
+        updateStatusItem(for: status)
+        playOfflineNotificationIfNeeded(for: status)
+    }
+
+    private func playOfflineNotificationIfNeeded(for status: RuntimeStatus) {
+        guard offlineAudioPolicy.shouldPlay(for: status) else { return }
+        if notificationSound == nil,
+           let url = Bundle.main.url(forResource: "notification", withExtension: "mp3") {
+            notificationSound = NSSound(contentsOf: url, byReference: false)
+        }
+        notificationSound?.stop()
+        notificationSound?.play()
     }
 
     private func updateStatusItem(for status: RuntimeStatus) {
@@ -229,14 +274,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func accessibilitySummary(for status: RuntimeStatus) -> String {
         switch status {
         case .stopped:
-            return "Stopped; desired state STOPPED"
+            return "Offline; desired state STOPPED"
         case .owned(let identity):
-            return "Running; endpoint 127.0.0.1:8080; PID \(identity.pid); live and ready"
+            return "Connected; endpoint 127.0.0.1:8080; PID \(identity.pid); live and ready"
         case .external(let pids):
             let identities = pids.map(String.init).joined(separator: ", ")
-            return "Running externally; endpoint 127.0.0.1:8080; PID(s) \(identities); read-only"
+            return "External; endpoint 127.0.0.1:8080; PID(s) \(identities); read-only"
         case .ambiguous(let message):
-            return "Unavailable; \(message)"
+            return "Attention; unavailable; \(message)"
         }
     }
 
