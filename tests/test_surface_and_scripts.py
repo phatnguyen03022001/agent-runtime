@@ -235,6 +235,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertIn("--control-plane.poll-channel", text)
         self.assertIn("--health.listen-addr", text)
         self.assertIn("RUNTIME_PATH=\"/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin\"", text)
+        self.assertIn('"PYTHONDONTWRITEBYTECODE": "1"', text)
         self.assertNotIn("--profile-file", text)
         self.assertNotIn("TUNNEL_CLIENT_PROFILE_FILE", text)
         self.assertNotIn("AGENT_RUNTIME_TUNNEL_PROFILE", text)
@@ -245,6 +246,8 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertIn("<key>PathState</key>", text)
         self.assertIn("protected-runtime-running", text)
         self.assertIn("bootstrap", text)
+        self.assertIn("DESIRED_STATE_WAS_PRESENT", text)
+        self.assertIn('kickstart -k "$RUNTIME_SERVICE"', text)
         self.assertNotIn("touch \"$DESIRED_STATE\"", text)
 
     def test_installer_is_narrow_and_derives_workspace_root_from_checkout_parent(self) -> None:
@@ -306,6 +309,30 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertIn("Agent Runtime.app", text)
         self.assertIn("--health.listen-addr", text)
         self.assertNotIn("tunnel-client run", text)
+
+    def test_installed_runtime_is_package_owned_except_for_env_pointer(self) -> None:
+        installer = (ROOT / "install.sh").read_text()
+        package = (ROOT / "macos/package_app.sh").read_text()
+        self.assertIn("$RUNTIME_ROOT/start.sh", installer)
+        self.assertIn("Resources/runtime", installer)
+        self.assertIn("runtime-manifest.json", installer)
+        self.assertIn("env-path.txt", installer)
+        self.assertNotIn('<string>$ROOT/start.sh</string>', installer)
+        self.assertIn('cp "$REPO_ROOT/start.sh" "$RUNTIME/start.sh"', package)
+        self.assertIn('cp -R -L "$REPO_ROOT/.venv" "$RUNTIME/.venv"', package)
+        self.assertIn('/usr/bin/strip -S "$MACOS/AgentRuntimeMenuBar"', package)
+        self.assertIn("find \"$RUNTIME/.venv\" -type d -name '__pycache__'", package)
+        self.assertIn('"$RUNTIME/agent_runtime/"', package)
+        self.assertNotIn("checkout-path.txt", package)
+
+    def test_configurable_session_limit_is_documented_and_not_hard_capped_at_three(self) -> None:
+        source = (ROOT / "agent_runtime/session.py").read_text()
+        docs = (ROOT / "README.md").read_text()
+        self.assertNotIn("MAX_ACTIVE_SESSIONS = 3", source)
+        self.assertIn("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS", source)
+        self.assertIn("DEFAULT_SESSION_LIMIT = 64", source)
+        self.assertIn("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS", docs)
+        self.assertIn("session-limit", docs)
 
 
 

@@ -1,5 +1,6 @@
 import AgentRuntimeCore
 import AppKit
+import Foundation
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -8,11 +9,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var timer: Timer?
     private var controller: RuntimeController?
+    private var runtimeConfiguration: RuntimeConfiguration?
     private var configurationError: String?
+    private var instanceLock: MenuBarInstanceLock?
     private let auditReader = ProtectionAuditReader()
     private lazy var controlPanel = makeControlPanel()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        guard let lock = MenuBarInstanceLock() else {
+            // launchd may observe a second manual/duplicate launch. The lock
+            // makes that process exit without creating a second status item.
+            NSApp.terminate(nil)
+            return
+        }
+        instanceLock = lock
         NSApp.setActivationPolicy(.accessory)
         configureRuntime()
         configureStatusItem()
@@ -29,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         timer?.invalidate()
+        instanceLock = nil
     }
 
     func applicationDidResignActive(_ notification: Notification) {
@@ -37,34 +48,70 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func configureRuntime() {
         do {
-            let checkoutRoot = try Self.checkoutRoot()
+            let configuration = try Self.installedRuntimeConfiguration()
             let system = DarwinProcessSystem()
             let backend = NativeRuntimeBackend(
-                configuration: RuntimeConfiguration(checkoutRoot: checkoutRoot),
+                configuration: configuration,
                 inspector: system,
                 discovery: PSRuntimeDiscovery(inspector: system)
             )
+            runtimeConfiguration = configuration
             controller = RuntimeController(backend: backend)
         } catch {
             configurationError = error.localizedDescription
         }
     }
 
-    private static func checkoutRoot() throws -> String {
+    private static func installedRuntimeConfiguration() throws -> RuntimeConfiguration {
         guard let resources = Bundle.main.resourceURL else {
             throw RuntimeLifecycleError.metadata("app bundle resources are unavailable")
         }
-        let pointer = resources.appendingPathComponent("checkout-path.txt", isDirectory: false)
-        let text = try String(contentsOf: pointer, encoding: .utf8)
+        let manifestURL = resources.appendingPathComponent("runtime-manifest.json", isDirectory: false)
+        let manifestData = try Data(contentsOf: manifestURL)
+        guard let manifest = try JSONSerialization.jsonObject(with: manifestData) as? [String: Any],
+              manifest["schema"] as? Int == 1,
+              manifest["owner"] as? String == "com.picmao.agent-runtime",
+              manifest["entrypoint"] as? String == "runtime/start.sh",
+              manifest["python"] as? String == "runtime/.venv/bin/python",
+              let revision = manifest["runtime_revision"] as? String,
+              revision.count == 40 else {
+            throw RuntimeLifecycleError.metadata("installed Runtime manifest is invalid")
+        }
+
+        let runtimeRoot = resources.appendingPathComponent("runtime", isDirectory: true)
+        let lifecycle = runtimeRoot.appendingPathComponent("start.sh", isDirectory: false)
+        let runtimePython = runtimeRoot.appendingPathComponent(".venv/bin/python", isDirectory: false)
+        let server = runtimeRoot.appendingPathComponent("agent_runtime/server.py", isDirectory: false)
+        let runtimeValues = try runtimeRoot.resourceValues(forKeys: [.isSymbolicLinkKey])
+        guard runtimeValues.isSymbolicLink != true,
+              FileManager.default.isExecutableFile(atPath: lifecycle.path),
+              FileManager.default.isExecutableFile(atPath: runtimePython.path),
+              FileManager.default.fileExists(atPath: server.path) else {
+            throw RuntimeLifecycleError.metadata("installed Runtime payload is incomplete")
+        }
+
+        let pointer = resources.appendingPathComponent("env-path.txt", isDirectory: false)
+        let pointerValues = try pointer.resourceValues(forKeys: [.isSymbolicLinkKey])
+        guard pointerValues.isSymbolicLink != true else {
+            throw RuntimeLifecycleError.metadata("installed .env pointer is a symlink")
+        }
+        let envPath = try String(contentsOf: pointer, encoding: .utf8)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else {
-            throw RuntimeLifecycleError.metadata("checkout path is empty")
+        let envURL = URL(fileURLWithPath: envPath)
+        guard envURL.path.hasPrefix("/"), envURL.lastPathComponent == ".env",
+              FileManager.default.fileExists(atPath: envURL.path) else {
+            throw RuntimeLifecycleError.metadata("checkout-local .env authority is unavailable")
         }
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: text, isDirectory: &isDirectory), isDirectory.boolValue else {
-            throw RuntimeLifecycleError.metadata("configured checkout no longer exists")
+        let values = try envURL.resourceValues(forKeys: [.isSymbolicLinkKey, .isRegularFileKey])
+        guard values.isSymbolicLink != true, values.isRegularFile == true else {
+            throw RuntimeLifecycleError.metadata("checkout-local .env must be a regular non-symlink file")
         }
-        return URL(fileURLWithPath: text).standardizedFileURL.path
+
+        return RuntimeConfiguration(
+            runtimeRoot: runtimeRoot.path,
+            envFileURL: envURL,
+            requiresReadiness: true
+        )
     }
 
     private func makeControlPanel() -> ControlPanelController {
@@ -80,6 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         button.target = self
         button.action = #selector(togglePopover)
         button.toolTip = "Agent Runtime"
+        button.setAccessibilityLabel("Agent Runtime")
         updateStatusItem(for: .stopped)
     }
 
@@ -105,17 +153,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func refreshStatus() {
+        let sessionLimit = runtimeConfiguration?.sessionLimit ?? RuntimeSessionCapacity.fallback
         guard let controller else {
             let status = RuntimeStatus.ambiguous(configurationError ?? "Configuration unavailable")
-            controlPanel.apply(status: status, audit: auditReader.read())
+            controlPanel.apply(status: status, audit: auditReader.read(), sessionLimit: sessionLimit)
             updateStatusItem(for: status)
             return
         }
         runtimeQueue.async { [weak self, controller] in
             let status = controller.refresh()
             DispatchQueue.main.async { [weak self] in
-                self?.controlPanel.apply(status: status, audit: self?.auditReader.read() ?? ProtectionAuditSnapshot())
-                self?.updateStatusItem(for: status)
+                guard let self else { return }
+                self.controlPanel.apply(
+                    status: status,
+                    audit: self.auditReader.read(),
+                    sessionLimit: self.runtimeConfiguration?.sessionLimit ?? RuntimeSessionCapacity.fallback
+                )
+                self.updateStatusItem(for: status)
             }
         }
     }
@@ -134,11 +188,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self else { return }
                 switch result {
                 case .success(let status):
-                    self.controlPanel.apply(status: status, audit: self.auditReader.read())
+                    self.controlPanel.apply(
+                        status: status,
+                        audit: self.auditReader.read(),
+                        sessionLimit: self.runtimeConfiguration?.sessionLimit ?? RuntimeSessionCapacity.fallback
+                    )
                     self.updateStatusItem(for: status)
                 case .failure(let error):
                     let status = controller.refresh()
-                    self.controlPanel.apply(status: status, audit: self.auditReader.read())
+                    self.controlPanel.apply(
+                        status: status,
+                        audit: self.auditReader.read(),
+                        sessionLimit: self.runtimeConfiguration?.sessionLimit ?? RuntimeSessionCapacity.fallback
+                    )
                     self.updateStatusItem(for: status)
                     self.showError(error.localizedDescription)
                 }

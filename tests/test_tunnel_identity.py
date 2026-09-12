@@ -84,6 +84,8 @@ fi
         repo.mkdir(); home.mkdir(); workspace.mkdir(); bin_dir.mkdir()
         shutil.copy2(ROOT / "start.sh", repo / "start.sh")
         (repo / "start.sh").chmod(0o700)
+        (repo / "agent_runtime").mkdir()
+        (repo / "agent_runtime/server.py").write_text("# fixture runtime payload\n")
         self._write(repo / ".venv/bin/python", "#!/bin/sh\nexit 0\n", 0o700)
         self._write(
             repo / ".env",
@@ -178,7 +180,8 @@ fi
         self._write(package, r'''#!/usr/bin/env bash
 set -euo pipefail
 APP="$PWD/build/Agent Runtime.app"
-mkdir -p "$APP/Contents/MacOS"
+RUNTIME="$APP/Contents/Resources/runtime"
+mkdir -p "$APP/Contents/MacOS" "$RUNTIME/agent_runtime" "$RUNTIME/.venv/bin"
 cat > "$APP/Contents/Info.plist" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -189,6 +192,14 @@ cat > "$APP/Contents/Info.plist" <<'EOF'
 EOF
 printf '#!/usr/bin/env bash\nexit 0\n' > "$APP/Contents/MacOS/AgentRuntimeMenuBar"
 chmod +x "$APP/Contents/MacOS/AgentRuntimeMenuBar"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$RUNTIME/start.sh"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$RUNTIME/.venv/bin/python"
+printf '# fixture runtime payload\n' > "$RUNTIME/agent_runtime/server.py"
+chmod +x "$RUNTIME/start.sh" "$RUNTIME/.venv/bin/python"
+START_SHA="$(shasum -a 256 "$RUNTIME/start.sh" | awk '{print $1}')"
+SERVER_SHA="$(shasum -a 256 "$RUNTIME/agent_runtime/server.py" | awk '{print $1}')"
+printf '{"schema":1,"owner":"com.picmao.agent-runtime","runtime_revision":"0000000000000000000000000000000000000000","entrypoint":"runtime/start.sh","python":"runtime/.venv/bin/python","mcp_package":"runtime/agent_runtime","start_sha256":"%s","server_sha256":"%s","checkout_dependency":"env-path.txt"}\n' "$START_SHA" "$SERVER_SHA" > "$APP/Contents/Resources/runtime-manifest.json"
+printf '%s\n' "$PWD/.env" > "$APP/Contents/Resources/env-path.txt"
 /usr/bin/codesign --force --sign - "$APP" >/dev/null 2>&1
 ''', 0o700)
         self._fake_tunnel_client(bin_dir)
@@ -228,10 +239,13 @@ esac
         with tempfile.TemporaryDirectory() as raw:
             repo, home, bin_dir, capture = self._install_fixture(Path(raw))
             env_file = self._env(repo, "same-id")
+            with env_file.open("a") as handle:
+                handle.write("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS=22\n")
             result = self._run_install(repo, home, bin_dir, capture)
             self.assertEqual(result.returncode, 0, result.stderr)
             text = env_file.read_text()
             self.assertIn("CONTROL_PLANE_TUNNEL_ID=same-id", text)
+            self.assertIn("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS=22", text)
             self.assertNotIn("AGENT_RUNTIME_TUNNEL_PROFILE=", text)
             self.assertFalse((home / ".config/tunnel-client/agent-runtime.yaml").exists())
             self.assertIn("argv=doctor --control-plane.poll-channel main", capture.read_text())

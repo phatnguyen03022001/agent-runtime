@@ -6,9 +6,32 @@ fail() {
   exit 2
 }
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+INSTALLED_RUNTIME_ROOT="${HOME}/Applications/Agent Runtime.app/Contents/Resources/runtime"
+
+# The source checkout remains a bounded operator CLI and test/development
+# entrypoint. Once the product is installed, all operator lifecycle actions
+# converge on the package-owned helper so the LaunchAgent and menu bar use the
+# same installed execution bytes. The internal --serve path is never delegated
+# because launchd supplies the package-owned script directly.
+if [[ "${1:-start}" != "--serve" \
+      && "$SOURCE_ROOT" != "$INSTALLED_RUNTIME_ROOT" \
+      && "${AGENT_RUNTIME_USE_SOURCE_RUNTIME:-0}" != "1" \
+      && -x "$INSTALLED_RUNTIME_ROOT/start.sh" ]]; then
+  exec "$INSTALLED_RUNTIME_ROOT/start.sh" "$@"
+fi
+
+ROOT="$SOURCE_ROOT"
 cd "$ROOT"
-ENV_FILE="$ROOT/.env"
+ENV_FILE="${RUNTIME_ENV_FILE:-$ROOT/.env}"
+ENV_POINTER="$ROOT/../env-path.txt"
+if [[ -n "${RUNTIME_ENV_FILE-}" && "$ENV_FILE" == */env-path.txt ]]; then
+  [[ -f "$ENV_FILE" && ! -L "$ENV_FILE" ]] || fail "Installed Runtime .env pointer is missing or invalid."
+  ENV_FILE="$(<"$ENV_FILE")"
+fi
+if [[ -z "${RUNTIME_ENV_FILE-}" && -f "$ENV_POINTER" && ! -L "$ENV_POINTER" ]]; then
+  ENV_FILE="$(<"$ENV_POINTER")"
+fi
 LEGACY_CONFIG="$HOME/.config/tunnel-client/agent-runtime.yaml"
 LABEL="com.picmao.agent-runtime-runtime"
 DOMAIN="gui/$(id -u)"
@@ -18,9 +41,12 @@ DESIRED_STATE="$STATE_DIR/protected-runtime-running"
 LOCK_DIR="$STATE_DIR/lifecycle.lock"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 ACTION="${1:-start}"
-MCP_COMMAND="command=$ROOT/.venv/bin/python -m agent_runtime.server,channel=main"
+RUNTIME_PYTHON="$ROOT/.venv/bin/python"
+MCP_COMMAND="command=${RUNTIME_PYTHON// /\\ } -m agent_runtime.server,channel=main"
+MCP_COMMAND_NORMALIZED="command=$RUNTIME_PYTHON -m agent_runtime.server,channel=main"
 HEALTH_URL="http://127.0.0.1:8080"
 RUNTIME_PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+DEFAULT_SESSION_LIMIT=64
 
 acquire_lock() {
   mkdir -p "$STATE_DIR"
@@ -57,6 +83,19 @@ set_running() {
   chmod 600 "$tmp"
   mv -f "$tmp" "$DESIRED_STATE"
 }
+
+effective_session_limit() {
+  local value=""
+  if [[ -f "$ENV_FILE" && ! -L "$ENV_FILE" ]]; then
+    value="$(awk -F= '$1 == "AGENT_RUNTIME_MAX_ACTIVE_SESSIONS" { print substr($0, index($0, "=") + 1); exit }' "$ENV_FILE")"
+  fi
+  if [[ "$value" =~ ^[1-9][0-9]*$ ]]; then
+    printf '%s\n' "$value"
+  else
+    printf '%s\n' "$DEFAULT_SESSION_LIMIT"
+  fi
+}
+
 port_owner_pids() {
   command -v lsof >/dev/null 2>&1 || fail "lsof is required to protect port 8080."
   lsof -nP -iTCP:8080 -sTCP:LISTEN -t 2>/dev/null | sort -u || true
@@ -65,11 +104,14 @@ port_owner_pids() {
 is_canonical_port_owner() {
   local pid="$1" command executable
   command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
-  executable="$(ps -p "$pid" -o comm= 2>/dev/null || true)"
+  # macOS truncates `comm` to a short display width. The full command line
+  # remains the authoritative executable identity for this narrow check.
+  command="${command//\\ / }"
+  executable="${command%% *}"
   [[ "${executable##*/}" == "tunnel-client" ]] || return 1
   [[ "$command" == *"tunnel-client run"* ]] || return 1
   [[ "$command" == *"--control-plane.poll-channel main"* ]] || return 1
-  [[ "$command" == *"--mcp.command $MCP_COMMAND"* ]] || return 1
+  [[ "$command" == *"--mcp.command $MCP_COMMAND_NORMALIZED"* ]] || return 1
   [[ "$command" == *"--health.listen-addr 127.0.0.1:8080"* ]] || return 1
   [[ "$command" != *"--profile"* ]]
 }
@@ -84,6 +126,7 @@ preflight_protected_port() {
     is_canonical_port_owner "$pid" || fail "Protected port 8080 is occupied by a foreign or ambiguous process; refusing to kill or rebind it."
   done <<< "$owners"
 }
+
 READY_DIAGNOSTIC=""
 
 runtime_ready_once() {
@@ -96,7 +139,7 @@ runtime_ready_once() {
   fi
   pid="$(printf '%s\n' "$owners" | awk 'NF { print; exit }')"
   if ! is_canonical_port_owner "$pid"; then
-    READY_DIAGNOSTIC="port 8080 listener is not the canonical no-profile Runtime"
+    READY_DIAGNOSTIC="port 8080 listener is not the canonical installed no-profile Runtime"
     return 1
   fi
   command -v curl >/dev/null 2>&1 || fail "curl is required for Runtime readiness checks."
@@ -142,16 +185,20 @@ wait_until_stopped() {
 
 serve() {
   local tunnel_client="${1:-}"
-  [[ -f "$DESIRED_STATE" ]] || exit 0
-  [[ -f "$ENV_FILE" && ! -L "$ENV_FILE" ]] || fail "Missing or invalid $ENV_FILE; run ./install.sh first."
+  local env_file="${2:-$ENV_FILE}"
+  if [[ "$env_file" == */env-path.txt ]]; then
+    [[ -f "$env_file" && ! -L "$env_file" ]] || fail "Installed Runtime .env pointer is missing or invalid."
+    env_file="$(<"$env_file")"
+  fi
+  [[ -f "$env_file" && ! -L "$env_file" ]] || fail "Missing or invalid checkout-local .env; run ./install.sh first."
   [[ ! -e "$LEGACY_CONFIG" && ! -L "$LEGACY_CONFIG" ]] \
     || fail "Legacy tunnel configuration must remain absent at $LEGACY_CONFIG."
   [[ "$tunnel_client" == /* && -x "$tunnel_client" && "${tunnel_client##*/}" == "tunnel-client" ]] \
     || fail "LaunchAgent must provide an absolute executable tunnel-client path."
+  [[ -x "$RUNTIME_PYTHON" && -f "$ROOT/agent_runtime/server.py" ]] \
+    || fail "Installed Runtime payload is incomplete."
 
-  [[ -x "$ROOT/.venv/bin/python" ]] || fail "Missing Runtime Python at $ROOT/.venv/bin/python."
-
-  exec /usr/bin/python3 - "$ENV_FILE" "$tunnel_client" "$ROOT/.venv/bin/python" "$RUNTIME_PATH" <<'PY'
+  exec /usr/bin/python3 - "$env_file" "$tunnel_client" "$RUNTIME_PYTHON" "$RUNTIME_PATH" "$ROOT" <<'PY'
 import os
 import re
 import subprocess
@@ -162,6 +209,7 @@ env_file = Path(sys.argv[1])
 tunnel_client = sys.argv[2]
 runtime_python = sys.argv[3]
 runtime_path = sys.argv[4]
+runtime_root = sys.argv[5]
 
 def fail(message):
     print("START ERROR: " + message, file=sys.stderr)
@@ -177,6 +225,7 @@ required = {
     "CONTROL_PLANE_TUNNEL_ID",
     "AGENT_RUNTIME_WORKSPACE_ROOT",
 }
+optional = {"AGENT_RUNTIME_MAX_ACTIVE_SESSIONS"}
 values = {}
 for number, line in enumerate(lines, start=1):
     if not line or line.lstrip().startswith("#"):
@@ -185,7 +234,7 @@ for number, line in enumerate(lines, start=1):
     if match is None:
         fail("Malformed .env entry at line " + str(number) + ".")
     key, value = match.groups()
-    if key in required:
+    if key in required or key in optional:
         if key in values:
             fail("Duplicate " + key + " entry in .env.")
         values[key] = value
@@ -203,8 +252,14 @@ runtime_env = {
     "CONTROL_PLANE_API_KEY": values["CONTROL_PLANE_API_KEY"],
     "CONTROL_PLANE_TUNNEL_ID": values["CONTROL_PLANE_TUNNEL_ID"],
     "AGENT_RUNTIME_WORKSPACE_ROOT": values["AGENT_RUNTIME_WORKSPACE_ROOT"],
+    "PYTHONPATH": runtime_root,
+    # The signed installed payload is immutable at runtime; do not create
+    # bytecode resources inside the app bundle.
+    "PYTHONDONTWRITEBYTECODE": "1",
     "OPEN_WEB_UI": "false",
 }
+if values.get("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS") is not None:
+    runtime_env["AGENT_RUNTIME_MAX_ACTIVE_SESSIONS"] = values["AGENT_RUNTIME_MAX_ACTIVE_SESSIONS"]
 for key in ("USER", "TMPDIR", "LANG"):
     value = os.environ.get(key)
     if value:
@@ -215,7 +270,7 @@ for key, value in os.environ.items():
 
 common = [
     "--control-plane.poll-channel", "main",
-    "--mcp.command", "command=" + runtime_python + " -m agent_runtime.server,channel=main",
+    "--mcp.command", "command=" + runtime_python.replace(" ", "\\ ") + " -m agent_runtime.server,channel=main",
     "--health.listen-addr", "127.0.0.1:8080",
 ]
 doctor = subprocess.run(
@@ -234,7 +289,7 @@ PY
 
 case "$ACTION" in
   --serve)
-    serve "${2:-}"
+    serve "${2:-}" "${3:-$ENV_FILE}"
     ;;
   start)
     acquire_lock
@@ -277,9 +332,16 @@ case "$ACTION" in
     echo "Agent Runtime desired state: RUNNING"
     ;;
   status)
-    if [[ -f "$DESIRED_STATE" ]]; then echo "RUNNING"; else echo "STOPPED"; fi
+    if [[ -f "$DESIRED_STATE" ]]; then
+      echo "RUNNING (persistent terminal sessions: $(effective_session_limit))"
+    else
+      echo "STOPPED (persistent terminal sessions: $(effective_session_limit))"
+    fi
+    ;;
+  session-limit)
+    echo "AGENT_RUNTIME_MAX_ACTIVE_SESSIONS effective: $(effective_session_limit)"
     ;;
   *)
-    fail "Usage: ./start.sh [start|stop|restart|status|--serve <absolute-tunnel-client>]"
+    fail "Usage: ./start.sh [start|stop|restart|status|session-limit|--serve <absolute-tunnel-client> [env-file]]"
     ;;
 esac

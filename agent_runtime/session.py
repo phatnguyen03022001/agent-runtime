@@ -25,7 +25,8 @@ from .executor import (
 from .protection import _PROTECTED_GUARD
 from .timing import TimingContext, current_call_context, emit_process_end
 
-MAX_ACTIVE_SESSIONS = 3
+SESSION_LIMIT_ENV = "AGENT_RUNTIME_MAX_ACTIVE_SESSIONS"
+DEFAULT_SESSION_LIMIT = 64
 IDLE_TTL_SECONDS = 600.0
 MAX_RETAINED_OUTPUT_BYTES = 64 * 1024
 MAX_POLL_OUTPUT_BYTES = 16 * 1024
@@ -34,6 +35,29 @@ MAX_WAIT_MS = 1000
 _READ_CHUNK_BYTES = 8192
 _READER_DRAIN_SECONDS = 0.2
 _REAPER_INTERVAL_SECONDS = 1.0
+
+
+def effective_session_limit(raw_value: str | None = None) -> int:
+    """Return the operator-configured positive session limit.
+
+    The setting is intentionally unbounded above by Agent Runtime policy. The
+    operating system and available PTY/process resources remain the practical
+    ceiling. Missing, malformed, or non-positive values use the documented
+    safe fallback instead of silently selecting a low replacement cap.
+    """
+
+    candidate = os.environ.get(SESSION_LIMIT_ENV, "") if raw_value is None else raw_value
+    try:
+        value = int(candidate.strip())
+    except (AttributeError, TypeError, ValueError):
+        return DEFAULT_SESSION_LIMIT
+    return value if value > 0 else DEFAULT_SESSION_LIMIT
+
+
+def _validated_session_limit(value: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ValueError("max_active_sessions must be a positive integer")
+    return value
 
 
 @dataclass
@@ -69,11 +93,17 @@ class TerminalSessionManager:
         clock: Callable[[], float] = time.monotonic,
         idle_ttl_seconds: float = IDLE_TTL_SECONDS,
         reaper_interval: float = _REAPER_INTERVAL_SECONDS,
+        max_active_sessions: int | None = None,
         start_reaper: bool = True,
     ) -> None:
         self._clock = clock
         self._idle_ttl_seconds = float(idle_ttl_seconds)
         self._reaper_interval = float(reaper_interval)
+        self.max_active_sessions = (
+            effective_session_limit()
+            if max_active_sessions is None
+            else _validated_session_limit(max_active_sessions)
+        )
         self._sessions: dict[str, _Session] = {}
         self._lock = threading.RLock()
         self._stop_reaper = threading.Event()
@@ -93,8 +123,10 @@ class TerminalSessionManager:
 
         with self._lock:
             active = sum(session.status == "running" for session in self._sessions.values())
-            if active >= MAX_ACTIVE_SESSIONS:
-                raise RuntimeError("maximum 3 active terminal sessions reached")
+            if active >= self.max_active_sessions:
+                raise RuntimeError(
+                    f"configured maximum {self.max_active_sessions} active terminal sessions reached"
+                )
 
             master_fd, slave_fd = pty.openpty()
             try:
@@ -450,6 +482,12 @@ def control_terminal(
 
 def shutdown_terminal_sessions() -> None:
     _MANAGER.shutdown()
+
+
+def configured_session_limit() -> int:
+    """Expose the effective limit for operator diagnostics and tests."""
+
+    return _MANAGER.max_active_sessions
 
 
 def _get_session(session_id: str) -> _Session:

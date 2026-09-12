@@ -7,6 +7,7 @@ final class ControlPanelController: NSViewController {
     private let quit: () -> Void
     private let statusLabel = NSTextField(labelWithString: "Stopped")
     private let detailLabel = NSTextField(labelWithString: "")
+    private let capacityLabel = NSTextField(labelWithString: "Persistent sessions: 64")
     private let protectionLabel = NSTextField(labelWithString: "Protection: no blocked attempts")
     private let startButton = NSButton()
     private let stopButton = NSButton()
@@ -16,7 +17,7 @@ final class ControlPanelController: NSViewController {
         self.performAction = performAction
         self.quit = quit
         super.init(nibName: nil, bundle: nil)
-        preferredContentSize = NSSize(width: 320, height: 194)
+        preferredContentSize = NSSize(width: 320, height: 214)
     }
 
     @available(*, unavailable)
@@ -25,7 +26,7 @@ final class ControlPanelController: NSViewController {
     }
 
     override func loadView() {
-        view = NSView(frame: NSRect(x: 0, y: 0, width: 320, height: 194))
+        view = NSView(frame: NSRect(x: 0, y: 0, width: 320, height: 214))
 
         let title = NSTextField(labelWithString: "Agent Runtime")
         title.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
@@ -36,6 +37,8 @@ final class ControlPanelController: NSViewController {
         detailLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         detailLabel.textColor = .secondaryLabelColor
         detailLabel.lineBreakMode = .byTruncatingTail
+        capacityLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        capacityLabel.textColor = .secondaryLabelColor
         protectionLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         protectionLabel.textColor = .secondaryLabelColor
         protectionLabel.lineBreakMode = .byTruncatingTail
@@ -59,7 +62,7 @@ final class ControlPanelController: NSViewController {
         quitButton.controlSize = .small
         quitButton.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
 
-        let root = NSStackView(views: [title, statusStack, protectionLabel, controls, separator(), quitButton])
+        let root = NSStackView(views: [title, statusStack, capacityLabel, protectionLabel, controls, separator(), quitButton])
         root.orientation = .vertical
         root.alignment = .leading
         root.spacing = 10
@@ -74,11 +77,16 @@ final class ControlPanelController: NSViewController {
         ])
     }
 
-    func apply(status: RuntimeStatus, audit: ProtectionAuditSnapshot = ProtectionAuditSnapshot()) {
+    func apply(
+        status: RuntimeStatus,
+        audit: ProtectionAuditSnapshot = ProtectionAuditSnapshot(),
+        sessionLimit: Int = RuntimeSessionCapacity.fallback
+    ) {
         let availability = RuntimePolicy.actions(for: status)
         startButton.isEnabled = availability.canStart
         stopButton.isEnabled = availability.canStop
         restartButton.isEnabled = availability.canRestart
+        capacityLabel.stringValue = "Persistent sessions: \(sessionLimit)"
         if audit.blockedCount > 0 {
             let category = audit.lastCategory ?? "protected lifecycle"
             protectionLabel.stringValue = "Protection: \(audit.blockedCount) blocked · last: \(category)"

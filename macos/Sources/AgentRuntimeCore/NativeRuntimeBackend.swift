@@ -45,7 +45,7 @@ public final class PSRuntimeDiscovery: RuntimeDiscovering, @unchecked Sendable {
             guard let separator = line.firstIndex(where: { $0.isWhitespace }) else { return nil }
             guard let pid = Int32(line[..<separator]) else { return nil }
             let command = line[separator...].trimmingCharacters(in: .whitespaces)
-            guard Self.matchesRuntimeCommand(command, checkoutRoot: checkoutRoot),
+            guard Self.matchesRuntimeCommand(command, runtimeRoot: checkoutRoot),
                   let identity = inspector.snapshot(pid: pid),
                   URL(fileURLWithPath: identity.executablePath).lastPathComponent == "tunnel-client" else {
                 return nil
@@ -54,29 +54,85 @@ public final class PSRuntimeDiscovery: RuntimeDiscovering, @unchecked Sendable {
         }.sorted()
     }
 
-    private static func matchesRuntimeCommand(_ command: String, checkoutRoot: String) -> Bool {
+    private static func matchesRuntimeCommand(_ command: String, runtimeRoot: String) -> Bool {
         guard let separator = command.firstIndex(where: { $0.isWhitespace }) else { return false }
         let arguments = command[separator...].trimmingCharacters(in: .whitespaces)
-        return arguments == "run --control-plane.poll-channel main --mcp.command command=\(checkoutRoot)/.venv/bin/python -m agent_runtime.server,channel=main --health.listen-addr 127.0.0.1:8080"
+        let python = "\(runtimeRoot)/.venv/bin/python"
+        let expected = "run --control-plane.poll-channel main --mcp.command command=\(python) -m agent_runtime.server,channel=main --health.listen-addr 127.0.0.1:8080"
+        // ps may render an argv element containing a space with shell escaping.
+        // Normalize only that presentation detail before exact comparison.
+        let normalized = arguments.replacingOccurrences(of: "\\ ", with: " ")
+        return normalized == expected
+    }
+}
+
+public enum RuntimeSessionCapacity {
+    public static let fallback = 64
+
+    public static func effective(from envFile: URL?) -> Int {
+        guard let envFile,
+              let text = try? String(contentsOf: envFile, encoding: .utf8) else {
+            return fallback
+        }
+        for line in text.split(whereSeparator: \.isNewline) {
+            let parts = line.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            guard parts.count == 2, parts[0] == "AGENT_RUNTIME_MAX_ACTIVE_SESSIONS" else { continue }
+            if let value = Int(parts[1].trimmingCharacters(in: .whitespaces)), value > 0 {
+                return value
+            }
+            return fallback
+        }
+        return fallback
     }
 }
 
 public struct RuntimeConfiguration: Sendable {
-    public let checkoutRoot: String
+    public let runtimeRoot: String
+    public let envFileURL: URL?
     public let desiredStateURL: URL
     public let transitionTimeout: TimeInterval
+    public let requiresReadiness: Bool
+    public let sessionLimit: Int
 
+    // Kept as a source-compatible label for fixture callers. In the installed
+    // product this value is the package-owned Resources/runtime directory.
     public init(
         checkoutRoot: String,
         desiredStateURL: URL? = nil,
-        transitionTimeout: TimeInterval = 10
+        transitionTimeout: TimeInterval = 10,
+        envFileURL: URL? = nil,
+        requiresReadiness: Bool = false,
+        sessionLimit: Int? = nil
     ) {
-        self.checkoutRoot = checkoutRoot
+        self.runtimeRoot = URL(fileURLWithPath: checkoutRoot).standardizedFileURL.path
+        self.envFileURL = envFileURL
         self.desiredStateURL = desiredStateURL ?? FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/Agent Runtime", isDirectory: true)
             .appendingPathComponent("protected-runtime-running", isDirectory: false)
         self.transitionTimeout = transitionTimeout
+        self.requiresReadiness = requiresReadiness
+        self.sessionLimit = sessionLimit ?? RuntimeSessionCapacity.effective(from: envFileURL)
     }
+
+    public init(
+        runtimeRoot: String,
+        envFileURL: URL,
+        desiredStateURL: URL? = nil,
+        transitionTimeout: TimeInterval = 10,
+        requiresReadiness: Bool = true,
+        sessionLimit: Int? = nil
+    ) {
+        self.init(
+            checkoutRoot: runtimeRoot,
+            desiredStateURL: desiredStateURL,
+            transitionTimeout: transitionTimeout,
+            envFileURL: envFileURL,
+            requiresReadiness: requiresReadiness,
+            sessionLimit: sessionLimit
+        )
+    }
+
+    public var checkoutRoot: String { runtimeRoot }
 }
 
 public final class NativeRuntimeBackend: RuntimeBackend, @unchecked Sendable {
@@ -120,11 +176,11 @@ public final class NativeRuntimeBackend: RuntimeBackend, @unchecked Sendable {
                record.matches(current) {
                 return .owned(current)
             }
-            let external = try discovery.matchingRuntimePIDs(checkoutRoot: configuration.checkoutRoot)
+            let external = try discovery.matchingRuntimePIDs(checkoutRoot: configuration.runtimeRoot)
             return external.isEmpty ? .stopped : .external(external)
         }
 
-        let pids = try discovery.matchingRuntimePIDs(checkoutRoot: configuration.checkoutRoot)
+        let pids = try discovery.matchingRuntimePIDs(checkoutRoot: configuration.runtimeRoot)
         let desiredRunning = FileManager.default.fileExists(atPath: configuration.desiredStateURL.path)
         if !desiredRunning {
             return pids.isEmpty ? .stopped : .external(pids)
@@ -137,6 +193,9 @@ public final class NativeRuntimeBackend: RuntimeBackend, @unchecked Sendable {
         }
         guard let identity = inspector.snapshot(pid: pids[0]) else {
             return .ambiguous("Canonical Runtime identity changed during inspection.")
+        }
+        if configuration.requiresReadiness && !readinessIsGreen() {
+            return .ambiguous("Canonical Runtime is running but health/readiness is not green yet.")
         }
         return .owned(identity)
     }
@@ -158,7 +217,7 @@ public final class NativeRuntimeBackend: RuntimeBackend, @unchecked Sendable {
             _ = try legacySupervisor.start(
                 spec: spec,
                 profile: "protected-runtime",
-                checkoutRoot: configuration.checkoutRoot
+                checkoutRoot: configuration.runtimeRoot
             )
             return
         }
@@ -186,20 +245,25 @@ public final class NativeRuntimeBackend: RuntimeBackend, @unchecked Sendable {
     }
 
     private func lifecycleScript() -> URL {
-        URL(fileURLWithPath: configuration.checkoutRoot)
+        URL(fileURLWithPath: configuration.runtimeRoot)
             .appendingPathComponent("start.sh", isDirectory: false)
     }
 
     private func runLifecycle(_ action: String) throws {
         let script = lifecycleScript()
         guard FileManager.default.isExecutableFile(atPath: script.path) else {
-            throw RuntimeLifecycleError.processLaunchFailed("start.sh is unavailable; run install.sh first")
+            throw RuntimeLifecycleError.processLaunchFailed("installed Runtime lifecycle helper is unavailable; run install.sh first")
         }
         let process = Process()
         let stderr = Pipe()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
         process.arguments = [script.path, action]
-        process.environment = Self.safeChildEnvironment()
+        var environment = Self.safeChildEnvironment()
+        if let envFileURL = configuration.envFileURL {
+            environment["RUNTIME_ENV_FILE"] = envFileURL.path
+        }
+        environment["RUNTIME_ROOT"] = configuration.runtimeRoot
+        process.environment = environment
         process.standardOutput = FileHandle.nullDevice
         process.standardError = stderr
         do {
@@ -219,9 +283,9 @@ public final class NativeRuntimeBackend: RuntimeBackend, @unchecked Sendable {
         let timeout = max(0, configuration.transitionTimeout)
         let deadline = Date().addingTimeInterval(timeout)
         repeat {
-            let pids = try discovery.matchingRuntimePIDs(checkoutRoot: configuration.checkoutRoot)
+            let pids = try discovery.matchingRuntimePIDs(checkoutRoot: configuration.runtimeRoot)
             if expectedRunning {
-                if pids.count == 1 { return }
+                if pids.count == 1 && (!configuration.requiresReadiness || readinessIsGreen()) { return }
             } else if pids.isEmpty {
                 return
             }
@@ -230,9 +294,27 @@ public final class NativeRuntimeBackend: RuntimeBackend, @unchecked Sendable {
         } while Date() < deadline
         throw RuntimeLifecycleError.operationFailed(
             expectedRunning
-                ? "Runtime did not converge to exactly one canonical instance."
+                ? "Runtime did not converge to exactly one healthy canonical instance."
                 : "Runtime did not stop within the bounded transition window."
         )
+    }
+
+    private func readinessIsGreen() -> Bool {
+        for endpoint in ["healthz", "readyz"] {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
+            process.arguments = ["-fsS", "--max-time", "1", "http://127.0.0.1:8080/\(endpoint)"]
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            do {
+                try process.run()
+                process.waitUntilExit()
+            } catch {
+                return false
+            }
+            guard process.terminationStatus == 0 else { return false }
+        }
+        return true
     }
 
     private static func safeChildEnvironment() -> [String: String] {

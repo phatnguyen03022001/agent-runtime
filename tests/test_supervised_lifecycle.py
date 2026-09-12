@@ -25,6 +25,8 @@ class SupervisedLifecycleTests(unittest.TestCase):
         self.repo.mkdir()
         (self.repo / "start.sh").write_text((ROOT / "start.sh").read_text())
         (self.repo / "start.sh").chmod(0o700)
+        (self.repo / "agent_runtime").mkdir()
+        (self.repo / "agent_runtime/server.py").write_text("# fixture runtime payload\n")
         runtime_python = self.repo / ".venv" / "bin" / "python"
         runtime_python.parent.mkdir(parents=True)
         runtime_python.write_text("#!/bin/bash\nexit 0\n")

@@ -10,6 +10,7 @@ import tempfile
 import threading
 import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
@@ -279,8 +280,12 @@ class TerminalSessionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unknown|expired"):
             manager.poll(session_ids[0], cursor=0, wait_ms=0)
 
-    def test_concurrent_starts_cannot_exceed_three_active_sessions(self) -> None:
-        barrier = threading.Barrier(4)
+    def test_operator_configured_concurrent_starts_respect_configured_capacity(self) -> None:
+        from agent_runtime.session import TerminalSessionManager
+
+        manager = TerminalSessionManager(max_active_sessions=4, start_reaper=False)
+        self.addCleanup(manager.shutdown)
+        barrier = threading.Barrier(5)
         results: list[str] = []
         errors: list[BaseException] = []
         result_lock = threading.Lock()
@@ -288,7 +293,7 @@ class TerminalSessionTests(unittest.TestCase):
         def worker() -> None:
             barrier.wait()
             try:
-                result = start_terminal(
+                result = manager.start(
                     [sys.executable, "-u", "-c", "import time; time.sleep(5)"],
                     str(self.cwd),
                 )
@@ -301,25 +306,88 @@ class TerminalSessionTests(unittest.TestCase):
                     results.append(session_id)
                     self.session_ids.append(session_id)
 
-        threads = [threading.Thread(target=worker) for _ in range(4)]
+        threads = [threading.Thread(target=worker) for _ in range(5)]
         for thread in threads:
             thread.start()
         for thread in threads:
             thread.join(timeout=3.0)
         self.assertTrue(all(not thread.is_alive() for thread in threads))
-        self.assertEqual(len(results), 3)
+        self.assertEqual(len(results), 4)
         self.assertEqual(len(errors), 1)
         self.assertIsInstance(errors[0], RuntimeError)
 
-    def test_maximum_three_active_sessions_and_fourth_is_rejected(self) -> None:
+    def test_explicit_operator_capacity_is_validated_and_enforced(self) -> None:
+        from agent_runtime.session import TerminalSessionManager
+
+        manager = TerminalSessionManager(max_active_sessions=3, start_reaper=False)
+        self.addCleanup(manager.shutdown)
         sessions = [
-            self.start([sys.executable, "-u", "-c", "import time; time.sleep(5)"])
+            manager.start(
+                [sys.executable, "-u", "-c", "import time; time.sleep(5)"],
+                str(self.cwd),
+            )
             for _ in range(3)
         ]
         with self.assertRaisesRegex(RuntimeError, "three|3|maximum"):
-            start_terminal([sys.executable, "-u", "-c", "import time; time.sleep(5)"], str(self.cwd))
+            manager.start(
+                [sys.executable, "-u", "-c", "import time; time.sleep(5)"],
+                str(self.cwd),
+            )
         for result in sessions:
-            control_terminal(str(result["session_id"]), "terminate")
+            manager.control(str(result["session_id"]), "terminate")
+
+    def test_configured_capacity_supports_twenty_persistent_sessions(self) -> None:
+        from agent_runtime.session import TerminalSessionManager
+
+        manager = TerminalSessionManager(max_active_sessions=20, start_reaper=False)
+        self.addCleanup(manager.shutdown)
+        sessions = [
+            manager.start(
+                [sys.executable, "-u", "-c", "import time; time.sleep(5)"],
+                str(self.cwd),
+            )
+            for _ in range(20)
+        ]
+        self.assertEqual(len(sessions), 20)
+        self.assertEqual(
+            sum(session.status == "running" for session in manager._sessions.values()),
+            20,
+        )
+        for result in sessions:
+            manager.control(str(result["session_id"]), "terminate")
+
+    def test_twenty_concurrent_terminal_start_calls_fill_configured_capacity(self) -> None:
+        from agent_runtime.session import TerminalSessionManager
+
+        manager = TerminalSessionManager(max_active_sessions=20, start_reaper=False)
+        self.addCleanup(manager.shutdown)
+        barrier = threading.Barrier(20)
+
+        def launch(index: int) -> dict[str, object]:
+            barrier.wait()
+            return manager.start(
+                [sys.executable, "-u", "-c", "import time; time.sleep(5)", str(index)],
+                str(self.cwd),
+            )
+
+        with ThreadPoolExecutor(max_workers=20) as executor:
+            sessions = list(executor.map(launch, range(20)))
+        self.session_ids.extend(str(result["session_id"]) for result in sessions)
+        self.assertEqual(len(sessions), 20)
+        self.assertEqual(
+            sum(session.status == "running" for session in manager._sessions.values()),
+            20,
+        )
+
+    def test_session_limit_setting_uses_positive_integer_and_safe_fallback(self) -> None:
+        from agent_runtime.session import DEFAULT_SESSION_LIMIT, effective_session_limit
+
+        self.assertEqual(effective_session_limit("20"), 20)
+        self.assertEqual(effective_session_limit("1"), 1)
+        self.assertEqual(effective_session_limit(""), DEFAULT_SESSION_LIMIT)
+        self.assertEqual(effective_session_limit("invalid"), DEFAULT_SESSION_LIMIT)
+        self.assertEqual(effective_session_limit("0"), DEFAULT_SESSION_LIMIT)
+        self.assertEqual(effective_session_limit("-2"), DEFAULT_SESSION_LIMIT)
 
     def test_idle_ttl_is_fixed_and_reaper_expires_without_a_follow_up_call(self) -> None:
         from agent_runtime.session import IDLE_TTL_SECONDS, TerminalSessionManager

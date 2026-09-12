@@ -25,6 +25,8 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
         repo.mkdir(); home.mkdir(); tools.mkdir()
         shutil.copy2(ROOT / "start.sh", repo / "start.sh")
         (repo / "start.sh").chmod(0o700)
+        (repo / "agent_runtime").mkdir()
+        (repo / "agent_runtime/server.py").write_text("# fixture runtime payload\n")
         (repo / ".venv/bin").mkdir(parents=True)
         (repo / ".venv/bin/python").write_text("#!/bin/sh\nexit 0\n")
         (repo / ".venv/bin/python").chmod(0o700)
@@ -113,6 +115,8 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
             path.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / "start.sh", repo / "start.sh")
         (repo / "start.sh").chmod(0o700)
+        (repo / "agent_runtime").mkdir()
+        (repo / "agent_runtime/server.py").write_text("# fixture runtime payload\n")
         plist = home / "Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist"
         plist.parent.mkdir(parents=True)
         plist.write_text("fixture\n")
