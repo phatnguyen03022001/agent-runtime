@@ -1,0 +1,245 @@
+protocol_version: 3
+
+task_id: TASK-0041
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0041/task.yaml
+  commit: "42b028d80dcb624866d4b11c915bc9711880063b"
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "42b028d80dcb624866d4b11c915bc9711880063b"
+  final_execution_head: "74e57026cb69e7afac5676ef5686046f1f2d333a"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - repository_content_write
+    - local_python_execution
+    - real_mcp_client_execution
+    - non_force_dev_publication
+  available:
+    - repository_content_write
+    - local_python_execution
+    - real_mcp_client_execution
+    - non_force_dev_publication
+  missing: []
+  passed: true
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: NOT_REQUIRED_FOR_THIS_EXECUTION_TASK
+  evidence: "TASK-0041 revision 1 defines no separate authoritative verifier for this execution phase."
+
+pushed: false
+
+implementation:
+  commit: "74e57026cb69e7afac5676ef5686046f1f2d333a"
+  parent: "42b028d80dcb624866d4b11c915bc9711880063b"
+  scope_summary: "Added fixed actual-read scan budgets to fs_read_batch and closed/bounded all six public MCP input contracts without changing the six-tool surface, annotations, dependency set, protection model, packaging, bootstrap, CI, or live Runtime state."
+  filesystem_scan_boundedness:
+    item_scan_limit_bytes: 1048576
+    batch_scan_limit_bytes: 4194304
+    accounting: "Counts only bytes actually returned by descriptor reads. Every os.read count is capped by both remaining item and batch scan budget. Duplicate requests consume scan budget again."
+    failure_semantics:
+      item_only: ITEM_SCAN_LIMIT_EXCEEDED
+      batch: BATCH_SCAN_LIMIT_EXCEEDED
+      simultaneous_precedence: BATCH_SCAN_LIMIT_EXCEEDED
+      partial_text_on_scan_failure: false
+      post_batch_exhaustion_item_file_io: false
+    output_limits_preserved:
+      item_bytes: 131072
+      batch_bytes: 262144
+  public_input_boundedness:
+    top_level_additional_properties: false
+    argv_max_items: 128
+    argv_item_max_utf8_bytes: 16384
+    argv_aggregate_max_utf8_bytes: 262144
+    terminal_write_data_max_utf8_bytes: 65536
+    session_id_max_characters: 128
+    fs_read_line_index_max: 2147483647
+    utf8_byte_enforcement: "AfterValidator checks encoded UTF-8 byte length for argv elements, aggregate argv content, and terminal write data; JSON Schema also publishes safe character-length/cardinality bounds where representable."
+    unknown_field_behavior: "The registered MCP 2.2 dynamic argument models are rebuilt with extra=forbid, so unknown top-level fields are rejected by real MCP Client validation before delegates execute."
+
+verification:
+  tdd_red_green:
+    result: PASS
+    evidence: "The initial TASK-0041 focused regression module failed on the new scan-budget, closed-schema, and request-bound predicates before production changes. After the implementation, the focused module passed 8/8; a later bounded-validation-error regression was then covered by the broader and canonical suites."
+  focused_task0041:
+    command: ".venv/bin/python -m unittest discover -s tests -p 'test_task0041_boundedness.py' -v"
+    result: PASS
+    tests_at_focused_run: 8
+    failures: 0
+    evidence: "Covered item/batch scan boundaries, actual read accounting, duplicate consumption, simultaneous exhaustion precedence, zero post-exhaustion open I/O, closed schemas, unknown-field delegate sentinels, and encoded-byte/cardinality boundaries."
+  affected_conformance:
+    command: "PYTHONPATH=. .venv/bin/python custom unittest loader over test_mcp_contracts.py, test_mcp_client_conformance.py, test_terminal_exec.py, test_terminal_session.py, test_fs_read_batch.py, test_fs_read_batch_adversarial.py, test_fs_read_batch_mcp.py, test_surface_and_scripts.py, test_timing.py, test_task0041_boundedness.py"
+    result: PASS
+    tests: 101
+    failures: 0
+    evidence: "The first broader pass exposed a registration-fixture compatibility regression caused by assuming the real SDK private tool manager always exists. The smallest feature-detection correction was applied; the repeated full affected set then passed 101/101."
+  validation_error_boundedness:
+    result: PASS
+    evidence: "Real MCP Client oversize/unknown-input failures were deliberate bounded error results around 321-328 UTF-8 bytes even for a 100 KiB injected unknown value; the persisted regression caps the returned error text at 512 bytes, rejects payload echo, and rejects Traceback text."
+  full_repository:
+    command: "./verify"
+    result: PASS
+    tests: 172
+    failures: 0
+    exit_code: 0
+    runs_after_stabilization: 1
+    evidence: "The canonical verifier was run exactly once after implementation bytes stabilized and exited 0. The unchanged stabilized tree's identical unittest discover -s tests discovery contains 172 tests; py_compile and shell syntax checks are also part of ./verify. Full-suite verification was not used as the default inner loop."
+
+benchmark:
+  result: PASS
+  command: "PYTHONPATH=. .venv/bin/python /private/tmp/TASK-0041-benchmark.py"
+  mcp_version: "2.2.0"
+  client_path: "real MCP 2.2 Client(server.mcp) for both paths against the stabilized production server implementation"
+  workload:
+    - "README.md lines 1-80"
+    - "agent_runtime/server.py lines 70-180"
+    - "agent_runtime/executor.py lines 120-240"
+    - "agent_runtime/session.py lines 180-310"
+    - "tests/test_terminal_session.py lines 160-300"
+  equivalent_logical_content_bytes: 22741
+  baseline_tool: terminal_exec
+  baseline_strategy: "Exactly one terminal_exec MCP call handled the entire five-file workload. The child Python process streamed each requested UTF-8 range with newline='' and enumerate(..., 1), stopped after each end line, joined the five selected texts with ASCII RS, and wrote the combined result once to stdout."
+  warmups_per_path: 5
+  measured_samples_per_path: 30
+  run_order: "interleaved; first path alternated each measured pair"
+  terminal_exec_median_ms: 61.508687
+  fs_read_batch_median_ms: 5.1747085
+  absolute_improvement_ms: 56.3339785
+  relative_improvement_percent: 91.58702818676653
+  required_absolute_improvement_ms: 20.0
+  required_relative_improvement_percent: 20.0
+  terminal_exec_min_ms: 60.277625
+  terminal_exec_max_ms: 100.454625
+  terminal_exec_mean_ms: 65.7064625
+  terminal_exec_stdev_ms: 9.671393545324232
+  terminal_exec_q1_ms: 61.205052
+  terminal_exec_q3_ms: 63.76333325
+  terminal_exec_iqr_outliers_ms:
+    - 82.245709
+    - 100.454625
+    - 84.846625
+    - 81.537333
+    - 79.3475
+  fs_read_batch_min_ms: 4.823958
+  fs_read_batch_max_ms: 6.574667
+  fs_read_batch_mean_ms: 5.1846472666666665
+  fs_read_batch_stdev_ms: 0.34032533845414215
+  fs_read_batch_q1_ms: 4.91522975
+  fs_read_batch_q3_ms: 5.30092725
+  fs_read_batch_iqr_outliers_ms:
+    - 6.574667
+  threshold_verdict: "PASS: median relative improvement is at least 20% and absolute median improvement is at least 20 ms."
+
+scope_audit:
+  base: "42b028d80dcb624866d4b11c915bc9711880063b"
+  candidate: "74e57026cb69e7afac5676ef5686046f1f2d333a"
+  git_diff_check: PASS
+  changed_files:
+    - README.md
+    - agent_runtime/contracts.py
+    - agent_runtime/fs_read.py
+    - agent_runtime/server.py
+    - tests/test_fs_read_batch_mcp.py
+    - tests/test_task0041_boundedness.py
+  dependency_diff: NONE
+  public_tool_set_change: false
+  authorized_public_input_contract_change: true
+  unauthorized_existing_tool_semantic_change: false
+  protection_model_change: false
+  packaging_bootstrap_or_ci_change: false
+  rejected_capability_added: false
+  live_runtime_or_configuration_mutation: false
+  main_tag_or_release_mutation: false
+
+mutation_boundaries:
+  live_runtime_installed_or_reinstalled: false
+  live_runtime_activated_or_reloaded: false
+  live_runtime_restarted_or_stopped: false
+  runtime_env_mutated: false
+  tunnel_identity_mutated: false
+  listener_binding_mutated: false
+  desired_state_mutated: false
+  installed_package_mutated: false
+  protection_model_mutated: false
+  packaging_or_bootstrap_mutated: false
+  ci_mutated: false
+  main_promoted: false
+  tag_or_release_work_performed: false
+  origin_main_required: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PROVEN
+    evidence: "Deterministic tests instrument descriptor reads on giant no-newline and sparse-range files, enforce that no read request exceeds remaining item/batch budget, cover below/at/above the 1 MiB item boundary, and prove duplicate requests consume actual read budget again."
+  - criterion_id: AC-2
+    status: PROVEN
+    evidence: "Ordered boundary tests prove ITEM_SCAN_LIMIT_EXCEEDED for item-only exhaustion with later processing allowed, BATCH_SCAN_LIMIT_EXCEEDED for current and remaining items after aggregate exhaustion, no partial text, no remaining item open I/O, and batch precedence on simultaneous exhaustion."
+  - criterion_id: AC-3
+    status: PROVEN
+    evidence: "Real MCP 2.2 list_tools reports additionalProperties=false for every one of the six top-level input schemas. Real Client calls inject an unknown top-level field into each tool while patched delegates prove rejection-before-delegate."
+  - criterion_id: AC-4
+    status: PROVEN
+    evidence: "Boundary tests cover argv 127/128/129 items, per-element 16 KiB, aggregate 256 KiB, terminal write 64 KiB, session_id 127/128/129 characters, and fs line 2147483646/2147483647/2147483648. Multibyte cases prove encoded UTF-8 byte enforcement for argv and write content."
+  - criterion_id: AC-5
+    status: PROVEN
+    evidence: "The final affected set passed 101/101 across MCP contracts/client conformance, terminal execution/session, fs_read behavior/security/MCP, timing, and registration fixtures. Existing output ceilings, no-symlink/regular-file rules, selected-range UTF-8, annotations, timing, and unexpected-exception sanitization remain covered."
+  - criterion_id: AC-6
+    status: PROVEN
+    evidence: "./verify ran exactly once after implementation stabilization and exited 0. The unchanged stabilized discovery contains 172 tests; compile and shell-syntax gates are included by the canonical verifier."
+  - criterion_id: AC-7
+    status: PROVEN
+    evidence: "Fresh real-MCP benchmark used 5 warmups and 30 interleaved measured calls per path with identical 22741-byte logical content. terminal_exec median 61.508687 ms versus fs_read_batch 5.1747085 ms; improvement 56.3339785 ms and 91.58702818676653%."
+  - criterion_id: AC-8
+    status: PROVEN
+    evidence: "Exact base-to-candidate scope is limited to README, MCP contracts/registration, fs_read scan accounting, and focused tests. Dependency files, protection/runtime configuration, install/start/verify, packaging/bootstrap/CI, live Runtime/config, main, tags, and releases are unchanged."
+  - criterion_id: AC-9
+    status: PENDING_PUBLICATION
+    evidence: "Implementation commit is the direct child of the exact TASK-0041 base. This report is the only authorized next commit; fresh pre/post publication origin/dev and origin/main proof occurs after the report-only commit exists."
+
+executor_checks:
+  - check_id: V-1
+    result: PASS
+    evidence: "Focused boundedness regressions exercised actual scan accounting, deterministic item/batch failure semantics, zero post-exhaustion item I/O, closed schemas, unknown-field delegate sentinels, and all new dimension boundaries."
+  - check_id: V-2
+    result: PASS
+    evidence: "The repeated affected set passed 101/101 after the one registration-fixture compatibility correction."
+  - check_id: V-3
+    result: PASS
+    evidence: "./verify passed with exit 0 in the single required final full-suite run on stabilized implementation bytes; identical discovery contains 172 tests."
+  - check_id: V-4
+    result: PASS
+    evidence: "Fresh production real-MCP benchmark measured 30 calls/path after 5 warmups; median delta 56.3339785 ms and relative improvement 91.58702818676653%."
+  - check_id: V-5
+    result: PASS
+    evidence: "Exact 42b028d80dcb624866d4b11c915bc9711880063b-to-74e57026cb69e7afac5676ef5686046f1f2d333a scope inspection and diff checks found only the six authorized implementation files and no dependency/protection/packaging/bootstrap/CI/live/main/tag/release mutation."
+  - check_id: V-6
+    result: PENDING_PUBLICATION
+    evidence: "Fresh origin/dev and origin/main resolution immediately before non-force publication and again after publication is a consequence-boundary proof performed after this report-only commit exists."
+
+publication:
+  implementation_commit: "74e57026cb69e7afac5676ef5686046f1f2d333a"
+  report_path: .agent/tasks/TASK-0041/report.yaml
+  report_commit: null
+  push_mode: non_force_dev
+  pushed: false
+  force_push: false
+  main_promoted: false
+  next_step: ARCHITECT_REVIEW
+
+result: NEEDS_REVIEW
