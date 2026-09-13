@@ -1,0 +1,459 @@
+protocol_version: 3
+task_id: TASK-0033
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0033/task.yaml
+  commit: "3847f34d03055fb72b2fc900e4aee3dff3531e1a"
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: dev, role: integration}
+  authorized_base_head: "3847f34d03055fb72b2fc900e4aee3dff3531e1a"
+  final_execution_head: "3847f34d03055fb72b2fc900e4aee3dff3531e1a"
+  execution_surface: CHATGPT_LOCAL
+  research_class: SPIKE
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+  required: [executor, simplicity, verification, github-workflow]
+
+authoritative_verification: {required: false, performed: false, result: NOT_REQUIRED}
+pushed: false
+promoted_to_main: false
+
+executive_verdict: RECOMMEND_WITH_CONDITIONS
+verdict_rationale: >-
+  Add a tiny read-only stateless Capacity Observer only as an advisory machine-capacity ceiling, not as a scheduler or a proof that arbitrary work is safe. On this 8-active-core, 16-GiB Mac, bounded x2 execution produced substantial wall-clock improvement for every tested workload class while failures remained zero, thermal state remained nominal, and no swap-in or swap-out activity was observed during the focused load windows. The required host signals can mostly be obtained from stable public macOS facilities with low steady-state probe overhead. However, a one-shot supported API for the exact current macOS memory-pressure level was not proven, and a stable public API for enumerating only Runtime-owned descendant processes was not found. Runtime commands can also have unbounded resource demand that no instantaneous host snapshot can predict. Therefore revision 1 should cap its recommendation at 2, omit private process enumeration and unsupported pressure signals, expose bounded reason codes plus an auditable signal summary, fail conservatively on unknown/acute-pressure inputs, and leave all semantic independence and execution decisions with Architect/Executor. Raising the ceiling above 2 requires real-task evidence on representative hardware.
+
+evidence_classification:
+  CONFIRMED:
+    - "Foundation ProcessInfo exposes public activeProcessorCount, processorCount and thermalState APIs on macOS; thermalState reports nominal/fair/serious/critical."
+    - "The current macOS SDK exposes public Mach host_statistics/HOST_CPU_LOAD_INFO and host_statistics64/HOST_VM_INFO64 interfaces, including VM swap-in/swap-out counters and compressor-page counts."
+    - "The current macOS SDK exposes getloadavg through libc and statfs with f_bavail for filesystem capacity."
+    - "The current SDK exposes vm.swapusage and struct xsw_usage in the public portion of sys/sysctl.h."
+    - "The local memory_pressure manual documents pressure-generation/simulation modes but does not document the observed -Q query option; therefore -Q is not accepted as a production contract by this spike."
+    - "The local libproc.h explicitly labels its process-information interfaces private and subject to change; proc_listchildpids is among those interfaces."
+    - "Agent Runtime terminal_exec creates a new process session for each one-shot command and owns timeout/process-group cleanup, but it does not maintain a global active one-shot task registry."
+    - "TerminalSessionManager already tracks Runtime-owned persistent PTY sessions in memory, but that state is specific to PTY lifecycle and is not a complete count of all active task children."
+    - "Current Runtime protection performs global ps command-line inspection for its existing narrow protection purpose; reusing that mechanism for capacity reporting would expand privacy scope and is rejected."
+    - "Architect semantic independence and host capacity are separate predicates: machine headroom cannot prove that two tasks have no ordering or shared-mutable-state dependency."
+  MEASURED:
+    - "Research host: macOS 26.6.2 build 25G83, 8 physical/logical active processors reported by local probes, and 17179869184 bytes physical memory."
+    - "The host had approximately 3.77 GB of 4.00 GiB configured swap already in use during the benchmark while bounded workloads completed without observed new swap-in/swap-out activity; existing swap occupancy alone is therefore not a sufficient serialize signal."
+    - "Eighty warm standalone instant native helper probes had external mean 3.872 ms, p50 3.271 ms, p95 6.674 ms and max 13.292 ms; internal API collection averaged 0.204 ms. Spawned-helper CPU consumption totaled 205.685 ms across 80 probes, about 2.571 ms per probe."
+    - "Twenty standalone probes with an intentional 50 ms sampling window had external mean 69.492 ms and p95 76.804 ms; internal duration averaged 54.793 ms and includes the deliberate 50 ms wait."
+    - "Cold first-launch standalone helper outliers of about 601-717 ms were observed in two independent temporary fixtures; their cause was not isolated."
+    - "Across three repeats of four independent jobs, x2 median wall-clock speedups were 1.991x light, 1.943x CPU, 1.939x memory and 1.672x I/O versus serial."
+    - "Across the same runs, x4 median wall-clock speedups were 3.900x light, 3.768x CPU, 3.353x memory and 2.625x I/O versus serial."
+    - "x2 median per-worker latency ratios versus serial were 0.998 light, 1.024 CPU, 1.027 memory and 1.277 I/O."
+    - "x4 median per-worker latency ratios versus serial were 1.002 light, 1.052 CPU, 1.092 memory and 1.796 I/O, showing substantial I/O contention despite improved aggregate wall time."
+    - "All serial/x2/x4 synthetic jobs completed with zero failures and all sampled thermal states remained nominal."
+    - "A focused x4 CPU run produced 24 instant observer samples with p50 11.604 ms, p95 23.594 ms and max 41.341 ms external latency; scheduler-monitor jitter p95 was 5.477 ms; thermal remained nominal and swap-in/swap-out deltas were zero."
+    - "A focused x4 memory run used four 128 MiB workers, produced 19 instant observer samples with p50 15.250 ms, p95 36.493 ms and max 105.504 ms; scheduler-monitor jitter p95 was 5.221 ms; thermal remained nominal and swap-in/swap-out deltas were zero."
+    - "memory_pressure -Q reported 46% before, during and after both focused x4 CPU and memory runs, but the undocumented option is diagnostic evidence only and is not proposed for production."
+    - "Both synthetic benchmark roots were deleted by guarded trap cleanup; generated I/O workload files were absent before final whole-root deletion."
+  INFERRED:
+    - "A v1 ceiling of 2 captures most of the measured parallel speedup while materially reducing the risk exposed by x4 I/O contention and by unmeasured real-task resource footprints."
+    - "A 50 ms two-sample CPU/swap window is small enough for on-demand use and gives materially better current-load evidence than load average alone."
+    - "The observer should treat non-nominal thermal state, active swap-out, insufficient CPU headroom and probe failure as conservative reasons to return 1."
+    - "The observer should keep disk capacity as a veto/headroom guard rather than treating free disk as a positive reason to increase concurrency."
+    - "A bounded JSON result with one advisory parallelism ceiling, reason codes and a small normalized signal summary is sufficient for v1; persistent history and adaptive control would add state without proving safer decisions."
+    - "If active Runtime work count is later required, an existing spawn/ownership path could maintain a tiny ephemeral scalar/set scoped to Runtime-owned calls more cleanly than OS-wide process enumeration, but that implementation is outside this research revision."
+  UNKNOWN:
+    - "A supported one-shot API that returns the exact current system memory-pressure level without persistent event state was not proven."
+    - "The semantics and support contract of vm.memory_pressure and kern.memorystatus_* sysctls were not established; their observed raw values are not interpreted."
+    - "A stable public macOS API for enumerating only Runtime-owned descendant processes was not found."
+    - "Production in-process observer latency and CPU overhead are NOT_MEASURED; the helper-process benchmarks bound a practical prototype path but include process-launch cost."
+    - "GUI interaction latency and end-user responsiveness under parallel execution are NOT_MEASURED; scheduler jitter and instant-probe latency are only bounded non-GUI proxies."
+    - "Real Agent Runtime task distributions, dependency installs, Xcode builds, large Node/Rust builds, network-heavy jobs and other machines are NOT_MEASURED."
+    - "Safe automatic x4 admission for production workloads is NOT_MEASURED."
+
+stable_macos_metric_sources:
+  cpu_topology:
+    classification: CONFIRMED
+    preferred_source: "Foundation ProcessInfo.activeProcessorCount and processorCount"
+    supportability: PUBLIC_SUPPORTED
+    measured_host: {active_processors: 8, processor_count: 8}
+    notes:
+      - "Use activeProcessorCount for currently available logical CPU capacity rather than hard-coding hardware assumptions."
+      - "The observer should not infer task independence from CPU count."
+    official_source: "https://developer.apple.com/documentation/foundation/processinfo/activeprocessorcount"
+  current_cpu_busy:
+    classification: CONFIRMED
+    preferred_source: "Two HOST_CPU_LOAD_INFO samples through host_statistics across a short bounded window."
+    supportability: PUBLIC_SUPPORTED
+    notes:
+      - "CPU tick counters require a delta; one sample is not a utilization percentage."
+      - "A short sample adds deliberate latency but avoids relying only on lagging load averages."
+    official_source: "https://developer.apple.com/documentation/kernel/1502546-host_statistics"
+  load_average:
+    classification: CONFIRMED
+    preferred_source: "getloadavg"
+    supportability: PUBLIC_SUPPORTED_LIBC
+    notes:
+      - "Useful as a coarse sustained run-queue signal."
+      - "It is inherently lagging and should not be the sole admission signal."
+    official_source: "https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/getloadavg.3.html"
+  vm_counters:
+    classification: CONFIRMED
+    preferred_source: "host_statistics64(HOST_VM_INFO64)"
+    supportability: PUBLIC_SUPPORTED
+    useful_fields: [free_count, inactive_count, purgeable_count, compressor_page_count, swapins, swapouts]
+    limitation: "These are memory/VM counters, not a documented exact memory-pressure severity level."
+    official_source: "https://developer.apple.com/documentation/kernel/1502863-host_statistics64"
+  exact_memory_pressure:
+    classification: UNKNOWN
+    production_source: NOT_PROVEN
+    supported_event_facility:
+      source: "DispatchSourceMemoryPressure"
+      classification: CONFIRMED
+      limitation: "Apple documents a memory-pressure event source, but this spike did not prove a stateless one-shot query contract for the exact current pressure level."
+      official_source: "https://developer.apple.com/documentation/dispatch/dispatchsourcememorypressure"
+    rejected_sources:
+      - source: "memory_pressure -Q"
+        reason: "Works on this host but -Q is absent from the local manual; benchmark diagnostic only."
+      - source: "vm.memory_pressure and kern.memorystatus_* sysctls"
+        reason: "Observed locally but stable public semantics/support were not established."
+      - source: "os_proc_available_memory"
+        reason: "Apple's API is unavailable on macOS; it is not a macOS solution."
+  swap_capacity_and_activity:
+    classification: CONFIRMED
+    preferred_sources:
+      - "sysctlbyname(vm.swapusage) into public struct xsw_usage for total/used/available bytes."
+      - "HOST_VM_INFO64 swapins/swapouts deltas across the same bounded sampling window for current activity."
+    supportability: PUBLIC_SDK_SURFACES
+    policy_note: "Prefer current swap activity over absolute nonzero occupancy; this host already had heavy historical swap occupancy without new swapping during successful x2/x4 fixtures."
+  thermal_state:
+    classification: CONFIRMED
+    preferred_source: "Foundation ProcessInfo.thermalState"
+    supportability: PUBLIC_SUPPORTED
+    values: [nominal, fair, serious, critical]
+    official_source: "https://developer.apple.com/documentation/foundation/processinfo/thermalstate-swift.enum"
+  disk_free_space:
+    classification: CONFIRMED
+    preferred_source: "statfs on the actual workspace filesystem, using f_bavail * f_bsize"
+    supportability: PUBLIC_SUPPORTED
+    privacy_note: "Filesystem-capacity APIs can be privacy-manifest relevant in distributed apps; any packaged product use must follow current Apple required-reason API rules."
+    official_source: "https://developer.apple.com/documentation/foundation/fileattributekey/systemfreesize"
+  runtime_owned_active_task_children:
+    classification: UNKNOWN
+    stable_os_source: NOT_PROVEN
+    current_runtime_facts:
+      - "Persistent PTY sessions are explicitly tracked by TerminalSessionManager."
+      - "One-shot terminal_exec children are directly owned while each call runs but are not represented in a global active-task counter."
+    rejected_sources:
+      - source: "global ps process/command-line inventory"
+        reason: "Violates the new observer privacy boundary and scans unrelated processes."
+      - source: "proc_listchildpids/libproc"
+        reason: "libproc.h explicitly declares the interfaces private and subject to change."
+    v1_disposition: "Omit active-task-child count rather than adopting a private or privacy-expanding source."
+
+privacy_and_scope_boundary:
+  classification: INFERRED
+  allowed:
+    - "Aggregate host CPU topology/load/counter values."
+    - "Aggregate VM and swap counters."
+    - "Aggregate thermal state."
+    - "Available bytes on the workspace filesystem."
+    - "A future ephemeral count of positively Runtime-owned active calls only, if implemented without global inventory."
+  forbidden:
+    - "Unrelated process enumeration."
+    - "Process command lines, executable paths or environment harvesting for capacity reporting."
+    - "User files, browsing data, application inventories or private user content."
+    - "Raw telemetry history, timestamps of historical samples, per-process resource history or persistent profiling."
+    - "Using the existing protection subsystem's global ps scan as a capacity-observer data source."
+  retention: "None. Return one bounded snapshot to the caller and discard probe-local intermediate samples after the response is formed."
+
+snapshot_schema_recommendation:
+  classification: INFERRED
+  integer_plus_reason_codes_alone: INSUFFICIENT_FOR_AUDITABLE_DECISIONS
+  explanation: >-
+    One integer plus reason codes is sufficient for a caller's immediate branch choice but too opaque for debugging false serialization or an unsafe recommendation. The smallest useful contract is an advisory integer, bounded reason codes and a compact normalized current-signal block. It should not expose raw process data or retain history.
+  naming_preference: "capacity_parallelism_ceiling is semantically safer than safe_parallelism; if safe_parallelism is retained, document that it means advisory current-host ceiling, not a guarantee for arbitrary workloads."
+  bounded_json_example:
+    schema_version: 1
+    capacity_parallelism_ceiling: 1
+    reason_codes: [LIMIT_V1_MAX_2]
+    signals:
+      active_processors: 8
+      load1: 0.0
+      cpu_busy_pct: 0.0
+      sampled_window_ms: 50
+      thermal_state: nominal
+      swap_used_bytes: 0
+      swap_total_bytes: 0
+      swapin_delta_pages: 0
+      swapout_delta_pages: 0
+      vm_free_bytes: 0
+      vm_inactive_bytes: 0
+      vm_purgeable_bytes: 0
+      vm_compressor_bytes: 0
+      disk_available_bytes: 0
+  omitted_v1_fields:
+    - "runtime_active_task_children: stable scoped source not proven."
+    - "memory_pressure_level: exact supported stateless source not proven."
+    - "per-process details of any kind."
+    - "historical trends or previous snapshots."
+
+probe_overhead_benchmarks:
+  classification: MEASURED
+  host: {os: "macOS 26.6.2 (25G83)", active_processors: 8, memory_bytes: 17179869184}
+  prototype_shape: "Temporary compiled native helper using Foundation/Mach/libc/sysctl/statfs; every fixture deleted after measurement."
+  warm_instant_probe:
+    repetitions: 80
+    external_mean_ms: 3.872
+    external_p50_ms: 3.271
+    external_p95_ms: 6.674
+    external_max_ms: 13.292
+    internal_api_collection_mean_ms: 0.204
+    child_cpu_user_ms_total: 115.118
+    child_cpu_system_ms_total: 90.567
+    child_cpu_ms_per_probe: 2.571
+  sampled_probe_50ms:
+    repetitions: 20
+    external_mean_ms: 69.492
+    external_p50_ms: 70.630
+    external_p95_ms: 76.804
+    external_max_ms: 81.640
+    internal_mean_ms_including_50ms_wait: 54.793
+    child_cpu_ms_per_probe: 9.903
+  cold_start:
+    classification: MEASURED
+    observed_external_ms: [716.827, 601.350]
+    cause: UNKNOWN
+    implication: "Do not assume a spawned helper has stable single-digit latency on first launch. Prefer an in-process production path if a later implementation can stay small and supportable; production in-process cost is NOT_MEASURED."
+  production_observer_overhead:
+    classification: UNKNOWN
+    result: NOT_MEASURED
+
+serial_vs_parallel_benchmarks:
+  classification: MEASURED
+  method:
+    jobs_per_run: 4
+    repeats_per_mode: 3
+    modes: [serial_x1, x2, x4]
+    ordering: "Mode order rotated between repeats to reduce fixed ordering bias."
+    fixtures:
+      light: "350 ms wait-bound job plus tiny hash."
+      cpu: "Bounded PBKDF2 CPU job using approximately one core per worker."
+      memory: "128 MiB materialized/scanned memory per worker; maximum synthetic concurrent payload 512 MiB."
+      io: "32 MiB write + fsync + read per worker inside the run-owned temp root; maximum 128 MiB concurrent fixture data."
+  results:
+    light:
+      serial: {wall_median_ms: 1680.673, speedup: 1.000, worker_latency_ratio: 1.000}
+      x2: {wall_median_ms: 844.171, speedup: 1.991, worker_latency_ratio: 0.998}
+      x4: {wall_median_ms: 430.939, speedup: 3.900, worker_latency_ratio: 1.002}
+    cpu:
+      serial: {wall_median_ms: 1920.550, speedup: 1.000, worker_latency_ratio: 1.000}
+      x2: {wall_median_ms: 988.426, speedup: 1.943, worker_latency_ratio: 1.024}
+      x4: {wall_median_ms: 509.717, speedup: 3.768, worker_latency_ratio: 1.052}
+    memory:
+      serial: {wall_median_ms: 709.880, speedup: 1.000, worker_latency_ratio: 1.000}
+      x2: {wall_median_ms: 366.027, speedup: 1.939, worker_latency_ratio: 1.027}
+      x4: {wall_median_ms: 211.712, speedup: 3.353, worker_latency_ratio: 1.092}
+    io:
+      serial: {wall_median_ms: 201.812, speedup: 1.000, worker_latency_ratio: 1.000}
+      x2: {wall_median_ms: 120.673, speedup: 1.672, worker_latency_ratio: 1.277}
+      x4: {wall_median_ms: 76.873, speedup: 2.625, worker_latency_ratio: 1.796}
+  failures_total: 0
+  interpretation:
+    - "x2 materially reduced wall time for every workload class with limited per-worker latency growth except a moderate I/O penalty."
+    - "x4 also reduced wall time substantially, but I/O per-worker latency grew about 80%, proving that core availability is not enough to justify higher automatic concurrency."
+    - "Light wait-bound work scaled almost linearly and is the strongest case for parallelism when Architect has already proven semantic independence."
+    - "These are harmless synthetic jobs, not representative production-task certification."
+
+cpu_memory_swap_thermal_findings:
+  classification: MEASURED
+  baseline:
+    active_processors: 8
+    swap_total_bytes: 4294967296
+    swap_used_bytes: 3768647680
+    thermal_state: nominal
+  focused_x4_cpu_responsiveness:
+    wall_ms: 1160.463
+    monitor_samples: 24
+    instant_probe_external_p50_ms: 11.604
+    instant_probe_external_p95_ms: 23.594
+    instant_probe_external_max_ms: 41.341
+    scheduler_jitter_p95_ms: 5.477
+    scheduler_jitter_max_ms: 11.548
+    swapin_delta_pages: 0
+    swapout_delta_pages: 0
+    thermal_max: nominal
+    memory_pressure_q_percent: {before: 46, during: 46, after: 46}
+  focused_x4_memory_responsiveness:
+    synthetic_payload: "4 x 128 MiB held for approximately 0.8 s per worker"
+    wall_ms: 990.130
+    monitor_samples: 19
+    instant_probe_external_p50_ms: 15.250
+    instant_probe_external_p95_ms: 36.493
+    instant_probe_external_max_ms: 105.504
+    scheduler_jitter_p95_ms: 5.221
+    scheduler_jitter_max_ms: 5.222
+    swapin_delta_pages: 0
+    swapout_delta_pages: 0
+    thermal_max: nominal
+    memory_pressure_q_percent: {before: 46, during: 46, after: 46}
+  findings:
+    - "No new swap activity or thermal escalation was observed in these bounded windows."
+    - "Absolute swap occupancy was already high, yet the measured workloads remained stable; a policy that serializes whenever swap_used_bytes > 0 would produce false negatives on this host."
+    - "Observer latency tails increased under x4 load, especially the memory fixture, so probe overhead is not invariant under contention."
+    - "GUI responsiveness is NOT_MEASURED; monitor jitter and probe latency are only bounded process-level proxies."
+    - "The undocumented memory_pressure -Q percentage is not part of the recommended production schema or policy."
+
+task_graph_vs_capacity_separation:
+  classification: CONFIRMED
+  architect_responsibility:
+    - "Determine whether tasks are semantically independent."
+    - "Reject shared mutable state, ordering dependencies, conflicting externally rate-limited dependencies and other correctness hazards before considering parallel execution."
+  capacity_observer_responsibility:
+    - "Report only current bounded machine-capacity evidence and an advisory host ceiling."
+    - "Never infer semantic independence from low load or idle cores."
+    - "Never spawn, schedule, queue, reorder, retry or cancel work."
+  executor_responsibility:
+    - "Apply the smaller of the already-proven independent work set and the current advisory capacity ceiling, and remain free to serialize when task-specific resource knowledge is worse than the host snapshot implies."
+  invariant: "parallel_allowed = semantic_independence AND executor_authority AND host_capacity; no one predicate substitutes for another."
+
+safe_parallelism_policy:
+  classification: INFERRED
+  v1_ceiling: 2
+  semantic_definition: "Advisory maximum concurrent independent workers based on current host evidence, not a guarantee that arbitrary commands cannot exhaust resources."
+  default_on_probe_failure: 1
+  candidate_x2_requires_all:
+    - "activeProcessorCount >= 2."
+    - "Thermal state is nominal; fair/serious/critical/unknown returns 1."
+    - "Short-window CPU utilization leaves at least two logical-processor equivalents of headroom. For N active processors, require busy_fraction <= 1 - 2/N."
+    - "One-minute load average is below activeProcessorCount; load average is a supporting sustained-load guard, not the primary instantaneous CPU signal."
+    - "No swap-out activity is observed during the bounded sampling window. Any positive swap-out delta returns 1."
+    - "VM counters needed by the policy are successfully readable; exact thresholds for free/inactive/compressed memory remain conservative implementation constants that require separate validation before production."
+    - "Workspace filesystem has a conservative emergency free-space floor; free disk can veto x2 but never raises the ceiling. The exact production floor is NOT_MEASURED."
+  reason_code_candidates:
+    capacity: [CAPACITY_X2_AVAILABLE, LIMIT_V1_MAX_2]
+    limits: [LIMIT_CPU_HEADROOM, LIMIT_SUSTAINED_LOAD, LIMIT_THERMAL, LIMIT_SWAP_ACTIVITY, LIMIT_MEMORY_HEADROOM, LIMIT_DISK_HEADROOM, LIMIT_SIGNAL_UNKNOWN]
+  deliberately_not_used:
+    - "Absolute swap-used > 0 as an automatic serial condition."
+    - "Private libproc child enumeration."
+    - "Global ps/process-command inspection."
+    - "Undocumented vm.memory_pressure/kern.memorystatus raw values."
+    - "Undocumented memory_pressure -Q output."
+  falsifiability:
+    - "Reject or tighten x2 if representative real tasks show swap-out, thermal escalation, user-visible responsiveness regression, material failure increase or wall-clock regression versus serial."
+    - "Do not raise the v1 ceiling above 2 until representative real-task x4 evidence exists across the machines that Runtime actually supports."
+    - "If conservative memory/disk thresholds create frequent false serialization, measure and revise those constants rather than adding adaptive history."
+
+failure_modes_and_counterarguments:
+  - finding: "Host snapshot cannot predict arbitrary workload footprint."
+    classification: CONFIRMED
+    attempted_disproof_effect: "This prevents safe_parallelism from being a universal safety guarantee and is the strongest reason to keep the value advisory and capped."
+  - finding: "Higher parallelism can hurt per-worker latency despite lower total wall time."
+    classification: MEASURED
+    evidence: "x4 I/O worker latency ratio was 1.796 versus serial while aggregate wall time improved 2.625x."
+    attempted_disproof_effect: "Reject a simple cores-to-workers mapping and automatic x4 in v1."
+  - finding: "Exact supported stateless current memory-pressure level is unproven."
+    classification: UNKNOWN
+    attempted_disproof_effect: "The observer must work with stable VM/swap counters and conservative uncertainty rather than depending on undocumented pressure keys or becoming a resident event-monitor daemon."
+  - finding: "Scoped Runtime-child enumeration has no proven stable public OS API."
+    classification: UNKNOWN
+    attempted_disproof_effect: "Omit it from v1; do not trade privacy/supportability for one metric."
+  - finding: "Helper-process cold start can dominate probe latency."
+    classification: MEASURED
+    evidence: "Two first launches measured about 601-717 ms."
+    attempted_disproof_effect: "A later implementation should prefer a tiny in-process path if supportable; spawned-helper architecture is not automatically justified."
+  - finding: "Absolute swap use is misleading."
+    classification: MEASURED
+    evidence: "Approximately 3.77 GB historical swap remained allocated throughout successful bounded runs with no observed new swap activity."
+    attempted_disproof_effect: "Use swap-rate deltas for acute pressure and treat absolute occupancy only as context."
+  - finding: "Observer can become an orchestration subsystem through scope creep."
+    classification: INFERRED
+    impact: "Adding history, adaptive scoring, queues, scheduling or automatic worker management would create synchronization, stale-state and operational failure modes that this spike does not justify."
+  - finding: "Synthetic success is not production-task proof."
+    classification: CONFIRMED
+    impact: "x2 is a conservative starting ceiling; real task evidence remains required for policy calibration and any higher ceiling."
+
+technical_debt_1_month_and_1_year:
+  one_month:
+    severity: LOW_TO_MODERATE_IF_SCOPE_HELD
+    likely_debt:
+      - "Threshold semantics and false-positive/false-negative calibration are the main debt, not the probe itself."
+      - "Production in-process access to Foundation/Mach signals must stay small; choosing a spawned native helper without measuring cold-start cost would add avoidable packaging and latency debt."
+      - "Reason-code and schema tests must prove fail-closed behavior for unavailable/invalid signals."
+      - "The exact memory-headroom and emergency disk floors are NOT_MEASURED and need bounded validation before implementation."
+      - "If the Runtime is distributed as an app/product, current Apple privacy-manifest required-reason rules for filesystem-capacity APIs must be checked."
+    rejected_growth: [daemon, scheduler, queue, database, telemetry_history, global_process_inventory, adaptive_controller]
+  one_year:
+    severity: MODERATE_IF_SCOPE_HELD
+    likely_debt:
+      - "Hardware heterogeneity and real workload drift can invalidate one threshold set even while the underlying public APIs stay stable."
+      - "Apple Silicon core counts, memory sizes and thermal behavior vary; policy must normalize to activeProcessorCount rather than encode this host."
+      - "The unsupported-pressure and private-child-enumeration gaps may tempt private API adoption; that should remain rejected unless Apple publishes a stable contract."
+      - "Reason-code/schema creep can become a pseudo-observability product; preserve a versioned bounded contract and delete unused signals."
+      - "x4 or higher should remain evidence-gated rather than becoming a configuration knob by demand."
+      - "A future need for historical optimization should be treated as a separate architecture decision, not quietly added to Capacity Observer."
+
+statelessness_and_garbage_analysis:
+  classification: INFERRED
+  architecture: "probe -> bounded JSON -> return"
+  persistent_runtime_state_required: false
+  background_process_required: false
+  database_required: false
+  queue_required: false
+  scheduler_required: false
+  task_registry_required: false
+  telemetry_history_required: false
+  adaptive_model_required: false
+  garbage_characteristics:
+    - "In-process probing needs no temporary artifact."
+    - "A 50 ms delta can live entirely in stack/local memory and be discarded after the response."
+    - "No raw snapshot is written to disk by the observer."
+    - "If active-child accounting is later added, keep only ephemeral Runtime-owned active-call state already coupled to spawn/cleanup lifetime; do not persist it."
+  synthetic_research_cleanup:
+    capacity_fixture_root: REMOVED
+    responsiveness_fixture_root: REMOVED
+    generated_io_residue_before_root_cleanup: 0
+    result: PASS
+
+minimal_next_implementation_slice_if_recommended:
+  classification: INFERRED
+  result: RECOMMENDED_ONLY_UNDER_VERDICT_CONDITIONS
+  scope:
+    - "Add exactly one read-only on-demand Capacity Observer surface returning one versioned bounded JSON object."
+    - "Use only supported/public host APIs for CPU topology, CPU tick deltas, load average, VM counters, swap usage/activity, thermal state and workspace-filesystem availability."
+    - "Do not use global ps, command-line harvesting, libproc child enumeration, undocumented memory-pressure sysctls or memory_pressure -Q."
+    - "Keep v1 capacity ceiling in {1,2}; do not expose x4 as automatic capacity even though synthetic x4 wall-clock results were positive."
+    - "Omit runtime-owned active-child count and exact memory-pressure-level fields in v1 rather than filling them from fragile sources."
+    - "Return bounded reason codes plus a small normalized signal block; retain no history."
+    - "Unit-test schema bounds, reason-code decisions, signal failures and fail-to-1 behavior with injected probe values."
+    - "Add a bounded real-task benchmark gate before any later proposal to raise the ceiling above 2."
+  explicit_non_scope:
+    - "No scheduler, worker spawner, queue, daemon, database, persistent task registry, telemetry history, adaptive controller or automatic semantic task analysis."
+    - "No live Runtime service/configuration changes as part of this research revision."
+
+acceptance_criteria:
+  AC-1:
+    result: PASS
+    evidence: "Metric choices were mapped to public Foundation, Mach, libc, sysctl xsw_usage and statfs surfaces; private/undocumented alternatives were explicitly rejected."
+  AC-2:
+    result: PASS
+    evidence: "Recommended architecture is strictly on-demand probe -> bounded JSON -> return with no persistent observer state."
+  AC-3:
+    result: PASS
+    evidence: "Prototype overhead is measured with warm instant and 50 ms sampled paths; production in-process cost is explicitly NOT_MEASURED."
+  AC-4:
+    result: PASS
+    evidence: "Serial, x2 and x4 were benchmarked for light, CPU, memory and I/O fixtures with wall time, worker latency, failures and pressure proxies recorded."
+  AC-5:
+    result: PASS
+    evidence: "Report assigns semantic independence only to Architect and host-capacity reporting only to Observer; Executor applies both predicates."
+  AC-6:
+    result: PASS
+    evidence: "Recommendation stores no telemetry/history and forbids unrelated process inventory or command-line harvesting."
+  AC-7:
+    result: PASS
+    evidence: "v1 cap is 2 with conservative fail-to-1 conditions and explicit falsification gates; x4 remains evidence-gated."
+  AC-8:
+    result: PASS
+    evidence: "Final pre-publication proof found no TASK-0033 synthetic temp roots; tracked working-tree diff was empty and the only untracked repository path was .agent/tasks/TASK-0033/report.yaml; fresh origin/dev remained exact authorized base 3847f34d03055fb72b2fc900e4aee3dff3531e1a."
