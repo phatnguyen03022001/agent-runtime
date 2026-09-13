@@ -1,0 +1,145 @@
+protocol_version: 3
+
+task_id: TASK-0039
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: operator_handoff
+  gap_id: MCP_SDK_2_2_MIGRATION_AND_CLIENT_CONFORMANCE
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+authority_sources:
+  - source: "phatnguyen03022001/agent-runtime@2827049017048fb257654334bffbd48a15071cb6:.agent/tasks/TASK-0038/review.yaml"
+    role: "Accepted typed MCP contract hardening and explicit recommendation to keep SDK migration/conformance separate."
+    precedence: 1
+  - source: "https://github.com/modelcontextprotocol/python-sdk/releases/tag/v2.2.0"
+    role: "Official MCP Python SDK v2.2.0 release; current stable 2.x release as of task creation."
+    precedence: 2
+  - source: "Operator handoff requesting the next prompt."
+    role: "Authorization for this bounded migration/conformance pass."
+    precedence: 3
+
+classification:
+  decomposition_gate: FIT
+  change_class: BOUNDED_DEPENDENCY_MIGRATION_AND_CONFORMANCE
+
+objective: >-
+  Migrate Agent Runtime from the accepted mcp==2.0.0 contract to mcp==2.2.0 and add a real MCP client conformance gate, while preserving the accepted five-tool surface, typed schemas, annotations, server metadata, execution semantics, lifecycle/protection/capacity behavior, and operator authority boundaries. Explicitly harden the public tool-error contract for MCP 2.2.0's exception-sanitization behavior without leaking unexpected exception details.
+
+current_contract_facts:
+  accepted_public_tools:
+    - terminal_exec
+    - terminal_start
+    - terminal_poll
+    - terminal_control
+    - capacity_observer
+  accepted_server:
+    name: Agent Runtime
+    version: "0.2.0"
+  current_sdk_pin: "mcp==2.0.0"
+  target_sdk_pin: "mcp==2.2.0"
+  accepted_protocol_direction: "MCP 2026-07-28 modern negotiation with compatibility provided by the v2 SDK."
+  terminal_poll_read_only: false
+  reason: "terminal_poll updates session activity/TTL state."
+
+upstream_migration_facts_to_verify_locally:
+  - "MCP Python SDK v2.2.0 is the current stable 2.x release targeted by this task."
+  - "Unexpected handler exceptions are sanitized for clients; deliberate model-visible tool failures must use the SDK's supported tool-error mechanism."
+  - "The public Client API can negotiate the modern protocol path and exposes negotiated protocol/server metadata through supported public properties."
+
+required_design:
+  sdk_migration:
+    - "Update requirements.txt to exactly mcp==2.2.0."
+    - "Install/resolve the new dependency only in the source-development environment; do not touch the installed live Runtime."
+    - "Use supported public SDK APIs only. No vendoring, monkeypatching, private SDK imports, or private attribute dependence."
+    - "Preserve the exact five tool names, accepted ToolAnnotations, typed input/output schemas, closed output objects, server name/version/description/instructions, and existing wire shapes."
+    - "Do not change terminal execution, PTY, workspace-root validation, protection, capacity policy, lifecycle, tunnel identity, or session-limit behavior merely to accommodate the SDK upgrade."
+  error_contract:
+    - "Inventory expected public tool failures that a model can act on, including deeper runtime/domain validation that occurs after JSON Schema validation."
+    - "Expose only deliberate, bounded, model-actionable error text through the public ToolError mechanism (or the exact public v2.2.0 equivalent after local inspection)."
+    - "Do not broad-catch Exception/BaseException merely to convert every failure into model-visible text."
+    - "Unexpected implementation exceptions must remain sanitized by the SDK and must not leak exception messages, tracebacks, paths, credentials, or injected sentinel secrets to the client."
+    - "Schema-invalid arguments must still be rejected before tool delegates execute."
+    - "Do not weaken existing protection-denial semantics or make protected Runtime lifecycle operations easier to invoke."
+  conformance_gate:
+    - "Add focused tests that connect through the public MCP Client API to the real production MCPServer object/process; do not rely only on MCPServer.list_tools/call_tool direct invocation."
+    - "Prove modern protocol negotiation to 2026-07-28 through supported public client state such as protocol_version/discover_result or the exact public equivalent in v2.2.0."
+    - "Prove server identity/instructions observed by the client match Agent Runtime / 0.2.0 and the accepted metadata contract."
+    - "Prove client tools/list returns exactly the accepted five tools with accepted annotations, input bounds/enums, and closed typed output schemas."
+    - "Through the real client, exercise representative safe successful calls and confirm structured output validates, including at minimum terminal_exec and capacity_observer; exercise the PTY start/poll/control lifecycle with a harmless bounded process if required to prove those result shapes."
+    - "Prove a deliberate expected tool/domain error is returned as an MCP tool error with the intended bounded model-readable message."
+    - "Inject a deterministic unexpected exception containing a unique secret/sentinel string and prove the client receives only sanitized generic failure text and never the sentinel/traceback."
+    - "Prove invalid schema boundaries still fail before the underlying delegate runs."
+    - "Use only harmless bounded local fixtures/processes and clean them before completion."
+
+compatibility_boundary: >-
+  Preserve the accepted TASK-0038 public contract exactly unless MCP 2.2.0 makes a particular representation impossible through supported public APIs. If the migration requires a material wire-contract change, private SDK coupling, broad error leakage, or a Runtime semantic change, STOP and report CAPABILITY_BLOCKED or REVISION_REQUIRED with exact evidence instead of silently changing the architecture.
+
+forbidden_scope:
+  - "Do not add/remove/rename MCP tools, resources, or prompts."
+  - "Do not add scheduler, queue, database, telemetry history, task registry, or adaptive concurrency."
+  - "Do not change terminal_poll to readOnly=true."
+  - "Do not install/reinstall/activate/reload/restart/stop the live Runtime."
+  - "Do not mutate canonical runtime.env, tunnel identity, listener binding, desired-state files, LaunchAgents, or installed package."
+  - "Do not perform live host/plugin reload merely to prove source conformance."
+  - "Do not add enforced GitHub CI/release governance in this task; that remains the next separate pass."
+  - "Do not promote main."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "requirements.txt is exactly mcp==2.2.0 and the source-development environment reports MCP Python SDK 2.2.0."
+  - id: AC-2
+    requirement: "The public MCP surface remains exactly the accepted five tools with unchanged annotations, typed input/output schemas, wire shapes, and Agent Runtime / 0.2.0 metadata/instructions."
+  - id: AC-3
+    requirement: "A real public MCP Client connection negotiates the modern 2026-07-28 protocol path using supported public API evidence and can list/call the accepted surface."
+  - id: AC-4
+    requirement: "Real-client conformance proves exact tool schemas/annotations, structured successful results, and representative PTY lifecycle behavior without live Runtime activation."
+  - id: AC-5
+    requirement: "Expected model-actionable domain failures use the supported deliberate tool-error path with bounded stable messages; schema-invalid arguments are rejected before delegates execute."
+  - id: AC-6
+    requirement: "Unexpected handler exceptions are sanitized under MCP 2.2.0; a deterministic injected sentinel/traceback is not exposed to the client."
+  - id: AC-7
+    requirement: "No private SDK internals, vendored MCP code, monkeypatching, or broad exception-to-model leakage is introduced."
+  - id: AC-8
+    requirement: "./verify passes in full under mcp==2.2.0, including the new real-client conformance tests."
+  - id: AC-9
+    requirement: "Because the packaged Runtime dependency changed, relevant non-installing Swift/release-package/codesign verification passes without modifying the live installed Runtime."
+  - id: AC-10
+    requirement: "origin/main remains unchanged; publication is implementation commit plus report-only commit, non-force to dev only."
+
+verification_requirements:
+  - "Read the official v2.2.0 release notes and public error/client documentation before changing code."
+  - "Record the exact installed development SDK version after migration."
+  - "Add/adjust focused migration tests for public Client negotiation, tools/list, metadata, schemas, structured outputs, intentional ToolError behavior, unexpected-exception sanitization, and schema rejection."
+  - "Run focused MCP migration/conformance tests."
+  - "Run ./verify in full."
+  - "Run swift test and swift build -c release if required by the canonical package workflow."
+  - "Run the repository's canonical non-installing package/signature verification because the packaged Python dependency changed; do not invoke install.sh."
+  - "Do not use the live installed Runtime as the conformance test target in this source/package task."
+
+publication:
+  implementation_commit_required: true
+  report_path: .agent/tasks/TASK-0039/report.yaml
+  push: non_force_dev
+  stop_for_architect_review: true
+
+git_authority:
+  create_branch: false
+  create_worktree: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
