@@ -1,0 +1,85 @@
+protocol_version: 3
+
+task_id: TASK-0033
+task_revision: 1
+review_revision: 1
+state: ACCEPTED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0033/report.yaml
+  commit: "f0af41fec08f4cad2e31f46ecd0b9ddb75555a5f"
+  report_revision: 1
+
+reviewed_base:
+  commit: "3847f34d03055fb72b2fc900e4aee3dff3531e1a"
+
+independence:
+  reviewer_role: ARCHITECT
+  exact_report_identity_verified: true
+  remote_lineage_verified: true
+  official_platform_claims_spot_checked: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  scope: PASS
+  git_authority: PASS
+  acceptance_criteria: PASS
+
+criterion_judgment:
+  AC-1: PASS
+  AC-2: PASS
+  AC-3: PASS
+  AC-4: PASS
+  AC-5: PASS
+  AC-6: PASS
+  AC-7: PASS
+  AC-8: PASS
+
+accepted_evidence:
+  - "Remote dev resolved to exact report commit f0af41fec08f4cad2e31f46ecd0b9ddb75555a5f; main remained c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "The report is exactly one commit ahead of authorized base 3847f34d03055fb72b2fc900e4aee3dff3531e1a and adds only .agent/tasks/TASK-0033/report.yaml."
+  - "The report preserves the required boundary: Capacity Observer is advisory, read-only, on-demand and stateless; Architect decides semantic independence while the observer only reports host capacity."
+  - "Synthetic benchmarks show bounded x2 execution improved aggregate wall-clock time across light, CPU, memory and I/O workloads, while x4 exposed materially higher per-worker I/O latency and remains unproven for automatic admission."
+  - "The report therefore caps revision-1 capacity_parallelism_ceiling at 2, fails conservatively to 1 on probe failure or pressure signals, and explicitly avoids treating the recommendation as a safety guarantee for arbitrary workloads."
+  - "Stable/public macOS facilities were identified for CPU topology, short-window CPU counters, load average, VM/swap counters, thermal state and workspace-filesystem capacity. Independent Apple documentation spot-checks confirm ProcessInfo.activeProcessorCount, ProcessInfo.thermalState, Dispatch memory-pressure events and host_statistics64 are public documented surfaces."
+  - "The report correctly leaves exact one-shot memory-pressure severity UNKNOWN and rejects undocumented/private sources from the production contract."
+  - "No stable public scoped source was proven for Runtime-owned active child count; the report omits that metric rather than expanding privacy scope through global process inventory or private libproc interfaces."
+  - "Warm probe overhead is low in the measured helper prototype, but production in-process overhead remains explicitly NOT_MEASURED; the report does not overclaim it."
+  - "Synthetic fixtures were removed and the canonical change is report-only."
+
+verdict_judgment:
+  report_verdict: RECOMMEND_WITH_CONDITIONS
+  architect_disposition: ACCEPTED
+  conditions:
+    - "V1 is advisory only and MUST NOT gain scheduling or worker-spawning authority."
+    - "V1 capacity_parallelism_ceiling is capped at 2. Any higher automatic ceiling requires separate real-task evidence."
+    - "Architect remains sole authority for semantic independence/dependency decisions."
+    - "Use supported/public host signals only; omit exact memory-pressure severity and active-child count until a supported scoped source is proven."
+    - "No persistent telemetry history, daemon, queue, database, adaptive controller or global process inventory."
+    - "Production implementation must measure its own in-process probe cost and preserve bounded JSON output plus reason codes."
+
+architecture_implications:
+  recommended_direction:
+    - "One tiny on-demand Capacity Observer surface returning a versioned bounded JSON capacity snapshot."
+    - "Expose capacity_parallelism_ceiling as an advisory host-capacity ceiling, initially in {1,2}."
+    - "Keep semantic task-graph classification outside the observer."
+  explicitly_not_recommended:
+    - "Automatic scheduling, spawning, queuing or adaptive concurrency control."
+    - "Private/undocumented macOS metrics."
+    - "Persistent resource-history collection."
+    - "Raising automatic parallelism above 2 from synthetic evidence alone."
+
+promotion_readiness: BLOCKED
+
+next_state:
+  research_spike: ACCEPTED
+  capacity_observer_direction: VIABLE_FOR_BOUNDED_IMPLEMENTATION
+  main_promotion_authorized: false
+  automatic_execution: false
+
+notes:
+  - "This review accepts the research result, not a production implementation."
+  - "The smallest next slice should implement only the observer contract and x1/x2 advisory policy, with deterministic tests and no scheduler behavior."
