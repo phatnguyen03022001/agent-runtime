@@ -1,0 +1,136 @@
+protocol_version: 3
+
+task_id: TASK-0034
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0034/task.yaml
+  commit: "9f6d8ad3dee851ddd58e2a93ae06881905df4aa1"
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+  authorized_base_head: "9f6d8ad3dee851ddd58e2a93ae06881905df4aa1"
+  implementation_commit: "ac3a7a7e1bd22082b3252475bdbd2ddd2e607ef1"
+  final_execution_head: "ac3a7a7e1bd22082b3252475bdbd2ddd2e607ef1"
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: NOT_REQUIRED
+
+implementation:
+  observer_surface: capacity_observer
+  schema_version: 1
+  properties: [read_only, on_demand, stateless, bounded_output]
+  operator_config:
+    key: AGENT_RUNTIME_MAX_PARALLELISM
+    accepted_range: [1, 10]
+    default_when_absent: 2
+    invalid_policy: fail_validation
+    semantics: hard_maximum_only
+  policy:
+    evidence_based_v1_maximum: 2
+    allowed_outputs: [1, 2]
+    rule: "capacity_parallelism_ceiling = min(AGENT_RUNTIME_MAX_PARALLELISM, evidence_based_ceiling_v1)"
+    sample_window_ms: 50
+    memory_headroom_floor_bytes: 1073741824
+    disk_available_floor_bytes: 5368709120
+    note: "The memory and disk floors are conservative v1 implementation guards; they are not evidence for x3+ admission."
+  supported_public_sources:
+    - "Foundation NSProcessInfo activeProcessorCount and thermalState"
+    - "Mach host_statistics(HOST_CPU_LOAD_INFO)"
+    - "Mach host_statistics64(HOST_VM_INFO64)"
+    - "libc getloadavg via Python os.getloadavg"
+    - "sysctlbyname vm.swapusage with public xsw_usage"
+    - "statfs workspace filesystem capacity"
+  privacy_boundary:
+    global_process_inventory: false
+    process_command_line_collection: false
+    telemetry_history: false
+    persistent_observer_state: false
+    automatic_worker_spawning: false
+    scheduler_or_queue: false
+  omitted_v1:
+    - exact_one_shot_memory_pressure_severity
+    - runtime_owned_active_child_enumeration
+    - x3_or_higher_admission
+
+verification:
+  focused:
+    command: ".venv/bin/python -m unittest tests.test_capacity_observer tests.test_runtime_config tests.test_tunnel_identity.TunnelIdentityTests.test_start_uses_env_identity_and_sanitized_environment tests.test_tunnel_identity.TunnelIdentityTests.test_start_rejects_invalid_parallelism_limit_instead_of_clamping tests.test_surface_and_scripts -v"
+    result: PASS
+    tests: 33
+  full_repository:
+    command: "./verify"
+    result: PASS
+    tests: 129
+    includes: [python_unit_integration, python_compile, shell_syntax]
+  swift_tests:
+    command: "xcrun swift test --package-path macos"
+    result: PASS
+    tests: 29
+  release_build:
+    command: "xcrun swift build --package-path macos -c release"
+    result: PASS
+  package:
+    command: "./macos/package_app.sh"
+    result: PASS
+    artifact: "build/Agent Runtime.app"
+    capacity_module_present: true
+    config_propagation_present: true
+  signature:
+    command: "codesign --verify --deep --strict --verbose=2 build/Agent Runtime.app"
+    result: PASS
+  live_read_only_smoke:
+    result: PASS
+    configured_operator_maximum: 10
+    observed_capacity_parallelism_ceiling: 2
+    observed_active_processors: 8
+    observed_thermal_state: nominal
+    observed_swapout_delta_pages: 0
+    observed_disk_available_bytes: 209815822336
+    note: "A pre-fix smoke exposed an incorrect statvfs transfer-size calculation; a regression test was added and the implementation now uses public statfs f_bavail * f_bsize as accepted by TASK-0033."
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PROVEN
+    evidence: "Canonical config parsing supports AGENT_RUNTIME_MAX_PARALLELISM values 1..10, the observer defaults the absent key to 2, and .env.example documents 2."
+  - criterion_id: AC-2
+    status: PROVEN
+    evidence: "Focused tests reject empty, 0, 11, -1, 2.0 and non-numeric values in canonical validation and the serve path without clamping."
+  - criterion_id: AC-3
+    status: PROVEN
+    evidence: "capacity_observer is registered read-only/idempotent, retains no state, and uses Foundation, Mach, sysctl and statfs public aggregate host sources only."
+  - criterion_id: AC-4
+    status: PROVEN
+    evidence: "Deterministic tests prove configured 10 still returns at most 2; V1_EVIDENCE_CEILING is 2."
+  - criterion_id: AC-5
+    status: PROVEN
+    evidence: "Deterministic tests prove configured 1 returns 1 while preserving independent evidence that the host may support x2; configured 2 or 10 returns only evidence-based 1 or 2."
+  - criterion_id: AC-6
+    status: PROVEN
+    evidence: "Injected probe failure returns bounded schema v1 with capacity_parallelism_ceiling 1 and LIMIT_SIGNAL_UNKNOWN; pressure signals independently serialize."
+  - criterion_id: AC-7
+    status: PROVEN
+    evidence: "No scheduler, daemon, queue, database, telemetry history, task registry, global process inventory or worker spawning was added."
+  - criterion_id: AC-8
+    status: PROVEN
+    evidence: "Focused 33/33, full repository 129/129, Swift 29/29, release build, package, packaged-payload checks and strict codesign all passed."
+  - criterion_id: AC-9
+    status: PROVEN
+    evidence: "Execution used source/test/build/package commands only. No live runtime.env write, install, start, stop, restart, kill, rebind, or main promotion was performed."
+
+publication:
+  implementation_commit: "ac3a7a7e1bd22082b3252475bdbd2ddd2e607ef1"
+  report_commit: null
+  pushed: false
+  force_push: false
+  main_promoted: false
+  next_step: ARCHITECT_REVIEW
+
+result: NEEDS_REVIEW
