@@ -1,13 +1,13 @@
 protocol_version: 3
 
 task_id: TASK-0040
-task_revision: 1
+task_revision: 2
 state: APPROVED
 
 origin:
-  type: operator_handoff
-  task_id: ""
-  gap_id: FS_READ_BATCH_ADMISSION
+  type: architect_revision
+  task_id: TASK-0040
+  gap_id: AC3_REVIEW_REVISION
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -27,18 +27,10 @@ skill_library:
   repository: phatnguyen03022001/agent-skills
   revision: "1826d33bd1e467896c133109b37db8b0656b3276"
 
-architect_analysis_skills:
-  - security-review
-  - optimization
-  - github-workflow
+architect_analysis_skills: [security-review, verification, optimization, github-workflow]
 
 execution_skills:
-  required:
-    - executor
-    - security-review
-    - optimization
-    - verification
-    - github-workflow
+  required: [executor, security-review, verification, optimization, github-workflow]
   recommended: []
 
 external_skills:
@@ -47,41 +39,43 @@ external_skills:
   execution_recommended: []
 
 authority_sources:
-  - source: "Operator final admission decision for fs_read_batch on 2026-09-13."
-    role: "Authorizes exactly one sixth read-only filesystem tool and fixes the material security, output, observability, benchmark, and forbidden-scope boundaries for this task."
+  - source: "phatnguyen03022001/agent-runtime@d7bc122974f4839412a70d03cd5d7dca07dee138:.agent/tasks/TASK-0040/review.yaml"
+    role: "Governing REVISION_REQUIRED review for the two acceptance-blocking AC-3 defects."
     precedence: 1
-  - source: "phatnguyen03022001/agent-runtime@49721e96f8a48ba30baaf3b3623482c932873f1b:.agent/tasks/TASK-0039/review.yaml"
-    role: "Accepted MCP 2.2.0 five-tool typed contract, deliberate ToolError discipline, unexpected-exception sanitization, and real public MCP Client conformance baseline."
+  - source: "phatnguyen03022001/agent-runtime@a52e0698a2ece4d5e473d9e41fbc1041f1b877e4:.agent/tasks/TASK-0040/task.yaml"
+    role: "Original fs_read_batch admission contract; all unaffected boundaries remain authoritative."
     precedence: 2
-
-classification:
-  decomposition_gate: FIT
-  change_class: BOUNDED_READ_ONLY_FILESYSTEM_TOOL_ADMISSION
 
 structure_authority:
   status: NOT_APPLICABLE
   source: ""
-  rationale: "No material repository-structure decision is required; Executor owns local file/module placement within the existing agent_runtime, tests, README, and task-report component boundary, with no new top-level directory or filesystem framework authorized."
+  rationale: "Both corrections remain inside the existing fs_read_batch implementation and tests; no new component or filesystem framework is authorized."
+
+objective: "Correct the two TASK-0040 revision-1 defects without broadening scope: make selected-range strict UTF-8 behavior independent of internal read chunk boundaries, and make fs_read_batch acquire its validated cwd descriptor with a race-resistant trust anchor. Preserve the accepted six-tool contract and performance admission thresholds."
 
 scope:
   required_changes:
-    - "Add exactly one public fs_read_batch tool with the frozen input/output/security/error contract in this task."
-    - "Extend existing typed contracts, exact MCP registration, server instructions, README, timing-name attribution, focused filesystem/security tests, and real public MCP Client conformance for the six-tool surface."
-    - "Run and record the bounded production real-MCP benchmark against the best optimized one-call terminal_exec baseline."
+    - "Correct selected-range UTF-8 processing so bytes outside the requested lines cannot change success or INVALID_UTF8 solely because of chunk placement."
+    - "Correct cwd descriptor acquisition so intermediate namespace replacement cannot redirect the validated cwd between validation and descriptor acquisition."
+    - "Add deterministic focused regressions for both defects and preserve all already-proven fs_read_batch behavior."
+    - "Run final canonical verification and a fresh corrected-production real-MCP benchmark, then publish report revision 2."
   allowed_existing_files_or_components:
-    - "agent_runtime MCP server, typed contracts, timing integration, and the smallest repo-native read implementation required for fs_read_batch"
-    - "existing Python tests plus focused fs_read_batch/security/conformance tests"
-    - "README.md server/tool documentation"
+    - "agent_runtime fs_read_batch read/security implementation and the smallest existing validation helper surface needed for its cwd trust anchor"
+    - "existing fs_read_batch security/conformance tests and narrowly focused regressions"
     - ".agent/tasks/TASK-0040/report.yaml"
   expected_files_are_restrictive: false
 
 invariants:
-  - "Final public MCP surface is exactly terminal_exec, terminal_start, terminal_poll, terminal_control, capacity_observer, fs_read_batch."
+  - "Public MCP surface remains exactly terminal_exec, terminal_start, terminal_poll, terminal_control, capacity_observer, fs_read_batch."
   - "Existing five public tool contracts and execution semantics remain unchanged."
-  - "fs_read_batch never follows item-path symlinks and never relies on resolve-then-open as its race boundary."
-  - "fs_read_batch returns regular-file UTF-8 text only and never silently truncates selected text to fit output ceilings."
-  - "AGENT_RUNTIME_WORKSPACE_ROOT remains explicitly documented as not being general mechanical filesystem confinement."
-  - "No live Runtime, configuration, tunnel, listener, installed package, main, tag, or release mutation occurs."
+  - "fs_read_batch annotations remain readOnly=true, destructive=false, idempotent=true, openWorld=false."
+  - "Strict UTF-8 acceptance applies to selected returned line content; unselected bytes before start_line or after end_line must not affect the result solely because of chunk placement."
+  - "Invalid UTF-8 inside selected content returns INVALID_UTF8 with no partial text."
+  - "The cwd descriptor used as the fs_read_batch trust anchor cannot be redirected by intermediate symlink replacement between validation and descriptor acquisition."
+  - "Item traversal remains descriptor-relative, cwd-descendant, no-symlink, regular-file-only, and safe for special-file rejection."
+  - "The 128 KiB per-item and 256 KiB aggregate output limits remain unchanged with no caller-controlled override and no silent success truncation."
+  - "AGENT_RUNTIME_WORKSPACE_ROOT remains documented as access-selection policy, not general mechanical host filesystem confinement."
+  - "No live Runtime, config, runtime.env, tunnel, listener, installed package, main, tag, or release mutation occurs."
 
 gap_policy:
   local_auto_fix: true
@@ -92,170 +86,54 @@ gap_policy:
   public_contract_change: revised_contract_required
   blocking_gap_behavior: BLOCKED
 
-objective: "Add exactly one sixth public MCP tool, fs_read_batch, for bounded ordered multi-file UTF-8 reads with heterogeneous line ranges and race-resistant descendant/no-symlink path access. Preserve the accepted five existing tools and MCP 2.2.0 error/conformance behavior, integrate the new tool into existing timing observability, and re-prove the measured real-MCP performance rationale against the best optimized one-call terminal_exec baseline without broadening Agent Runtime into a generic filesystem subsystem."
-
-research_evidence:
-  provenance: "Three independent read-only research passes supplied by the operator for this planning decision."
-  findings:
-    - "Optimized existing terminal_exec one-call baselines measured approximately 47-73 ms median for representative multi-file full/ranged workloads through the real public MCP Client path."
-    - "An ephemeral in-process fs_read_batch prototype measured approximately 0.25-1.4 ms on the same MCP Client path."
-    - "Representative absolute savings were approximately 48-71 ms per logical workload."
-    - "One real five-file heterogeneous-range workload reduced MCP response size from approximately 95.2 KB to approximately 32.1 KB, about 66%, while prototype handler latency remained negligible."
-    - "Existing terminal_exec can already provide useful partial-failure attribution in one optimized call; structured partial errors alone are not an admission rationale."
-    - "The enduring admitted value is bounded multi-file reading, heterogeneous selected ranges, avoidance of terminal_exec's existing 64 KiB stdout truncation/recovery boundary, and material real-MCP latency improvement."
-    - "The measured advantage is partly attributable to current terminal_exec execution/capture overhead, not merely subprocess spawn; production performance must therefore be revalidated rather than assumed."
-
-current_contract_facts:
-  accepted_public_tools_before_task:
-    - terminal_exec
-    - terminal_start
-    - terminal_poll
-    - terminal_control
-    - capacity_observer
-  required_public_tools_after_task:
-    - terminal_exec
-    - terminal_start
-    - terminal_poll
-    - terminal_control
-    - capacity_observer
-    - fs_read_batch
-  mcp_sdk: "2.2.0"
-  server_name: "Agent Runtime"
-  server_version: "0.2.0"
-  terminal_exec_stdout_limit: "64 KiB"
-  workspace_root_semantics: "AGENT_RUNTIME_WORKSPACE_ROOT is a working-directory/access-selection boundary, not mechanical confinement of the host account."
-  reproduced_observability_gap: "At exact base 49721e96f8a48ba30baaf3b3623482c932873f1b, agent_runtime/timing.py allowlists only the four terminal tools, so public capacity_observer is not attributed by tool name."
-
-required_design:
-  public_surface:
-    - "Register exactly one new public MCP tool named fs_read_batch; final public surface is exactly terminal_exec, terminal_start, terminal_poll, terminal_control, capacity_observer, fs_read_batch."
-    - "Keep all five existing tool names, signatures, typed output contracts, annotations, execution semantics, and MCP 2.2.0 deliberate/unexpected error behavior unchanged."
-    - "fs_read_batch annotations are exactly readOnly=true, destructive=false, idempotent=true, openWorld=false. Annotations are descriptive hints, not authorization."
-    - "Keep the implementation inside the existing small MCP/runtime boundary. Do not create a filesystem framework, registry, service, cache, index, daemon, or second security system."
-
-  input_contract:
-    - "fs_read_batch accepts a validated absolute cwd and exactly one ordered items list containing 1..20 items."
-    - "cwd must satisfy the existing workspace-root working-directory validation applicable to Agent Runtime and identify an existing directory."
-    - "Each item contains path plus optional start_line and optional end_line. path is a strict non-empty cwd-relative descendant path, maximum 4096 characters."
-    - "Reject absolute item paths, NUL, empty path components, '.' components, and '..' components as deliberate request validation failures."
-    - "start_line and end_line are strict 1-based inclusive positive integers. Missing start_line means line 1; missing end_line means EOF. If both are present, end_line must be >= start_line."
-    - "Preserve item ordering exactly. The same path may appear multiple times with different or identical ranges."
-    - "If start_line is beyond EOF, a valid UTF-8 regular file returns an OK item with empty text. If end_line exceeds EOF, return through EOF. Preserve original decoded text and line terminators; do not normalize newline style."
-
-  filesystem_boundary:
-    - "Regular files only. Do not read directories, FIFOs, sockets, block/character devices, or other special files."
-    - "Strict UTF-8 only: no replacement decoding, fallback encodings, encoding detection, binary mode response, or base64 response. Content selected for return must decode strictly as UTF-8 or the item fails with the bounded typed INVALID_UTF8 result."
-    - "No symlink component may be followed for an item path, including intermediate components."
-    - "Descendant and no-symlink semantics must be enforced at open/traversal time, not merely by pre-resolving a path string. Plain Path.resolve() followed by ordinary open() is insufficient because it leaves a namespace TOCTOU race."
-    - "Use descriptor-anchored traversal/opening relative to the validated cwd directory or an equivalently race-resistant mechanism. The material invariant is that namespace replacement cannot turn an authorized descendant path into a symlink escape between validation and read."
-    - "The final opened object must be verified from the opened handle as a regular file before bytes are consumed. The open strategy must not allow a FIFO/socket/device to block or create read side effects before regular-file verification."
-    - "Do not claim that AGENT_RUNTIME_WORKSPACE_ROOT mechanically confines arbitrary host filesystem access. Document that fs_read_batch has its own bounded descendant/no-symlink read boundary while the workspace root remains non-sandbox selection policy for Agent Runtime generally."
-
-  output_contract:
-    - "Use closed typed MCP result models consistent with the existing Pydantic contract style."
-    - "The top-level result contains exactly an ordered items result list corresponding one-for-one with the input items."
-    - "Each successful item is a closed discriminated result containing status='ok', the original relative path, effective start_line, requested end_line or null, and complete text."
-    - "Each expected per-item failure is a closed discriminated result containing status='error', the original relative path, effective start_line, requested end_line or null, a stable bounded error_code, and a bounded sanitized message. It contains no partial text."
-    - "Stable per-item error codes cover at minimum NOT_FOUND, ACCESS_DENIED, SYMLINK_DISALLOWED, NOT_REGULAR_FILE, INVALID_UTF8, ITEM_OUTPUT_LIMIT_EXCEEDED, BATCH_OUTPUT_LIMIT_EXCEEDED, and READ_FAILED. Do not surface raw OSError text, absolute host paths, tracebacks, or secrets in item messages."
-    - "Fixed server-owned returned-text ceilings are 128 KiB UTF-8 bytes per successful item and 256 KiB UTF-8 bytes aggregated across successful items in one call. There are no caller-controlled parameters that can raise either ceiling."
-    - "Never silently truncate decoded text to satisfy a ceiling. If an item's complete selected text would exceed the per-item ceiling, return ITEM_OUTPUT_LIMIT_EXCEEDED for that item with no text. If adding an otherwise valid complete item would exceed the aggregate ceiling, return BATCH_OUTPUT_LIMIT_EXCEEDED for that item with no text. Continue processing later ordered items within the remaining aggregate budget."
-    - "Output byte accounting is over UTF-8 bytes of returned text, not character count."
-
-  error_contract:
-    - "JSON Schema/Pydantic validation and deeper request/config validation use the accepted deliberate ToolError discipline for model-actionable invalid requests such as invalid cwd, item count, lexical path shape, or line-range relationship."
-    - "Expected filesystem conditions for individual well-formed items use bounded typed item failures so one bad file does not erase valid sibling results."
-    - "Only known expected validation/domain/filesystem failures may be deliberately exposed. Do not broad-catch Exception/BaseException into model-visible item text. Unexpected implementation exceptions must remain sanitized by MCP 2.2.0 and must not expose exception messages, tracebacks, paths, or sentinels."
-
-  observability_and_docs:
-    - "Extend existing timing attribution so all six public tools, including the already-public capacity_observer and new fs_read_batch, are recognized by the existing tool-name allowlist. This is a minimal name-consistency repair only; do not add telemetry fields, payload logging, history, persistence, or a new timing system."
-    - "Update README tool-surface documentation from five to exactly six tools and document fs_read_batch bounds/path semantics plus the unchanged non-confinement meaning of AGENT_RUNTIME_WORKSPACE_ROOT."
-    - "Update server instructions minimally so models can discover the bounded fs_read_batch purpose and constraints. Preserve Agent Runtime name/version and do not use this task to redesign server metadata."
-
-  conformance:
-    - "Extend typed-contract and exact-registration tests to assert the final six-tool surface and exact fs_read_batch annotations/schema/closed output contract."
-    - "Add focused filesystem tests for ordered multi-file reads, full-file reads, heterogeneous inclusive ranges, duplicate paths, empty-after-EOF ranges, strict UTF-8, item/batch ceilings, and expected partial failures."
-    - "Add adversarial filesystem tests for absolute/.. lexical rejection, intermediate/final symlinks, symlink replacement/rename races where deterministically testable, directory/FIFO/socket/device rejection without blocking, and descendant confinement at open time."
-    - "Extend the real public MCP Client conformance gate to list/call exactly six tools, validate fs_read_batch schemas/annotations/results, prove deliberate request errors, prove bounded item errors, and prove an injected unexpected exception sentinel remains sanitized."
-    - "Preserve the existing five-tool conformance predicates while updating their exact expected surface to six."
-
-performance_acceptance:
-  workload: "At least one representative five-file heterogeneous-line-range workload using real repository text fixtures and the same logical requested content for both paths."
-  baseline: "Best optimized one-call terminal_exec implementation for the entire workload; do not compare against one terminal_exec call per file."
-  path: "Both baseline and fs_read_batch must be invoked through the same public MCP Client path against the production server implementation, not direct handler calls."
-  method:
-    - "Warm both paths before measurement and collect a bounded repeated sample set sufficient for a stable median; use at least 20 measured calls per path."
-    - "Keep workload files/ranges, client path, process, and host conditions materially equivalent. Interleave or otherwise control run-order bias."
-    - "Record exact benchmark workload, baseline argv/strategy, sample counts, both medians, relative improvement, absolute median improvement, and any material variance/outliers in the Executor report."
-    - "Do not encode host timing thresholds as a permanent unit-test assertion."
-  pass_threshold:
-    relative_median_improvement_minimum: "20%"
-    absolute_median_improvement_minimum: "20 ms"
-  failure_policy: "If the production fs_read_batch implementation fails either threshold, the admission rationale is not proven. Executor must report the criterion as failed and stop for Architect review; the task cannot be accepted and the Architect judgment must be REVISION_REQUIRED. Do not waive the failure by citing prototype timing."
-
 forbidden_changes:
-  - "Do not add text_search."
-  - "Do not add fs_stat_batch."
-  - "Do not add a generic filesystem API."
-  - "Do not add hashing APIs, globbing, recursive walk, directory listing, binary/base64 reads, or arbitrary encoding detection."
-  - "Do not add filesystem writes, watch, index, cache, daemon, service, database, registry, or filesystem capability framework."
-  - "Do not optimize, redesign, or change terminal_exec semantics/capture limits in this task."
-  - "Do not implement disposable workspace lifecycle or sandbox-exec/SBPL."
-  - "Do not add third-party dependencies."
-  - "Do not install, reinstall, activate, reload, restart, stop, or otherwise lifecycle-mutate the live Agent Runtime."
-  - "Do not mutate Runtime configuration, runtime.env, tunnel identity, listener state, desired-state files, LaunchAgents, or the installed Runtime package."
-  - "Do not promote main, create tags/releases, or perform release work."
+  - "No text_search, fs_stat_batch, or generic filesystem API."
+  - "No hashing, globbing, recursive walk, directory listing, binary/base64 reads, arbitrary encoding detection, filesystem writes, watch, index, cache, daemon, service, database, or registry."
+  - "No terminal_exec redesign or semantic/capture change."
+  - "No general workspace-root sandboxing or second security system."
+  - "No third-party dependency."
+  - "No live Runtime install, reload, restart, stop, config, tunnel, listener, desired-state, or runtime.env mutation."
+  - "No main promotion, tag, or release work."
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "The public MCP surface is exactly terminal_exec, terminal_start, terminal_poll, terminal_control, capacity_observer, fs_read_batch; the existing five contracts/semantics remain unchanged and fs_read_batch has exactly readOnly=true, destructive=false, idempotent=true, openWorld=false."
-    evidence_required: "Exact public list_tools/schema/annotation assertions through the real MCP Client plus focused registration tests."
+    requirement: "Selected-range UTF-8 behavior is deterministic: unselected invalid bytes before or after the requested lines do not affect the result, same-versus-next-chunk placement is equivalent, and invalid selected content returns INVALID_UTF8."
+    evidence_required: "Focused regressions force equivalent invalid unselected bytes into different read chunk layouts, cover invalid selected content, and prove identical client-visible semantics."
   - id: AC-2
-    requirement: "fs_read_batch enforces the exact ordered 1..20-item input and 1-based inclusive range semantics, supports duplicate paths/ranges, and returns closed typed ordered success/error results with no caller-controlled ceiling knobs."
-    evidence_required: "Focused typed-contract and behavior tests covering 1/20/21 items, range defaults/bounds, duplicate paths, ordering, and closed result schemas."
+    requirement: "The cwd trust-anchor descriptor is acquired race-resistently so intermediate-component replacement between validation and descriptor acquisition cannot redirect the authorized cwd."
+    evidence_required: "Implementation inspection plus a deterministic adversarial cwd-intermediate-component replacement test where feasible."
   - id: AC-3
-    requirement: "Filesystem access is regular-file-only, strict UTF-8, cwd-descendant, and no-symlink for every traversed item component at open time; deterministic tests prove Path.resolve()+open()-style TOCTOU/symlink escape is not the security mechanism."
-    evidence_required: "Focused adversarial tests for traversal, intermediate/final symlinks, race substitution where deterministic, and non-regular file rejection without blocking, plus implementation diff inspection of the open-time mechanism."
+    requirement: "All unaffected revision-1 contract predicates remain preserved, including exact six-tool surface, typed results/errors, item-path no-symlink traversal, special-file rejection, output limits, timing attribution, and MCP 2.2 sanitization."
+    evidence_required: "Affected existing conformance/security tests and exact correction diff inspection show no unrelated contract or dependency change."
   - id: AC-4
-    requirement: "Returned text is never silently truncated: complete selected text is capped at 128 KiB per successful item and 256 KiB aggregate, with typed no-text limit failures when a complete item cannot fit."
-    evidence_required: "Boundary tests immediately below/at/above both fixed byte ceilings, including multibyte UTF-8 accounting and assertions that limit errors contain no partial text."
+    requirement: "The stabilized corrected candidate passes canonical repository verification."
+    evidence_required: "Use targeted tests during iteration; after bytes stabilize, run ./verify once in full. A separate final focused rerun is not required when the full suite includes those regressions."
   - id: AC-5
-    requirement: "Invalid requests/configuration use deliberate bounded ToolError behavior; expected per-item filesystem failures are typed/sanitized; unexpected exceptions remain MCP 2.2.0-sanitized with no sentinel, traceback, raw OS error, absolute host path, or secret leakage."
-    evidence_required: "Real-client deliberate-error, item-error, schema-rejection-before-delegate, and injected unexpected-exception sanitization tests."
+    requirement: "Corrected production fs_read_batch still beats the optimized one-call terminal_exec baseline by at least 20% median and at least 20 ms absolute median on the bounded real-MCP workload."
+    evidence_required: "Fresh real-MCP benchmark with warmup and at least 20 measured calls per path records both medians, absolute and relative improvement, and material variance/outliers."
   - id: AC-6
-    requirement: "Existing timing observability recognizes all six public tool names, including capacity_observer and fs_read_batch, without telemetry expansion or payload logging."
-    evidence_required: "Timing tests showing tool_name attribution for capacity_observer and fs_read_batch and diff proof that no new telemetry payload/history surface was added."
+    requirement: "Correction remains narrowly scoped with no rejected capability, dependency, existing-tool semantic change, live Runtime/config mutation, main promotion, or release work."
+    evidence_required: "Exact revision-2-base-to-candidate diff/status inspection and boundary evidence."
   - id: AC-7
-    requirement: "README and server instructions document exactly six tools, fs_read_batch semantics/bounds, and that AGENT_RUNTIME_WORKSPACE_ROOT is not general mechanical filesystem confinement."
-    evidence_required: "Diff inspection of README/server instructions and exact public metadata assertions."
-  - id: AC-8
-    requirement: "Focused filesystem/security/contract tests and the real public MCP Client conformance gate pass for the complete six-tool surface, including schema/annotations, representative success/partial failure, deliberate ToolError, and unexpected-exception sanitization."
-    evidence_required: "Recorded commands and PASS outputs for focused suites and the real MCP Client conformance suite."
-  - id: AC-9
-    requirement: "A bounded production real-MCP benchmark on at least one five-file heterogeneous-range workload beats the best optimized one-call terminal_exec baseline by both >=20% median and >=20 ms absolute median; exact benchmark evidence is recorded in report.yaml and is not encoded as a flaky permanent unit-test assertion."
-    evidence_required: "Executor report records workload identity, exact optimized one-call baseline strategy, >=20 measured calls per path after warmup, both medians, relative improvement, absolute improvement, and material variance/outliers."
-  - id: AC-10
-    requirement: "./verify passes in full; no third-party dependency, live Runtime/config/tunnel/listener lifecycle mutation, terminal_exec redesign, rejected filesystem capability, main promotion, or release work is introduced."
-    evidence_required: "Full ./verify PASS plus exact base-to-candidate diff/status inspection and repository/runtime boundary evidence."
-  - id: AC-11
-    requirement: "origin/main remains unchanged; publication is implementation commit plus report-only commit, non-force to dev only, then stop for Architect review."
-    evidence_required: "Fresh remote refs before/after push and exact commit lineage showing one implementation commit followed by one report-only commit on dev, with unchanged main."
+    requirement: "Publication is one correction implementation commit followed by one report-revision-2-only commit on dev, non-force, with unchanged main, then stop for Architect review."
+    evidence_required: "Fresh remote refs before and after publication plus exact commit/report lineage."
 
 verification:
   executor_checks:
     - id: V-1
-      command_or_check: "Run focused fs_read_batch typed-contract, filesystem-security, timing, and public MCP Client conformance tests."
+      command_or_check: "During implementation, run the minimum focused regressions needed for the two defects and affected fs_read_batch security/conformance behavior."
       required: true
     - id: V-2
-      command_or_check: "Run ./verify in full on the exact implementation candidate."
+      command_or_check: "After implementation stabilizes, run ./verify once in full on the exact correction candidate."
       required: true
     - id: V-3
-      command_or_check: "Run the bounded production public-MCP benchmark in performance_acceptance and record exact method/results in .agent/tasks/TASK-0040/report.yaml."
+      command_or_check: "Run a fresh corrected-production real-MCP benchmark with at least 20 measured calls per path and record exact threshold evidence in report revision 2."
       required: true
     - id: V-4
-      command_or_check: "Inspect the exact base-to-candidate diff for forbidden filesystem APIs/frameworks, dependency changes, live Runtime/config mutations, and accidental terminal_exec semantic changes."
+      command_or_check: "Inspect the exact revision-2 base-to-candidate diff for scope, dependency, terminal_exec semantic, rejected-capability, and live-mutation violations."
       required: true
     - id: V-5
-      command_or_check: "Fresh-resolve origin/dev and origin/main before publication; non-force push only if dev still matches the authorized base/candidate lineage; fresh-resolve both refs after publication."
+      command_or_check: "Fresh-resolve origin/dev and origin/main immediately before non-force publication and again after publication; fail closed on drift."
       required: true
   authoritative_verification:
     required: false
@@ -265,6 +143,7 @@ verification:
 publication:
   implementation_commit_required: true
   report_path: .agent/tasks/TASK-0040/report.yaml
+  required_report_revision: 2
   push: non_force_dev
   stop_for_architect_review: true
 
