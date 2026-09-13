@@ -1,0 +1,183 @@
+protocol_version: 3
+
+task_id: TASK-0041
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_hardening_followup
+  task_id: TASK-0040
+  gap_id: PUBLIC_MCP_BOUNDEDNESS
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+architect_analysis_skills: [security-review, verification, optimization, github-workflow]
+
+execution_skills:
+  required: [executor, security-review, verification, optimization, github-workflow]
+  recommended: []
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "Operator-approved fellow-level hardening architecture and TASK-0041 contract on 2026-09-14."
+    role: "Governs scan accounting, deterministic exhaustion behavior, UTF-8 byte bounds, closed top-level MCP inputs, and real-client proof requirements for this task."
+    precedence: 1
+  - source: "phatnguyen03022001/agent-runtime@5c0f1315048e5d952cc80b4602b24d1c665bca11:.agent/tasks/TASK-0040/review.yaml"
+    role: "Accepted six-tool fs_read_batch baseline; all unaffected filesystem, UTF-8, output, error-sanitization, timing, and performance semantics remain authoritative."
+    precedence: 2
+
+classification:
+  decomposition_gate: FIT
+  change_class: PUBLIC_MCP_BOUNDEDNESS_AND_INPUT_CONTRACT_HARDENING
+
+structure_authority:
+  status: NOT_APPLICABLE
+  source: ""
+  rationale: "The work stays inside existing MCP contracts, fs_read_batch read accounting, registration/validation glue, tests, and minimal documentation; no new subsystem, service, framework, or top-level ownership boundary is authorized."
+
+objective: "Make all six public MCP tools explicitly bounded at their public input boundary and make fs_read_batch bounded by actual bytes scanned from file descriptors as well as returned output, while preserving the accepted six-tool semantics and measured performance rationale."
+
+reproduced_evidence:
+  - "At accepted dev HEAD 5c0f1315048e5d952cc80b4602b24d1c665bca11, an 8 MiB no-newline file requested at start_line=2 across 20 duplicate items produced zero output yet required about 5.15 seconds because scan work was not bounded."
+  - "All six currently published top-level MCP input schemas omit additionalProperties=false."
+  - "MCP 2.2.0 generated argument models ignore unknown top-level fields by default; schema appearance alone is therefore insufficient proof of rejection behavior."
+
+scope:
+  required_changes:
+    - "Add fixed server-owned fs_read_batch scan-work ceilings of 1 MiB actual bytes read per item and 4 MiB actual bytes read per batch, with no caller-controlled knobs."
+    - "Define scan_bytes as bytes actually returned by reads from the opened file descriptor. Duplicate items consume scan budget again independently; file size, output bytes, skipped bytes inferred without a read, and character counts are not scan_bytes."
+    - "Add stable typed ITEM_SCAN_LIMIT_EXCEEDED and BATCH_SCAN_LIMIT_EXCEEDED item errors with zero partial text."
+    - "When the 4 MiB batch scan budget is exhausted while processing an item, that item returns BATCH_SCAN_LIMIT_EXCEEDED with no text; every remaining ordered item deterministically returns BATCH_SCAN_LIMIT_EXCEEDED without opening or reading its file."
+    - "If item and batch scan budgets become exhausted at the same boundary before the requested selection is complete, BATCH_SCAN_LIMIT_EXCEEDED takes precedence because the global batch resource is exhausted. If only the 1 MiB item budget is exhausted, return ITEM_SCAN_LIMIT_EXCEEDED and continue later items while batch budget remains."
+    - "Never request more bytes from os.read than the remaining item budget and remaining batch budget permit, so accounting is exact and no over-budget read is hidden by post-read rejection."
+    - "Close the top-level input contract for all six public MCP tools so unknown top-level arguments are rejected before the delegate/tool body executes and published schemas contain additionalProperties=false."
+    - "Add reasonable public input bounds: argv has at most 128 items; every argv string is at most 16 KiB UTF-8 bytes; aggregate argv content is at most 256 KiB UTF-8 bytes; terminal write data is at most 64 KiB UTF-8 bytes; session_id is at most 128 characters; fs_read_batch line indexes are at most 2147483647. Preserve existing cwd/path/item-count/timeout/wait/dimension bounds."
+    - "For argv per-string, aggregate argv, and terminal write limits, enforce limits by UTF-8 encoded byte length, not Python character count. JSON Schema may additionally advertise safe character-count maxima, but runtime byte validation is authoritative."
+    - "Update README/tool documentation only as needed to state the new fixed bounds and scan-work behavior."
+    - "Use targeted tests during iteration, broader affected verification after stabilization, one canonical ./verify on exact stabilized candidate, and a fresh accepted production real-MCP performance benchmark before handoff."
+  allowed_existing_files_or_components:
+    - "agent_runtime/contracts.py and the smallest existing request-validation/helper surface needed for byte bounds and closed top-level arguments"
+    - "agent_runtime/fs_read.py scan accounting and typed error mapping"
+    - "agent_runtime/server.py registration/validation glue only if required to make MCP 2.2 reject unknown top-level fields before delegate execution"
+    - "existing fs_read_batch, MCP contract/client conformance, terminal exec/session, timing, and focused adversarial tests"
+    - "README.md"
+    - ".agent/tasks/TASK-0041/report.yaml"
+  expected_files_are_restrictive: false
+
+invariants:
+  - "Public MCP surface remains exactly terminal_exec, terminal_start, terminal_poll, terminal_control, capacity_observer, fs_read_batch."
+  - "Existing tool annotations and accepted terminal/fs_read_batch semantics remain unchanged except for the explicitly authorized input/work bounds and new scan-limit errors."
+  - "The existing 128 KiB per-item and 256 KiB aggregate fs_read_batch returned-text limits remain unchanged; scan budgets are independent work ceilings, not replacements for output ceilings."
+  - "No scan-limit failure returns partial text."
+  - "After batch scan exhaustion, no remaining item may trigger file open/read I/O."
+  - "Expected bounded validation failures remain deliberate ToolError or typed item failures as appropriate; unexpected exceptions remain MCP-sanitized."
+  - "Top-level unknown MCP arguments are rejected before delegate execution for every public tool."
+  - "No live Runtime, runtime.env, config, tunnel, listener, installed package, desired state, lifecycle, main, tag, or release mutation occurs."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+forbidden_changes:
+  - "Do not add text_search, fs_stat_batch, a generic filesystem API, hashing, globbing, recursive walk, directory listing, binary/base64 reads, arbitrary encoding detection, writes, watch, index, cache, daemon, service, database, or registry."
+  - "Do not redesign terminal_exec, PTY/session lifecycle, capacity_observer semantics, timing architecture, Runtime protection model, packaging, dependency locking, installer/bootstrap, CI, or release workflow in this task."
+  - "Do not add a caller-controlled scan/output/resource limit knob."
+  - "Do not add third-party dependencies."
+  - "Do not install, reinstall, activate, reload, restart, stop, rebind, or otherwise lifecycle-mutate the live Agent Runtime."
+  - "Do not mutate runtime.env, tunnel identity, listener state, desired-state files, LaunchAgents, installed Runtime package, main, tags, or releases."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "fs_read_batch scan work is bounded by exactly 1 MiB of actual FD-read bytes per item and exactly 4 MiB per batch, independent of returned output size."
+    evidence_required: "Deterministic byte-accounting tests instrument reads and cover giant no-newline files, start_line beyond scanned content, sparse ranges, duplicate items, exact-below/at/above item and batch boundaries, and prove no read exceeds remaining budget."
+  - id: AC-2
+    requirement: "Scan-limit result semantics are deterministic: item-only exhaustion yields ITEM_SCAN_LIMIT_EXCEEDED with no text and later items may continue; batch exhaustion yields BATCH_SCAN_LIMIT_EXCEEDED for the current item and every remaining item with no text and zero subsequent item file I/O; batch takes precedence on simultaneous exhaustion."
+    evidence_required: "Focused adversarial tests assert exact ordered results and instrument open/read calls to prove zero post-exhaustion I/O."
+  - id: AC-3
+    requirement: "All six published top-level MCP input schemas are closed with additionalProperties=false and unknown top-level fields are rejected by the real MCP Client before the underlying delegate executes."
+    evidence_required: "Exact list_tools schema assertions plus real MCP Client calls injecting one unknown top-level field into each of the six tools, with delegate sentinels proving rejection-before-delegate."
+  - id: AC-4
+    requirement: "Public request dimensions are bounded as authorized: argv <=128 items, each argv element <=16 KiB UTF-8 bytes, aggregate argv <=256 KiB UTF-8 bytes, terminal write data <=64 KiB UTF-8 bytes, session_id <=128 characters, fs_read line indexes <=2147483647, while existing bounds remain intact."
+    evidence_required: "Boundary tests immediately below/at/above every new limit, including multibyte UTF-8 cases proving argv/write/aggregate enforcement uses encoded byte length rather than character count."
+  - id: AC-5
+    requirement: "Accepted TASK-0040 filesystem security, selected-range UTF-8, regular-file/no-symlink behavior, output ceilings, typed existing errors, MCP unexpected-exception sanitization, annotations, timing attribution, and six-tool surface remain preserved."
+    evidence_required: "Affected existing fs/security/MCP/terminal/timing conformance tests plus exact diff inspection show no unrelated semantic regression."
+  - id: AC-6
+    requirement: "The stabilized candidate passes canonical repository verification exactly once after implementation bytes stabilize."
+    evidence_required: "./verify PASS with command, test count, failure count, exit code, and exact candidate identity; report records that full-suite verification was not used as the default inner loop."
+  - id: AC-7
+    requirement: "The stabilized production fs_read_batch preserves the accepted real-MCP performance admission: optimized one-call terminal_exec is beaten by at least 20% median and at least 20 ms absolute median on the accepted representative five-file workload."
+    evidence_required: "Fresh real MCP 2.2 Client benchmark after warmup with at least 20 measured calls per path records equivalent logical content, both medians, absolute/relative improvement, and material variance/outliers."
+  - id: AC-8
+    requirement: "The task remains limited to public MCP boundedness/input contracts and introduces no dependency, protection-model, packaging/bootstrap/CI, live Runtime/config, main, tag, or release change."
+    evidence_required: "Exact base-to-candidate diff/status inspection and boundary evidence."
+  - id: AC-9
+    requirement: "Publication is one implementation commit followed by one report-only commit on dev, non-force, with unchanged main, then stop for Architect review."
+    evidence_required: "Fresh remote refs before/after publication and exact commit lineage."
+
+verification:
+  executor_checks:
+    - id: V-1
+      command_or_check: "During iteration, run only minimum targeted scan-budget, closed-schema, byte-bound, and directly affected contract regressions; record any deliberate RED-to-GREEN TDD evidence for new material predicates."
+      required: true
+    - id: V-2
+      command_or_check: "After implementation stabilizes, run the broader affected fs_read_batch/MCP client/terminal/timing conformance set once."
+      required: true
+    - id: V-3
+      command_or_check: "After bytes stabilize, run ./verify once in full on the exact candidate."
+      required: true
+    - id: V-4
+      command_or_check: "Run a fresh accepted production real-MCP benchmark with at least 20 measured calls/path and record exact threshold evidence."
+      required: true
+    - id: V-5
+      command_or_check: "Inspect exact base-to-candidate diff for scope, dependency, packaging/bootstrap/protection/CI, live-mutation, and existing-tool semantic violations."
+      required: true
+    - id: V-6
+      command_or_check: "Fresh-resolve origin/dev and origin/main immediately before non-force publication and again after publication; fail closed on drift."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "NONE"
+    expected_signal: "NOT_REQUIRED_FOR_THIS_EXECUTION_TASK"
+
+publication:
+  implementation_commit_required: true
+  report_path: .agent/tasks/TASK-0041/report.yaml
+  required_report_revision: 1
+  push: non_force_dev
+  stop_for_architect_review: true
+
+git_authority:
+  create_branch: false
+  create_worktree: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
