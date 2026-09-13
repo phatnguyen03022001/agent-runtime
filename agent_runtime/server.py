@@ -10,6 +10,8 @@ try:
 except ImportError:
     from mcp.server.mcpserver import MCPServer
 
+from mcp.server.mcpserver.exceptions import ToolError
+
 try:
     from mcp.types import ToolAnnotations as _ToolAnnotations
 except ImportError:
@@ -31,7 +33,9 @@ from .contracts import (
     TimeoutSeconds,
     WaitMilliseconds,
 )
+from .errors import RuntimeStateError, RuntimeValidationError
 from .executor import execute_terminal
+from .protection import ProtectedRuntimeDenied
 from .session import (
     control_terminal as _control_terminal,
     poll_terminal as _poll_terminal,
@@ -55,6 +59,19 @@ mcp = MCPServer(
     description=SERVER_DESCRIPTION,
     instructions=SERVER_INSTRUCTIONS,
 )
+
+_EXPECTED_TOOL_ERRORS = (
+    RuntimeValidationError,
+    RuntimeStateError,
+    ProtectedRuntimeDenied,
+)
+
+
+def _call_runtime_tool(delegate: Callable[..., Any], *args: Any) -> Any:
+    try:
+        return delegate(*args)
+    except _EXPECTED_TOOL_ERRORS as exc:
+        raise ToolError(str(exc)) from None
 
 
 def _tool_annotations_supported() -> bool:
@@ -165,14 +182,14 @@ def terminal_exec(
 ) -> TerminalExecResult:
     """Run one literal local argv; this capability may modify the host."""
 
-    return cast(TerminalExecResult, execute_terminal(argv, cwd, timeout_seconds))
+    return cast(TerminalExecResult, _call_runtime_tool(execute_terminal, argv, cwd, timeout_seconds))
 
 
 @_tool(read_only=False, destructive=True, idempotent=False, open_world=True)
 def terminal_start(argv: Argv, cwd: AbsoluteCwd) -> TerminalSessionResult:
     """Start one literal argv in a bounded persistent PTY session."""
 
-    return cast(TerminalSessionResult, _start_terminal(argv, cwd))
+    return cast(TerminalSessionResult, _call_runtime_tool(_start_terminal, argv, cwd))
 
 
 @_tool(read_only=False, destructive=False, idempotent=False, open_world=False)
@@ -183,7 +200,7 @@ def terminal_poll(
 ) -> TerminalSessionResult:
     """Read bounded incremental PTY output and current session status."""
 
-    return cast(TerminalSessionResult, _poll_terminal(session_id, cursor, wait_ms))
+    return cast(TerminalSessionResult, _call_runtime_tool(_poll_terminal, session_id, cursor, wait_ms))
 
 
 @_tool(read_only=False, destructive=True, idempotent=False, open_world=True)
@@ -196,14 +213,17 @@ def terminal_control(
 ) -> TerminalControlResult:
     """Write, interrupt, terminate, or resize one persistent PTY session."""
 
-    return cast(TerminalControlResult, _control_terminal(session_id, action, data, rows, cols))
+    return cast(
+        TerminalControlResult,
+        _call_runtime_tool(_control_terminal, session_id, action, data, rows, cols),
+    )
 
 
 @_tool(read_only=True, destructive=False, idempotent=True, open_world=False)
 def capacity_observer() -> CapacityObserverResult:
     """Report a bounded read-only advisory machine-capacity ceiling."""
 
-    return cast(CapacityObserverResult, observe_capacity())
+    return cast(CapacityObserverResult, _call_runtime_tool(observe_capacity))
 
 
 def _install_timing_middleware() -> None:

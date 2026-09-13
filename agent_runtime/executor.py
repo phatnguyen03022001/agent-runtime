@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from .errors import RuntimeValidationError
 from .protection import _PROTECTED_GUARD
 from .timing import current_call_context, emit_process_end
 
@@ -45,22 +46,22 @@ class _BoundedCapture:
 
 def _validated_argv(argv: list[str]) -> list[str]:
     if not isinstance(argv, list) or not argv:
-        raise ValueError("argv must be a non-empty list of strings")
+        raise RuntimeValidationError("argv must be a non-empty list of strings")
     if any(not isinstance(item, str) for item in argv):
-        raise ValueError("argv must be a non-empty list of strings")
+        raise RuntimeValidationError("argv must be a non-empty list of strings")
     if not argv[0]:
-        raise ValueError("argv executable must be non-empty")
+        raise RuntimeValidationError("argv executable must be non-empty")
     if any("\x00" in item for item in argv):
-        raise ValueError("argv must not contain NUL bytes")
+        raise RuntimeValidationError("argv must not contain NUL bytes")
     return list(argv)
 
 
 def _validated_timeout(timeout_seconds: float) -> float:
     if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)):
-        raise ValueError("timeout_seconds must be numeric")
+        raise RuntimeValidationError("timeout_seconds must be numeric")
     timeout = float(timeout_seconds)
     if timeout <= 0 or timeout > MAX_TIMEOUT_SECONDS:
-        raise ValueError(
+        raise RuntimeValidationError(
             f"timeout_seconds must be greater than 0 and at most {MAX_TIMEOUT_SECONDS:g}"
         )
     return timeout
@@ -69,35 +70,35 @@ def _validated_timeout(timeout_seconds: float) -> float:
 def _workspace_root() -> Path:
     raw = os.environ.get(WORKSPACE_ROOT_ENV, "")
     if not raw:
-        raise ValueError(f"{WORKSPACE_ROOT_ENV} must be set")
+        raise RuntimeValidationError(f"{WORKSPACE_ROOT_ENV} must be set")
     path = Path(raw)
     if not path.is_absolute():
-        raise ValueError(f"{WORKSPACE_ROOT_ENV} must be an absolute path")
+        raise RuntimeValidationError(f"{WORKSPACE_ROOT_ENV} must be an absolute path")
     try:
         resolved = path.resolve(strict=True)
     except OSError as exc:
-        raise ValueError(f"{WORKSPACE_ROOT_ENV} must identify an existing directory") from exc
+        raise RuntimeValidationError(f"{WORKSPACE_ROOT_ENV} must identify an existing directory") from exc
     if not resolved.is_dir():
-        raise ValueError(f"{WORKSPACE_ROOT_ENV} must identify an existing directory")
+        raise RuntimeValidationError(f"{WORKSPACE_ROOT_ENV} must identify an existing directory")
     return resolved
 
 
 def _validated_cwd(raw_cwd: str, root: Path) -> Path:
     if not isinstance(raw_cwd, str) or not raw_cwd:
-        raise ValueError("cwd must be a non-empty absolute path")
+        raise RuntimeValidationError("cwd must be a non-empty absolute path")
     path = Path(raw_cwd)
     if not path.is_absolute():
-        raise ValueError("cwd must be an absolute path")
+        raise RuntimeValidationError("cwd must be an absolute path")
     try:
         resolved = path.resolve(strict=True)
     except OSError as exc:
-        raise ValueError("cwd must identify an existing directory") from exc
+        raise RuntimeValidationError("cwd must identify an existing directory") from exc
     if not resolved.is_dir():
-        raise ValueError("cwd must identify an existing directory")
+        raise RuntimeValidationError("cwd must identify an existing directory")
     try:
         resolved.relative_to(root)
     except ValueError as exc:
-        raise ValueError("cwd resolves outside AGENT_RUNTIME_WORKSPACE_ROOT") from exc
+        raise RuntimeValidationError("cwd resolves outside AGENT_RUNTIME_WORKSPACE_ROOT") from exc
     return resolved
 
 

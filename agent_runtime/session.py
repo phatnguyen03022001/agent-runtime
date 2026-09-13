@@ -15,6 +15,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from .errors import RuntimeStateError, RuntimeValidationError
 from .executor import (
     _minimal_child_env,
     _terminate_process_group,
@@ -56,7 +57,7 @@ def effective_session_limit(raw_value: str | None = None) -> int:
 
 def _validated_session_limit(value: int) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-        raise ValueError("max_active_sessions must be a positive integer")
+        raise RuntimeValidationError("max_active_sessions must be a positive integer")
     return value
 
 
@@ -124,7 +125,7 @@ class TerminalSessionManager:
         with self._lock:
             active = sum(session.status == "running" for session in self._sessions.values())
             if active >= self.max_active_sessions:
-                raise RuntimeError(
+                raise RuntimeStateError(
                     f"configured maximum {self.max_active_sessions} active terminal sessions reached"
                 )
 
@@ -191,7 +192,7 @@ class TerminalSessionManager:
 
             retained_end = session.base_cursor + len(session.output)
             if checked_cursor > retained_end:
-                raise ValueError("cursor is ahead of available session output")
+                raise RuntimeValidationError("cursor is ahead of available session output")
 
             cursor_expired = checked_cursor < session.base_cursor
             dropped = max(0, session.base_cursor - checked_cursor)
@@ -227,7 +228,7 @@ class TerminalSessionManager:
         if action == "write":
             self._require_no_dimensions(rows, cols)
             if not isinstance(data, str):
-                raise ValueError("write action requires UTF-8 string data")
+                raise RuntimeValidationError("write action requires UTF-8 string data")
             buffered = session.protected_input_buffer if isinstance(session.protected_input_buffer, str) else ""
             pending = buffered + data
             _PROTECTED_GUARD.check(["/bin/sh", "-c", pending], tool_name="terminal_control")
@@ -261,7 +262,7 @@ class TerminalSessionManager:
 
         if action == "resize":
             if data is not None:
-                raise ValueError("resize action does not accept data")
+                raise RuntimeValidationError("resize action does not accept data")
             if (
                 isinstance(rows, bool)
                 or isinstance(cols, bool)
@@ -272,14 +273,14 @@ class TerminalSessionManager:
                 or rows > 65535
                 or cols > 65535
             ):
-                raise ValueError("resize action requires positive integer rows and cols")
+                raise RuntimeValidationError("resize action requires positive integer rows and cols")
             self._require_running(session)
             winsize = struct.pack("HHHH", rows, cols, 0, 0)
             fcntl.ioctl(session.master_fd, termios.TIOCSWINSZ, winsize)
             self._touch(session)
             return self._control_result(session)
 
-        raise ValueError("action must be one of: write, interrupt, terminate, resize")
+        raise RuntimeValidationError("action must be one of: write, interrupt, terminate, resize")
 
     def reap_idle_once(self) -> list[str]:
         now = self._clock()
@@ -319,11 +320,11 @@ class TerminalSessionManager:
 
     def _get_session(self, session_id: str) -> _Session:
         if not isinstance(session_id, str) or not session_id:
-            raise ValueError("session_id must be a non-empty string")
+            raise RuntimeValidationError("session_id must be a non-empty string")
         with self._lock:
             session = self._sessions.get(session_id)
         if session is None:
-            raise ValueError("unknown or expired session_id")
+            raise RuntimeValidationError("unknown or expired session_id")
         return session
 
     def _reader(self, session: _Session) -> None:
@@ -408,7 +409,7 @@ class TerminalSessionManager:
     @staticmethod
     def _validated_cursor(cursor: int) -> int:
         if isinstance(cursor, bool) or not isinstance(cursor, int) or cursor < 0:
-            raise ValueError("cursor must be a non-negative integer")
+            raise RuntimeValidationError("cursor must be a non-negative integer")
         return cursor
 
     @staticmethod
@@ -419,13 +420,13 @@ class TerminalSessionManager:
             or wait_ms < 0
             or wait_ms > MAX_WAIT_MS
         ):
-            raise ValueError(f"wait_ms must be an integer from 0 to {MAX_WAIT_MS}")
+            raise RuntimeValidationError(f"wait_ms must be an integer from 0 to {MAX_WAIT_MS}")
         return wait_ms
 
     @staticmethod
     def _require_no_dimensions(rows: int | None, cols: int | None) -> None:
         if rows is not None or cols is not None:
-            raise ValueError("write action does not accept rows or cols")
+            raise RuntimeValidationError("write action does not accept rows or cols")
 
     @staticmethod
     def _require_no_arguments(
@@ -434,13 +435,13 @@ class TerminalSessionManager:
         cols: int | None,
     ) -> None:
         if data is not None or rows is not None or cols is not None:
-            raise ValueError("action does not accept data, rows, or cols")
+            raise RuntimeValidationError("action does not accept data, rows, or cols")
 
     @staticmethod
     def _require_running(session: _Session) -> None:
         with session.lock:
             if session.status != "running" or session.process.poll() is not None:
-                raise RuntimeError("terminal session is not running")
+                raise RuntimeStateError("terminal session is not running")
 
     @staticmethod
     def _control_result(session: _Session) -> dict[str, Any]:

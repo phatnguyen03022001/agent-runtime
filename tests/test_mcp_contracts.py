@@ -194,8 +194,8 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
             }
             self.assertEqual(field_names, expected, name)
 
-    def test_sdk_pin_remains_exactly_mcp_2_0_0(self) -> None:
-        self.assertEqual((ROOT / "requirements.txt").read_text(), "mcp==2.0.0\n")
+    def test_sdk_pin_is_exactly_mcp_2_2_0(self) -> None:
+        self.assertEqual((ROOT / "requirements.txt").read_text(), "mcp==2.2.0\n")
 
     async def test_server_metadata_is_explicit_and_machine_useful(self) -> None:
         self.assertEqual(server.mcp.name, "Agent Runtime")

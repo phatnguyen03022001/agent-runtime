@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .errors import RuntimeValidationError
+
 MAX_PARALLELISM_ENV = "AGENT_RUNTIME_MAX_PARALLELISM"
 DEFAULT_MAX_PARALLELISM = 2
 V1_EVIDENCE_CEILING = 2
@@ -114,10 +116,10 @@ def _configured_max_parallelism() -> int:
     if raw is None:
         return DEFAULT_MAX_PARALLELISM
     if re.fullmatch(r"[1-9][0-9]*", raw) is None:
-        raise ValueError(f"{MAX_PARALLELISM_ENV} must be an integer from 1 through 10")
+        raise RuntimeValidationError(f"{MAX_PARALLELISM_ENV} must be an integer from 1 through 10")
     value = int(raw)
     if not 1 <= value <= 10:
-        raise ValueError(f"{MAX_PARALLELISM_ENV} must be an integer from 1 through 10")
+        raise RuntimeValidationError(f"{MAX_PARALLELISM_ENV} must be an integer from 1 through 10")
     return value
 
 
