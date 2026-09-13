@@ -485,7 +485,7 @@ class TerminalSessionTests(unittest.TestCase):
 import pathlib, sys, time, types
 
 class FakeMCPServer:
-    def __init__(self, _name):
+    def __init__(self, name=None, **_metadata):
         self.middleware = []
 
     def tool(self, annotations=None):

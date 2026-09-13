@@ -3,7 +3,7 @@ from __future__ import annotations
 import inspect
 import os
 import signal
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 try:
     from mcp.server import MCPServer
@@ -16,6 +16,21 @@ except ImportError:
     _ToolAnnotations = None
 
 from .capacity import observe_capacity
+from .contracts import (
+    AbsoluteCwd,
+    Argv,
+    CapacityObserverResult,
+    ControlAction,
+    Cursor,
+    SessionId,
+    TerminalControlResult,
+    TerminalData,
+    TerminalDimension,
+    TerminalExecResult,
+    TerminalSessionResult,
+    TimeoutSeconds,
+    WaitMilliseconds,
+)
 from .executor import execute_terminal
 from .session import (
     control_terminal as _control_terminal,
@@ -26,7 +41,20 @@ from .session import (
 from .timing import timed_tool_wrapper, timing_middleware
 
 PUBLIC_TOOL_NAMES = ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "capacity_observer")
-mcp = MCPServer("Agent Runtime")
+SERVER_DESCRIPTION = "Bounded local command execution and advisory capacity MCP server."
+SERVER_INSTRUCTIONS = (
+    "Execute literal argv with shell=False and no implicit shell. "
+    "Use an absolute cwd under the configured workspace root. "
+    "terminal_exec is one-shot; terminal_start begins a PTY lifecycle managed with "
+    "terminal_poll and terminal_control. Tools expose bounded output. "
+    "capacity_observer provides read-only advisory capacity information."
+)
+mcp = MCPServer(
+    name="Agent Runtime",
+    version="0.2.0",
+    description=SERVER_DESCRIPTION,
+    instructions=SERVER_INSTRUCTIONS,
+)
 
 
 def _tool_annotations_supported() -> bool:
@@ -131,51 +159,51 @@ def _tool(
 
 @_tool(read_only=False, destructive=True, idempotent=False, open_world=True)
 def terminal_exec(
-    argv: list[str],
-    cwd: str,
-    timeout_seconds: float = 300.0,
-) -> dict[str, Any]:
+    argv: Argv,
+    cwd: AbsoluteCwd,
+    timeout_seconds: TimeoutSeconds = 300.0,
+) -> TerminalExecResult:
     """Run one literal local argv; this capability may modify the host."""
 
-    return execute_terminal(argv, cwd, timeout_seconds)
+    return cast(TerminalExecResult, execute_terminal(argv, cwd, timeout_seconds))
 
 
 @_tool(read_only=False, destructive=True, idempotent=False, open_world=True)
-def terminal_start(argv: list[str], cwd: str) -> dict[str, Any]:
+def terminal_start(argv: Argv, cwd: AbsoluteCwd) -> TerminalSessionResult:
     """Start one literal argv in a bounded persistent PTY session."""
 
-    return _start_terminal(argv, cwd)
+    return cast(TerminalSessionResult, _start_terminal(argv, cwd))
 
 
 @_tool(read_only=False, destructive=False, idempotent=False, open_world=False)
 def terminal_poll(
-    session_id: str,
-    cursor: int = 0,
-    wait_ms: int = 0,
-) -> dict[str, Any]:
+    session_id: SessionId,
+    cursor: Cursor = 0,
+    wait_ms: WaitMilliseconds = 0,
+) -> TerminalSessionResult:
     """Read bounded incremental PTY output and current session status."""
 
-    return _poll_terminal(session_id, cursor, wait_ms)
+    return cast(TerminalSessionResult, _poll_terminal(session_id, cursor, wait_ms))
 
 
 @_tool(read_only=False, destructive=True, idempotent=False, open_world=True)
 def terminal_control(
-    session_id: str,
-    action: str,
-    data: str | None = None,
-    rows: int | None = None,
-    cols: int | None = None,
-) -> dict[str, Any]:
+    session_id: SessionId,
+    action: ControlAction,
+    data: TerminalData = None,
+    rows: TerminalDimension | None = None,
+    cols: TerminalDimension | None = None,
+) -> TerminalControlResult:
     """Write, interrupt, terminate, or resize one persistent PTY session."""
 
-    return _control_terminal(session_id, action, data, rows, cols)
+    return cast(TerminalControlResult, _control_terminal(session_id, action, data, rows, cols))
 
 
 @_tool(read_only=True, destructive=False, idempotent=True, open_world=False)
-def capacity_observer() -> dict[str, Any]:
+def capacity_observer() -> CapacityObserverResult:
     """Report a bounded read-only advisory machine-capacity ceiling."""
 
-    return observe_capacity()
+    return cast(CapacityObserverResult, observe_capacity())
 
 
 def _install_timing_middleware() -> None:

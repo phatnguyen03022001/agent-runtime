@@ -139,8 +139,9 @@ class SurfaceAndScriptsTests(unittest.TestCase):
                 self.values = kwargs
 
         class FakeMCPServer:
-            def __init__(self, name: str) -> None:
+            def __init__(self, name: str, **metadata) -> None:
                 self.name = name
+                self.metadata = metadata
                 self.tools = {}
 
             def tool(self, annotations=None):
