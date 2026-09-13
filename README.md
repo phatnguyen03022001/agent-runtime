@@ -80,7 +80,7 @@ out-of-band tools outside Agent Runtime's enforcement boundary.
 
 ## Tool surface
 
-The MCP server exposes exactly five public tools:
+The MCP server exposes exactly six public tools:
 
 - `terminal_exec(argv, cwd, timeout_seconds=300)` executes one literal argv
   with `shell=False`, disconnected stdin, bounded output, and bounded cleanup.
@@ -95,6 +95,11 @@ The MCP server exposes exactly five public tools:
   snapshot with a bounded signal summary, reason codes, and advisory
   `capacity_parallelism_ceiling`. It does not spawn, schedule, queue, reorder,
   retry, or cancel work.
+- `fs_read_batch(cwd, items)` reads 1..20 ordered cwd-relative UTF-8 regular
+  files or inclusive line ranges. It rejects absolute/dot/dot-dot/empty path
+  components and symlinks, never truncates successful text, and enforces fixed
+  128 KiB per-item plus 256 KiB aggregate UTF-8 output ceilings with typed
+  per-item filesystem errors. It is read-only and exposes no caller limit knobs.
 
 Capacity Observer v1 reports only an x1/x2 host-capacity ceiling. The effective
 ceiling is `min(AGENT_RUNTIME_MAX_PARALLELISM, evidence_based_ceiling_v1)`, so an
@@ -124,6 +129,9 @@ lifecycle lock.
 `AGENT_RUNTIME_WORKSPACE_ROOT` selects the allowed working-directory tree. It
 is not mechanical filesystem confinement: executable arguments retain the
 operator account's normal host permissions.
+`fs_read_batch` additionally anchors each item below its validated cwd with
+descriptor-relative no-symlink traversal. That bounded read rule does not turn
+the workspace root into general host filesystem confinement.
 
 ## Native app development and packaging
 

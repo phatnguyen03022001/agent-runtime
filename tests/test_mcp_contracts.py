@@ -17,6 +17,7 @@ EXPECTED_TOOLS = (
     "terminal_poll",
     "terminal_control",
     "capacity_observer",
+    "fs_read_batch",
 )
 EXPECTED_ANNOTATIONS = {
     "terminal_exec": (False, True, False, True),
@@ -24,6 +25,7 @@ EXPECTED_ANNOTATIONS = {
     "terminal_poll": (False, False, False, False),
     "terminal_control": (False, True, False, True),
     "capacity_observer": (True, False, True, False),
+    "fs_read_batch": (True, False, True, False),
 }
 
 
@@ -89,7 +91,7 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
         for node in objects:
             self.assertIs(node.get("additionalProperties"), False, node)
 
-    async def test_exact_five_tool_surface_and_annotations_are_preserved(self) -> None:
+    async def test_exact_six_tool_surface_and_annotations_are_preserved(self) -> None:
         tools = await server.mcp.list_tools()
         self.assertEqual(tuple(tool.name for tool in tools), EXPECTED_TOOLS)
         for tool in tools:
@@ -181,6 +183,10 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
                 "vm_compressor_bytes",
                 "disk_available_bytes",
                 "probe_status",
+            },
+            "fs_read_batch": {
+                "items", "status", "path", "start_line", "end_line",
+                "text", "error_code", "message",
             },
         }
         for name, expected in expected_fields.items():

@@ -119,7 +119,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
 
         self.assertEqual(
             assigned.get("PUBLIC_TOOL_NAMES"),
-            ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "capacity_observer"),
+            ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "capacity_observer", "fs_read_batch"),
         )
         for name in assigned["PUBLIC_TOOL_NAMES"]:
             self.assertIn(name, functions)
@@ -170,7 +170,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
             module = importlib.import_module("agent_runtime.server")
             self.assertEqual(
                 tuple(module.mcp.tools),
-                ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "capacity_observer"),
+                ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "capacity_observer", "fs_read_batch"),
             )
             expected = {
                 "terminal_exec": (False, True, False, True),
@@ -178,6 +178,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
                 "terminal_poll": (False, False, False, False),
                 "terminal_control": (False, True, False, True),
                 "capacity_observer": (True, False, True, False),
+                "fs_read_batch": (True, False, True, False),
             }
             for name, values in expected.items():
                 _, annotations = module.mcp.tools[name]
@@ -292,7 +293,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertIn("protected singleton", docs)
         self.assertIn("root/sudo", docs)
         self.assertIn("malicious local administrator", docs)
-        self.assertIn("five public tools", docs)
+        self.assertIn("six public tools", docs)
         self.assertIn("AGENT_RUNTIME_MAX_PARALLELISM", docs)
         self.assertIn("capacity_observer", docs)
 

@@ -24,6 +24,8 @@ from .contracts import (
     CapacityObserverResult,
     ControlAction,
     Cursor,
+    FsReadBatchResult,
+    FsReadItems,
     SessionId,
     TerminalControlResult,
     TerminalData,
@@ -35,6 +37,7 @@ from .contracts import (
 )
 from .errors import RuntimeStateError, RuntimeValidationError
 from .executor import execute_terminal
+from .fs_read import read_files_batch
 from .protection import ProtectedRuntimeDenied
 from .session import (
     control_terminal as _control_terminal,
@@ -44,14 +47,16 @@ from .session import (
 )
 from .timing import timed_tool_wrapper, timing_middleware
 
-PUBLIC_TOOL_NAMES = ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "capacity_observer")
+PUBLIC_TOOL_NAMES = ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "capacity_observer", "fs_read_batch")
 SERVER_DESCRIPTION = "Bounded local command execution and advisory capacity MCP server."
 SERVER_INSTRUCTIONS = (
     "Execute literal argv with shell=False and no implicit shell. "
     "Use an absolute cwd under the configured workspace root. "
     "terminal_exec is one-shot; terminal_start begins a PTY lifecycle managed with "
     "terminal_poll and terminal_control. Tools expose bounded output. "
-    "capacity_observer provides read-only advisory capacity information."
+    "capacity_observer provides read-only advisory capacity information. "
+    "fs_read_batch performs read-only ordered cwd-relative UTF-8 file reads for at most 20 items "
+    "with fixed output ceilings and per-item filesystem failures."
 )
 mcp = MCPServer(
     name="Agent Runtime",
@@ -224,6 +229,13 @@ def capacity_observer() -> CapacityObserverResult:
     """Report a bounded read-only advisory machine-capacity ceiling."""
 
     return cast(CapacityObserverResult, _call_runtime_tool(observe_capacity))
+
+
+@_tool(read_only=True, destructive=False, idempotent=True, open_world=False)
+def fs_read_batch(cwd: AbsoluteCwd, items: FsReadItems) -> FsReadBatchResult:
+    """Read bounded ordered UTF-8 file ranges below one validated cwd."""
+
+    return cast(FsReadBatchResult, _call_runtime_tool(read_files_batch, cwd, items))
 
 
 def _install_timing_middleware() -> None:

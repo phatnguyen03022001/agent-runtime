@@ -23,6 +23,9 @@ WaitMilliseconds = Annotated[int, Field(strict=True, ge=0, le=1000)]
 ControlAction = Literal["write", "interrupt", "terminate", "resize"]
 TerminalData = StrictStr | None
 TerminalDimension = Annotated[int, Field(strict=True, ge=1, le=65535)]
+FsReadPath = Annotated[StrictStr, Field(min_length=1, max_length=4096)]
+FsReadLine = Annotated[int, Field(strict=True, ge=1)]
+FsReadMessage = Annotated[StrictStr, Field(max_length=160)]
 
 
 class _ClosedResult(BaseModel):
@@ -104,3 +107,46 @@ class CapacityObserverResult(_ClosedResult):
     capacity_parallelism_ceiling: int
     reason_codes: list[str]
     signals: CapacitySignals
+
+
+class FsReadItem(_ClosedResult):
+    path: FsReadPath
+    start_line: FsReadLine | None = None
+    end_line: FsReadLine | None = None
+
+
+FsReadItems = Annotated[list[FsReadItem], Field(strict=True, min_length=1, max_length=20)]
+FsReadErrorCode = Literal[
+    "NOT_FOUND",
+    "ACCESS_DENIED",
+    "SYMLINK_DISALLOWED",
+    "NOT_REGULAR_FILE",
+    "INVALID_UTF8",
+    "ITEM_OUTPUT_LIMIT_EXCEEDED",
+    "BATCH_OUTPUT_LIMIT_EXCEEDED",
+    "READ_FAILED",
+]
+
+
+class FsReadOkResult(_ClosedResult):
+    status: Literal["ok"]
+    path: str
+    start_line: int
+    end_line: int | None
+    text: str
+
+
+class FsReadErrorResult(_ClosedResult):
+    status: Literal["error"]
+    path: str
+    start_line: int
+    end_line: int | None
+    error_code: FsReadErrorCode
+    message: FsReadMessage
+
+
+FsReadItemResult = Annotated[FsReadOkResult | FsReadErrorResult, Field(discriminator="status")]
+
+
+class FsReadBatchResult(_ClosedResult):
+    items: list[FsReadItemResult]

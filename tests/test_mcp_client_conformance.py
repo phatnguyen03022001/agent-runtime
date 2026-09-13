@@ -20,6 +20,7 @@ EXPECTED_TOOLS = (
     "terminal_poll",
     "terminal_control",
     "capacity_observer",
+    "fs_read_batch",
 )
 EXPECTED_ANNOTATIONS = {
     "terminal_exec": (False, True, False, True),
@@ -27,6 +28,7 @@ EXPECTED_ANNOTATIONS = {
     "terminal_poll": (False, False, False, False),
     "terminal_control": (False, True, False, True),
     "capacity_observer": (True, False, True, False),
+    "fs_read_batch": (True, False, True, False),
 }
 EXPECTED_OUTPUT_FIELDS = {
     "terminal_exec": {
@@ -49,6 +51,10 @@ EXPECTED_OUTPUT_FIELDS = {
         "swapout_delta_pages", "vm_free_bytes", "vm_inactive_bytes",
         "vm_purgeable_bytes", "vm_compressor_bytes", "disk_available_bytes",
         "probe_status",
+    },
+    "fs_read_batch": {
+        "items", "status", "path", "start_line", "end_line",
+        "text", "error_code", "message",
     },
 }
 
