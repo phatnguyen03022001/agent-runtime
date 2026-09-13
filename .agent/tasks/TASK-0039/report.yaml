@@ -1,0 +1,304 @@
+protocol_version: 3
+
+task_id: TASK-0039
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0039/task.yaml
+  commit: "56a2ed6d22c5a3e95926ab1a9103a0eea6635704"
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "56a2ed6d22c5a3e95926ab1a9103a0eea6635704"
+  implementation_commit: "74f1441f26d25abe155294dae3ba80245cedfd35"
+  fresh_bind:
+    result: PASS
+    evidence: >-
+      Fetched origin/dev and origin/main, fast-forwarded the clean canonical checkout to the
+      exact authorized base, and verified origin/main remained the required fixed revision
+      before implementation mutation.
+
+upstream_review:
+  result: PASS
+  sources:
+    - "https://github.com/modelcontextprotocol/python-sdk/releases/tag/v2.2.0"
+    - "https://github.com/modelcontextprotocol/python-sdk/blob/main/docs/client/index.md"
+    - "https://github.com/modelcontextprotocol/python-sdk/blob/main/docs/whats-new.md"
+    - "https://github.com/modelcontextprotocol/python-sdk/blob/main/tests/server/mcpserver/test_server.py"
+  conclusions:
+    - "MCP Python SDK 2.2.0 supports the public in-process Client(MCPServer) conformance path."
+    - "The public Client exposes negotiated protocol_version, server_info, and instructions."
+    - "Deliberate model-visible tool failures use ToolError; unexpected handler exceptions are converted to sanitized generic client failures."
+    - "The modern negotiated protocol targeted by the SDK is 2026-07-28."
+
+sdk_migration:
+  requirements_exact: "mcp==2.2.0"
+  development_mcp_version: "2.2.0"
+  development_mcp_types_version: "2.2.0"
+  packaged_mcp_version: "2.2.0"
+  packaged_mcp_types_version: "2.2.0"
+  development_environment: "checkout .venv"
+  temporary_validation_environment: "/tmp/agent-runtime-task0039-venv"
+  public_sdk_apis_used:
+    - "mcp.Client"
+    - "mcp.server.MCPServer"
+    - "mcp.server.mcpserver.exceptions.ToolError"
+    - "mcp.types.ToolAnnotations"
+    - "mcp.types.TextContent"
+  tool_error_import_support: >-
+    The official SDK v2 server source and test suite import ToolError from
+    mcp.server.mcpserver.exceptions; TASK-0039 uses that documented supported symbol without
+    underscored/private attribute access.
+  private_sdk_internals_used: false
+  sdk_monkeypatching: false
+  vendored_mcp_code: false
+
+public_contract:
+  negotiated_protocol_version: "2026-07-28"
+  server:
+    name: Agent Runtime
+    version: "0.2.0"
+    instructions_preserved: true
+    description_semantics_preserved: true
+  tools:
+    - terminal_exec
+    - terminal_start
+    - terminal_poll
+    - terminal_control
+    - capacity_observer
+  exact_tool_count: 5
+  resources: []
+  prompts: []
+  annotations:
+    terminal_exec:
+      readOnlyHint: false
+      destructiveHint: true
+      idempotentHint: false
+      openWorldHint: true
+    terminal_start:
+      readOnlyHint: false
+      destructiveHint: true
+      idempotentHint: false
+      openWorldHint: true
+    terminal_poll:
+      readOnlyHint: false
+      destructiveHint: false
+      idempotentHint: false
+      openWorldHint: false
+    terminal_control:
+      readOnlyHint: false
+      destructiveHint: true
+      idempotentHint: false
+      openWorldHint: true
+    capacity_observer:
+      readOnlyHint: true
+      destructiveHint: false
+      idempotentHint: true
+      openWorldHint: false
+  input_contract:
+    argv_min_items: 1
+    argv_items_type: string
+    cwd_min_length: 1
+    cwd_pattern: "^/"
+    timeout_seconds:
+      exclusive_minimum: 0
+      maximum: 3600
+      default: 300
+    session_id_min_length: 1
+    cursor_minimum: 0
+    wait_ms:
+      minimum: 0
+      maximum: 1000
+    action_enum: [write, interrupt, terminate, resize]
+    rows:
+      minimum: 1
+      maximum: 65535
+    cols:
+      minimum: 1
+      maximum: 65535
+  output_contract:
+    closed_typed_schemas: true
+    additional_properties_allowed: false
+    structured_wire_shapes_preserved: true
+    successful_results_validated_through_public_client:
+      - terminal_exec
+      - terminal_start
+      - terminal_poll
+      - terminal_control
+      - capacity_observer
+
+error_contract:
+  expected_domain_errors:
+    result: PASS
+    classification:
+      - RuntimeValidationError
+      - RuntimeStateError
+      - ProtectedRuntimeDenied
+    sdk_path: ToolError
+    proof: >-
+      A real Client call to terminal_poll with a schema-valid but unknown session id returned
+      is_error=true with bounded model-readable text containing "unknown or expired session_id"
+      and no traceback.
+  unexpected_errors:
+    result: PASS
+    proof: >-
+      A deterministic plain RuntimeError injected into terminal_exec contained a unique sentinel.
+      The real Client received exactly "Error executing tool terminal_exec"; the sentinel,
+      RuntimeError detail, and traceback were absent from both client-visible text and the
+      serialized client result.
+  schema_invalid_arguments:
+    result: PASS
+    proof: >-
+      A real Client terminal_exec call with timeout_seconds=0 was rejected as an input-schema
+      error before the patched Runtime delegate executed.
+  broad_exception_to_model_conversion_added: false
+  protection_denial_weakened: false
+
+implementation:
+  production_files:
+    - agent_runtime/capacity.py
+    - agent_runtime/errors.py
+    - agent_runtime/executor.py
+    - agent_runtime/server.py
+    - agent_runtime/session.py
+    - requirements.txt
+  test_files:
+    - tests/test_mcp_client_conformance.py
+    - tests/test_mcp_contracts.py
+    - tests/test_terminal_session.py
+  semantics:
+    terminal_execution_changed: false
+    pty_changed: false
+    workspace_guard_changed: false
+    lifecycle_changed: false
+    tunnel_identity_changed: false
+    listener_binding_changed: false
+    capacity_policy_changed: false
+    protection_policy_changed: false
+  note: >-
+    Existing caller-correctable ValueError/RuntimeError sites were specialized into subclasses
+    that preserve their original base exception behavior. Only those explicit domain classes and
+    the existing ProtectedRuntimeDenied class are translated to ToolError at the MCP boundary.
+    Other implementation exceptions continue to propagate to MCP 2.2.0 for generic sanitization.
+
+verification:
+  tdd_red:
+    command: >-
+      /tmp/agent-runtime-task0039-venv/bin/python -m unittest
+      tests.test_mcp_client_conformance
+      tests.test_mcp_contracts.MCPContractTests.test_sdk_pin_is_exactly_mcp_2_2_0 -v
+    result: EXPECTED_FAIL
+    tests_run: 7
+    failures: 3
+    evidence: >-
+      The failures were exactly the old mcp==2.0.0 requirements pin in two assertions and the
+      MCP 2.2.0 generic sanitization of the previously unclassified unknown-session domain error.
+  focused_mcp_conformance:
+    command: >-
+      /tmp/agent-runtime-task0039-venv/bin/python -m unittest
+      tests.test_mcp_client_conformance tests.test_mcp_contracts -v
+    result: PASS
+    tests: 13
+  initial_full_repository:
+    command: "PYTHON=/tmp/agent-runtime-task0039-venv/bin/python ./verify"
+    result: EXPECTED_REGRESSION_FOUND
+    tests: 142
+    failures: 2
+    evidence: >-
+      The only failures were SIGTERM/SIGINT subprocess fixtures that modeled the old MCP module
+      surface and lacked the public ToolError module path. The fixture was updated without adding
+      a production fallback, and the focused signal lifecycle test then passed.
+  full_repository_temp_environment:
+    command: "PYTHON=/tmp/agent-runtime-task0039-venv/bin/python ./verify"
+    result: PASS
+    tests: 142
+  full_repository_canonical_environment:
+    command: "./verify"
+    result: PASS
+    tests: 142
+    includes: [python_unit_integration, python_compile, shell_syntax]
+  swift_tests:
+    command: "xcrun swift test --package-path macos"
+    result: PASS
+    tests: 29
+    failures: 0
+  swift_release_build:
+    command: "xcrun swift build --package-path macos -c release"
+    result: PASS
+  release_package:
+    command: "./macos/package_app.sh"
+    result: PASS
+    artifact: "build/Agent Runtime.app"
+    manifest_runtime_revision: "74f1441f26d25abe155294dae3ba80245cedfd35"
+  codesign:
+    command: "codesign --verify --deep --strict 'build/Agent Runtime.app'"
+    result: PASS
+  packaged_dependency_probe:
+    result: PASS
+    mcp: "2.2.0"
+    mcp_types: "2.2.0"
+
+mutation_boundaries:
+  live_runtime_installed_or_reinstalled: false
+  live_runtime_activated_or_reloaded: false
+  live_runtime_restarted_or_stopped: false
+  runtime_env_mutated: false
+  tunnel_identity_mutated: false
+  listener_binding_mutated: false
+  desired_state_mutated: false
+  launchagents_mutated: false
+  installed_package_mutated: false
+  install_sh_invoked: false
+  main_promoted: false
+  origin_main_required: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  origin_main_observed_before_implementation: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PROVEN
+    evidence: "requirements.txt is exactly mcp==2.2.0 and the canonical development environment reports MCP 2.2.0."
+  - criterion_id: AC-2
+    status: PROVEN
+    evidence: "Real Client listing preserves exactly five tools, accepted annotations, typed schemas, wire shapes, and Agent Runtime/0.2.0 metadata/instructions."
+  - criterion_id: AC-3
+    status: PROVEN
+    evidence: "Public Client(MCPServer) negotiated protocol 2026-07-28 through client.protocol_version."
+  - criterion_id: AC-4
+    status: PROVEN
+    evidence: "Real Client calls validated terminal_exec, capacity_observer, and bounded terminal_start/poll/control structured results against advertised output schemas."
+  - criterion_id: AC-5
+    status: PROVEN
+    evidence: "Expected unknown-session domain failure uses ToolError with bounded readable text; invalid JSON-schema arguments fail before delegate execution."
+  - criterion_id: AC-6
+    status: PROVEN
+    evidence: "Injected unexpected RuntimeError is genericized to Error executing tool terminal_exec with no sentinel or traceback in the client result."
+  - criterion_id: AC-7
+    status: PROVEN
+    evidence: "No private SDK internals, vendored MCP code, SDK monkeypatching, or broad exception-to-model conversion was introduced."
+  - criterion_id: AC-8
+    status: PROVEN
+    evidence: "Canonical ./verify passes all 142 tests under checkout MCP 2.2.0."
+  - criterion_id: AC-9
+    status: PROVEN
+    evidence: "Swift 29/29, release build, package build, packaged MCP 2.2.0 probe, and strict codesign verification pass without install.sh or live activation."
+  - criterion_id: AC-10
+    status: PENDING_PUBLICATION
+    evidence: "Implementation candidate is committed on dev; report-only commit and non-force dev push remain to be completed."
+
+publication:
+  implementation_commit: "74f1441f26d25abe155294dae3ba80245cedfd35"
+  report_path: .agent/tasks/TASK-0039/report.yaml
+  report_commit: null
+  push_mode: non_force_dev
+  pushed: false
+  force_push: false
+  main_promoted: false
+  next_step: ARCHITECT_REVIEW
+
+result: NEEDS_REVIEW
