@@ -79,7 +79,7 @@ else
 fi
 
 echo "[3/8] Initializing canonical Runtime configuration..."
-/usr/bin/python3 "$ROOT/macos/runtime_config.py" "$ENV_FILE" "$CANONICAL_ENV_FILE"
+/usr/bin/python3 "$ROOT/macos/runtime_config.py" "$ENV_FILE" "$CANONICAL_ENV_FILE" "$WORKSPACE_ROOT"
 ENV_FILE="$CANONICAL_ENV_FILE"
 echo "Validating canonical Runtime configuration..."
 INSTALL_API_KEY="${CONTROL_PLANE_API_KEY-}" \

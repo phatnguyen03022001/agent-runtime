@@ -237,12 +237,25 @@ esac
         self._write(path, "\n".join(lines) + "\n")
         return path
 
+    def test_install_first_bootstrap_persists_derived_workspace_root(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            repo, home, bin_dir, capture = self._install_fixture(Path(raw))
+            source = self._env(repo, "bootstrap-id")
+            source.write_text(source.read_text().replace(f"AGENT_RUNTIME_WORKSPACE_ROOT={repo.parent}", "AGENT_RUNTIME_WORKSPACE_ROOT="))
+
+            result = self._run_install(repo, home, bin_dir, capture)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            canonical = home / "Library/Application Support/Agent Runtime/runtime.env"
+            self.assertIn(f"AGENT_RUNTIME_WORKSPACE_ROOT={repo.parent.resolve()}\n", canonical.read_text())
+
     def test_install_preserves_env_owned_identity_and_registers_absolute_runtime_binary(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             repo, home, bin_dir, capture = self._install_fixture(Path(raw))
             env_file = self._env(repo, "same-id")
             with env_file.open("a") as handle:
                 handle.write("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS=22\n")
+            source_before = env_file.read_bytes()
             result = self._run_install(repo, home, bin_dir, capture)
             self.assertEqual(result.returncode, 0, result.stderr)
             text = env_file.read_text()
@@ -256,7 +269,10 @@ esac
             self.assertIn("/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin", plist)
             canonical = home / "Library/Application Support/Agent Runtime/runtime.env"
             self.assertEqual(canonical.stat().st_mode & 0o777, 0o600)
-            self.assertEqual(canonical.read_bytes(), env_file.read_bytes())
+            self.assertEqual(env_file.read_bytes(), source_before)
+            canonical_text = canonical.read_text()
+            self.assertIn(f"AGENT_RUNTIME_WORKSPACE_ROOT={repo.parent.resolve()}\n", canonical_text)
+            self.assertIn("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS=22\n", canonical_text)
 
     def test_install_accepts_a_verified_homebrew_style_tunnel_symlink(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
