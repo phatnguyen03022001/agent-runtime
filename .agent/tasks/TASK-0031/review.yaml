@@ -1,19 +1,19 @@
 protocol_version: 3
 
 task_id: TASK-0031
-task_revision: 2
-review_revision: 2
+task_revision: 3
+review_revision: 3
 state: ACCEPTED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0031/report.yaml
-  commit: "756b3b819e8576c89f888a12463c8ac9aa414f32"
-  report_revision: 2
+  commit: "d4e890c8ac9013a84f57d03c21b0fef6c08b4b05"
+  report_revision: 3
 
-reviewed_candidate:
-  commit: "f01c1547ad2c896d433b4b76f730af10f6884b76"
-  exact_base: "56ce940b8cd827b4fe164233f2c5c25ddfbd6d00"
+execution_base:
+  exact_base: "562b5ad1918706d4f708681de6564f8d8d9efac1"
+  report_parent_matches_base: true
 
 independence:
   reviewer_role: ARCHITECT
@@ -37,30 +37,36 @@ criterion_judgment:
   AC-6: PASS
 
 accepted_evidence:
-  - "Remote dev resolved to exact report commit 756b3b819e8576c89f888a12463c8ac9aa414f32 before review; main remained c49d777efa09db7f6c51bd8d8616db4623499fb8."
-  - "Candidate f01c1547ad2c896d433b4b76f730af10f6884b76 is exactly one commit ahead of authorized revision-2 base 56ce940b8cd827b4fe164233f2c5c25ddfbd6d00 and changes only install.sh, macos/runtime_config.py, tests/test_runtime_config.py, and tests/test_tunnel_identity.py."
-  - "Report 756b3b819e8576c89f888a12463c8ac9aa414f32 is the direct child of the candidate and changes only .agent/tasks/TASK-0031/report.yaml."
-  - "First canonical publication now uses a same-directory private mode-0600 file, writes and fsyncs complete bytes, validates the private file, and publishes with atomic no-clobber hard-link semantics; failure/interruption cleanup and concurrent-winner preservation have deterministic coverage."
-  - "First bootstrap persists the installer-derived AGENT_RUNTIME_WORKSPACE_ROOT even when checkout input is blank, stale, or different; existing valid canonical runtime.env bytes remain authoritative and unchanged."
-  - "Executor evidence records focused config fixtures 6/6 PASS, Python discovery 118/118 PASS, py_compile PASS, shell syntax PASS, Swift 29/29 PASS, release package PASS, strict deep codesign PASS, and package scan 1486 files / 0 checkout references."
-  - "Read-only before/after evidence retained serving PID 70506, health=live, ready=ready, absent real Application Support runtime.env, and unchanged checkout .env; no Runtime lifecycle/config action occurred."
+  - "Remote dev resolved to report d4e890c8ac9013a84f57d03c21b0fef6c08b4b05; its parent is exact authorized base 562b5ad1918706d4f708681de6564f8d8d9efac1 and only TASK-0031 report.yaml changed."
+  - "Remote main remained c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "Exactly one authorized installer activation occurred. It was not retried after the transport returned 502, and independent post-state proves the cutover completed."
+  - "Canonical runtime.env is live at the accepted Application Support path as a regular non-symlink mode-0600 file with required non-empty keys and workspace root /Users/tienphat/Developer."
+  - "Tunnel fingerprint remained 6aa2b81d6dd8 and checkout .env content/metadata remained unchanged."
+  - "Post-activation evidence shows one canonical listener, loaded/running canonical service, health=live, ready=ready, installed revision 562b5ad1918706d4f708681de6564f8d8d9efac1 and strict deep codesign PASS."
+  - "Installed package/service scan found zero checkout-config references and zero legacy config-path references across 1486 files."
+  - "Executor post-publication evidence records a clean synchronized canonical checkout with no auxiliary worktree/clone."
 
 execution_deviation:
-  direct_verify_wrapper:
+  activation_transport_502:
     disposition: ACCEPTED_NON_MATERIAL
-    finding: "One authorized ./verify invocation was attempted but the Agent Runtime tool resource became unavailable before command execution, so the wrapper itself has no PASS result."
-    rationale: "The candidate does not modify verify; its exact canonical body is Python unittest discovery, Python py_compile, and bash -n install.sh start.sh verify. Those exact constituent checks were executed and passed, and no separate authoritative verifier is required by the task. This preserves the required verification signal without bypassing or weakening a safety boundary."
+    finding: "The sole authorized installer request returned HTTP 502 during the authorized Runtime cutover."
+    rationale: "The task authorized exactly one activation and forbade retry. The Executor did not retry, and independent read-only postchecks prove the intended cutover completed with the required singleton, identity, canonical config, health/readiness and package state."
+
+final_judgment:
+  task_state: ACCEPTED
+  rationale: "TASK-0031 revision 3 successfully activated the accepted runtime.env authority migration with no source drift or identity drift."
 
 promotion_readiness: BLOCKED
 
 next_state:
   source_package_revision_2: ACCEPTED
-  live_activation_performed: false
+  live_activation_revision_3: ACCEPTED
+  live_runtime_config_authority: CANONICAL_APPLICATION_SUPPORT
+  task_0030_reaudit_required: true
   main_promotion_authorized: false
   automatic_execution: false
 
 notes:
-  - "TASK-0031 revision 2 is accepted as the source/package migration candidate."
-  - "The live installed Runtime still uses the pre-migration configuration authority because revision 2 explicitly forbids installer activation/cutover."
-  - "A separately authorized activation/closure revision is required before claiming the live TASK-0030 containment gap is closed on the operator machine."
+  - "TASK-0031 is fully closed for source/package plus live activation."
+  - "TASK-0030 must now be re-audited against the migrated live authority before claiming the native Executor containment gap fully closed."
   - "No Runtime lifecycle action was performed during Architect review."
