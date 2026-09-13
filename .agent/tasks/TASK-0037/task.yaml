@@ -1,0 +1,72 @@
+protocol_version: 3
+
+task_id: TASK-0037
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: operator_closure_request
+  gap_id: LIVE_CAPACITY_OBSERVER_FINAL_PROOF
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+authority_sources:
+  - source: "phatnguyen03022001/agent-runtime@408873ef37e4cd78857495269327cdad6726f3e4:.agent/tasks/TASK-0036/review.yaml"
+    role: "Architect review narrowing the remaining gap to live MCP discovery."
+    precedence: 1
+  - source: "Operator reports that, after manually reloading Runtime, the plugin now exposes five tools."
+    role: "Operator-provided external state change authorizing final live proof only."
+    precedence: 2
+
+objective: >-
+  Close the remaining live MCP proof gap after the operator-performed Runtime reload. Verify the fresh live connector exposes the accepted five-tool surface and invoke capacity_observer exactly once read-only. Do not change Runtime, source, configuration, installed package, tunnel identity, or main.
+
+invariants:
+  - "Use the already-installed Runtime state produced by prior accepted work and the operator reload."
+  - "Do not reinstall, re-activate, patch, or otherwise mutate Runtime merely to obtain proof."
+  - "Do not use a local/static function call as a substitute for live MCP evidence."
+  - "No source/test/config/package/listener/tunnel/main mutation."
+  - "No branch, worktree, clone, tag, release, or main promotion."
+
+required_proof:
+  - "Fresh-resolve dev and bind exactly to the authorized base."
+  - "Confirm Runtime remains healthy/ready and the installed revision remains the accepted TASK-0035 installed revision 748b930f74d947ec4fb6fe8b3d7975a585584e9b."
+  - "Record the exact live MCP tool surface exposed to this execution session."
+  - "PASS requires exactly terminal_exec, terminal_start, terminal_poll, terminal_control, capacity_observer."
+  - "Invoke capacity_observer exactly once through the live connector."
+  - "Prove schema_version=1, capacity_parallelism_ceiling in [1,2], bounded reason_codes/signals, and absence of process inventory/history fields."
+  - "Confirm origin/main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Live MCP exposes exactly the accepted five-tool surface after the operator reload."
+  - id: AC-2
+    requirement: "Exactly one live read-only capacity_observer call returns the bounded v1 contract."
+  - id: AC-3
+    requirement: "Runtime identity/health remains correct and no Runtime/source/config/main mutation is performed by this task."
+  - id: AC-4
+    requirement: "Report publication is the only repository change after the authorized base."
+
+publication:
+  report_path: .agent/tasks/TASK-0037/report.yaml
+  push: non_force_dev
+  stop_for_architect_review: true
+
+git_authority:
+  create_branch: false
+  create_worktree: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
