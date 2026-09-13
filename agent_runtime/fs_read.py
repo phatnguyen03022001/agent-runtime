@@ -10,6 +10,8 @@ from .executor import _validated_cwd_with_identity, _workspace_root
 
 ITEM_OUTPUT_LIMIT_BYTES = 128 * 1024
 BATCH_OUTPUT_LIMIT_BYTES = 256 * 1024
+ITEM_SCAN_LIMIT_BYTES = 1024 * 1024
+BATCH_SCAN_LIMIT_BYTES = 4 * 1024 * 1024
 _READ_CHUNK_BYTES = 64 * 1024
 
 _ERROR_MESSAGES: dict[str, str] = {
@@ -20,14 +22,17 @@ _ERROR_MESSAGES: dict[str, str] = {
     "INVALID_UTF8": "File content is not valid UTF-8",
     "ITEM_OUTPUT_LIMIT_EXCEEDED": "Selected text exceeds the per-item output limit",
     "BATCH_OUTPUT_LIMIT_EXCEEDED": "Selected text exceeds the remaining batch output limit",
+    "ITEM_SCAN_LIMIT_EXCEEDED": "File scan exceeds the per-item scan limit",
+    "BATCH_SCAN_LIMIT_EXCEEDED": "File scan exceeds the remaining batch scan limit",
     "READ_FAILED": "File could not be read",
 }
 
 
 class _ItemFailure(Exception):
-    def __init__(self, code: FsReadErrorCode) -> None:
+    def __init__(self, code: FsReadErrorCode, scan_bytes: int = 0) -> None:
         super().__init__(code)
         self.code = code
+        self.scan_bytes = scan_bytes
 
 
 def _request_item(item: FsReadItem) -> tuple[str, tuple[str, ...], int, int | None]:
@@ -126,18 +131,31 @@ def _open_regular_at(cwd_fd: int, components: tuple[str, ...]) -> int:
         os.close(parent_fd)
 
 
-def _read_selected_text(file_fd: int, start_line: int, end_line: int | None) -> str:
+def _read_selected_text(
+    file_fd: int,
+    start_line: int,
+    end_line: int | None,
+    batch_scan_remaining: int,
+) -> tuple[str, int]:
     output = bytearray()
     line_number = 1
     pending_cr = False
     pending_cr_selected = False
+    scan_bytes = 0
 
     def selected() -> bool:
         return line_number >= start_line and (end_line is None or line_number <= end_line)
 
+    def fail_incomplete(code: FsReadErrorCode) -> None:
+        if scan_bytes >= batch_scan_remaining:
+            raise _ItemFailure("BATCH_SCAN_LIMIT_EXCEEDED", scan_bytes)
+        if scan_bytes >= ITEM_SCAN_LIMIT_BYTES:
+            raise _ItemFailure("ITEM_SCAN_LIMIT_EXCEEDED", scan_bytes)
+        raise _ItemFailure(code, scan_bytes)
+
     def write_selected(raw: bytes) -> None:
         if len(output) + len(raw) > ITEM_OUTPUT_LIMIT_BYTES:
-            raise _ItemFailure("ITEM_OUTPUT_LIMIT_EXCEEDED")
+            fail_incomplete("ITEM_OUTPUT_LIMIT_EXCEEDED")
         output.extend(raw)
 
     def finish_line() -> None:
@@ -146,12 +164,20 @@ def _read_selected_text(file_fd: int, start_line: int, end_line: int | None) -> 
 
     done = False
     while not done:
+        item_remaining = ITEM_SCAN_LIMIT_BYTES - scan_bytes
+        batch_remaining = batch_scan_remaining - scan_bytes
+        if batch_remaining <= 0:
+            raise _ItemFailure("BATCH_SCAN_LIMIT_EXCEEDED", scan_bytes)
+        if item_remaining <= 0:
+            raise _ItemFailure("ITEM_SCAN_LIMIT_EXCEEDED", scan_bytes)
+        read_size = min(_READ_CHUNK_BYTES, item_remaining, batch_remaining)
         try:
-            raw = os.read(file_fd, _READ_CHUNK_BYTES)
+            raw = os.read(file_fd, read_size)
         except OSError as exc:
             if exc.errno in {errno.EACCES, errno.EPERM}:
-                raise _ItemFailure("ACCESS_DENIED") from None
-            raise _ItemFailure("READ_FAILED") from None
+                fail_incomplete("ACCESS_DENIED")
+            fail_incomplete("READ_FAILED")
+        scan_bytes += len(raw)
         if not raw:
             if pending_cr and pending_cr_selected:
                 write_selected(b"\r")
@@ -189,11 +215,16 @@ def _read_selected_text(file_fd: int, start_line: int, end_line: int | None) -> 
             elif selected():
                 write_selected(bytes((value,)))
 
-    try:
-        return bytes(output).decode("utf-8", errors="strict")
-    except UnicodeDecodeError:
-        raise _ItemFailure("INVALID_UTF8") from None
+        if not done:
+            if scan_bytes >= batch_scan_remaining:
+                raise _ItemFailure("BATCH_SCAN_LIMIT_EXCEEDED", scan_bytes)
+            if scan_bytes >= ITEM_SCAN_LIMIT_BYTES:
+                raise _ItemFailure("ITEM_SCAN_LIMIT_EXCEEDED", scan_bytes)
 
+    try:
+        return bytes(output).decode("utf-8", errors="strict"), scan_bytes
+    except UnicodeDecodeError:
+        raise _ItemFailure("INVALID_UTF8", scan_bytes) from None
 
 def _error_result(
     path: str, start_line: int, end_line: int | None, failure: _ItemFailure
@@ -229,19 +260,38 @@ def read_files_batch(cwd: str, items: list[FsReadItem]) -> dict[str, object]:
         raise RuntimeValidationError("cwd could not be opened safely")
 
     successful_bytes = 0
+    batch_scan_bytes = 0
     results: list[dict[str, object]] = []
     try:
         for path, components, start_line, end_line in requests:
+            if batch_scan_bytes >= BATCH_SCAN_LIMIT_BYTES:
+                results.append(
+                    _error_result(
+                        path,
+                        start_line,
+                        end_line,
+                        _ItemFailure("BATCH_SCAN_LIMIT_EXCEEDED"),
+                    )
+                )
+                continue
+
             try:
                 file_fd = _open_regular_at(cwd_fd, components)
                 try:
-                    text = _read_selected_text(file_fd, start_line, end_line)
+                    text, item_scan_bytes = _read_selected_text(
+                        file_fd,
+                        start_line,
+                        end_line,
+                        BATCH_SCAN_LIMIT_BYTES - batch_scan_bytes,
+                    )
                 finally:
                     os.close(file_fd)
             except _ItemFailure as failure:
+                batch_scan_bytes += failure.scan_bytes
                 results.append(_error_result(path, start_line, end_line, failure))
                 continue
 
+            batch_scan_bytes += item_scan_bytes
             text_bytes = len(text.encode("utf-8"))
             if successful_bytes + text_bytes > BATCH_OUTPUT_LIMIT_BYTES:
                 results.append(

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Annotated, Literal
 
 from pydantic import (
+    AfterValidator,
     BaseModel,
     ConfigDict,
     Field,
@@ -11,20 +12,70 @@ from pydantic import (
     model_serializer,
 )
 
-Argv = Annotated[list[StrictStr], Field(strict=True, min_length=1)]
+ARGV_MAX_ITEMS = 128
+ARGV_ITEM_MAX_BYTES = 16 * 1024
+ARGV_TOTAL_MAX_BYTES = 256 * 1024
+TERMINAL_DATA_MAX_BYTES = 64 * 1024
+SESSION_ID_MAX_CHARS = 128
+FS_READ_MAX_LINE = 2_147_483_647
+
+
+def _utf8_size(value: str, field_name: str) -> int:
+    try:
+        return len(value.encode("utf-8"))
+    except UnicodeEncodeError as exc:
+        raise ValueError(f"{field_name} must be valid UTF-8") from exc
+
+
+def _validate_argv_item(value: str) -> str:
+    if _utf8_size(value, "argv item") > ARGV_ITEM_MAX_BYTES:
+        raise ValueError("argv item exceeds 16 KiB UTF-8 bytes")
+    return value
+
+
+def _validate_argv_total(value: list[str]) -> list[str]:
+    if sum(_utf8_size(item, "argv item") for item in value) > ARGV_TOTAL_MAX_BYTES:
+        raise ValueError("aggregate argv content exceeds 256 KiB UTF-8 bytes")
+    return value
+
+
+def _validate_terminal_data(value: str) -> str:
+    if _utf8_size(value, "terminal data") > TERMINAL_DATA_MAX_BYTES:
+        raise ValueError("terminal write data exceeds 64 KiB UTF-8 bytes")
+    return value
+
+
+ArgvItem = Annotated[
+    StrictStr,
+    Field(max_length=ARGV_ITEM_MAX_BYTES),
+    AfterValidator(_validate_argv_item),
+]
+Argv = Annotated[
+    list[ArgvItem],
+    Field(strict=True, min_length=1, max_length=ARGV_MAX_ITEMS),
+    AfterValidator(_validate_argv_total),
+]
 AbsoluteCwd = Annotated[
     StrictStr,
     Field(min_length=1, pattern=r"^/"),
 ]
 TimeoutSeconds = Annotated[float, Field(strict=True, gt=0, le=3600)]
-SessionId = Annotated[StrictStr, Field(min_length=1)]
+SessionId = Annotated[
+    StrictStr,
+    Field(min_length=1, max_length=SESSION_ID_MAX_CHARS),
+]
 Cursor = Annotated[int, Field(strict=True, ge=0)]
 WaitMilliseconds = Annotated[int, Field(strict=True, ge=0, le=1000)]
 ControlAction = Literal["write", "interrupt", "terminate", "resize"]
-TerminalData = StrictStr | None
+TerminalWriteData = Annotated[
+    StrictStr,
+    Field(max_length=TERMINAL_DATA_MAX_BYTES),
+    AfterValidator(_validate_terminal_data),
+]
+TerminalData = TerminalWriteData | None
 TerminalDimension = Annotated[int, Field(strict=True, ge=1, le=65535)]
 FsReadPath = Annotated[StrictStr, Field(min_length=1, max_length=4096)]
-FsReadLine = Annotated[int, Field(strict=True, ge=1)]
+FsReadLine = Annotated[int, Field(strict=True, ge=1, le=FS_READ_MAX_LINE)]
 FsReadMessage = Annotated[StrictStr, Field(max_length=160)]
 
 
@@ -124,6 +175,8 @@ FsReadErrorCode = Literal[
     "INVALID_UTF8",
     "ITEM_OUTPUT_LIMIT_EXCEEDED",
     "BATCH_OUTPUT_LIMIT_EXCEEDED",
+    "ITEM_SCAN_LIMIT_EXCEEDED",
+    "BATCH_SCAN_LIMIT_EXCEEDED",
     "READ_FAILED",
 ]
 

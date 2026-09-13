@@ -84,12 +84,17 @@ The MCP server exposes exactly six public tools:
 
 - `terminal_exec(argv, cwd, timeout_seconds=300)` executes one literal argv
   with `shell=False`, disconnected stdin, bounded output, and bounded cleanup.
+  `argv` is limited to 128 items, 16 KiB UTF-8 bytes per item, and 256 KiB
+  aggregate UTF-8 content.
 - `terminal_start(argv, cwd)` starts one literal argv in a PTY-backed process
-  group and returns promptly with a session id and bounded initial output.
+  group and returns promptly with a session id and bounded initial output; it
+  uses the same fixed `argv` limits as `terminal_exec`.
 - `terminal_poll(session_id, cursor=0, wait_ms=0)` returns bounded incremental
-  PTY output and current status. `wait_ms` is bounded to 1000 ms.
+  PTY output and current status. `session_id` is limited to 128 characters and
+  `wait_ms` is bounded to 1000 ms.
 - `terminal_control(session_id, action, data=None, rows=None, cols=None)`
-  supports exactly `write`, `interrupt`, `terminate`, and `resize`.
+  supports exactly `write`, `interrupt`, `terminate`, and `resize`; `session_id`
+  is limited to 128 characters and write data to 64 KiB UTF-8 bytes.
 
 - `capacity_observer()` returns one read-only, on-demand, stateless capacity
   snapshot with a bounded signal summary, reason codes, and advisory
@@ -98,8 +103,11 @@ The MCP server exposes exactly six public tools:
 - `fs_read_batch(cwd, items)` reads 1..20 ordered cwd-relative UTF-8 regular
   files or inclusive line ranges. It rejects absolute/dot/dot-dot/empty path
   components and symlinks, never truncates successful text, and enforces fixed
-  128 KiB per-item plus 256 KiB aggregate UTF-8 output ceilings with typed
-  per-item filesystem errors. It is read-only and exposes no caller limit knobs.
+  128 KiB per-item plus 256 KiB aggregate UTF-8 output ceilings, 1 MiB actual
+  FD-read bytes per item, and 4 MiB actual FD-read bytes per batch. Scan-limit
+  failures return no partial text; after batch scan exhaustion, remaining items
+  fail without file I/O. Line indexes are limited to 2147483647. It is read-only
+  and exposes no caller limit knobs.
 
 Capacity Observer v1 reports only an x1/x2 host-capacity ceiling. The effective
 ceiling is `min(AGENT_RUNTIME_MAX_PARALLELISM, evidence_based_ceiling_v1)`, so an

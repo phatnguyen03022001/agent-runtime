@@ -11,6 +11,7 @@ except ImportError:
     from mcp.server.mcpserver import MCPServer
 
 from mcp.server.mcpserver.exceptions import ToolError
+from pydantic import ConfigDict
 
 try:
     from mcp.types import ToolAnnotations as _ToolAnnotations
@@ -56,7 +57,7 @@ SERVER_INSTRUCTIONS = (
     "terminal_poll and terminal_control. Tools expose bounded output. "
     "capacity_observer provides read-only advisory capacity information. "
     "fs_read_batch performs read-only ordered cwd-relative UTF-8 file reads for at most 20 items "
-    "with fixed output ceilings and per-item filesystem failures."
+    "with fixed output and scan-work ceilings and per-item filesystem failures."
 )
 mcp = MCPServer(
     name="Agent Runtime",
@@ -153,6 +154,21 @@ def _build_tool_annotations(
         return None
 
 
+def _close_registered_tool_input(tool_name: str) -> None:
+    tool_manager = getattr(mcp, "_tool_manager", None)
+    if tool_manager is None:
+        return
+    registered = tool_manager.get_tool(tool_name)
+    if registered is None:
+        raise RuntimeError(f"registered tool not found: {tool_name}")
+    argument_model = registered.fn_metadata.arg_model
+    model_config = dict(argument_model.model_config)
+    model_config["extra"] = "forbid"
+    argument_model.model_config = ConfigDict(**model_config)
+    argument_model.model_rebuild(force=True)
+    registered.parameters = argument_model.model_json_schema(by_alias=True)
+
+
 def _tool(
     *,
     read_only: bool,
@@ -169,12 +185,16 @@ def _tool(
 
     def decorator(function: Callable[..., Any]) -> Callable[..., Any]:
         observed_function = timed_tool_wrapper(function.__name__, function)
+        registered_function: Callable[..., Any]
         if annotations is not None:
             try:
-                return mcp.tool(annotations=annotations)(observed_function)
+                registered_function = mcp.tool(annotations=annotations)(observed_function)
             except (TypeError, ValueError):
-                pass
-        return mcp.tool()(observed_function)
+                registered_function = mcp.tool()(observed_function)
+        else:
+            registered_function = mcp.tool()(observed_function)
+        _close_registered_tool_input(observed_function.__name__)
+        return registered_function
 
     return decorator
 
