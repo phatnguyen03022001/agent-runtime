@@ -1,0 +1,271 @@
+protocol_version: 3
+
+task_id: TASK-0040
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0040/task.yaml
+  commit: "a52e0698a2ece4d5e473d9e41fbc1041f1b877e4"
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "a52e0698a2ece4d5e473d9e41fbc1041f1b877e4"
+  final_execution_head: "881a675607a83e850a05568851c2a01ce89c3685"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - repository_content_write
+    - local_python_execution
+    - real_mcp_client_execution
+  available:
+    - repository_content_write
+    - local_python_execution
+    - real_mcp_client_execution
+  missing: []
+  passed: true
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: NOT_REQUIRED_FOR_THIS_EXECUTION_TASK
+  evidence: "TASK-0040 defines no authoritative verifier for the execution phase."
+
+pushed: false
+
+implementation:
+  commit: "881a675607a83e850a05568851c2a01ce89c3685"
+  parent: "a52e0698a2ece4d5e473d9e41fbc1041f1b877e4"
+  scope_summary: "Added exactly one sixth public MCP tool, fs_read_batch, with typed contracts, descriptor-relative no-symlink UTF-8 file reads, fixed output ceilings, existing timing attribution, documentation, focused security tests, and real MCP Client conformance. No rejected filesystem capability or unrelated runtime behavior was added."
+  production_and_docs_files:
+    - README.md
+    - agent_runtime/contracts.py
+    - agent_runtime/fs_read.py
+    - agent_runtime/server.py
+    - agent_runtime/timing.py
+  test_files:
+    - tests/test_fs_read_batch.py
+    - tests/test_fs_read_batch_adversarial.py
+    - tests/test_fs_read_batch_mcp.py
+    - tests/test_mcp_client_conformance.py
+    - tests/test_mcp_contracts.py
+    - tests/test_surface_and_scripts.py
+    - tests/test_timing.py
+
+public_contract:
+  tools:
+    - terminal_exec
+    - terminal_start
+    - terminal_poll
+    - terminal_control
+    - capacity_observer
+    - fs_read_batch
+  exact_tool_count: 6
+  fs_read_batch_annotations:
+    readOnlyHint: true
+    destructiveHint: false
+    idempotentHint: true
+    openWorldHint: false
+  input:
+    items_min: 1
+    items_max: 20
+    path_max_characters: 4096
+    line_semantics: "strict positive 1-based inclusive"
+    duplicate_paths_preserved: true
+  output:
+    strict_utf8: true
+    ordered_one_result_per_input: true
+    per_item_success_text_limit_bytes: 131072
+    aggregate_success_text_limit_bytes: 262144
+    caller_controlled_limit_knobs: false
+    never_truncates_success_text: true
+  error_codes:
+    - NOT_FOUND
+    - ACCESS_DENIED
+    - SYMLINK_DISALLOWED
+    - NOT_REGULAR_FILE
+    - INVALID_UTF8
+    - ITEM_OUTPUT_LIMIT_EXCEEDED
+    - BATCH_OUTPUT_LIMIT_EXCEEDED
+    - READ_FAILED
+
+filesystem_security:
+  result: PASS
+  mechanism:
+    - "Validated cwd reuses the existing Agent Runtime workspace-root working-directory guard."
+    - "Item paths reject absolute, empty, dot, dot-dot, and NUL components."
+    - "Traversal is descriptor-relative via dir_fd and O_NOFOLLOW; intermediate opens add O_DIRECTORY."
+    - "Final open adds O_NONBLOCK, then os.fstat verifies a regular file before os.read consumes bytes."
+    - "The fs_read_batch path mechanism does not use Path.resolve()+ordinary-open as its security boundary."
+  adversarial_evidence:
+    - "Final-component symlink replacement race returned SYMLINK_DISALLOWED without leaking outside content."
+    - "Intermediate-directory to symlink substitution race returned SYMLINK_DISALLOWED without reading outside content."
+    - "FIFO and Unix socket inputs returned NOT_REGULAR_FILE while os.read was guarded to prove no content consumption."
+    - "Simulated character and block device modes returned NOT_REGULAR_FILE before final open/read."
+    - "Directory and stable intermediate/final symlink cases produced bounded typed item failures."
+
+observability_and_docs:
+  timing_allowlist_exact_six: true
+  capacity_observer_attribution_repaired: true
+  fs_read_batch_attribution_added: true
+  telemetry_payload_or_history_added: false
+  readme_exact_six_documented: true
+  workspace_root_non_confinement_documented: true
+  server_instructions_updated_minimally: true
+
+verification:
+  focused_filesystem_security_conformance:
+    command: "./.venv/bin/python -m unittest tests.test_fs_read_batch tests.test_fs_read_batch_adversarial tests.test_fs_read_batch_mcp -v"
+    result: PASS
+    tests: 18
+    failures: 0
+    evidence: "Ordered full/ranged/duplicate/EOF behavior, strict UTF-8, typed partial failures, per-item/batch byte boundaries, final/intermediate symlink races, FIFO/socket/device rejection before unsafe reads, MCP cardinality 1 and 20, schema/annotations, deliberate ToolError behavior, and unexpected MCP 2.2 sanitization all passed."
+  full_repository:
+    command: "./verify"
+    result: PASS
+    tests: 160
+    failures: 0
+    exit_code: 0
+
+benchmark:
+  result: PASS
+  client_path: "real MCP 2.2 Client(server.mcp) for both paths"
+  workload:
+    - "README.md lines 1-80"
+    - "agent_runtime/server.py lines 70-180"
+    - "agent_runtime/executor.py lines 120-240"
+    - "agent_runtime/session.py lines 180-310"
+    - "tests/test_terminal_session.py lines 160-300"
+  equivalent_result_content_bytes: 22650
+  baseline_tool: terminal_exec
+  baseline_strategy: "Exactly one terminal_exec MCP call for the entire five-file workload. Its argv was /Users/tienphat/Developer/agent-runtime/.venv/bin/python -c <python source>; that one process streamed each requested UTF-8 range with newline='' and enumerate(..., 1), stopped after each requested end line, joined the five selected texts with ASCII RS, and wrote the combined result once to stdout. No per-file terminal_exec calls were used."
+  baseline_python_source: "import sys; specs=[('README.md',1,80),('agent_runtime/server.py',70,180), ('agent_runtime/executor.py',120,240),('agent_runtime/session.py',180,310), ('tests/test_terminal_session.py',160,300)]; for each spec the process opened the file as UTF-8 with newline='', streamed enumerate(handle,1), collected lines start..end, joined each range, then wrote ASCII-RS.join(texts) to stdout."
+  warmups_per_path: 5
+  measured_samples_per_path: 30
+  run_order: "interleaved; first path alternated each measured pair"
+  terminal_exec_median_ms: 58.09245850014122
+  fs_read_batch_median_ms: 4.897333000371873
+  absolute_improvement_ms: 53.19512549976935
+  relative_improvement_percent: 91.56976115865372
+  required_absolute_improvement_ms: 20.0
+  required_relative_improvement_percent: 20.0
+  fs_read_batch_min_ms: 4.535500000201864
+  fs_read_batch_max_ms: 5.288958998789894
+  fs_read_batch_iqr_outliers: []
+  terminal_exec_min_ms: 56.77008400016348
+  terminal_exec_max_ms: 78.45095900120214
+  terminal_exec_iqr_outliers_ms:
+    - 60.32654199952958
+    - 63.10637500064331
+    - 76.43612500032759
+    - 78.45095900120214
+  threshold_verdict: "PASS: both median relative improvement >=20% and absolute improvement >=20 ms."
+
+scope_audit:
+  base: "a52e0698a2ece4d5e473d9e41fbc1041f1b877e4"
+  candidate: "881a675607a83e850a05568851c2a01ce89c3685"
+  git_diff_check: PASS
+  dependency_diff: NONE
+  terminal_exec_semantic_or_capture_redesign: false
+  executor_session_or_protection_core_changed: false
+  forbidden_scope_absent:
+    - text_search
+    - fs_stat_batch
+    - generic filesystem API
+    - hashing or globbing
+    - recursive walk or directory-listing API
+    - binary/base64 or arbitrary encoding support
+    - writes, watchers, indexes, caches, daemons, services, databases, registries
+    - third-party dependency
+    - disposable workspace or sandbox-exec/SBPL work
+    - live Runtime/config/tunnel/listener/install/lifecycle mutation
+    - main promotion, tags, or release work
+
+mutation_boundaries:
+  live_runtime_installed_or_reinstalled: false
+  live_runtime_activated_or_reloaded: false
+  live_runtime_restarted_or_stopped: false
+  runtime_env_mutated: false
+  tunnel_identity_mutated: false
+  listener_binding_mutated: false
+  desired_state_mutated: false
+  installed_package_mutated: false
+  main_promoted: false
+  tag_or_release_work_performed: false
+  origin_main_required: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PROVEN
+    evidence: "Real MCP Client and focused registration assertions expose exactly terminal_exec, terminal_start, terminal_poll, terminal_control, capacity_observer, fs_read_batch; fs_read_batch annotations are exactly true/false/true/false and existing five-tool contracts/semantics were not changed."
+  - criterion_id: AC-2
+    status: PROVEN
+    evidence: "Closed typed schemas enforce ordered 1..20 items, path <=4096 characters, strict positive 1-based inclusive ranges, duplicate preservation, one result per input, and no caller-controlled output-limit parameters; real Client accepted 1 and 20 items and rejected 0/21 plus invalid line bounds before delegate execution."
+  - criterion_id: AC-3
+    status: PROVEN
+    evidence: "Descriptor-relative dir_fd traversal uses O_NOFOLLOW, O_DIRECTORY for intermediate components, O_NONBLOCK for final open, and final-handle fstat regular-file verification before os.read. Deterministic final/intermediate symlink substitution tests and FIFO/socket/character/block-device evidence prove no resolve-then-open dependency and no unsafe non-regular content consumption."
+  - criterion_id: AC-4
+    status: PROVEN
+    evidence: "Boundary tests cover below/at/above the fixed 128 KiB per-item and 256 KiB aggregate UTF-8 byte ceilings, including multibyte accounting. Limit failures contain no partial text and successful selected text is never truncated."
+  - criterion_id: AC-5
+    status: PROVEN
+    evidence: "Real MCP Client tests prove deliberate bounded ToolError for actionable request errors, typed sanitized per-item filesystem failures, schema rejection before delegate, and MCP 2.2 generic sanitization of an injected RuntimeError sentinel with no sentinel or traceback in client-visible results."
+  - criterion_id: AC-6
+    status: PROVEN
+    evidence: "Existing timing allowlist now recognizes exactly all six public tools including capacity_observer and fs_read_batch; timing tests confirm attribution and diff inspection confirms no argument/result payload logging, persistence, or new telemetry surface."
+  - criterion_id: AC-7
+    status: PROVEN
+    evidence: "README documents exactly six tools, fs_read_batch path/range/output bounds, and that AGENT_RUNTIME_WORKSPACE_ROOT is not general mechanical confinement; server instructions minimally advertise the bounded read-only cwd-relative purpose while preserving server identity."
+  - criterion_id: AC-8
+    status: PROVEN
+    evidence: "Focused filesystem/security/conformance suite passed 18/18, including real public MCP Client schema/annotations, representative success/partial failure, deliberate ToolError, cardinality 1/20, and unexpected-exception sanitization."
+  - criterion_id: AC-9
+    status: PROVEN
+    evidence: "Production real-MCP benchmark used five real repository files with heterogeneous ranges, exact content equivalence, 5 warmups/path, 30 interleaved measured samples/path, and one terminal_exec call for the entire workload. terminal_exec median 58.09245850014122 ms; fs_read_batch median 4.897333000371873 ms; absolute improvement 53.19512549976935 ms; relative improvement 91.56976115865372%, exceeding both required thresholds."
+  - criterion_id: AC-10
+    status: PROVEN
+    evidence: "./verify passed 160/160 with exit 0. Base-to-candidate git diff --check passed; no dependency change, rejected filesystem capability, terminal_exec redesign, live Runtime or configuration mutation, main promotion, tag, or release work was introduced."
+  - criterion_id: AC-11
+    status: PENDING_PUBLICATION
+    evidence: "Implementation commit is the direct child of the exact base and report publication is authorized as one report-only child plus non-force dev push. Fresh pre/post-push remote identity cannot truthfully be self-certified inside the report commit and must be proven at the publication consequence boundary after this artifact is committed."
+executor_checks:
+  - check_id: V-1
+    result: PASS
+    evidence: "Focused fs_read_batch filesystem/security/contract and real MCP Client suites passed 18/18."
+  - check_id: V-2
+    result: PASS
+    evidence: "./verify passed 160 tests with 0 failures and exit 0 on the implementation candidate."
+  - check_id: V-3
+    result: PASS
+    evidence: "Real MCP benchmark: 30 samples/path after 5 warmups, interleaved; median delta 53.19512549976935 ms and relative median improvement 91.56976115865372%."
+  - check_id: V-4
+    result: PASS
+    evidence: "Exact base-to-candidate diff inspection and forbidden-scope scans passed; git diff --check passed; no dependency, terminal_exec semantic/capture, lifecycle, rejected filesystem, main, tag, or release change was present."
+  - check_id: V-5
+    result: PENDING_PUBLICATION
+    evidence: "Fresh origin/dev and origin/main resolution immediately before non-force publication and again after push is a consequence-boundary proof performed after the report-only commit."
+discovered_gaps: []
+deviations_from_task: []
+blockers: []
+
+publication:
+  implementation_commit: "881a675607a83e850a05568851c2a01ce89c3685"
+  report_path: .agent/tasks/TASK-0040/report.yaml
+  report_commit: null
+  push_mode: non_force_dev
+  pushed: false
+  force_push: false
+  main_promoted: false
+  next_step: ARCHITECT_REVIEW
+
+result: NEEDS_REVIEW
