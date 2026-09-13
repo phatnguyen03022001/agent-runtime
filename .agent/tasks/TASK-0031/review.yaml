@@ -1,0 +1,65 @@
+protocol_version: 3
+
+task_id: TASK-0031
+task_revision: 1
+review_revision: 1
+state: REVISION_REQUIRED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0031/report.yaml
+  commit: "8d754783d349e4339af30de25346371441924440"
+  report_revision: 1
+
+reviewed_candidate:
+  commit: "319f1a378a95804aac3d168211c16d2e50fd6da4"
+  exact_base: "9e5f0aae51e208c1f2a60051d205968813394b47"
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  scope: PASS
+  git_authority: PASS
+  acceptance_criteria: REVISION_REQUIRED
+
+criterion_judgment:
+  AC-1: PASS
+  AC-2: PASS
+  AC-3: FAIL
+  AC-4: PASS
+  AC-5: PASS
+  AC-6: PASS
+
+accepted_evidence:
+  - "Candidate 319f1a378a95804aac3d168211c16d2e50fd6da4 is exactly one commit ahead of authorized base 9e5f0aae51e208c1f2a60051d205968813394b47."
+  - "Report 8d754783d349e4339af30de25346371441924440 is the direct child of the candidate and changes only TASK-0031 report.yaml."
+  - "Remote dev resolved to the exact report commit before review; main remained c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "Package/source design removes env-path.txt and checkout credential pointers, preserves canonical runtime.env mode/symlink checks, and keeps revision 1 source-only with the live Runtime untouched."
+  - "Executor evidence records ./verify 111 tests PASS, Swift 29/29 PASS, release package PASS, strict codesign PASS, and no Runtime activation/restart/cutover."
+
+revision_required:
+  - id: ATOMIC_CANONICAL_CONFIG_INITIALIZATION
+    severity: material
+    finding: "macos/runtime_config.py creates the final runtime.env path with O_CREAT|O_EXCL and then writes bytes directly into that visible final file. This does not satisfy the task requirement for atomic initialization: readers can observe a partially written file, and process/power failure can leave a truncated canonical authority that blocks later validation."
+    required_change: "Initialize through a private temporary file in the canonical directory, validate/write/fsync/chmod it, then publish with an atomic no-clobber strategy that preserves an already-existing canonical file. Add deterministic coverage for interrupted/partial-publication avoidance and existing-file race preservation."
+  - id: WORKSPACE_ROOT_BOOTSTRAP_PERSISTENCE
+    severity: material
+    finding: "install.sh derives AGENT_RUNTIME_WORKSPACE_ROOT and overrides it only in the in-memory validation map after runtime.env has already been initialized from checkout .env, so the canonical file may retain stale or blank workspace-root bytes."
+    required_change: "Ensure first-time canonical initialization persists the derived workspace root while preserving existing canonical runtime.env unchanged on subsequent installs. Add deterministic fixture coverage for blank/stale checkout workspace-root input and existing canonical preservation."
+
+invariants_for_revision:
+  - "Source/package/test only; no install activation, Runtime lifecycle transition, runtime.env live creation, tunnel/key/profile change, or main promotion."
+  - "Preserve accepted TASK-0029 behavior and TASK-0030 evidence."
+  - "No new dependency, Keychain, privileged helper, daemon redesign, container, branch, worktree, clone, tag, or release."
+
+promotion_readiness: BLOCKED
+
+notes:
+  - "No Runtime lifecycle action was performed during Architect review."
+  - "The overall authority move to per-user Application Support remains architecturally accepted; this review rejects only the candidate implementation details above."
