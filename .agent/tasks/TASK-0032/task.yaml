@@ -1,0 +1,160 @@
+protocol_version: 3
+
+task_id: TASK-0032
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: operator_research_request
+  gap_id: DISPOSABLE_TASK_SANDBOX_RESEARCH
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+execution_skills:
+  required: [executor, simplicity, verification, github-workflow]
+
+authority_sources:
+  - source: "phatnguyen03022001/agent-runtime@e689e78535befc6fbe456c080cb2f95e9ef807fd:.agent/tasks/TASK-0030/review.yaml"
+    role: "Accepted proof that current CODEX_LOCAL Seatbelt containment blocks control/write access to live Runtime authority while ordinary checkout engineering remains usable."
+    precedence: 1
+  - source: "phatnguyen03022001/agent-runtime@54b515c6e72cddc95411e5c8bfff0f7bc67ef959:.agent/tasks/TASK-0031/review.yaml"
+    role: "Accepted installed Runtime authority model: live configuration is outside the source checkout."
+    precedence: 2
+  - source: "Operator direction: evaluate a thin model where one task gets one disposable workspace plus macOS Seatbelt, verified results are published, then the workspace is deleted completely."
+    role: "Research objective and product constraint."
+    precedence: 3
+
+research_class: SPIKE
+
+objective: >-
+  Determine whether Agent Runtime should replace most persistent-checkout execution state and command-heuristic protection with a thin disposable per-task workspace wrapped by macOS Seatbelt: canonical Git source -> ephemeral task workspace -> sandboxed execution -> verify -> preserve only accepted Git/evidence outputs -> destroy workspace. Evaluate security, garbage reduction, latency, simplicity, quality, crash recovery, and technical debt against the current Runtime architecture without assuming the proposed model is superior.
+
+research_questions:
+  - "What exact process boundary must be sandboxed so every task command, PTY child, wrapper, subprocess, build tool, and test inherits the Seatbelt restrictions?"
+  - "Can the current macOS host provide a reliable per-task Seatbelt launch mechanism suitable for Agent Runtime, and what parts rely on deprecated/private/unstable interfaces? Distinguish empirical host evidence from documentation/inference."
+  - "What is the smallest safe writable surface for one task? Prefer only the disposable workspace plus narrowly required temporary locations; the canonical checkout and live Runtime authority must remain outside writable scope."
+  - "Should the canonical Git checkout be read-only source only, with no Executor writes at all? What Git material must be present inside the disposable workspace to create a commit or verified patch?"
+  - "Compare at least three workspace strategies where practical: detached git worktree, local/shared/reference clone, and independent local clone/copy. Measure creation time, disk overhead, cleanup time, residue/crash behavior, and Git publication complexity."
+  - "Does deleting the sandbox immediately after successful publication materially reduce dirty-repo recovery, manual cleanup, stale WIP, build/log/temp residue, and Architect evidence ambiguity? Quantify where possible instead of asserting."
+  - "What performance is lost by cold disposable workspaces? Measure or estimate dependency/build/test cache effects and identify whether a small read-only/shared content cache is justified now or should remain YAGNI."
+  - "Can the model improve correctness/quality by making every task start from an exact clean base and making the verified delta the only durable output? Identify counterexamples where throwing away WIP makes recovery or debugging worse."
+  - "Which current heuristic protection layers become redundant, which remain necessary defense-in-depth, and which must never be removed (especially protection of Agent Runtime itself, its live config, listener, tunnel identity, and operator-only lifecycle)?"
+  - "What is the minimal orphan cleanup design after crash/reboot? Evaluate one owned sandbox root plus ownership marker/manifest, bounded stale detection, and deletion only under that root."
+  - "After task success, should the sandbox always be destroyed? Define the exact terminal boundary: what must be durable before deletion, what happens on publication failure, and what happens after Executor/process crash."
+  - "What technical debt does this introduce over 1 month / 1 year, especially macOS-version coupling, Seatbelt policy maintenance, filesystem exceptions, Git workspace lifecycle, cache design, debugging, and unsupported/deprecated APIs?"
+  - "Would this architecture actually be simpler than the current Runtime after counting all lifecycle, policy, cleanup, publication, verification, and compatibility code? Give an explicit complexity budget and reject the design if it becomes a framework."
+
+required_comparisons:
+  current_baseline:
+    description: "Current canonical checkout execution plus existing Agent Runtime self-protection and CODEX_LOCAL Seatbelt boundary."
+  candidate_model:
+    description: "One task = one disposable Git workspace; all task execution descendants sandboxed; publish only verified durable outputs; delete workspace at task completion."
+  alternative_model:
+    description: "Keep persistent checkout and strengthen existing policy/protection rather than introducing per-task workspace lifecycle."
+
+research_method:
+  - "Fresh-bind exact task base and inspect the current Runtime code paths for terminal_exec, terminal_start/poll/control, subprocess/process-tree creation, workspace/cwd guards, protection checks, Git/report flow, and current cleanup/state behavior."
+  - "Use current host evidence for macOS/Seatbelt capabilities. Prefer primary/official system documentation, local man pages, source-visible behavior, and small empirical probes. Clearly label CONFIRMED, MEASURED, INFERRED, and UNKNOWN."
+  - "Any empirical sandbox experiment must use synthetic harmless sentinels and disposable temporary repositories/workspaces only. Do not probe private user data or real protected assets."
+  - "If benchmarking Git workspace strategies, use throwaway temporary fixtures or disposable copies so canonical repository metadata is not polluted. Clean all experiment artifacts before finishing."
+  - "Measure repeated operations where cheap enough to be meaningful; record hardware/OS/runtime context and command shape so results are reproducible. Do not fabricate benchmark numbers if a measurement is blocked."
+  - "Research should actively seek failure cases and evidence against the proposed architecture, not only confirmation."
+  - "No implementation of the production sandbox lifecycle is authorized in revision 1. Throwaway experimental scripts/files must not become product code."
+
+security_invariants:
+  - "Do not start, stop, restart, reload, replace, rebind, kill, or otherwise lifecycle-transition Agent Runtime, its tunnel, listener, LaunchAgent, or installed app."
+  - "Do not mutate live runtime.env, desired-state marker, LaunchAgent plist, installed Runtime payload, tunnel identity, or port 8080."
+  - "Do not access Photos/hidden photos, Keychain, SSH material, browser sessions, or unrelated private data."
+  - "Do not request/enable a full-access sandbox bypass."
+  - "No root, sudo, privileged helper, VM, Docker/container sandbox, EndpointSecurity extension, second daemon, new network service, database, queue, or task registry."
+  - "No source/product/test implementation change in this research revision."
+  - "No branch, worktree, clone, tag, release, or main promotion in the canonical repository. Synthetic throwaway Git fixtures outside the canonical repository are allowed only for measurement and must be removed before completion."
+
+simplicity_target:
+  durable_components_if_recommended:
+    - "Seatbelt policy/profile source"
+    - "Disposable workspace create/run/destroy lifecycle"
+    - "Existing Git publication/evidence flow"
+    - "Small bounded orphan cleanup"
+  reject_if_required:
+    - "persistent task database"
+    - "scheduler/queue framework"
+    - "snapshot engine"
+    - "VM/container runtime"
+    - "new daemon or privileged service"
+    - "complex multi-tier cache manager"
+    - "workspace repair/recovery state machine"
+
+required_output:
+  report_path: .agent/tasks/TASK-0032/report.yaml
+  report_sections:
+    - "executive_verdict: RECOMMEND / RECOMMEND_WITH_CONDITIONS / DO_NOT_RECOMMEND"
+    - "evidence_classification: CONFIRMED / MEASURED / INFERRED / UNKNOWN"
+    - "current_architecture_costs"
+    - "candidate_architecture_minimum"
+    - "seatbelt_boundary_and_supportability"
+    - "workspace_strategy_comparison"
+    - "security_comparison"
+    - "garbage_and_cleanup_comparison"
+    - "latency_and_resource_comparison"
+    - "quality_and_reproducibility_comparison"
+    - "crash_and_orphan_cleanup"
+    - "publication_and_deletion_boundary"
+    - "technical_debt_1_month_and_1_year"
+    - "what_existing_protection_can_be_removed_vs_must_remain"
+    - "measured_benchmarks_with_method_or_explicit_NOT_MEASURED"
+    - "failure_modes_and_counterarguments"
+    - "minimal_next_implementation_slice_if_recommended"
+  publication: "Report-only non-force commit to dev; stop for Architect review."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Research is grounded in current Agent Runtime implementation and current host behavior."
+    evidence_required: "Exact current code paths and host observations are cited; claims distinguish measured facts from inference."
+  - id: AC-2
+    requirement: "Seatbelt supportability and process-tree boundary are resolved enough for an architecture decision."
+    evidence_required: "Report states what mechanism is available, what is unsupported/deprecated/unknown, and whether children/PTY/subprocesses inherit the intended boundary."
+  - id: AC-3
+    requirement: "Workspace alternatives are compared rather than assuming one implementation."
+    evidence_required: "At least three strategies are assessed; creation/disk/cleanup/publication trade-offs are measured where practical."
+  - id: AC-4
+    requirement: "Security, garbage, time, simplicity, and quality claims are evidence-based."
+    evidence_required: "Each claimed benefit has measurement, current-code evidence, or explicit inference with limitations."
+  - id: AC-5
+    requirement: "Technical debt and failure modes are explicit."
+    evidence_required: "Report covers API/macOS coupling, policy maintenance, cleanup risk, cold-cache cost, debugging, loss of WIP, Git metadata/residue, and operator recovery."
+  - id: AC-6
+    requirement: "The proposed lifecycle has a precise deletion boundary."
+    evidence_required: "Report defines success publication, publication failure, normal failure, crash/reboot, orphan detection, and when deletion is safe."
+  - id: AC-7
+    requirement: "Research remains non-invasive and leaves the machine/repo clean."
+    evidence_required: "No live Runtime lifecycle/config mutation; all synthetic artifacts removed; only report artifact is committed/pushed."
+  - id: AC-8
+    requirement: "Recommendation is minimal and falsifiable."
+    evidence_required: "If recommended, next slice is small enough to implement/test independently and includes rollback/rejection criteria; if not recommended, report names the blocking debt or missing capability."
+
+verification:
+  authoritative_verification:
+    required: false
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
