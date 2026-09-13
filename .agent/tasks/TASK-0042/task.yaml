@@ -1,0 +1,187 @@
+protocol_version: 3
+
+task_id: TASK-0042
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_hardening_followup
+  task_id: TASK-0041
+  gap_id: PACKAGE_PROVENANCE_AND_BOOTSTRAP
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "6930b8da48c9466389653fc55eb16f49eebbb28f"
+
+architect_analysis_skills: [security-review, verification, github-workflow]
+
+execution_skills:
+  required: [executor, security-review, verification, github-workflow]
+  recommended: []
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "Operator-approved fellow-level hardening architecture and TASK-0042 contract on 2026-09-14."
+    role: "Governs immutable source staging, complete hashed dependency locking, runtime payload manifest closure, reconstructible provenance, and clean bootstrap semantics."
+    precedence: 1
+  - source: "phatnguyen03022001/agent-runtime@456baf1e132f87ec139085f59e0ec6f1ef20c53e:.agent/tasks/TASK-0041/review.yaml"
+    role: "Accepted bounded six-tool Runtime baseline; all unaffected public MCP and filesystem contracts remain authoritative."
+    precedence: 2
+  - source: "phatnguyen03022001/architect-profile@97215b78e69b0aebcd87574b7e0cc8c78f2e5c73"
+    role: "Fresh dev pin observed immediately before TASK-0042 planning."
+    precedence: 3
+  - source: "phatnguyen03022001/agent-skills@6930b8da48c9466389653fc55eb16f49eebbb28f"
+    role: "Fresh dev pin observed immediately before TASK-0042 planning and governing task skill library for this task."
+    precedence: 4
+  - source: "phatnguyen03022001/agent-documents@ff135cde2dbebbffcd0c33415a7abaf1b2e2c4ec"
+    role: "Fresh dev pin observed immediately before TASK-0042 planning."
+    precedence: 5
+  - source: "phatnguyen03022001/agent-standards@4eb149686329b3a5ad74d66a6fce050d930ada39"
+    role: "Fresh dev pin observed immediately before TASK-0042 planning."
+    precedence: 6
+  - source: "phatnguyen03022001/agent-runtime@EXECUTION_BASE_AFTER_FINAL_PLANNING_COMMIT"
+    role: "Target repository self-pin is supplied by execution_base and the exact launch HEAD because a task cannot embed its own future commit SHA without self-reference."
+    precedence: 7
+
+structure_authority:
+  status: NOT_APPLICABLE
+  source: ""
+  rationale: "The work modifies the existing package/install/config pipeline and adds one dependency lock artifact; no new runtime service, daemon, framework, or source ownership boundary is authorized."
+
+objective: "Make the packaged Agent Runtime reconstructibly attributable to one immutable Git tree and one complete hash-locked Python dependency closure, make the runtime manifest close over the entire installed runtime payload, and make first bootstrap accept operator credentials from the process environment without requiring secrets in checkout .env."
+
+scope:
+  required_changes:
+    - "Add checked-in requirements.lock containing the complete transitive Python dependency closure with exact versions and SHA-256 hashes suitable for pip --require-hashes on the supported packaging environment. requirements.txt may remain the direct dependency declaration, but release packaging must not resolve an unpinned transitive dependency set."
+    - "Release packaging must refuse a non-clean Git checkout and must derive build/package source bytes from a temporary immutable staging tree exported from exact HEAD rather than copying source from the mutable working tree. Ignored build outputs may remain outside the source staging boundary."
+    - "Remove all package dependence on checkout .venv. Build a fresh temporary package-owned virtual environment from requirements.lock using pip --require-hashes; use copies rather than checkout interpreter symlinks where necessary so the final runtime payload has no checkout dependency."
+    - "Define the manifest closure as every regular file below Contents/Resources/runtime. The manifest itself lives outside that runtime tree, so it is excluded without self-reference; signing-owned metadata outside the runtime tree is separately protected by codesign."
+    - "Manifest schema must contain exact runtime Git revision, exact Git tree SHA, requirements.lock SHA-256, sorted per-file entries with relative POSIX path, byte size, and SHA-256, plus one aggregate payload digest over the sorted canonical file list."
+    - "Canonical aggregate digest input is the UTF-8 concatenation, in lexicographic path order, of path + TAB + decimal size + TAB + lowercase sha256 + LF for every manifest file entry."
+    - "Installer package validation must verify strict codesign and exact manifest closure: reject runtime symlinks, missing listed files, extra runtime files, size mismatch, hash mismatch, aggregate digest mismatch, invalid revision/tree/lock identities, or malformed/unsorted/duplicate manifest entries."
+    - "Do not claim bit-for-bit reproducible builds. Documentation and manifest semantics may claim reconstructible provenance only: source revision/tree, locked dependency identity, final payload hashes, and signature can be independently checked."
+    - "Fix first bootstrap so an absent canonical runtime.env may fill missing CONTROL_PLANE_API_KEY and CONTROL_PLANE_TUNNEL_ID from the installer process environment after preferring non-empty checkout source values. Existing canonical runtime.env remains authoritative and is never overridden from process environment."
+    - "When install.sh creates checkout .env from .env.example, set mode 0600 before any credential/bootstrap use. The checkout .env may retain empty secret slots; canonical runtime.env remains an atomic regular 0600 file and secrets must never be printed."
+    - "Update README/package documentation only as required to describe immutable staging, dependency lock, reconstructible provenance, manifest closure, and bootstrap credential precedence."
+  allowed_existing_files_or_components:
+    - "requirements.txt and new requirements.lock"
+    - "macos/package_app.sh and the smallest existing package helper surface"
+    - "install.sh and macos/runtime_config.py"
+    - "existing package/config/surface tests plus narrowly focused new provenance/bootstrap regressions"
+    - "README.md"
+    - ".agent/tasks/TASK-0042/report.yaml"
+  expected_files_are_restrictive: false
+
+invariants:
+  - "Public MCP surface and TASK-0041 boundedness/input semantics remain unchanged."
+  - "The installed runtime payload is attributable to exact Git source plus exact hash-locked Python dependencies; checkout history and checkout .venv contents cannot alter packaged runtime bytes."
+  - "The runtime manifest closes exactly over regular files below Contents/Resources/runtime; no unlisted runtime file is accepted."
+  - "Codesign remains an independent whole-bundle integrity gate; manifest payload hashing does not replace signature verification."
+  - "Reconstructible provenance is required; bit-for-bit reproducible build is explicitly not claimed or required."
+  - "Existing canonical runtime.env wins over all bootstrap inputs. For first creation only, non-empty checkout values win over process-environment fallback values, and process environment only fills missing API key/tunnel ID values."
+  - "No credential value may appear in logs, manifest, app resources, task/report artifacts, tests, or Git."
+  - "CHATGPT_LOCAL means reasoning is performed by ChatGPT while local execution/file operations use Agent Runtime by default. ChatGPT sandbox is not authorized for TASK-0042; it may be used in a future task only when that task proves a specific required capability cannot be satisfied through Agent Runtime."
+  - "No live Agent Runtime install, activation, reload, restart, stop, runtime.env mutation, tunnel/listener mutation, desired-state mutation, main promotion, tag, or release occurs in this task. Building and signing a non-installed candidate under the repository build output is allowed."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: allowed_only_for_locking_existing_closure
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+forbidden_changes:
+  - "Do not change the six public MCP tools, their schemas, annotations, scan/output limits, terminal semantics, capacity semantics, timing architecture, or Runtime protection model."
+  - "Do not add an alternative package manager, dependency service, artifact registry, container, daemon, cache service, release framework, or third-party build dependency merely to implement locking."
+  - "Do not vendor arbitrary site-packages or continue copying checkout .venv into the app bundle."
+  - "Do not weaken codesign verification, symlink rejection, canonical runtime.env mode/atomicity, tunnel identity checks, singleton ownership, or installed-package validation."
+  - "Do not run live install.sh against the operator installation, reload/restart/stop Agent Runtime, mutate port 8080, runtime.env, tunnel identity, listener state, desired-state files, LaunchAgents, installed app, main, tags, or releases."
+  - "Do not use ChatGPT sandbox for ordinary TASK-0042 execution."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "requirements.lock captures the complete Python runtime dependency closure with exact versions and SHA-256 hashes, and package dependency installation succeeds only through pip --require-hashes from that lock."
+    evidence_required: "Lock audit proves every resolved runtime distribution is exact/hash-pinned; focused tests or a clean package build prove hash-required installation and failure on a tampered/missing hash without modifying the live installation."
+  - id: AC-2
+    requirement: "Release packaging refuses a dirty checkout and consumes source from an immutable temporary export of exact HEAD; working-tree source edits or checkout .venv history cannot influence the packaged runtime payload."
+    evidence_required: "Deterministic fixture/regression tests cover dirty tracked/untracked state and prove package source/venv inputs originate from exact HEAD staging and fresh lock installation, plus exact diff inspection shows checkout .venv copying is removed."
+  - id: AC-3
+    requirement: "runtime-manifest.json provides reconstructible provenance with exact runtime revision, Git tree SHA, lock SHA-256, sorted unique per-file path/size/hash entries for every regular runtime payload file, and the specified aggregate payload digest."
+    evidence_required: "Manifest-generation tests recompute the canonical list/digest independently and prove exact equality; no secret or checkout path is present."
+  - id: AC-4
+    requirement: "Installer validation verifies codesign plus exact runtime manifest closure and fails closed for missing, extra, symlinked, size-modified, hash-modified, aggregate-mismatched, malformed, duplicate, unsorted, or identity-invalid runtime payload state."
+    evidence_required: "Fixture/adversarial tests mutate each condition independently and prove rejection before activation; one clean packaged candidate passes strict signature and manifest validation."
+  - id: AC-5
+    requirement: "First bootstrap can create canonical runtime.env when checkout .env has empty secret slots but process environment provides both credentials; source non-empty values take precedence, existing canonical config is never overridden, and created checkout/canonical env files use mode 0600."
+    evidence_required: "Focused config/installer fixtures cover empty-source environment fallback, source-over-environment precedence, existing-canonical preservation, missing-credential failure, 0600 modes, atomic canonical creation, and absence of secret echo."
+  - id: AC-6
+    requirement: "The stabilized exact implementation candidate passes affected package/config/security verification, canonical ./verify once, and one non-installed clean package/signature/provenance build from exact implementation HEAD."
+    evidence_required: "Record affected test counts, ./verify exit/test counts and exact run count after stabilization, package command/result, strict codesign result, manifest closure result, and exact candidate SHA."
+  - id: AC-7
+    requirement: "TASK-0042 remains limited to dependency locking, package provenance/closure, installer validation, and bootstrap configuration; no MCP/protection/CI/live Runtime/main/tag/release semantic mutation occurs."
+    evidence_required: "Exact base-to-candidate diff/status plus live-boundary audit."
+  - id: AC-8
+    requirement: "Published lineage on dev contains one final implementation candidate commit followed by one report-only commit, non-force, with main unchanged, then stops for Architect review."
+    evidence_required: "Fresh remote refs before/after publication and exact commit/report lineage."
+
+verification:
+  executor_checks:
+    - id: V-1
+      command_or_check: "During iteration run minimum focused dependency-lock, immutable-staging, manifest-closure, installer-validation, and bootstrap-config regressions; use synthetic/fixture targets only and never the live installation."
+      required: true
+    - id: V-2
+      command_or_check: "After bytes stabilize, run the broader affected package/config/security test set once."
+      required: true
+    - id: V-3
+      command_or_check: "Create the final implementation candidate commit, ensure the worktree is clean at that exact HEAD, then run ./verify once on that exact candidate. If a code fix becomes necessary, replace/amend the unpublished candidate and rerun the invalidated final gates on the new exact candidate."
+      required: true
+    - id: V-4
+      command_or_check: "On the clean exact implementation candidate, run one non-installed macos/package_app.sh build from immutable staging; independently verify strict codesign, manifest identity/closure, absence of checkout references/secrets, and fresh lock-owned runtime environment."
+      required: true
+    - id: V-5
+      command_or_check: "Inspect exact task-base-to-candidate diff for public-MCP/protection/CI/live-Runtime/main/tag/release violations and confirm no checkout .venv packaging remains."
+      required: true
+    - id: V-6
+      command_or_check: "Fresh-resolve origin/dev and origin/main immediately before non-force publication and again after publication; fail closed on drift."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "NONE"
+    expected_signal: "NOT_REQUIRED_FOR_THIS_EXECUTION_TASK"
+
+publication:
+  implementation_commit_required: true
+  report_path: .agent/tasks/TASK-0042/report.yaml
+  required_report_revision: 1
+  push: non_force_dev
+  stop_for_architect_review: true
+
+git_authority:
+  create_branch: false
+  create_worktree: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
