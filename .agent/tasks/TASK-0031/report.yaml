@@ -1,22 +1,21 @@
 protocol_version: 3
 
 task_id: TASK-0031
-task_revision: 2
-report_revision: 2
+task_revision: 3
+report_revision: 3
 state: REPORTED
 
 task_source:
   path: .agent/tasks/TASK-0031/task.yaml
-  commit: "56ce940b8cd827b4fe164233f2c5c25ddfbd6d00"
+  commit: "562b5ad1918706d4f708681de6564f8d8d9efac1"
 
 execution:
   repository: phatnguyen03022001/agent-runtime
   branch:
     name: dev
     role: integration
-  authorized_base_head: "56ce940b8cd827b4fe164233f2c5c25ddfbd6d00"
-  pre_execution_head: "56ce940b8cd827b4fe164233f2c5c25ddfbd6d00"
-  final_execution_head: "f01c1547ad2c896d433b4b76f730af10f6884b76"
+  authorized_base_head: "562b5ad1918706d4f708681de6564f8d8d9efac1"
+  final_execution_head: "562b5ad1918706d4f708681de6564f8d8d9efac1"
 
 skill_library:
   repository: phatnguyen03022001/agent-skills
@@ -24,19 +23,8 @@ skill_library:
 
 capability_preflight:
   phase: EXECUTION
-  required:
-    - repository_content_write
-    - local_process_execution
-    - git_commit
-    - non_force_git_push
-  available:
-    - repository_content_read
-    - repository_content_write
-    - local_process_execution
-    - git_history_read
-    - git_commit
-    - non_force_git_push
-    - remote_ref_read
+  required: [local_process_execution, repository_content_write, git_commit, non_force_git_push, remote_ref_read]
+  available: [local_process_execution, repository_content_read, repository_content_write, git_history_read, git_commit, non_force_git_push, remote_ref_read]
   missing: []
   passed: true
 
@@ -44,95 +32,45 @@ authoritative_verification:
   required: false
   performed: false
   result: NOT_REQUIRED
-  evidence: "TASK-0031 declares no separate authoritative verifier."
+  evidence: "TASK-0031 revision 3 declares no separate authoritative verifier."
 
 pushed: false
-promoted_to_main: false
-
-continuation_reconciliation:
-  result: PASS
-  canonical_checkout: /Users/tienphat/Developer/agent-runtime
-  preserved_wip_base: "56ce940b8cd827b4fe164233f2c5c25ddfbd6d00"
-  preserved_wip_paths:
-    - install.sh
-    - macos/runtime_config.py
-    - tests/test_tunnel_identity.py
-    - tests/test_runtime_config.py
-  evidence: "The continued session found dev at the exact authorized base with exactly the four expected WIP paths. Existing implementation bytes were preserved except for one additional deterministic interruption-cleanup fixture required by the revision-2 evidence contract."
-
-live_runtime_evidence:
-  serving_pid: 70506
-  listener: 127.0.0.1:8080
-  baseline_health: PASS
-  baseline_readiness: PASS
-  postcheck_health: PASS
-  postcheck_readiness: PASS
-  launchagent_state: loaded
-  canonical_runtime_env_created: false
-  checkout_env_mutated: false
-  lifecycle_actions_issued: []
-  evidence: "Read-only checks before and after verification showed the same serving PID, live/ready endpoints, loaded LaunchAgent, absent real Application Support runtime.env, and unchanged checkout .env bytes/metadata. No secret value or secret-derived fingerprint is persisted here."
-
-implementation:
-  canonical_config: "$HOME/Library/Application Support/Agent Runtime/runtime.env"
-  first_publication: "Bootstrap renders installer-derived workspace authority into a mode-0600 private file in the canonical directory, flushes and fsyncs it, validates it, then publishes with same-directory atomic no-clobber hard-link semantics and removes the private name."
-  race_behavior: "A concurrently appearing canonical file wins; it is validated and preserved rather than overwritten."
-  existing_authority_behavior: "An existing valid canonical runtime.env is validated and byte-preserved without applying checkout or installer-derived workspace values."
-  preserved_contracts:
-    - installed Runtime reads only canonical runtime.env
-    - fail-closed symlink, mode, and configuration validation
-    - exact four-tool MCP surface
-    - protected Runtime boundary
-    - singleton lifecycle and tunnel identity semantics
-
-verification_evidence:
-  focused_runtime_config_tests: "6/6 PASS, including partial-publication avoidance, failed cleanup, KeyboardInterrupt cleanup, concurrent no-clobber, workspace-root override, and existing-file preservation."
-  installer_workspace_fixture: PASS
-  verify_wrapper: "NOT_RUN: one authorized Agent Runtime invocation was attempted, but the tool resource became unavailable before command execution. The wrapper is not reported as PASS."
-  verify_canonical_body: "PASS: Python unittest discovery 118/118; Python py_compile PASS; bash -n install.sh start.sh verify PASS."
-  swift_tests: "29/29 PASS"
-  release_package: PASS
-  strict_codesign: PASS
-  package_reference_scan: "PASS: 1486 files inspected, 0 checkout/env-path references found."
 
 acceptance_evidence:
   - criterion_id: AC-1
     status: PROVEN
-    evidence: "Deterministic runtime-config fixtures prove the final canonical path is absent until a fully written, fsynced, validated mode-0600 private file is atomically published; injected failure and KeyboardInterrupt leave no final or private temp; concurrent valid canonical publication wins without clobber."
+    evidence: "Exactly one authorized installer invocation occurred. Its request returned a 502 transport error and was not retried. Independent read-only postchecks prove the cutover completed and no later task action changed service state."
   - criterion_id: AC-2
     status: PROVEN
-    evidence: "Fixtures prove blank, stale, and different checkout workspace-root values are replaced only for first bootstrap with the installer-derived root while credentials and optional session limit remain intact; installer-level fixture passes."
+    evidence: "Canonical runtime.env changed from absent to a regular non-symlink mode-0600 file with all required keys non-empty, workspace root /Users/tienphat/Developer, accepted tunnel fingerprint 6aa2b81d6dd8, and no disclosed credential values."
   - criterion_id: AC-3
     status: PROVEN
-    evidence: "Unit and installer fixtures prove an existing valid mode-0600 canonical runtime.env is byte-preserved and not rewritten from checkout/bootstrap values."
+    evidence: "Postchecks observed one canonical listener, the canonical service loaded and running from the installed payload, health live, readiness ready, installed revision 562b5ad1918706d4f708681de6564f8d8d9efac1, and valid strict deep package signature."
   - criterion_id: AC-4
     status: PROVEN
-    evidence: "The direct ./verify wrapper could not execute because the authorized Agent Runtime tool resource disappeared at invocation, and is not claimed PASS. Its exact canonical body passed independently: 118 Python tests, py_compile, and bash syntax; exact-four-tool/protected-runtime coverage is included. Swift 29/29, release package, strict codesign, and package reference scan also passed."
+    evidence: "Tunnel fingerprint remained 6aa2b81d6dd8. Checkout .env retained identical size 364, mtime_ns 1789254882984131365, SHA-256 ca507c06e3fd6663e993db6bbf3a62ca21ab022c9b3b7aeeef1934fc4634ac28, mode 0600, and workspace root before and after activation."
   - criterion_id: AC-5
     status: PROVEN
-    evidence: "Read-only before/after checks retained the same serving PID 70506, live/ready endpoints, loaded LaunchAgent, absent live canonical runtime.env, and unchanged checkout .env; no lifecycle/config action was issued."
+    evidence: "Installed service configuration no longer contains a checkout-config pointer. Independent installed-app scan inspected 1486 files and found zero source-checkout references and zero legacy config-path references."
   - criterion_id: AC-6
-    status: PENDING_REVIEW
-    evidence: "Candidate f01c1547ad2c896d433b4b76f730af10f6884b76 is a direct child of exact base 56ce940b8cd827b4fe164233f2c5c25ddfbd6d00 and changes only the four authorized implementation/test paths. Remote publication and final lineage refresh occur after this report commit."
+    status: NOT_PROVEN
+    evidence: "Pre-publication lineage is exact: clean local dev and remote dev are 562b5ad1918706d4f708681de6564f8d8d9efac1 and main is unchanged at c49d777efa09db7f6c51bd8d8616db4623499fb8. This report does not self-attest its future commit or publication; those are verified after report authorship."
 
 executor_checks:
   - check_id: CHECK-1
     result: PASS
-    evidence: "Continuation re-bound the preserved WIP to exact revision-2 base and captured read-only live evidence without printing secrets."
+    evidence: "Fresh binding proved clean local dev and canonical remote dev matched the exact revision-3 base before activation."
   - check_id: CHECK-2
     result: PASS
-    evidence: "Only the two Architect-required fixes and their deterministic atomicity/workspace fixtures are present."
+    evidence: "Pre-activation evidence captured config absence, installed revision, serving identity, live/ready endpoints, and checkout .env hash/metadata without secret disclosure."
   - check_id: CHECK-3
     result: PASS
-    evidence: "Focused tests and all required native/package checks passed. ./verify itself is explicitly NOT_RUN because the authorized Agent Runtime resource vanished before execution; its exact canonical body passed independently."
+    evidence: "The sole installer invocation was not retried after its transport error; independent post-state proves canonical config creation and installed service cutover."
   - check_id: CHECK-4
     result: PASS
-    evidence: "Fresh read-only postcheck showed the serving Runtime remained live/ready and protected configuration remained untouched."
+    evidence: "Postchecks prove singleton serving Runtime, loaded canonical service, live/ready endpoints, valid package signature, stable fingerprint, unchanged checkout .env, and no installed checkout-config dependency."
   - check_id: CHECK-5
-    result: PENDING_REVIEW
-    evidence: "Report commit and non-force dev publication are the remaining publication steps; no main promotion is authorized."
+    result: NOT_PROVEN
+    evidence: "Report commit, non-force dev publication, fresh remote report identity, unchanged main, and final clean local mirror are publication-boundary checks performed after report authorship."
 
-deviations_from_task:
-  - "Direct ./verify invocation has no execution result because Agent Runtime returned a resource-unavailable tool error before the command ran; no safety guard was bypassed or weakened."
-blockers: []
 result: NEEDS_REVIEW
