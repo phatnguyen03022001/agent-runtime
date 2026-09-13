@@ -2,8 +2,8 @@ protocol_version: 3
 
 task_id: TASK-0040
 task_revision: 2
-review_revision: 2
-state: ACCEPTED
+review_revision: 3
+state: REVISION_REQUIRED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
@@ -30,33 +30,36 @@ contract_compliance:
   scope: PASS
   structure_policy: PASS
   git_authority: PASS
-  acceptance_criteria: PASS
+  acceptance_criteria: FAIL
   verifier_evidence: NOT_REQUIRED
 
 criterion_judgment:
   AC-1: PASS
-  AC-2: PASS
+  AC-2: FAIL
   AC-3: PASS
   AC-4: PASS
   AC-5: PASS
   AC-6: PASS
   AC-7: PASS
 
-accepted_evidence:
-  - "Remote dev resolved to report revision-2 commit b9b6b287fa2a80c6a8df3e3dbbfa3564bf00cdcf and remote main remained c49d777efa09db7f6c51bd8d8616db4623499fb8 before review publication."
-  - "Exact revision-2 lineage is 8c2de71565f1abcf39498edcd35a9cb3641c59e1 -> 0a4ff5ca5c923213a16cbd70aed3369456f33732 -> b9b6b287fa2a80c6a8df3e3dbbfa3564bf00cdcf; implementation is one direct child and the second commit is report-only."
-  - "The correction diff changes only agent_runtime/fs_read.py and tests/test_fs_read_batch_adversarial.py; no dependency, rejected capability, terminal_exec semantic/capture, live Runtime/config, main, tag, or release mutation is present."
-  - "Selected-range UTF-8 handling now accumulates only selected raw bytes and strict-decodes the complete selected result. Independent Architect probes passed both same-versus-later-chunk invalid suffix behavior and invalid selected-content semantics."
-  - "The cwd trust anchor is acquired with Darwin O_NOFOLLOW_ANY plus O_DIRECTORY before descriptor-relative item traversal. The independent Architect cwd intermediate-component replacement regression failed closed as required."
-  - "Executor evidence records focused adversarial 6/6 PASS, affected conformance 20/20 PASS, and ./verify 162/162 PASS with exit 0 on the exact implementation candidate. Architect did not redundantly rerun the full suite."
-  - "Fresh corrected-production benchmark records terminal_exec median 58.7406455006203 ms versus fs_read_batch 4.998333499315777 ms, an absolute improvement of 53.742312001304526 ms and relative improvement of 91.49084342414488%, exceeding both admission thresholds."
-  - "The revision-2 report validated PASS with the exact pinned agent-skills@1826d33bd1e467896c133109b37db8b0656b3276 protocol-v3 validator."
+blocking_findings:
+  - id: CWD_DIRECTORY_REPLACEMENT_RACE
+    criterion: AC-2
+    evidence: "After _validated_cwd() resolves and validates the cwd pathname, an intermediate validated directory can be renamed away and a different ordinary directory can be renamed into the same pathname before os.open(... O_NOFOLLOW_ANY | O_DIRECTORY). O_NOFOLLOW_ANY rejects symlinks but does not bind the opened directory identity to the directory object previously validated. Independent Architect reproduction returned RENAMED_SECRET from the replacement namespace."
+    consequence: "The cwd trust-anchor claim is false for pure directory namespace replacement: fs_read_batch can acquire and read from a different directory object than the one validated before descriptor acquisition."
+
+revision_requirements:
+  - "Acquire the fs_read_batch cwd trust anchor with identity binding that cannot be redirected by pure directory rename/replacement between authorization validation and descriptor acquisition. Symlink-only protection is insufficient."
+  - "Add a deterministic adversarial regression that validates a cwd, replaces an intermediate directory with a different ordinary directory before trust-anchor acquisition, and proves redirected content cannot be read."
+  - "Keep the correction bounded to fs_read_batch cwd authorization/trust-anchor acquisition and focused tests; do not broaden into general workspace sandboxing or redesign terminal_exec."
+  - "Rerun only verification invalidated by the correction plus one final canonical ./verify and a fresh benchmark only if the read path materially changes performance."
 
 promotion_readiness:
   eligible_for_candidate_capture: false
-  reason: "TASK-0040 is accepted on dev, but this task explicitly authorizes no main promotion; any promotion or subsequent Agent Runtime work requires separate canonical authority."
+  reason: "Post-acceptance independent red-team evidence reproduced a material AC-2 cwd identity race; TASK-0040 requires another bounded correction revision before acceptance."
 
 notes:
-  - "The two revision-1 AC-3 blockers are closed by revision 2."
-  - "No live Agent Runtime install/reload/restart/config/tunnel/listener mutation was part of this acceptance."
-  - "No main promotion, tag, or release work is authorized by TASK-0040."
+  - "Review revision 3 supersedes review revision 2 ACCEPTED after a newly discovered deterministic pure-directory replacement race was independently reproduced by the governing Architect."
+  - "The selected-range UTF-8 correction remains proven; no regression was found there."
+  - "Resource-amplification and top-level input-schema observations are follow-up debt and are not acceptance blockers for this revision."
+  - "No main promotion, release work, or live Runtime lifecycle/configuration mutation is authorized."
