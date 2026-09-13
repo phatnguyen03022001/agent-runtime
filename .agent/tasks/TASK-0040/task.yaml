@@ -1,13 +1,13 @@
 protocol_version: 3
 
 task_id: TASK-0040
-task_revision: 2
+task_revision: 3
 state: APPROVED
 
 origin:
   type: architect_revision
   task_id: TASK-0040
-  gap_id: AC3_REVIEW_REVISION
+  gap_id: CWD_DIRECTORY_REPLACEMENT_RACE
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -27,10 +27,10 @@ skill_library:
   repository: phatnguyen03022001/agent-skills
   revision: "1826d33bd1e467896c133109b37db8b0656b3276"
 
-architect_analysis_skills: [security-review, verification, optimization, github-workflow]
+architect_analysis_skills: [security-review, verification, github-workflow]
 
 execution_skills:
-  required: [executor, security-review, verification, optimization, github-workflow]
+  required: [executor, security-review, verification, github-workflow]
   recommended: []
 
 external_skills:
@@ -39,42 +39,39 @@ external_skills:
   execution_recommended: []
 
 authority_sources:
-  - source: "phatnguyen03022001/agent-runtime@d7bc122974f4839412a70d03cd5d7dca07dee138:.agent/tasks/TASK-0040/review.yaml"
-    role: "Governing REVISION_REQUIRED review for the two acceptance-blocking AC-3 defects."
+  - source: "phatnguyen03022001/agent-runtime@16198776d57e2573fef096c89c0b667c20ad3e1d:.agent/tasks/TASK-0040/review.yaml"
+    role: "Governing REVISION_REQUIRED review revision 3 for the reproduced pure-directory cwd replacement race."
     precedence: 1
-  - source: "phatnguyen03022001/agent-runtime@a52e0698a2ece4d5e473d9e41fbc1041f1b877e4:.agent/tasks/TASK-0040/task.yaml"
-    role: "Original fs_read_batch admission contract; all unaffected boundaries remain authoritative."
+  - source: "phatnguyen03022001/agent-runtime@8c2de71565f1abcf39498edcd35a9cb3641c59e1:.agent/tasks/TASK-0040/task.yaml"
+    role: "Revision-2 contract; all unaffected six-tool, UTF-8, output, error, performance, and mutation boundaries remain authoritative."
     precedence: 2
 
 structure_authority:
   status: NOT_APPLICABLE
   source: ""
-  rationale: "Both corrections remain inside the existing fs_read_batch implementation and tests; no new component or filesystem framework is authorized."
+  rationale: "The correction remains inside fs_read_batch cwd authorization/trust-anchor acquisition and focused tests; no new component or filesystem framework is authorized."
 
-objective: "Correct the two TASK-0040 revision-1 defects without broadening scope: make selected-range strict UTF-8 behavior independent of internal read chunk boundaries, and make fs_read_batch acquire its validated cwd descriptor with a race-resistant trust anchor. Preserve the accepted six-tool contract and performance admission thresholds."
+objective: "Close the remaining fs_read_batch cwd trust-anchor identity race so a validated cwd cannot be redirected to a different ordinary directory object by rename/replacement before descriptor acquisition, while preserving every unaffected TASK-0040 contract and keeping the correction minimal."
 
 scope:
   required_changes:
-    - "Correct selected-range UTF-8 processing so bytes outside the requested lines cannot change success or INVALID_UTF8 solely because of chunk placement."
-    - "Correct cwd descriptor acquisition so intermediate namespace replacement cannot redirect the validated cwd between validation and descriptor acquisition."
-    - "Add deterministic focused regressions for both defects and preserve all already-proven fs_read_batch behavior."
-    - "Run final canonical verification and a fresh corrected-production real-MCP benchmark, then publish report revision 2."
+    - "Bind fs_read_batch cwd authorization to the directory identity actually opened, so pure directory rename/replacement between validation and descriptor acquisition fails closed instead of reading replacement content."
+    - "Add a deterministic adversarial regression for replacement of a validated intermediate cwd directory with a different ordinary directory before trust-anchor acquisition."
+    - "Preserve revision-2 selected-range UTF-8 behavior and all unaffected six-tool/security/error/output semantics."
+    - "Run affected focused verification, one final ./verify on stabilized bytes, a fresh real-MCP performance benchmark, and publish report revision 3."
   allowed_existing_files_or_components:
-    - "agent_runtime fs_read_batch read/security implementation and the smallest existing validation helper surface needed for its cwd trust anchor"
-    - "existing fs_read_batch security/conformance tests and narrowly focused regressions"
+    - "agent_runtime fs_read_batch cwd trust-anchor/read implementation and the smallest existing cwd validation helper surface needed for identity binding"
+    - "existing fs_read_batch adversarial/security/conformance tests"
     - ".agent/tasks/TASK-0040/report.yaml"
   expected_files_are_restrictive: false
 
 invariants:
   - "Public MCP surface remains exactly terminal_exec, terminal_start, terminal_poll, terminal_control, capacity_observer, fs_read_batch."
-  - "Existing five public tool contracts and execution semantics remain unchanged."
-  - "fs_read_batch annotations remain readOnly=true, destructive=false, idempotent=true, openWorld=false."
-  - "Strict UTF-8 acceptance applies to selected returned line content; unselected bytes before start_line or after end_line must not affect the result solely because of chunk placement."
-  - "Invalid UTF-8 inside selected content returns INVALID_UTF8 with no partial text."
-  - "The cwd descriptor used as the fs_read_batch trust anchor cannot be redirected by intermediate symlink replacement between validation and descriptor acquisition."
-  - "Item traversal remains descriptor-relative, cwd-descendant, no-symlink, regular-file-only, and safe for special-file rejection."
-  - "The 128 KiB per-item and 256 KiB aggregate output limits remain unchanged with no caller-controlled override and no silent success truncation."
-  - "AGENT_RUNTIME_WORKSPACE_ROOT remains documented as access-selection policy, not general mechanical host filesystem confinement."
+  - "Existing five public tool contracts and terminal execution semantics remain unchanged."
+  - "The directory object used as fs_read_batch cwd trust anchor must be the same authorized identity established during cwd validation; pathname reuse alone is insufficient."
+  - "Symlink and pure-directory namespace replacement between cwd validation and trust-anchor acquisition must both fail closed."
+  - "Selected-range UTF-8, descriptor-relative item traversal, regular-file-only behavior, output ceilings, typed errors, timing attribution, and MCP 2.2 sanitization remain unchanged."
+  - "AGENT_RUNTIME_WORKSPACE_ROOT remains access-selection policy, not general host filesystem confinement."
   - "No live Runtime, config, runtime.env, tunnel, listener, installed package, main, tag, or release mutation occurs."
 
 gap_policy:
@@ -87,53 +84,52 @@ gap_policy:
   blocking_gap_behavior: BLOCKED
 
 forbidden_changes:
-  - "No text_search, fs_stat_batch, or generic filesystem API."
-  - "No hashing, globbing, recursive walk, directory listing, binary/base64 reads, arbitrary encoding detection, filesystem writes, watch, index, cache, daemon, service, database, or registry."
+  - "No text_search, fs_stat_batch, generic filesystem API, hashing, globbing, recursive walk, listing, binary/base64 reads, writes, watch, index, cache, daemon, service, database, or registry."
   - "No terminal_exec redesign or semantic/capture change."
-  - "No general workspace-root sandboxing or second security system."
+  - "No general workspace-root sandboxing or second filesystem security framework."
   - "No third-party dependency."
-  - "No live Runtime install, reload, restart, stop, config, tunnel, listener, desired-state, or runtime.env mutation."
+  - "No live Runtime install/reload/restart/stop/config/tunnel/listener/runtime.env mutation."
   - "No main promotion, tag, or release work."
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "Selected-range UTF-8 behavior is deterministic: unselected invalid bytes before or after the requested lines do not affect the result, same-versus-next-chunk placement is equivalent, and invalid selected content returns INVALID_UTF8."
-    evidence_required: "Focused regressions force equivalent invalid unselected bytes into different read chunk layouts, cover invalid selected content, and prove identical client-visible semantics."
+    requirement: "Pure directory rename/replacement after cwd validation cannot redirect fs_read_batch to a different directory identity before trust-anchor acquisition."
+    evidence_required: "Deterministic adversarial regression replaces a validated intermediate cwd directory with a different ordinary directory immediately before trust-anchor acquisition and proves replacement content is never returned."
   - id: AC-2
-    requirement: "The cwd trust-anchor descriptor is acquired race-resistently so intermediate-component replacement between validation and descriptor acquisition cannot redirect the authorized cwd."
-    evidence_required: "Implementation inspection plus a deterministic adversarial cwd-intermediate-component replacement test where feasible."
+    requirement: "The implementation binds validation to the opened cwd directory identity rather than relying only on pathname resolution or O_NOFOLLOW_ANY."
+    evidence_required: "Implementation inspection plus regression evidence showing identity mismatch fails closed; symlink replacement protection remains intact."
   - id: AC-3
-    requirement: "All unaffected revision-1 contract predicates remain preserved, including exact six-tool surface, typed results/errors, item-path no-symlink traversal, special-file rejection, output limits, timing attribution, and MCP 2.2 sanitization."
-    evidence_required: "Affected existing conformance/security tests and exact correction diff inspection show no unrelated contract or dependency change."
+    requirement: "All unaffected TASK-0040 revision-2 predicates remain preserved, including selected-range UTF-8 semantics, exact six-tool surface, item no-symlink traversal, special-file rejection, output ceilings, typed errors, timing attribution, and MCP sanitization."
+    evidence_required: "Affected focused/conformance tests and exact correction diff show no unrelated contract change."
   - id: AC-4
-    requirement: "The stabilized corrected candidate passes canonical repository verification."
-    evidence_required: "Use targeted tests during iteration; after bytes stabilize, run ./verify once in full. A separate final focused rerun is not required when the full suite includes those regressions."
+    requirement: "The stabilized correction passes canonical repository verification."
+    evidence_required: "Use targeted tests during iteration; after bytes stabilize, run ./verify once in full."
   - id: AC-5
-    requirement: "Corrected production fs_read_batch still beats the optimized one-call terminal_exec baseline by at least 20% median and at least 20 ms absolute median on the bounded real-MCP workload."
-    evidence_required: "Fresh real-MCP benchmark with warmup and at least 20 measured calls per path records both medians, absolute and relative improvement, and material variance/outliers."
+    requirement: "Corrected production fs_read_batch still beats optimized one-call terminal_exec by at least 20% median and at least 20 ms absolute median on the accepted real-MCP workload."
+    evidence_required: "Fresh benchmark with warmup and at least 20 measured calls/path records medians, absolute/relative improvement, and material variance/outliers."
   - id: AC-6
-    requirement: "Correction remains narrowly scoped with no rejected capability, dependency, existing-tool semantic change, live Runtime/config mutation, main promotion, or release work."
-    evidence_required: "Exact revision-2-base-to-candidate diff/status inspection and boundary evidence."
+    requirement: "Correction remains narrowly scoped with no dependency, rejected capability, terminal_exec semantic change, live Runtime/config mutation, main promotion, tag, or release work."
+    evidence_required: "Exact revision-3-base-to-candidate diff/status and boundary evidence."
   - id: AC-7
-    requirement: "Publication is one correction implementation commit followed by one report-revision-2-only commit on dev, non-force, with unchanged main, then stop for Architect review."
-    evidence_required: "Fresh remote refs before and after publication plus exact commit/report lineage."
+    requirement: "Publication is one correction implementation commit followed by one report-revision-3-only commit on dev, non-force, with unchanged main, then stop for Architect review."
+    evidence_required: "Fresh remote refs before/after publication and exact lineage."
 
 verification:
   executor_checks:
     - id: V-1
-      command_or_check: "During implementation, run the minimum focused regressions needed for the two defects and affected fs_read_batch security/conformance behavior."
+      command_or_check: "Run the minimum focused regressions for pure-directory cwd replacement, prior symlink replacement, and affected fs_read_batch behavior."
       required: true
     - id: V-2
-      command_or_check: "After implementation stabilizes, run ./verify once in full on the exact correction candidate."
+      command_or_check: "After correction bytes stabilize, run ./verify once in full on the exact candidate."
       required: true
     - id: V-3
-      command_or_check: "Run a fresh corrected-production real-MCP benchmark with at least 20 measured calls per path and record exact threshold evidence in report revision 2."
+      command_or_check: "Run the accepted bounded real-MCP benchmark with at least 20 measured calls per path and record exact results in report revision 3."
       required: true
     - id: V-4
-      command_or_check: "Inspect the exact revision-2 base-to-candidate diff for scope, dependency, terminal_exec semantic, rejected-capability, and live-mutation violations."
+      command_or_check: "Inspect exact revision-3 base-to-candidate diff for scope/dependency/existing-tool/live-mutation violations."
       required: true
     - id: V-5
-      command_or_check: "Fresh-resolve origin/dev and origin/main immediately before non-force publication and again after publication; fail closed on drift."
+      command_or_check: "Fresh-resolve origin/dev and origin/main immediately before non-force publication and after publication; fail closed on drift."
       required: true
   authoritative_verification:
     required: false
@@ -143,7 +139,7 @@ verification:
 publication:
   implementation_commit_required: true
   report_path: .agent/tasks/TASK-0040/report.yaml
-  required_report_revision: 2
+  required_report_revision: 3
   push: non_force_dev
   stop_for_architect_review: true
 
