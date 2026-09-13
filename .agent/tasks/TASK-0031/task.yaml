@@ -1,15 +1,12 @@
 protocol_version: 3
 
 task_id: TASK-0031
-task_revision: 2
+task_revision: 3
 state: APPROVED
 
 origin:
-  type: architect_review_followup
-  gap_id: ATOMIC_CONFIG_MIGRATION_AND_WORKSPACE_PERSISTENCE
-
-architect_binding:
-  target_repository: phatnguyen03022001/agent-runtime
+  type: architect_activation_followup
+  gap_id: LIVE_RUNTIME_CONFIG_CUTOVER
 
 target:
   repository: phatnguyen03022001/agent-runtime
@@ -30,103 +27,68 @@ execution_skills:
   required: [executor, simplicity, verification, github-workflow]
 
 authority_sources:
-  - source: "phatnguyen03022001/agent-runtime@008bf3e67ed56e7cdd7e60f55c9e730a65636f39:.agent/tasks/TASK-0031/review.yaml"
-    role: "Architect review requiring two material fixes: truly atomic first publication of runtime.env and persistence of the installer-derived workspace root during bootstrap."
+  - source: "phatnguyen03022001/agent-runtime@f2fff95884d50d4c850b1952afaeebac8197ee84:.agent/tasks/TASK-0031/review.yaml"
+    role: "Accepted revision-2 source/package migration; live activation remains pending."
     precedence: 1
-  - source: "phatnguyen03022001/agent-runtime@319f1a378a95804aac3d168211c16d2e50fd6da4"
-    role: "Revision-1 source candidate; retain all accepted source/package behavior except the two review findings."
+  - source: "phatnguyen03022001/agent-runtime@f01c1547ad2c896d433b4b76f730af10f6884b76"
+    role: "Accepted implementation candidate."
     precedence: 2
-  - source: "phatnguyen03022001/agent-runtime@ba91f89043a366ad8fe48b1d8b1037007c890ccf:.agent/tasks/TASK-0030/review.yaml"
-    role: "Architect-confirmed containment gap that TASK-0031 is closing."
-    precedence: 3
 
-structure_authority:
-  status: RESOLVED
-  source: "Per-user Application Support Runtime configuration authority."
-  rationale: "Keep the accepted revision-1 authority model: installed execution reads only $HOME/Library/Application Support/Agent Runtime/runtime.env; the checkout .env is bootstrap/source input only."
+operator_authorization:
+  live_activation: true
+  installer_activation_limit: 1
 
-objective: "Revise the accepted TASK-0031 source candidate so first-time canonical Runtime configuration publication is actually atomic and the canonical file persists the installer-derived workspace root, while preserving existing canonical configuration and leaving the live Runtime untouched."
-
-canonical_runtime_config:
-  path: "$HOME/Library/Application Support/Agent Runtime/runtime.env"
-  requirements:
-    - "Regular non-symlink file only."
-    - "Mode 0600."
-    - "Contains CONTROL_PLANE_API_KEY, CONTROL_PLANE_TUNNEL_ID, AGENT_RUNTIME_WORKSPACE_ROOT and optional AGENT_RUNTIME_MAX_ACTIVE_SESSIONS."
-    - "Secrets are never logged, committed, embedded into the app bundle, or copied into task evidence."
+objective: "Activate the accepted runtime.env migration once and prove healthy canonical Runtime convergence without source changes or identity drift."
 
 scope:
-  required_changes:
-    - "Fresh-bind this exact revision-2 base and preserve the accepted revision-1 authority model, TASK-0029/TASK-0030 evidence, main, and the currently serving Runtime."
-    - "Fix first-time runtime.env initialization so the final canonical path is never exposed with partially written/truncated content. Publication must be atomic at the final path, must not overwrite an already-existing canonical file, and must preserve a concurrently appearing valid canonical file rather than clobber it."
-    - "Before first-time publication only, persist the installer-derived AGENT_RUNTIME_WORKSPACE_ROOT into the canonical runtime.env payload even if the checkout bootstrap input contains a blank, stale, or different workspace-root value."
-    - "When canonical runtime.env already exists, validate and preserve its bytes unchanged; do not silently rewrite its workspace root from the checkout or installer-derived value."
-    - "Add deterministic fixture coverage proving no partial canonical publication, interrupted/failed initialization cleanup, existing-file race/no-clobber behavior, first-bootstrap workspace-root persistence, blank/stale checkout workspace-root correction, and preservation of an existing canonical file."
-    - "Retain revision-1 package/source behavior: no env-path.txt, no checkout credential pointer in the app bundle, installed execution derives canonical runtime.env, fail-closed symlink/mode/config validation, exact four MCP tools, protection boundary, singleton lifecycle and tunnel identity semantics."
-    - "Run focused tests, ./verify, Swift tests, release build/package, package checkout-reference scan and strict codesign. Publish candidate/report non-force to dev and stop for Architect review."
+  required_actions:
+    - "Fresh-bind the exact revision-3 base and require a clean synchronized dev checkout."
+    - "Capture a read-only pre-activation baseline for service identity, endpoint readiness, installed revision, canonical config presence, and checkout .env metadata without exposing credentials."
+    - "Perform the accepted installer activation exactly once."
+    - "After activation, prove one canonical listener on 127.0.0.1:8080, loaded canonical service, healthz=live, readyz=ready, and valid installed package signature."
+    - "Prove $HOME/Library/Application Support/Agent Runtime/runtime.env is a regular non-symlink mode-0600 file with required non-empty keys and AGENT_RUNTIME_WORKSPACE_ROOT=/Users/tienphat/Developer, without exposing credential values."
+    - "Prove the accepted tunnel fingerprint remains 6aa2b81d6dd8, checkout .env is unchanged, and the installed package has no checkout config pointer/dependency."
+    - "Publish only a truthful revision-3 report non-force to dev and stop for Architect review."
 
 invariants:
-  - "Revision 2 remains source/package/test only: no ./install.sh activation and no Runtime start/stop/restart/reload/cutover."
-  - "Do not create or modify the live canonical runtime.env under the operator's real Application Support directory."
-  - "Do not mutate the existing checkout .env bytes, permissions or ownership."
-  - "The live Runtime, tunnel, listener 127.0.0.1:8080 and currently installed app remain untouched."
-  - "No Keychain use, privileged helper, daemon redesign, dedicated OS account, container, database, queue, new network service or new dependency."
-  - "TASK-0029 and TASK-0030 task/report/review artifacts remain unchanged."
+  - "No product/source/test modification is authorized."
+  - "No second installer activation is authorized."
+  - "No additional service-state action outside the installer is authorized."
+  - "No credential or tunnel identity change is authorized."
+  - "No checkout .env mutation."
+  - "No TASK-0029/TASK-0030 artifact mutation."
   - "No branch, worktree, clone, tag, release or main promotion."
-
-forbidden_changes:
-  - "No Runtime lifecycle action or installer activation."
-  - "No tunnel/key/profile rotation or recreation."
-  - "No weakening of Runtime ownership or protected-port semantics."
-  - "No fallback from installed Runtime to checkout .env when canonical runtime.env is missing or invalid; installed execution must fail closed."
-  - "No secret material in Git, logs, reports, tests, fixtures or app bundle."
-  - "Do not broaden the revision beyond the two Architect review findings except for directly necessary tests/documentation."
+  - "If preflight is not clean/synchronized, or closure cannot be proven after the single activation, stop truthfully rather than widening scope."
 
 gap_policy:
-  local_auto_fix: true
+  local_auto_fix: false
   scope_expansion: forbidden
   architecture_change: forbidden
-  dependency_change: revised_contract_required
-  public_contract_change: revised_contract_required
+  dependency_change: forbidden
+  public_contract_change: forbidden
   blocking_gap_behavior: BLOCKED
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "First-time canonical config publication is truly atomic and no-clobber."
-    evidence_required: "Deterministic tests prove readers cannot observe a partially written final runtime.env, failed/interrupted initialization leaves no partial final authority, and an already/concurrently existing canonical file is preserved rather than overwritten."
+    requirement: "Exactly one accepted installer activation occurs."
+    evidence_required: "Activation count is one and no additional service-state action is attributable to the task."
   - id: AC-2
-    requirement: "First bootstrap persists the installer-derived workspace root."
-    evidence_required: "Fixture tests prove blank, stale, or different checkout AGENT_RUNTIME_WORKSPACE_ROOT input results in a first-time canonical runtime.env containing the derived workspace root while preserving credentials/session-limit semantics."
+    requirement: "Canonical Runtime config authority is live."
+    evidence_required: "runtime.env has the canonical path, file type, mode, required keys and derived workspace root without secret disclosure."
   - id: AC-3
-    requirement: "Existing canonical authority remains authoritative."
-    evidence_required: "Tests prove an existing valid mode-0600 runtime.env is byte-preserved and is not rewritten from checkout/bootstrap values."
+    requirement: "Serving Runtime converges safely."
+    evidence_required: "Singleton listener, loaded service, live/ready endpoints and valid installed package signature."
   - id: AC-4
-    requirement: "Revision-1 accepted Runtime contracts remain intact."
-    evidence_required: "Package/source scans show no checkout config dependency; ./verify, exact four MCP tools, protected-runtime tests, Swift tests, release package and strict codesign remain green."
+    requirement: "Identity and checkout authority remain stable."
+    evidence_required: "Accepted fingerprint is unchanged and checkout .env metadata/content are unchanged."
   - id: AC-5
-    requirement: "Live infrastructure remains untouched."
-    evidence_required: "Before/after read-only evidence shows the serving Runtime remains live/ready with no lifecycle/config mutation attributable to TASK-0031 revision 2."
+    requirement: "Installed product no longer depends on checkout config."
+    evidence_required: "Installed package/service scan has no checkout config pointer/dependency."
   - id: AC-6
     requirement: "Publication is bounded and reconstructible."
-    evidence_required: "Exact base/candidate/report lineage, non-force dev publication, unchanged main, clean canonical checkout and no auxiliary worktree/clone are proven."
+    evidence_required: "Exact base/report lineage, non-force dev publication, unchanged main and clean canonical checkout."
 
 verification:
-  executor_checks:
-    - id: CHECK-1
-      command_or_check: "Bind exact revision-2 base; capture read-only live baseline without printing secrets."
-      required: true
-    - id: CHECK-2
-      command_or_check: "Implement only the two review-required fixes and deterministic race/interruption/workspace fixtures."
-      required: true
-    - id: CHECK-3
-      command_or_check: "Run focused tests, ./verify, Swift tests, release build/package, package reference scans and strict codesign."
-      required: true
-    - id: CHECK-4
-      command_or_check: "Fresh read-only postcheck proves no live Runtime lifecycle/config mutation."
-      required: true
-    - id: CHECK-5
-      command_or_check: "Publish truthful report non-force to dev and stop for Architect review."
-      required: true
   authoritative_verification:
     required: false
 
