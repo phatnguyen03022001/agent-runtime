@@ -1,0 +1,136 @@
+protocol_version: 3
+
+task_id: TASK-0034
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: operator_implementation_request
+  gap_id: CAPACITY_OBSERVER_V1_IMPLEMENTATION
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+authority_sources:
+  - source: "phatnguyen03022001/agent-runtime@f86b51d4c81527c850d95a438ea28ae343a5114b:.agent/tasks/TASK-0033/review.yaml"
+    role: "Accepted research basis for Capacity Observer v1."
+    precedence: 1
+  - source: "Operator decision: expose AGENT_RUNTIME_MAX_PARALLELISM in canonical runtime.env; accepted range 1..10; default 2."
+    role: "Operator-owned configuration contract."
+    precedence: 2
+
+objective: >-
+  Implement the smallest production Capacity Observer v1 supported by TASK-0033 evidence. The observer is read-only, on-demand and stateless. It returns a bounded capacity snapshot and advisory parallelism ceiling for already-independent work. Add an operator hard cap from canonical runtime.env using AGENT_RUNTIME_MAX_PARALLELISM with valid values 1 through 10 and default 2.
+
+config_contract:
+  key: AGENT_RUNTIME_MAX_PARALLELISM
+  canonical_source: "$HOME/Library/Application Support/Agent Runtime/runtime.env"
+  accepted_range: [1, 10]
+  default_when_absent: 2
+  invalid_policy: "Fail configuration validation; do not silently clamp malformed or out-of-range values."
+  semantics: >-
+    Operator hard maximum only. It never forces that many workers and never overrides evidence-based serialization. The returned capacity_parallelism_ceiling is the minimum of the configured operator maximum and the evidence-based v1 ceiling.
+
+v1_parallelism_contract:
+  evidence_based_maximum: 2
+  allowed_output_values: [1, 2]
+  rule: "capacity_parallelism_ceiling = min(AGENT_RUNTIME_MAX_PARALLELISM, evidence_based_ceiling_v1)"
+  semantic_independence: "Out of scope for the observer. Architect/Executor must independently establish that work can run concurrently."
+  guarantee: "Advisory capacity ceiling only; not a guarantee that arbitrary commands cannot exhaust resources."
+
+observer_contract:
+  properties: [read_only, on_demand, stateless, bounded_output]
+  required_signals:
+    - "Supported/public CPU topology and short-window CPU load signal."
+    - "Load average as supporting evidence."
+    - "Supported/public VM and swap counters/activity."
+    - "Supported/public thermal state."
+    - "Available capacity on the workspace filesystem."
+  explicitly_omit_v1:
+    - "Exact one-shot memory-pressure severity because TASK-0033 did not prove a supported stateless source."
+    - "Runtime-owned active-child enumeration because no stable public scoped source was proven."
+    - "Any global process inventory or process command-line collection."
+    - "Telemetry history or adaptive learning."
+  output:
+    schema_version: 1
+    required_fields:
+      - capacity_parallelism_ceiling
+      - reason_codes
+      - bounded normalized signal summary
+
+scope:
+  include:
+    - "Production observer implementation using supported/public macOS facilities only."
+    - "Canonical runtime.env configuration parsing/validation for AGENT_RUNTIME_MAX_PARALLELISM."
+    - "Default value 2 when key is absent."
+    - "Deterministic policy tests for configured values 1, 2 and 10, absent key, malformed values and out-of-range values."
+    - "Deterministic observer-policy tests for serialize/admit-x2 outcomes and probe-failure conservative fallback."
+    - "Documentation/example configuration updates required by the new key."
+  exclude:
+    - "Automatic worker spawning or task scheduling."
+    - "Scheduler, queue, daemon, database, telemetry history or task registry."
+    - "x3 or higher evidence-based admission in v1."
+    - "Private/deprecated/undocumented macOS process or pressure interfaces."
+    - "Global ps/process inventory for capacity decisions."
+    - "Live activation or mutation of the operator's canonical runtime.env in this source phase."
+    - "Runtime service lifecycle changes."
+    - "Main promotion."
+
+privacy_and_simplicity_invariants:
+  - "Do not collect unrelated process metadata, command lines, user files or private content."
+  - "Do not persist telemetry samples after the response."
+  - "Keep the observer as a small read-only capability, not a scheduler framework."
+  - "Unknown or failed critical signals must conservatively return ceiling 1."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "AGENT_RUNTIME_MAX_PARALLELISM is supported from canonical runtime.env with range 1..10 and default 2."
+  - id: AC-2
+    requirement: "Malformed/out-of-range values fail validation rather than silently clamping."
+  - id: AC-3
+    requirement: "Observer is read-only, stateless and uses only supported/public macOS sources accepted by TASK-0033."
+  - id: AC-4
+    requirement: "V1 evidence-based ceiling never exceeds 2 even when operator maximum is 3..10."
+  - id: AC-5
+    requirement: "Configured maximum 1 forces advisory ceiling 1; configured maximum >=2 still permits only evidence-based 1 or 2."
+  - id: AC-6
+    requirement: "Probe failure or unknown critical state fails conservatively to 1."
+  - id: AC-7
+    requirement: "No scheduler/daemon/history/global-process-inventory capability is introduced."
+  - id: AC-8
+    requirement: "Focused tests plus full repository verification pass; package/config documentation remains consistent."
+  - id: AC-9
+    requirement: "No live Runtime configuration or lifecycle state is changed during this source implementation phase."
+
+verification:
+  required:
+    - focused_config_tests
+    - focused_capacity_observer_tests
+    - full_repository_verify
+    - syntax_or_build_checks_required_by_touched_surfaces
+  authoritative_verification:
+    required: false
+
+publication:
+  implementation_commit: true
+  report_path: .agent/tasks/TASK-0034/report.yaml
+  push: non_force_dev
+  stop_for_architect_review: true
+
+git_authority:
+  create_branch: false
+  create_worktree: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
