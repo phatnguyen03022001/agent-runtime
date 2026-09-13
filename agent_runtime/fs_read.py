@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import codecs
 import errno
-import io
 import os
 import stat
 
@@ -79,6 +77,10 @@ def _directory_flags() -> int:
     return os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
 
 
+def _cwd_directory_flags() -> int:
+    return os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW_ANY | getattr(os, "O_CLOEXEC", 0)
+
+
 def _file_flags() -> int:
     return os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0)
 
@@ -125,9 +127,7 @@ def _open_regular_at(cwd_fd: int, components: tuple[str, ...]) -> int:
 
 
 def _read_selected_text(file_fd: int, start_line: int, end_line: int | None) -> str:
-    decoder = codecs.getincrementaldecoder("utf-8")("strict")
-    output = io.StringIO()
-    output_bytes = 0
+    output = bytearray()
     line_number = 1
     pending_cr = False
     pending_cr_selected = False
@@ -135,13 +135,10 @@ def _read_selected_text(file_fd: int, start_line: int, end_line: int | None) -> 
     def selected() -> bool:
         return line_number >= start_line and (end_line is None or line_number <= end_line)
 
-    def write_selected(text: str) -> None:
-        nonlocal output_bytes
-        encoded_size = len(text.encode("utf-8"))
-        if output_bytes + encoded_size > ITEM_OUTPUT_LIMIT_BYTES:
+    def write_selected(raw: bytes) -> None:
+        if len(output) + len(raw) > ITEM_OUTPUT_LIMIT_BYTES:
             raise _ItemFailure("ITEM_OUTPUT_LIMIT_EXCEEDED")
-        output.write(text)
-        output_bytes += encoded_size
+        output.extend(raw)
 
     def finish_line() -> None:
         nonlocal line_number
@@ -155,17 +152,16 @@ def _read_selected_text(file_fd: int, start_line: int, end_line: int | None) -> 
             if exc.errno in {errno.EACCES, errno.EPERM}:
                 raise _ItemFailure("ACCESS_DENIED") from None
             raise _ItemFailure("READ_FAILED") from None
-        final = not raw
-        try:
-            decoded = decoder.decode(raw, final=final)
-        except UnicodeDecodeError:
-            raise _ItemFailure("INVALID_UTF8") from None
+        if not raw:
+            if pending_cr and pending_cr_selected:
+                write_selected(b"\r")
+            break
 
-        for char in decoded:
+        for value in raw:
             if pending_cr:
-                if char == "\n":
+                if value == 0x0A:
                     if pending_cr_selected:
-                        write_selected("\r\n")
+                        write_selected(b"\r\n")
                     pending_cr = False
                     finish_line()
                     if end_line is not None and line_number > end_line:
@@ -173,36 +169,30 @@ def _read_selected_text(file_fd: int, start_line: int, end_line: int | None) -> 
                         break
                     continue
                 if pending_cr_selected:
-                    write_selected("\r")
+                    write_selected(b"\r")
                 pending_cr = False
                 finish_line()
                 if end_line is not None and line_number > end_line:
                     done = True
                     break
 
-            if char == "\r":
+            if value == 0x0D:
                 pending_cr = True
                 pending_cr_selected = selected()
-            elif char == "\n":
+            elif value == 0x0A:
                 if selected():
-                    write_selected("\n")
+                    write_selected(b"\n")
                 finish_line()
                 if end_line is not None and line_number > end_line:
                     done = True
                     break
             elif selected():
-                write_selected(char)
+                write_selected(bytes((value,)))
 
-        if done:
-            break
-        if final:
-            if pending_cr:
-                if pending_cr_selected:
-                    write_selected("\r")
-                pending_cr = False
-            break
-
-    return output.getvalue()
+    try:
+        return bytes(output).decode("utf-8", errors="strict")
+    except UnicodeDecodeError:
+        raise _ItemFailure("INVALID_UTF8") from None
 
 
 def _error_result(
@@ -225,7 +215,7 @@ def read_files_batch(cwd: str, items: list[FsReadItem]) -> dict[str, object]:
     root = _workspace_root()
     checked_cwd = _validated_cwd(cwd, root)
     try:
-        cwd_fd = os.open(str(checked_cwd), _directory_flags())
+        cwd_fd = os.open(str(checked_cwd), _cwd_directory_flags())
     except OSError:
         raise RuntimeValidationError("cwd could not be opened safely") from None
 

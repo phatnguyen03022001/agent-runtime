@@ -13,6 +13,7 @@ from mcp import Client
 
 from agent_runtime import fs_read, server
 from agent_runtime.contracts import FsReadItem
+from agent_runtime.errors import RuntimeValidationError
 from agent_runtime.fs_read import read_files_batch
 
 ITEM_LIMIT = 128 * 1024
@@ -32,6 +33,69 @@ class FsReadBatchAdversarialTests(unittest.TestCase):
 
     def _call(self, *items: FsReadItem) -> list[dict[str, object]]:
         return read_files_batch(str(self.cwd), list(items))["items"]  # type: ignore[index,return-value]
+
+    def test_selected_range_utf8_ignores_unselected_invalid_bytes_across_chunk_layouts(self) -> None:
+        path = self.cwd / "range.txt"
+        path.write_bytes(b"ok\n\xffsuffix")
+
+        with patch.object(fs_read, "_READ_CHUNK_BYTES", 64 * 1024):
+            same_chunk = self._call(FsReadItem(path="range.txt", start_line=1, end_line=1))[0]
+        with patch.object(fs_read, "_READ_CHUNK_BYTES", 3):
+            later_chunk = self._call(FsReadItem(path="range.txt", start_line=1, end_line=1))[0]
+
+        expected = {
+            "status": "ok",
+            "path": "range.txt",
+            "start_line": 1,
+            "end_line": 1,
+            "text": "ok\n",
+        }
+        self.assertEqual(same_chunk, expected)
+        self.assertEqual(later_chunk, expected)
+
+        path.write_bytes(b"\xffprefix\nok\n")
+        prefix_unselected = self._call(FsReadItem(path="range.txt", start_line=2, end_line=2))[0]
+        self.assertEqual(prefix_unselected["status"], "ok")
+        self.assertEqual(prefix_unselected["text"], "ok\n")
+
+        path.write_bytes(b"ok\n\xffselected")
+        selected_invalid = self._call(FsReadItem(path="range.txt", start_line=2, end_line=2))[0]
+        self.assertEqual(selected_invalid["status"], "error")
+        self.assertEqual(selected_invalid["error_code"], "INVALID_UTF8")
+        self.assertNotIn("text", selected_invalid)
+
+    def test_cwd_intermediate_component_substitution_cannot_redirect_anchor(self) -> None:
+        trusted = self.root / "trusted"
+        trusted.mkdir()
+        cwd = trusted / "cwd"
+        cwd.mkdir()
+        (cwd / "victim.txt").write_text("safe", encoding="utf-8")
+        moved = self.root / "trusted-original"
+
+        with tempfile.TemporaryDirectory(prefix="agent-runtime-task0040-cwd-outside-") as outside_dir:
+            outside = Path(outside_dir)
+            redirected_cwd = outside / "cwd"
+            redirected_cwd.mkdir()
+            (redirected_cwd / "victim.txt").write_text("CWD_RACE_SECRET", encoding="utf-8")
+            expected_cwd = str(cwd.resolve())
+            original_open = os.open
+            swapped = False
+
+            def racing_open(path, flags, mode=0o777, *, dir_fd=None):
+                nonlocal swapped
+                if path == expected_cwd and dir_fd is None and not swapped:
+                    swapped = True
+                    trusted.rename(moved)
+                    trusted.symlink_to(outside, target_is_directory=True)
+                if dir_fd is None:
+                    return original_open(path, flags, mode)
+                return original_open(path, flags, mode, dir_fd=dir_fd)
+
+            with patch("agent_runtime.fs_read.os.open", side_effect=racing_open):
+                with self.assertRaisesRegex(RuntimeValidationError, "cwd could not be opened safely"):
+                    read_files_batch(str(cwd), [FsReadItem(path="victim.txt")])
+
+        self.assertTrue(swapped)
 
     def test_intermediate_component_symlink_substitution_race_cannot_escape(self) -> None:
         safe_dir = self.cwd / "safe"
