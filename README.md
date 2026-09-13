@@ -31,9 +31,13 @@ operator-owned canonical configuration at:
 
 The canonical file must be a regular file with mode `0600`. It is authoritative
 for installed execution and is never replaced from the checkout after
-initialization. During future installation, an absent canonical file may be
-initialized atomically from the checkout `.env`; the checkout file remains
-available only as source development/bootstrap input.
+initialization. During first bootstrap only, an absent canonical file is
+initialized atomically from the checkout `.env`: non-empty checkout credentials
+win, while `CONTROL_PLANE_API_KEY` and `CONTROL_PLANE_TUNNEL_ID` from the
+installer process environment fill only missing/empty checkout values. A
+checkout `.env` created from `.env.example` is made mode `0600` before bootstrap.
+Once canonical `runtime.env` exists, process-environment fallback never overrides
+it. The checkout file remains only source development/bootstrap input.
 
 `CONTROL_PLANE_API_KEY`, `CONTROL_PLANE_TUNNEL_ID`,
 `AGENT_RUNTIME_WORKSPACE_ROOT`, and optional `AGENT_RUNTIME_MAX_PARALLELISM`
@@ -151,10 +155,18 @@ xcrun swift build --package-path macos -c release
 ./macos/package_app.sh
 ```
 
-The package script verifies the menu-bar-only bundle, copies the implementation
-payload into the app, writes an ownership/version manifest without checkout
-paths or credential pointers, and ad-hoc signs the bundle. Installer activation
-is staged, validated, and rolled back on activation failure.
+Release packaging fails closed on a dirty Git checkout, exports exact `HEAD`
+into a temporary immutable source staging tree, and builds the app only from
+that staged source. Python runtime dependencies come from checked-in
+`requirements.lock` through `pip --require-hashes` into a fresh package-owned
+virtual environment; checkout `.venv` contents are never copied into the app.
+
+`Contents/Resources/runtime-manifest.json` records the exact Git revision and
+tree, the `requirements.lock` SHA-256, every regular file below
+`Contents/Resources/runtime` with path/size/SHA-256, and an aggregate digest
+over the sorted canonical file list. Installer validation combines strict
+codesign verification with exact closed-world manifest validation. This is
+reconstructible provenance, not a claim of bit-for-bit reproducible builds.
 
 ## Verification
 

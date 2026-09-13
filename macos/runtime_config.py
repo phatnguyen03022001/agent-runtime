@@ -64,7 +64,9 @@ def validate(path: Path, *, require_mode: bool) -> bytes:
 
 def _bootstrap_payload(source: Path, workspace_root: Path) -> bytes:
     _, lines, values = _read(source, require_mode=False)
-    missing = [key for key in REQUIRED[:2] if not values.get(key)]
+    inherited = {key: os.environ.get(key, "") for key in REQUIRED[:2]}
+    resolved = {key: values.get(key, "") or inherited[key] for key in REQUIRED[:2]}
+    missing = [key for key in REQUIRED[:2] if not resolved[key]]
     if missing:
         fail("missing non-empty value for " + ", ".join(missing))
     if "AGENT_RUNTIME_WORKSPACE_ROOT" not in values:
@@ -76,14 +78,27 @@ def _bootstrap_payload(source: Path, workspace_root: Path) -> bytes:
         fail("AGENT_RUNTIME_MAX_PARALLELISM must be an integer from 1 through 10")
 
     rendered: list[str] = []
+    seen_secrets: set[str] = set()
     for raw_line in lines:
         line = raw_line.rstrip("\r\n")
         match = ENTRY.fullmatch(line)
+        if match is not None and match.group(1) in REQUIRED[:2]:
+            key = match.group(1)
+            seen_secrets.add(key)
+            ending = raw_line[len(line):]
+            rendered.append(f"{key}={resolved[key]}{ending}")
+            continue
         if match is None or match.group(1) != "AGENT_RUNTIME_WORKSPACE_ROOT":
             rendered.append(raw_line)
             continue
         ending = raw_line[len(line):]
         rendered.append(f"AGENT_RUNTIME_WORKSPACE_ROOT={workspace_root}{ending}")
+    for key in REQUIRED[:2]:
+        if key in seen_secrets:
+            continue
+        if rendered and not rendered[-1].endswith(("\n", "\r")):
+            rendered[-1] += "\n"
+        rendered.append(f"{key}={resolved[key]}\n")
     return "".join(rendered).encode("utf-8")
 
 

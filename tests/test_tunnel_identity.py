@@ -185,7 +185,8 @@ fi
         shutil.copy2(ROOT / "install.sh", repo / "install.sh")
         (repo / "install.sh").chmod(0o700)
         shutil.copy2(ROOT / ".env.example", repo / ".env.example")
-        self._write(repo / "requirements.txt", "")
+        self._write(repo / "requirements.txt", "mcp==2.2.0\n")
+        shutil.copy2(ROOT / "requirements.lock", repo / "requirements.lock")
         self._write(repo / "verify", "#!/usr/bin/env bash\nexit 0\n", 0o700)
         venv_python = repo / ".venv" / "bin" / "python"
         self._write(venv_python, "#!/usr/bin/env bash\nexit 0\n", 0o700)
@@ -193,6 +194,7 @@ fi
         config_helper = repo / "macos" / "runtime_config.py"
         config_helper.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / "macos/runtime_config.py", config_helper)
+        shutil.copy2(ROOT / "macos/package_provenance.py", repo / "macos" / "package_provenance.py")
         self._write(package, r'''#!/usr/bin/env bash
 set -euo pipefail
 APP="$PWD/build/Agent Runtime.app"
@@ -212,11 +214,17 @@ printf '#!/usr/bin/env bash\nexit 0\n' > "$RUNTIME/start.sh"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$RUNTIME/.venv/bin/python"
 printf '# fixture runtime payload\n' > "$RUNTIME/agent_runtime/server.py"
 chmod +x "$RUNTIME/start.sh" "$RUNTIME/.venv/bin/python"
-START_SHA="$(shasum -a 256 "$RUNTIME/start.sh" | awk '{print $1}')"
-SERVER_SHA="$(shasum -a 256 "$RUNTIME/agent_runtime/server.py" | awk '{print $1}')"
-printf '{"schema":1,"owner":"com.picmao.agent-runtime","runtime_revision":"0000000000000000000000000000000000000000","entrypoint":"runtime/start.sh","python":"runtime/.venv/bin/python","mcp_package":"runtime/agent_runtime","start_sha256":"%s","server_sha256":"%s"}\n' "$START_SHA" "$SERVER_SHA" > "$APP/Contents/Resources/runtime-manifest.json"
+REVISION="$(git rev-parse HEAD)"
+TREE="$(git rev-parse 'HEAD^{tree}')"
+/usr/bin/python3 "$PWD/macos/package_provenance.py" manifest \
+  "$RUNTIME" "$APP/Contents/Resources/runtime-manifest.json" \
+  "$REVISION" "$TREE" "$PWD/requirements.lock"
 /usr/bin/codesign --force --sign - "$APP" >/dev/null 2>&1
 ''', 0o700)
+        subprocess.run(["git", "-C", str(repo), "config", "user.email", "test@example.invalid"], check=True)
+        subprocess.run(["git", "-C", str(repo), "config", "user.name", "Test"], check=True)
+        subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(repo), "commit", "-qm", "fixture"], check=True)
         self._fake_tunnel_client(bin_dir)
         self._write(
             bin_dir / "launchctl",
@@ -233,11 +241,22 @@ esac
         )
         return repo, home, bin_dir, capture
 
-    def _run_install(self, repo: Path, home: Path, bin_dir: Path, capture: Path, *, tunnel_id: str | None = None) -> subprocess.CompletedProcess[str]:
+    def _run_install(
+        self,
+        repo: Path,
+        home: Path,
+        bin_dir: Path,
+        capture: Path,
+        *,
+        api_key: str | None = None,
+        tunnel_id: str | None = None,
+    ) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
         env.update({"HOME": str(home), "PATH": f"{bin_dir}:{env['PATH']}"})
         for key in ("CONTROL_PLANE_API_KEY", "CONTROL_PLANE_TUNNEL_ID", "TUNNEL_CLIENT_CONFIG", "TUNNEL_CLIENT_PROFILE", "TUNNEL_CLIENT_PROFILE_FILE", "TUNNEL_CLIENT_PROFILE_DIR", "XDG_CONFIG_HOME"):
             env.pop(key, None)
+        if api_key is not None:
+            env["CONTROL_PLANE_API_KEY"] = api_key
         if tunnel_id is not None:
             env["CONTROL_PLANE_TUNNEL_ID"] = tunnel_id
         return subprocess.run([str(repo / "install.sh")], cwd=repo, env=env, text=True, capture_output=True, check=False)
@@ -249,6 +268,36 @@ esac
         lines += [f"AGENT_RUNTIME_WORKSPACE_ROOT={repo.parent}"]
         self._write(path, "\n".join(lines) + "\n")
         return path
+
+    def test_install_first_bootstrap_accepts_process_environment_credentials_and_keeps_source_precedence(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            repo, home, bin_dir, capture = self._install_fixture(Path(raw))
+            result = self._run_install(
+                repo, home, bin_dir, capture, api_key="env-key", tunnel_id="env-tunnel"
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            source = repo / ".env"
+            canonical = home / "Library/Application Support/Agent Runtime/runtime.env"
+            self.assertEqual(source.stat().st_mode & 0o777, 0o600)
+            canonical_text = canonical.read_text()
+            self.assertIn("CONTROL_PLANE_API_KEY=env-key\n", canonical_text)
+            self.assertIn("CONTROL_PLANE_TUNNEL_ID=env-tunnel\n", canonical_text)
+            self.assertNotIn("env-key", result.stdout + result.stderr)
+            self.assertNotIn("env-tunnel", result.stdout + result.stderr)
+
+        with tempfile.TemporaryDirectory() as raw:
+            repo, home, bin_dir, capture = self._install_fixture(Path(raw))
+            self._env(repo, "source-tunnel", api_key="source-key")
+            result = self._run_install(
+                repo, home, bin_dir, capture, api_key="env-key", tunnel_id="env-tunnel"
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            canonical = home / "Library/Application Support/Agent Runtime/runtime.env"
+            canonical_text = canonical.read_text()
+            self.assertIn("CONTROL_PLANE_API_KEY=source-key\n", canonical_text)
+            self.assertIn("CONTROL_PLANE_TUNNEL_ID=source-tunnel\n", canonical_text)
+            self.assertNotIn("env-key", canonical_text)
+            self.assertNotIn("env-tunnel", canonical_text)
 
     def test_install_first_bootstrap_persists_derived_workspace_root(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

@@ -157,14 +157,30 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         mcp_package = types.ModuleType("mcp")
         mcp_package.__path__ = []
         server_module = types.ModuleType("mcp.server")
+        server_module.__path__ = []
         server_module.MCPServer = FakeMCPServer
+        mcpserver_module = types.ModuleType("mcp.server.mcpserver")
+        mcpserver_module.__path__ = []
+        mcpserver_module.MCPServer = FakeMCPServer
+        exceptions_module = types.ModuleType("mcp.server.mcpserver.exceptions")
+        exceptions_module.ToolError = type("ToolError", (Exception,), {})
         types_module = types.ModuleType("mcp.types")
         types_module.ToolAnnotations = FakeAnnotations
 
-        saved = {name: sys.modules.get(name) for name in ("mcp", "mcp.server", "mcp.types", "agent_runtime.server")}
+        module_names = (
+            "mcp",
+            "mcp.server",
+            "mcp.server.mcpserver",
+            "mcp.server.mcpserver.exceptions",
+            "mcp.types",
+            "agent_runtime.server",
+        )
+        saved = {name: sys.modules.get(name) for name in module_names}
         try:
             sys.modules["mcp"] = mcp_package
             sys.modules["mcp.server"] = server_module
+            sys.modules["mcp.server.mcpserver"] = mcpserver_module
+            sys.modules["mcp.server.mcpserver.exceptions"] = exceptions_module
             sys.modules["mcp.types"] = types_module
             sys.modules.pop("agent_runtime.server", None)
             module = importlib.import_module("agent_runtime.server")
@@ -324,10 +340,14 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertIn("runtime.env", installer)
         self.assertNotIn("env-path.txt", installer)
         self.assertNotIn('<string>$ROOT/start.sh</string>', installer)
-        self.assertIn('cp "$REPO_ROOT/start.sh" "$RUNTIME/start.sh"', package)
-        self.assertIn('cp -R -L "$REPO_ROOT/.venv" "$RUNTIME/.venv"', package)
+        self.assertIn('cp "$SOURCE_ROOT/start.sh" "$RUNTIME/start.sh"', package)
+        self.assertIn('package_provenance.py" stage "$REPO_ROOT" "$SOURCE_ROOT"', package)
+        self.assertIn('--without-pip "$PACKAGE_VENV"', package)
+        self.assertIn("--require-hashes", package)
+        self.assertIn('cp -R "$PACKAGE_VENV" "$RUNTIME/.venv"', package)
+        self.assertNotIn('cp -R -L "$REPO_ROOT/.venv"', package)
         self.assertIn('/usr/bin/strip -S "$MACOS/AgentRuntimeMenuBar"', package)
-        self.assertIn("find \"$RUNTIME/.venv\" -type d -name '__pycache__'", package)
+        self.assertIn("find \"$PACKAGE_VENV\" -type d -name '__pycache__'", package)
         self.assertIn('"$RUNTIME/agent_runtime/"', package)
         self.assertNotIn("checkout-path.txt", package)
 

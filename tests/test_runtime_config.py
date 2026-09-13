@@ -208,5 +208,71 @@ class RuntimeConfigTests(unittest.TestCase):
                     runtime_config.validate(canonical, require_mode=True)
 
 
+    def test_first_bootstrap_fills_empty_secrets_from_process_environment(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            workspace = temp / "workspace"
+            workspace.mkdir()
+            source = temp / "source.env"
+            source.write_text(
+                "CONTROL_PLANE_API_KEY=\n"
+                "CONTROL_PLANE_TUNNEL_ID=\n"
+                "AGENT_RUNTIME_WORKSPACE_ROOT=\n"
+            )
+            canonical = temp / "config" / "runtime.env"
+            with mock.patch.dict(
+                runtime_config.os.environ,
+                {"CONTROL_PLANE_API_KEY": "env-key", "CONTROL_PLANE_TUNNEL_ID": "env-tunnel"},
+                clear=False,
+            ):
+                try:
+                    runtime_config.ensure(source, canonical, workspace)
+                except SystemExit as exc:
+                    self.fail(f"process-environment fallback was not applied: {exc}")
+            text = canonical.read_text()
+            self.assertIn("CONTROL_PLANE_API_KEY=env-key\n", text)
+            self.assertIn("CONTROL_PLANE_TUNNEL_ID=env-tunnel\n", text)
+            self.assertEqual(stat.S_IMODE(canonical.stat().st_mode), 0o600)
+
+    def test_first_bootstrap_source_secrets_win_over_process_environment(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            workspace = temp / "workspace"
+            workspace.mkdir()
+            source = temp / "source.env"
+            self._write_source(source, "")
+            canonical = temp / "config" / "runtime.env"
+            with mock.patch.dict(
+                runtime_config.os.environ,
+                {"CONTROL_PLANE_API_KEY": "env-key", "CONTROL_PLANE_TUNNEL_ID": "env-tunnel"},
+                clear=False,
+            ):
+                runtime_config.ensure(source, canonical, workspace)
+            text = canonical.read_text()
+            self.assertIn("CONTROL_PLANE_API_KEY=test-key\n", text)
+            self.assertIn("CONTROL_PLANE_TUNNEL_ID=test-tunnel\n", text)
+            self.assertNotIn("env-key", text)
+            self.assertNotIn("env-tunnel", text)
+
+    def test_existing_canonical_ignores_process_environment_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            workspace = temp / "workspace"
+            workspace.mkdir()
+            source = temp / "source.env"
+            self._write_source(source, "")
+            canonical = temp / "config" / "runtime.env"
+            canonical.parent.mkdir()
+            self._write_source(canonical, str(workspace))
+            before = canonical.read_bytes()
+            with mock.patch.dict(
+                runtime_config.os.environ,
+                {"CONTROL_PLANE_API_KEY": "env-key", "CONTROL_PLANE_TUNNEL_ID": "env-tunnel"},
+                clear=False,
+            ):
+                runtime_config.ensure(source, canonical, workspace)
+            self.assertEqual(canonical.read_bytes(), before)
+
+
 if __name__ == "__main__":
     unittest.main()

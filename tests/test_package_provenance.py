@@ -1,0 +1,229 @@
+from __future__ import annotations
+
+import hashlib
+import importlib.util
+import json
+import os
+import shutil
+import subprocess
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+ROOT = Path(__file__).resolve().parents[1]
+MODULE_PATH = ROOT / "macos" / "package_provenance.py"
+
+
+def load_module():
+    if not MODULE_PATH.is_file():
+        raise AssertionError("macos/package_provenance.py must exist")
+    spec = importlib.util.spec_from_file_location("package_provenance", MODULE_PATH)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def git(repo: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", "-C", str(repo), *args],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    ).stdout.strip()
+
+
+class PackageProvenanceTests(unittest.TestCase):
+    def test_export_head_requires_clean_checkout_and_exports_exact_committed_bytes(self) -> None:
+        provenance = load_module()
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            repo = temp / "repo"
+            repo.mkdir()
+            git(repo, "init", "-q")
+            git(repo, "config", "user.email", "test@example.invalid")
+            git(repo, "config", "user.name", "Test")
+            payload = repo / "payload.txt"
+            payload.write_text("committed\n")
+            git(repo, "add", "payload.txt")
+            git(repo, "commit", "-qm", "fixture")
+            expected_revision = git(repo, "rev-parse", "HEAD")
+            expected_tree = git(repo, "rev-parse", "HEAD^{tree}")
+
+            stage = temp / "stage"
+            revision, tree = provenance.export_head(repo, stage)
+            self.assertEqual(revision, expected_revision)
+            self.assertEqual(tree, expected_tree)
+            self.assertEqual((stage / "payload.txt").read_text(), "committed\n")
+            self.assertFalse((stage / ".git").exists())
+
+            payload.write_text("dirty tracked\n")
+            with self.assertRaisesRegex(provenance.PackageProvenanceError, "clean"):
+                provenance.export_head(repo, temp / "tracked-dirty")
+            git(repo, "checkout", "--", "payload.txt")
+            (repo / "untracked.txt").write_text("dirty untracked\n")
+            with self.assertRaisesRegex(provenance.PackageProvenanceError, "clean"):
+                provenance.export_head(repo, temp / "untracked-dirty")
+
+    def test_export_head_does_not_require_tarfile_filter_keyword_and_rejects_symlinks(self) -> None:
+        provenance = load_module()
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            repo = temp / "repo"
+            repo.mkdir()
+            git(repo, "init", "-q")
+            git(repo, "config", "user.email", "test@example.invalid")
+            git(repo, "config", "user.name", "Test")
+            (repo / "payload.txt").write_text("committed\n")
+            git(repo, "add", "payload.txt")
+            git(repo, "commit", "-qm", "fixture")
+            real_extractall = provenance.tarfile.TarFile.extractall
+
+            def legacy_extractall(self, path=".", members=None, *, numeric_owner=False):
+                return real_extractall(self, path=path, members=members, numeric_owner=numeric_owner)
+
+            with mock.patch.object(provenance.tarfile.TarFile, "extractall", legacy_extractall):
+                provenance.export_head(repo, temp / "legacy-stage")
+
+            (repo / "link.txt").symlink_to("payload.txt")
+            git(repo, "add", "link.txt")
+            git(repo, "commit", "-qm", "symlink")
+            with self.assertRaisesRegex(provenance.PackageProvenanceError, "symlink|regular"):
+                provenance.export_head(repo, temp / "symlink-stage")
+
+    def _make_manifest_fixture(self, provenance, root: Path):
+        runtime = root / "runtime"
+        (runtime / "agent_runtime").mkdir(parents=True)
+        (runtime / "start.sh").write_bytes(b"#!/bin/sh\nexit 0\n")
+        (runtime / "agent_runtime" / "server.py").write_bytes(b"print('ok')\n")
+        manifest = root / "runtime-manifest.json"
+        revision = "a" * 40
+        tree = "b" * 40
+        lock_sha = "c" * 64
+        provenance.write_manifest(runtime, manifest, revision, tree, lock_sha)
+        return runtime, manifest, revision, tree, lock_sha
+
+    def test_manifest_round_trip_matches_independent_canonical_digest(self) -> None:
+        provenance = load_module()
+        with tempfile.TemporaryDirectory() as raw:
+            runtime, manifest, revision, tree, lock_sha = self._make_manifest_fixture(provenance, Path(raw))
+            data = json.loads(manifest.read_text())
+            self.assertEqual(data["runtime_revision"], revision)
+            self.assertEqual(data["git_tree"], tree)
+            self.assertEqual(data["requirements_lock_sha256"], lock_sha)
+            paths = [entry["path"] for entry in data["files"]]
+            self.assertEqual(paths, sorted(paths))
+            self.assertEqual(len(paths), len(set(paths)))
+
+            lines = []
+            for path in sorted(paths):
+                target = runtime / path
+                digest = hashlib.sha256(target.read_bytes()).hexdigest()
+                lines.append(f"{path}\t{target.stat().st_size}\t{digest}\n")
+            expected = hashlib.sha256("".join(lines).encode("utf-8")).hexdigest()
+            self.assertEqual(data["payload_sha256"], expected)
+            manifest_text = manifest.read_text()
+            self.assertNotIn(str(Path(raw)), manifest_text)
+            self.assertNotIn("CONTROL_PLANE_API_KEY", manifest_text)
+            self.assertNotIn("CONTROL_PLANE_TUNNEL_ID", manifest_text)
+            provenance.validate_manifest(runtime, manifest, revision, tree, lock_sha)
+
+    def test_manifest_validation_rejects_each_closed_world_failure(self) -> None:
+        provenance = load_module()
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw)
+            runtime, manifest, revision, tree, lock_sha = self._make_manifest_fixture(provenance, base / "base")
+            original = json.loads(manifest.read_text())
+
+            def fixture(name: str):
+                root = base / name
+                shutil.copytree(runtime, root / "runtime")
+                (root / "runtime-manifest.json").write_text(json.dumps(original, indent=2) + "\n")
+                return root / "runtime", root / "runtime-manifest.json"
+
+            cases = []
+            rt, mf = fixture("missing")
+            (rt / original["files"][0]["path"]).unlink()
+            cases.append(("missing", rt, mf, revision, tree, lock_sha))
+
+            rt, mf = fixture("extra")
+            (rt / "extra.txt").write_text("extra")
+            cases.append(("extra", rt, mf, revision, tree, lock_sha))
+
+            rt, mf = fixture("symlink")
+            os.symlink("start.sh", rt / "link")
+            cases.append(("symlink", rt, mf, revision, tree, lock_sha))
+
+            rt, mf = fixture("size")
+            target = rt / original["files"][0]["path"]
+            target.write_bytes(target.read_bytes() + b"x")
+            cases.append(("size", rt, mf, revision, tree, lock_sha))
+
+            rt, mf = fixture("hash")
+            target = rt / original["files"][0]["path"]
+            payload = bytearray(target.read_bytes())
+            payload[0] ^= 1
+            target.write_bytes(payload)
+            cases.append(("hash", rt, mf, revision, tree, lock_sha))
+
+            rt, mf = fixture("malformed_json")
+            mf.write_text("{not-json\n")
+            cases.append(("malformed_json", rt, mf, revision, tree, lock_sha))
+
+            for name, mutate in (
+                ("aggregate", lambda data: data.__setitem__("payload_sha256", "0" * 64)),
+                ("duplicate", lambda data: data["files"].append(dict(data["files"][0]))),
+                ("unsorted", lambda data: data["files"].reverse()),
+                ("malformed_path", lambda data: data["files"][0].__setitem__("path", "../escape")),
+                ("invalid_revision", lambda data: data.__setitem__("runtime_revision", "invalid")),
+                ("invalid_tree", lambda data: data.__setitem__("git_tree", "invalid")),
+                ("invalid_lock", lambda data: data.__setitem__("requirements_lock_sha256", "invalid")),
+            ):
+                rt, mf = fixture(name)
+                data = json.loads(mf.read_text())
+                mutate(data)
+                mf.write_text(json.dumps(data, indent=2) + "\n")
+                cases.append((name, rt, mf, revision, tree, lock_sha))
+
+            cases.extend(
+                [
+                    ("revision", *fixture("revision"), "0" * 40, tree, lock_sha),
+                    ("tree", *fixture("tree"), revision, "0" * 40, lock_sha),
+                    ("lock", *fixture("lock"), revision, tree, "0" * 64),
+                ]
+            )
+
+            for name, rt, mf, expected_revision, expected_tree, expected_lock in cases:
+                with self.subTest(name=name):
+                    with self.assertRaises(provenance.PackageProvenanceError):
+                        provenance.validate_manifest(rt, mf, expected_revision, expected_tree, expected_lock)
+
+    def test_package_contract_uses_lock_fresh_venv_and_no_checkout_venv_copy(self) -> None:
+        package = (ROOT / "macos" / "package_app.sh").read_text()
+        installer = (ROOT / "install.sh").read_text()
+        lock = ROOT / "requirements.lock"
+        self.assertTrue(lock.is_file())
+        requirement_lines = [line for line in lock.read_text().splitlines() if line and not line.startswith("#")]
+        self.assertTrue(requirement_lines)
+        for line in requirement_lines:
+            self.assertIn("==", line)
+            self.assertIn("--hash=sha256:", line)
+        self.assertIn("package_provenance.py", package)
+        self.assertIn('chmod -R a-w "$SOURCE_ROOT"', package)
+        self.assertIn('chmod -R u+w "$TEMP_ROOT"', package)
+        self.assertIn('SWIFT_SCRATCH="$TEMP_ROOT/swift-build"', package)
+        self.assertIn('--scratch-path "$SWIFT_SCRATCH"', package)
+        self.assertIn('PACKAGE_VENV="$TEMP_ROOT/runtime-venv"', package)
+        self.assertIn('--without-pip "$PACKAGE_VENV"', package)
+        self.assertIn('cp -R "$PACKAGE_VENV" "$RUNTIME/.venv"', package)
+        self.assertIn("--require-hashes", package)
+        self.assertNotIn('cp -R -L "$REPO_ROOT/.venv"', package)
+        self.assertIn("package_provenance.py", installer)
+        self.assertIn("--require-hashes", installer)
+        self.assertIn('chmod 600 "$ENV_FILE"', installer)
+
+
+if __name__ == "__main__":
+    unittest.main()

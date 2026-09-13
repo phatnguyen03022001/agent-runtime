@@ -68,7 +68,7 @@ fi
 [[ -d "$ROOT/.venv" && ! -L "$ROOT/.venv" && -x "$ROOT/.venv/bin/python" ]] \
   || fail "existing .venv is not a usable local virtual environment."
 
-"$ROOT/.venv/bin/python" -m pip install -r "$ROOT/requirements.txt"
+"$ROOT/.venv/bin/python" -m pip install --require-hashes -r "$ROOT/requirements.lock"
 PYTHON="$ROOT/.venv/bin/python" "$ROOT/verify"
 
 if [[ -e "$ENV_FILE" || -L "$ENV_FILE" ]]; then
@@ -76,6 +76,7 @@ if [[ -e "$ENV_FILE" || -L "$ENV_FILE" ]]; then
 else
   echo "[2/8] Creating ignored local environment file..."
   cp "$ROOT/.env.example" "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
 fi
 
 echo "[3/8] Initializing canonical Runtime configuration..."
@@ -221,45 +222,25 @@ validate_package() {
     || fail "package CFBundleIdentifier is not owned by agent-runtime."
   /usr/bin/codesign --verify --deep --strict "$app" \
     || fail "package failed strict deep code-signature verification."
-/usr/bin/python3 - "$app" "$ROOT" <<'PY'
-import hashlib
-import json
-import os
+  local runtime="$app/Contents/Resources/runtime"
+  local manifest="$app/Contents/Resources/runtime-manifest.json"
+  local expected_revision expected_tree
+  expected_revision="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || true)"
+  expected_tree="$(git -C "$ROOT" rev-parse 'HEAD^{tree}' 2>/dev/null || true)"
+  /usr/bin/python3 "$ROOT/macos/package_provenance.py" validate \
+    "$runtime" "$manifest" "$expected_revision" "$expected_tree" "$ROOT/requirements.lock" \
+    || fail "package Runtime provenance validation failed."
+  /usr/bin/python3 - "$app" "$ROOT" <<'PY'
 import sys
 from pathlib import Path
 
 app = Path(sys.argv[1])
 checkout_root = Path(sys.argv[2]).resolve()
-resources = app / "Contents/Resources"
-manifest_path = resources / "runtime-manifest.json"
-if manifest_path.is_symlink() or not manifest_path.is_file():
-    raise SystemExit("INSTALL ERROR: package manifest is missing or symlinked")
-try:
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-except Exception as exc:
-    raise SystemExit("INSTALL ERROR: package manifest is invalid") from exc
-if manifest.get("schema") != 1 or manifest.get("owner") != "com.picmao.agent-runtime":
-    raise SystemExit("INSTALL ERROR: package manifest ownership/version is invalid")
-if not isinstance(manifest.get("runtime_revision"), str) or len(manifest["runtime_revision"]) != 40:
-    raise SystemExit("INSTALL ERROR: package manifest revision is invalid")
-if manifest.get("entrypoint") != "runtime/start.sh" or manifest.get("python") != "runtime/.venv/bin/python":
-    raise SystemExit("INSTALL ERROR: package manifest execution paths are invalid")
-runtime = resources / "runtime"
-for relative in ("start.sh", ".venv/bin/python", "agent_runtime/server.py"):
-    candidate = runtime / relative
-    if candidate.is_symlink() or not candidate.is_file() or not os.access(candidate, os.X_OK if relative != "agent_runtime/server.py" else os.R_OK):
-        raise SystemExit("INSTALL ERROR: package Runtime payload is incomplete")
-for relative, manifest_key in (("start.sh", "start_sha256"), ("agent_runtime/server.py", "server_sha256")):
-    candidate = runtime / relative
-    expected = manifest.get(manifest_key)
-    actual = hashlib.sha256(candidate.read_bytes()).hexdigest()
-    if expected != actual:
-        raise SystemExit("INSTALL ERROR: package Runtime payload hash does not match its manifest")
 for candidate in app.rglob("*"):
-    if not candidate.is_file():
-        continue
     if candidate.is_symlink():
         raise SystemExit("INSTALL ERROR: package contains a symlinked execution/resource file")
+    if not candidate.is_file():
+        continue
     try:
         payload = candidate.read_bytes()
     except OSError as exc:
