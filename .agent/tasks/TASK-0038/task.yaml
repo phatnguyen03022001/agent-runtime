@@ -1,0 +1,130 @@
+protocol_version: 3
+
+task_id: TASK-0038
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: operator_handoff
+  gap_id: MCP_TYPED_CONTRACT_AND_METADATA_HARDENING
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+authority_sources:
+  - source: "phatnguyen03022001/agent-runtime@4c8a92153180c4c225bdc0285e6c79076dc2ee3a:.agent/tasks/TASK-0037/review.yaml"
+    role: "Accepted live five-tool Capacity Observer closure."
+    precedence: 1
+  - source: "Operator-approved next hardening pass: typed MCP schemas/results plus server metadata, separated from SDK migration/conformance/CI."
+    role: "Scope authority."
+    precedence: 2
+
+classification:
+  decomposition_gate: FIT
+  change_class: BOUNDED_CONTRACT_HARDENING
+
+objective: >-
+  Harden the current five-tool MCP contract without changing execution semantics or upgrading the MCP SDK. Replace generic dict-shaped tool contracts with explicit typed schemas/results where supported by the currently pinned mcp==2.0.0 line, encode the Runtime's existing input bounds in JSON Schema, and provide non-empty machine-useful server metadata/instructions. Preserve the exact five-tool surface and current annotations/side-effect semantics.
+
+current_contract_facts:
+  public_tools:
+    - terminal_exec
+    - terminal_start
+    - terminal_poll
+    - terminal_control
+    - capacity_observer
+  sdk_pin: "mcp==2.0.0"
+  product_version: "0.2.0"
+  terminal_exec:
+    timeout_seconds:
+      exclusive_minimum: 0
+      maximum: 3600
+      default: 300
+  terminal_poll:
+    cursor_minimum: 0
+    wait_ms_minimum: 0
+    wait_ms_maximum: 1000
+  terminal_control:
+    action_enum: [write, interrupt, terminate, resize]
+    rows_minimum: 1
+    rows_maximum: 65535
+    cols_minimum: 1
+    cols_maximum: 65535
+  semantic_note: >-
+    cwd remains an existing absolute path constrained to AGENT_RUNTIME_WORKSPACE_ROOT at runtime; this is a cwd guard, not filesystem sandboxing.
+
+required_design:
+  - "Keep exactly the five existing public MCP tool names."
+  - "Keep existing ToolAnnotations semantics unchanged, including terminal_poll remaining readOnly=false because polling updates activity/TTL state."
+  - "Use explicit typed result models/contracts for terminal_exec, terminal_start/terminal_poll, terminal_control, and capacity_observer instead of dict[str, Any] at the public MCP boundary."
+  - "Published output schemas must describe known fields precisely and must not degrade to a generic object with unconstrained additionalProperties."
+  - "Encode all currently enforced, JSON-Schema-representable input constraints: non-empty argv, non-empty/absolute cwd shape where practical without pretending to prove filesystem existence, timeout (0,3600], non-empty session_id, cursor >= 0, wait_ms 0..1000, terminal_control action enum, rows/cols 1..65535 when present."
+  - "Do not loosen any deeper runtime validation merely because schema now catches part of it earlier."
+  - "Do not claim JSON Schema can prove cwd exists or is within the configured workspace; preserve runtime validation for those conditions."
+  - "Add explicit server metadata for Agent Runtime: name remains Agent Runtime; version must be non-empty and stay consistent with the current product version 0.2.0; description and instructions must be concise and machine-useful."
+  - "Instructions must accurately state literal argv/no shell behavior, absolute cwd under the workspace root, one-shot exec versus PTY start/poll/control lifecycle, bounded output, and capacity_observer as advisory/read-only."
+  - "Prefer the smallest supported mechanism in the currently pinned public SDK. Do not vendor, monkeypatch, or depend on private SDK internals to manufacture schemas."
+
+forbidden_scope:
+  - "Do not upgrade or otherwise change mcp==2.0.0 in this task."
+  - "Do not perform the separate MCP 2.2 migration/error-contract work."
+  - "Do not add scheduler, queue, database, resource, prompt, telemetry history, or extra MCP tools."
+  - "Do not change terminal execution, PTY, protection, lifecycle, capacity policy, tunnel identity, or workspace authority semantics."
+  - "Do not change terminal_poll annotation to read-only without a separate behavior change task."
+  - "Do not install/reinstall/activate/reload/restart Runtime for this source-contract task."
+  - "Do not promote main."
+
+compatibility_boundary: >-
+  First inspect the exact pinned SDK behavior locally. If mcp==2.0.0 cannot expose the required typed/closed schemas through a supported public mechanism without private SDK coupling or semantic breakage, do not silently bump the SDK and do not fake compliance. Report CAPABILITY_BLOCKED with exact evidence for the unsupported requirement and stop for Architect judgment.
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "The public MCP surface remains exactly the accepted five tools with unchanged annotation semantics."
+  - id: AC-2
+    requirement: "Live/list-tools-equivalent schema inspection under the pinned SDK shows explicit representable input bounds and terminal_control.action as an enum rather than an unconstrained string."
+  - id: AC-3
+    requirement: "All five tools expose explicit typed output contracts; their output schemas enumerate the supported fields and are not generic additionalProperties:true objects."
+  - id: AC-4
+    requirement: "Tool runtime behavior and deeper validation remain backward-compatible with the accepted implementation; existing functional tests continue to pass."
+  - id: AC-5
+    requirement: "Server metadata is explicit: Agent Runtime name, non-empty version consistent with product version 0.2.0, non-empty description, and concise accurate instructions."
+  - id: AC-6
+    requirement: "requirements.txt remains exactly on mcp==2.0.0 and no private/unsupported SDK dependency is introduced."
+  - id: AC-7
+    requirement: "Focused schema/metadata tests prove the contract through the actual pinned SDK registration/introspection path, not source-text assertions alone."
+  - id: AC-8
+    requirement: "Full repository verification passes; macOS Swift tests/build remain green if the implementation touches packaged/runtime integration; no live Runtime lifecycle/config mutation occurs."
+  - id: AC-9
+    requirement: "origin/main remains unchanged and publication is non-force to dev only."
+
+verification_requirements:
+  - "Add focused MCP contract tests that inspect registered tool inputSchema, outputSchema, annotations, and server metadata using mcp==2.0.0."
+  - "Exercise representative successful results through the public tool wrappers or supported SDK contract path and validate they satisfy their declared typed schemas."
+  - "Exercise schema-rejected boundary values for timeout, cursor, wait_ms, action, rows, and cols without destructive host effects."
+  - "Run ./verify in full."
+  - "Run the relevant package/build checks if packaged runtime files or metadata parity wiring are changed."
+  - "Do not use live Runtime activation as a test mechanism in this task."
+
+publication:
+  implementation_commit_required: true
+  report_path: .agent/tasks/TASK-0038/report.yaml
+  push: non_force_dev
+  stop_for_architect_review: true
+
+git_authority:
+  create_branch: false
+  create_worktree: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
