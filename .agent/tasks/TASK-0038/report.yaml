@@ -1,0 +1,230 @@
+protocol_version: 3
+
+task_id: TASK-0038
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0038/task.yaml
+  commit: "67890ab549266ad34f82eafee9a8900161d9bfe7"
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "67890ab549266ad34f82eafee9a8900161d9bfe7"
+  implementation_commit: "c9d29532cf302280ef5bc5d10c781cad98eee19b"
+  final_execution_head: "c9d29532cf302280ef5bc5d10c781cad98eee19b"
+  fresh_bind:
+    result: PASS
+    method: >-
+      Verified the canonical checkout was clean, fetched origin/dev, confirmed the remote
+      authorized revision, then fast-forwarded dev exactly to the authorized base before mutation.
+
+sdk_boundary:
+  required_pin: "mcp==2.0.0"
+  observed_package_version: "2.0.0"
+  requirements_unchanged: true
+  public_mechanisms_used:
+    - "MCPServer name/version/description/instructions constructor parameters"
+    - "MCPServer.tool function-annotation schema registration"
+    - "MCPServer.list_tools registration introspection"
+    - "MCPServer.call_tool public invocation path"
+    - "Public Pydantic typed models/Field constraints supplied by the pinned MCP dependency set"
+  private_sdk_internals_used: false
+  vendored_mcp_code: false
+  sdk_monkeypatching: false
+  sdk_upgrade_performed: false
+  capability_blocked: false
+  compatibility_result: PASS
+  note: >-
+    A root union result model was rejected during implementation because MCP 2.0.0 wrapped it
+    in a result field and would have changed the existing wire shape. The final implementation
+    uses single closed result models with public serialization hooks, preserving omission of
+    exit_code while running without changing terminal semantics.
+
+implementation:
+  production_files:
+    - agent_runtime/contracts.py
+    - agent_runtime/server.py
+  test_files:
+    - tests/test_mcp_contracts.py
+    - tests/test_surface_and_scripts.py
+    - tests/test_terminal_session.py
+  public_tool_names:
+    - terminal_exec
+    - terminal_start
+    - terminal_poll
+    - terminal_control
+    - capacity_observer
+  annotations_preserved: true
+  terminal_poll_read_only: false
+  typed_output_contracts:
+    terminal_exec: TerminalExecResult
+    terminal_start: TerminalSessionResult
+    terminal_poll: TerminalSessionResult
+    terminal_control: TerminalControlResult
+    capacity_observer: CapacityObserverResult
+  closed_output_schemas: true
+  input_contracts:
+    argv_min_items: 1
+    cwd_min_length: 1
+    cwd_absolute_shape_pattern: "^/"
+    timeout_seconds:
+      exclusive_minimum: 0
+      maximum: 3600
+      default: 300
+    session_id_min_length: 1
+    cursor_minimum: 0
+    wait_ms:
+      minimum: 0
+      maximum: 1000
+    action_enum: [write, interrupt, terminate, resize]
+    rows:
+      minimum: 1
+      maximum: 65535
+    cols:
+      minimum: 1
+      maximum: 65535
+  deeper_runtime_validation_preserved: true
+  server_metadata:
+    name: Agent Runtime
+    version: "0.2.0"
+    description_nonempty: true
+    instructions_nonempty: true
+    instructions_cover:
+      - literal_argv
+      - shell_false_no_implicit_shell
+      - absolute_cwd_under_workspace_root
+      - terminal_exec_one_shot
+      - terminal_start_poll_control_pty_lifecycle
+      - bounded_output
+      - capacity_observer_read_only_advisory
+
+verification:
+  tdd_red:
+    command: ".venv/bin/python -m unittest tests.test_mcp_contracts -v"
+    result: EXPECTED_FAIL
+    evidence: >-
+      Baseline failed on missing input bounds, generic additionalProperties:true output schemas,
+      boundary values reaching tool bodies, and empty server metadata.
+  focused_contract:
+    command: ".venv/bin/python -m unittest tests.test_mcp_contracts -v"
+    result: PASS
+    tests: 7
+  focused_regression:
+    command: >-
+      .venv/bin/python -m unittest tests.test_surface_and_scripts tests.test_terminal_exec
+      tests.test_terminal_session tests.test_capacity_observer tests.test_mcp_contracts -v
+    result: PASS
+    tests: 67
+  full_repository:
+    command: "./verify"
+    result: PASS
+    tests: 136
+    includes: [python_unit_integration, python_compile, shell_syntax]
+  sdk_schema_introspection:
+    result: PASS
+    evidence: >-
+      Public list_tools output exposes the exact five tool names, unchanged annotations,
+      required input enum/bounds, closed typed output schemas, and explicit server metadata.
+  representative_result_validation:
+    result: PASS
+    evidence: >-
+      Successful terminal_exec, terminal_start, terminal_poll, terminal_control, and
+      capacity_observer results were invoked through MCPServer.call_tool and validated against
+      their published Draft 2020-12 output schemas. Running session/control payloads preserve
+      omission of exit_code; exited control payloads preserve exit_code.
+  invalid_boundary_validation:
+    result: PASS
+    evidence: >-
+      Focused tests prove timeout_seconds, cursor, wait_ms, action, rows, and cols invalid
+      boundary values are rejected by the pinned SDK boundary before the tool delegate runs.
+  swift_package_build:
+    result: NOT_REQUIRED
+    evidence: >-
+      No Swift source, package script, installed payload integration, or version-parity wiring
+      was modified by TASK-0038.
+
+mutation_boundaries:
+  runtime_installed_or_reinstalled: false
+  runtime_activated_or_reloaded: false
+  runtime_restarted_or_stopped: false
+  runtime_configuration_mutated: false
+  tunnel_identity_mutated: false
+  listener_state_mutated: false
+  lifecycle_behavior_changed: false
+  pty_behavior_changed: false
+  protection_behavior_changed: false
+  capacity_policy_changed: false
+  tools_resources_prompts_added: false
+  scheduler_queue_database_history_added: false
+  main_promoted: false
+  origin_main_before: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  origin_main_before_report_commit: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PROVEN
+    evidence: >-
+      Public MCP registration exposes exactly terminal_exec, terminal_start, terminal_poll,
+      terminal_control, and capacity_observer. ToolAnnotations match the accepted values and
+      terminal_poll remains readOnlyHint=false.
+  - criterion_id: AC-2
+    status: PROVEN
+    evidence: >-
+      Public list_tools inputSchema contains non-empty argv/cwd/session constraints,
+      timeout (0,3600] with default 300, cursor >= 0, wait_ms 0..1000, the exact control action
+      enum, and rows/cols 1..65535.
+  - criterion_id: AC-3
+    status: PROVEN
+    evidence: >-
+      All five outputSchema values enumerate supported fields through explicit typed contracts.
+      Every concrete output object is closed with additionalProperties=false; no generic
+      additionalProperties:true output contract remains.
+  - criterion_id: AC-4
+    status: PROVEN
+    evidence: >-
+      Tool bodies still delegate to the existing executor/session/capacity implementations,
+      deeper runtime validation remains intact, representative wire shapes are preserved, and
+      the full 136-test repository verification passes.
+  - criterion_id: AC-5
+    status: PROVEN
+    evidence: >-
+      MCPServer metadata is explicit with name Agent Runtime, version 0.2.0, non-empty
+      description, and concise machine-useful instructions covering the required execution model.
+  - criterion_id: AC-6
+    status: PROVEN
+    evidence: >-
+      requirements.txt remains exactly mcp==2.0.0. No SDK upgrade, vendoring, monkeypatching,
+      or private SDK dependency was introduced.
+  - criterion_id: AC-7
+    status: PROVEN
+    evidence: >-
+      tests/test_mcp_contracts.py uses the actual pinned MCPServer.list_tools and
+      MCPServer.call_tool public paths for schema, annotation, metadata, result, and rejection proof.
+  - criterion_id: AC-8
+    status: PROVEN
+    evidence: >-
+      ./verify passes 136 tests plus Python compilation and shell syntax checks. Swift/package
+      checks were correctly not required because packaged integration/version parity wiring was untouched.
+  - criterion_id: AC-9
+    status: PROVEN
+    evidence: >-
+      origin/main remained c49d777efa09db7f6c51bd8d8616db4623499fb8 before report authorship.
+      Publication is restricted to a non-force dev push and main is not promoted.
+
+publication:
+  implementation_commit: "c9d29532cf302280ef5bc5d10c781cad98eee19b"
+  report_path: .agent/tasks/TASK-0038/report.yaml
+  report_commit: null
+  push_mode: non_force_dev
+  pushed: false
+  force_push: false
+  main_promoted: false
+  next_step: ARCHITECT_REVIEW
+
+result: NEEDS_REVIEW
