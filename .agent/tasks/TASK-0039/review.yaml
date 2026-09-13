@@ -1,0 +1,86 @@
+protocol_version: 3
+
+task_id: TASK-0039
+task_revision: 1
+review_revision: 1
+state: ACCEPTED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0039/report.yaml
+  commit: "d2267f404373a624b0242f36e2aa4e0c25e678e0"
+  report_revision: 1
+
+reviewed_implementation:
+  commit: "74f1441f26d25abe155294dae3ba80245cedfd35"
+
+reviewed_base:
+  commit: "56a2ed6d22c5a3e95926ab1a9103a0eea6635704"
+
+independence:
+  reviewer_role: ARCHITECT
+  exact_report_identity_verified: true
+  remote_lineage_verified: true
+  implementation_diff_inspected: true
+  real_client_conformance_test_source_inspected: true
+  upstream_v2_2_release_and_tool_error_contract_spot_checked: true
+  full_verify_independently_rerun: false
+  swift_package_checks_independently_rerun: false
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  implementation_scope: PASS
+  publication_scope: PASS
+  sdk_migration_boundary: PASS
+  error_contract_boundary: PASS
+  real_client_conformance_boundary: PASS
+
+criterion_judgment:
+  AC-1: PASS
+  AC-2: PASS
+  AC-3: PASS
+  AC-4: PASS
+  AC-5: PASS
+  AC-6: PASS
+  AC-7: PASS
+  AC-8: PASS
+  AC-9: PASS
+  AC-10: PASS
+
+accepted_evidence:
+  - "Remote dev resolved to report commit d2267f404373a624b0242f36e2aa4e0c25e678e0; remote main remained c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "Authorized base 56a2ed6d22c5a3e95926ab1a9103a0eea6635704 to implementation 74f1441f26d25abe155294dae3ba80245cedfd35 is exactly one commit ahead."
+  - "Implementation to report d2267f404373a624b0242f36e2aa4e0c25e678e0 is exactly one report-only commit adding .agent/tasks/TASK-0039/report.yaml."
+  - "requirements.txt changes exactly from mcp==2.0.0 to mcp==2.2.0."
+  - "The public surface remains exactly terminal_exec, terminal_start, terminal_poll, terminal_control, capacity_observer, with terminal_poll readOnly=false and the accepted schemas/metadata preserved."
+  - "Production error handling adds RuntimeValidationError and RuntimeStateError subclasses and translates only those plus ProtectedRuntimeDenied to ToolError; unrelated exceptions continue to propagate to MCP 2.2 sanitization."
+  - "Official MCP Python SDK v2.2.0 exceptions documentation states ToolError is for anticipated model-readable failures and unexpected tool failures are represented by sanitized UnexpectedToolError text naming only the tool."
+  - "Focused real-client tests use public Client(MCPServer), assert protocol_version 2026-07-28, validate exact tools/schemas/annotations/metadata, exercise terminal_exec/capacity_observer and bounded PTY lifecycle, prove expected ToolError text, prove injected unexpected RuntimeError sentinel is absent, and prove schema-invalid input is rejected before delegate execution."
+  - "Executor report records ./verify PASS with 142 tests, Swift 29/29 PASS, release build/package PASS, bundled MCP 2.2.0, and strict codesign PASS. Architect accepts these as canonical execution evidence but does not claim independent reruns."
+
+architecture_judgment:
+  sdk_2_2_migration: ACCEPTED
+  real_client_conformance_gate: ACCEPTED
+  deliberate_tool_error_contract: ACCEPTED
+  unexpected_exception_sanitization: ACCEPTED
+  public_wire_contract_changed: false
+  runtime_execution_semantics_changed: false
+  live_runtime_activation_in_scope: false
+  ci_release_enforcement_in_scope: false
+
+next_state:
+  task_0039: ACCEPTED
+  sdk_migration_and_conformance: CLOSED
+  live_runtime_activation_required_for_task_0039: false
+  ci_release_hardening: READY_FOR_SEPARATE_TASK
+  main_promotion_authorized: false
+  automatic_execution: false
+
+recommended_next_pass: >-
+  Keep release governance separate. Add enforced repository CI/release gates for the accepted verification contract, including Python MCP conformance, Swift/package verification, and appropriate status enforcement, without retroactively mixing release-policy changes into TASK-0039.
+
+notes:
+  - "This review accepts source/package migration and conformance only; it does not activate or reload the live Runtime."
+  - "No main promotion is authorized."
