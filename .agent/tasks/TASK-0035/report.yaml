@@ -1,0 +1,149 @@
+protocol_version: 3
+
+task_id: TASK-0035
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0035/task.yaml
+  commit: "748b930f74d947ec4fb6fe8b3d7975a585584e9b"
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+  authorized_base_head: "748b930f74d947ec4fb6fe8b3d7975a585584e9b"
+  fresh_bind:
+    result: PASS
+    method: "Fetched origin/dev and fast-forwarded the clean canonical dev checkout to the exact authorized base."
+  activation_attempts: 1
+  activation_command: "./install.sh"
+  activation_transport_result: "The invoking ChatGPT Local transport returned HTTP 502 during the single cutover attempt."
+  activation_retry_performed: false
+  activation_retry_policy_obeyed: true
+
+configuration:
+  canonical_path: "$HOME/Library/Application Support/Agent Runtime/runtime.env"
+  preexisting_parallelism_key: absent
+  action: "Persisted AGENT_RUNTIME_MAX_PARALLELISM=2 before activation."
+  configured_value: 2
+  accepted_range: [1, 10]
+  canonical_validation_before_activation: PASS
+  canonical_validation_after_prepare: PASS
+  post_activation_regular_file: true
+  post_activation_symlink: false
+  post_activation_mode: "0600"
+  post_activation_parallelism_valid: true
+  canonical_bytes_unchanged_after_prepare_during_activation: true
+  credential_values_exposed: false
+
+activation_poststate:
+  runtime_healthz: PASS
+  runtime_readyz: PASS
+  runtime_service_loaded: true
+  listener_count_127_0_0_1_8080: 1
+  listener_is_canonical_tunnel_client: true
+  installed_app: "$HOME/Applications/Agent Runtime.app"
+  installed_manifest_schema: 1
+  installed_manifest_owner: com.picmao.agent-runtime
+  installed_runtime_revision: "748b930f74d947ec4fb6fe8b3d7975a585584e9b"
+  installed_signature_verification: PASS
+  installed_source_handlers:
+    - capacity_observer
+    - terminal_control
+    - terminal_exec
+    - terminal_poll
+    - terminal_start
+  installed_five_handler_source_presence: PASS
+
+live_mcp_acceptance:
+  expected_exact_surface:
+    - terminal_exec
+    - terminal_start
+    - terminal_poll
+    - terminal_control
+    - capacity_observer
+  current_chat_connector_discovery_after_cutover:
+    - terminal_exec
+    - terminal_start
+    - terminal_poll
+    - terminal_control
+  current_chat_connector_tool_count: 4
+  capacity_observer_mounted_in_current_chat: false
+  capacity_observer_live_calls: 0
+  required_single_capacity_observer_call_performed: false
+  status: BLOCKED
+  reason: >-
+    After the one authorized activation attempt and successful post-state recovery,
+    ChatGPT Local connector discovery in this same execution session continued to
+    expose only the pre-cutover four-tool schema. The installed package at the
+    authorized revision contains the fifth capacity_observer handler, but static
+    package evidence is not equivalent to the required live MCP surface proof.
+    The missing live tool therefore could not be called without fabricating
+    evidence or performing an unauthorized activation/lifecycle retry.
+
+boundaries:
+  source_or_test_mutation: false
+  checkout_env_mutation: false
+  tunnel_identity_unchanged: true
+  tunnel_identity_values_exposed: false
+  origin_main_before: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  origin_main_after: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  main_promoted: false
+  activation_attempt_limit_respected: true
+  lifecycle_retry_after_transport_loss: false
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PROVEN
+    evidence: >-
+      Exactly one ./install.sh activation attempt was issued. Although its calling
+      transport dropped with HTTP 502 during cutover, subsequent read-only proof
+      showed a healthy/ready canonical Runtime using the installed package whose
+      manifest revision is the exact authorized base. No activation retry occurred.
+  - criterion_id: AC-2
+    status: PROVEN
+    evidence: >-
+      The canonical runtime.env was a regular non-symlink 0600 file. The parallelism
+      key was absent before activation, was atomically persisted as exactly 2, passed
+      canonical validation, remained valid after activation, and the canonical file
+      bytes did not change again during activation.
+  - criterion_id: AC-3
+    status: PROVEN
+    evidence: >-
+      Post-cutover /healthz and /readyz were green, the protected Runtime service was
+      loaded, exactly one canonical tunnel-client listener owned 127.0.0.1:8080, the
+      installed manifest reported runtime revision 748b930f74d947ec4fb6fe8b3d7975a585584e9b,
+      and strict deep codesign verification passed.
+  - criterion_id: AC-4
+    status: BLOCKED
+    evidence: >-
+      Two post-cutover ChatGPT Local connector discoveries in this execution session
+      exposed exactly four tools: terminal_exec, terminal_start, terminal_poll, and
+      terminal_control. capacity_observer was not mounted in the current chat even though
+      the installed exact-base package source contains all five accepted handlers.
+  - criterion_id: AC-5
+    status: BLOCKED
+    evidence: >-
+      capacity_observer was unavailable through the live connector in this execution
+      session, so the required exactly-once live read-only invocation was not performed.
+      No local/static substitute was invoked because that would not prove live MCP behavior.
+  - criterion_id: AC-6
+    status: PROVEN
+    evidence: >-
+      No source/tests or checkout .env were modified, the canonical tunnel identity
+      matched its pre-activation fingerprint without exposing credential values,
+      origin/main remained c49d777efa09db7f6c51bd8d8616db4623499fb8, and no main promotion occurred.
+
+publication:
+  report_path: .agent/tasks/TASK-0035/report.yaml
+  implementation_commit: null
+  report_commit: null
+  pushed: false
+  force_push: false
+  main_promoted: false
+  next_step: ARCHITECT_REVIEW
+
+result: BLOCKED
