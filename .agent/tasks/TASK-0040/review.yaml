@@ -1,21 +1,21 @@
 protocol_version: 3
 
 task_id: TASK-0040
-task_revision: 1
-review_revision: 1
-state: REVISION_REQUIRED
+task_revision: 2
+review_revision: 2
+state: ACCEPTED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0040/report.yaml
-  commit: "1428632eaa1cb4ecf99776ed08d131fe5437ee48"
-  report_revision: 1
+  commit: "b9b6b287fa2a80c6a8df3e3dbbfa3564bf00cdcf"
+  report_revision: 2
 
 reviewed_implementation:
-  commit: "881a675607a83e850a05568851c2a01ce89c3685"
+  commit: "0a4ff5ca5c923213a16cbd70aed3369456f33732"
 
 reviewed_base:
-  commit: "a52e0698a2ece4d5e473d9e41fbc1041f1b877e4"
+  commit: "8c2de71565f1abcf39498edcd35a9cb3641c59e1"
 
 independence:
   reviewer_role: ARCHITECT
@@ -27,50 +27,36 @@ contract_compliance:
   identity: PASS
   execution_base: PASS
   skill_rules: PASS
-  scope: FAIL
+  scope: PASS
   structure_policy: PASS
   git_authority: PASS
-  acceptance_criteria: FAIL
+  acceptance_criteria: PASS
   verifier_evidence: NOT_REQUIRED
 
 criterion_judgment:
   AC-1: PASS
   AC-2: PASS
-  AC-3: FAIL
+  AC-3: PASS
   AC-4: PASS
   AC-5: PASS
   AC-6: PASS
   AC-7: PASS
-  AC-8: FAIL
-  AC-9: PASS
-  AC-10: PASS
-  AC-11: PASS
 
 accepted_evidence:
-  - "Remote dev resolved to report commit 1428632eaa1cb4ecf99776ed08d131fe5437ee48 and remote main remained c49d777efa09db7f6c51bd8d8616db4623499fb8 before review publication."
-  - "Exact lineage is a52e0698a2ece4d5e473d9e41fbc1041f1b877e4 -> 881a675607a83e850a05568851c2a01ce89c3685 -> 1428632eaa1cb4ecf99776ed08d131fe5437ee48; the second commit is report-only."
-  - "The six-tool public surface, typed contracts, fixed output ceilings, bounded errors, MCP sanitization boundary, timing-name repair, documentation, benchmark arithmetic, performance thresholds, forbidden-scope boundary, and non-mutation claims show no material contradiction."
-  - "Focused 18/18 and full ./verify 160/160 evidence are internally consistent, but the focused coverage does not prove the two edge predicates below."
-
-blocking_findings:
-  - id: UTF8_RANGE_CHUNK_BOUNDARY
-    criterion: AC-3
-    evidence: "agent_runtime/fs_read.py decodes each entire raw read chunk with the strict UTF-8 decoder before processing end_line. Invalid bytes after the requested range therefore fail when present in the same chunk, while bytes in a later unread chunk may not be validated. Client-visible validity can depend on chunk placement rather than the selected range contract."
-    consequence: "The required strict UTF-8 range semantics are not deterministic and are not proven by the current focused tests."
-  - id: CWD_DESCRIPTOR_ANCHOR_RACE
-    criterion: AC-3
-    evidence: "agent_runtime/executor.py validates cwd with Path.resolve(strict=True), then agent_runtime/fs_read.py later opens the resolved cwd by absolute pathname before descriptor-relative item traversal. This leaves an intermediate-component namespace replacement window at the cwd trust anchor. Darwin distinguishes O_NOFOLLOW from O_NOFOLLOW_ANY, so final-component O_NOFOLLOW alone is not a full-path no-symlink guarantee."
-    consequence: "The item traversal is descriptor-relative after cwd_fd exists, but the cwd descriptor itself is not yet proven to be acquired with the task's race-resistant descendant/no-symlink invariant."
-
-revision_requirements:
-  - "Make UTF-8 range validity deterministic and aligned with the task's selected-content contract: bytes outside the requested selected lines must not change the result merely because of read chunk boundaries, while invalid UTF-8 inside selected returned content must still produce INVALID_UTF8. Add focused regression tests that force the same invalid suffix into the same versus a later read chunk and prove identical client-visible results."
-  - "Close the cwd trust-anchor namespace race. Acquire or validate the cwd descriptor with an open-time mechanism that cannot be redirected through an intermediate symlink replacement between pathname validation and descriptor acquisition. Keep the existing workspace-root non-confinement documentation and do not broaden into a second security framework. Add a deterministic adversarial regression covering intermediate cwd-component replacement where feasible."
-  - "After correction, rerun only verification invalidated by changed bytes plus the required final canonical verification and performance proof if the changed read path can materially affect benchmark acceptance. Publish a new truthful report revision for Architect review."
+  - "Remote dev resolved to report revision-2 commit b9b6b287fa2a80c6a8df3e3dbbfa3564bf00cdcf and remote main remained c49d777efa09db7f6c51bd8d8616db4623499fb8 before review publication."
+  - "Exact revision-2 lineage is 8c2de71565f1abcf39498edcd35a9cb3641c59e1 -> 0a4ff5ca5c923213a16cbd70aed3369456f33732 -> b9b6b287fa2a80c6a8df3e3dbbfa3564bf00cdcf; implementation is one direct child and the second commit is report-only."
+  - "The correction diff changes only agent_runtime/fs_read.py and tests/test_fs_read_batch_adversarial.py; no dependency, rejected capability, terminal_exec semantic/capture, live Runtime/config, main, tag, or release mutation is present."
+  - "Selected-range UTF-8 handling now accumulates only selected raw bytes and strict-decodes the complete selected result. Independent Architect probes passed both same-versus-later-chunk invalid suffix behavior and invalid selected-content semantics."
+  - "The cwd trust anchor is acquired with Darwin O_NOFOLLOW_ANY plus O_DIRECTORY before descriptor-relative item traversal. The independent Architect cwd intermediate-component replacement regression failed closed as required."
+  - "Executor evidence records focused adversarial 6/6 PASS, affected conformance 20/20 PASS, and ./verify 162/162 PASS with exit 0 on the exact implementation candidate. Architect did not redundantly rerun the full suite."
+  - "Fresh corrected-production benchmark records terminal_exec median 58.7406455006203 ms versus fs_read_batch 4.998333499315777 ms, an absolute improvement of 53.742312001304526 ms and relative improvement of 91.49084342414488%, exceeding both admission thresholds."
+  - "The revision-2 report validated PASS with the exact pinned agent-skills@1826d33bd1e467896c133109b37db8b0656b3276 protocol-v3 validator."
 
 promotion_readiness:
   eligible_for_candidate_capture: false
-  reason: "TASK-0040 has two material AC-3 filesystem/read-contract defects requiring correction before acceptance."
+  reason: "TASK-0040 is accepted on dev, but this task explicitly authorizes no main promotion; any promotion or subsequent Agent Runtime work requires separate canonical authority."
 
 notes:
-  - "The independent review-advisory recommendation was treated as advisory evidence only; Architect independently confirmed both material defects against the exact task and candidate source."
-  - "No main promotion, release work, or live Runtime lifecycle/configuration mutation is authorized."
+  - "The two revision-1 AC-3 blockers are closed by revision 2."
+  - "No live Agent Runtime install/reload/restart/config/tunnel/listener mutation was part of this acceptance."
+  - "No main promotion, tag, or release work is authorized by TASK-0040."
