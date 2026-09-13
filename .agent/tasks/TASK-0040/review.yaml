@@ -1,21 +1,21 @@
 protocol_version: 3
 
 task_id: TASK-0040
-task_revision: 2
-review_revision: 3
-state: REVISION_REQUIRED
+task_revision: 3
+review_revision: 4
+state: ACCEPTED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0040/report.yaml
-  commit: "b9b6b287fa2a80c6a8df3e3dbbfa3564bf00cdcf"
-  report_revision: 2
+  commit: "01558e821860e8c01ba719d64cb4646b38611403"
+  report_revision: 3
 
 reviewed_implementation:
-  commit: "0a4ff5ca5c923213a16cbd70aed3369456f33732"
+  commit: "280452e2c6d29b1aae860c90238fbb639f810766"
 
 reviewed_base:
-  commit: "8c2de71565f1abcf39498edcd35a9cb3641c59e1"
+  commit: "94c42c7b1f59e9ac35ae94d417e028f112e2e2bc"
 
 independence:
   reviewer_role: ARCHITECT
@@ -30,36 +30,35 @@ contract_compliance:
   scope: PASS
   structure_policy: PASS
   git_authority: PASS
-  acceptance_criteria: FAIL
+  acceptance_criteria: PASS
   verifier_evidence: NOT_REQUIRED
 
 criterion_judgment:
   AC-1: PASS
-  AC-2: FAIL
+  AC-2: PASS
   AC-3: PASS
   AC-4: PASS
   AC-5: PASS
   AC-6: PASS
   AC-7: PASS
 
-blocking_findings:
-  - id: CWD_DIRECTORY_REPLACEMENT_RACE
-    criterion: AC-2
-    evidence: "After _validated_cwd() resolves and validates the cwd pathname, an intermediate validated directory can be renamed away and a different ordinary directory can be renamed into the same pathname before os.open(... O_NOFOLLOW_ANY | O_DIRECTORY). O_NOFOLLOW_ANY rejects symlinks but does not bind the opened directory identity to the directory object previously validated. Independent Architect reproduction returned RENAMED_SECRET from the replacement namespace."
-    consequence: "The cwd trust-anchor claim is false for pure directory namespace replacement: fs_read_batch can acquire and read from a different directory object than the one validated before descriptor acquisition."
-
-revision_requirements:
-  - "Acquire the fs_read_batch cwd trust anchor with identity binding that cannot be redirected by pure directory rename/replacement between authorization validation and descriptor acquisition. Symlink-only protection is insufficient."
-  - "Add a deterministic adversarial regression that validates a cwd, replaces an intermediate directory with a different ordinary directory before trust-anchor acquisition, and proves redirected content cannot be read."
-  - "Keep the correction bounded to fs_read_batch cwd authorization/trust-anchor acquisition and focused tests; do not broaden into general workspace sandboxing or redesign terminal_exec."
-  - "Rerun only verification invalidated by the correction plus one final canonical ./verify and a fresh benchmark only if the read path materially changes performance."
+accepted_evidence:
+  - "Fresh remote review resolution found dev at exact report commit 01558e821860e8c01ba719d64cb4646b38611403 and main unchanged at c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "Exact revision-3 lineage is 94c42c7b1f59e9ac35ae94d417e028f112e2e2bc -> 280452e2c6d29b1aae860c90238fbb639f810766 -> 01558e821860e8c01ba719d64cb4646b38611403; implementation is one direct child and the second commit is report-only."
+  - "Implementation diff is limited to agent_runtime/executor.py, agent_runtime/fs_read.py, and tests/test_fs_read_batch_adversarial.py; git diff --check passed."
+  - "Cwd validation now captures directory identity as st_dev/st_ino; fs_read_batch fstats the opened cwd descriptor and fails closed on identity mismatch while retaining O_NOFOLLOW_ANY for symlink replacement."
+  - "Architect independently reran the pure-directory replacement and prior symlink-replacement regressions; both passed."
+  - "Architect independently reran the affected 58-test fs/MCP/terminal conformance set; 58/58 passed."
+  - "Architect independently reran canonical ./verify on the exact report checkout; it completed with exit code 0 and the suite included the revision-3 adversarial regressions."
+  - "Executor report records fresh corrected-production real-MCP benchmark evidence: terminal_exec median 64.672917 ms, fs_read_batch median 5.266917 ms, absolute improvement 59.406 ms, relative improvement 91.85607013829298%, exceeding both required thresholds."
+  - "No evidence of dependency, rejected capability, terminal_exec semantic/capture, live Runtime/config/tunnel/listener/installed-package, main, tag, or release mutation was found in the revision-3 correction boundary."
 
 promotion_readiness:
-  eligible_for_candidate_capture: false
-  reason: "Post-acceptance independent red-team evidence reproduced a material AC-2 cwd identity race; TASK-0040 requires another bounded correction revision before acceptance."
+  eligible_for_candidate_capture: true
+  reason: "TASK-0040 revision 3 is accepted at exact report commit 01558e821860e8c01ba719d64cb4646b38611403; this review does not itself authorize main promotion or release."
 
 notes:
-  - "Review revision 3 supersedes review revision 2 ACCEPTED after a newly discovered deterministic pure-directory replacement race was independently reproduced by the governing Architect."
-  - "The selected-range UTF-8 correction remains proven; no regression was found there."
-  - "Resource-amplification and top-level input-schema observations are follow-up debt and are not acceptance blockers for this revision."
-  - "No main promotion, release work, or live Runtime lifecycle/configuration mutation is authorized."
+  - "Review revision 4 supersedes revision 3 REVISION_REQUIRED for TASK-0040 after the pure-directory cwd identity race was corrected and independently rechecked."
+  - "The report's pushed=false and PENDING_PUBLICATION fields are accepted as pre-publication truth; fresh post-publication remote refs were independently resolved at review time."
+  - "No live Agent Runtime lifecycle or configuration mutation was performed during Architect review."
+  - "No main promotion, tag, or release is authorized by this review."
