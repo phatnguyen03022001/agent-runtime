@@ -1,0 +1,80 @@
+protocol_version: 3
+
+task_id: TASK-0035
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: operator_activation_request
+  gap_id: CAPACITY_OBSERVER_V1_LIVE_ACTIVATION
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+authority_sources:
+  - source: "phatnguyen03022001/agent-runtime@2e9a5fda0be641adafee10d28c48c25c2ae55b13:.agent/tasks/TASK-0034/review.yaml"
+    role: "Accepted Capacity Observer v1 source/package implementation."
+    precedence: 1
+  - source: "Operator authorization to activate the accepted build and use AGENT_RUNTIME_MAX_PARALLELISM=2 as the live default."
+    role: "Activation authority."
+    precedence: 2
+
+objective: >-
+  Activate the accepted TASK-0034 build on the live Mac, ensure canonical runtime.env explicitly uses AGENT_RUNTIME_MAX_PARALLELISM=2 when the key is absent, and prove the installed Runtime exposes the accepted five-tool surface with Capacity Observer v1 operating within its x1/x2 contract.
+
+config_contract:
+  key: AGENT_RUNTIME_MAX_PARALLELISM
+  valid_range: [1, 10]
+  absent_live_value: "2"
+  preserve_existing_valid_value: true
+  invalid_existing_value: "Stop before activation and report BLOCKED."
+  secrecy: "Do not expose credential values."
+
+activation_contract:
+  maximum_activation_attempts: 1
+  retry_after_transport_loss: false
+
+required_proof:
+  - "Fresh exact-base clean synchronized dev preflight."
+  - "Post-state Runtime is healthy and ready and installed package signature is valid."
+  - "Canonical runtime.env remains private/regular and has a valid AGENT_RUNTIME_MAX_PARALLELISM; absent-before case becomes exactly 2."
+  - "Live MCP surface contains exactly terminal_exec, terminal_start, terminal_poll, terminal_control and capacity_observer."
+  - "One read-only capacity_observer call returns schema_version 1 and capacity_parallelism_ceiling in [1, 2]."
+  - "No source/test mutation, checkout .env mutation, identity change or main promotion."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Accepted build activated within the one-attempt limit."
+  - id: AC-2
+    requirement: "Live canonical parallelism configuration is valid and defaults explicitly to 2 when previously absent."
+  - id: AC-3
+    requirement: "Installed Runtime is healthy/ready and package verification passes."
+  - id: AC-4
+    requirement: "Live MCP exposes exactly the accepted five-tool surface."
+  - id: AC-5
+    requirement: "Live Capacity Observer returns bounded schema v1 and only x1/x2 ceiling."
+  - id: AC-6
+    requirement: "Repository/main/identity boundaries remain unchanged except report publication."
+
+publication:
+  report_path: .agent/tasks/TASK-0035/report.yaml
+  push: non_force_dev
+  stop_for_architect_review: true
+
+git_authority:
+  create_branch: false
+  create_worktree: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
