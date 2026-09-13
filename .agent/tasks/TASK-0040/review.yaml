@@ -1,0 +1,76 @@
+protocol_version: 3
+
+task_id: TASK-0040
+task_revision: 1
+review_revision: 1
+state: REVISION_REQUIRED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0040/report.yaml
+  commit: "1428632eaa1cb4ecf99776ed08d131fe5437ee48"
+  report_revision: 1
+
+reviewed_implementation:
+  commit: "881a675607a83e850a05568851c2a01ce89c3685"
+
+reviewed_base:
+  commit: "a52e0698a2ece4d5e473d9e41fbc1041f1b877e4"
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  skill_rules: PASS
+  scope: FAIL
+  structure_policy: PASS
+  git_authority: PASS
+  acceptance_criteria: FAIL
+  verifier_evidence: NOT_REQUIRED
+
+criterion_judgment:
+  AC-1: PASS
+  AC-2: PASS
+  AC-3: FAIL
+  AC-4: PASS
+  AC-5: PASS
+  AC-6: PASS
+  AC-7: PASS
+  AC-8: FAIL
+  AC-9: PASS
+  AC-10: PASS
+  AC-11: PASS
+
+accepted_evidence:
+  - "Remote dev resolved to report commit 1428632eaa1cb4ecf99776ed08d131fe5437ee48 and remote main remained c49d777efa09db7f6c51bd8d8616db4623499fb8 before review publication."
+  - "Exact lineage is a52e0698a2ece4d5e473d9e41fbc1041f1b877e4 -> 881a675607a83e850a05568851c2a01ce89c3685 -> 1428632eaa1cb4ecf99776ed08d131fe5437ee48; the second commit is report-only."
+  - "The six-tool public surface, typed contracts, fixed output ceilings, bounded errors, MCP sanitization boundary, timing-name repair, documentation, benchmark arithmetic, performance thresholds, forbidden-scope boundary, and non-mutation claims show no material contradiction."
+  - "Focused 18/18 and full ./verify 160/160 evidence are internally consistent, but the focused coverage does not prove the two edge predicates below."
+
+blocking_findings:
+  - id: UTF8_RANGE_CHUNK_BOUNDARY
+    criterion: AC-3
+    evidence: "agent_runtime/fs_read.py decodes each entire raw read chunk with the strict UTF-8 decoder before processing end_line. Invalid bytes after the requested range therefore fail when present in the same chunk, while bytes in a later unread chunk may not be validated. Client-visible validity can depend on chunk placement rather than the selected range contract."
+    consequence: "The required strict UTF-8 range semantics are not deterministic and are not proven by the current focused tests."
+  - id: CWD_DESCRIPTOR_ANCHOR_RACE
+    criterion: AC-3
+    evidence: "agent_runtime/executor.py validates cwd with Path.resolve(strict=True), then agent_runtime/fs_read.py later opens the resolved cwd by absolute pathname before descriptor-relative item traversal. This leaves an intermediate-component namespace replacement window at the cwd trust anchor. Darwin distinguishes O_NOFOLLOW from O_NOFOLLOW_ANY, so final-component O_NOFOLLOW alone is not a full-path no-symlink guarantee."
+    consequence: "The item traversal is descriptor-relative after cwd_fd exists, but the cwd descriptor itself is not yet proven to be acquired with the task's race-resistant descendant/no-symlink invariant."
+
+revision_requirements:
+  - "Make UTF-8 range validity deterministic and aligned with the task's selected-content contract: bytes outside the requested selected lines must not change the result merely because of read chunk boundaries, while invalid UTF-8 inside selected returned content must still produce INVALID_UTF8. Add focused regression tests that force the same invalid suffix into the same versus a later read chunk and prove identical client-visible results."
+  - "Close the cwd trust-anchor namespace race. Acquire or validate the cwd descriptor with an open-time mechanism that cannot be redirected through an intermediate symlink replacement between pathname validation and descriptor acquisition. Keep the existing workspace-root non-confinement documentation and do not broaden into a second security framework. Add a deterministic adversarial regression covering intermediate cwd-component replacement where feasible."
+  - "After correction, rerun only verification invalidated by changed bytes plus the required final canonical verification and performance proof if the changed read path can materially affect benchmark acceptance. Publish a new truthful report revision for Architect review."
+
+promotion_readiness:
+  eligible_for_candidate_capture: false
+  reason: "TASK-0040 has two material AC-3 filesystem/read-contract defects requiring correction before acceptance."
+
+notes:
+  - "The independent review-advisory recommendation was treated as advisory evidence only; Architect independently confirmed both material defects against the exact task and candidate source."
+  - "No main promotion, release work, or live Runtime lifecycle/configuration mutation is authorized."
