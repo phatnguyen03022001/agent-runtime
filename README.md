@@ -35,9 +35,13 @@ initialization. During future installation, an absent canonical file may be
 initialized atomically from the checkout `.env`; the checkout file remains
 available only as source development/bootstrap input.
 
-`CONTROL_PLANE_API_KEY`, `CONTROL_PLANE_TUNNEL_ID`, and
-`AGENT_RUNTIME_WORKSPACE_ROOT` are read from the canonical file. The accepted tunnel
-fingerprint is `6aa2b81d6dd8`. Never print the complete tunnel ID or API key.
+`CONTROL_PLANE_API_KEY`, `CONTROL_PLANE_TUNNEL_ID`,
+`AGENT_RUNTIME_WORKSPACE_ROOT`, and optional `AGENT_RUNTIME_MAX_PARALLELISM`
+are read from the canonical file. `AGENT_RUNTIME_MAX_PARALLELISM` accepts only
+integers from `1` through `10`; when absent its effective default is `2`. Invalid
+values fail configuration validation instead of being silently clamped. The
+accepted tunnel fingerprint is `6aa2b81d6dd8`. Never print the complete tunnel
+ID or API key.
 The historical `~/.config/tunnel-client/agent-runtime.yaml` profile must stay
 absent; installation, startup, and recovery fail closed if it reappears.
 Official `tunnel-client` and macOS launchd/system utilities are the only
@@ -76,7 +80,7 @@ out-of-band tools outside Agent Runtime's enforcement boundary.
 
 ## Tool surface
 
-The MCP server exposes exactly four public tools:
+The MCP server exposes exactly five public tools:
 
 - `terminal_exec(argv, cwd, timeout_seconds=300)` executes one literal argv
   with `shell=False`, disconnected stdin, bounded output, and bounded cleanup.
@@ -86,6 +90,21 @@ The MCP server exposes exactly four public tools:
   PTY output and current status. `wait_ms` is bounded to 1000 ms.
 - `terminal_control(session_id, action, data=None, rows=None, cols=None)`
   supports exactly `write`, `interrupt`, `terminate`, and `resize`.
+
+- `capacity_observer()` returns one read-only, on-demand, stateless capacity
+  snapshot with a bounded signal summary, reason codes, and advisory
+  `capacity_parallelism_ceiling`. It does not spawn, schedule, queue, reorder,
+  retry, or cancel work.
+
+Capacity Observer v1 reports only an x1/x2 host-capacity ceiling. The effective
+ceiling is `min(AGENT_RUNTIME_MAX_PARALLELISM, evidence_based_ceiling_v1)`, so an
+operator maximum of `1` always serializes, `2` permits x1/x2, and values `3`
+through `10` still cannot raise v1 above x2. Architect/Executor remains
+responsible for proving semantic independence before using any parallelism.
+The observer uses only aggregate public macOS CPU/load, VM/swap, thermal, and
+workspace-filesystem capacity signals; probe failures and critical unknowns
+conservatively return x1. It keeps no telemetry history and performs no global
+process inventory.
 
 Persistent session state is memory-only. The operator-configurable positive
 integer `AGENT_RUNTIME_MAX_ACTIVE_SESSIONS` controls active PTY capacity. Its

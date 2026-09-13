@@ -13,7 +13,7 @@ REQUIRED = (
     "CONTROL_PLANE_TUNNEL_ID",
     "AGENT_RUNTIME_WORKSPACE_ROOT",
 )
-OPTIONAL = {"AGENT_RUNTIME_MAX_ACTIVE_SESSIONS"}
+OPTIONAL = {"AGENT_RUNTIME_MAX_ACTIVE_SESSIONS", "AGENT_RUNTIME_MAX_PARALLELISM"}
 ENTRY = re.compile(r"([A-Z_][A-Z0-9_]*)=(.*)")
 
 
@@ -56,6 +56,9 @@ def validate(path: Path, *, require_mode: bool) -> bytes:
     workspace = Path(values["AGENT_RUNTIME_WORKSPACE_ROOT"])
     if not workspace.is_absolute() or not workspace.is_dir():
         fail("AGENT_RUNTIME_WORKSPACE_ROOT must be an absolute existing directory")
+    parallelism = values.get("AGENT_RUNTIME_MAX_PARALLELISM")
+    if parallelism is not None and (re.fullmatch(r"[1-9][0-9]*", parallelism) is None or not 1 <= int(parallelism) <= 10):
+        fail("AGENT_RUNTIME_MAX_PARALLELISM must be an integer from 1 through 10")
     return raw
 
 
@@ -68,6 +71,9 @@ def _bootstrap_payload(source: Path, workspace_root: Path) -> bytes:
         fail("missing AGENT_RUNTIME_WORKSPACE_ROOT entry")
     if not workspace_root.is_absolute() or not workspace_root.is_dir():
         fail("AGENT_RUNTIME_WORKSPACE_ROOT must be an absolute existing directory")
+    parallelism = values.get("AGENT_RUNTIME_MAX_PARALLELISM")
+    if parallelism is not None and (re.fullmatch(r"[1-9][0-9]*", parallelism) is None or not 1 <= int(parallelism) <= 10):
+        fail("AGENT_RUNTIME_MAX_PARALLELISM must be an integer from 1 through 10")
 
     rendered: list[str] = []
     for raw_line in lines:

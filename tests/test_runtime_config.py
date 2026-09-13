@@ -172,6 +172,40 @@ class RuntimeConfigTests(unittest.TestCase):
 
             self.assertEqual(canonical.read_bytes(), winner)
 
+    def test_parallelism_limit_accepts_absent_one_two_and_ten(self) -> None:
+        for configured in (None, "1", "2", "10"):
+            with self.subTest(configured=configured), tempfile.TemporaryDirectory() as raw:
+                temp = Path(raw)
+                workspace = temp / "workspace"
+                workspace.mkdir()
+                canonical = temp / "runtime.env"
+                text = (
+                    "CONTROL_PLANE_API_KEY=test-key\n"
+                    "CONTROL_PLANE_TUNNEL_ID=test-tunnel\n"
+                    f"AGENT_RUNTIME_WORKSPACE_ROOT={workspace}\n"
+                )
+                if configured is not None:
+                    text += f"AGENT_RUNTIME_MAX_PARALLELISM={configured}\n"
+                canonical.write_text(text)
+                canonical.chmod(0o600)
+                runtime_config.validate(canonical, require_mode=True)
+
+    def test_parallelism_limit_rejects_malformed_and_out_of_range_values(self) -> None:
+        for configured in ("", "0", "11", "-1", "2.0", "many"):
+            with self.subTest(configured=configured), tempfile.TemporaryDirectory() as raw:
+                temp = Path(raw)
+                workspace = temp / "workspace"
+                workspace.mkdir()
+                canonical = temp / "runtime.env"
+                canonical.write_text(
+                    "CONTROL_PLANE_API_KEY=test-key\n"
+                    "CONTROL_PLANE_TUNNEL_ID=test-tunnel\n"
+                    f"AGENT_RUNTIME_WORKSPACE_ROOT={workspace}\n"
+                    f"AGENT_RUNTIME_MAX_PARALLELISM={configured}\n"
+                )
+                canonical.chmod(0o600)
+                with self.assertRaisesRegex(SystemExit, "AGENT_RUNTIME_MAX_PARALLELISM"):
+                    runtime_config.validate(canonical, require_mode=True)
 
 
 if __name__ == "__main__":

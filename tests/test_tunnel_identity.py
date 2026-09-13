@@ -45,7 +45,7 @@ class TunnelIdentityTests(unittest.TestCase):
 set -euo pipefail
 CAPTURE="$(dirname "$0")/capture.log"
 printf 'argv=%s\n' "$*" >> "$CAPTURE"
-for key in CONTROL_PLANE_API_KEY CONTROL_PLANE_TUNNEL_ID TUNNEL_CLIENT_CONFIG TUNNEL_CLIENT_PROFILE TUNNEL_CLIENT_PROFILE_FILE TUNNEL_CLIENT_PROFILE_DIR XDG_CONFIG_HOME AGENT_RUNTIME_TUNNEL_PROFILE AGENT_RUNTIME_WORKSPACE_ROOT; do
+for key in CONTROL_PLANE_API_KEY CONTROL_PLANE_TUNNEL_ID TUNNEL_CLIENT_CONFIG TUNNEL_CLIENT_PROFILE TUNNEL_CLIENT_PROFILE_FILE TUNNEL_CLIENT_PROFILE_DIR XDG_CONFIG_HOME AGENT_RUNTIME_TUNNEL_PROFILE AGENT_RUNTIME_WORKSPACE_ROOT AGENT_RUNTIME_MAX_PARALLELISM; do
   if [[ -n "${!key-}" ]]; then printf 'env:%s=%s\n' "$key" "${!key}" >> "$CAPTURE"; fi
 done
 if [[ "${1-}" == init ]]; then
@@ -89,7 +89,7 @@ fi
         self._write(repo / ".venv/bin/python", "#!/bin/sh\nexit 0\n", 0o700)
         self._write(
             repo / ".env",
-            f"CONTROL_PLANE_API_KEY=test-key\nCONTROL_PLANE_TUNNEL_ID=stable-test-id\nAGENT_RUNTIME_WORKSPACE_ROOT={workspace}\n",
+            f"CONTROL_PLANE_API_KEY=test-key\nCONTROL_PLANE_TUNNEL_ID=stable-test-id\nAGENT_RUNTIME_WORKSPACE_ROOT={workspace}\nAGENT_RUNTIME_MAX_PARALLELISM=10\n",
         )
         self._fake_tunnel_client(bin_dir)
         capture = bin_dir / "capture.log"
@@ -129,7 +129,20 @@ fi
             ])
             self.assertEqual(sum(line == "env:CONTROL_PLANE_API_KEY=test-key" for line in lines), 2)
             self.assertEqual(sum(line == "env:CONTROL_PLANE_TUNNEL_ID=stable-test-id" for line in lines), 2)
+            self.assertEqual(sum(line == "env:AGENT_RUNTIME_MAX_PARALLELISM=10" for line in lines), 2)
             self.assertFalse((home / ".config/tunnel-client/agent-runtime.yaml").exists())
+
+    def test_start_rejects_invalid_parallelism_limit_instead_of_clamping(self) -> None:
+        for configured in ("", "0", "11", "-1", "2.0", "many"):
+            with self.subTest(configured=configured), tempfile.TemporaryDirectory() as raw:
+                repo, home, bin_dir, capture = self._start_fixture(Path(raw))
+                env_file = repo / ".env"
+                text = env_file.read_text().replace("AGENT_RUNTIME_MAX_PARALLELISM=10", f"AGENT_RUNTIME_MAX_PARALLELISM={configured}")
+                env_file.write_text(text)
+                result = self._run_start(repo, home, bin_dir, capture)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("AGENT_RUNTIME_MAX_PARALLELISM", result.stderr)
+                self.assertFalse(capture.exists())
 
     def test_repeated_start_preserves_env_bytes_and_never_creates_legacy_configuration(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

@@ -15,6 +15,7 @@ try:
 except ImportError:
     _ToolAnnotations = None
 
+from .capacity import observe_capacity
 from .executor import execute_terminal
 from .session import (
     control_terminal as _control_terminal,
@@ -24,7 +25,7 @@ from .session import (
 )
 from .timing import timed_tool_wrapper, timing_middleware
 
-PUBLIC_TOOL_NAMES = ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control")
+PUBLIC_TOOL_NAMES = ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "capacity_observer")
 mcp = MCPServer("Agent Runtime")
 
 
@@ -168,6 +169,13 @@ def terminal_control(
     """Write, interrupt, terminate, or resize one persistent PTY session."""
 
     return _control_terminal(session_id, action, data, rows, cols)
+
+
+@_tool(read_only=True, destructive=False, idempotent=True, open_world=False)
+def capacity_observer() -> dict[str, Any]:
+    """Report a bounded read-only advisory machine-capacity ceiling."""
+
+    return observe_capacity()
 
 
 def _install_timing_middleware() -> None:

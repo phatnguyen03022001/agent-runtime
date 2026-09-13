@@ -236,7 +236,7 @@ required = {
     "CONTROL_PLANE_TUNNEL_ID",
     "AGENT_RUNTIME_WORKSPACE_ROOT",
 }
-optional = {"AGENT_RUNTIME_MAX_ACTIVE_SESSIONS"}
+optional = {"AGENT_RUNTIME_MAX_ACTIVE_SESSIONS", "AGENT_RUNTIME_MAX_PARALLELISM"}
 values = {}
 for number, line in enumerate(lines, start=1):
     if not line or line.lstrip().startswith("#"):
@@ -256,6 +256,9 @@ if missing:
 workspace = Path(values["AGENT_RUNTIME_WORKSPACE_ROOT"])
 if not workspace.is_absolute() or not workspace.is_dir():
     fail("AGENT_RUNTIME_WORKSPACE_ROOT must be an absolute existing directory.")
+parallelism = values.get("AGENT_RUNTIME_MAX_PARALLELISM")
+if parallelism is not None and (re.fullmatch(r"[1-9][0-9]*", parallelism) is None or not 1 <= int(parallelism) <= 10):
+    fail("AGENT_RUNTIME_MAX_PARALLELISM must be an integer from 1 through 10.")
 
 runtime_env = {
     "PATH": runtime_path,
@@ -271,6 +274,8 @@ runtime_env = {
 }
 if values.get("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS") is not None:
     runtime_env["AGENT_RUNTIME_MAX_ACTIVE_SESSIONS"] = values["AGENT_RUNTIME_MAX_ACTIVE_SESSIONS"]
+if values.get("AGENT_RUNTIME_MAX_PARALLELISM") is not None:
+    runtime_env["AGENT_RUNTIME_MAX_PARALLELISM"] = values["AGENT_RUNTIME_MAX_PARALLELISM"]
 for key in ("USER", "TMPDIR", "LANG"):
     value = os.environ.get(key)
     if value:

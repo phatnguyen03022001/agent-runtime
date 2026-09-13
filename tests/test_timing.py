@@ -152,6 +152,7 @@ class TimingToolTests(unittest.TestCase):
             "terminal_start",
             "terminal_poll",
             "terminal_control",
+            "capacity_observer",
         ))
         self.assertIn(timing_middleware, server.mcp.middleware)
         self.assertEqual(

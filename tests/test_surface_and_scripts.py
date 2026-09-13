@@ -104,7 +104,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
                 ],
             )
 
-    def test_public_mcp_surface_is_exactly_four_terminal_tools(self) -> None:
+    def test_public_mcp_surface_adds_capacity_observer_to_four_terminal_tools(self) -> None:
         source = (ROOT / "agent_runtime/server.py").read_text()
         tree = ast.parse(source)
         assigned = {}
@@ -119,14 +119,14 @@ class SurfaceAndScriptsTests(unittest.TestCase):
 
         self.assertEqual(
             assigned.get("PUBLIC_TOOL_NAMES"),
-            ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control"),
+            ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "capacity_observer"),
         )
         for name in assigned["PUBLIC_TOOL_NAMES"]:
             self.assertIn(name, functions)
         for retired in ("get_head", "sync", "run_verify", "get_last_log"):
             self.assertNotIn(f"def {retired}(", source)
 
-    def test_supported_mcp_registration_exposes_exact_four_tools_with_conservative_annotations(self) -> None:
+    def test_supported_mcp_registration_exposes_capacity_observer_with_read_only_annotations(self) -> None:
         class FakeAnnotations:
             __annotations__ = {
                 "readOnlyHint": bool,
@@ -169,13 +169,14 @@ class SurfaceAndScriptsTests(unittest.TestCase):
             module = importlib.import_module("agent_runtime.server")
             self.assertEqual(
                 tuple(module.mcp.tools),
-                ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control"),
+                ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "capacity_observer"),
             )
             expected = {
                 "terminal_exec": (False, True, False, True),
                 "terminal_start": (False, True, False, True),
                 "terminal_poll": (False, False, False, False),
                 "terminal_control": (False, True, False, True),
+                "capacity_observer": (True, False, True, False),
             }
             for name, values in expected.items():
                 _, annotations = module.mcp.tools[name]
@@ -290,7 +291,9 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertIn("protected singleton", docs)
         self.assertIn("root/sudo", docs)
         self.assertIn("malicious local administrator", docs)
-        self.assertIn("four public tools", docs)
+        self.assertIn("five public tools", docs)
+        self.assertIn("AGENT_RUNTIME_MAX_PARALLELISM", docs)
+        self.assertIn("capacity_observer", docs)
 
     def test_native_app_bundle_is_menu_bar_only(self) -> None:
         import plistlib
