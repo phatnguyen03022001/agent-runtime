@@ -1,0 +1,130 @@
+protocol_version: 3
+
+task_id: TASK-0033
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: operator_research_request
+  gap_id: READ_ONLY_CAPACITY_OBSERVER_RESEARCH
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+execution_skills:
+  required: [executor, simplicity, verification, github-workflow]
+
+authority_sources:
+  - source: "phatnguyen03022001/agent-runtime@02c1cade3fba4dd1f0b658e147117561caccaa86:.agent/tasks/TASK-0032/review.yaml"
+    role: "Accepted baseline for current Runtime protection and workspace research."
+    precedence: 1
+  - source: "Operator direction: research a stateless read-only capacity observer for safe parallelism decisions."
+    role: "Research objective."
+    precedence: 2
+
+research_class: SPIKE
+
+objective: >-
+  Determine whether Agent Runtime should add a tiny stateless read-only Capacity Observer that samples stable macOS host/resource signals and returns a bounded capacity snapshot to Architect/Executor so independent task work can be parallelized safely for lower wall-clock time without reducing quality or creating persistent telemetry/state.
+
+research_questions:
+  - "Which macOS signals are stable, low-overhead and useful: CPU topology/load, memory pressure, swap pressure, thermal pressure, disk free space, and count of Runtime-owned active task children?"
+  - "Which sources are supported/stable APIs or commands versus private/deprecated/fragile interfaces?"
+  - "What is the latency/CPU overhead of one on-demand snapshot?"
+  - "Can a simple safe_parallelism recommendation improve wall-clock time for independent workloads versus serial execution?"
+  - "Compare serial, x2 and one higher bounded level where safe; record wall-clock, failures and pressure/thermal observations."
+  - "Separate semantic task independence from machine capacity: Architect decides dependency safety; Observer only reports capacity."
+  - "Can the observer be fully stateless: probe -> bounded JSON -> return, with no database, daemon, history store, queue or scheduler?"
+  - "What data should be omitted to avoid privacy leakage and useless telemetry?"
+  - "What is the smallest falsifiable safe_parallelism policy using coarse pressure signals plus a small integer recommendation?"
+  - "What technical debt and failure modes appear at one month and one year?"
+
+candidate_minimum:
+  behavior:
+    - "Read-only, on-demand and stateless."
+    - "No scheduling authority, no automatic worker spawning, no repo mutation and no persistent telemetry history."
+    - "Return only a bounded snapshot plus recommendation; Architect/Executor decides whether to use it."
+  forbidden_growth:
+    - "scheduler/queue framework"
+    - "background monitoring daemon"
+    - "persistent telemetry database"
+    - "global process inventory"
+    - "adaptive control system"
+
+research_method:
+  - "Fresh-bind exact task base and inspect current Runtime execution/session ownership paths."
+  - "Use official Apple documentation, local man pages and safe read-only host probes. Label claims CONFIRMED, MEASURED, INFERRED or UNKNOWN."
+  - "Use only harmless bounded synthetic workloads in a dedicated temporary root for parallelism benchmarks."
+  - "Measure repeated snapshot overhead and serial-vs-parallel wall-clock where practical."
+  - "Remove every synthetic artifact before completion."
+  - "Do not implement production observer code in revision 1."
+
+invariants:
+  - "Research only; do not alter live Runtime configuration or service state."
+  - "Do not access private user data or unrelated files."
+  - "Do not persist raw machine telemetry history or unrelated process metadata."
+  - "No privileged components, VM/container, new daemon, database, queue or scheduler."
+  - "No production source/product/test implementation change."
+  - "No branch, worktree, clone, tag, release or main promotion in the canonical repository."
+
+required_output:
+  report_path: .agent/tasks/TASK-0033/report.yaml
+  report_sections:
+    - "executive_verdict: RECOMMEND / RECOMMEND_WITH_CONDITIONS / DO_NOT_RECOMMEND"
+    - "evidence_classification: CONFIRMED / MEASURED / INFERRED / UNKNOWN"
+    - "stable_macos_metric_sources"
+    - "privacy_and_scope_boundary"
+    - "snapshot_schema_recommendation"
+    - "probe_overhead_benchmarks"
+    - "serial_vs_parallel_benchmarks"
+    - "cpu_memory_swap_thermal_findings"
+    - "task_graph_vs_capacity_separation"
+    - "safe_parallelism_policy"
+    - "failure_modes_and_counterarguments"
+    - "technical_debt_1_month_and_1_year"
+    - "statelessness_and_garbage_analysis"
+    - "minimal_next_implementation_slice_if_recommended"
+  publication: "Report-only non-force commit to dev; stop for Architect review."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Metric choices are grounded in supported/stable macOS facilities."
+  - id: AC-2
+    requirement: "Observer remains read-only and stateless."
+  - id: AC-3
+    requirement: "Probe overhead is empirically bounded or explicitly NOT_MEASURED."
+  - id: AC-4
+    requirement: "Parallelism claims are benchmarked rather than assumed."
+  - id: AC-5
+    requirement: "Task dependency and machine capacity remain separate decisions."
+  - id: AC-6
+    requirement: "Recommendation does not create telemetry garbage or privacy expansion."
+  - id: AC-7
+    requirement: "Safe parallelism policy is minimal, conservative and falsifiable."
+  - id: AC-8
+    requirement: "Research leaves canonical repo and host clean except the report artifact."
+
+verification:
+  authoritative_verification:
+    required: false
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
