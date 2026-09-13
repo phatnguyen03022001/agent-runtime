@@ -1,13 +1,13 @@
 protocol_version: 3
 
 task_id: TASK-0040
-task_revision: 2
-report_revision: 2
+task_revision: 3
+report_revision: 3
 state: REPORTED
 
 task_source:
   path: .agent/tasks/TASK-0040/task.yaml
-  commit: "8c2de71565f1abcf39498edcd35a9cb3641c59e1"
+  commit: "94c42c7b1f59e9ac35ae94d417e028f112e2e2bc"
 
 execution:
   repository: phatnguyen03022001/agent-runtime
@@ -15,8 +15,8 @@ execution:
     name: dev
     role: integration
   execution_surface: CHATGPT_LOCAL
-  authorized_base_head: "8c2de71565f1abcf39498edcd35a9cb3641c59e1"
-  final_execution_head: "0a4ff5ca5c923213a16cbd70aed3369456f33732"
+  authorized_base_head: "94c42c7b1f59e9ac35ae94d417e028f112e2e2bc"
+  final_execution_head: "280452e2c6d29b1aae860c90238fbb639f810766"
 
 skill_library:
   repository: phatnguyen03022001/agent-skills
@@ -39,47 +39,45 @@ authoritative_verification:
   required: false
   performed: false
   result: NOT_REQUIRED_FOR_THIS_EXECUTION_TASK
-  evidence: "TASK-0040 revision 2 defines no authoritative verifier for this execution phase."
+  evidence: "TASK-0040 revision 3 defines no authoritative verifier for this execution phase."
 
 pushed: false
 
 implementation:
-  commit: "0a4ff5ca5c923213a16cbd70aed3369456f33732"
-  parent: "8c2de71565f1abcf39498edcd35a9cb3641c59e1"
-  scope_summary: "Corrected only the two revision-required fs_read_batch defects: selected-range UTF-8 validity is independent of raw read chunk placement, and Darwin cwd trust-anchor acquisition rejects intermediate symlink redirection at open time."
-  utf8_range_correction:
-    mechanism: "Line/range selection now operates on raw bytes and strictly decodes only the complete selected returned bytes as UTF-8. Bytes outside the selected lines are not decoded."
-    regression_evidence:
-      - "The same invalid UTF-8 suffix after selected line 1 produces identical OK text whether it resides in the same 64 KiB read chunk or a later 3-byte chunk."
-      - "Invalid UTF-8 before start_line is ignored when it is outside selected content."
-      - "Invalid UTF-8 inside selected content returns INVALID_UTF8 with no partial text."
+  commit: "280452e2c6d29b1aae860c90238fbb639f810766"
+  parent: "94c42c7b1f59e9ac35ae94d417e028f112e2e2bc"
+  scope_summary: "Closed the remaining fs_read_batch cwd identity race by binding the directory identity observed during cwd validation to the descriptor acquired as the read trust anchor."
   cwd_anchor_correction:
-    mechanism: "The validated cwd is opened on Darwin with O_NOFOLLOW_ANY plus O_DIRECTORY, so symlinks in any cwd pathname component are rejected during descriptor acquisition; descriptor-relative item traversal remains unchanged."
-    regression_evidence: "A deterministic adversarial test replaces an intermediate cwd component with a symlink after validation and immediately before cwd open; descriptor acquisition fails closed with bounded cwd validation error instead of reading the redirected secret."
+    mechanism: "Cwd validation now returns the resolved directory plus its st_dev/st_ino identity. fs_read_batch opens the validated path with the existing Darwin O_NOFOLLOW_ANY directory flags, fstats the descriptor, and fails closed unless the opened directory identity exactly matches the identity established during validation. Existing terminal/session callers retain the original path-only helper contract."
+    regression_evidence:
+      - "Before the correction, a deterministic regression renamed the validated intermediate directory away, renamed a different ordinary directory into the same pathname immediately before trust-anchor open, and the test failed because RuntimeValidationError was not raised."
+      - "After the correction, the same pure-directory replacement regression fails closed before replacement content can be returned."
+      - "The prior intermediate-symlink cwd substitution regression and descriptor-relative item symlink substitution regression remain passing."
 
 verification:
-  focused_regressions:
+  tdd_regression:
+    command: "PYTHONPATH=. .venv/bin/python -m unittest tests.test_fs_read_batch_adversarial.FsReadBatchAdversarialTests.test_cwd_intermediate_directory_replacement_cannot_redirect_anchor -v"
+    result_before_fix: EXPECTED_FAIL
+    evidence: "The regression produced AssertionError: RuntimeValidationError not raised against the revision-3 base, proving the ordinary-directory replacement defect before production code changed."
+  focused_adversarial:
     command: "PYTHONPATH=. .venv/bin/python -m unittest discover -s tests -p 'test_fs_read_batch_adversarial.py' -v"
     result: PASS
-    tests: 6
+    tests: 7
     failures: 0
-    evidence: "Both new regressions were first observed failing for the reviewed defects, then passed after the correction together with existing adversarial filesystem tests."
+    evidence: "Pure-directory cwd replacement, prior symlink races, selected-range UTF-8, special-file rejection, output limits, and real-client cardinality all passed."
   affected_conformance:
-    commands:
-      - "PYTHONPATH=. .venv/bin/python -m unittest discover -s tests -p 'test_fs_read_batch.py' -v"
-      - "PYTHONPATH=. .venv/bin/python -m unittest discover -s tests -p 'test_fs_read_batch_mcp.py' -v"
-      - "PYTHONPATH=. .venv/bin/python -m unittest discover -s tests -p 'test_mcp_client_conformance.py' -v"
+    command: ".venv/bin/python -m unittest tests.test_fs_read_batch tests.test_fs_read_batch_mcp tests.test_mcp_client_conformance tests.test_terminal_exec tests.test_terminal_session -v"
     result: PASS
-    tests: 20
+    tests: 58
     failures: 0
-    evidence: "Existing fs_read_batch behavior, six-tool schema/annotations, deliberate ToolError behavior, typed item failures, and MCP 2.2 unexpected-exception sanitization remain intact."
+    evidence: "Affected fs_read_batch/MCP behavior and the unchanged path-only cwd validation contract used by terminal execution/session paths remain passing."
   full_repository:
     command: "./verify"
     result: PASS
-    tests: 162
+    tests: 163
     failures: 0
     exit_code: 0
-    evidence: "The full verifier was run once after correction bytes stabilized and after the corrected-production benchmark passed."
+    evidence: "The canonical verifier was run once after implementation bytes stabilized and after the fresh real-MCP benchmark passed."
 
 benchmark:
   result: PASS
@@ -90,35 +88,39 @@ benchmark:
     - "agent_runtime/executor.py lines 120-240"
     - "agent_runtime/session.py lines 180-310"
     - "tests/test_terminal_session.py lines 160-300"
-  equivalent_result_content_bytes: 22650
+  equivalent_result_content_bytes: 22592
   baseline_tool: terminal_exec
   baseline_strategy: "Exactly one terminal_exec MCP call handled the entire five-file workload. The child Python process streamed each requested UTF-8 range with newline='' and enumerate(..., 1), stopped after each end line, joined the five selected texts with ASCII RS, and wrote the combined result once to stdout."
   warmups_per_path: 5
   measured_samples_per_path: 30
   run_order: "interleaved; first path alternated each measured pair"
-  terminal_exec_median_ms: 58.7406455006203
-  fs_read_batch_median_ms: 4.998333499315777
-  absolute_improvement_ms: 53.742312001304526
-  relative_improvement_percent: 91.49084342414488
+  terminal_exec_median_ms: 64.672917
+  fs_read_batch_median_ms: 5.266917
+  absolute_improvement_ms: 59.406
+  relative_improvement_percent: 91.85607013829298
   required_absolute_improvement_ms: 20.0
   required_relative_improvement_percent: 20.0
-  fs_read_batch_min_ms: 4.706583998995484
-  fs_read_batch_max_ms: 5.20262499958335
+  fs_read_batch_min_ms: 4.804542
+  fs_read_batch_max_ms: 5.840375
   fs_read_batch_iqr_outliers_ms: []
-  terminal_exec_min_ms: 57.39141700178152
-  terminal_exec_max_ms: 76.10208299956867
+  terminal_exec_min_ms: 63.033583
+  terminal_exec_max_ms: 103.760709
   terminal_exec_iqr_outliers_ms:
-    - 57.39141700178152
-    - 76.10208299956867
-    - 62.14624999847729
-    - 58.200708001095336
+    - 85.731458
+    - 84.119959
+    - 82.519416
+    - 90.498334
+    - 103.760709
+    - 90.373042
+    - 87.519959
   threshold_verdict: "PASS: median relative improvement is at least 20% and absolute median improvement is at least 20 ms."
 
 scope_audit:
-  base: "8c2de71565f1abcf39498edcd35a9cb3641c59e1"
-  candidate: "0a4ff5ca5c923213a16cbd70aed3369456f33732"
+  base: "94c42c7b1f59e9ac35ae94d417e028f112e2e2bc"
+  candidate: "280452e2c6d29b1aae860c90238fbb639f810766"
   git_diff_check: PASS
   changed_files:
+    - agent_runtime/executor.py
     - agent_runtime/fs_read.py
     - tests/test_fs_read_batch_adversarial.py
   dependency_diff: NONE
@@ -144,45 +146,45 @@ mutation_boundaries:
 acceptance_evidence:
   - criterion_id: AC-1
     status: PROVEN
-    evidence: "Deterministic regression forces an invalid unselected suffix into the same read chunk and a later read chunk and gets the same OK result; invalid unselected prefix is ignored; invalid selected bytes return INVALID_UTF8 with no text."
+    evidence: "A deterministic adversarial regression replaces the validated intermediate cwd directory with a different ordinary directory at the trust-anchor open boundary. It failed against the base and passes after the correction without returning RENAMED_SECRET."
   - criterion_id: AC-2
     status: PROVEN
-    evidence: "cwd descriptor acquisition uses Darwin O_NOFOLLOW_ANY at open time. The adversarial intermediate-component replacement regression fails closed rather than following the replacement symlink and reading redirected content."
+    evidence: "The identity established during cwd validation is st_dev/st_ino and the opened cwd descriptor must match it by fstat before any item traversal. O_NOFOLLOW_ANY remains in force for symlink replacement."
   - criterion_id: AC-3
     status: PROVEN
-    evidence: "Affected behavior/conformance suites passed 20/20 and the exact base-to-candidate diff changes only fs_read_batch read/security internals plus focused regressions. Six-tool contracts, typed results/errors, descriptor-relative item traversal, special-file rejection, output ceilings, timing attribution, and MCP 2.2 sanitization remain unchanged."
+    evidence: "Focused adversarial checks passed 7/7, affected fs/MCP/terminal conformance passed 58/58, and the exact base-to-candidate diff changes only the cwd identity helper, fs_read_batch anchor check, and focused regression."
   - criterion_id: AC-4
     status: PROVEN
-    evidence: "./verify passed 162/162 with exit 0 on exact implementation candidate 0a4ff5ca5c923213a16cbd70aed3369456f33732 after bytes stabilized."
+    evidence: "./verify passed 163/163 with exit 0 on the exact stabilized implementation bytes before the implementation commit was created."
   - criterion_id: AC-5
     status: PROVEN
-    evidence: "Fresh corrected-production real-MCP benchmark used 5 warmups and 30 interleaved measured calls per path. terminal_exec median 58.7406455006203 ms versus fs_read_batch 4.998333499315777 ms; improvement 53.742312001304526 ms and 91.49084342414488%, exceeding both required thresholds."
+    evidence: "Fresh real-MCP benchmark used 5 warmups and 30 interleaved measured calls per path with identical 22592-byte result content. terminal_exec median 64.672917 ms versus fs_read_batch 5.266917 ms; improvement 59.406 ms and 91.85607013829298%."
   - criterion_id: AC-6
     status: PROVEN
-    evidence: "Exact revision-2 base-to-candidate diff is limited to agent_runtime/fs_read.py and tests/test_fs_read_batch_adversarial.py; no dependency, rejected capability, terminal_exec semantic change, live Runtime/config mutation, main promotion, tag, or release work is present."
+    evidence: "Exact revision-3 base-to-candidate diff is limited to three authorized files with no dependency, rejected capability, terminal_exec semantic change, live Runtime/config mutation, main promotion, tag, or release work."
   - criterion_id: AC-7
     status: PENDING_PUBLICATION
-    evidence: "Implementation commit is the direct child of the exact revision-2 base. The next authorized commit is report-revision-2-only; fresh pre/post publication remote ref proof is necessarily resolved outside this report commit."
+    evidence: "Implementation commit is the direct child of the exact revision-3 base. This report is the only authorized next commit; fresh pre/post publication remote-ref proof is resolved outside the report commit."
 
 executor_checks:
   - check_id: V-1
     result: PASS
-    evidence: "Focused adversarial regressions passed 6/6 and affected fs_read_batch/public-MCP conformance checks passed 20/20."
+    evidence: "The pure-directory replacement regression was observed failing before the fix; final adversarial suite passed 7/7 and affected conformance passed 58/58."
   - check_id: V-2
     result: PASS
-    evidence: "./verify passed 162 tests with 0 failures and exit 0 on the exact implementation candidate."
+    evidence: "./verify passed 163 tests with 0 failures and exit 0 in the single required final full-suite run."
   - check_id: V-3
     result: PASS
-    evidence: "Fresh corrected-production real-MCP benchmark measured 30 calls/path after 5 warmups; median delta 53.742312001304526 ms and relative improvement 91.49084342414488%."
+    evidence: "Fresh corrected-production real-MCP benchmark measured 30 calls/path after 5 warmups; median delta 59.406 ms and relative improvement 91.85607013829298%."
   - check_id: V-4
     result: PASS
-    evidence: "Exact 8c2de71565f1abcf39498edcd35a9cb3641c59e1-to-0a4ff5ca5c923213a16cbd70aed3369456f33732 diff inspection and git diff --check passed; only the two authorized correction surfaces changed and no forbidden scope/dependency/live mutation was introduced."
+    evidence: "Exact 94c42c7b1f59e9ac35ae94d417e028f112e2e2bc-to-280452e2c6d29b1aae860c90238fbb639f810766 diff inspection and git diff --check passed; only authorized correction surfaces changed and no forbidden scope/dependency/live mutation was introduced."
   - check_id: V-5
     result: PENDING_PUBLICATION
     evidence: "Fresh origin/dev and origin/main resolution immediately before non-force publication and again after publication is a consequence-boundary proof performed after this report-only commit exists."
 
 publication:
-  implementation_commit: "0a4ff5ca5c923213a16cbd70aed3369456f33732"
+  implementation_commit: "280452e2c6d29b1aae860c90238fbb639f810766"
   report_path: .agent/tasks/TASK-0040/report.yaml
   report_commit: null
   push_mode: non_force_dev
