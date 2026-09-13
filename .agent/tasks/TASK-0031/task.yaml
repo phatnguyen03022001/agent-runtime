@@ -1,12 +1,12 @@
 protocol_version: 3
 
 task_id: TASK-0031
-task_revision: 1
+task_revision: 2
 state: APPROVED
 
 origin:
   type: architect_review_followup
-  gap_id: CHECKOUT_ENV_AUTHORITY_ESCAPE
+  gap_id: ATOMIC_CONFIG_MIGRATION_AND_WORKSPACE_PERSISTENCE
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -30,45 +30,46 @@ execution_skills:
   required: [executor, simplicity, verification, github-workflow]
 
 authority_sources:
-  - source: "phatnguyen03022001/agent-runtime@ba91f89043a366ad8fe48b1d8b1037007c890ccf:.agent/tasks/TASK-0030/review.yaml"
-    role: "Architect-confirmed blocker: CODEX_LOCAL can open checkout-local .env for writing while protected Runtime assets outside the workspace are mechanically denied."
+  - source: "phatnguyen03022001/agent-runtime@008bf3e67ed56e7cdd7e60f55c9e730a65636f39:.agent/tasks/TASK-0031/review.yaml"
+    role: "Architect review requiring two material fixes: truly atomic first publication of runtime.env and persistence of the installer-derived workspace root during bootstrap."
     precedence: 1
-  - source: "phatnguyen03022001/agent-runtime@cd3d099344f817938d32ef230f77df9f698ffe10:.agent/tasks/TASK-0029/review.yaml"
-    role: "Accepted Runtime lifecycle, ownership, UI, protection and MCP baseline to preserve."
+  - source: "phatnguyen03022001/agent-runtime@319f1a378a95804aac3d168211c16d2e50fd6da4"
+    role: "Revision-1 source candidate; retain all accepted source/package behavior except the two review findings."
     precedence: 2
+  - source: "phatnguyen03022001/agent-runtime@ba91f89043a366ad8fe48b1d8b1037007c890ccf:.agent/tasks/TASK-0030/review.yaml"
+    role: "Architect-confirmed containment gap that TASK-0031 is closing."
+    precedence: 3
 
 structure_authority:
   status: RESOLVED
   source: "Per-user Application Support Runtime configuration authority."
-  rationale: "The installed Runtime must not depend on or trust a credential/config file inside a CODEX_LOCAL-writable checkout. Use one operator-owned per-user configuration file outside the repository workspace, without introducing Keychain, privileged helpers, a second service or another control plane."
+  rationale: "Keep the accepted revision-1 authority model: installed execution reads only $HOME/Library/Application Support/Agent Runtime/runtime.env; the checkout .env is bootstrap/source input only."
 
-objective: "Prepare a source-only migration from checkout-local .env authority to a per-user Runtime configuration owned outside the repository workspace, closing the TASK-0030 containment gap without changing the live Runtime in this revision."
+objective: "Revise the accepted TASK-0031 source candidate so first-time canonical Runtime configuration publication is actually atomic and the canonical file persists the installer-derived workspace root, while preserving existing canonical configuration and leaving the live Runtime untouched."
 
 canonical_runtime_config:
   path: "$HOME/Library/Application Support/Agent Runtime/runtime.env"
   requirements:
-    - "Regular file only; symlinks are rejected."
+    - "Regular non-symlink file only."
     - "Mode 0600."
     - "Contains CONTROL_PLANE_API_KEY, CONTROL_PLANE_TUNNEL_ID, AGENT_RUNTIME_WORKSPACE_ROOT and optional AGENT_RUNTIME_MAX_ACTIVE_SESSIONS."
     - "Secrets are never logged, committed, embedded into the app bundle, or copied into task evidence."
 
 scope:
   required_changes:
-    - "Fresh-bind exact base and preserve TASK-0029/TASK-0030 evidence, main and the currently serving Runtime."
-    - "Change installed Runtime source logic so package-owned execution derives canonical configuration from $HOME/Library/Application Support/Agent Runtime/runtime.env and never reads a checkout .env or checkout-path pointer."
-    - "Remove env-path.txt and checkout_dependency semantics from the packaged app. The built app must contain no absolute checkout path and no operator username-specific path."
-    - "Update installer source so a future operator-confirmed activation can atomically initialize runtime.env from the existing checkout .env only when runtime.env is absent; once initialized, runtime.env is authoritative and an existing canonical file is preserved/validated rather than overwritten from checkout."
-    - "Keep checkout .env available only for source-development/bootstrap input; it must not remain an installed Runtime dependency."
-    - "Preserve fail-closed parsing, tunnel identity semantics, workspace-root semantics, session-limit semantics, singleton lifecycle, protection boundary and exact four-tool MCP surface."
-    - "Add deterministic fixture coverage for migration, existing-config preservation, permissions/symlink rejection, package no-checkout-reference scanning, and installed-vs-source config selection."
-    - "Update README to describe the new authority model without publishing credentials or machine-specific absolute paths."
-    - "Run deterministic verification, Swift tests, release build/package and strict codesign. Publish source candidate/report non-force to dev and stop for Architect review."
+    - "Fresh-bind this exact revision-2 base and preserve the accepted revision-1 authority model, TASK-0029/TASK-0030 evidence, main, and the currently serving Runtime."
+    - "Fix first-time runtime.env initialization so the final canonical path is never exposed with partially written/truncated content. Publication must be atomic at the final path, must not overwrite an already-existing canonical file, and must preserve a concurrently appearing valid canonical file rather than clobber it."
+    - "Before first-time publication only, persist the installer-derived AGENT_RUNTIME_WORKSPACE_ROOT into the canonical runtime.env payload even if the checkout bootstrap input contains a blank, stale, or different workspace-root value."
+    - "When canonical runtime.env already exists, validate and preserve its bytes unchanged; do not silently rewrite its workspace root from the checkout or installer-derived value."
+    - "Add deterministic fixture coverage proving no partial canonical publication, interrupted/failed initialization cleanup, existing-file race/no-clobber behavior, first-bootstrap workspace-root persistence, blank/stale checkout workspace-root correction, and preservation of an existing canonical file."
+    - "Retain revision-1 package/source behavior: no env-path.txt, no checkout credential pointer in the app bundle, installed execution derives canonical runtime.env, fail-closed symlink/mode/config validation, exact four MCP tools, protection boundary, singleton lifecycle and tunnel identity semantics."
+    - "Run focused tests, ./verify, Swift tests, release build/package, package checkout-reference scan and strict codesign. Publish candidate/report non-force to dev and stop for Architect review."
 
 invariants:
-  - "Revision 1 is source/package/test only: no ./install.sh activation and no Runtime start/stop/restart/reload/cutover."
-  - "The live Runtime, tunnel, listener 127.0.0.1:8080 and current installed app remain untouched."
-  - "Do not create or modify the live canonical runtime.env in Application Support during this revision."
+  - "Revision 2 remains source/package/test only: no ./install.sh activation and no Runtime start/stop/restart/reload/cutover."
+  - "Do not create or modify the live canonical runtime.env under the operator's real Application Support directory."
   - "Do not mutate the existing checkout .env bytes, permissions or ownership."
+  - "The live Runtime, tunnel, listener 127.0.0.1:8080 and currently installed app remain untouched."
   - "No Keychain use, privileged helper, daemon redesign, dedicated OS account, container, database, queue, new network service or new dependency."
   - "TASK-0029 and TASK-0030 task/report/review artifacts remain unchanged."
   - "No branch, worktree, clone, tag, release or main promotion."
@@ -78,7 +79,8 @@ forbidden_changes:
   - "No tunnel/key/profile rotation or recreation."
   - "No weakening of Runtime ownership or protected-port semantics."
   - "No fallback from installed Runtime to checkout .env when canonical runtime.env is missing or invalid; installed execution must fail closed."
-  - "No secrets in Git, logs, reports, tests, fixtures or app bundle."
+  - "No secret material in Git, logs, reports, tests, fixtures or app bundle."
+  - "Do not broaden the revision beyond the two Architect review findings except for directly necessary tests/documentation."
 
 gap_policy:
   local_auto_fix: true
@@ -90,31 +92,31 @@ gap_policy:
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "Installed Runtime no longer has a checkout credential/config dependency in source/package design."
-    evidence_required: "Package/source scans show no env-path.txt, no checkout .env pointer and no machine-specific absolute checkout path in the app payload."
+    requirement: "First-time canonical config publication is truly atomic and no-clobber."
+    evidence_required: "Deterministic tests prove readers cannot observe a partially written final runtime.env, failed/interrupted initialization leaves no partial final authority, and an already/concurrently existing canonical file is preserved rather than overwritten."
   - id: AC-2
-    requirement: "Canonical per-user Runtime config behavior is deterministic and fail-closed."
-    evidence_required: "Tests prove runtime.env path derivation, regular-file/symlink checks, mode expectations and missing/invalid config failure behavior."
+    requirement: "First bootstrap persists the installer-derived workspace root."
+    evidence_required: "Fixture tests prove blank, stale, or different checkout AGENT_RUNTIME_WORKSPACE_ROOT input results in a first-time canonical runtime.env containing the derived workspace root while preserving credentials/session-limit semantics."
   - id: AC-3
-    requirement: "Future migration preserves operator authority safely."
-    evidence_required: "Fixture tests prove first initialization from checkout .env is atomic and 0600, while an existing runtime.env is preserved and not silently replaced from checkout."
+    requirement: "Existing canonical authority remains authoritative."
+    evidence_required: "Tests prove an existing valid mode-0600 runtime.env is byte-preserved and is not rewritten from checkout/bootstrap values."
   - id: AC-4
-    requirement: "Accepted Runtime contracts remain intact."
-    evidence_required: "Repository verification, exact four MCP tools, protected-runtime tests, Swift tests, release package and strict codesign remain green."
+    requirement: "Revision-1 accepted Runtime contracts remain intact."
+    evidence_required: "Package/source scans show no checkout config dependency; ./verify, exact four MCP tools, protected-runtime tests, Swift tests, release package and strict codesign remain green."
   - id: AC-5
     requirement: "Live infrastructure remains untouched."
-    evidence_required: "Before/after read-only evidence shows the serving Runtime remained live/ready with no lifecycle event attributable to TASK-0031 revision 1."
+    evidence_required: "Before/after read-only evidence shows the serving Runtime remains live/ready with no lifecycle/config mutation attributable to TASK-0031 revision 2."
   - id: AC-6
     requirement: "Publication is bounded and reconstructible."
-    evidence_required: "Exact base/candidate/report lineage, non-force dev publication, unchanged main, clean canonical checkout and no auxiliary worktree/clone."
+    evidence_required: "Exact base/candidate/report lineage, non-force dev publication, unchanged main, clean canonical checkout and no auxiliary worktree/clone are proven."
 
 verification:
   executor_checks:
     - id: CHECK-1
-      command_or_check: "Bind exact base; capture read-only live baseline and protected config metadata without printing secrets."
+      command_or_check: "Bind exact revision-2 base; capture read-only live baseline without printing secrets."
       required: true
     - id: CHECK-2
-      command_or_check: "Implement source-only config-authority migration and deterministic fixtures."
+      command_or_check: "Implement only the two review-required fixes and deterministic race/interruption/workspace fixtures."
       required: true
     - id: CHECK-3
       command_or_check: "Run focused tests, ./verify, Swift tests, release build/package, package reference scans and strict codesign."
