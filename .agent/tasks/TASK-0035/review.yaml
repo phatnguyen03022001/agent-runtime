@@ -1,0 +1,74 @@
+protocol_version: 3
+
+task_id: TASK-0035
+task_revision: 1
+review_revision: 1
+state: BLOCKED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0035/report.yaml
+  commit: "12dc18dee6d4516c2a08d86a9488c0c310605a65"
+  report_revision: 1
+
+reviewed_base:
+  commit: "748b930f74d947ec4fb6fe8b3d7975a585584e9b"
+
+independence:
+  reviewer_role: ARCHITECT
+  exact_report_identity_verified: true
+  remote_lineage_verified: true
+  live_mcp_surface_independently_verified: false
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  publication_scope: PASS
+  one_attempt_activation_boundary: PASS
+
+criterion_judgment:
+  AC-1: PASS
+  AC-2: PASS
+  AC-3: PASS
+  AC-4: BLOCKED
+  AC-5: BLOCKED
+  AC-6: PASS
+
+accepted_evidence:
+  - "Remote dev resolves to report commit 12dc18dee6d4516c2a08d86a9488c0c310605a65; remote main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "The report commit is exactly one report-only commit ahead of authorized base 748b930f74d947ec4fb6fe8b3d7975a585584e9b."
+  - "Executor reports exactly one activation attempt, no retry after transport loss, healthy/ready post-state, valid installed signature, installed manifest at the authorized revision, and valid private canonical runtime.env with AGENT_RUNTIME_MAX_PARALLELISM=2."
+  - "Executor reports the installed package source contains all five accepted handlers."
+  - "The same ChatGPT Local execution session continued to discover only four tools after cutover, so capacity_observer was not available for the required live invocation."
+
+blocker:
+  classification: CAPABILITY_BLOCKED
+  boundary: CHATGPT_LOCAL_HOST_TOOL_DISCOVERY
+  description: >-
+    The installed Runtime/package state is reported healthy at the authorized revision,
+    but the executing ChatGPT Local session did not refresh its mounted MCP tool surface
+    to include capacity_observer. Static package presence is insufficient for AC-4/AC-5.
+    No evidence currently proves a Runtime implementation defect, and another activation
+    attempt is not authorized by TASK-0035 revision 1.
+
+next_state:
+  task_0035_activation_attempt_consumed: true
+  installed_candidate_reported_healthy: true
+  live_five_tool_surface_proven: false
+  capacity_observer_live_call_proven: false
+  source_revision_required: false
+  main_promotion_authorized: false
+  automatic_execution: false
+
+recommended_resolution: >-
+  Re-prove the live MCP surface from a fresh ChatGPT Local host/session that performs new
+  connector discovery against the already-installed Runtime. Do not reinstall or repeat the
+  activation merely to refresh host-side tool discovery. If the fresh host still exposes four
+  tools, then open a separate bounded diagnostic task to determine whether the MCP server,
+  tunnel/control plane, or host connector caches the pre-cutover schema.
+
+notes:
+  - "This review does not accept AC-4 or AC-5 without live MCP evidence."
+  - "This review does not request source changes."
+  - "No main promotion is authorized."
