@@ -1,21 +1,19 @@
 protocol_version: 3
 task_id: TASK-0030
-task_revision: 1
-report_revision: 2
+task_revision: 2
+report_revision: 1
 state: REPORTED
 
 task_source:
   path: .agent/tasks/TASK-0030/task.yaml
-  commit: "e334176e41f5b53fcc4eb4ee3dc434311e5971c7"
+  commit: "9ee623e19f3fc13b54dc4b7cf66ff6a4243e121b"
 
 execution:
   repository: phatnguyen03022001/agent-runtime
-  branch:
-    name: dev
-    role: integration
-  authorized_base_head: "cd3d099344f817938d32ef230f77df9f698ffe10"
-  pre_execution_head: "cd3d099344f817938d32ef230f77df9f698ffe10"
-  final_execution_head: "cd3d099344f817938d32ef230f77df9f698ffe10"
+  branch: {name: dev, role: integration}
+  authorized_base_head: "9ee623e19f3fc13b54dc4b7cf66ff6a4243e121b"
+  pre_execution_head: "9ee623e19f3fc13b54dc4b7cf66ff6a4243e121b"
+  final_execution_head: "9ee623e19f3fc13b54dc4b7cf66ff6a4243e121b"
 
 skill_library:
   repository: phatnguyen03022001/agent-skills
@@ -23,159 +21,92 @@ skill_library:
 
 capability_preflight:
   phase: EXECUTION
-  required:
-    - repository_content_read
-    - repository_content_write
-    - local_file_read
-    - local_file_write
-    - local_process_read
-    - local_process_control
-    - local_network_read
-    - out_of_band_local_execution
-    - git_history_read
-    - git_commit
-    - non_force_git_push
-    - remote_ref_read
-    - repository_metadata_read
-  available:
-    - repository_content_read
-    - repository_content_write
-    - local_file_read
-    - local_file_write
-    - local_process_read
-    - local_process_control
-    - local_network_read
-    - out_of_band_local_execution
-    - git_history_read
-    - git_commit
-    - non_force_git_push
-    - remote_ref_read
-    - repository_metadata_read
+  required: [repository_content_read, repository_content_write, local_file_read, local_process_read, local_network_read, git_history_read, git_commit, non_force_git_push, remote_ref_read]
+  available: [repository_content_read, repository_content_write, local_file_read, local_process_read, local_network_read, git_history_read, git_commit, non_force_git_push, remote_ref_read]
   missing: []
   passed: true
 
-authoritative_verification:
-  required: false
-  performed: false
-  result: NOT_REQUIRED
-  evidence: "TASK-0030 declares no separate authoritative verifier."
-
+authoritative_verification: {required: false, performed: false, result: NOT_REQUIRED, evidence: "No separate authoritative verifier is declared."}
 pushed: false
 promoted_to_main: false
 
 wip_reconciliation:
   result: PASS
   canonical_checkout: /Users/tienphat/Developer/agent-runtime
-  primary_base: "cd3d099344f817938d32ef230f77df9f698ffe10"
+  primary_base: "9ee623e19f3fc13b54dc4b7cf66ff6a4243e121b"
   auxiliary_paths_reconciled: []
   checkout_initially_clean: true
-  worktree_evidence: "The canonical checkout was clean at exact handoff bind. No branch, worktree, clone, or alternate checkout was created."
+  worktree_evidence: "Clean exact-base canonical checkout; no branch, worktree, clone, or alternate checkout was created."
 
-live_runtime_baseline:
+live_runtime:
   launchagent_label: com.picmao.agent-runtime-runtime
   launchagent_path: /Users/tienphat/Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist
   launchagent_state: running
-  serving_pid: 70506
+  serving_pid: 39812
   serving_program: /Users/tienphat/Applications/Agent Runtime.app/Contents/Resources/runtime/start.sh
   listener: 127.0.0.1:8080
   health: live
   readiness: ready
   tunnel_fingerprint: 6aa2b81d6dd8
+  mcp_surface: [terminal_exec, terminal_start, terminal_poll, terminal_control]
   identity_disclosure: false
 
 containment_probes:
-  effective_boundary: "The current CODEX_LOCAL shell is under a kernel-enforced macOS Seatbelt boundary: /bin/ps execution was denied with operation not permitted, and a permission-only kill -0 probe against the positively identified serving PID 70506 was denied with operation not permitted."
+  effective_boundary: "Current CODEX_LOCAL behavior empirically identifies an active kernel-enforced macOS Seatbelt boundary: ps process enumeration and permission-only kill -0 against PID 39812 returned Operation not permitted."
   full_access_bypass: false
-  process_control_probe: "DENIED; kill -0 70506 returned operation not permitted and did not send a lifecycle-changing signal."
+  process_control_probe: "DENIED; kill -0 39812 returned errno 1 Operation not permitted and sent no signal."
   write_capability:
-    checkout_env:
-      path: /Users/tienphat/Developer/agent-runtime/.env
-      result: OPENED_WRITE_CAPABILITY
-      operation: "os.open with O_WRONLY only; no bytes were written"
-    desired_state:
-      path: /Users/tienphat/Library/Application Support/Agent Runtime/protected-runtime-running
-      result: DENIED
-      errno: 1
-      error: Operation not permitted
-    launchagent_plist:
-      path: /Users/tienphat/Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist
-      result: DENIED
-      errno: 1
-      error: Operation not permitted
-    installed_payload:
-      path: /Users/tienphat/Applications/Agent Runtime.app/Contents/Resources/runtime/start.sh
-      result: DENIED
-      errno: 1
-      error: Operation not permitted
-  service_lifecycle_surface: "Read-only launchctl print succeeded and showed the canonical LaunchAgent running. No lifecycle-changing launchctl action was issued."
-  protected_port_surface: "Read-only lsof showed exactly one tunnel-client listener on 127.0.0.1:8080 and a read-only health request returned live. No bind, free, occupy, or rebind operation was attempted."
-  protected_asset_postcheck:
-    result: PASS
-    observations:
-      - path: /Users/tienphat/Developer/agent-runtime/.env
-        pre: "size=364|mtime=1789254882|ctime=1789254882|mode=100600|uid=501|gid=20|sha256=ca507c06e3fd6663e993db6bbf3a62ca21ab022c9b3b7aeeef1934fc4634ac28"
-        post: "size=364|mtime=1789254882|ctime=1789254882|mode=100600|uid=501|gid=20|sha256=ca507c06e3fd6663e993db6bbf3a62ca21ab022c9b3b7aeeef1934fc4634ac28"
-      - path: /Users/tienphat/Library/Application Support/Agent Runtime/protected-runtime-running
-        pre: "size=0|mtime=1789254962|ctime=1789254962|mode=100600|uid=501|gid=20|sha256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        post: "size=0|mtime=1789254962|ctime=1789254962|mode=100600|uid=501|gid=20|sha256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      - path: /Users/tienphat/Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist
-        pre: "size=1388|mtime=1789254888|ctime=1789254888|mode=100600|uid=501|gid=20|sha256=29c5fed35d67ed1bbdca21906e0e62acff60dc511e36ff01abbd8e06fb42bcda"
-        post: "size=1388|mtime=1789254888|ctime=1789254888|mode=100600|uid=501|gid=20|sha256=29c5fed35d67ed1bbdca21906e0e62acff60dc511e36ff01abbd8e06fb42bcda"
-      - path: /Users/tienphat/Applications/Agent Runtime.app/Contents/Resources/runtime/start.sh
-        pre: "size=11992|mtime=1789254885|ctime=1789254887|mode=100755|uid=501|gid=20|sha256=38ca090300dc0b78c390c8bd3e0d1f43c5e29c218457241551d3f4053bb8304b"
-        post: "size=11992|mtime=1789254885|ctime=1789254887|mode=100755|uid=501|gid=20|sha256=38ca090300dc0b78c390c8bd3e0d1f43c5e29c218457241551d3f4053bb8304b"
-    conclusion: "All four probes were non-writing. Hash, size, mtime, ctime, mode, uid, and gid observations remained unchanged; no protected bytes, metadata, permissions, ownership, or location were mutated."
+    canonical_runtime_env: {path: "/Users/tienphat/Library/Application Support/Agent Runtime/runtime.env", result: DENIED, errno: 1, error: "Operation not permitted"}
+    desired_state: {path: "/Users/tienphat/Library/Application Support/Agent Runtime/protected-runtime-running", result: DENIED, errno: 1, error: "Operation not permitted"}
+    launchagent_plist: {path: "/Users/tienphat/Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist", result: DENIED, errno: 1, error: "Operation not permitted"}
+    installed_payload: {path: "/Users/tienphat/Applications/Agent Runtime.app/Contents/Resources/runtime/start.sh", result: DENIED, errno: 1, error: "Operation not permitted"}
+  checkout_env: {path: /Users/tienphat/Developer/agent-runtime/.env, result: OPENED_WRITE_CAPABILITY, operation: "Non-writing O_WRONLY open only; no bytes written. Not a live installed authority under accepted TASK-0031."}
+  service_lifecycle_surface: "Read-only launchctl print succeeded; no lifecycle-changing action was issued."
+  protected_port_surface: "Read-only lsof showed exactly one tunnel-client listener on 127.0.0.1:8080; no bind/free/occupy/rebind was attempted."
+
+protected_asset_postcheck:
+  result: PASS
+  observations:
+    - {path: "/Users/tienphat/Library/Application Support/Agent Runtime/runtime.env", metadata: "Regular file mode 0600 uid 501 gid 20 size 364", sha256: ca507c06e3fd6663e993db6bbf3a62ca21ab022c9b3b7aeeef1934fc4634ac28}
+    - {path: "/Users/tienphat/Library/Application Support/Agent Runtime/protected-runtime-running", metadata: "Regular file mode 0600 uid 501 gid 20 size 0", sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855}
+    - {path: "/Users/tienphat/Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist", metadata: "Regular file mode 0600 uid 501 gid 20 size 1144", sha256: 57c20f838c80b5edcddede87d3c886e73cc95ae6f518468795428cec8bd39809}
+    - {path: "/Users/tienphat/Applications/Agent Runtime.app/Contents/Resources/runtime/start.sh", metadata: "Regular file mode 0755 uid 501 gid 20 size 12323", sha256: c3f397d49e0aab9ae37ea92eaaa3a4c4b1b0786c5d6e6be8611e1d8572c970bf}
+    - {path: /Users/tienphat/Developer/agent-runtime/.env, metadata: "Regular file mode 0600 uid 501 gid 20 size 364", sha256: ca507c06e3fd6663e993db6bbf3a62ca21ab022c9b3b7aeeef1934fc4634ac28}
+  conclusion: "All capability probes were non-writing; observed hashes and metadata remained unchanged."
+
+checkout_authority:
+  result: PASS
+  evidence: "Installed --serve selects Application Support runtime.env; plist points to package-owned start.sh; installed payload/plist scan found no checkout path, env-path.txt, or checkout_dependency reference."
+
+ordinary_workspace_fixture:
+  result: PASS
+  evidence: "Disposable workspace-local directory/file create-write-read-remove operations passed without bypass; checkout was clean afterward."
+
+verification:
+  repository_verify: {result: INCONCLUSIVE, evidence: "PYTHONDONTWRITEBYTECODE=1 ./verify started, but sandbox-related process/PTY test errors prevented a complete summary within the bounded window."}
+  exact_four_tool_surface: PASS
+  deterministic_protection_tests: PASS
+  note: "No source, product, or test change was required; execution remained report-only."
 
 acceptance_evidence:
-  - criterion_id: AC-1
-    status: PROVEN
-    evidence: "Current-session kernel behavior identified an active macOS Seatbelt boundary. Process enumeration and permission-only process-control access were denied, and no full-access bypass was active."
-  - criterion_id: AC-2
-    status: PROVEN
-    evidence: "The permission-only kill -0 probe against canonical serving PID 70506 returned operation not permitted. No signal or lifecycle action was sent."
-  - criterion_id: AC-3
-    status: BLOCKED
-    evidence: "The checkout-local .env accepted O_WRONLY open capability, although the probe wrote no bytes. Desired state, LaunchAgent plist, and installed payload probes were denied. Because one required dangerous write capability remains available, the task must stop BLOCKED."
-  - criterion_id: AC-4
-    status: NOT_PERFORMED
-    evidence: "Execution stopped at the required containment blocker before adding or running a repository fixture."
-  - criterion_id: AC-5
-    status: NOT_PROVEN
-    evidence: "Before and after safe probing retained LaunchAgent state running, serving PID 70506, one listener on 127.0.0.1:8080, health live, and readiness ready with no lifecycle action. The current-session probe did not independently enumerate the MCP child or recompute the tunnel fingerprint without disclosing tunnel identity material."
-  - criterion_id: AC-6
-    status: BLOCKED
-    evidence: "A verifier cannot truthfully report sufficient containment while CODEX_LOCAL can open the protected checkout .env for writing. No architecture workaround or permission mutation was introduced."
-  - criterion_id: AC-7
-    status: NOT_PROVEN
-    evidence: "The report is pending its authorized commit and non-force publication; final remote lineage and publication closure are not asserted in this pre-publication report."
+  - {criterion_id: AC-1, status: PROVEN, evidence: "Current-session Seatbelt behavior denied ps and kill -0; no full-access bypass was requested or active."}
+  - {criterion_id: AC-2, status: PROVEN, evidence: "Permission-only kill -0 against canonical PID 39812 was denied; service remained healthy."}
+  - {criterion_id: AC-3, status: PROVEN, evidence: "O_WRONLY probes were denied for all four live authority assets; hashes/metadata were unchanged."}
+  - {criterion_id: AC-4, status: PROVEN, evidence: "Installed service uses Application Support runtime.env and has no checkout config pointer/dependency."}
+  - {criterion_id: AC-5, status: PROVEN, evidence: "Disposable workspace-local fixture passed without bypass."}
+  - {criterion_id: AC-6, status: PROVEN, evidence: "One listener, running canonical service, live/ready endpoints, accepted fingerprint, exact four tools, and no task lifecycle action were observed."}
+  - {criterion_id: AC-7, status: NOT_PROVEN, evidence: "Report commit, publication, final remote lineage, unchanged main, and final clean-checkout closure follow authorship."}
 
 executor_checks:
-  - check_id: CHECK-1
-    result: PASS
-    evidence: "Fresh exact bind proved HEAD=origin/dev=cd3d099344f817938d32ef230f77df9f698ffe10, origin/main=c49d777efa09db7f6c51bd8d8616db4623499fb8, task source identity, accepted TASK-0029 review identity, clean canonical checkout, and live Runtime state."
-  - check_id: CHECK-2
-    result: BLOCKED
-    evidence: "Safe native-containment probes proved process-control denial and three protected write denials, but the checkout .env O_WRONLY probe opened successfully without writing bytes."
-  - check_id: CHECK-3
-    result: NOT_PERFORMED
-    evidence: "No implementation verifier or deterministic test was added or run after the required containment condition failed."
-  - check_id: CHECK-4
-    result: PASS
-    evidence: "No lifecycle signal, service action, protected-port mutation, tunnel change, or protected-asset write was performed. Final safe observation retained serving PID 70506, one listener, health live, and readiness ready."
-  - check_id: CHECK-5
-    result: NOT_PROVEN
-    evidence: "Report validation, non-force publication, final dev identity, unchanged main, and clean checkout closure occur after this report is committed and pushed."
+  - {check_id: CHECK-1, result: PASS, evidence: "Exact revision-2 base 9ee623e; origin/dev matched; origin/main was c49d777efa09db7f6c51bd8d8616db4623499fb8; accepted TASK-0031 review identity verified."}
+  - {check_id: CHECK-2, result: PASS, evidence: "Containment, process, live-asset, fixture, service, port, health, and readiness probes completed without lifecycle mutation."}
+  - {check_id: CHECK-3, result: PARTIAL, evidence: "Exact four-tool and deterministic protection checks passed; full ./verify did not complete because sandbox process/PTY tests errored."}
+  - {check_id: CHECK-4, result: PASS, evidence: "Fresh postchecks retained singleton service, live/ready endpoints, accepted fingerprint, and unchanged protected hashes/metadata."}
+  - {check_id: CHECK-5, result: NOT_PROVEN, evidence: "Publication is pending report commit and non-force push; main promotion is not authorized."}
 
-changed_files:
-  - .agent/tasks/TASK-0030/report.yaml
-
+changed_files: [.agent/tasks/TASK-0030/report.yaml]
 deviations_from_task:
-  - "Execution stopped before the ordinary workspace fixture and repository verification because AC-3 produced the task-defined BLOCKING result."
+  - "No source/product/test change was made; evidence-only re-audit was sufficient."
+  - "Full ./verify did not reach a complete summary within the bounded window due sandbox process/PTY errors; retained as an Architect-review evidence limitation."
 
-blockers:
-  - category: BLOCKING
-    path: /Users/tienphat/Developer/agent-runtime/.env
-    disposition: BLOCKED
-    evidence: "A permission-only os.open(path, O_WRONLY) succeeded in the current CODEX_LOCAL shell. No bytes were written, and pre/post protected-asset observations are identical. Closing this gap requires a separate Architect/operator decision about the checkout-local .env authority or a new containment architecture, both forbidden by TASK-0030."
-
-result: BLOCKED
+result: NEEDS_REVIEW
