@@ -1,0 +1,395 @@
+protocol_version: 3
+task_id: TASK-0032
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0032/task.yaml
+  commit: "f6004dd5b87a59bc03b47c7db26295e6a3ee9f7d"
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: dev, role: integration}
+  authorized_base_head: "f6004dd5b87a59bc03b47c7db26295e6a3ee9f7d"
+  final_execution_head: "f6004dd5b87a59bc03b47c7db26295e6a3ee9f7d"
+  execution_surface: CHATGPT_LOCAL
+  research_class: SPIKE
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+  required: [executor, simplicity, verification, github-workflow]
+
+authoritative_verification: {required: false, performed: false, result: NOT_REQUIRED}
+pushed: false
+promoted_to_main: false
+
+executive_verdict: DO_NOT_RECOMMEND
+verdict_rationale: >-
+  Do not adopt the exact proposed architecture as Agent Runtime's production security foundation. Disposable per-task workspaces are empirically cheap on this repository and improve cleanliness and reproducibility, and custom Seatbelt profiles mechanically confined the tested non-PTY and PTY descendant trees. However, the dynamic custom policy mechanism available on this host is sandbox-exec/SBPL: the host marks sandbox-exec DEPRECATED, the current SDK marks sandbox.h deprecated and no-longer-supported, and Apple DTS states custom sandbox facilities and SBPL are not supported for third-party product development. The supported App Sandbox is real and inherited by children, but this spike did not prove it can express Agent Runtime's dynamic arbitrary task-root policy while preserving the four generic engineering tools. Adopting now would add workspace lifecycle and unsupported policy debt while current Runtime protection still has to remain.
+
+evidence_classification:
+  CONFIRMED:
+    - "executor.py:159-163 states the cwd guard is not filesystem confinement; terminal_exec spawns argv directly with shell=False."
+    - "session.py:119-143 applies the same cwd guard to PTY processes; terminal_control(write) currently applies Runtime protection before delivering bytes."
+    - "protection.py implements shell parsing, wrapper handling, canonical Runtime identity recognition, service/process protection and protected-listener patterns."
+    - "protection.py is 327 lines and tests/test_protected_runtime.py is 212 lines at the exact base."
+    - "Accepted TASK-0030 proves CODEX_LOCAL has a separate mechanical Seatbelt boundary; accepted TASK-0031 places live runtime.env authority outside the checkout."
+    - "Apple documents App Sandbox as supported kernel-enforced access control and documents child-process inheritance."
+    - "Git documents linked-worktree administrative metadata and warns that shared/reference clones depend on source object lifetime."
+  MEASURED:
+    - "Host: macOS 26.6.2 build 25G83, arm64, 16 GiB RAM, Git 2.55.0."
+    - "/usr/bin/sandbox-exec exists; its local man page marks it DEPRECATED."
+    - "Current SDK sandbox.h says the header is deprecated and may be removed; related APIs are annotated No longer supported."
+    - "Non-PTY synthetic profile allowed an allowed-subtree write but denied Python child and shell grandchild writes to a denied subtree."
+    - "PTY synthetic profile allowed an allowed-subtree write but denied a shell grandchild write with Operation not permitted."
+    - "Eight-run medians: detached worktree create 31.342 ms / 1360 KiB / cleanup 13.250 ms; shared clone 39.832 ms / 1480 KiB / 8.356 ms; independent no-hardlinks clone 75.270 ms / 3392 KiB / 26.525 ms."
+    - "Crash-like deletion of a linked-worktree directory left stale metadata until git worktree prune."
+    - "Five fresh-workspace focused-test medians: worktree 4634.225 ms, shared clone 4621.433 ms, independent clone 4608.838 ms; all runs passed 26/26 tests."
+    - "Current checkout is 425268 KiB, including .venv 54072 KiB and build 36028 KiB; ignored state also includes macos/.build and Python caches."
+    - "PYTHONDONTWRITEBYTECODE=1 ./verify passed 118/118 tests in 55.266 s plus compile and shell-syntax checks."
+    - "All TASK-0032 synthetic roots were removed; final residue scan was empty."
+  INFERRED:
+    - "Whole-root deletion after durable publication materially reduces dirty-checkout recovery and stale generated-state ambiguity."
+    - "Independent local clone is the cleanest measured Git strategy because task metadata and object lifetime are self-contained; its roughly 44 ms median create penalty over worktree is negligible beside multi-second tests here."
+    - "A useful custom SBPL policy would likely accumulate tool-specific filesystem, network and process exceptions, moving complexity rather than eliminating it."
+  UNKNOWN:
+    - "Whether a fully supported Apple API can express the exact dynamic per-task file/process/network boundary without forbidden heavier infrastructure."
+    - "Whether every compiler, package manager, debugger, code-signing flow and future build tool remains usable under a minimal supported policy."
+    - "When Apple might remove or materially change sandbox-exec/custom-profile behavior."
+    - "Cross-repository dependency-install and full build-cache cold costs."
+
+current_architecture_costs:
+  security: "CHATGPT_LOCAL task argv has no general filesystem confinement; Runtime self-protection is partly semantic/heuristic plus governance."
+  protection_code_lines: 327
+  focused_protection_test_lines: 212
+  persistent_checkout_kib: 425268
+  note: "Timeout/process cleanup, PTY lifecycle, bounded I/O, env filtering and ownership semantics remain required independently of sandboxing."
+
+candidate_architecture_minimum:
+  classification: INFERRED
+  components:
+    - "One fixed Runtime-owned task root with strict path, realpath and non-symlink cleanup guards."
+    - "One self-contained exact-base Git workspace per task."
+    - "One OS sandbox launch boundary around the one-shot child and PTY child so descendants inherit it."
+    - "Existing timeout/process cleanup, PTY, bounded-I/O, env filtering, task authority, verification and non-force publication flow."
+    - "One small ownership marker inside each task root for crash classification; no registry or database."
+  blocking_problem: "The measured dynamic custom policy mechanism is not a supported Apple product API."
+
+seatbelt_boundary_and_supportability:
+  process_boundary:
+    classification: MEASURED
+    finding: "The sandbox must wrap the direct task command or PTY child itself. Tested shell, Python and subprocess descendants inherited the deny rule; polling and PTY control do not create a new process boundary."
+    unproven: [complete_process_control_rules, complete_network_rules, all_developer_toolchains, sandbox_extension_edge_cases]
+  custom_profile:
+    classification: CONFIRMED
+    host_binary: /usr/bin/sandbox-exec
+    status: DEPRECATED_UNSUPPORTED_FOR_PRODUCT_FOUNDATION
+    evidence:
+      - "Local sandbox-exec manual marks the command DEPRECATED."
+      - "Local current SDK sandbox.h says deprecated, may be removed, and related APIs are no longer supported."
+      - "Apple DTS states custom sandbox facilities are not supported for third-party development, SBPL is undocumented, and product dependence is unwise."
+  supported_app_sandbox:
+    classification: CONFIRMED
+    facts: [kernel_enforced, child_processes_inherit]
+    exact_candidate_fit: UNKNOWN
+  sources:
+    - "local macOS 26.6.2 sandbox-exec manual"
+    - "local current SDK usr/include/sandbox.h"
+    - "https://developer.apple.com/documentation/xcode/configuring-the-macos-app-sandbox"
+    - "https://developer.apple.com/documentation/security/discovering-and-diagnosing-app-sandbox-violations"
+    - "https://developer.apple.com/forums/thread/661939"
+
+workspace_strategy_comparison:
+  method:
+    classification: MEASURED
+    fixture: "Disposable exact-base bare repository inside one run-owned scratch root; eight create/cleanup repetitions per strategy; all fixture roots removed."
+  detached_worktree:
+    create_ms_median: 31.342
+    create_ms_max_of_8: 37.565
+    disk_kib_median: 1360.0
+    cleanup_ms_median: 13.250
+    commit_possible: true
+    strengths: [fastest_creation, smallest_measured_workspace]
+    liabilities:
+      - "Linked administrative metadata lives under the source repository Git directory, so using the canonical checkout as source violates the cleanest read-only-source model."
+      - "Crash-like directory disappearance left stale worktree metadata until Git pruning."
+    disposition: "Do not use against the canonical checkout. A dedicated bare mirror could avoid canonical metadata mutation but adds another lifecycle/cache component."
+  shared_or_reference_clone:
+    create_ms_median: 39.832
+    create_ms_max_of_8: 42.032
+    disk_kib_median: 1480.0
+    cleanup_ms_median: 8.356
+    commit_possible: true
+    strengths: [low_disk, no_linked_worktree_registry]
+    liabilities:
+      - "Object alternates couple workspace correctness to source object lifetime."
+      - "Official Git documentation warns shared clones can become corrupt if source objects become unreachable and are pruned."
+    disposition: "Reject for task isolation; the measured speed and disk benefit is too small for object-lifetime coupling."
+  independent_local_clone_no_hardlinks:
+    create_ms_median: 75.270
+    create_ms_max_of_8: 100.054
+    disk_kib_median: 3392.0
+    cleanup_ms_median: 26.525
+    commit_possible: true
+    strengths: [self_contained_git_metadata, self_contained_objects, no_source_worktree_registry, simple_whole_root_cleanup]
+    liabilities:
+      - "Highest measured create and disk cost of the three."
+      - "A local-source clone must verify and bind its publication remote to canonical GitHub before publication."
+    disposition: "Preferred measured strategy if disposable workspaces are pursued independently."
+  official_git_sources:
+    - "https://git-scm.com/docs/git-worktree"
+    - "https://git-scm.com/docs/git-clone"
+
+security_comparison:
+  current_baseline:
+    classification: CONFIRMED
+    strengths:
+      - "Runtime-specific semantic protection knows canonical identity, service ownership, process relationships and protected listener intent."
+      - "Focused tests cover compound shell, wrapper and PTY write bypass classes."
+      - "Live Runtime configuration authority is outside the source checkout."
+    weaknesses:
+      - "No general host filesystem confinement for CHATGPT_LOCAL task argv."
+      - "Command classification must understand bypass syntax and wrappers, creating parser maintenance debt."
+  candidate_custom_seatbelt:
+    classification: MEASURED
+    strengths:
+      - "Mechanical descendant-tree filesystem denial worked for both non-PTY and PTY synthetic probes."
+      - "The rule is independent of command spelling for the tested file operations."
+    weaknesses:
+      - "The exact custom policy mechanism is deprecated and unsupported as a product foundation."
+      - "Complete process and network equivalence to current Runtime-specific protection was not proven."
+      - "Developer-tool compatibility exceptions can widen the policy and reintroduce complexity."
+  persistent_checkout_plus_current_hardening:
+    classification: INFERRED
+    finding: "Operationally dirtier and more heuristic, but lower platform-coupling debt than adopting the exact custom-profile candidate today."
+  conclusion: "Mechanical security could improve if a stable supported custom boundary existed; current supportability prevents treating the measured gain as a durable production improvement."
+
+garbage_and_cleanup_comparison:
+  current:
+    classification: MEASURED
+    evidence: "The checkout occupies 425268 KiB and contains ignored dependency, build and interpreter cache state."
+    limitation: "Those bytes are not proven to be stale or produced by any particular Executor task."
+  disposable_success_path:
+    classification: INFERRED
+    benefit: "Whole-root destruction removes task-local untracked files, build products, logs and caches without selective cleanup heuristics, leaving the verified Git/evidence outputs as the durable result."
+  failure_path:
+    classification: INFERRED
+    limitation: "Immediate deletion of failed or unpublished work destroys useful diagnostic/WIP state, so safe failure handling cannot promise zero residue without accepting data loss."
+  synthetic_cleanup: PASS
+
+latency_and_resource_comparison:
+  workspace_creation:
+    classification: MEASURED
+    conclusion: "Independent-clone creation costs about 43.9 ms more than detached worktree at median on this repository, negligible next to the measured multi-second test path."
+  focused_cold_test:
+    classification: MEASURED
+    command_shape: "Fresh workspace; Python unittest for terminal execution plus Runtime protection tests; bytecode writes disabled."
+    runs_per_strategy: 5
+    tests_per_run: 26
+    all_runs: PASS
+    worktree_median_ms: 4634.225
+    shared_clone_median_ms: 4621.433
+    independent_clone_median_ms: 4608.838
+    interpretation: "No meaningful strategy-specific focused-test penalty was observed."
+  dependency_install_and_full_build_cache:
+    classification: UNKNOWN
+    result: NOT_MEASURED
+    reason: "Dependency installation and large toolchain build-cache costs are repository, network and cache-shape dependent; this spike does not guess them."
+  cache_recommendation: "Do not add a shared cache manager now. Admit cache sharing only after real measurements show material need and the cache can be shared without weakening the boundary."
+
+quality_and_reproducibility_comparison:
+  clean_base:
+    classification: INFERRED
+    benefit: "Exact-base workspace creation prevents pre-existing dirty files from silently changing source selection."
+  verified_delta:
+    classification: INFERRED
+    benefit: "Publishing only verified commits and evidence reduces ambiguity about which persistent files belong to a successful task."
+  limits:
+    - "A clean Git tree does not control HOME state, global caches, toolchain versions, external services or network nondeterminism."
+    - "A failed workspace can be more useful for debugging than logs alone."
+    - "Larger repositories may depend materially on caches not measured here."
+  current_verification:
+    classification: MEASURED
+    result: PASS
+    tests: "118/118"
+    unittest_elapsed_seconds: 55.266
+
+crash_and_orphan_cleanup:
+  classification: INFERRED
+  minimal_design_if_workspace_only_is_pursued:
+    owned_root: "Use one fixed Runtime-owned task-workspace root and never recursively remove outside it."
+    marker: "Keep one small marker inside each task root with schema version, task/run identity, exact base, creation time and lifecycle state; do not add a database or registry."
+    safe_automatic_cleanup:
+      - "A published-success orphan may be removed only after fresh remote proof of the exact durable publication and path/ownership/non-symlink checks."
+      - "A provably empty or unmodified abandoned workspace may be removed after proving exact ownership and absence of a live task process."
+    retain_for_recovery:
+      - "A failed or unpublished workspace after a Runtime/process crash must be retained because it can contain the only useful WIP or evidence."
+    reboot_note: "Reboot establishes that the previous task processes are gone, but does not establish that unpublished WIP is disposable."
+  strategy_effect:
+    detached_worktree: "Requires source-repository metadata pruning in addition to directory cleanup."
+    independent_clone: "Leaves one self-contained directory and therefore has the simpler orphan boundary."
+
+publication_and_deletion_boundary:
+  successful_task:
+    classification: INFERRED
+    destroy_workspace: ALWAYS_AFTER_DURABLE_PUBLICATION_PROOF
+    prerequisites:
+      - "Task verification passed against the exact candidate implementation head."
+      - "Required implementation, report and evidence commits exist in the disposable repository."
+      - "Authorized non-force publication succeeded."
+      - "A fresh remote-ref read proves the authorized ref equals the intended published lineage."
+      - "Any separately required verifier/evidence output that must survive deletion is durable outside the task workspace."
+    reason: "Before this point the workspace may contain the only copy of a verified commit or diagnostic evidence; after this point successful-workspace retention only reintroduces garbage."
+  publication_failure:
+    classification: INFERRED
+    action: "Retain the exact workspace because its commit/evidence may not exist anywhere durable."
+  verification_or_task_failure:
+    classification: INFERRED
+    action: "Do not automatically destroy useful WIP. Retain bounded evidence until explicit discard or durability handoff, then remove the entire task root."
+  crash_before_publication:
+    classification: INFERRED
+    action: "Treat as orphaned unpublished WIP and retain rather than guessing it is safe to remove."
+  crash_after_proven_publication_before_cleanup:
+    classification: INFERRED
+    action: "Startup orphan cleanup may remove it after re-proving remote publication identity and workspace ownership."
+
+technical_debt_1_month_and_1_year:
+  one_month:
+    custom_seatbelt:
+      severity: HIGH
+      reasons:
+        - "Debt exists immediately because the measured launcher and related SDK surface are already deprecated/unsupported."
+        - "A useful profile needs compatibility probes for build tools, temporary paths, SDK/toolchain reads, network and process behavior."
+        - "Existing Runtime protection cannot be removed until equivalent mechanical invariants are proven, so early adoption is additive."
+    disposable_workspace_only:
+      severity: LOW_TO_MODERATE
+      reasons:
+        - "Independent-clone creation and whole-root cleanup are small concepts."
+        - "Failure retention, durable-publication proof and orphan ownership still require precise tests."
+  one_year:
+    custom_seatbelt:
+      severity: VERY_HIGH
+      reasons:
+        - "macOS-version coupling to an undocumented profile language and deprecated launcher has no supported compatibility contract."
+        - "Policy exceptions risk becoming a second compatibility framework."
+        - "If the mechanism changes or disappears, this task's rejected complexity classes exclude the obvious heavier substitutes."
+    disposable_workspace_only:
+      severity: MODERATE
+      reasons:
+        - "Git lifecycle is stable, but multi-repository dependency/cache cost and failure-retention ergonomics still need real usage evidence."
+        - "A dedicated mirror or cache should remain YAGNI until measurements prove a material cost."
+
+what_existing_protection_can_be_removed_vs_must_remain:
+  removable_now: []
+  reason_none_removable_now: "No supported production task sandbox exists in this revision; deleting current protection from spike evidence would reduce safety."
+  potentially_redundant_only_after_supported_mechanical_proof:
+    classification: INFERRED
+    items:
+      - "Shell/wrapper parsing whose only purpose is to prevent task commands from controlling live Runtime authority."
+      - "Protected-listener command-string heuristics if supported OS process/network controls prove equivalent protection."
+      - "PTY shell-fragment classification if every PTY session is born inside the same proven mechanical boundary and cannot escape it."
+  must_remain_even_with_supported_sandbox:
+    classification: CONFIRMED
+    items:
+      - "Task/operator authority and positive process ownership rules."
+      - "Cwd and exact workspace identity validation."
+      - "Minimal child environment and secret stripping."
+      - "Timeout and task-owned process-group cleanup."
+      - "PTY session IDs, capacity, idle reaping, bounded retained output and input/control validation."
+      - "Bounded stdout/stderr capture and truthful timeout/truncation result fields."
+      - "Git exact-base binding, verification, non-force publication, fresh remote-ref proof and report evidence."
+      - "Defense-in-depth for live Runtime configuration, tunnel/listener and installed payload until a supported boundary proves equivalent invariants."
+
+measured_benchmarks_with_method_or_explicit_NOT_MEASURED:
+  host: {os: "macOS 26.6.2 (25G83)", arch: arm64, memory_bytes: 17179869184, git: "2.55.0"}
+  workspace_fixture:
+    source: "Disposable bare clone of exact-base agent-runtime inside a run-owned scratch root."
+    bare_clone_create_ms: 98.323
+    bare_clone_size_kib: 2000.0
+    repetitions_per_strategy: 8
+    detached_worktree: {create_ms_median: 31.342, create_ms_max_of_8: 37.565, disk_kib_median: 1360.0, cleanup_ms_median: 13.250}
+    shared_clone: {create_ms_median: 39.832, create_ms_max_of_8: 42.032, disk_kib_median: 1480.0, cleanup_ms_median: 8.356}
+    independent_clone_no_hardlinks: {create_ms_median: 75.270, create_ms_max_of_8: 100.054, disk_kib_median: 3392.0, cleanup_ms_median: 26.525}
+  focused_test_fixture:
+    repetitions_per_strategy: 5
+    tests_per_run: 26
+    all_runs: PASS
+    medians_ms: {detached_worktree: 4634.225, shared_clone: 4621.433, independent_clone: 4608.838}
+  production_dependency_install_cost: NOT_MEASURED
+  full_macos_build_cache_cold_cost: NOT_MEASURED
+  arbitrary_other_repository_cost: NOT_MEASURED
+  reason_not_measured: "Those costs depend on repository, toolchain, network and cache shape not represented by the safe local fixture."
+
+failure_modes_and_counterarguments:
+  - finding: "Unsupported custom sandbox foundation"
+    classification: CONFIRMED
+    impact: "A core long-lived security boundary should not depend on a mechanism Apple marks deprecated/unsupported for third-party product use."
+  - finding: "Architecture is initially additive"
+    classification: INFERRED
+    impact: "Current Runtime protection remains necessary until supported mechanical process/network/authority invariants are proven."
+  - finding: "WIP loss versus cleanup"
+    classification: INFERRED
+    impact: "Always removing every terminal workspace maximizes hygiene but destroys failed-task recovery; retaining failures necessarily preserves some orphan/manual-cleanup surface."
+  - finding: "Worktree source coupling"
+    classification: MEASURED
+    impact: "The fastest strategy mutates source Git administrative state and left stale metadata after abnormal directory disappearance."
+  - finding: "Shared clone object coupling"
+    classification: CONFIRMED
+    impact: "Official Git documentation warns that source object pruning can corrupt a shared clone."
+  - finding: "Cold-cache regression may exist elsewhere"
+    classification: UNKNOWN
+    impact: "Large JavaScript, Rust or Xcode repositories may pay much higher dependency/build costs than this Python-focused benchmark."
+  - finding: "Clean Git does not equal a reproducible machine"
+    classification: CONFIRMED
+    impact: "Global state, toolchain versions, external services and network inputs remain uncontrolled unless separately governed."
+
+minimal_next_implementation_slice_if_recommended:
+  result: NOT_APPLICABLE
+  reason: "The executive verdict is DO_NOT_RECOMMEND; no production sandbox lifecycle implementation is justified or authorized by this research revision."
+  falsifiable_research_gate_if_reconsidered:
+    - "Prove a supported Apple mechanism, not sandbox-exec/SBPL, can enforce the required dynamic per-task file/process/network boundary for the current four-tool surface."
+    - "Prove representative Python, Swift/Xcode, Node/package-manager, Git and PTY/subprocess workflows under that supported boundary."
+    - "Reject if satisfying the boundary requires the task's explicitly rejected infrastructure classes or broad protected-user-data access."
+  independently_promising_follow_up: "If Architect wants operational cleanliness independently of sandboxing, evaluate self-contained disposable Git workspaces as a separate task; this spike favors independent local no-hardlinks clones."
+
+architecture_size_judgment:
+  classification: INFERRED
+  genuinely_smaller_now: false
+  explanation: "The exact candidate adds workspace create/destroy/orphan/publication states plus policy compatibility while current protection remains. It becomes smaller only if a supported mechanical boundary proves equivalent invariants and permits deletion of substantial heuristic protection; current evidence does not establish that path."
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PROVEN
+    evidence: "Exact-base Runtime code and current host behavior were inspected; material claims are explicitly classified."
+  - criterion_id: AC-2
+    status: PROVEN
+    evidence: "Non-PTY and PTY descendant inheritance was measured; custom-profile supportability is resolved as deprecated/unsupported, while supported App Sandbox fit for the exact dynamic policy remains UNKNOWN."
+  - criterion_id: AC-3
+    status: PROVEN
+    evidence: "Three Git workspace strategies were repeatedly benchmarked for create time, disk, cleanup and commit behavior; abnormal linked-worktree residue was measured."
+  - criterion_id: AC-4
+    status: PROVEN
+    evidence: "Security, garbage, latency, simplicity and quality conclusions are tied to code evidence, measurements, primary documentation or explicit inference."
+  - criterion_id: AC-5
+    status: PROVEN
+    evidence: "Platform/API coupling, policy maintenance, cache uncertainty, WIP loss, Git metadata/object coupling and recovery are covered."
+  - criterion_id: AC-6
+    status: PROVEN
+    evidence: "Successful publication, publication failure, task failure, crash-before-publication and crash-after-publication deletion boundaries are explicit."
+  - criterion_id: AC-7
+    status: PROVEN
+    evidence: "No live Runtime infrastructure/configuration lifecycle mutation occurred; all synthetic artifacts were removed; only this report is intended for publication."
+  - criterion_id: AC-8
+    status: PROVEN
+    evidence: "The negative recommendation is falsifiable by a supported-mechanism plus representative-compatibility gate."
+
+local_hygiene:
+  result: PASS
+  synthetic_artifacts_removed: true
+  residue_found: []
+
+final_result:
+  decision: DO_NOT_RECOMMEND
+  architect_review_required: true
