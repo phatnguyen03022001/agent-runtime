@@ -97,6 +97,38 @@ class FsReadBatchAdversarialTests(unittest.TestCase):
 
         self.assertTrue(swapped)
 
+    def test_cwd_intermediate_directory_replacement_cannot_redirect_anchor(self) -> None:
+        trusted = self.root / "trusted-directory"
+        trusted.mkdir()
+        cwd = trusted / "cwd"
+        cwd.mkdir()
+        (cwd / "victim.txt").write_text("safe", encoding="utf-8")
+        moved = self.root / "trusted-directory-original"
+        replacement = self.root / "replacement-directory"
+        replacement.mkdir()
+        replacement_cwd = replacement / "cwd"
+        replacement_cwd.mkdir()
+        (replacement_cwd / "victim.txt").write_text("RENAMED_SECRET", encoding="utf-8")
+        expected_cwd = str(cwd.resolve())
+        original_open = os.open
+        swapped = False
+
+        def racing_open(path, flags, mode=0o777, *, dir_fd=None):
+            nonlocal swapped
+            if path == expected_cwd and dir_fd is None and not swapped:
+                swapped = True
+                trusted.rename(moved)
+                replacement.rename(trusted)
+            if dir_fd is None:
+                return original_open(path, flags, mode)
+            return original_open(path, flags, mode, dir_fd=dir_fd)
+
+        with patch("agent_runtime.fs_read.os.open", side_effect=racing_open):
+            with self.assertRaisesRegex(RuntimeValidationError, "cwd could not be opened safely"):
+                read_files_batch(str(cwd), [FsReadItem(path="victim.txt")])
+
+        self.assertTrue(swapped)
+
     def test_intermediate_component_symlink_substitution_race_cannot_escape(self) -> None:
         safe_dir = self.cwd / "safe"
         safe_dir.mkdir()

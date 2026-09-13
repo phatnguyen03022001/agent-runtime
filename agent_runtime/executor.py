@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import signal
+import stat
 import subprocess
 import threading
 import time
@@ -83,7 +84,7 @@ def _workspace_root() -> Path:
     return resolved
 
 
-def _validated_cwd(raw_cwd: str, root: Path) -> Path:
+def _validated_cwd_with_identity(raw_cwd: str, root: Path) -> tuple[Path, tuple[int, int]]:
     if not isinstance(raw_cwd, str) or not raw_cwd:
         raise RuntimeValidationError("cwd must be a non-empty absolute path")
     path = Path(raw_cwd)
@@ -91,14 +92,20 @@ def _validated_cwd(raw_cwd: str, root: Path) -> Path:
         raise RuntimeValidationError("cwd must be an absolute path")
     try:
         resolved = path.resolve(strict=True)
+        observed = resolved.stat()
     except OSError as exc:
         raise RuntimeValidationError("cwd must identify an existing directory") from exc
-    if not resolved.is_dir():
+    if not stat.S_ISDIR(observed.st_mode):
         raise RuntimeValidationError("cwd must identify an existing directory")
     try:
         resolved.relative_to(root)
     except ValueError as exc:
         raise RuntimeValidationError("cwd resolves outside AGENT_RUNTIME_WORKSPACE_ROOT") from exc
+    return resolved, (observed.st_dev, observed.st_ino)
+
+
+def _validated_cwd(raw_cwd: str, root: Path) -> Path:
+    resolved, _identity = _validated_cwd_with_identity(raw_cwd, root)
     return resolved
 
 

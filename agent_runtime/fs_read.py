@@ -6,7 +6,7 @@ import stat
 
 from .contracts import FsReadErrorCode, FsReadItem
 from .errors import RuntimeValidationError
-from .executor import _validated_cwd, _workspace_root
+from .executor import _validated_cwd_with_identity, _workspace_root
 
 ITEM_OUTPUT_LIMIT_BYTES = 128 * 1024
 BATCH_OUTPUT_LIMIT_BYTES = 256 * 1024
@@ -213,11 +213,20 @@ def read_files_batch(cwd: str, items: list[FsReadItem]) -> dict[str, object]:
 
     requests = [_request_item(item) for item in items]
     root = _workspace_root()
-    checked_cwd = _validated_cwd(cwd, root)
+    checked_cwd, validated_identity = _validated_cwd_with_identity(cwd, root)
     try:
         cwd_fd = os.open(str(checked_cwd), _cwd_directory_flags())
     except OSError:
         raise RuntimeValidationError("cwd could not be opened safely") from None
+
+    try:
+        opened_cwd = os.fstat(cwd_fd)
+    except OSError:
+        os.close(cwd_fd)
+        raise RuntimeValidationError("cwd could not be opened safely") from None
+    if validated_identity != (opened_cwd.st_dev, opened_cwd.st_ino):
+        os.close(cwd_fd)
+        raise RuntimeValidationError("cwd could not be opened safely")
 
     successful_bytes = 0
     results: list[dict[str, object]] = []
