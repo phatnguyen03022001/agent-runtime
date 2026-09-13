@@ -1,16 +1,12 @@
 protocol_version: 3
 
 task_id: TASK-0030
-task_revision: 1
+task_revision: 2
 state: APPROVED
 
 origin:
-  type: user_request
-  task_id: ""
+  type: architect_reaudit_followup
   gap_id: NATIVE_EXECUTOR_RUNTIME_ISOLATION
-
-architect_binding:
-  target_repository: phatnguyen03022001/agent-runtime
 
 target:
   repository: phatnguyen03022001/agent-runtime
@@ -27,138 +23,80 @@ skill_library:
   repository: phatnguyen03022001/agent-skills
   revision: "1826d33bd1e467896c133109b37db8b0656b3276"
 
-architect_analysis_skills:
-  - architect
-  - simplicity
-  - verification
-  - github-workflow
-
 execution_skills:
-  required:
-    - executor
-    - simplicity
-    - verification
-    - github-workflow
-  recommended: []
-
-external_skills:
-  architect_analysis: []
-  execution_required: []
-  execution_recommended: []
+  required: [executor, simplicity, verification, github-workflow]
 
 authority_sources:
-  - source: "Current operator requirement: a native Executor must not be able to accidentally interrupt, restart, replace, or corrupt Agent Runtime in a way that disconnects other chats or recreates restart-induced 403. Prompt-only policy is insufficient where mechanical containment is available."
-    role: "Highest current product/safety authority for TASK-0030."
+  - source: "phatnguyen03022001/agent-runtime@54b515c6e72cddc95411e5c8bfff0f7bc67ef959:.agent/tasks/TASK-0031/review.yaml"
+    role: "Accepted live migration: installed Runtime config authority is now $HOME/Library/Application Support/Agent Runtime/runtime.env and no longer checkout .env."
     precedence: 1
-  - source: "phatnguyen03022001/agent-runtime@96b1cb44616ed657b00cd66fed7febcc1eb81551:.agent/tasks/TASK-0029/review.yaml"
-    role: "Current Architect judgment establishing the existing Agent Runtime MCP self-protection boundary and the remaining native/out-of-band containment gap."
+  - source: "phatnguyen03022001/agent-runtime@ba91f89043a366ad8fe48b1d8b1037007c890ccf:.agent/tasks/TASK-0030/review.yaml"
+    role: "Prior BLOCKED judgment caused only by checkout-local .env remaining writable under CODEX_LOCAL."
     precedence: 2
-  - source: "phatnguyen03022001/agent-runtime@f74844c47754f88a926315ac9aa1bde0f27d0654:agent_runtime/protection.py"
-    role: "Existing Agent Runtime MCP self-protection baseline; preserve it."
-    precedence: 3
-  - source: "phatnguyen03022001/agent-skills@1826d33bd1e467896c133109b37db8b0656b3276:protocols/TASK_PROTOCOL.md"
-    role: "Protocol-v3 execution/evidence/review authority."
-    precedence: 4
 
 structure_authority:
   status: RESOLVED
-  source: "Existing CODEX_LOCAL native execution sandbox/OS containment plus existing Agent Runtime self-protection; no new privileged Runtime architecture in this task."
-  rationale: "First prove the actual current CODEX_LOCAL kernel-enforced boundary and reuse it when sufficient. Do not introduce privilege separation, a second service architecture, or another control plane in this task. If current containment cannot mechanically deny the required capabilities, fail closed with exact evidence for a later Architect decision."
+  source: "Current CODEX_LOCAL macOS containment plus the accepted installed Runtime authority model."
+  rationale: "Re-audit the same mechanical boundary after moving live config authority outside the writable checkout. Do not redesign containment in this revision."
 
-objective: "Prove and, within the existing supported CODEX_LOCAL containment model, close the accidental native-Executor path to Agent Runtime lifecycle/resource destruction without interrupting the live Runtime, while preserving ordinary repository engineering capability."
+objective: "Re-audit TASK-0030 after TASK-0031 live activation and determine whether CODEX_LOCAL now mechanically denies accidental control or corruption of every live Agent Runtime authority asset while ordinary repository engineering remains available."
 
 scope:
-  required_changes:
-    - "Fresh-bind TASK-0030 revision 1 at the exact handoff base. Prove dev/main identity, canonical single-checkout topology, current TASK-0029 review identity, and live Agent Runtime singleton/health/readiness before repository mutation."
-    - "Determine the actual CODEX_LOCAL execution containment from current runtime evidence. Do not infer sandboxing from documentation, prompt text, model identity, or historical behavior. Record whether kernel-enforced sandboxing is active and whether a full-access bypass is active."
-    - "Perform only non-destructive permission probes against the live canonical Runtime. Process-control proof must use a permission-only/no-effect probe; no lifecycle-changing signal or service action may be sent."
-    - "Prove whether CODEX_LOCAL can obtain write capability without changing bytes for each critical asset: checkout-local .env, desired-state marker, canonical Runtime LaunchAgent plist, and installed Runtime payload. Capture pre/post metadata/hash where applicable and prove no mutation."
-    - "Prove whether CODEX_LOCAL can reach protected service-lifecycle and protected-port mutation surfaces without executing those mutations."
-    - "If current CODEX_LOCAL containment mechanically denies every required dangerous capability, add only the smallest repository-owned deterministic boundary verifier/documentation needed to make the proof reproducible for future execution. It must be non-destructive and fail closed when containment is absent, bypassed, or insufficient."
-    - "If any required dangerous capability remains available, stop with RESULT=BLOCKED after collecting exact safe evidence. Do not compensate by introducing privileged services, ownership redesign, new OS accounts, containers, or other architecture changes; those require separate Architect authority."
-    - "Preserve tunnel identity, singleton behavior, exact four MCP tools, installed-runtime source independence, session capacity behavior, and protected-port semantics."
-    - "Publish an Executor report non-force to dev after required checks; stop for Architect review and do not promote main."
-  allowed_existing_files_or_components:
-    - "README.md"
-    - "verify"
-    - "tests/"
-    - "agent_runtime/protection.py"
-    - ".agent/tasks/TASK-0030/report.yaml"
-    - "minimal existing macOS/test support required only for non-destructive containment verification"
+  required_actions:
+    - "Fresh-bind exact revision-2 base and prove current dev/main, single canonical checkout, accepted TASK-0031 review identity, and live Runtime singleton/health/readiness before probes."
+    - "Empirically identify the effective CODEX_LOCAL Seatbelt boundary and prove no full-access bypass is active."
+    - "Use only non-destructive permission/capability probes. Never send a lifecycle-changing signal or service action."
+    - "Prove process-control capability against the positively identified canonical Runtime is mechanically denied without changing Runtime state."
+    - "Prove non-writing write-capability attempts are mechanically denied for the live canonical runtime.env, desired-state marker, Runtime LaunchAgent plist, and installed Runtime payload. Capture pre/post hashes/metadata where applicable and prove no mutation."
+    - "Confirm checkout .env is no longer an installed Runtime authority/dependency. Its workspace writability is not itself a failure if the live product cannot consume it after installation."
+    - "Prove ordinary repository-local engineering operations remain available inside the authorized workspace."
+    - "Prove the installed product/service has no checkout config pointer/dependency and retains exact accepted tunnel fingerprint, one listener, live/ready endpoints, and exact four MCP tools."
+    - "If every live dangerous capability is denied, publish evidence-only report non-force to dev. If any live authority remains writable/controllable, stop BLOCKED without architecture improvisation."
 
 invariants:
-  - "TASK-0030 must not intentionally interrupt, restart, replace, or lifecycle-transition the live canonical Agent Runtime/tunnel/MCP tree."
-  - "No acceptance probe may create a reconnect/cutover for other active chats."
-  - "Secure MCP Tunnel identity remains unchanged; no connector, tunnel, key, app, or profile recreation/rotation is permitted."
-  - "The existing Agent Runtime MCP self-protection boundary remains intact."
-  - "Behavioral instructions alone do not count as mechanical containment proof."
-  - "No privileged helper, root daemon, dedicated OS user, EndpointSecurity extension, container, new network service, database, queue, scheduler, or second control plane is introduced."
-  - "Private operator data, Photos/hidden photos, Keychain, SSH material, browser sessions, and unrelated filesystem state remain out of scope."
-  - "main, tags, releases, sibling repositories, and unrelated services remain unchanged."
-
-forbidden_changes:
-  - "Do not perform any lifecycle-changing process signal or service action against Agent Runtime."
-  - "Do not invoke Agent Runtime lifecycle transitions during TASK-0030."
-  - "Do not free, occupy, or rebind protected endpoint 127.0.0.1:8080."
-  - "Do not mutate permissions, ownership, location, or bytes of .env, desired-state marker, Runtime LaunchAgent plists, installed Runtime payload, or tunnel-client."
-  - "Do not enable or request full-access/sandbox-bypass mode merely to make the task pass."
-  - "Do not create a branch, worktree, clone, alternate checkout, privileged helper, privileged service, dedicated OS account, container, or external service."
-  - "Do not modify TASK-0029 task/report/review artifacts."
-  - "Do not promote main, force-push, tag, or release."
+  - "No Runtime start/stop/restart/reload/rebind/cutover."
+  - "No protected-port mutation on 127.0.0.1:8080."
+  - "No mutation of runtime.env, desired-state marker, LaunchAgent, installed payload, checkout .env, tunnel identity, permissions or ownership."
+  - "No source/product/test change is authorized unless a tiny evidence helper is strictly required; prefer report-only execution."
+  - "No sandbox bypass/full-access request, privileged helper, daemon redesign, OS account, container, new service, database or second control plane."
+  - "No branch, worktree, clone, tag, release or main promotion."
+  - "TASK-0029 and TASK-0031 artifacts remain unchanged."
+  - "Photos/hidden photos, Keychain, SSH, browser sessions and unrelated filesystem state remain out of scope."
 
 gap_policy:
-  local_auto_fix: true
+  local_auto_fix: false
   scope_expansion: forbidden
   architecture_change: forbidden
-  spec_change: forbidden
-  dependency_change: revised_contract_required
-  public_contract_change: revised_contract_required
+  dependency_change: forbidden
+  public_contract_change: forbidden
   blocking_gap_behavior: BLOCKED
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "CODEX_LOCAL containment is empirically identified and no full-access bypass is active."
-    evidence_required: "Current-session runtime evidence identifies the effective macOS containment boundary; documentation or self-report alone is insufficient."
+    requirement: "CODEX_LOCAL containment is empirically active with no bypass."
+    evidence_required: "Current-session OS/runtime evidence, not prompt or documentation alone."
   - id: AC-2
-    requirement: "CODEX_LOCAL lacks permission to interrupt the live canonical Runtime process."
-    evidence_required: "A non-destructive permission-only process-control probe against the positively identified canonical serving process is denied by the mechanical boundary; Runtime identity and health remain unchanged."
+    requirement: "CODEX_LOCAL cannot interrupt the live canonical Runtime process."
+    evidence_required: "Non-destructive permission-only control probe is mechanically denied; Runtime remains unchanged and healthy."
   - id: AC-3
-    requirement: "CODEX_LOCAL lacks write capability over critical Runtime identity/lifecycle assets."
-    evidence_required: "Non-writing write-capability probes are denied for .env, desired-state marker, Runtime LaunchAgent plist, and installed Runtime payload; pre/post bytes/metadata prove no mutation."
+    requirement: "CODEX_LOCAL cannot write any live Runtime authority asset."
+    evidence_required: "Non-writing capability probes are denied for canonical runtime.env, desired-state marker, Runtime LaunchAgent plist and installed Runtime payload; pre/post evidence proves no mutation."
   - id: AC-4
-    requirement: "Ordinary repository engineering remains usable inside the authorized workspace."
-    evidence_required: "A disposable repository-local fixture proves normal scoped file operations plus required deterministic test/build execution remain available without sandbox bypass."
+    requirement: "Checkout .env is no longer live authority."
+    evidence_required: "Installed package/service has no checkout config pointer/dependency and live Runtime uses canonical Application Support runtime.env."
   - id: AC-5
-    requirement: "Agent Runtime remains uninterrupted throughout verification."
-    evidence_required: "Before/after proof shows the same canonical serving identity where stable identity observation is available, one MCP child, one listener on 127.0.0.1:8080, desired RUNNING, health=live, ready=ready, unchanged tunnel fingerprint, and no lifecycle event attributable to TASK-0030."
+    requirement: "Ordinary repository engineering remains usable."
+    evidence_required: "Disposable workspace-local fixture proves normal scoped file/test execution without bypass."
   - id: AC-6
-    requirement: "Containment verification is reproducible and fail-closed."
-    evidence_required: "When containment is available, a minimal repository-owned verifier/documented procedure safely detects missing/bypassed/insufficient containment and exits nonzero without mutating protected resources; when containment is unavailable, report BLOCKED instead of manufacturing PASS."
+    requirement: "Runtime remains stable throughout re-audit."
+    evidence_required: "One canonical listener, loaded service, health=live, ready=ready, stable fingerprint, unchanged protected assets and no lifecycle event attributable to the task."
   - id: AC-7
     requirement: "Publication is bounded and reconstructible."
-    evidence_required: "Exact task/base/candidate/report lineage, non-force dev publication, unchanged main, clean canonical checkout, and no auxiliary worktree/clone are proven."
+    evidence_required: "Exact base/report lineage, non-force dev publication, unchanged main, clean canonical checkout and no auxiliary checkout/worktree."
 
 verification:
-  executor_checks:
-    - id: CHECK-1
-      command_or_check: "Fresh-bind exact TASK-0030/base/dev/main and prove live Runtime identity plus protected assets read-only before mutation."
-      required: true
-    - id: CHECK-2
-      command_or_check: "Run only safe native-containment probes: sandbox identity, permission-only process-control probe, non-writing write-capability probes, and ordinary workspace fixture operations."
-      required: true
-    - id: CHECK-3
-      command_or_check: "Run repository verification and any focused deterministic tests added for the non-destructive boundary verifier; prove exact four-tool surface and existing protected-runtime behavior remain unchanged."
-      required: true
-    - id: CHECK-4
-      command_or_check: "Fresh-prove no Runtime lifecycle interruption, stable tunnel fingerprint/health/readiness, unchanged protected assets, and no unrelated process/service mutation."
-      required: true
-    - id: CHECK-5
-      command_or_check: "Validate/publish report non-force to dev, prove final dev, unchanged main, canonical clean checkout, and stop for Architect review."
-      required: true
   authoritative_verification:
     required: false
-    mechanism: ""
-    expected_signal: ""
 
 git_authority:
   create_branch: false
