@@ -1,0 +1,70 @@
+protocol_version: 3
+
+task_id: TASK-0036
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_closure_task
+  gap_id: FRESH_HOST_MCP_DISCOVERY_PROOF
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+authority_sources:
+  - source: "phatnguyen03022001/agent-runtime@beab2419b679dd4e9718017cb026ad9fc940c210:.agent/tasks/TASK-0035/review.yaml"
+    role: "Architect review establishing CHATGPT_LOCAL_HOST_TOOL_DISCOVERY as the only remaining blocker."
+    precedence: 1
+
+objective: >-
+  From a fresh ChatGPT Local session, re-prove the already-installed Agent Runtime MCP tool surface without reinstalling or repeating activation. If the fifth capacity_observer tool is freshly discovered, invoke it exactly once read-only and close the live-proof gap. If the fresh session still exposes only four tools, report the capability blocker without mutating Runtime or source.
+
+invariants:
+  - "Fresh ChatGPT Local conversation/session is required."
+  - "Do not reinstall or repeat activation."
+  - "Do not mutate Runtime configuration, tunnel identity, source, tests, installed package, listener binding, or main."
+  - "Do not use a local/static function call as substitute for live MCP evidence."
+  - "Use only read-only inspection needed to establish current installed/runtime identity and tool discovery."
+  - "No branch, worktree, clone, tag, release, or main promotion."
+
+required_proof:
+  - "Fresh-resolve dev and bind to the exact authorized base."
+  - "Confirm installed Runtime remains healthy/ready at the accepted installed revision from TASK-0035."
+  - "Record the exact MCP tools exposed to this fresh ChatGPT Local session."
+  - "PASS requires exactly terminal_exec, terminal_start, terminal_poll, terminal_control, capacity_observer."
+  - "If capacity_observer is exposed, invoke it exactly once and prove schema_version=1, capacity_parallelism_ceiling in [1,2], bounded reason_codes/signals, and no process inventory/history fields."
+  - "If capacity_observer is not exposed, do not attempt activation or source changes; report BLOCKED with the exact discovered surface."
+  - "Confirm origin/main remains unchanged."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Fresh ChatGPT Local session performs new live MCP discovery against the already-installed Runtime."
+  - id: AC-2
+    requirement: "Live MCP exposes the exact accepted five-tool surface."
+  - id: AC-3
+    requirement: "Exactly one live read-only capacity_observer call returns the bounded v1 contract."
+  - id: AC-4
+    requirement: "No reinstall, activation retry, source/config mutation, identity change, or main promotion occurs."
+
+publication:
+  report_path: .agent/tasks/TASK-0036/report.yaml
+  push: non_force_dev
+  stop_for_architect_review: true
+
+git_authority:
+  create_branch: false
+  create_worktree: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
