@@ -1,13 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0047
-task_revision: 1
+task_revision: 2
 state: APPROVED
 
 origin:
   type: architect_live_cutover_followup
   task_id: TASK-0046
-  gap_id: EXACT_CANDIDATE_LIVE_CUTOVER_AND_ACCEPTANCE
+  prior_report_commit: "073751f27769286c858232ddd868d798aa08eebb"
+  prior_review_commit: "3d2a089f599224ee80bc79eb176d82e68216777a"
+  gap_id: EXACT_CANDIDATE_LIVE_CUTOVER_AND_ACCEPTANCE_REVISION_2
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -33,18 +35,21 @@ execution_skills:
   recommended: [simplicity]
 
 authority_sources:
+  - source: "phatnguyen03022001/agent-runtime@3d2a089f599224ee80bc79eb176d82e68216777a:.agent/tasks/TASK-0047/review.yaml"
+    role: "Authoritative r1 BLOCKED review: six-tool MCP is post-cutover acceptance, not a pre-cutover prerequisite; safe fast-forward may preserve the two observed untracked operator files."
+    precedence: 1
   - source: "Current operator authorization to use Remote Desktop Commander for the exact live install/start/test boundary after the accepted freeze gate."
     role: "Authorizes the bounded live lifecycle actions explicitly serialized by TASK-0047; grants no standing restart authority outside this task."
-    precedence: 1
+    precedence: 2
   - source: "phatnguyen03022001/agent-runtime@46f92e08e22e652f387f4ccfa25c60d4d2bfc752:.agent/tasks/TASK-0046/review.yaml"
     role: "Accepted exact frozen candidate and successor authority for live cutover without rebuild or re-sign."
-    precedence: 2
+    precedence: 3
   - source: "phatnguyen03022001/agent-runtime@38b9684d6b6f0a92e5b61b787e823f166b67e3d4:.agent/tasks/TASK-0044/review.yaml"
     role: "Accepted external candidate handoff, transactional PENDING cutover, explicit COMMIT/ROLLBACK, and known-good rollback mechanics."
-    precedence: 3
+    precedence: 4
   - source: "phatnguyen03022001/agent-runtime@748b930f74d947ec4fb6fe8b3d7975a585584e9b:.agent/tasks/TASK-0035/task.yaml"
     role: "Existing live configuration authority for AGENT_RUNTIME_MAX_PARALLELISM=2 and protected Runtime health/readiness proof."
-    precedence: 4
+    precedence: 5
 
 structure_authority:
   status: NOT_APPLICABLE
@@ -80,8 +85,8 @@ canonical_live_config:
 
 scope:
   required_changes:
-    - "Fresh-resolve origin/dev and origin/main, prove the local repository is the exact clean TASK-0047 execution base, and prove the retained candidate/handoff still match every frozen identity before live mutation."
-    - "Preflight an actual live MCP client route sufficient for post-cutover end-to-end verification; static source imports are not a substitute. If this capability is unavailable, stop before live mutation."
+    - "Fresh-resolve origin/dev and origin/main. Reconcile the designated local dev checkout only by non-destructive fast-forward to the exact r2 execution base when tracked state is clean, the prior HEAD is an ancestor, and the two existing untracked files chatgpt-sample.txt and vscode-gpu-sample.txt do not collide with incoming tracked paths. Preserve both files byte-for-byte; no reset/stash/clean/delete/move/overwrite/adoption is authorized. Then prove the retained candidate/handoff still match every frozen identity before live mutation."
+    - "Preflight one actually callable live MCP client route before mutation and record its current surface. The installed pre-cutover generation is known to expose five tools and is not required to expose fs_read_batch before replacement. Exact six-tool live E2E remains mandatory only after the frozen candidate is active and before COMMIT; static source imports are not final E2E evidence."
     - "Capture a rollback envelope of the current installed app identity if present, LaunchAgent presence/loaded state, desired-state marker, canonical runtime.env non-secret validation/hash/mode, tunnel-client canonical command identity, listener/port-8080 ownership, and health/readiness state."
     - "Perform one live rollback rehearsal using the existing candidate_cutover.py transactional path: cut over the exact candidate to PENDING, start/refresh the candidate generation as needed for live proof, verify the installed candidate identity and basic health, then explicitly ROLLBACK and prove the captured previous app/LaunchAgent/desired-state/service state is restored."
     - "After rollback, revalidate the retained external candidate/handoff byte identities exactly. Do not rebuild or re-sign."
@@ -98,7 +103,7 @@ scope:
 
 invariants:
   - "No candidate rebuild, re-sign, source mutation, dependency mutation, or handoff regeneration occurs in TASK-0047."
-  - "The first destructive/live mutation is forbidden until exact candidate identity, rollback envelope, canonical runtime.env=2, remote/local task binding, and post-cutover MCP verification capability are all proven."
+  - "The first destructive/live mutation is forbidden until exact candidate identity, rollback envelope, canonical runtime.env=2, remote/local task binding, preserved untracked-file identities, and a real callable MCP client route are proven. The pre-cutover route may truthfully expose only the old five-tool generation."
   - "Any final-cutover acceptance failure while the transaction is PENDING triggers explicit ROLLBACK before terminal BLOCKED reporting unless rollback itself fails; rollback failure must preserve truthful PARTIAL evidence and must never be reported as success."
   - "The rollback rehearsal and final cutover are the only authorized live candidate replacement cycles in this task. No convenience retries are authorized."
   - "Runtime/tunnel lifecycle authority exists only inside this TASK-0047 proof boundary. It does not grant future Architect or Executor sessions standing permission to stop/restart/reconfigure protected Runtime infrastructure."
@@ -116,7 +121,7 @@ forbidden_changes:
 acceptance_criteria:
   - id: AC-1
     requirement: "Pre-live authority and candidate identity are exact and canonical configuration is safe before mutation."
-    evidence_required: "Exact TASK-0047 base/dev/main/local-clean proof; candidate/handoff digests and provenance match frozen values; strict codesign passes; runtime.env is regular non-symlink mode 0600, validates without secret disclosure, and has AGENT_RUNTIME_MAX_PARALLELISM=2; real post-cutover MCP client capability is preflighted."
+    evidence_required: "Exact TASK-0047 r2 base/dev/main and tracked-clean local binding proof after authorized fast-forward; both preserved untracked files remain byte-identical; candidate/handoff digests and provenance match frozen values; strict codesign passes; runtime.env is regular non-symlink mode 0600, validates without secret disclosure, and has AGENT_RUNTIME_MAX_PARALLELISM=2; one real callable MCP client route is available. Six-tool exposure is not required until after activation."
   - id: AC-2
     requirement: "One real rollback rehearsal proves the accepted transactional rollback mechanics against the operator installation."
     evidence_required: "Record pre-state envelope, first PENDING cutover identity, bounded live health/start proof, explicit ROLLBACK result, and exact restoration of previous app/LaunchAgent/desired-state/service facts."
@@ -139,7 +144,7 @@ acceptance_criteria:
 verification:
   executor_checks:
     - id: V-1
-      command_or_check: "Preflight exact candidate/handoff/provenance/codesign plus canonical runtime.env and live MCP-client capability before any live mutation."
+      command_or_check: "Preflight exact r2 remote/local binding with byte-identical preservation of the two untracked files, exact candidate/handoff/provenance/codesign, canonical runtime.env, and one real callable MCP client route before live mutation. Do not require fs_read_batch pre-cutover."
       required: true
     - id: V-2
       command_or_check: "Capture exact non-secret pre-live rollback envelope and current canonical service/listener/health state."
@@ -167,7 +172,7 @@ verification:
 publication:
   implementation_commit_required: false
   report_path: .agent/tasks/TASK-0047/report.yaml
-  required_report_revision: 1
+  required_report_revision: 2
   push: non_force_dev
   stop_for_architect_review: true
 
