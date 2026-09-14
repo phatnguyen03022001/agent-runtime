@@ -1,0 +1,168 @@
+protocol_version: 3
+
+task_id: TASK-0046
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_continuation
+  task_id: TASK-0045
+  gap_id: DETERMINISTIC_CANDIDATE_AND_SOURCE_FREEZE
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+architect_analysis_skills: [simplicity, verification, github-workflow]
+execution_skills:
+  required: [executor, verification, github-workflow]
+  recommended: [security-review, simplicity]
+
+authority_sources:
+  - source: "phatnguyen03022001/agent-runtime@e4ca1bf36db69b8a60778777f2e83164651cabba:.agent/tasks/TASK-0045/review.yaml"
+    role: "Accepted predecessor and authority to continue to TASK-0046."
+    precedence: 1
+  - source: "phatnguyen03022001/agent-runtime@38b9684d6b6f0a92e5b61b787e823f166b67e3d4:.agent/tasks/TASK-0044/review.yaml"
+    role: "Accepted exact-candidate handoff and prebuilt cutover semantics to preserve."
+    precedence: 2
+  - source: "phatnguyen03022001/architect-profile@97215b78e69b0aebcd87574b7e0cc8c78f2e5c73"
+    role: "Current Architect context."
+    precedence: 3
+  - source: "phatnguyen03022001/agent-skills@1826d33bd1e467896c133109b37db8b0656b3276"
+    role: "Pinned execution governance."
+    precedence: 4
+
+structure_authority:
+  status: NOT_APPLICABLE
+  source: ""
+  rationale: "Bounded work inside existing package/provenance/test ownership; no new subsystem is authorized."
+
+objective: "Produce one exact sealed non-installed Agent Runtime candidate from the final TASK-0046 implementation commit and establish the smallest deterministic non-interactive source/candidate freeze gate suitable for local or CI execution, so TASK-0047 can consume that exact retained candidate without rebuilding or re-signing it."
+
+scope:
+  required_changes:
+    - "Add the smallest repository-owned non-interactive freeze gate that binds candidate construction to one clean exact source commit/tree and fails closed on source or lock identity drift."
+    - "Reuse the existing package_app/package_provenance/external candidate handoff contracts instead of creating a competing candidate identity or provenance system."
+    - "After implementation bytes stabilize, create the final implementation commit, run one canonical full repository verification on that exact implementation candidate, then build and validate one final sealed non-installed Agent Runtime.app through the real package path."
+    - "Record exact source revision/tree, requirements.lock SHA-256, packaged Python identity, runtime payload/manifest identity, external candidate closure digest, strict codesign result, and leakage checks required to hand the retained candidate to TASK-0047."
+    - "Make the freeze gate directly runnable on the canonical macOS arm64 environment and suitable for CI invocation. GitHub Actions workflow creation is not required merely to satisfy the term CI; add one only if repository evidence makes it necessary for the gate itself."
+    - "Add focused regressions proving fail-closed behavior for dirty/source-drift or identity-mismatch cases relevant to the chosen gate."
+    - "Retain the final sealed candidate and its external handoff locally for downstream TASK-0047; report their exact paths and digests. Final retained candidate cleanup is forbidden in this task."
+  allowed_existing_files_or_components:
+    - "macos/package_app.sh, macos/package_provenance.py, and narrowly scoped freeze-gate companion code"
+    - "verify and narrowly scoped package/provenance/freeze tests"
+    - "README.md only if the freeze invocation or handoff contract needs durable maintainer documentation"
+    - ".agent/tasks/TASK-0046/report.yaml"
+  expected_files_are_restrictive: false
+
+invariants:
+  - "The final frozen candidate is built from the exact final TASK-0046 implementation commit/tree, not from a dirty checkout or report commit."
+  - "TASK-0042/TASK-0044/TASK-0045 immutable-source, hash-lock, provenance, manifest-closure, signing, external-closure, and no-leakage guarantees remain authoritative."
+  - "The existing external candidate handoff remains the primary candidate identity; do not add a second competing manifest/schema unless exact acceptance evidence proves it unavoidable."
+  - "Targeted/affected tests are the inner loop; one canonical full verification is the final source gate on the exact implementation candidate before downstream handoff."
+  - "A later report-only commit does not authorize rebuilding the frozen candidate and does not change the candidate's embedded source identity."
+  - "AGENT_RUNTIME_MAX_PARALLELISM checkout=4 versus canonical-live=2 remains a TASK-0047 live/canonical-config concern and is not normalized here."
+  - "Remote Desktop Commander may be used as the local execution transport when it is the currently available sufficient authorized candidate; it is not a fifth execution surface and grants no extra lifecycle authority."
+  - "No live Agent Runtime install, activation, start, stop, restart, reload, COMMIT/ROLLBACK, runtime.env, tunnel/listener, port 8080, LaunchAgent, main, tag, or release mutation occurs in TASK-0046."
+
+forbidden_changes:
+  - "Do not install or activate the frozen candidate on the operator's live Runtime."
+  - "Do not rebuild or re-sign the final frozen candidate after its handoff identity is recorded."
+  - "Do not change dependency versions, public MCP contracts, Runtime protection semantics, tunnel identity, listener binding, or live configuration."
+  - "Do not add containers, build services, artifact registries, generalized workflow engines, or multi-platform matrices."
+  - "Do not create TASK-0047 as Executor work; Architect owns successor task materialization after TASK-0046 review."
+  - "Do not fix the live parallelism mismatch in this source-freeze task."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "A deterministic non-interactive source/candidate freeze gate exists and fails closed unless it is operating on the exact clean final implementation commit/tree and expected lock identity."
+    evidence_required: "Focused positive and negative tests plus one real invocation on the exact final implementation commit."
+  - id: AC-2
+    requirement: "One final sealed non-installed candidate is built through the real package path from the exact final implementation commit after source bytes stabilize."
+    evidence_required: "Record exact implementation commit/tree, build command, retained candidate path, external handoff path, and prove no live installation occurred."
+  - id: AC-3
+    requirement: "The final candidate preserves the accepted provenance and integrity contracts."
+    evidence_required: "Strict deep codesign, embedded runtime-manifest closure, external whole-app closure, source revision/tree, requirements.lock SHA-256, packaged CPython 3.13/cp313/macOS arm64 identity, and leakage checks all PASS."
+  - id: AC-4
+    requirement: "The freeze gate reuses the accepted external candidate handoff as candidate identity and does not introduce unnecessary competing authority."
+    evidence_required: "Source/diff inspection and exact handoff validation prove one coherent candidate identity chain."
+  - id: AC-5
+    requirement: "Canonical repository verification passes once on the exact final implementation candidate before freeze handoff."
+    evidence_required: "Record ./verify result, test count, exit code, exact implementation commit/tree, and rerun rationale only if later source-byte changes invalidate the gate."
+  - id: AC-6
+    requirement: "The freeze command is suitable for local or CI execution without requiring a new CI platform or GitHub Actions workflow."
+    evidence_required: "Run the non-interactive gate on the canonical local environment and prove deterministic exit status plus attributable failure output for at least one invalid-source case."
+  - id: AC-7
+    requirement: "The exact frozen candidate remains available for TASK-0047 consumption without rebuild or re-sign."
+    evidence_required: "Report exact retained local candidate/handoff paths and digests, validate them after report preparation, and do not clean the retained final candidate."
+  - id: AC-8
+    requirement: "Published dev lineage contains one TASK-0046 implementation commit followed by one report-only commit, non-force, with main unchanged, then stops for Architect review."
+    evidence_required: "Fresh remote refs plus exact task-base -> implementation -> report lineage and report-only diff proof."
+
+verification:
+  executor_checks:
+    - id: V-1
+      command_or_check: "During iteration run only focused freeze/provenance/package regressions affected by current edits."
+      required: true
+    - id: V-2
+      command_or_check: "Create the final implementation commit, require a clean exact checkout, and run ./verify once on that exact implementation candidate."
+      required: true
+    - id: V-3
+      command_or_check: "Run the real non-interactive freeze/package path once on the exact implementation commit and retain the final candidate plus external handoff."
+      required: true
+    - id: V-4
+      command_or_check: "Validate the final retained candidate with strict codesign, runtime-manifest closure, external candidate closure, exact source/tree/lock identity, packaged interpreter identity, and leakage checks."
+      required: true
+    - id: V-5
+      command_or_check: "Exercise at least one fail-closed source/cleanliness or identity-drift case without mutating live Runtime state."
+      required: true
+    - id: V-6
+      command_or_check: "Audit exact base-to-implementation diff for forbidden live/public/dependency/parallelism/main/release changes."
+      required: true
+    - id: V-7
+      command_or_check: "Fresh-resolve origin/dev and origin/main immediately before and after non-force publication; fail closed on unexpected drift."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "NONE"
+    expected_signal: "NOT_REQUIRED_FOR_THIS_EXECUTION_TASK"
+
+publication:
+  implementation_commit_required: true
+  report_path: .agent/tasks/TASK-0046/report.yaml
+  required_report_revision: 1
+  push: non_force_dev
+  stop_for_architect_review: true
+
+git_authority:
+  create_branch: false
+  create_worktree: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+live_boundary:
+  allowed: "Source freeze, non-installed candidate construction, candidate validation, and retained local handoff only."
+  forbidden: "Live install/activation/lifecycle mutation, runtime.env/tunnel/listener/port/LaunchAgent mutation, COMMIT/ROLLBACK, main promotion, tags, or releases."
+
+downstream_handoff:
+  sequence: "TASK-0046 deterministic candidate construction + source/CI freeze -> TASK-0047 authorized exact-candidate live cutover + rollback + active-generation/canonical-config/post-cleanup proof"
+  create_successor_tasks_now: false
+  note: "Executor stops after TASK-0046 report publication for Architect review."
+
+blocking_decisions: []
+execution_ready: true
