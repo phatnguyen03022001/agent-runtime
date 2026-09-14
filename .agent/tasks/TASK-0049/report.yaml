@@ -1,0 +1,247 @@
+protocol_version: 3
+
+task_id: TASK-0049
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0049/task.yaml
+  commit: "d155a33b1bf1b0b2b3775e290cb20e0ba7d997d9"
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "d155a33b1bf1b0b2b3775e290cb20e0ba7d997d9"
+  final_execution_head: "9db648fb37a2bd8d3eb5c1ac95661adfd0fa4195"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - repository_content_write
+    - local_native_execution
+    - deterministic_candidate_freeze
+    - git_commit
+    - non_force_dev_publication
+  available:
+    - repository_content_write
+    - local_native_execution
+    - deterministic_candidate_freeze
+    - git_commit
+    - non_force_dev_publication
+  missing: []
+  passed: true
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: NOT_REQUIRED_FOR_THIS_EXECUTION_TASK
+  evidence: "TASK-0049 revision 1 requires Executor verification gates but no separate authoritative verifier."
+
+pushed: true
+
+execution_transport:
+  primary: Remote Desktop Commander
+  chatgpt_sandbox_used: false
+implementation:
+  commit: "9db648fb37a2bd8d3eb5c1ac95661adfd0fa4195"
+  parent: "d155a33b1bf1b0b2b3775e290cb20e0ba7d997d9"
+  tree: "cfff5ea2ee2375b2de451c134c629b6db3190aab"
+  changed_paths:
+    - macos/candidate_cutover.py
+    - tests/test_candidate_cutover.py
+    - tests/test_service_recovery.py
+    - tests/test_tunnel_identity.py
+  scope_summary: "LaunchAgent replacement now refreshes both owned UI and Runtime services through explicit bootout, bounded observable service absence, bootstrap, and exact registered program verification. Launchctl failures retain bounded redacted operation/return-code/stdout/stderr diagnostics while TASK-0048 rollback and strict candidate trust semantics remain intact."
+
+verification:
+  tdd_red:
+    result: PASS
+    evidence: "Focused regressions were observed RED before production changes: delayed Runtime disappearance reproduced bootstrap error 37, loaded UI still reused kickstart -k, absence timeout and service-identity helpers were missing, and launchctl diagnostics omitted actionable return-code/output evidence."
+  focused_candidate_cutover:
+    command: "python3 -m unittest tests.test_candidate_cutover"
+    result: PASS
+    tests: 24
+    failures: 0
+    evidence: "Final focused cutover coverage includes delayed disappearance, fail-closed timeout, UI replacement, exact program identity, bounded credential-redacted diagnostics, opaque legacy rollback, snapshot tamper/PARTIAL semantics, and strict candidate validation."
+  compatibility_regressions:
+    result: PASS
+    tests: 7
+    failures: 0
+    evidence: "The seven failures from the first full run were isolated to compatibility fixtures/assertions: legacy fake launchctl absence used rc=1 with empty output instead of real macOS rc=113 plus 'Could not find service', and one text assertion depended on the former inline Runtime bootstrap implementation. Corrected compatibility tests passed 7/7 without weakening source fail-closed behavior."
+  canonical_verify:
+    command: "./verify"
+    runs:
+      - run: 1
+        verified_commit: "46b045440f6a3dc030164737d4f1812a12152889"
+        verified_tree: "8e1889fe667a12ca1a4efd007db3c12cd005291f"
+        result: FAIL
+        tests: 220
+        failures: 7
+        exit_code: 1
+        evidence: "Diagnostic run on the temporary implementation commit failed 7/220 because legacy test fixtures modeled launchctl service absence incorrectly and one structural assertion required the previous inline bootstrap source shape."
+      - run: 2
+        verified_commit: "9db648fb37a2bd8d3eb5c1ac95661adfd0fa4195"
+        verified_tree: "cfff5ea2ee2375b2de451c134c629b6db3190aab"
+        result: PASS
+        tests: 220
+        failures: 0
+        exit_code: 0
+        evidence: "After the accepted compatibility test-byte corrections, the exact final implementation completed 'Ran 220 tests', 'OK', and exit 0."
+    run_count_on_final_implementation: 1
+    rerun_rationale: "Run 1 did not verify the final tree because accepted compatibility test bytes changed afterward; Run 2 is the only canonical ./verify execution on the final implementation commit."
+  freeze_gate:
+    command: "python3.13 macos/freeze_candidate.py --source-revision 9db648fb37a2bd8d3eb5c1ac95661adfd0fa4195 --source-tree cfff5ea2ee2375b2de451c134c629b6db3190aab --requirements-lock-sha256 80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
+    result: PASS
+    successful_candidate_builds: 1
+    deterministic_exit_status: 0
+    scratch_checkout: "/private/tmp/agent-runtime-task0049.xhWSOq"
+    scratch_head: "9db648fb37a2bd8d3eb5c1ac95661adfd0fa4195"
+    scratch_tree: "cfff5ea2ee2375b2de451c134c629b6db3190aab"
+    scratch_clean_before_freeze: true
+    scratch_clean_after_freeze: true
+    scratch_removed_after_evidence: true
+    evidence: "A transient local clone from the existing canonical repository/object database was detached at the exact final implementation commit with a clean tree and exact lock hash. The deterministic freeze path ran exactly once, no Git worktree or network clone was used, and only the final app plus handoff were copied back to canonical build/."
+
+frozen_candidate:
+  installed_or_activated: false
+  app_path: "/Users/tienphat/Developer/agent-runtime/build/Agent Runtime.app"
+  handoff_path: "/Users/tienphat/Developer/agent-runtime/build/Agent Runtime.candidate.json"
+  source_revision: "9db648fb37a2bd8d3eb5c1ac95661adfd0fa4195"
+  source_tree: "cfff5ea2ee2375b2de451c134c629b6db3190aab"
+  requirements_lock_sha256: "80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
+  runtime_payload_sha256: "25ea66b07d844c83e163dcb86037649f01a20809559aa28b54f0e64e5afcc5df"
+  runtime_manifest_files: 1021
+  candidate_sha256: "c4be39267c8e1e2b787aeacf41c3b7872b6458058ed05466dda5cae5fca74039"
+  candidate_record_count: 1027
+  handoff_sha256: "362faede3d737d396b28afc9b2c71ab34a0cfbf8d5b71866842ad3e5470a2815"
+  packaged_python_identity: "cpython / 3.13.13 / cpython-313 / cpython-313-darwin / darwin / arm64"
+  strict_deep_codesign: PASS
+  runtime_manifest_closure: PASS
+  external_candidate_closure: PASS
+  packaged_probe_cache_entries_before: 0
+  packaged_probe_cache_entries_after: 0
+  checkout_path_leakage: ABSENT
+  git_env_artifact_leakage: ABSENT
+  copied_to_canonical_build: true
+  post_copy_identity_revalidated: true
+  evidence: "The canonical retained app and handoff revalidated to the exact scratch identities after copy. Strict deep codesign, 1021-file runtime manifest closure, 1027-record whole-app closure, exact source/tree/lock binding, packaged CPython identity, zero-cache probe, checkout-path leakage scan, and Git/environment artifact scan all passed."
+
+scope_audit:
+  base: "d155a33b1bf1b0b2b3775e290cb20e0ba7d997d9"
+  implementation: "9db648fb37a2bd8d3eb5c1ac95661adfd0fa4195"
+  result: PASS
+  changed_paths: "macos/candidate_cutover.py, tests/test_candidate_cutover.py, tests/test_service_recovery.py, tests/test_tunnel_identity.py"
+  dependencies_unchanged: true
+  public_mcp_unchanged: true
+  capacity_parallelism_policy_unchanged: true
+  live_config_tunnel_listener_port_unchanged: true
+  main_tags_releases_topology_unchanged: true
+operator_state_preservation:
+  env_example:
+    state: PRESERVED_UNRELATED_TRACKED_DRIFT
+    staged_or_committed_by_task: false
+  untracked_files:
+    - path: chatgpt-sample.txt
+      inode: 141031895
+      size: 383332
+      mtime: 1789397674
+      ctime: 1789397674
+      mode: "0644"
+      content_read: false
+    - path: vscode-gpu-sample.txt
+      inode: 141047688
+      size: 523563
+      mtime: 1789398971
+      ctime: 1789398971
+      mode: "0644"
+      content_read: false
+  evidence: "The unrelated .env.example drift was never staged, committed, reset, stashed, cleaned, moved, deleted, or adopted. The two operator sample files were never content-read and their observed metadata remained unchanged through implementation, verification, freeze, scratch cleanup, and implementation publication."
+
+mutation_boundaries:
+  live_runtime_installed_or_reinstalled: false
+  live_runtime_activated_or_reloaded: false
+  live_runtime_restarted_or_stopped: false
+  live_cutover_performed: false
+  live_rollback_performed: false
+  live_commit_performed: false
+  live_launchagents_mutated: false
+  runtime_env_mutated: false
+  tunnel_identity_mutated: false
+  listener_binding_mutated: false
+  desired_state_mutated: false
+  port_8080_mutated: false
+  capacity_policy_mutated: false
+  parallelism_policy_mutated: false
+  main_promoted: false
+  tag_or_release_work_performed: false
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PROVEN
+    evidence: "Focused tests reproduce the observed error-37 race with delayed Runtime service disappearance. Cutover now waits on bounded launchctl print observations until exact service absence before bootstrap, and timeout fails closed."
+  - criterion_id: AC-2
+    status: PROVEN
+    evidence: "A loaded UI registration is explicitly booted out and observed absent, then the new UI plist is bootstrapped; kickstart -k is not reused for UI replacement, and exact registered program identity is verified before continuation."
+  - criterion_id: AC-3
+    status: PROVEN
+    evidence: "Launchctl failure tests retain operation, return code, and bounded stdout/stderr while redacting credential-like assignments, including whitespace-bearing values; runtime.env values are not read for diagnostics."
+  - criterion_id: AC-4
+    status: PROVEN
+    evidence: "The final 24/24 candidate-cutover suite preserves TASK-0048 opaque legacy rollback, snapshot tamper rejection, PARTIAL semantics, strict incoming/staged/installed candidate validation, exact service/config restoration, and final candidate provenance/codesign/closure validation."
+  - criterion_id: AC-5
+    status: PROVEN
+    evidence: "Canonical ./verify Run 1 on temporary commit 46b0454 failed 7/220 as diagnostic evidence. After accepted compatibility test-byte corrections, Run 2 ran exactly once on final implementation 9db648f/tree cfff5ea and passed 220/220 with exit 0."
+  - criterion_id: AC-6
+    status: PROVEN
+    evidence: "Exactly one final deterministic non-installed candidate was frozen from the clean detached exact implementation commit, copied to canonical build/, and revalidated with candidate SHA-256 c4be3926... and handoff SHA-256 362faede.... No live activation occurred."
+  - criterion_id: AC-7
+    status: NOT_PROVEN
+    evidence: "Before this report commit, origin/dev was freshly proven at the task base, then non-force advanced to exact implementation 9db648f; origin/main remained c49d777. This report cannot truthfully attest its own future report-only commit or post-publication remote identity; final lineage and preservation are resolved after report publication."
+
+executor_checks:
+  - check_id: V-1
+    result: PASS
+    evidence: "Targeted regressions reproduced the Runtime error-37 sequencing defect and UI stale-registration behavior before the source fix; final focused candidate-cutover tests passed 24/24."
+  - check_id: V-2
+    result: PASS
+    evidence: "Tests prove bounded service-absence polling, timeout failure, exact newly registered service program identity, and bounded credential-redacted launchctl diagnostics."
+  - check_id: V-3
+    result: PASS
+    evidence: "Opaque rollback and strict candidate verification remain covered by focused tests and by the retained candidate's strict provenance, manifest closure, whole-app closure, and codesign checks."
+  - check_id: V-4
+    result: PASS
+    evidence: "Final implementation 9db648f/tree cfff5ea is the sole direct child implementation of the exact base, and canonical ./verify passed 220/220 exactly once on that final commit."
+  - check_id: V-5
+    result: PASS
+    evidence: "The deterministic freeze path ran once in a clean detached local scratch clone and retained exactly one final non-installed candidate plus external handoff under canonical build/."
+  - check_id: V-6
+    result: NOT_PROVEN
+    evidence: "Pre-publication refs, implementation publication, main preservation, and operator-state preservation passed. Report-only publication, final remote refs, exact final lineage, and final local preservation are intentionally resolved after this report commit."
+
+publication:
+  implementation_commit: "9db648fb37a2bd8d3eb5c1ac95661adfd0fa4195"
+  implementation_pushed: true
+  implementation_push_mode: non_force_dev
+  implementation_push_retry_reason: "The first push command used a zsh-ambiguous variable/refspec expression and failed locally before remote mutation. Fresh remote refs reconfirmed origin/dev at the exact base and origin/main unchanged before the corrected explicit non-force refspec was pushed."
+  report_path: .agent/tasks/TASK-0049/report.yaml
+  report_commit: null
+  push_mode: non_force_dev
+  force_push: false
+  main_promoted: false
+  next_step: ARCHITECT_REVIEW_AFTER_PUBLICATION_PROOF
+
+local_hygiene:
+  result: PASS
+  evidence: "The transient scratch clone /private/tmp/agent-runtime-task0049.xhWSOq was removed only after scratch evidence and canonical-copy revalidation completed. Retained build artifacts are the final candidate and handoff; unrelated operator state remains preserved."
+
+deviations_from_task:
+  - "The first implementation push command failed locally before any remote mutation because zsh interpreted an unbraced variable/refspec expression. Fresh remote refs were revalidated unchanged before the corrected non-force push."
+
+result: NEEDS_REVIEW
