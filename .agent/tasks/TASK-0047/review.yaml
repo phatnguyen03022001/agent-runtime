@@ -1,55 +1,61 @@
 protocol_version: 3
 
 task_id: TASK-0047
-task_revision: 3
-review_revision: 3
+task_revision: 4
+review_revision: 4
 state: BLOCKED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0047/report.yaml
-  commit: "2b11eff944c4506250f66dccf2508c4f7bf6e242"
-  report_revision: 3
+  commit: "3a50ebda4b63baa5ca8d6f5a40224f1aebb194d0"
+  report_revision: 4
 
 reviewed_base:
-  commit: "13944c22510337de0616d9152f56fcb53c5ec1dd"
+  commit: "b6f7033e0b1a6f65ffa3419d47f67599272b917d"
 
 contract_compliance:
   protocol_version: PASS
   identity: PASS
   execution_base: PASS
   publication_scope: PASS
-  fail_closed_live_failure: PASS
-  transactional_rollback: PASS
+  rehearsal_rollback: PASS
+  fail_closed_final_rollback: PASS
   replacement_cycle_boundary: PASS
+  operator_state_preservation: PASS
 
 criterion_judgment:
   AC-1: PASS
-  AC-2: BLOCKED
+  AC-2: PASS
   AC-3: PASS
-  AC-4: NOT_RUN
+  AC-4: BLOCKED
   AC-5: NOT_RUN
   AC-6: NOT_RUN
   AC-7: PASS
+  AC-8: NOT_TRIGGERED
 
 accepted_evidence:
-  - "Exact r3 binding, accepted TASK-0048 candidate, canonical runtime.env/tunnel/listener/health state, opaque rollback closure, and five-tool pre-cutover MCP route all passed before mutation."
-  - "Exactly one rehearsal replacement attempt was consumed; failure occurred before PENDING at Runtime LaunchAgent registration, and transactional rollback restored the exact legacy app/service/config state."
-  - "Retained candidate remained byte-identical and strict-valid after rollback; no rebuild, re-sign, legacy normalization, live config mutation, source mutation, main promotion, tag, or release occurred."
-  - "Published r3 lineage is exactly 13944c22510337de0616d9152f56fcb53c5ec1dd -> 2b11eff944c4506250f66dccf2508c4f7bf6e242; the direct-child diff changes only .agent/tasks/TASK-0047/report.yaml and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
-  - "Fresh macOS unified-log evidence identifies the Runtime failure: bootout began at 01:43:47.201, bootstrap was invoked at 01:43:47.206, launchd rejected it with error 37 Operation already in progress, and the old service was only removed at 01:43:47.222."
-  - "The same trace exposes a UI lifecycle defect: kickstart -k reused the old UI registration after app replacement and the candidate UI launch hit macOS Launch Constraint/codesigning rejection."
+  - "Published r4 lineage is exactly b6f7033e0b1a6f65ffa3419d47f67599272b917d -> 3a50ebda4b63baa5ca8d6f5a40224f1aebb194d0 and the direct-child diff changes only .agent/tasks/TASK-0047/report.yaml; main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "Cycle 1 completed one real PENDING -> explicit ROLLBACK rehearsal and restored the exact captured legacy app closure, LaunchAgent bytes/modes/loaded state, desired state, runtime.env, singleton listener, health/readiness, and legacy MCP route."
+  - "The accepted TASK-0049 candidate and handoff remained byte-identical after rehearsal and after the final rollback; no rebuild or re-sign occurred."
+  - "Cycle 2 reached PENDING and passed installed candidate identity, candidate LaunchAgent registration, canonical runtime.env, singleton listener, and tunnel checks before the Executor added an extra process-tree predicate."
+  - "The failing predicate required exactly one persistent MCP child under the canonical tunnel process. TASK-0047 r4 does not require that predicate. The canonical V-4 contract requires exact six-tool surface and harmless callability, including a bounded terminal_start -> terminal_poll -> terminal_control lifecycle."
+  - "Executor fail-closed handling explicitly rolled back cycle 2 and did not perform a third replacement cycle, exact-six-tool E2E, COMMIT, or plugin reload instruction."
+  - "Fresh Architect read-only post-report verification observed local HEAD/origin/dev at 3a50ebda4b63baa5ca8d6f5a40224f1aebb194d0, origin/main unchanged, only the preserved .env.example drift plus the two untracked operator files, retained handoff SHA-256 362faede3d737d396b28afc9b2c71ab34a0cfbf8d5b71866842ad3e5470a2815, strict deep codesign PASS, exactly one listener on 127.0.0.1:8080, healthz live, and readyz ready."
 
 architect_finding:
-  classification: LAUNCHAGENT_REFRESH_SEQUENCING_DEFECT
-  description: "candidate_cutover.py assumes bootout completion is ready for immediate bootstrap and reuses the old UI registration after replacing app bytes. The owned LaunchAgent refresh sequence must become state-aware and observable for both services."
+  classification: EXECUTOR_VERIFICATION_SCOPE_DEFECT
+  description: "The final r4 cycle was consumed by an Executor-added persistent MCP child process-tree assertion that is outside the canonical task proof contract. The evidence does not identify a Runtime implementation or candidate defect. Because r4 correctly fail-closed rolled back and exhausted its two-cycle authority, r4 cannot continue."
 
 continuation:
-  action: NEW_BOUNDED_SOURCE_TASK_REQUIRED
-  preserve_completed_r3_replacement_cycles: 1
-  required_design: "For both owned LaunchAgents, make deregistration-to-absence explicit before registering the new plist/app identity; capture bounded launchctl return code/stdout/stderr on failure; verify newly registered service identity before activation; preserve exact transactional rollback and strict candidate verification. Avoid arbitrary sleeps and unbounded retry loops."
-  return_to_live_cutover_after_acceptance: true
+  action: REVISE_TASK_0047_FOR_FINAL_CUTOVER_ONLY
+  carry_forward_rehearsal: true
+  fresh_replacement_cycles_authorized: 1
+  rationale: "The exact accepted candidate already completed the required rehearsal rollback in r4 and the legacy pre-state was restored exactly. Repeating rehearsal would add disruption without new proof value. The next revision may perform one final PENDING -> COMMIT attempt only, after fresh preflight and exact candidate revalidation."
+  proof_boundary: "Use only TASK-0047 canonical predicates. Do not invent process-tree cardinality, persistent MCP-child topology, or other additional acceptance gates. Exact six-tool surface plus bounded harmless callability is the MCP proof contract."
+
 notes:
-  - "Do not retry TASK-0047 r3; its rehearsal attempt was consumed and AC-2 remains unsatisfied."
-  - "A later TASK-0047 revision may receive fresh bounded replacement-cycle authority only after the LaunchAgent sequencing fix and a new sealed candidate are accepted."
-  - "No live mutation is authorized by this review."
+  - "No third cycle is authorized under r4."
+  - "Parallelism policy remains deferred until successful live stability is proven."
+  - "Plugin reload/reconnect instruction remains conditional on successful final generation replacement and post-commit stability."
+  - "dev-to-main promotion remains separate lifecycle work."
