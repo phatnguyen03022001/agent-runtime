@@ -1,0 +1,247 @@
+protocol_version: 3
+
+task_id: TASK-0045
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_packaging_defect_followup
+  task_id: TASK-0044
+  gap_id: PACKAGING_INTERPRETER_HASH_LOCK_AND_TAR_EXTRACTION
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "6930b8da48c9466389653fc55eb16f49eebbb28f"
+
+architect_analysis_skills: [simplicity, security-review, verification, github-workflow]
+
+execution_skills:
+  required: [executor, security-review, verification, github-workflow]
+  recommended: [simplicity]
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "Operator-reproduced normal-install packaging failure on 2026-09-14 plus the explicit TASK-0045 architecture in the current request."
+    role: "Governs the correction: one canonical packaging interpreter contract, one compatible complete hash lock, deterministic fail-fast interpreter selection, explicit tar extraction semantics, and no weakening of pip --require-hashes."
+    precedence: 1
+  - source: "phatnguyen03022001/agent-runtime@38b9684d6b6f0a92e5b61b787e823f166b67e3d4:.agent/tasks/TASK-0044/review.yaml"
+    role: "Accepted exact sealed-candidate handoff, rebuild-free prebuilt activation, transactional cutover, explicit COMMIT/ROLLBACK, and known-good rollback retention. TASK-0045 is a candidate-construction prerequisite and must not redesign these mechanics."
+    precedence: 2
+  - source: "phatnguyen03022001/agent-runtime@38b9684d6b6f0a92e5b61b787e823f166b67e3d4:.agent/tasks/TASK-0042/review.yaml"
+    role: "Accepted immutable exact-HEAD staging, complete hash-required dependency lock, fresh package-owned venv, runtime-manifest closure, codesign, reconstructible provenance, and no-secret guarantees that TASK-0045 must preserve."
+    precedence: 3
+  - source: "phatnguyen03022001/architect-profile@97215b78e69b0aebcd87574b7e0cc8c78f2e5c73"
+    role: "Fresh dev pin observed during TASK-0045 planning."
+    precedence: 4
+  - source: "phatnguyen03022001/agent-skills@6930b8da48c9466389653fc55eb16f49eebbb28f"
+    role: "Fresh dev pin observed during TASK-0045 planning and governing task skill library for this task."
+    precedence: 5
+  - source: "phatnguyen03022001/agent-documents@ff135cde2dbebbffcd0c33415a7abaf1b2e2c4ec"
+    role: "Fresh dev pin observed during TASK-0045 planning."
+    precedence: 6
+  - source: "phatnguyen03022001/agent-standards@4eb149686329b3a5ad74d66a6fce050d930ada39"
+    role: "Fresh dev pin observed during TASK-0045 planning."
+    precedence: 7
+  - source: "phatnguyen03022001/agent-runtime@EXECUTION_BASE_AFTER_FINAL_PLANNING_COMMIT"
+    role: "Target repository self-pin is supplied by execution_base and exact launch HEAD; pre-planning accepted dev state was 38b9684d6b6f0a92e5b61b787e823f166b67e3d4."
+    precedence: 8
+
+structure_authority:
+  status: NOT_APPLICABLE
+  source: ""
+  rationale: "This is one bounded correction inside the existing package/install/provenance ownership boundary. No new service, framework, package manager, environment manager, container, registry, or source ownership layer is authorized."
+
+objective: "Make Agent Runtime candidate construction use one explicit supported packaging interpreter identity and a complete hash lock valid for that identity, fail fast before dependency installation on unsupported interpreter/platform combinations, and make immutable Git archive extraction semantics explicit and stable across Python-version default changes while preserving TASK-0042 provenance/security and TASK-0044 cutover mechanics."
+
+reproduced_failure:
+  workflow_boundary: "Normal installation reached [4/8] Building package-owned Runtime payload and menu-bar app, then package construction failed during pip --require-hashes."
+  package: "cffi==2.1.1"
+  locked_sha256: "661c298b4821edebead0c91edd2b00374d67ad7c5a1f7a91d4442633b79d6a72"
+  selected_artifact: "cffi-2.1.1-cp313-cp313-macosx_11_0_arm64.whl"
+  selected_artifact_sha256: "19ee6127ee34de7d83ce3d371ebc5ed91addbdcc39f9ab15ce4eb35a4e534971"
+  interpretation: "The checked-in lock authorizes a different distribution artifact than pip selected for the operator packaging interpreter. pip hash rejection is correct fail-closed behavior and is not evidence of PyPI tampering."
+  second_signal: "The same packaging run emitted the Python 3.14 tarfile.extractall default-filter DeprecationWarning because immutable Git archive staging does not pass an explicit extraction filter."
+
+root_cause: "The repository declares packaging compatibility as arbitrary first python3 from PATH with Python >= 3.11, but requirements.lock is a one-hash-per-distribution artifact set that is not proven valid across all supported CPython ABIs on macOS arm64. The executable-selection contract and lock-artifact contract therefore disagree. Immutable tar extraction also relies on a Python-version-dependent default rather than an explicit extraction policy."
+
+packaging_interpreter_contract:
+  implementation: CPython
+  version: "3.13.x"
+  abi: cp313
+  operating_system: macOS
+  architecture: arm64
+  rationale: "The reproduced operator packaging environment selected the cp313 macOS arm64 cffi wheel. One explicit CPython 3.13/cp313 Darwin arm64 packaging contract is the smallest correction; broad Python >=3.11 multi-ABI support is not required."
+  selection_requirements:
+    - "Normal packaging/install candidate construction must resolve a versioned CPython 3.13 interpreter and validate implementation, major/minor version, cp313 ABI, Darwin, and arm64 before any pip dependency download/install/build action."
+    - "Generic first python3 from PATH is not a sufficient packaging-interpreter contract and must not be used as a silent fallback for candidate construction."
+    - "If the canonical packaging interpreter is unavailable or its identity does not match CPython 3.13/cp313/macOS/arm64, fail immediately with a precise unsupported-packaging-interpreter diagnostic before dependency installation."
+    - "Do not mutate global Python installations, require system Python replacement, install a Python environment manager, or silently fall back across unrelated interpreters."
+    - "The exact resolver/helper decomposition is Executor-local HOW, but conflicting-PATH tests must prove that an unrelated generic python3 cannot silently become the packaging interpreter."
+
+scope:
+  required_changes:
+    - "Replace the current candidate-construction contract of command -v python3 plus Python >=3.11 with deterministic selection/validation of the canonical CPython 3.13/cp313/macOS/arm64 packaging interpreter. Apply the same contract wherever the normal install/package path installs requirements.lock for candidate construction or its prerequisite verification environment, so an existing incompatible checkout .venv cannot mask or reintroduce ABI drift."
+    - "Regenerate or systematically correct requirements.lock for the complete transitive runtime dependency closure selected by the canonical packaging environment. Preserve exact versions and SHA-256 authorization and preserve pip --require-hashes. Do not patch only cffi; audit native/platform-sensitive packages including cffi, cryptography, pydantic_core, rpds-py and the rest of the closure."
+    - "The checked-in lock must authorize every distribution artifact actually selected by pip for the canonical packaging environment. The final proof must map installed distributions to the exact locked version and selected artifact hash; unsupported ABI/platform artifacts must not be treated as implicitly supported merely because they share a package version."
+    - "Define the smallest deterministic lock generation/audit procedure using the canonical interpreter and existing pip/standard tooling. The procedure must state the target identity CPython 3.13/cp313/macOS/arm64, resolve the complete closure from requirements.txt, capture exact versions, hash the exact selected artifacts, and verify the resulting lock through a fresh temporary venv install with pip --require-hashes. No dependency-management platform or generalized multi-platform lock system is authorized."
+    - "Record the lock target identity in the smallest durable repository surface needed for maintainers to regenerate/audit it, and update package documentation only as required. requirements.txt remains the direct dependency declaration unless current evidence requires the smallest compatible correction."
+    - "Make immutable git archive extraction explicit under the canonical interpreter by passing the standard-library safe data extraction filter or an equivalently explicit standard-library filter API supported by CPython 3.13. Preserve the existing pre-extraction rejection of absolute/traversal paths, symlinks, hardlinks, and unsupported non-regular entries. Do not weaken TASK-0042 source-staging security."
+    - "Remove the existing regression assumption that export_head must work without the tarfile filter keyword. Replace it with tests that require explicit deterministic extraction semantics, emit no extraction deprecation warning under the canonical interpreter, and retain unsafe-entry rejection."
+    - "Make the operator-supported normal candidate-construction boundary that exposed the defect pass from a clean exact candidate. Actual live activation is not required: the proof may run the same package-construction entry used by normal install, validate the resulting sealed non-installed candidate, and stop before live cutover."
+    - "Preserve TASK-0042 immutable exact-HEAD staging, fresh package-owned venv, complete transitive dependency locking, pip --require-hashes, no checkout .venv packaging, runtime manifest closure, strict codesign verification, reconstructible provenance, and no-secret guarantees."
+    - "Preserve TASK-0044 external post-sign candidate closure, prebuilt activation without rebuild/re-sign, pending transaction, explicit COMMIT/ROLLBACK, known-good rollback retention, and candidate-owned provenance semantics. Modify cutover code only if concrete regression evidence proves the smallest compatibility adjustment is required; otherwise leave it byte-identical."
+  allowed_existing_files_or_components:
+    - "requirements.txt and requirements.lock"
+    - "macos/package_app.sh"
+    - "macos/package_provenance.py"
+    - "install.sh only where normal install must select/validate the canonical packaging interpreter or keep its prerequisite checkout verification environment ABI-compatible"
+    - "tests/test_package_provenance.py, tests/test_surface_and_scripts.py, and narrowly focused package/interpreter/lock regressions"
+    - "README.md only as required for the packaging interpreter and lock maintenance contract"
+    - ".agent/tasks/TASK-0045/report.yaml"
+  expected_files_are_restrictive: false
+
+invariants:
+  - "pip --require-hashes remains mandatory for package dependency installation; dependency integrity checking is never disabled or downgraded to version-only pinning."
+  - "The supported candidate-construction environment is one explicit CPython 3.13/cp313/macOS/arm64 contract. TASK-0045 does not promise arbitrary Python >=3.11 ABI compatibility."
+  - "Unsupported packaging interpreter/platform identity fails before dependency download/install/build, not after pip has partially resolved or fetched the runtime closure."
+  - "requirements.lock closes over the complete transitive runtime dependency set for the canonical packaging environment, not only the observed cffi wheel."
+  - "Tar extraction behavior is explicit and deterministic for the canonical interpreter; future Python default-filter changes cannot silently change immutable source staging semantics."
+  - "TASK-0042 immutable exact-HEAD staging security, runtime manifest closure, strict codesign, reconstructible provenance, fresh package-owned venv, no checkout .venv packaging, and no-secret rules remain authoritative."
+  - "TASK-0044 sealed-candidate identity, rebuild-free prebuilt activation, transactional pending cutover, COMMIT/ROLLBACK, and known-good rollback retention remain unchanged unless a concrete regression requires the smallest explicitly reported compatibility fix."
+  - "Bit-for-bit reproducible builds are not claimed or required."
+  - "No live Agent Runtime install, activation, reload, restart, stop, runtime.env mutation, tunnel/listener mutation, desired-state mutation, LaunchAgent mutation, main promotion, tag, or release occurs in TASK-0045."
+  - "The downstream AGENT_RUNTIME_MAX_PARALLELISM checkout=4/canonical-live=2 freeze condition remains downstream and is not normalized here."
+
+forbidden_changes:
+  - "Do not weaken, remove, bypass, or conditionally disable pip --require-hashes."
+  - "Do not solve the defect by appending only the observed cffi hash without proving the complete canonical-environment closure."
+  - "Do not add broad hashes for every Python >=3.11 ABI/platform merely to retain an unsupported compatibility claim."
+  - "Do not classify the observed hash rejection as PyPI tampering without separate evidence."
+  - "Do not add containers, a Python version manager, dependency service, package/dependency-management platform, artifact registry, generalized multi-platform build matrix, reproducible-build framework, custom sandbox, or new daemon/service."
+  - "Do not redesign TASK-0044 candidate/cutover mechanics, add a second transaction system, or rebuild/re-sign a sealed candidate during prebuilt activation."
+  - "Do not change the six public MCP tools/schemas/semantics, Runtime protection model, fs_read_batch contract, capacity/timing behavior, tunnel identity, listener binding, or protected lifecycle semantics."
+  - "Do not run install/cutover against the operator's live Agent Runtime, start/stop/restart/reload the live Runtime, mutate runtime.env, port 8080, live LaunchAgents, installed app, desired state, main, tags, releases, or repository topology."
+  - "Do not create TASK-0046, TASK-0047, final freeze proof, final candidate freeze artifact, live active-generation proof, canonical-config proof, post-cleanup stability proof, main promotion, tag, or release in this task."
+  - "Do not introduce disposable independent workspace architecture; ordinary temporary test/build directories remain allowed where existing package verification requires them."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Candidate construction has one explicit canonical packaging interpreter contract: CPython 3.13.x, cp313 ABI, macOS, arm64; normal package/install selection is deterministic and no generic unrelated python3 can silently satisfy it."
+    evidence_required: "Focused regression fixtures prove canonical interpreter selection/identity validation and conflicting PATH behavior; record the exact interpreter executable and full identity used for final package proof without turning its machine-specific absolute path into cross-machine authority."
+  - id: AC-2
+    requirement: "An unsupported implementation/version/ABI/platform/architecture fails with a precise diagnostic before any dependency download/install/build."
+    evidence_required: "Deterministic negative fixtures exercise at least wrong Python minor/ABI and wrong platform/architecture identity and prove the pip/dependency-install command is never invoked."
+  - id: AC-3
+    requirement: "requirements.lock is a complete exact-version, SHA-256-authorized transitive runtime closure for the canonical packaging environment and every distribution selected by pip is authorized by that lock."
+    evidence_required: "Create a fresh temporary venv with the canonical interpreter and run pip --require-hashes -r requirements.lock successfully; audit installed distributions plus selected/downloaded artifact filenames and SHA-256 values against the lock, including native/platform-sensitive distributions."
+  - id: AC-4
+    requirement: "The reproduced cffi mismatch is closed by the coherent canonical-environment lock rather than a one-package exception."
+    evidence_required: "Regression/evidence records the pre-fix cffi locked hash 661c298b4821edebead0c91edd2b00374d67ad7c5a1f7a91d4442633b79d6a72, the cp313 macOS arm64 wheel hash 19ee6127ee34de7d83ce3d371ebc5ed91addbdcc39f9ab15ce4eb35a4e534971, and proves the corrected lock accepts the canonical selected artifact while the old mismatch would fail."
+  - id: AC-5
+    requirement: "Lock regeneration/audit has one small documented deterministic procedure bound to CPython 3.13/cp313/macOS/arm64 and does not introduce a new dependency-management subsystem."
+    evidence_required: "Source/docs inspection plus one execution of the procedure or its audit half proves complete closure, exact versions, exact selected artifact hashes, and a successful fresh hash-required install."
+  - id: AC-6
+    requirement: "Immutable Git archive staging uses explicit safe tar extraction semantics supported by CPython 3.13 and preserves existing unsafe-entry rejection."
+    evidence_required: "Focused tests prove an explicit extraction filter/API is passed, no extraction deprecation warning is emitted, safe exact-HEAD staging succeeds, and traversal, symlink/hardlink, and unsupported non-regular entries remain rejected."
+  - id: AC-7
+    requirement: "A clean exact implementation candidate builds one sealed non-installed Agent Runtime.app through the real normal package-construction path under the canonical interpreter."
+    evidence_required: "Run the actual package-construction entry used by normal install from a clean exact candidate; package build passes with hash-required dependency installation and records source revision/tree plus corrected requirements.lock SHA-256. Stop before live cutover."
+  - id: AC-8
+    requirement: "The resulting non-installed candidate preserves TASK-0042 and TASK-0044 integrity/provenance contracts."
+    evidence_required: "On the final sealed candidate prove strict deep codesign PASS, runtime-manifest exact closure PASS, external whole-app candidate closure PASS, expected source revision/tree PASS, corrected lock identity PASS, and no checkout/secret leakage."
+  - id: AC-9
+    requirement: "TASK-0045 does not mutate TASK-0044 cutover semantics or any live/public Runtime boundary."
+    evidence_required: "Exact base-to-candidate diff audit confirms no unauthorized candidate_cutover/public MCP/protection/live config/tunnel/listener/port 8080/installed package/LaunchAgent/main/tag/release mutation; any unavoidable compatibility touch to TASK-0044 mechanics must be separately identified and proven minimal or execution stops BLOCKED."
+  - id: AC-10
+    requirement: "After bytes stabilize, affected package/provenance/interpreter/lock tests and the canonical verification required by repository/task convention pass on the exact implementation candidate."
+    evidence_required: "Record targeted regression results during iteration, one broader affected package/provenance set after stabilization, canonical ./verify final result/run count where required by the stabilized task contract, exact candidate SHA/tree, and any invalidated rerun rationale."
+  - id: AC-11
+    requirement: "Published dev lineage contains one final TASK-0045 implementation candidate commit followed by one report-only commit, non-force, with main unchanged, then stops for Architect review."
+    evidence_required: "Fresh remote refs before/after publication plus exact base -> implementation -> report lineage and report-only diff proof."
+
+verification:
+  executor_checks:
+    - id: V-1
+      command_or_check: "Before implementation proof, preserve the reproduced mismatch as a deterministic regression: old first-python3/>=3.11 selection or old cffi lock artifact authorization must fail for the observed CPython 3.13/cp313/macOS arm64 case."
+      required: true
+    - id: V-2
+      command_or_check: "During iteration run minimum focused interpreter-selection, unsupported-identity, lock, and tar-extraction regressions. Prove unsupported identity exits before the dependency installer is invoked."
+      required: true
+    - id: V-3
+      command_or_check: "With the canonical CPython 3.13/cp313/macOS arm64 interpreter, create a fresh temporary venv and run pip --require-hashes -r requirements.lock. Audit the complete installed distribution set and exact selected artifact hashes against the checked-in lock."
+      required: true
+    - id: V-4
+      command_or_check: "After bytes stabilize, run the broader affected package/provenance/install-script test set once; do not run full verification after every edit."
+      required: true
+    - id: V-5
+      command_or_check: "Create the final implementation candidate commit, require a clean exact checkout, then run the canonical repository verifier once if required by the stabilized repository/task contract. If candidate bytes change afterward, rerun only the invalidated final gates and record why."
+      required: true
+    - id: V-6
+      command_or_check: "On the exact final implementation candidate, run one real non-installed package build through the normal package-construction entry under the canonical interpreter; verify strict codesign, runtime manifest closure, external candidate closure, exact source revision/tree, corrected lock SHA, and absence of secret/checkout references. Do not invoke live cutover."
+      required: true
+    - id: V-7
+      command_or_check: "Exercise tar staging under the canonical interpreter with warnings treated as evidence: no extraction deprecation warning is allowed, and unsafe archive-entry regressions must remain fail-closed."
+      required: true
+    - id: V-8
+      command_or_check: "Inspect exact task-base-to-candidate diff for unauthorized TASK-0044 cutover, public MCP, Runtime protection, live config/tunnel/listener/port/LaunchAgent/installed-package, downstream parallelism, main/tag/release, or topology mutation."
+      required: true
+    - id: V-9
+      command_or_check: "Fresh-resolve origin/dev and origin/main immediately before non-force publication and again after publication; fail closed on drift."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "NONE"
+    expected_signal: "NOT_REQUIRED_FOR_THIS_EXECUTION_TASK"
+
+publication:
+  implementation_commit_required: true
+  report_path: .agent/tasks/TASK-0045/report.yaml
+  required_report_revision: 1
+  push: non_force_dev
+  stop_for_architect_review: true
+
+git_authority:
+  create_branch: false
+  create_worktree: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+live_boundary:
+  allowed: "Non-installed candidate construction and validation only."
+  forbidden: "Installed Runtime mutation, lifecycle start/stop/restart/reload, runtime.env/tunnel/listener/port 8080/desired-state/LaunchAgent mutation, live cutover, COMMIT/ROLLBACK against the operator installation, main promotion, tags, or releases."
+
+downstream_handoff:
+  sequence: "TASK-0045 correction -> TASK-0046 deterministic candidate construction + CI/source freeze gate -> TASK-0047 authorized exact-candidate live cutover + rollback + active-generation/canonical-config/post-cleanup proof -> final Architect freeze judgment -> separate main promotion"
+  create_successor_tasks_now: false
+  note: "TASK-0045 produces corrected candidate-construction source and proof only. It must not materialize TASK-0046 or TASK-0047."
+
+blocking_decisions: []
+execution_ready: true
