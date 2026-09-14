@@ -1,16 +1,16 @@
 protocol_version: 3
 
 task_id: TASK-0047
-task_revision: 4
+task_revision: 5
 state: APPROVED
 
 origin:
   type: architect_live_cutover_followup
-  prior_report_commit: "2b11eff944c4506250f66dccf2508c4f7bf6e242"
-  prior_review_commit: "3cabfbd037f214b8e42d69556139ce460ccae260"
+  prior_report_commit: "3a50ebda4b63baa5ca8d6f5a40224f1aebb194d0"
+  prior_review_commit: "247b35c4fc77ebb03ce880be617fd97ab1df6432"
   source_fix_task: TASK-0049
   source_fix_review_commit: "2d1e501720ad12385e0b9f1d2773246f6d89352b"
-  gap_id: EXACT_ACCEPTED_CANDIDATE_LIVE_CUTOVER_AFTER_LAUNCHAGENT_FIX
+  gap_id: FINAL_CUTOVER_AFTER_EXECUTOR_VERIFICATION_SCOPE_DEFECT
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -35,20 +35,20 @@ execution_skills:
   recommended: [simplicity]
 
 authority_sources:
+  - source: "phatnguyen03022001/agent-runtime@247b35c4fc77ebb03ce880be617fd97ab1df6432:.agent/tasks/TASK-0047/review.yaml"
+    role: "Authoritative r4 review: rehearsal PASS, final rollback PASS, blocker classified as Executor verification-scope defect rather than Runtime defect."
+    precedence: 1
   - source: "phatnguyen03022001/agent-runtime@2d1e501720ad12385e0b9f1d2773246f6d89352b:.agent/tasks/TASK-0049/review.yaml"
     role: "Accepted LaunchAgent sequencing fix and exact retained candidate authority."
-    precedence: 1
-  - source: "phatnguyen03022001/agent-runtime@3cabfbd037f214b8e42d69556139ce460ccae260:.agent/tasks/TASK-0047/review.yaml"
-    role: "Authoritative r3 BLOCKED review; r3 consumed its rehearsal authority and identified the sequencing defect now fixed by TASK-0049."
     precedence: 2
   - source: "phatnguyen03022001/agent-runtime@6731a0f7b012cc628b4112ccfa77c5cc46f0a986:.agent/tasks/TASK-0048/review.yaml"
     role: "Accepted opaque legacy rollback semantics that remain mandatory."
     precedence: 3
-  - source: "Current operator authorization for this bounded TASK-0047 revision 4 live cutover."
-    role: "Authorizes only the exact replacement/lifecycle actions stated below."
+  - source: "Current operator authorization for this bounded TASK-0047 revision 5 final live cutover."
+    role: "Authorizes only the exact single final replacement/lifecycle actions stated below."
     precedence: 4
 
-objective: "Consume the exact TASK-0049 accepted retained candidate without rebuild or re-sign, prove one successful rehearsal PENDING->ROLLBACK, then perform one final PENDING cutover, prove exact six-tool live MCP behavior and installed-generation integrity, COMMIT only after all predicates pass, and prove bounded post-commit stability."
+objective: "Carry forward the already-proven r4 rehearsal rollback, perform exactly one final PENDING cutover with the exact TASK-0049 accepted candidate, prove only the canonical installed-generation and six-tool MCP predicates, COMMIT only after all predicates pass, then prove bounded stability and instruct the operator to reload/reconnect the ChatGPT Agent Runtime plugin."
 
 execution_transport:
   primary: Remote Desktop Commander
@@ -68,6 +68,13 @@ frozen_candidate:
   rebuild_allowed: false
   resign_allowed: false
 
+carried_forward_rehearsal:
+  source_report: "phatnguyen03022001/agent-runtime@3a50ebda4b63baa5ca8d6f5a40224f1aebb194d0:.agent/tasks/TASK-0047/report.yaml"
+  source_review: "phatnguyen03022001/agent-runtime@247b35c4fc77ebb03ce880be617fd97ab1df6432:.agent/tasks/TASK-0047/review.yaml"
+  result: PASS
+  repeat_required: false
+  rationale: "The exact accepted candidate already completed a real PENDING -> explicit ROLLBACK rehearsal and exact legacy restoration in r4. Repeating rehearsal adds disruption without additional proof value."
+
 canonical_live_config:
   path: "$HOME/Library/Application Support/Agent Runtime/runtime.env"
   required_mode: "0600"
@@ -76,74 +83,72 @@ canonical_live_config:
 
 scope:
   required_changes:
-    - "Fresh-resolve origin/dev and origin/main and reconcile the designated local checkout to the exact r4 execution base only by safe non-destructive fast-forward while preserving unrelated local state."
-    - "Before mutation, revalidate exact candidate/handoff identity, canonical candidate provenance and strict codesign, runtime.env mode/validation/parallelism=2, tunnel fingerprint, singleton listener, health/readiness, callable legacy MCP route, and opaque legacy rollback envelope."
-    - "Fresh replacement authority for r4 is exactly two cycles because TASK-0049 source fix is ACCEPTED: cycle 1 is one rehearsal PENDING->explicit ROLLBACK; cycle 2 is one final PENDING->COMMIT. No additional retry/replacement cycle is authorized."
-    - "For rehearsal, activate the exact candidate only through the accepted candidate_cutover transactional path, prove bounded basic generation/health state, explicitly ROLLBACK, and prove exact legacy app closure plus LaunchAgent bytes/modes/loaded state, desired state, runtime.env, listener/health/readiness restoration."
-    - "After rehearsal rollback, revalidate the same retained candidate and handoff byte identities; do not rebuild or re-sign."
-    - "For final cutover, activate the exact same candidate and prove installed candidate identity, strict codesign, runtime manifest and external closure, source/tree/lock, packaged interpreter, runtime.env=2, canonical tunnel identity, exactly one 127.0.0.1:8080 listener, and green healthz/readyz."
-    - "Before COMMIT, perform real live MCP E2E on the new generation and prove the public surface is exactly: terminal_exec, terminal_start, terminal_poll, terminal_control, capacity_observer, fs_read_batch. Harmless successful probes must include capacity_observer, fs_read_batch on benign repository content, terminal_exec using a non-mutating printf-style command, and one bounded terminal_start->terminal_poll->terminal_control lifecycle proving the persistent-session tools are callable without host mutation beyond that temporary process."
-    - "Only after every final predicate passes, explicitly COMMIT. Then prove transaction/rollback material is removed, installed identity remains exact, desired state remains RUNNING, and two consecutive bounded stability observations keep singleton listener, tunnel, health/readiness, and generation identity stable."
-    - "After successful generation change and stability proof, explicitly tell the operator: RELOAD / RECONNECT THE CHATGPT AGENT RUNTIME PLUGIN. Do not claim ChatGPT-side connector continuity before the operator performs that action."
-    - "Publish only .agent/tasks/TASK-0047/report.yaml revision 4 after operational state is stable; no source implementation belongs to this task."
+    - "Fresh-resolve origin/dev and origin/main and reconcile the designated local checkout to the exact r5 execution base only by safe non-destructive fast-forward while preserving unrelated local state."
+    - "Before mutation, revalidate exact candidate/handoff bytes, strict candidate provenance/codesign/closure, runtime.env mode/validation/parallelism=2, tunnel fingerprint, exactly one 127.0.0.1:8080 listener, green health/readiness, callable legacy MCP route, and exact restored legacy rollback pre-state."
+    - "r5 authorizes exactly ONE replacement cycle: one final PENDING -> COMMIT attempt. There is no rehearsal cycle in r5 and no retry/replacement cycle after this one is consumed."
+    - "Activate the exact retained candidate only through the accepted candidate_cutover transactional path."
+    - "While PENDING, prove installed candidate identity, strict codesign, runtime manifest and external closure, source/tree/lock, packaged interpreter, runtime.env=2, canonical tunnel identity, exactly one 127.0.0.1:8080 listener, and green healthz/readyz."
+    - "Before COMMIT, perform real live MCP E2E and prove the public surface is exactly: terminal_exec, terminal_start, terminal_poll, terminal_control, capacity_observer, fs_read_batch."
+    - "Harmless callability proof must include: capacity_observer; fs_read_batch on benign repository content; terminal_exec with a non-mutating printf-style command; and one bounded terminal_start -> terminal_poll -> terminal_control lifecycle for a temporary harmless process."
+    - "Do not add process-tree cardinality, persistent MCP-child topology, tunnel-child count, or any other acceptance predicate not stated in this task. Observational diagnostics may be recorded but cannot become a blocking gate unless this task explicitly names them."
+    - "Only after every stated final predicate passes, explicitly COMMIT. Then prove transaction/rollback material is removed, installed identity remains exact, desired state remains RUNNING, and two consecutive bounded stability observations keep singleton listener, tunnel, health/readiness, and generation identity stable."
+    - "After successful COMMIT and stability proof, explicitly tell the operator: RELOAD / RECONNECT THE CHATGPT AGENT RUNTIME PLUGIN. Do not claim ChatGPT-side connector continuity before the operator performs that action."
+    - "Publish only .agent/tasks/TASK-0047/report.yaml revision 5; no source implementation belongs to this task."
 
 invariants:
-  - "r3 replacement usage does not authorize retrying r3. r4 receives a fresh bounded 2-cycle authority only because the exact sequencing source fix and new candidate were independently ACCEPTED."
-  - "Any final acceptance failure while PENDING requires explicit ROLLBACK before terminal BLOCKED reporting unless rollback itself fails; rollback failure remains truthful PARTIAL evidence."
+  - "The r4 rehearsal PASS is carried forward and must not be repeated."
+  - "Exactly one final replacement cycle is authorized in r5. No retry or second replacement cycle is authorized."
+  - "Any stated acceptance failure while PENDING requires explicit ROLLBACK before terminal BLOCKED reporting unless rollback itself fails; rollback failure remains truthful PARTIAL evidence."
   - "Incoming/new candidate verification remains strict; legacy rollback trust remains exact opaque captured pre-state only."
+  - "Canonical proof predicates are closed over this task. Executor diagnostics must not silently become new acceptance requirements."
   - "No candidate rebuild/re-sign, source/test/docs/dependency/public-MCP mutation, runtime.env mutation, tunnel identity mutation, capacity/parallelism policy mutation, main/tag/release mutation, or broad process killing."
-  - "Runtime lifecycle authority exists only inside this r4 proof boundary and grants no standing restart authority afterward."
+  - "Runtime lifecycle authority exists only inside this r5 proof boundary and grants no standing restart authority afterward."
   - "Preserve unrelated .env.example drift and chatgpt-sample.txt / vscode-gpu-sample.txt; do not content-read, stage, commit, stash, clean, reset, move, delete, overwrite, or adopt those operator files/state."
 
 forbidden_changes:
   - "Do not run ./install.sh or any build-producing install path."
   - "Do not rebuild, re-sign, regenerate, or alter the frozen candidate/handoff."
+  - "Do not repeat the rehearsal."
+  - "Do not invent additional blocking verification predicates."
   - "Do not repair, normalize, delete caches from, rewrite, or re-sign the pre-cutover legacy installed app."
   - "Do not mutate runtime.env, dependency versions, source/tests/docs, public MCP semantics, capacity.py, V1_EVIDENCE_CEILING, main, tags, or releases."
   - "Do not use pkill/killall/broad process selection."
-  - "Do not perform a third replacement cycle or blind retry after either authorized cycle is consumed."
+  - "Do not perform a second r5 replacement cycle or blind retry after the authorized final cycle is consumed."
   - "Do not create successor tasks as Executor."
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "Exact r4 authority, accepted candidate identity, preserved local operator state, canonical live config/tunnel/listener/health state, callable pre-cutover MCP route, and opaque rollback envelope are proven before mutation."
+    requirement: "Exact r5 authority, carried-forward rehearsal evidence, exact accepted candidate identity, preserved operator state, canonical live config/tunnel/listener/health state, callable pre-cutover MCP route, and exact restored legacy pre-state are proven before mutation."
   - id: AC-2
-    requirement: "One successful rehearsal PENDING->explicit ROLLBACK restores exact captured legacy app and transaction-owned pre-state."
+    requirement: "The single r5 final PENDING generation is exactly the TASK-0049 accepted candidate under canonical config/tunnel/listener state with strict provenance/codesign/closure proof."
   - id: AC-3
-    requirement: "The exact accepted candidate remains byte-identical after rehearsal rollback and is reused without rebuild/re-sign."
+    requirement: "Pre-COMMIT live MCP E2E exposes exactly the six accepted public tools and proves harmless callability of all six tool families, including the bounded persistent terminal lifecycle."
   - id: AC-4
-    requirement: "Final installed active generation is exactly the TASK-0049 accepted candidate under canonical config/tunnel/listener state with strict provenance/codesign/closure proof."
+    requirement: "COMMIT occurs only after AC-2/AC-3 pass; transaction material is removed and two bounded post-commit stability observations remain green with no duplicate generation/listener/tunnel state."
   - id: AC-5
-    requirement: "Pre-COMMIT live MCP E2E exposes exactly the six accepted public tools and proves harmless callability of all six tool families, including the persistent terminal lifecycle."
+    requirement: "r5 remains operational-only and publishes one report-only commit non-force with main unchanged and operator state preserved."
   - id: AC-6
-    requirement: "COMMIT occurs only after AC-4/AC-5 pass; transaction material is removed and two bounded post-commit stability observations remain green with no duplicate generation/listener/tunnel state."
-  - id: AC-7
-    requirement: "r4 remains operational-only and publishes one report-only commit non-force with main unchanged and operator state preserved."
-  - id: AC-8
-    requirement: "After successful live generation replacement, Executor explicitly instructs the operator to reload/reconnect the ChatGPT Agent Runtime plugin and does not misrepresent pre-reload connector continuity as proven."
+    requirement: "After successful live generation replacement, Executor explicitly instructs the operator to reload/reconnect the ChatGPT Agent Runtime plugin and does not represent pre-reload connector continuity as proven."
 
 verification:
   executor_checks:
     - id: V-1
-      command_or_check: "Preflight exact r4 binding, preserved operator state, exact accepted candidate/handoff/current validation, runtime.env=2, tunnel/listener/health/readiness, callable MCP route, and opaque rollback envelope."
+      command_or_check: "Preflight exact r5 binding, carried-forward rehearsal proof, preserved operator state, exact candidate/handoff/current validation, runtime.env=2, tunnel/listener/health/readiness, callable legacy MCP route, and restored legacy pre-state."
       required: true
     - id: V-2
-      command_or_check: "Execute exactly one rehearsal PENDING->ROLLBACK and prove exact legacy/pre-state restoration."
+      command_or_check: "Execute exactly one final PENDING cutover. No rehearsal and no retry."
       required: true
     - id: V-3
-      command_or_check: "Revalidate unchanged candidate/handoff, then execute exactly one final PENDING cutover."
-      required: true
-    - id: V-4
       command_or_check: "Before COMMIT prove installed candidate identity/current verification, canonical config/tunnel/listener/health/readiness, exact six-tool surface, and harmless callability evidence for capacity_observer, fs_read_batch, terminal_exec, terminal_start, terminal_poll, and terminal_control."
       required: true
-    - id: V-5
-      command_or_check: "COMMIT only after V-4 PASS; prove transaction cleanup, active identity persistence, and two consecutive stability observations."
+    - id: V-4
+      command_or_check: "COMMIT only after V-3 PASS; prove transaction cleanup, active identity persistence, and two consecutive stability observations."
       required: true
-    - id: V-6
+    - id: V-5
       command_or_check: "Fresh-resolve refs and publish one report-only commit non-force; prove main unchanged and unrelated local operator state preserved."
       required: true
-    - id: V-7
-      command_or_check: "After successful generation change, explicitly issue the operator plugin reload/reconnect instruction in the Executor result."
+    - id: V-6
+      command_or_check: "After successful generation change and stability, explicitly issue the operator plugin reload/reconnect instruction in the Executor result."
       required: true
   authoritative_verification:
     required: false
@@ -152,7 +157,7 @@ verification:
 publication:
   implementation_commit_required: false
   report_path: .agent/tasks/TASK-0047/report.yaml
-  required_report_revision: 4
+  required_report_revision: 5
   push: non_force_dev
   stop_for_architect_review: true
 
@@ -164,8 +169,8 @@ git_authority:
   promote_to_main: false
 
 live_boundary:
-  allowed: "Exactly two accepted-prebuilt candidate replacement cycles: one rehearsal PENDING->ROLLBACK and one final PENDING->COMMIT, plus only bounded canonical Runtime lifecycle actions required for those proofs."
-  forbidden: "Any third replacement/retry, rebuild/re-sign, runtime.env/tunnel identity/source/capacity/main/tag/release mutation, or lifecycle action outside this task."
+  allowed: "Exactly one accepted-prebuilt candidate replacement cycle: one final PENDING -> COMMIT attempt, plus only bounded canonical Runtime lifecycle actions required for the stated proof."
+  forbidden: "Any rehearsal repetition, second r5 replacement/retry, rebuild/re-sign, invented acceptance gate, runtime.env/tunnel identity/source/capacity/main/tag/release mutation, or lifecycle action outside this task."
 
 blocking_decisions: []
 execution_ready: true
