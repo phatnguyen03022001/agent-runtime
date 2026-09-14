@@ -1,16 +1,16 @@
 protocol_version: 3
 
 task_id: TASK-0047
-task_revision: 5
+task_revision: 6
 state: APPROVED
 
 origin:
   type: architect_live_cutover_followup
-  prior_report_commit: "3a50ebda4b63baa5ca8d6f5a40224f1aebb194d0"
-  prior_review_commit: "247b35c4fc77ebb03ce880be617fd97ab1df6432"
+  prior_report_commit: "b148462db0c702f87d215f16d3eac9ff46aeab21"
+  prior_review_commit: "c8c3f1268f77a02dccae36e9ee65b1328a5381be"
   source_fix_task: TASK-0049
   source_fix_review_commit: "2d1e501720ad12385e0b9f1d2773246f6d89352b"
-  gap_id: FINAL_CUTOVER_AFTER_EXECUTOR_VERIFICATION_SCOPE_DEFECT
+  gap_id: FINAL_CUTOVER_AFTER_EXECUTOR_PROBE_ENVIRONMENT_DEFECT
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -35,20 +35,20 @@ execution_skills:
   recommended: [simplicity]
 
 authority_sources:
-  - source: "phatnguyen03022001/agent-runtime@247b35c4fc77ebb03ce880be617fd97ab1df6432:.agent/tasks/TASK-0047/review.yaml"
-    role: "Authoritative r4 review: rehearsal PASS, final rollback PASS, blocker classified as Executor verification-scope defect rather than Runtime defect."
+  - source: "phatnguyen03022001/agent-runtime@c8c3f1268f77a02dccae36e9ee65b1328a5381be:.agent/tasks/TASK-0047/review.yaml"
+    role: "Authoritative r5 review: canonical MCP predicates passed; COMMIT failed after a non-canonical direct stdio probe bypassed the immutable-package bytecode guard."
     precedence: 1
+  - source: "phatnguyen03022001/agent-runtime@247b35c4fc77ebb03ce880be617fd97ab1df6432:.agent/tasks/TASK-0047/review.yaml"
+    role: "Authoritative r4 rehearsal PASS and exact legacy restoration evidence."
+    precedence: 2
   - source: "phatnguyen03022001/agent-runtime@2d1e501720ad12385e0b9f1d2773246f6d89352b:.agent/tasks/TASK-0049/review.yaml"
     role: "Accepted LaunchAgent sequencing fix and exact retained candidate authority."
-    precedence: 2
-  - source: "phatnguyen03022001/agent-runtime@6731a0f7b012cc628b4112ccfa77c5cc46f0a986:.agent/tasks/TASK-0048/review.yaml"
-    role: "Accepted opaque legacy rollback semantics that remain mandatory."
     precedence: 3
-  - source: "Current operator authorization for this bounded TASK-0047 revision 5 final live cutover."
+  - source: "Current operator authorization for this bounded TASK-0047 revision 6 final live cutover."
     role: "Authorizes only the exact single final replacement/lifecycle actions stated below."
     precedence: 4
 
-objective: "Carry forward the already-proven r4 rehearsal rollback, perform exactly one final PENDING cutover with the exact TASK-0049 accepted candidate, prove only the canonical installed-generation and six-tool MCP predicates, COMMIT only after all predicates pass, then prove bounded stability and instruct the operator to reload/reconnect the ChatGPT Agent Runtime plugin."
+objective: "Carry forward the already-proven rehearsal, perform exactly one final PENDING cutover with the exact TASK-0049 accepted candidate, prove the canonical six-tool MCP contract without mutating the signed installed bundle, COMMIT only after fresh strict validation passes, then prove bounded stability and instruct the operator to reload/reconnect the ChatGPT Agent Runtime plugin."
 
 execution_transport:
   primary: Remote Desktop Commander
@@ -73,7 +73,6 @@ carried_forward_rehearsal:
   source_review: "phatnguyen03022001/agent-runtime@247b35c4fc77ebb03ce880be617fd97ab1df6432:.agent/tasks/TASK-0047/review.yaml"
   result: PASS
   repeat_required: false
-  rationale: "The exact accepted candidate already completed a real PENDING -> explicit ROLLBACK rehearsal and exact legacy restoration in r4. Repeating rehearsal adds disruption without additional proof value."
 
 canonical_live_config:
   path: "$HOME/Library/Application Support/Agent Runtime/runtime.env"
@@ -81,74 +80,82 @@ canonical_live_config:
   required_parallelism: "2"
   mutation_authorized: false
 
+mcp_proof_method:
+  preferred: "Use the already-running canonical live MCP route for exact tools/list and harmless calls."
+  fallback: "If a fresh local stdio MCP client is materially required, preserve canonical immutable-package execution invariants: PYTHONDONTWRITEBYTECODE=1 or Python -B, canonical workspace/parallelism values, correct PYTHONPATH, and zero writes into the installed app bundle."
+  forbidden: "Direct invocation of installed packaged Python for MCP proof without a no-bytecode guard, or any proof method that writes into the installed app bundle."
+
 scope:
   required_changes:
-    - "Fresh-resolve origin/dev and origin/main and reconcile the designated local checkout to the exact r5 execution base only by safe non-destructive fast-forward while preserving unrelated local state."
-    - "Before mutation, revalidate exact candidate/handoff bytes, strict candidate provenance/codesign/closure, runtime.env mode/validation/parallelism=2, tunnel fingerprint, exactly one 127.0.0.1:8080 listener, green health/readiness, callable legacy MCP route, and exact restored legacy rollback pre-state."
-    - "r5 authorizes exactly ONE replacement cycle: one final PENDING -> COMMIT attempt. There is no rehearsal cycle in r5 and no retry/replacement cycle after this one is consumed."
+    - "Fresh-resolve origin/dev and origin/main and reconcile the designated local checkout to the exact r6 execution base only by safe non-destructive fast-forward while preserving unrelated local state."
+    - "Before mutation, revalidate exact candidate/handoff bytes, strict candidate provenance/codesign/closure, runtime.env mode/validation/parallelism=2, tunnel fingerprint, exactly one 127.0.0.1:8080 listener, green health/readiness, callable legacy MCP route, and exact restored legacy pre-state."
+    - "r6 authorizes exactly ONE replacement cycle: one final PENDING -> COMMIT attempt. Do not repeat rehearsal and do not retry after the cycle is consumed."
     - "Activate the exact retained candidate only through the accepted candidate_cutover transactional path."
-    - "While PENDING, prove installed candidate identity, strict codesign, runtime manifest and external closure, source/tree/lock, packaged interpreter, runtime.env=2, canonical tunnel identity, exactly one 127.0.0.1:8080 listener, and green healthz/readyz."
-    - "Before COMMIT, perform real live MCP E2E and prove the public surface is exactly: terminal_exec, terminal_start, terminal_poll, terminal_control, capacity_observer, fs_read_batch."
-    - "Harmless callability proof must include: capacity_observer; fs_read_batch on benign repository content; terminal_exec with a non-mutating printf-style command; and one bounded terminal_start -> terminal_poll -> terminal_control lifecycle for a temporary harmless process."
-    - "Do not add process-tree cardinality, persistent MCP-child topology, tunnel-child count, or any other acceptance predicate not stated in this task. Observational diagnostics may be recorded but cannot become a blocking gate unless this task explicitly names them."
-    - "Only after every stated final predicate passes, explicitly COMMIT. Then prove transaction/rollback material is removed, installed identity remains exact, desired state remains RUNNING, and two consecutive bounded stability observations keep singleton listener, tunnel, health/readiness, and generation identity stable."
-    - "After successful COMMIT and stability proof, explicitly tell the operator: RELOAD / RECONNECT THE CHATGPT AGENT RUNTIME PLUGIN. Do not claim ChatGPT-side connector continuity before the operator performs that action."
-    - "Publish only .agent/tasks/TASK-0047/report.yaml revision 5; no source implementation belongs to this task."
+    - "While PENDING, prove exact installed candidate identity, strict codesign, runtime manifest and external closure, source/tree/lock, packaged interpreter, runtime.env=2, canonical tunnel identity, singleton listener, healthz, and readyz."
+    - "Perform the exact six-tool MCP proof: terminal_exec, terminal_start, terminal_poll, terminal_control, capacity_observer, fs_read_batch. Harmless calls must include capacity_observer, benign fs_read_batch, non-mutating terminal_exec, and one bounded terminal_start -> terminal_poll -> terminal_control lifecycle."
+    - "MCP proof must follow mcp_proof_method. Do not bypass the package no-bytecode invariant. Do not invent additional acceptance gates."
+    - "After all MCP probes and immediately before COMMIT, prove strict deep codesign and exact candidate identity/closure still PASS. Any failure requires explicit ROLLBACK and terminal BLOCKED; no retry is authorized."
+    - "Only after every stated predicate passes, explicitly COMMIT. Then prove transaction/rollback material removed, exact installed identity retained, desired state RUNNING, and two consecutive bounded stability observations with singleton listener/tunnel, health/readiness, and stable generation identity."
+    - "After successful COMMIT and stability proof, explicitly tell the operator: RELOAD / RECONNECT THE CHATGPT AGENT RUNTIME PLUGIN. Do not claim ChatGPT-side connector continuity before operator reload."
+    - "Publish only .agent/tasks/TASK-0047/report.yaml revision 6; no source implementation belongs to this task."
 
 invariants:
   - "The r4 rehearsal PASS is carried forward and must not be repeated."
-  - "Exactly one final replacement cycle is authorized in r5. No retry or second replacement cycle is authorized."
-  - "Any stated acceptance failure while PENDING requires explicit ROLLBACK before terminal BLOCKED reporting unless rollback itself fails; rollback failure remains truthful PARTIAL evidence."
-  - "Incoming/new candidate verification remains strict; legacy rollback trust remains exact opaque captured pre-state only."
-  - "Canonical proof predicates are closed over this task. Executor diagnostics must not silently become new acceptance requirements."
+  - "Exactly one final replacement cycle is authorized in r6; no retry or second cycle."
+  - "Any stated acceptance failure while PENDING requires explicit ROLLBACK unless rollback itself fails."
+  - "Canonical proof predicates are closed over this task; diagnostics do not become new acceptance requirements."
+  - "The signed installed bundle must remain immutable during verification."
   - "No candidate rebuild/re-sign, source/test/docs/dependency/public-MCP mutation, runtime.env mutation, tunnel identity mutation, capacity/parallelism policy mutation, main/tag/release mutation, or broad process killing."
-  - "Runtime lifecycle authority exists only inside this r5 proof boundary and grants no standing restart authority afterward."
-  - "Preserve unrelated .env.example drift and chatgpt-sample.txt / vscode-gpu-sample.txt; do not content-read, stage, commit, stash, clean, reset, move, delete, overwrite, or adopt those operator files/state."
+  - "Preserve unrelated .env.example drift and chatgpt-sample.txt / vscode-gpu-sample.txt; do not content-read, stage, commit, stash, clean, reset, move, delete, overwrite, or adopt them."
 
 forbidden_changes:
   - "Do not run ./install.sh or any build-producing install path."
   - "Do not rebuild, re-sign, regenerate, or alter the frozen candidate/handoff."
-  - "Do not repeat the rehearsal."
-  - "Do not invent additional blocking verification predicates."
-  - "Do not repair, normalize, delete caches from, rewrite, or re-sign the pre-cutover legacy installed app."
-  - "Do not mutate runtime.env, dependency versions, source/tests/docs, public MCP semantics, capacity.py, V1_EVIDENCE_CEILING, main, tags, or releases."
-  - "Do not use pkill/killall/broad process selection."
-  - "Do not perform a second r5 replacement cycle or blind retry after the authorized final cycle is consumed."
+  - "Do not repeat rehearsal."
+  - "Do not directly invoke installed packaged Python for MCP proof without PYTHONDONTWRITEBYTECODE=1 or equivalent -B no-bytecode behavior."
+  - "Do not write cache/bytecode/artifacts into the installed app bundle."
+  - "Do not mutate runtime.env, source/tests/docs, public MCP semantics, capacity.py, V1_EVIDENCE_CEILING, main, tags, or releases."
+  - "Do not perform a second r6 replacement cycle."
   - "Do not create successor tasks as Executor."
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "Exact r5 authority, carried-forward rehearsal evidence, exact accepted candidate identity, preserved operator state, canonical live config/tunnel/listener/health state, callable pre-cutover MCP route, and exact restored legacy pre-state are proven before mutation."
+    requirement: "Exact r6 authority, carried-forward rehearsal evidence, exact candidate, preserved operator state, canonical live config/tunnel/listener/health, callable pre-cutover route, and restored legacy pre-state are proven before mutation."
   - id: AC-2
-    requirement: "The single r5 final PENDING generation is exactly the TASK-0049 accepted candidate under canonical config/tunnel/listener state with strict provenance/codesign/closure proof."
+    requirement: "The sole r6 PENDING generation is exactly the TASK-0049 accepted candidate with strict provenance/codesign/closure and canonical live configuration."
   - id: AC-3
-    requirement: "Pre-COMMIT live MCP E2E exposes exactly the six accepted public tools and proves harmless callability of all six tool families, including the bounded persistent terminal lifecycle."
+    requirement: "Pre-COMMIT MCP E2E exposes exactly six accepted public tools and proves required harmless callability without mutating the signed installed bundle."
   - id: AC-4
-    requirement: "COMMIT occurs only after AC-2/AC-3 pass; transaction material is removed and two bounded post-commit stability observations remain green with no duplicate generation/listener/tunnel state."
+    requirement: "Fresh strict deep codesign and exact candidate identity/closure still PASS after MCP proof and immediately before COMMIT."
   - id: AC-5
-    requirement: "r5 remains operational-only and publishes one report-only commit non-force with main unchanged and operator state preserved."
+    requirement: "COMMIT succeeds, transaction material is removed, and two bounded post-commit stability observations remain green."
   - id: AC-6
-    requirement: "After successful live generation replacement, Executor explicitly instructs the operator to reload/reconnect the ChatGPT Agent Runtime plugin and does not represent pre-reload connector continuity as proven."
+    requirement: "r6 remains operational-only and publishes one report-only commit non-force with main unchanged and operator state preserved."
+  - id: AC-7
+    requirement: "After successful replacement and stability, Executor explicitly instructs operator to reload/reconnect the ChatGPT Agent Runtime plugin without claiming pre-reload connector continuity."
 
 verification:
   executor_checks:
     - id: V-1
-      command_or_check: "Preflight exact r5 binding, carried-forward rehearsal proof, preserved operator state, exact candidate/handoff/current validation, runtime.env=2, tunnel/listener/health/readiness, callable legacy MCP route, and restored legacy pre-state."
+      command_or_check: "Preflight exact r6 binding, carried-forward rehearsal, operator state, candidate/handoff, runtime.env=2, tunnel/listener/health/readiness, callable legacy route, and restored legacy state."
       required: true
     - id: V-2
-      command_or_check: "Execute exactly one final PENDING cutover. No rehearsal and no retry."
+      command_or_check: "Execute exactly one final PENDING cutover."
       required: true
     - id: V-3
-      command_or_check: "Before COMMIT prove installed candidate identity/current verification, canonical config/tunnel/listener/health/readiness, exact six-tool surface, and harmless callability evidence for capacity_observer, fs_read_batch, terminal_exec, terminal_start, terminal_poll, and terminal_control."
+      command_or_check: "Prove exact candidate/live state and exact six-tool harmless callability using only an immutable-package-safe MCP proof method."
       required: true
     - id: V-4
-      command_or_check: "COMMIT only after V-3 PASS; prove transaction cleanup, active identity persistence, and two consecutive stability observations."
+      command_or_check: "After MCP proof, revalidate strict deep codesign and exact candidate identity/closure immediately before COMMIT."
       required: true
     - id: V-5
-      command_or_check: "Fresh-resolve refs and publish one report-only commit non-force; prove main unchanged and unrelated local operator state preserved."
+      command_or_check: "COMMIT only after V-4 PASS; prove cleanup, identity persistence, and two stability observations."
       required: true
     - id: V-6
-      command_or_check: "After successful generation change and stability, explicitly issue the operator plugin reload/reconnect instruction in the Executor result."
+      command_or_check: "Fresh-resolve refs and publish report revision 6 only; prove main and operator state unchanged."
+      required: true
+    - id: V-7
+      command_or_check: "After successful COMMIT/stability, issue operator plugin reload/reconnect instruction."
       required: true
   authoritative_verification:
     required: false
@@ -157,7 +164,7 @@ verification:
 publication:
   implementation_commit_required: false
   report_path: .agent/tasks/TASK-0047/report.yaml
-  required_report_revision: 5
+  required_report_revision: 6
   push: non_force_dev
   stop_for_architect_review: true
 
@@ -169,8 +176,8 @@ git_authority:
   promote_to_main: false
 
 live_boundary:
-  allowed: "Exactly one accepted-prebuilt candidate replacement cycle: one final PENDING -> COMMIT attempt, plus only bounded canonical Runtime lifecycle actions required for the stated proof."
-  forbidden: "Any rehearsal repetition, second r5 replacement/retry, rebuild/re-sign, invented acceptance gate, runtime.env/tunnel identity/source/capacity/main/tag/release mutation, or lifecycle action outside this task."
+  allowed: "Exactly one accepted-prebuilt candidate replacement cycle: one final PENDING -> COMMIT attempt plus bounded lifecycle actions required for the stated proof."
+  forbidden: "Any rehearsal repetition, second r6 replacement/retry, proof-induced installed-bundle mutation, rebuild/re-sign, runtime.env/tunnel/source/capacity/main/tag/release mutation, or lifecycle action outside this task."
 
 blocking_decisions: []
 execution_ready: true
