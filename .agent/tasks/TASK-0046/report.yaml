@@ -1,0 +1,205 @@
+protocol_version: 3
+
+task_id: TASK-0046
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0046/task.yaml
+  commit: "d135bb0ae6a67404aab1abbb836247bd99ef7ed9"
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "d135bb0ae6a67404aab1abbb836247bd99ef7ed9"
+  final_execution_head: "b108ef7dc2c53fb5d9fe3f14d658b5f4d032ab44"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - repository_content_write
+    - local_native_execution
+    - git_commit
+    - non_force_dev_publication
+  available:
+    - repository_content_write
+    - local_native_execution
+    - git_commit
+    - non_force_dev_publication
+  missing: []
+  passed: true
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: NOT_REQUIRED_FOR_THIS_EXECUTION_TASK
+  evidence: "TASK-0046 revision 1 requires Executor verification gates but no separate authoritative verifier."
+
+pushed: true
+
+execution_transport:
+  primary: Remote Desktop Commander
+  chatgpt_sandbox_used: false
+  evidence: "All local repository, filesystem, shell, build, test, Git, and package work used Remote Desktop Commander as required by the operator."
+
+implementation:
+  commit: "b108ef7dc2c53fb5d9fe3f14d658b5f4d032ab44"
+  parent: "d135bb0ae6a67404aab1abbb836247bd99ef7ed9"
+  tree: "2c1380186513916d4a901bff765dea1ec1f7c910"
+  scope_summary: "Adds one narrow non-interactive freeze gate that requires exact clean source revision/tree/requirements.lock identity, invokes the existing package path, then revalidates source identity and the existing external candidate handoff without introducing a second candidate schema or authority."
+
+verification:
+  tdd_red:
+    result: PASS
+    evidence: "Initial focused freeze tests failed because macos/freeze_candidate.py did not exist; later orchestration tests failed because freeze_candidate() did not yet exist, proving the new behavior tests were RED before implementation."
+  focused_regressions:
+    result: PASS
+    tests: 18
+    failures: 0
+    command: ".venv/bin/python -m unittest -v tests.test_candidate_freeze tests.test_package_provenance tests.test_packaging_interpreter"
+    evidence: "Freeze/source/candidate identity, dirty/source-drift, package/provenance, and canonical packaging-interpreter regressions passed 18/18."
+  real_fail_closed_probe:
+    result: PASS
+    exit_code: 2
+    evidence: "On clean exact implementation HEAD, direct freeze invocation with an all-zero expected source revision failed before package construction with 'source revision does not match expected freeze identity'; HEAD/tree/status remained unchanged."
+  canonical_verify:
+    command: "./verify"
+    result: PASS
+    tests: 212
+    failures: 0
+    exit_code: 0
+    run_count_on_final_implementation: 1
+    verified_commit: "b108ef7dc2c53fb5d9fe3f14d658b5f4d032ab44"
+    verified_tree: "2c1380186513916d4a901bff765dea1ec1f7c910"
+    evidence: "The exact final implementation candidate completed 'Ran 212 tests in 79.604s', 'OK', exit 0. Source bytes did not change afterward."
+  freeze_gate:
+    command: "AGENT_RUNTIME_PACKAGING_PYTHON=/opt/homebrew/Caskroom/miniconda/base/bin/python3.13 ./macos/freeze_candidate.py --source-revision b108ef7dc2c53fb5d9fe3f14d658b5f4d032ab44 --source-tree 2c1380186513916d4a901bff765dea1ec1f7c910 --requirements-lock-sha256 80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
+    result: PASS
+    successful_candidate_builds: 1
+    prebuild_failed_invocations: 1
+    deterministic_exit_status: 0
+    evidence: "The first real invocation failed closed before package construction because canonical CPython 3.13 was not on PATH and no explicit override was set. Investigation proved /opt/homebrew/Caskroom/miniconda/base/bin/python3.13 is CPython 3.13.13/cp313/Darwin/arm64 and the existing resolver accepts it through AGENT_RUNTIME_PACKAGING_PYTHON. The source remained unchanged; the replacement invocation used that supported explicit environment input and produced the sole final candidate build."
+
+frozen_candidate:
+  installed_or_activated: false
+  app_path: "/Users/tienphat/Developer/agent-runtime/build/Agent Runtime.app"
+  handoff_path: "/Users/tienphat/Developer/agent-runtime/build/Agent Runtime.candidate.json"
+  source_revision: "b108ef7dc2c53fb5d9fe3f14d658b5f4d032ab44"
+  source_tree: "2c1380186513916d4a901bff765dea1ec1f7c910"
+  requirements_lock_sha256: "80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
+  runtime_payload_sha256: "de4e94d0cddb3f038fca0a18c12ed62da44fb0121eb117d20791aa996c47e476"
+  runtime_manifest_files: 1021
+  candidate_sha256: "701c536a3b67496921ff2a0a5eae6bb28eb315bb69a5710d230eb8bea8ae24af"
+  candidate_record_count: 1027
+  handoff_sha256: "1d7ffcad995162ad0f63292b7c5186e8912dff1168105741d4a15ffa104cd847"
+  packaged_python_identity: "cpython 3.13.13 / cpython-313 / cpython-313-darwin / darwin / arm64"
+  strict_deep_codesign: PASS
+  runtime_manifest_closure: PASS
+  external_candidate_closure: PASS
+  packaged_probe_cache_entries_before: 0
+  packaged_probe_cache_entries_after: 0
+  checkout_path_leakage: ABSENT
+  git_env_artifact_leakage: ABSENT
+  evidence: "Pre/post packaged-Python validation produced identical external handoff identity; PYTHONDONTWRITEBYTECODE=1 kept cache entries at zero; strict codesign, embedded manifest closure, external whole-app closure, expected source/tree/lock identity, and structural leakage checks all passed."
+
+scope_audit:
+  base: "d135bb0ae6a67404aab1abbb836247bd99ef7ed9"
+  implementation: "b108ef7dc2c53fb5d9fe3f14d658b5f4d032ab44"
+  result: PASS
+  changed_paths: "macos/freeze_candidate.py, tests/test_candidate_freeze.py"
+  package_app_unchanged: true
+  package_provenance_unchanged: true
+  candidate_cutover_unchanged: true
+  dependency_versions_unchanged: true
+  public_mcp_unchanged: true
+  runtime_protection_unchanged: true
+  live_config_tunnel_listener_port_unchanged: true
+  main_tags_releases_topology_unchanged: true
+
+mutation_boundaries:
+  live_runtime_installed_or_reinstalled: false
+  live_runtime_activated_or_reloaded: false
+  live_runtime_restarted_or_stopped: false
+  runtime_env_mutated: false
+  tunnel_identity_mutated: false
+  listener_binding_mutated: false
+  desired_state_mutated: false
+  live_launchagents_mutated: false
+  installed_package_mutated: false
+  port_8080_mutated: false
+  task0044_cutover_semantics_mutated: false
+  public_mcp_or_protection_semantics_mutated: false
+  main_promoted: false
+  tag_or_release_work_performed: false
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PROVEN
+    evidence: "The repository-owned freeze gate requires explicit revision/tree/lock identities, calls existing git_identity cleanliness proof, rechecks source after package construction and candidate validation, and focused tests plus a real wrong-revision invocation prove fail-closed behavior."
+  - criterion_id: AC-2
+    status: PROVEN
+    evidence: "Exact implementation b108ef7/tree 2c138018 passed canonical ./verify before the only successful final candidate build; the retained app/handoff paths are recorded and no live install/activation occurred."
+  - criterion_id: AC-3
+    status: PROVEN
+    evidence: "Final retained candidate passed strict deep codesign, 1021-file runtime-manifest closure, 1027-record external closure, exact revision/tree/lock identity, CPython 3.13.13/cp313/macOS arm64 identity, zero-cache post-probe integrity, and leakage checks."
+  - criterion_id: AC-4
+    status: PROVEN
+    evidence: "The gate calls package_provenance.validate_candidate against the existing Agent Runtime.candidate.json handoff and adds no candidate manifest/schema or competing provenance authority."
+  - criterion_id: AC-5
+    status: PROVEN
+    evidence: "Canonical ./verify ran exactly once on exact implementation b108ef7/tree 2c138018 and passed 212/212 with exit 0 before the final successful build."
+  - criterion_id: AC-6
+    status: PROVEN
+    evidence: "The executable CLI is non-interactive, requires all three expected source identities, returns deterministic exit 2 with attributable diagnostics on invalid source, and completed locally with exit 0 using the repository-supported canonical interpreter override; no GitHub Actions workflow was needed."
+  - criterion_id: AC-7
+    status: PROVEN
+    evidence: "The final app and external handoff remain under the repository build directory with candidate digest 701c536a... and handoff SHA-256 1d7ffcad...; no cleanup/rebuild/re-sign is authorized or performed after identity recording."
+  - criterion_id: AC-8
+    status: NOT_PROVEN
+    evidence: "Implementation b108ef7 is already published non-force as the direct child of task base d135bb0 and main remained c49d777. This report artifact cannot truthfully claim its own future report-only commit or post-publication remote identity; those are resolved after this report commit at the publication consequence boundary."
+
+executor_checks:
+  - check_id: V-1
+    result: PASS
+    evidence: "Iteration used only focused freeze/provenance/package regressions; final focused set passed 18/18."
+  - check_id: V-2
+    result: PASS
+    evidence: "Final implementation commit b108ef7 was clean/exact and canonical ./verify passed once with 212 tests and exit 0."
+  - check_id: V-3
+    result: PASS
+    evidence: "After canonical verification, the real freeze/package path produced one successful retained candidate build from b108ef7; the earlier environment-precondition failure stopped before package construction."
+  - check_id: V-4
+    result: PASS
+    evidence: "Retained candidate passed strict codesign, runtime-manifest closure, external candidate closure, exact source/tree/lock, packaged interpreter, zero-cache post-probe, and leakage validation."
+  - check_id: V-5
+    result: PASS
+    evidence: "Direct clean-checkout invocation with a wrong expected source revision returned exit 2 before package construction with attributable source-revision mismatch output."
+  - check_id: V-6
+    result: PASS
+    evidence: "Exact base-to-implementation diff contains only macos/freeze_candidate.py and tests/test_candidate_freeze.py; no live/public/dependency/parallelism/main/release surfaces changed."
+  - check_id: V-7
+    result: NOT_PROVEN
+    evidence: "Implementation publication was freshly guarded origin/dev d135bb0 -> b108ef7 with origin/main unchanged c49d777 before/after non-force push. The report commit's own pre/post publication proof is intentionally resolved outside this self-referential artifact."
+
+publication:
+  implementation_commit: "b108ef7dc2c53fb5d9fe3f14d658b5f4d032ab44"
+  implementation_pushed: true
+  report_path: .agent/tasks/TASK-0046/report.yaml
+  report_commit: null
+  push_mode: non_force_dev
+  force_push: false
+  main_promoted: false
+  next_step: ARCHITECT_REVIEW_AFTER_PUBLICATION_PROOF
+
+deviations_from_task:
+  - "The first real freeze CLI invocation exited 2 before package construction because the canonical CPython 3.13 interpreter was not on PATH and AGENT_RUNTIME_PACKAGING_PYTHON was unset. No candidate bytes or source bytes changed. Root-cause inspection confirmed the existing supported interpreter at /opt/homebrew/Caskroom/miniconda/base/bin/python3.13; the successful invocation used that already-supported explicit override and built the sole final candidate."
+
+result: NEEDS_REVIEW
