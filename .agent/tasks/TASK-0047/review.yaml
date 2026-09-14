@@ -1,27 +1,27 @@
 protocol_version: 3
 
 task_id: TASK-0047
-task_revision: 4
-review_revision: 4
+task_revision: 5
+review_revision: 5
 state: BLOCKED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0047/report.yaml
-  commit: "3a50ebda4b63baa5ca8d6f5a40224f1aebb194d0"
-  report_revision: 4
+  commit: "b148462db0c702f87d215f16d3eac9ff46aeab21"
+  report_revision: 5
 
 reviewed_base:
-  commit: "b6f7033e0b1a6f65ffa3419d47f67599272b917d"
+  commit: "0bd03a7936d8c15d8afcc1778d62467f8da95d95"
 
 contract_compliance:
   protocol_version: PASS
   identity: PASS
   execution_base: PASS
   publication_scope: PASS
-  rehearsal_rollback: PASS
-  fail_closed_final_rollback: PASS
-  replacement_cycle_boundary: PASS
+  carried_forward_rehearsal: PASS
+  single_cycle_boundary: PASS
+  fail_closed_rollback: PASS
   operator_state_preservation: PASS
 
 criterion_judgment:
@@ -29,33 +29,32 @@ criterion_judgment:
   AC-2: PASS
   AC-3: PASS
   AC-4: BLOCKED
-  AC-5: NOT_RUN
-  AC-6: NOT_RUN
-  AC-7: PASS
-  AC-8: NOT_TRIGGERED
+  AC-5: PASS
+  AC-6: NOT_TRIGGERED
 
 accepted_evidence:
-  - "Published r4 lineage is exactly b6f7033e0b1a6f65ffa3419d47f67599272b917d -> 3a50ebda4b63baa5ca8d6f5a40224f1aebb194d0 and the direct-child diff changes only .agent/tasks/TASK-0047/report.yaml; main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
-  - "Cycle 1 completed one real PENDING -> explicit ROLLBACK rehearsal and restored the exact captured legacy app closure, LaunchAgent bytes/modes/loaded state, desired state, runtime.env, singleton listener, health/readiness, and legacy MCP route."
-  - "The accepted TASK-0049 candidate and handoff remained byte-identical after rehearsal and after the final rollback; no rebuild or re-sign occurred."
-  - "Cycle 2 reached PENDING and passed installed candidate identity, candidate LaunchAgent registration, canonical runtime.env, singleton listener, and tunnel checks before the Executor added an extra process-tree predicate."
-  - "The failing predicate required exactly one persistent MCP child under the canonical tunnel process. TASK-0047 r4 does not require that predicate. The canonical V-4 contract requires exact six-tool surface and harmless callability, including a bounded terminal_start -> terminal_poll -> terminal_control lifecycle."
-  - "Executor fail-closed handling explicitly rolled back cycle 2 and did not perform a third replacement cycle, exact-six-tool E2E, COMMIT, or plugin reload instruction."
-  - "Fresh Architect read-only post-report verification observed local HEAD/origin/dev at 3a50ebda4b63baa5ca8d6f5a40224f1aebb194d0, origin/main unchanged, only the preserved .env.example drift plus the two untracked operator files, retained handoff SHA-256 362faede3d737d396b28afc9b2c71ab34a0cfbf8d5b71866842ad3e5470a2815, strict deep codesign PASS, exactly one listener on 127.0.0.1:8080, healthz live, and readyz ready."
+  - "Published r5 lineage is exactly 0bd03a7936d8c15d8afcc1778d62467f8da95d95 -> b148462db0c702f87d215f16d3eac9ff46aeab21 and the direct-child diff changes only .agent/tasks/TASK-0047/report.yaml; main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "The r4 rehearsal PASS was correctly carried forward and not repeated. Exactly one r5 final replacement cycle was used and no retry occurred."
+  - "The PENDING generation initially passed exact accepted candidate identity, strict deep codesign, provenance/closure, canonical runtime.env=2, tunnel/listener, health/readiness, and the exact six-tool MCP surface plus all required harmless callability probes."
+  - "COMMIT fresh validation then failed strict deep codesign and the Executor correctly performed explicit ROLLBACK; exact legacy restoration and transaction cleanup passed."
+  - "The MCP proof invoked packaged Python directly with -m agent_runtime.server instead of preserving the package execution environment. The canonical packaged launch path injects PYTHONDONTWRITEBYTECODE=1 specifically to keep the signed installed payload immutable; the r5 direct probe did not set that guard."
+  - "The exact modified installed path was not retained after mandatory rollback, so byte-level causation is not claimed as proven. However the verification-method deviation is concrete and temporally consistent with the commit-boundary signature failure."
+  - "Fresh Architect read-only post-report verification observed local HEAD/origin/dev at b148462db0c702f87d215f16d3eac9ff46aeab21, origin/main unchanged, only the preserved .env.example drift plus the two untracked operator files, retained handoff SHA-256 362faede3d737d396b28afc9b2c71ab34a0cfbf8d5b71866842ad3e5470a2815, and retained candidate strict deep codesign PASS."
 
 architect_finding:
-  classification: EXECUTOR_VERIFICATION_SCOPE_DEFECT
-  description: "The final r4 cycle was consumed by an Executor-added persistent MCP child process-tree assertion that is outside the canonical task proof contract. The evidence does not identify a Runtime implementation or candidate defect. Because r4 correctly fail-closed rolled back and exhausted its two-cycle authority, r4 cannot continue."
+  classification: EXECUTOR_PROBE_ENVIRONMENT_DEFECT
+  description: "r5 used a non-canonical fresh stdio MCP proof environment that bypassed the package bytecode-write guard before COMMIT. Current evidence does not identify a Runtime source or frozen-candidate defect; the accepted retained candidate remains strict-valid after rollback. Because r5 exhausted its sole replacement cycle, r5 cannot continue."
 
 continuation:
-  action: REVISE_TASK_0047_FOR_FINAL_CUTOVER_ONLY
+  action: REVISE_TASK_0047_FOR_CANONICAL_FINAL_CUTOVER
   carry_forward_rehearsal: true
   fresh_replacement_cycles_authorized: 1
-  rationale: "The exact accepted candidate already completed the required rehearsal rollback in r4 and the legacy pre-state was restored exactly. Repeating rehearsal would add disruption without new proof value. The next revision may perform one final PENDING -> COMMIT attempt only, after fresh preflight and exact candidate revalidation."
-  proof_boundary: "Use only TASK-0047 canonical predicates. Do not invent process-tree cardinality, persistent MCP-child topology, or other additional acceptance gates. Exact six-tool surface plus bounded harmless callability is the MCP proof contract."
+  rationale: "The required rehearsal remains proven and the accepted retained candidate remains exact and strict-valid. A single new final PENDING -> COMMIT attempt is justified only with the MCP proof method constrained to preserve the canonical immutable-package execution environment."
+  proof_method_boundary: "Prefer the already-running canonical live MCP route. If a fresh local stdio MCP client is materially required, it must preserve the canonical package runtime invariants, including PYTHONDONTWRITEBYTECODE=1 (or equivalent Python -B no-bytecode behavior), canonical workspace/parallelism environment, and no writes into the installed app bundle. Direct packaged-Python execution without the bytecode guard is forbidden."
 
 notes:
-  - "No third cycle is authorized under r4."
+  - "No second cycle is authorized under r5."
+  - "Before COMMIT in the next revision, strict deep codesign must still pass after all MCP probes."
   - "Parallelism policy remains deferred until successful live stability is proven."
-  - "Plugin reload/reconnect instruction remains conditional on successful final generation replacement and post-commit stability."
+  - "Plugin reload/reconnect instruction remains conditional on successful COMMIT and stability."
   - "dev-to-main promotion remains separate lifecycle work."
