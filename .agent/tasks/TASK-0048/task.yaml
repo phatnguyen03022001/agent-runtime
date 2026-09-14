@@ -1,0 +1,149 @@
+protocol_version: 3
+
+task_id: TASK-0048
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  task_id: TASK-0047
+  gap_id: LEGACY_ROLLBACK_SOURCE_COMPATIBILITY
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+execution_skills:
+  required: [executor, verification, security-review, github-workflow]
+  recommended: [simplicity]
+
+authority_sources:
+  - source: "phatnguyen03022001/agent-runtime@c31fdb27de751f3927395a2bc585dcbf9cb55fc9:.agent/tasks/TASK-0047/review.yaml"
+    role: "Authoritative r2 BLOCKED review identifying legacy rollback-source incompatibility before live mutation."
+    precedence: 1
+  - source: "phatnguyen03022001/agent-runtime@87ecb4cde685b8391471993ac8afeb8a4b7c1ecb:.agent/tasks/TASK-0047/report.yaml"
+    role: "Observed legacy installed-app codesign/provenance failures and zero live replacement cycles."
+    precedence: 2
+  - source: "phatnguyen03022001/agent-runtime@46f92e08e22e652f387f4ccfa25c60d4d2bfc752:.agent/tasks/TASK-0046/review.yaml"
+    role: "Accepted deterministic candidate construction and provenance/freeze guarantees to preserve."
+    precedence: 3
+
+objective: "Make the existing transactional candidate cutover safely support rollback from a legacy installed Agent Runtime.app that cannot satisfy current candidate provenance/codesign checks, by treating the previous installed app as an exact opaque rollback pre-state while preserving strict verification for the new candidate; then build and freeze one new exact non-installed candidate containing the fix for later TASK-0047 continuation."
+
+execution_transport:
+  primary: Remote Desktop Commander
+  chatgpt_sandbox_default: FORBIDDEN
+  sandbox_exception: "Use OpenAI/ChatGPT sandbox only for a materially required capability unavailable through Remote Desktop Commander or another already-authorized current surface, and record the bounded reason in report.yaml."
+
+scope:
+  required_changes:
+    - "Change the existing candidate_cutover.py rollback-envelope logic so the pre-existing installed app does not need to pass the current candidate provenance parser or current strict candidate verification merely to become rollback material."
+    - "Snapshot the previous installed app as an opaque exact pre-state before replacement, using a deterministic repository-owned byte/metadata closure sufficient to prove the rollback copy did not change between capture and restore."
+    - "Rollback must restore the exact captured previous-app bytes plus the already-captured LaunchAgent files, desired-state marker, loaded-state facts, and other transaction-owned pre-state."
+    - "Do not delete runtime-generated __pycache__ files, rewrite legacy manifests, re-sign the legacy app, or mutate the legacy installed app to make it pass current verification."
+    - "Keep strict codesign, current provenance identity, runtime manifest closure, external candidate closure, and exact handoff validation mandatory for the incoming/new candidate and final installed candidate."
+    - "Add focused regression fixtures for a legacy previous app containing extra runtime-generated files and a legacy manifest shape, proving cutover can snapshot/rollback it exactly while a malformed or changed rollback snapshot fails closed."
+    - "Preserve existing PENDING/COMMIT/ROLLBACK semantics and fail-closed behavior on incomplete rollback."
+    - "After implementation bytes stabilize, create one implementation commit, run the canonical full repository verification once on that exact commit, then build/freeze one final non-installed candidate through the existing deterministic freeze path and retain its exact handoff for later TASK-0047 revision."
+  allowed_existing_files_or_components:
+    - "macos/candidate_cutover.py"
+    - "existing cutover/provenance/freeze helpers only when narrowly required"
+    - "focused cutover/provenance tests"
+    - ".agent/tasks/TASK-0048/report.yaml"
+  expected_files_are_restrictive: false
+
+invariants:
+  - "Legacy rollback compatibility must not weaken verification of the incoming or newly installed candidate."
+  - "The previous installed app is trusted only as the exact captured rollback pre-state, not promoted into current candidate provenance authority."
+  - "Opaque rollback closure must detect post-capture mutation or incomplete restoration."
+  - "No live Runtime install, activation, stop, start, restart, reload, COMMIT/ROLLBACK, runtime.env, tunnel/listener, port 8080, LaunchAgent, main, tag, or release mutation occurs in TASK-0048."
+  - "The two operator files chatgpt-sample.txt and vscode-gpu-sample.txt must remain untracked and untouched; do not inspect their contents, move, delete, overwrite, stash, clean, adopt, or commit them."
+
+forbidden_changes:
+  - "Do not bypass or remove verification of the frozen/new candidate."
+  - "Do not normalize, repair, delete caches from, rewrite, or re-sign the current live legacy app."
+  - "Do not run the live cutover in this task."
+  - "Do not change dependency versions, public MCP semantics, runtime.env, tunnel identity, main, tags, or releases."
+  - "Do not create successor tasks as Executor."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Legacy installed apps can be captured as exact opaque rollback pre-state without current candidate provenance/codesign acceptance."
+    evidence_required: "Focused tests reproduce the TASK-0047 blocker shape and PASS without mutating the legacy fixture to make it current-valid."
+  - id: AC-2
+    requirement: "Rollback restores the exact captured previous app and rejects changed/corrupt rollback snapshots."
+    evidence_required: "Deterministic closure/digest equality before/after restore plus negative tamper/corruption tests."
+  - id: AC-3
+    requirement: "Incoming and newly installed candidates remain under the full accepted current verification contract."
+    evidence_required: "Existing/new tests prove candidate handoff, provenance, strict codesign/closure verification are still mandatory and fail closed on invalid candidate input."
+  - id: AC-4
+    requirement: "Existing transactional PENDING/COMMIT/ROLLBACK semantics and service/config rollback behavior remain intact."
+    evidence_required: "Affected cutover tests PASS, including rollback-failure/PARTIAL behavior where applicable."
+  - id: AC-5
+    requirement: "Canonical full repository verification passes exactly once on the final implementation commit before candidate freeze."
+    evidence_required: "Record ./verify result, test count, exit code, exact implementation commit/tree, and any rerun rationale only if later source changes invalidate it."
+  - id: AC-6
+    requirement: "One new final sealed non-installed candidate containing the accepted fix is built/frozen and retained without live activation."
+    evidence_required: "Record exact candidate/handoff paths and SHA-256 identities, source revision/tree, lock identity, packaged Python identity, strict codesign, manifest/external closure, and no-leakage checks."
+  - id: AC-7
+    requirement: "Published dev lineage is one implementation commit followed by one report-only commit, non-force, with main unchanged."
+    evidence_required: "Fresh remote refs and exact base -> implementation -> report lineage; report-only diff proof."
+
+verification:
+  executor_checks:
+    - id: V-1
+      command_or_check: "Use targeted cutover/provenance tests during iteration; reproduce the legacy rollback blocker with fixtures before changing behavior."
+      required: true
+    - id: V-2
+      command_or_check: "Prove opaque previous-app snapshot/restore exactness and negative tamper detection."
+      required: true
+    - id: V-3
+      command_or_check: "Prove incoming/new candidate verification remains strict and unchanged in material guarantees."
+      required: true
+    - id: V-4
+      command_or_check: "Create the final implementation commit and run ./verify once on that exact commit."
+      required: true
+    - id: V-5
+      command_or_check: "Build/freeze one final non-installed candidate from the exact implementation commit and retain the candidate plus handoff for downstream TASK-0047."
+      required: true
+    - id: V-6
+      command_or_check: "Fresh-resolve origin/dev and origin/main before and after non-force publication; preserve the two untracked operator files untouched."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "NONE"
+
+publication:
+  implementation_commit_required: true
+  report_path: .agent/tasks/TASK-0048/report.yaml
+  required_report_revision: 1
+  push: non_force_dev
+  stop_for_architect_review: true
+
+git_authority:
+  create_branch: false
+  create_worktree: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+live_boundary:
+  allowed: "Source/test changes plus non-installed deterministic candidate construction/freeze only."
+  forbidden: "Any mutation of the currently installed/live Runtime, its LaunchAgents, desired state, runtime.env, tunnel/listener/port 8080, or live lifecycle."
+
+blocking_decisions: []
+execution_ready: true
