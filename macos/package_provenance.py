@@ -8,6 +8,7 @@ import hashlib
 import io
 import json
 import os
+import plistlib
 import re
 import stat
 import subprocess
@@ -15,6 +16,7 @@ import tarfile
 from pathlib import Path, PurePosixPath
 
 SCHEMA = 1
+CANDIDATE_SCHEMA = 1
 OWNER = "com.picmao.agent-runtime"
 HEX40 = re.compile(r"[0-9a-f]{40}")
 HEX64 = re.compile(r"[0-9a-f]{64}")
@@ -31,6 +33,15 @@ MANIFEST_KEYS = {
     "payload_sha256",
 }
 ENTRY_KEYS = {"path", "size", "sha256"}
+CANDIDATE_KEYS = {
+    "schema",
+    "bundle_identifier",
+    "source_revision",
+    "source_tree",
+    "requirements_lock_sha256",
+    "record_count",
+    "candidate_sha256",
+}
 
 
 class PackageProvenanceError(RuntimeError):
@@ -94,6 +105,60 @@ def lock_sha256(lock_path: Path) -> str:
     if lock_path.is_symlink() or not lock_path.is_file():
         raise PackageProvenanceError("requirements.lock must be a regular non-symlink file")
     return _sha256(lock_path)
+
+
+def validate_candidate_relative_path(path: str) -> bytes:
+    if not isinstance(path, str) or not path or any(ch in path for ch in "\x00\t\r\n"):
+        raise PackageProvenanceError("candidate file path is invalid")
+    pure = PurePosixPath(path)
+    if pure.is_absolute() or path != pure.as_posix() or path == "." or any(part in {".", ".."} for part in pure.parts):
+        raise PackageProvenanceError("candidate file path is invalid")
+    try:
+        return path.encode("utf-8", "strict")
+    except UnicodeEncodeError as exc:
+        raise PackageProvenanceError("candidate file path is not valid UTF-8") from exc
+
+
+def _candidate_records(app: Path) -> list[tuple[bytes, str]]:
+    if app.is_symlink() or not app.is_dir():
+        raise PackageProvenanceError("candidate app root must be a regular directory")
+    records: list[tuple[bytes, str]] = []
+    seen: set[str] = set()
+    for current, dirs, files in os.walk(app, topdown=True, followlinks=False):
+        root = Path(current)
+        for name in dirs:
+            candidate = root / name
+            info = candidate.lstat()
+            if stat.S_ISLNK(info.st_mode):
+                raise PackageProvenanceError("candidate app must not contain symlinks")
+            if not stat.S_ISDIR(info.st_mode):
+                raise PackageProvenanceError("candidate app contains an unsupported non-regular entry")
+        for name in files:
+            candidate = root / name
+            info = candidate.lstat()
+            if stat.S_ISLNK(info.st_mode):
+                raise PackageProvenanceError("candidate app must not contain symlinks")
+            if not stat.S_ISREG(info.st_mode):
+                raise PackageProvenanceError("candidate app contains an unsupported non-regular entry")
+            relative = candidate.relative_to(app).as_posix()
+            path_bytes = validate_candidate_relative_path(relative)
+            if relative in seen:
+                raise PackageProvenanceError("candidate app contains duplicate file paths")
+            seen.add(relative)
+            mode = stat.S_IMODE(info.st_mode)
+            record = f"{relative}\t{mode:04o}\t{info.st_size}\t{_sha256(candidate)}\n"
+            records.append((path_bytes, record))
+    records.sort(key=lambda item: item[0])
+    return records
+
+
+def candidate_closure(app: Path) -> dict[str, object]:
+    records = _candidate_records(app)
+    canonical = "".join(record for _, record in records).encode("utf-8")
+    return {
+        "record_count": len(records),
+        "candidate_sha256": hashlib.sha256(canonical).hexdigest(),
+    }
 
 
 def _runtime_entries(runtime: Path) -> list[dict[str, object]]:
@@ -233,6 +298,103 @@ def validate_manifest(
     return manifest
 
 
+def _verify_codesign(app: Path) -> None:
+    result = subprocess.run(
+        ["/usr/bin/codesign", "--verify", "--deep", "--strict", str(app)],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise PackageProvenanceError("candidate failed strict deep code-signature verification")
+
+
+def embedded_candidate_identity(app: Path) -> dict[str, object]:
+    info_path = app / "Contents" / "Info.plist"
+    if info_path.is_symlink() or not info_path.is_file():
+        raise PackageProvenanceError("candidate Info.plist must be a regular non-symlink file")
+    try:
+        info = plistlib.loads(info_path.read_bytes())
+    except (OSError, plistlib.InvalidFileException) as exc:
+        raise PackageProvenanceError("candidate Info.plist is malformed") from exc
+    if info.get("CFBundleIdentifier") != OWNER:
+        raise PackageProvenanceError("candidate bundle identifier is not owned by agent-runtime")
+
+    runtime = app / "Contents" / "Resources" / "runtime"
+    manifest_path = app / "Contents" / "Resources" / "runtime-manifest.json"
+    manifest = _load_manifest(manifest_path)
+    revision = _validate_identity(manifest.get("runtime_revision"), HEX40, "revision")
+    tree = _validate_identity(manifest.get("git_tree"), HEX40, "tree")
+    lock_sha = _validate_identity(manifest.get("requirements_lock_sha256"), HEX64, "requirements.lock")
+    validate_manifest(runtime, manifest_path, revision, tree, lock_sha)
+    return {
+        "bundle_identifier": OWNER,
+        "source_revision": revision,
+        "source_tree": tree,
+        "requirements_lock_sha256": lock_sha,
+    }
+
+
+def _candidate_handoff_data(app: Path) -> dict[str, object]:
+    identity = embedded_candidate_identity(app)
+    closure = candidate_closure(app)
+    return {
+        "schema": CANDIDATE_SCHEMA,
+        **identity,
+        **closure,
+    }
+
+
+def _load_candidate_handoff(path: Path) -> dict[str, object]:
+    if path.is_symlink() or not path.is_file():
+        raise PackageProvenanceError("candidate handoff must be a regular non-symlink file")
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise PackageProvenanceError("candidate handoff is malformed") from exc
+    if not isinstance(value, dict) or set(value) != CANDIDATE_KEYS:
+        raise PackageProvenanceError("candidate handoff shape is invalid")
+    if value["schema"] != CANDIDATE_SCHEMA or value["bundle_identifier"] != OWNER:
+        raise PackageProvenanceError("candidate handoff ownership/schema is invalid")
+    _validate_identity(value["source_revision"], HEX40, "candidate revision")
+    _validate_identity(value["source_tree"], HEX40, "candidate tree")
+    _validate_identity(value["requirements_lock_sha256"], HEX64, "candidate requirements.lock")
+    _validate_identity(value["candidate_sha256"], HEX64, "candidate closure")
+    if type(value["record_count"]) is not int or value["record_count"] < 1:
+        raise PackageProvenanceError("candidate handoff record count is invalid")
+    return value
+
+
+def validate_candidate(app: Path, handoff_path: Path) -> dict[str, object]:
+    expected = _load_candidate_handoff(handoff_path)
+    _verify_codesign(app)
+    actual = _candidate_handoff_data(app)
+    if actual != expected:
+        raise PackageProvenanceError("candidate identity does not match expected external handoff")
+    _verify_codesign(app)
+    final = _candidate_handoff_data(app)
+    if final != expected:
+        raise PackageProvenanceError("candidate changed during validation")
+    return expected
+
+
+def seal_candidate(app: Path, handoff_path: Path) -> dict[str, object]:
+    app_real = app.resolve()
+    handoff_real = handoff_path.resolve(strict=False)
+    if handoff_real == app_real or app_real in handoff_real.parents:
+        raise PackageProvenanceError("candidate handoff must remain external to the app bundle")
+    _verify_codesign(app)
+    data = _candidate_handoff_data(app)
+    handoff_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = handoff_path.with_name(handoff_path.name + ".tmp")
+    temporary.write_text(json.dumps(data, indent=2, sort_keys=False) + "\n", encoding="utf-8")
+    temporary.chmod(0o600)
+    os.replace(temporary, handoff_path)
+    validate_candidate(app, handoff_path)
+    return data
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -251,6 +413,12 @@ def main() -> int:
     validate.add_argument("revision")
     validate.add_argument("tree")
     validate.add_argument("lock", type=Path)
+    seal = subparsers.add_parser("seal")
+    seal.add_argument("app", type=Path)
+    seal.add_argument("handoff", type=Path)
+    candidate_validate = subparsers.add_parser("validate-candidate")
+    candidate_validate.add_argument("app", type=Path)
+    candidate_validate.add_argument("handoff", type=Path)
     args = parser.parse_args()
     try:
         if args.command == "stage":
@@ -258,7 +426,7 @@ def main() -> int:
             print(f"{revision}\t{tree}")
         elif args.command == "manifest":
             write_manifest(args.runtime, args.manifest_path, args.revision, args.tree, lock_sha256(args.lock))
-        else:
+        elif args.command == "validate":
             validate_manifest(
                 args.runtime,
                 args.manifest_path,
@@ -266,6 +434,10 @@ def main() -> int:
                 args.tree,
                 lock_sha256(args.lock),
             )
+        elif args.command == "seal":
+            print(json.dumps(seal_candidate(args.app, args.handoff), sort_keys=True))
+        else:
+            print(json.dumps(validate_candidate(args.app, args.handoff), sort_keys=True))
     except PackageProvenanceError as exc:
         print("PROVENANCE ERROR: " + str(exc), file=os.sys.stderr)
         return 2

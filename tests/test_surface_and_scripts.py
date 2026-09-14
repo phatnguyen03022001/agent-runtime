@@ -260,26 +260,29 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertNotIn("AGENT_RUNTIME_TUNNEL_PROFILE", text)
 
     def test_installer_registers_one_runtime_launch_agent_without_changing_desired_state(self) -> None:
-        text = (ROOT / "install.sh").read_text()
-        self.assertIn("com.picmao.agent-runtime-runtime", text)
-        self.assertIn("<key>PathState</key>", text)
-        self.assertIn("protected-runtime-running", text)
-        self.assertIn("bootstrap", text)
-        self.assertIn("DESIRED_STATE_WAS_PRESENT", text)
-        self.assertIn('kickstart -k "$RUNTIME_SERVICE"', text)
-        self.assertNotIn("touch \"$DESIRED_STATE\"", text)
+        installer = (ROOT / "install.sh").read_text()
+        cutover = (ROOT / "macos" / "candidate_cutover.py").read_text()
+        self.assertIn("--install-prebuilt", installer)
+        self.assertIn("com.picmao.agent-runtime-runtime", cutover)
+        self.assertIn('"KeepAlive": {"PathState": {str(desired_state): True}}', cutover)
+        self.assertIn("protected-runtime-running", cutover)
+        self.assertIn('"bootstrap"', cutover)
+        self.assertIn('"kickstart", "-k"', cutover)
+        self.assertIn('"desired_state_present": desired_state.exists()', cutover)
 
     def test_installer_is_narrow_and_derives_workspace_root_from_checkout_parent(self) -> None:
-        text = (ROOT / "install.sh").read_text()
-        self.assertIn("AGENT_RUNTIME_WORKSPACE_ROOT", text)
-        self.assertIn('WORKSPACE_ROOT="$(dirname "$ROOT")"', text)
-        self.assertIn(".venv", text)
-        self.assertIn(".env", text)
-        self.assertIn("CONTROL_PLANE_TUNNEL_ID", text)
-        self.assertIn("--control-plane.poll-channel", text)
-        self.assertIn("<key>EnvironmentVariables</key>", text)
-        self.assertIn("$TUNNEL_CLIENT", text)
-        self.assertIn('runtime_python + " -m agent_runtime.server,channel=main"', text)
+        installer = (ROOT / "install.sh").read_text()
+        cutover = (ROOT / "macos" / "candidate_cutover.py").read_text()
+        combined = installer + cutover
+        self.assertIn("AGENT_RUNTIME_WORKSPACE_ROOT", installer)
+        self.assertIn('WORKSPACE_ROOT="$(dirname "$ROOT")"', installer)
+        self.assertIn(".venv", installer)
+        self.assertIn(".env", installer)
+        self.assertIn("CONTROL_PLANE_TUNNEL_ID", installer)
+        self.assertIn("--control-plane.poll-channel", installer)
+        self.assertIn('"EnvironmentVariables"', cutover)
+        self.assertIn("--tunnel-client", installer)
+        self.assertIn('runtime_python + " -m agent_runtime.server,channel=main"', installer)
         for retired in (
             ".config/agent-runtime",
             ".local/state/agent-runtime",
@@ -288,10 +291,10 @@ class SurfaceAndScriptsTests(unittest.TestCase):
             "disposable",
             "verify_argv",
         ):
-            self.assertNotIn(retired, text)
-        self.assertNotIn("/Users/tienphat", text)
-        self.assertNotIn("--profile-file", text)
-        self.assertNotIn("tunnel-client init", text)
+            self.assertNotIn(retired, combined)
+        self.assertNotIn("/Users/tienphat", combined)
+        self.assertNotIn("--profile-file", combined)
+        self.assertNotIn("tunnel-client init", combined)
 
     def test_verify_is_deterministic_and_does_not_start_tunnel(self) -> None:
         text = (ROOT / "verify").read_text()
@@ -337,24 +340,27 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertEqual(info["CFBundleExecutable"], "AgentRuntimeMenuBar")
 
     def test_installer_adds_ui_login_launch_without_runtime_autostart(self) -> None:
-        text = (ROOT / "install.sh").read_text()
-        self.assertIn("com.picmao.agent-runtime-ui", text)
-        self.assertIn("<key>RunAtLoad</key>", text)
-        self.assertIn("<key>KeepAlive</key>", text)
-        self.assertIn("<false/>", text)
-        self.assertIn("Agent Runtime.app", text)
-        self.assertIn("--health.listen-addr", text)
-        self.assertNotIn("tunnel-client run", text)
+        installer = (ROOT / "install.sh").read_text()
+        cutover = (ROOT / "macos" / "candidate_cutover.py").read_text()
+        self.assertIn("com.picmao.agent-runtime-ui", cutover)
+        self.assertIn('"RunAtLoad": True', cutover)
+        self.assertIn('"KeepAlive": False', cutover)
+        self.assertIn("Agent Runtime.app", installer)
+        self.assertIn("--health.listen-addr", installer)
+        self.assertNotIn("tunnel-client run", installer + cutover)
 
     def test_installed_runtime_is_package_owned_without_checkout_config_pointer(self) -> None:
         installer = (ROOT / "install.sh").read_text()
+        cutover = (ROOT / "macos/candidate_cutover.py").read_text()
         package = (ROOT / "macos/package_app.sh").read_text()
-        self.assertIn("$RUNTIME_ROOT/start.sh", installer)
+        provenance = (ROOT / "macos/package_provenance.py").read_text()
+        self.assertIn('Contents/Resources/runtime/start.sh', cutover)
         self.assertIn("Resources/runtime", installer)
-        self.assertIn("runtime-manifest.json", installer)
+        self.assertIn("runtime-manifest.json", provenance)
         self.assertIn("runtime.env", installer)
-        self.assertNotIn("env-path.txt", installer)
-        self.assertNotIn('<string>$ROOT/start.sh</string>', installer)
+        self.assertNotIn("env-path.txt", installer + cutover)
+        self.assertNotIn('"RUNTIME_ENV_FILE":', cutover)
+        self.assertIn('"RUNTIME_ENV_FILE" in environment', cutover)
         self.assertIn('cp "$SOURCE_ROOT/start.sh" "$RUNTIME/start.sh"', package)
         self.assertIn('package_provenance.py" stage "$REPO_ROOT" "$SOURCE_ROOT"', package)
         self.assertIn('--without-pip "$PACKAGE_VENV"', package)

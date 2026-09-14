@@ -4,6 +4,7 @@ set -euo pipefail
 PACKAGE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 REPO_ROOT="$(cd "$PACKAGE_ROOT/.." && pwd -P)"
 APP="$REPO_ROOT/build/Agent Runtime.app"
+CANDIDATE_HANDOFF="$REPO_ROOT/build/Agent Runtime.candidate.json"
 CONTENTS="$APP/Contents"
 MACOS="$CONTENTS/MacOS"
 RESOURCES="$CONTENTS/Resources"
@@ -49,6 +50,7 @@ BINARY="$BIN_DIR/AgentRuntimeMenuBar"
 [[ -x "$BINARY" ]] || { echo "PACKAGE ERROR: missing AgentRuntimeMenuBar binary" >&2; exit 2; }
 
 rm -rf "$APP"
+rm -f "$CANDIDATE_HANDOFF"
 mkdir -p "$MACOS" "$RESOURCES" "$RUNTIME/agent_runtime"
 cp "$SOURCE_PACKAGE_ROOT/AppBundle/Info.plist" "$CONTENTS/Info.plist"
 cp "$BINARY" "$MACOS/AgentRuntimeMenuBar"
@@ -83,5 +85,9 @@ chmod 755 "$RUNTIME/start.sh" "$RUNTIME/.venv/bin/python"
   || { echo "PACKAGE ERROR: LSUIElement must be true" >&2; exit 2; }
 /usr/bin/codesign --force --deep --sign - "$APP" >/dev/null
 /usr/bin/codesign --verify --deep --strict "$APP"
+"$PYTHON_BIN" "$SOURCE_PACKAGE_ROOT/package_provenance.py" validate \
+  "$RUNTIME" "$RESOURCES/runtime-manifest.json" \
+  "$RUNTIME_REVISION" "$RUNTIME_TREE" "$SOURCE_ROOT/requirements.lock"
+"$PYTHON_BIN" "$SOURCE_PACKAGE_ROOT/package_provenance.py" seal "$APP" "$CANDIDATE_HANDOFF" >/dev/null
 
 echo "$APP"

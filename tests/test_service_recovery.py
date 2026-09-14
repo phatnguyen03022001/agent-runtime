@@ -226,11 +226,15 @@ class ServiceRecoveryTests(unittest.TestCase):
         )
 
     def test_installer_never_bypasses_resolved_launchctl(self) -> None:
-        text = (Path(__file__).resolve().parents[1] / "install.sh").read_text()
-        self.assertIn('LAUNCHCTL="$(command -v launchctl)"', text)
-        self.assertNotIn("/bin/launchctl", text)
-        self.assertIn('"$LAUNCHCTL" print', text)
-        self.assertIn('"$LAUNCHCTL" bootstrap', text)
+        root = Path(__file__).resolve().parents[1]
+        installer = (root / "install.sh").read_text()
+        cutover = (root / "macos" / "candidate_cutover.py").read_text()
+        combined = installer + cutover
+        self.assertIn('LAUNCHCTL="$(command -v launchctl)"', installer)
+        self.assertIn('--launchctl "$(command -v launchctl)"', installer)
+        self.assertNotIn("/bin/launchctl", combined)
+        self.assertIn('[str(launchctl), "print", service]', cutover)
+        self.assertIn('[str(launchctl), "bootstrap", domain, str(runtime_plist)]', cutover)
 
     def test_recover_executes_only_bounded_migration_sequence(self) -> None:
         tunnel, child = self.canonical_processes()

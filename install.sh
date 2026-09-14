@@ -9,6 +9,32 @@ fail() {
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 cd "$ROOT"
 
+run_cutover_helper() {
+  command -v python3 >/dev/null 2>&1 || fail "Python 3.11+ is required for candidate cutover."
+  exec "$(command -v python3)" "$ROOT/macos/candidate_cutover.py" "$@"
+}
+
+case "${1-}" in
+  --install-prebuilt)
+    [[ "$#" == "3" ]] || fail "usage: ./install.sh --install-prebuilt <Agent Runtime.app> <candidate.json>"
+    [[ "$(uname -s)" == "Darwin" ]] || fail "prebuilt candidate installation supports macOS only."
+    command -v launchctl >/dev/null 2>&1 || fail "launchctl is required for candidate cutover."
+    command -v tunnel-client >/dev/null 2>&1 || fail "tunnel-client is required for candidate cutover."
+    run_cutover_helper cutover "$2" "$3" --home "$HOME" \
+      --launchctl "$(command -v launchctl)" --tunnel-client "$(command -v tunnel-client)"
+    ;;
+  --commit-cutover)
+    [[ "$#" == "1" ]] || fail "usage: ./install.sh --commit-cutover"
+    run_cutover_helper commit --home "$HOME"
+    ;;
+  --rollback-cutover)
+    [[ "$#" == "1" ]] || fail "usage: ./install.sh --rollback-cutover"
+    [[ "$(uname -s)" == "Darwin" ]] || fail "candidate rollback supports macOS only."
+    command -v launchctl >/dev/null 2>&1 || fail "launchctl is required for candidate rollback."
+    run_cutover_helper rollback --home "$HOME" --launchctl "$(command -v launchctl)"
+    ;;
+esac
+
 if [[ "${1-}" == "--recover-runtime-service" ]]; then
   [[ "$(uname -s)" == "Darwin" ]] || fail "Runtime service recovery supports macOS only."
   command -v python3 >/dev/null 2>&1 || fail "Python 3.11+ is required for Runtime service recovery."
@@ -211,221 +237,22 @@ PY
 echo "[4/8] Building package-owned Runtime payload and menu-bar app..."
 "$ROOT/macos/package_app.sh" >/dev/null
 SOURCE_APP="$ROOT/build/Agent Runtime.app"
-TARGET_APPS="$HOME/Applications"
-TARGET_APP="$TARGET_APPS/Agent Runtime.app"
-mkdir -p "$TARGET_APPS"
+CANDIDATE_HANDOFF="$ROOT/build/Agent Runtime.candidate.json"
+[[ -d "$SOURCE_APP" && ! -L "$SOURCE_APP" ]] || fail "packaged app candidate is missing or unsafe."
+[[ -f "$CANDIDATE_HANDOFF" && ! -L "$CANDIDATE_HANDOFF" ]] || fail "external candidate handoff is missing or unsafe."
 
-validate_package() {
-  local app="$1"
-  [[ -d "$app" && ! -L "$app" ]] || fail "package staging is not a regular app bundle."
-  [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist" 2>/dev/null || true)" == "com.picmao.agent-runtime" ]] \
-    || fail "package CFBundleIdentifier is not owned by agent-runtime."
-  /usr/bin/codesign --verify --deep --strict "$app" \
-    || fail "package failed strict deep code-signature verification."
-  local runtime="$app/Contents/Resources/runtime"
-  local manifest="$app/Contents/Resources/runtime-manifest.json"
-  local expected_revision expected_tree
-  expected_revision="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || true)"
-  expected_tree="$(git -C "$ROOT" rev-parse 'HEAD^{tree}' 2>/dev/null || true)"
-  /usr/bin/python3 "$ROOT/macos/package_provenance.py" validate \
-    "$runtime" "$manifest" "$expected_revision" "$expected_tree" "$ROOT/requirements.lock" \
-    || fail "package Runtime provenance validation failed."
-  /usr/bin/python3 - "$app" "$ROOT" <<'PY'
-import sys
-from pathlib import Path
+echo "[5/8] Installing the sealed prebuilt candidate transactionally..."
+"$ROOT/install.sh" --install-prebuilt "$SOURCE_APP" "$CANDIDATE_HANDOFF"
 
-app = Path(sys.argv[1])
-checkout_root = Path(sys.argv[2]).resolve()
-for candidate in app.rglob("*"):
-    if candidate.is_symlink():
-        raise SystemExit("INSTALL ERROR: package contains a symlinked execution/resource file")
-    if not candidate.is_file():
-        continue
-    try:
-        payload = candidate.read_bytes()
-    except OSError as exc:
-        raise SystemExit("INSTALL ERROR: package file cannot be inspected") from exc
-    if (b"env-" + b"path.txt") in payload or str(checkout_root).encode("utf-8") in payload:
-        raise SystemExit("INSTALL ERROR: package contains a source-checkout implementation reference")
-PY
-}
-
-if [[ -L "$TARGET_APP" ]]; then
-  fail "existing $TARGET_APP must not be a symlink."
-fi
-STAGING_APP="$TARGET_APPS/.Agent Runtime.app.$$.staging"
-BACKUP_APP="$TARGET_APPS/.Agent Runtime.app.$$.previous"
-rm -rf "$STAGING_APP" "$BACKUP_APP"
-/usr/bin/ditto "$SOURCE_APP" "$STAGING_APP"
-validate_package "$STAGING_APP"
-if [[ -e "$TARGET_APP" ]]; then
-  EXISTING_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$TARGET_APP/Contents/Info.plist" 2>/dev/null || true)"
-  [[ "$EXISTING_ID" == "com.picmao.agent-runtime" ]] || fail "existing $TARGET_APP is not owned by agent-runtime."
-  mv "$TARGET_APP" "$BACKUP_APP"
-fi
-if ! mv "$STAGING_APP" "$TARGET_APP"; then
-  if [[ -e "$BACKUP_APP" ]]; then mv "$BACKUP_APP" "$TARGET_APP"; fi
-  fail "atomic app-bundle activation failed."
-fi
-rm -rf "$BACKUP_APP"
-validate_package "$TARGET_APP"
-
-echo "[5/8] Installing and immediately registering the UI login agent..."
-LOGIN_DIR="$HOME/Library/LaunchAgents"
-LOGIN_PLIST="$LOGIN_DIR/com.picmao.agent-runtime-ui.plist"
-UI_LABEL="com.picmao.agent-runtime-ui"
-UI_SERVICE="gui/$(id -u)/$UI_LABEL"
-mkdir -p "$LOGIN_DIR"
-if [[ -L "$LOGIN_PLIST" ]]; then
-  fail "existing login launch configuration must not be a symlink."
-fi
-if [[ -e "$LOGIN_PLIST" && ! -f "$LOGIN_PLIST" ]]; then
-  fail "existing login launch configuration must be a regular file."
-fi
-cat > "$LOGIN_PLIST" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>$UI_LABEL</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>$TARGET_APP/Contents/MacOS/AgentRuntimeMenuBar</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <false/>
-    <key>ProcessType</key>
-    <string>Interactive</string>
-</dict>
-</plist>
-PLIST
-/usr/bin/plutil -lint "$LOGIN_PLIST" >/dev/null || fail "login launch configuration is invalid."
-if "$LAUNCHCTL" print "$UI_SERVICE" >/dev/null 2>&1; then
-  # The label is already ours; kickstart refreshes the newly activated bundle
-  # without registering a second job. The fallback accepts an already-loaded
-  # UI on launchctl variants without kickstart support.
-  "$LAUNCHCTL" kickstart -k "$UI_SERVICE" >/dev/null 2>&1 \
-    || "$LAUNCHCTL" print "$UI_SERVICE" >/dev/null 2>&1 \
-    || fail "could not refresh the existing menu-bar LaunchAgent."
-else
-  "$LAUNCHCTL" bootstrap "gui/$(id -u)" "$LOGIN_PLIST" >/dev/null 2>&1 \
-    || "$LAUNCHCTL" print "$UI_SERVICE" >/dev/null 2>&1 \
-    || fail "could not register the menu-bar LaunchAgent in the current login session."
-fi
-"$LAUNCHCTL" print "$UI_SERVICE" >/dev/null 2>&1 \
-  || fail "menu-bar LaunchAgent is not loaded after installation."
-
-echo "[6/8] Installing the package-owned protected Runtime LaunchAgent..."
-RUNTIME_LABEL="com.picmao.agent-runtime-runtime"
-RUNTIME_PLIST="$LOGIN_DIR/$RUNTIME_LABEL.plist"
-STATE_DIR="$HOME/Library/Application Support/Agent Runtime"
-DESIRED_STATE="$STATE_DIR/protected-runtime-running"
+echo "[6/8] Prebuilt candidate is installed and pending explicit commit."
+TARGET_APP="$HOME/Applications/Agent Runtime.app"
 RUNTIME_ROOT="$TARGET_APP/Contents/Resources/runtime"
-mkdir -p "$STATE_DIR"
-DESIRED_STATE_WAS_PRESENT=0
-if [[ -e "$DESIRED_STATE" ]]; then
-  DESIRED_STATE_WAS_PRESENT=1
-fi
-if [[ -L "$RUNTIME_PLIST" ]]; then
-  fail "existing Runtime launch configuration must not be a symlink."
-fi
-if [[ -e "$RUNTIME_PLIST" && ! -f "$RUNTIME_PLIST" ]]; then
-  fail "existing Runtime launch configuration must be a regular file."
-fi
-cat > "$RUNTIME_PLIST" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>$RUNTIME_LABEL</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>$RUNTIME_ROOT/start.sh</string>
-        <string>--serve</string>
-        <string>$TUNNEL_CLIENT</string>
-    </array>
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>HOME</key>
-        <string>$HOME</string>
-        <key>PATH</key>
-        <string>$RUNTIME_PATH</string>
-    </dict>
-    <key>RunAtLoad</key>
-    <false/>
-    <key>KeepAlive</key>
-    <dict>
-        <key>PathState</key>
-        <dict>
-            <key>$DESIRED_STATE</key>
-            <true/>
-        </dict>
-    </dict>
-    <key>ProcessType</key>
-    <string>Interactive</string>
-    <key>ThrottleInterval</key>
-    <integer>2</integer>
-</dict>
-</plist>
-PLIST
-/usr/bin/plutil -lint "$RUNTIME_PLIST" >/dev/null || fail "Runtime launch configuration is invalid."
-RUNTIME_SERVICE="gui/$(id -u)/$RUNTIME_LABEL"
-if "$LAUNCHCTL" print "$RUNTIME_SERVICE" >/dev/null 2>&1; then
-  # Updating ProgramArguments requires one bounded unregister/register cycle.
-  # The desired-state marker is never touched, so RUNNING intent survives.
-  "$LAUNCHCTL" bootout "$RUNTIME_SERVICE" >/dev/null 2>&1 \
-    || "$LAUNCHCTL" print "$RUNTIME_SERVICE" >/dev/null 2>&1 \
-    || fail "could not refresh the existing Runtime LaunchAgent."
-fi
-if ! "$LAUNCHCTL" print "$RUNTIME_SERVICE" >/dev/null 2>&1; then
-  "$LAUNCHCTL" bootstrap "gui/$(id -u)" "$RUNTIME_PLIST" >/dev/null 2>&1 \
-    || "$LAUNCHCTL" print "$RUNTIME_SERVICE" >/dev/null 2>&1 \
-    || fail "could not register protected Runtime LaunchAgent."
-fi
-if [[ "$DESIRED_STATE_WAS_PRESENT" == "1" ]]; then
-  # Re-registering a PathState job can leave an existing RUNNING intent loaded
-  # but idle. Refresh the package-owned job without changing that intent.
-  # launchd can report the service loaded before its new registration is
-  # kickstartable, so allow a bounded registration/start retry sequence.
-  RUNTIME_RESUME_OK=0
-  for _attempt in 1 2 3; do
-    if ! "$LAUNCHCTL" print "$RUNTIME_SERVICE" >/dev/null 2>&1; then
-      "$LAUNCHCTL" bootstrap "gui/$(id -u)" "$RUNTIME_PLIST" >/dev/null 2>&1 || true
-    fi
-    if "$LAUNCHCTL" kickstart -k "$RUNTIME_SERVICE" >/dev/null 2>&1; then
-      RUNTIME_RESUME_OK=1
-      break
-    fi
-    sleep 1
-  done
-  [[ "$RUNTIME_RESUME_OK" == "1" ]] \
-    || fail "could not resume the protected Runtime after installation."
-fi
+/usr/bin/python3 "$ROOT/macos/package_provenance.py" validate-candidate "$TARGET_APP" "$CANDIDATE_HANDOFF" \
+  || fail "installed candidate changed before commit."
 
-echo "[7/8] Verifying installed execution ownership..."
-/usr/bin/python3 - "$RUNTIME_PLIST" "$TARGET_APP" "$ROOT" <<'PY'
-import plistlib
-import sys
-from pathlib import Path
+echo "[7/8] Candidate integrity verified; rollback remains available."
 
-plist_path, app_path, checkout_root = map(Path, sys.argv[1:])
-payload = plistlib.loads(plist_path.read_bytes())
-args = payload.get("ProgramArguments", [])
-runtime_root = app_path / "Contents/Resources/runtime"
-expected = [str(runtime_root / "start.sh"), "--serve"]
-if args[:2] != expected or len(args) != 3 or not args[2].startswith("/"):
-    raise SystemExit("INSTALL ERROR: Runtime LaunchAgent does not point to installed payload")
-if str(runtime_root) in " ".join(args[2:]) and str(checkout_root / "start.sh") in " ".join(args):
-    raise SystemExit("INSTALL ERROR: Runtime LaunchAgent references checkout implementation")
-if "RUNTIME_ENV_FILE" in payload.get("EnvironmentVariables", {}):
-    raise SystemExit("INSTALL ERROR: Runtime LaunchAgent must derive canonical configuration")
-PY
-
-echo "[8/8] Installation ready."
+echo "[8/8] Cutover is pending explicit commit after downstream live acceptance."
 echo "Workspace root: $WORKSPACE_ROOT"
 echo "Tunnel authority: per-user Application Support runtime.env"
 echo "Native app: $TARGET_APP"

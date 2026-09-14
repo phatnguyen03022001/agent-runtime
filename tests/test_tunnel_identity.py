@@ -195,6 +195,7 @@ fi
         config_helper.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / "macos/runtime_config.py", config_helper)
         shutil.copy2(ROOT / "macos/package_provenance.py", repo / "macos" / "package_provenance.py")
+        shutil.copy2(ROOT / "macos/candidate_cutover.py", repo / "macos" / "candidate_cutover.py")
         self._write(package, r'''#!/usr/bin/env bash
 set -euo pipefail
 APP="$PWD/build/Agent Runtime.app"
@@ -219,7 +220,9 @@ TREE="$(git rev-parse 'HEAD^{tree}')"
 /usr/bin/python3 "$PWD/macos/package_provenance.py" manifest \
   "$RUNTIME" "$APP/Contents/Resources/runtime-manifest.json" \
   "$REVISION" "$TREE" "$PWD/requirements.lock"
-/usr/bin/codesign --force --sign - "$APP" >/dev/null 2>&1
+/usr/bin/codesign --force --deep --sign - "$APP" >/dev/null 2>&1
+/usr/bin/python3 "$PWD/macos/package_provenance.py" seal \
+  "$APP" "$PWD/build/Agent Runtime.candidate.json" >/dev/null
 ''', 0o700)
         subprocess.run(["git", "-C", str(repo), "config", "user.email", "test@example.invalid"], check=True)
         subprocess.run(["git", "-C", str(repo), "config", "user.name", "Test"], check=True)
@@ -232,8 +235,25 @@ TREE="$(git rev-parse 'HEAD^{tree}')"
 set -euo pipefail
 STATE="$(dirname "$0")/launchd-loaded"
 case "${1-}" in
-  print) [[ -f "$STATE" ]] ;;
-  bootstrap) : > "$STATE" ;;
+  print)
+    [[ -f "$STATE" ]] && grep -Fxq -- "$2" "$STATE"
+    ;;
+  bootstrap)
+    label="$(basename "$3" .plist)"
+    service="$2/$label"
+    touch "$STATE"
+    grep -Fxq -- "$service" "$STATE" || printf '%s\n' "$service" >> "$STATE"
+    ;;
+  bootout)
+    [[ -f "$STATE" ]] || exit 0
+    tmp="$STATE.tmp"
+    grep -Fvx -- "$2" "$STATE" > "$tmp" || true
+    mv "$tmp" "$STATE"
+    ;;
+  kickstart)
+    service="${!#}"
+    [[ -f "$STATE" ]] && grep -Fxq -- "$service" "$STATE"
+    ;;
   *) exit 2 ;;
 esac
 ''',
@@ -250,6 +270,7 @@ esac
         *,
         api_key: str | None = None,
         tunnel_id: str | None = None,
+        args: tuple[str, ...] = (),
     ) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
         env.update({"HOME": str(home), "PATH": f"{bin_dir}:{env['PATH']}"})
@@ -259,7 +280,7 @@ esac
             env["CONTROL_PLANE_API_KEY"] = api_key
         if tunnel_id is not None:
             env["CONTROL_PLANE_TUNNEL_ID"] = tunnel_id
-        return subprocess.run([str(repo / "install.sh")], cwd=repo, env=env, text=True, capture_output=True, check=False)
+        return subprocess.run([str(repo / "install.sh"), *args], cwd=repo, env=env, text=True, capture_output=True, check=False)
 
     def _env(self, repo: Path, tunnel_id: str | None = None, api_key: str = "test-key") -> Path:
         path = repo / ".env"
@@ -360,7 +381,7 @@ esac
             self.assertEqual(legacy.read_bytes(), before)
             self.assertFalse(capture.exists())
 
-    def test_install_is_idempotent_without_legacy_configuration(self) -> None:
+    def test_install_rejects_reentry_while_pending_then_allows_reinstall_after_commit(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             repo, home, bin_dir, capture = self._install_fixture(Path(raw))
             env_file = self._env(repo, "bootstrap-id")
@@ -369,10 +390,17 @@ esac
             first_bytes = env_file.read_bytes()
             self.assertIn(b"CONTROL_PLANE_TUNNEL_ID=bootstrap-id", first_bytes)
             self.assertFalse((home / ".config/tunnel-client/agent-runtime.yaml").exists())
+
             second = self._run_install(repo, home, bin_dir, capture)
-            self.assertEqual(second.returncode, 0, second.stderr)
+            self.assertNotEqual(second.returncode, 0)
+            self.assertIn("already pending", second.stderr)
+
+            committed = self._run_install(repo, home, bin_dir, capture, args=("--commit-cutover",))
+            self.assertEqual(committed.returncode, 0, committed.stderr)
+            third = self._run_install(repo, home, bin_dir, capture)
+            self.assertEqual(third.returncode, 0, third.stderr)
             self.assertEqual(env_file.read_bytes(), first_bytes)
-            self.assertEqual(capture.read_text().count("argv=doctor "), 2)
+            self.assertEqual(capture.read_text().count("argv=doctor "), 3)
 
     def test_install_preserves_existing_canonical_config_and_rejects_bad_mode_or_symlink(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

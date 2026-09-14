@@ -6,12 +6,21 @@ menu-bar app is the normal intentional lifecycle authority for one protected sin
 
 ## Installed product and tunnel authority
 
-Run `./install.sh` from the canonical checkout to build and install
-`~/Applications/Agent Runtime.app`. Installation stages and validates an
-owned app bundle before activation, then registers the menu-bar LaunchAgent in
-the current login session. No logout, reboot, or next login is required.
-Repeated installation refreshes one registration/process and never changes the
-persisted Runtime desired state.
+Run `./install.sh` from the canonical checkout to build one sealed candidate
+and enter a transactional cutover for `~/Applications/Agent Runtime.app`.
+The cutover validates the sealed candidate through staging and installed
+placement, refreshes only the owned LaunchAgents, preserves the Runtime desired
+state, and leaves the previous known-good package/LaunchAgent state recoverable
+in a pending transaction. A second cutover is rejected while one is pending.
+
+After downstream live acceptance, commit the pending cutover explicitly with
+`./install.sh --commit-cutover`. To restore the previous package and relevant
+LaunchAgent/desired-state facts instead, use `./install.sh --rollback-cutover`.
+An already sealed bundle can be handed off without rebuilding or re-signing via
+`./install.sh --install-prebuilt <Agent Runtime.app> <candidate.json>`; this path
+validates candidate-owned embedded provenance plus the caller-supplied external
+candidate identity and does not use the invoking checkout HEAD as candidate
+identity. The prebuilt cutover does not modify canonical `runtime.env`.
 
 The installed Runtime executes package-owned bytes under:
 
@@ -173,15 +182,22 @@ virtual environment; checkout `.venv` contents are never copied into the app.
 `Contents/Resources/runtime-manifest.json` records the exact Git revision and
 tree, the `requirements.lock` SHA-256, every regular file below
 `Contents/Resources/runtime` with path/size/SHA-256, and an aggregate digest
-over the sorted canonical file list. Installer validation combines strict
-codesign verification with exact closed-world manifest validation. This is
-reconstructible provenance, not a claim of bit-for-bit reproducible builds.
+over the sorted canonical file list. After all candidate-mutating build work,
+signing, strict codesign verification, and final runtime-manifest validation,
+packaging writes the external `build/Agent Runtime.candidate.json` handoff.
+Its candidate digest closes over every regular file in the logical app bundle,
+including signing-owned files, using sorted UTF-8 relative path, four-digit
+permission mode, byte size, and SHA-256 records. Symlinks and unsupported
+non-regular entries are rejected. Staging and installed placement must preserve
+that exact external closure as well as strict codesign and embedded manifest
+closure. This is reconstructible provenance, not a claim of bit-for-bit
+reproducible builds.
 
 ## Verification
 
 `./verify` runs deterministic Python unit/integration checks, Python compile,
 and shell syntax checks. It does not require live control-plane credentials or
 the live ChatGPT plugin. Native Swift tests, release build, package/signature
-verification, source-checkout reference scans, installer idempotence, launchd
+verification, source-checkout reference scans, pending-cutover/rollback fixtures, launchd
 fixture recovery, protected-runtime checks, and bounded live acceptance are
 run before publication.
