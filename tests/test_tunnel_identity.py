@@ -243,21 +243,32 @@ TREE="$(git rev-parse 'HEAD^{tree}')"
             r'''#!/usr/bin/env bash
 set -euo pipefail
 STATE="$(dirname "$0")/launchd-loaded"
+PROGRAMS="$(dirname "$0")/launchd-programs"
 case "${1-}" in
   print)
-    [[ -f "$STATE" ]] && grep -Fxq -- "$2" "$STATE"
+    if [[ ! -f "$STATE" ]] || ! grep -Fxq -- "$2" "$STATE"; then
+      printf 'Could not find service "%s" in domain for user gui: 501\n' "${2##*/}" >&2
+      exit 113
+    fi
+    label="${2##*/}"
+    program="$(cat "$PROGRAMS/$label")"
+    printf '%s = {\n\tpath = /fake/%s.plist\n\tstate = not running\n\tprogram = %s\n}\n' "$2" "$label" "$program"
     ;;
   bootstrap)
     label="$(basename "$3" .plist)"
     service="$2/$label"
+    program="$(/usr/libexec/PlistBuddy -c 'Print :ProgramArguments:0' "$3")"
     touch "$STATE"
+    mkdir -p "$PROGRAMS"
     grep -Fxq -- "$service" "$STATE" || printf '%s\n' "$service" >> "$STATE"
+    printf '%s\n' "$program" > "$PROGRAMS/$label"
     ;;
   bootout)
     [[ -f "$STATE" ]] || exit 0
     tmp="$STATE.tmp"
     grep -Fvx -- "$2" "$STATE" > "$tmp" || true
     mv "$tmp" "$STATE"
+    rm -f "$PROGRAMS/${2##*/}"
     ;;
   kickstart)
     service="${!#}"

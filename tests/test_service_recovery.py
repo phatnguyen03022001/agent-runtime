@@ -234,7 +234,7 @@ class ServiceRecoveryTests(unittest.TestCase):
         self.assertIn('--launchctl "$(command -v launchctl)"', installer)
         self.assertNotIn("/bin/launchctl", combined)
         self.assertIn('[str(launchctl), "print", service]', cutover)
-        self.assertIn('[str(launchctl), "bootstrap", domain, str(runtime_plist)]', cutover)
+        self.assertIn('[str(launchctl), "bootstrap", domain, str(plist)]', cutover)
 
     def test_recover_executes_only_bounded_migration_sequence(self) -> None:
         tunnel, child = self.canonical_processes()

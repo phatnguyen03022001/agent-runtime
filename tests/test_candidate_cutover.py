@@ -172,34 +172,83 @@ class CandidateClosureTests(unittest.TestCase):
 
 
 
-def make_fake_launchctl(root: Path, *, ui_loaded: bool, runtime_loaded: bool) -> tuple[Path, Path, Path]:
+def make_fake_launchctl(
+    root: Path,
+    *,
+    ui_loaded: bool,
+    runtime_loaded: bool,
+    bootout_delay_prints: int = 0,
+    bootout_never_absent: bool = False,
+) -> tuple[Path, Path, Path]:
     state = root / "launchctl-state.json"
+    pending = root / "launchctl-pending.json"
+    programs = root / "launchctl-programs.json"
     log = root / "launchctl.log"
     loaded = []
+    initial_programs = {}
     if ui_loaded:
-        loaded.append("gui/501/com.picmao.agent-runtime-ui")
+        service = "gui/501/com.picmao.agent-runtime-ui"
+        loaded.append(service)
+        initial_programs[service] = "/previous/AgentRuntimeMenuBar"
     if runtime_loaded:
-        loaded.append("gui/501/com.picmao.agent-runtime-runtime")
+        service = "gui/501/com.picmao.agent-runtime-runtime"
+        loaded.append(service)
+        initial_programs[service] = "/previous/start.sh"
     state.write_text(json.dumps(sorted(loaded)) + "\n")
+    pending.write_text("{}\n")
+    programs.write_text(json.dumps(initial_programs, sort_keys=True) + "\n")
     script = root / "launchctl"
     script_lines = [
         "#!/usr/bin/env python3",
         "import json, plistlib, sys",
         "from pathlib import Path",
         f"STATE = Path({str(state)!r})",
+        f"PENDING = Path({str(pending)!r})",
+        f"PROGRAMS = Path({str(programs)!r})",
         f"LOG = Path({str(log)!r})",
+        f"BOOTOUT_DELAY_PRINTS = {bootout_delay_prints}",
+        f"BOOTOUT_NEVER_ABSENT = {bootout_never_absent!r}",
         "loaded = set(json.loads(STATE.read_text()))",
+        "pending = json.loads(PENDING.read_text())",
+        "programs = json.loads(PROGRAMS.read_text())",
         "args = sys.argv[1:]",
         "with LOG.open('a') as handle: handle.write(' '.join(args) + '\\n')",
         "rc = 0",
-        "if args[0] == 'print': rc = 0 if args[1] in loaded else 1",
+        "if args[0] == 'print':",
+        "    service = args[1]",
+        "    if service in pending and not BOOTOUT_NEVER_ABSENT:",
+        "        if pending[service] <= 0:",
+        "            pending.pop(service, None)",
+        "            loaded.discard(service)",
+        "        else:",
+        "            pending[service] -= 1",
+        "    if service in loaded:",
+        "        label = service.rsplit('/', 1)[-1]",
+        "        print(f'{service} = {{')",
+        "        print(f'\tpath = /fake/{label}.plist')",
+        "        print('\tstate = not running')",
+        "        print(f'\tprogram = {programs[service]}')",
+        "        print('}')",
+        "    else:",
+        "        print(f'Could not find service \"{service.rsplit(chr(47), 1)[-1]}\" in domain for user gui: 501', file=sys.stderr)",
+        "        rc = 113",
         "elif args[0] == 'bootstrap':",
         "    data = plistlib.loads(Path(args[2]).read_bytes())",
-        "    loaded.add(args[1] + '/' + data['Label'])",
-        "elif args[0] == 'bootout': loaded.discard(args[1])",
+        "    service = args[1] + '/' + data['Label']",
+        "    if service in loaded:",
+        "        print('Bootstrap failed: 37: Operation already in progress', file=sys.stderr)",
+        "        rc = 37",
+        "    else:",
+        "        loaded.add(service)",
+        "        programs[service] = data['ProgramArguments'][0]",
+        "elif args[0] == 'bootout':",
+        "    if args[1] in loaded and (BOOTOUT_DELAY_PRINTS or BOOTOUT_NEVER_ABSENT): pending[args[1]] = BOOTOUT_DELAY_PRINTS",
+        "    else: loaded.discard(args[1])",
         "elif args[0] == 'kickstart': rc = 0 if args[-1] in loaded else 1",
         "else: rc = 2",
         "STATE.write_text(json.dumps(sorted(loaded)) + '\\n')",
+        "PENDING.write_text(json.dumps(pending, sort_keys=True) + '\\n')",
+        "PROGRAMS.write_text(json.dumps(programs, sort_keys=True) + '\\n')",
         "raise SystemExit(rc)",
     ]
     script.write_text("\n".join(script_lines) + "\n")
@@ -338,13 +387,91 @@ class CandidateCutoverTests(unittest.TestCase):
             self.assertFalse(fx["transaction"].exists())
             self.assertEqual(json.loads(fx["launch_state"].read_text()), [])
 
-    def test_launchagent_registration_failure_occurs_after_ui_refresh_and_rolls_back(self) -> None:
+    def test_cutover_waits_for_delayed_service_absence_before_bootstrap(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            launchctl, launch_state, launch_log = make_fake_launchctl(
+                fx["root"], ui_loaded=True, runtime_loaded=True, bootout_delay_prints=2,
+            )
+            fx.update(launchctl=launchctl, launch_state=launch_state, launch_log=launch_log)
+            result = self._cutover(cutover, fx)
+            self.assertEqual(result["status"], "PENDING")
+            log = launch_log.read_text().splitlines()
+            runtime_service = "gui/501/com.picmao.agent-runtime-runtime"
+            bootout = log.index(f"bootout {runtime_service}")
+            bootstrap = next(i for i, line in enumerate(log) if "com.picmao.agent-runtime-runtime.plist" in line)
+            absence_checks = [line for line in log[bootout + 1:bootstrap] if line == f"print {runtime_service}"]
+            self.assertGreaterEqual(len(absence_checks), 3)
+
+    def test_loaded_ui_registration_is_replaced_not_kickstarted(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            result = self._cutover(cutover, fx)
+            self.assertEqual(result["status"], "PENDING")
+            log = fx["launch_log"].read_text().splitlines()
+            ui_service = "gui/501/com.picmao.agent-runtime-ui"
+            self.assertIn(f"bootout {ui_service}", log)
+            self.assertNotIn(f"kickstart -k {ui_service}", log)
+            ui_bootout = log.index(f"bootout {ui_service}")
+            ui_bootstrap = next(i for i, line in enumerate(log) if "com.picmao.agent-runtime-ui.plist" in line)
+            self.assertLess(ui_bootout, ui_bootstrap)
+
+    def test_service_absence_timeout_fails_closed_before_bootstrap(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            launchctl, _, log = make_fake_launchctl(
+                fx["root"], ui_loaded=True, runtime_loaded=True, bootout_never_absent=True,
+            )
+            service = "gui/501/com.picmao.agent-runtime-runtime"
+            cutover._require_launchctl_ok(
+                cutover._run([str(launchctl), "bootout", service]),
+                "could not unregister test service",
+            )
+            with self.assertRaisesRegex(cutover.CutoverError, "timed out waiting for LaunchAgent absence"):
+                cutover._wait_for_service_absence(
+                    launchctl, service, timeout_seconds=0.01, poll_interval_seconds=0.001,
+                )
+            self.assertFalse(any(line.startswith("bootstrap ") for line in log.read_text().splitlines()))
+
+    def test_registered_service_identity_requires_exact_program_path(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            service = "gui/501/com.picmao.agent-runtime-runtime"
+            with self.assertRaisesRegex(cutover.CutoverError, "identity mismatch"):
+                cutover._require_service_identity(
+                    fx["launchctl"], service, fx["target"] / "wrong/start.sh",
+                )
+
+    def test_launchctl_failure_diagnostics_are_bounded_and_redact_credentials(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, _ = self._fixture(raw)
+            noisy = "x" * 10000
+            result = subprocess.CompletedProcess(
+                ["/bin/launchctl", "bootstrap", "gui/501", "/tmp/runtime.plist"],
+                37,
+                stdout="CONTROL_PLANE_API_KEY=super-secret\nAUTH_TOKEN => bearer-secret\nPASSWORD: password-secret trailing-secret-fragment\n" + noisy,
+                stderr="Bootstrap failed: 37: Operation already in progress\n" + noisy,
+            )
+            with self.assertRaises(cutover.CutoverError) as raised:
+                cutover._require_launchctl_ok(result, "could not register Runtime LaunchAgent")
+            message = str(raised.exception)
+            self.assertIn("operation=bootstrap", message)
+            self.assertIn("returncode=37", message)
+            self.assertIn("Operation already in progress", message)
+            self.assertNotIn("super-secret", message)
+            self.assertNotIn("bearer-secret", message)
+            self.assertNotIn("password-secret", message)
+            self.assertNotIn("trailing-secret-fragment", message)
+            self.assertLess(len(message), 5000)
+
+    def test_launchagent_registration_failure_occurs_after_ui_replacement_and_rolls_back(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             _, cutover, fx = self._fixture(raw)
             with self.assertRaisesRegex(cutover.CutoverError, "rollback restored"):
                 self._cutover(cutover, fx, fail_stages={"launchagent_registration"})
             log = fx["launch_log"].read_text()
-            self.assertIn("kickstart -k gui/501/com.picmao.agent-runtime-ui", log)
+            self.assertIn("bootout gui/501/com.picmao.agent-runtime-ui", log)
+            self.assertIn("bootstrap gui/501", log)
             self.assertFalse(fx["transaction"].exists())
 
     def test_cutover_rejects_unowned_previous_launchagent_before_mutation(self) -> None:

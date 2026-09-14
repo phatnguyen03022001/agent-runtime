@@ -9,9 +9,11 @@ import json
 import os
 import stat
 import plistlib
+import re
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 MACOS_ROOT = Path(__file__).resolve().parent
@@ -23,6 +25,9 @@ TRANSACTION_SCHEMA = 1
 UI_LABEL = "com.picmao.agent-runtime-ui"
 RUNTIME_LABEL = "com.picmao.agent-runtime-runtime"
 RUNTIME_PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+SERVICE_ABSENCE_TIMEOUT_SECONDS = 5.0
+SERVICE_POLL_INTERVAL_SECONDS = 0.05
+LAUNCHCTL_DIAGNOSTIC_LIMIT = 1536
 
 
 class CutoverError(RuntimeError):
@@ -40,8 +45,111 @@ def _run(argv: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _bounded_launchctl_text(value: str) -> str:
+    redacted = re.sub(
+        r"(?i)\b([A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)[A-Z0-9_]*)\s*(?:=>|=|:)\s*[^\r\n]*",
+        r"\1=<redacted>",
+        value,
+    )
+    if len(redacted) <= LAUNCHCTL_DIAGNOSTIC_LIMIT:
+        return redacted
+    return redacted[:LAUNCHCTL_DIAGNOSTIC_LIMIT] + "...<truncated>"
+
+
+def _require_launchctl_ok(result: subprocess.CompletedProcess[str], message: str) -> None:
+    if result.returncode == 0:
+        return
+    args = result.args if isinstance(result.args, (list, tuple)) else []
+    operation = str(args[1]) if len(args) > 1 else "unknown"
+    stdout = _bounded_launchctl_text(result.stdout or "")
+    stderr = _bounded_launchctl_text(result.stderr or "")
+    raise CutoverError(
+        f"{message}; launchctl operation={operation} returncode={result.returncode} "
+        f"stdout={stdout!r} stderr={stderr!r}"
+    )
+
+
+def _service_print(launchctl: Path, service: str) -> subprocess.CompletedProcess[str] | None:
+    result = _run([str(launchctl), "print", service])
+    if result.returncode == 0:
+        return result
+    combined = (result.stdout or "") + "\n" + (result.stderr or "")
+    if result.returncode == 113 and "Could not find service" in combined:
+        return None
+    _require_launchctl_ok(result, f"could not inspect LaunchAgent state: {service}")
+    raise AssertionError("unreachable")
+
+
 def _service_loaded(launchctl: Path, service: str) -> bool:
-    return _run([str(launchctl), "print", service]).returncode == 0
+    return _service_print(launchctl, service) is not None
+
+
+def _wait_for_service_absence(
+    launchctl: Path,
+    service: str,
+    *,
+    timeout_seconds: float = SERVICE_ABSENCE_TIMEOUT_SECONDS,
+    poll_interval_seconds: float = SERVICE_POLL_INTERVAL_SECONDS,
+) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    while _service_loaded(launchctl, service):
+        if time.monotonic() >= deadline:
+            raise CutoverError(f"timed out waiting for LaunchAgent absence: {service}")
+        time.sleep(poll_interval_seconds)
+
+
+def _require_service_identity(launchctl: Path, service: str, expected_program: Path) -> None:
+    result = _service_print(launchctl, service)
+    if result is None:
+        raise CutoverError(f"LaunchAgent identity mismatch: service is absent: {service}")
+    lines = [line for line in result.stdout.splitlines() if line.strip()]
+    if not lines or lines[0].strip() != f"{service} = {{":
+        raise CutoverError(f"LaunchAgent identity mismatch: label does not match {service}")
+    top_level_indented = any(raw.startswith("\tprogram = ") for raw in lines)
+    programs: list[str] = []
+    for raw in lines:
+        if top_level_indented and (not raw.startswith("\t") or raw.startswith("\t\t")):
+            continue
+        line = raw.strip()
+        if line.startswith("program = "):
+            programs.append(line[len("program = "):].strip())
+    if programs != [str(expected_program)]:
+        raise CutoverError(f"LaunchAgent identity mismatch: program does not match {service}")
+
+
+def _launchagent_program(plist: Path, expected_label: str) -> Path:
+    try:
+        payload = plistlib.loads(plist.read_bytes())
+    except (OSError, plistlib.InvalidFileException) as exc:
+        raise CutoverError(f"LaunchAgent plist is malformed: {plist}") from exc
+    arguments = payload.get("ProgramArguments")
+    if payload.get("Label") != expected_label or not isinstance(arguments, list) or not arguments:
+        raise CutoverError(f"LaunchAgent plist identity is invalid: {plist}")
+    return Path(str(arguments[0]))
+
+
+def _refresh_service_registration(
+    *,
+    launchctl: Path,
+    domain: str,
+    service: str,
+    plist: Path,
+    expected_label: str,
+    was_loaded: bool,
+    unregister_message: str,
+    register_message: str,
+) -> None:
+    if was_loaded:
+        _require_launchctl_ok(
+            _run([str(launchctl), "bootout", service]),
+            unregister_message,
+        )
+        _wait_for_service_absence(launchctl, service)
+    _require_launchctl_ok(
+        _run([str(launchctl), "bootstrap", domain, str(plist)]),
+        register_message,
+    )
+    _require_service_identity(launchctl, service, _launchagent_program(plist, expected_label))
 
 
 def _atomic_json(path: Path, value: dict[str, object]) -> None:
@@ -238,11 +346,6 @@ def _atomic_file(path: Path, payload: bytes, mode: int = 0o600) -> None:
     os.replace(temp, path)
 
 
-def _require_launchctl_ok(result: subprocess.CompletedProcess[str], message: str) -> None:
-    if result.returncode != 0:
-        raise CutoverError(message)
-
-
 def _register_services(
     *,
     launchctl: Path,
@@ -257,26 +360,27 @@ def _register_services(
     domain = f"gui/{uid}"
     ui_service = f"{domain}/{UI_LABEL}"
     runtime_service = f"{domain}/{RUNTIME_LABEL}"
-    if ui_was_loaded:
-        _require_launchctl_ok(
-            _run([str(launchctl), "kickstart", "-k", ui_service]),
-            "could not refresh the menu-bar LaunchAgent",
-        )
-    else:
-        _require_launchctl_ok(
-            _run([str(launchctl), "bootstrap", domain, str(ui_plist)]),
-            "could not register the menu-bar LaunchAgent",
-        )
+    _refresh_service_registration(
+        launchctl=launchctl,
+        domain=domain,
+        service=ui_service,
+        plist=ui_plist,
+        expected_label=UI_LABEL,
+        was_loaded=ui_was_loaded,
+        unregister_message="could not unregister the previous menu-bar LaunchAgent",
+        register_message="could not register the menu-bar LaunchAgent",
+    )
 
     _inject(fail_stages, "launchagent_registration")
-    if runtime_was_loaded:
-        _require_launchctl_ok(
-            _run([str(launchctl), "bootout", runtime_service]),
-            "could not unregister the previous Runtime LaunchAgent",
-        )
-    _require_launchctl_ok(
-        _run([str(launchctl), "bootstrap", domain, str(runtime_plist)]),
-        "could not register the Runtime LaunchAgent",
+    _refresh_service_registration(
+        launchctl=launchctl,
+        domain=domain,
+        service=runtime_service,
+        plist=runtime_plist,
+        expected_label=RUNTIME_LABEL,
+        was_loaded=runtime_was_loaded,
+        unregister_message="could not unregister the previous Runtime LaunchAgent",
+        register_message="could not register the Runtime LaunchAgent",
     )
 
     _inject(fail_stages, "activation_refresh")
@@ -286,8 +390,8 @@ def _register_services(
             "could not refresh the desired Runtime generation",
         )
 
-    if not _service_loaded(launchctl, ui_service) or not _service_loaded(launchctl, runtime_service):
-        raise CutoverError("LaunchAgent registration did not reach the expected loaded state")
+    _require_service_identity(launchctl, ui_service, _launchagent_program(ui_plist, UI_LABEL))
+    _require_service_identity(launchctl, runtime_service, _launchagent_program(runtime_plist, RUNTIME_LABEL))
 
 
 def _restore_loaded_state(
@@ -310,11 +414,14 @@ def _restore_loaded_state(
                 _run([str(launchctl), "bootout", service]),
                 f"could not unload service during rollback: {service}",
             )
+            _wait_for_service_absence(launchctl, service)
         if expected_loaded:
             _require_launchctl_ok(
                 _run([str(launchctl), "bootstrap", domain, str(plist)]),
                 f"could not restore service during rollback: {service}",
             )
+            label = service.rsplit("/", 1)[-1]
+            _require_service_identity(launchctl, service, _launchagent_program(plist, label))
         if _service_loaded(launchctl, service) != expected_loaded:
             raise CutoverError(f"restored LaunchAgent loaded state mismatch: {service}")
 
