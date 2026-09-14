@@ -74,13 +74,22 @@ instance. Concurrent operator starts serialize through one lifecycle lock and
 converge on the same launchd service. Foreign or ambiguous ownership of
 `127.0.0.1:8080` fails closed; occupancy alone never authorizes termination.
 
-Agent Runtime terminal tools deny clear attempts to signal, stop, relaunch,
-replace, or rebind the protected Runtime, tunnel, service, or port. Denials
-return `PROTECTED_RUNTIME` and append only a bounded category/tool/timestamp
-audit. The menu bar shows the blocked count and last category. This is
-defense-in-depth for normal unprivileged Agent Runtime use; it does not claim
-to defeat `root/sudo`, a malicious local administrator, kernel compromise, or
-out-of-band tools outside Agent Runtime's enforcement boundary.
+Agent Runtime terminal tools apply a defense-in-depth recognized intent filter
+to direct argv plus the supported shell/wrapper forms they understand. Clear
+attempts to signal, stop, relaunch, replace, or rebind the protected Runtime,
+tunnel, service, or port return `PROTECTED_RUNTIME` and append only a bounded
+category/tool/timestamp audit. The menu bar shows the blocked count and last
+category.
+
+This filter is not a sandbox, privilege boundary, syscall filter, filesystem
+confinement mechanism, or complete same UID containment. An otherwise allowed
+program running as the operator's same UID can perform host effects whose
+semantics are not visible to this argv/text classifier. An allow result therefore
+does not grant Runtime lifecycle authority. Executor governance separately
+requires exact authorization for shared Runtime lifecycle mutation. See
+[`THREAT_MODEL.md`](THREAT_MODEL.md) for the covered intents, limitations, and
+explicit non-goals, including `root/sudo`, a malicious local administrator,
+kernel compromise, and out-of-band tools.
 
 ## Tool surface
 

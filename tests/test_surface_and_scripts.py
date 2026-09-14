@@ -313,6 +313,21 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertIn("AGENT_RUNTIME_MAX_PARALLELISM", docs)
         self.assertIn("capacity_observer", docs)
 
+    def test_threat_model_states_filter_boundary_and_same_uid_limitations(self) -> None:
+        docs = (ROOT / "README.md").read_text()
+        threat_model = (ROOT / "THREAT_MODEL.md").read_text()
+        for phrase in (
+            "recognized intent",
+            "same UID",
+            "not a sandbox",
+            "Executor governance",
+            "separate future isolation architecture",
+        ):
+            self.assertIn(phrase, threat_model)
+        self.assertIn("THREAT_MODEL.md", docs)
+        self.assertIn("same UID", docs)
+        self.assertIn("not a sandbox", docs)
+
     def test_native_app_bundle_is_menu_bar_only(self) -> None:
         import plistlib
 

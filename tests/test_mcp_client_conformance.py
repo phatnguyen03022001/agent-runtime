@@ -117,10 +117,21 @@ class MCPClientConformanceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(client.server_info.name, "Agent Runtime")
             self.assertEqual(client.server_info.version, "0.2.0")
             self.assertEqual(client.instructions, server.SERVER_INSTRUCTIONS)
+            for phrase in (
+                "may modify the host",
+                "defense-in-depth",
+                "not a sandbox",
+                "filesystem confinement",
+                "privilege isolation",
+                "same-UID",
+            ):
+                self.assertIn(phrase, client.instructions)
 
             listing = await client.list_tools()
             self.assertEqual(tuple(tool.name for tool in listing.tools), EXPECTED_TOOLS)
             tools = {tool.name: tool for tool in listing.tools}
+            for name in ("terminal_exec", "terminal_start", "terminal_control"):
+                self.assertIn("may modify the host", tools[name].description)
             for name, annotations in EXPECTED_ANNOTATIONS.items():
                 self.assertEqual(_annotation_tuple(tools[name]), annotations)
 

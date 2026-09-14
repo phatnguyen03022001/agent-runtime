@@ -122,6 +122,19 @@ class ProtectedRuntimeGuardTests(unittest.TestCase):
             )
             guard.check(["python3", "-m", "http.server", "8099"], tool_name="terminal_exec")
 
+    def test_classifier_only_documents_same_uid_interpreter_indirection_limitations(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            guard = self.make_guard(Path(raw))
+            cases = (
+                ["python3", "-c", "import os; os.kill(410, 15)"],
+                ["perl", "-e", "kill 15, 410"],
+                ["/bin/zsh", "/tmp/synthetic-runtime-maintenance.sh"],
+            )
+            for argv in cases:
+                with self.subTest(argv=argv):
+                    # Classification only: these synthetic argv values are never spawned.
+                    self.assertIsNone(guard._classify(argv))
+
     def test_audit_is_bounded_and_contains_no_command_payload(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
