@@ -1,13 +1,13 @@
 protocol_version: 3
 
 task_id: TASK-0047
-task_revision: 5
-report_revision: 5
+task_revision: 6
+report_revision: 6
 state: REPORTED
 
 task_source:
   path: .agent/tasks/TASK-0047/task.yaml
-  commit: "0bd03a7936d8c15d8afcc1778d62467f8da95d95"
+  commit: "03b3bd24c47c6b72672f40e7c809d894d444d966"
 
 execution:
   repository: phatnguyen03022001/agent-runtime
@@ -15,8 +15,8 @@ execution:
     name: dev
     role: integration
   execution_surface: CHATGPT_LOCAL
-  authorized_base_head: "0bd03a7936d8c15d8afcc1778d62467f8da95d95"
-  final_execution_head_before_report_commit: "0bd03a7936d8c15d8afcc1778d62467f8da95d95"
+  authorized_base_head: "03b3bd24c47c6b72672f40e7c809d894d444d966"
+  final_execution_head: "03b3bd24c47c6b72672f40e7c809d894d444d966"
 
 skill_library:
   repository: phatnguyen03022001/agent-skills
@@ -43,29 +43,31 @@ authoritative_verification:
   required: false
   performed: false
   result: NOT_REQUIRED_FOR_THIS_EXECUTION_TASK
-  evidence: "TASK-0047 revision 5 requires Executor live-cutover verification gates but no separate authoritative verifier."
+  evidence: "TASK-0047 revision 6 requires Executor cutover and MCP verification gates but no separate authoritative verifier."
 
 pushed: false
 
 execution_transport:
   primary: Remote Desktop Commander
-  fallback_used: Agent Runtime MCP
-  fallback_reason: "Remote Desktop Commander was transiently unavailable after PENDING cutover; the already-authorized Agent Runtime surface was used for live MCP proof and read-only diagnostics until Remote Desktop Commander returned."
+  canonical_live_mcp_route_used_for_mcp_proof: true
+  fresh_local_stdio_mcp_probe_used: false
   chatgpt_sandbox_used: false
 
 pre_live_binding:
-  remote_dev: "0bd03a7936d8c15d8afcc1778d62467f8da95d95"
+  remote_dev: "03b3bd24c47c6b72672f40e7c809d894d444d966"
   remote_main: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
   local_branch: dev
-  local_head: "0bd03a7936d8c15d8afcc1778d62467f8da95d95"
+  local_head: "03b3bd24c47c6b72672f40e7c809d894d444d966"
   reconciliation: SAFE_FAST_FORWARD
-  unrelated_env_example_drift_preserved: true
+  task_revision: 6
+  execution_ready: true
+  unrelated_operator_state_preserved: true
 
 carried_forward_rehearsal:
   source_report_commit: "3a50ebda4b63baa5ca8d6f5a40224f1aebb194d0"
   source_review_commit: "247b35c4fc77ebb03ce880be617fd97ab1df6432"
   result: PASS
-  repeated_in_r5: false
+  repeated_in_r6: false
 
 frozen_candidate:
   app_path: "/Users/tienphat/Developer/agent-runtime/build/Agent Runtime.app"
@@ -77,13 +79,9 @@ frozen_candidate:
   candidate_record_count: 1027
   handoff_sha256: "362faede3d737d396b28afc9b2c71ab34a0cfbf8d5b71866842ad3e5470a2815"
   runtime_payload_sha256: "25ea66b07d844c83e163dcb86037649f01a20809559aa28b54f0e64e5afcc5df"
-  runtime_manifest_files: 1021
-  packaged_python_identity: "cpython 3.13.13 / cpython-313 / cpython-313-darwin / darwin / arm64"
+  packaged_python_identity: "cpython 3.13.13 / cpython-313 / darwin / arm64"
   strict_deep_codesign_pre_cutover: PASS
-  current_provenance_validation_pre_cutover: PASS
-  retained_candidate_validation_post_rollback: PASS
-  retained_candidate_agent_runtime_pyc_count_post_rollback: 0
-  package_start_sh_bytecode_guard_present: true
+  strict_candidate_validation_pre_cutover: PASS
   rebuilt: false
   resigned: false
 
@@ -93,6 +91,7 @@ canonical_live_config:
   mode: "0600"
   sha256: "1c853b6c2306cb1fee3c1b5d5e0102c1b266ad41ae409a73b611574efaf5c1f2"
   required_keys_present: true
+  workspace: "/Users/tienphat/Developer"
   workspace_valid: true
   parallelism: "2"
   tunnel_fingerprint: "6aa2b81d6dd8"
@@ -112,39 +111,36 @@ preflight:
     desired_state_sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     ui_loaded: true
     runtime_loaded: true
+  transaction_directory_absent: true
+  tunnel_client: "/opt/homebrew/bin/tunnel-client"
   listener_count_127_0_0_1_8080: 1
   canonical_tunnel_identity: PASS
   healthz: PASS
   readyz: PASS
   legacy_mcp_route: PASS
-  legacy_public_tools_before_cutover:
-    - terminal_exec
-    - terminal_start
-    - terminal_poll
-    - terminal_control
-    - capacity_observer
-  capacity_observer_call: PASS
+  legacy_capacity_observer: PASS
 
 replacement_cycles:
   authorized: 1
   used: 1
+  rehearsal_repeated: false
   retry_performed: false
   second_cycle_authorized: false
   final:
     cycle_number: 1
-    cutover_status: PENDING
-    installed_candidate_identity_initial: PASS
+    cutover_status_initial: PENDING
+    installed_candidate_identity: PASS
     installed_strict_deep_codesign_initial: PASS
-    installed_runtime_manifest_and_external_closure_initial: PASS
-    installed_source_tree_lock_initial: PASS
-    installed_packaged_python_identity_initial: PASS
+    installed_runtime_manifest_and_external_closure: PASS
+    installed_source_tree_lock: PASS
+    installed_packaged_python_identity: PASS
     canonical_runtime_env_parallelism_2: PASS
     canonical_tunnel_identity: PASS
     singleton_listener_127_0_0_1_8080: PASS
     healthz: PASS
     readyz: PASS
     mcp_acceptance:
-      method: "Fresh MCP stdio E2E against the exact installed packaged server command used by the active tunnel channel."
+      method: "Already-running canonical live MCP route."
       exact_public_tools: PASS
       tools:
         - terminal_exec
@@ -157,62 +153,49 @@ replacement_cycles:
       fs_read_batch_benign_repository_read: PASS
       terminal_exec_non_mutating_printf: PASS
       terminal_start_poll_control_bounded_lifecycle: PASS
+      fresh_local_stdio_fallback_used: false
+      signed_installed_bundle_mutated_by_probe: false
       result: PASS
+    precommit_gate_after_all_mcp_probes:
+      strict_deep_codesign: PASS
+      exact_candidate_identity_and_closure: PASS
+      candidate_sha256: "c4be39267c8e1e2b787aeacf41c3b7872b6458058ed05466dda5cae5fca74039"
+      source_revision: "9db648fb37a2bd8d3eb5c1ac95661adfd0fa4195"
+      source_tree: "cfff5ea2ee2375b2de451c134c629b6db3190aab"
     commit:
       attempted: true
-      result: FAIL
-      error: "candidate failed strict deep code-signature verification"
-      transaction_removed_by_commit: false
-    explicit_rollback_after_commit_failure: PASS
-    exact_legacy_restoration: PASS
-    retry_performed: false
-    reason: "All stated PENDING and six-tool MCP predicates were proven, but candidate_cutover commit performs a fresh strict candidate validation and rejected the installed bundle because deep codesign was no longer valid. TASK-0047 r5 requires rollback on any stated failure while PENDING and forbids a second replacement cycle, so the transaction was explicitly rolled back and execution stopped."
+      result: PASS
+      status: COMMITTED
+      transaction_removed_by_commit: true
 
-mcp_probe_diagnostics:
-  first_fresh_stdio_probe:
-    exact_six_tool_listing: PASS
-    capacity_observer: PASS
-    fs_read_batch: INVALID_PROBE_ENVIRONMENT
-    detail: "The probe was launched from terminal_exec, whose intentional minimal child environment strips AGENT_RUNTIME_WORKSPACE_ROOT. The resulting fs_read_batch rejection therefore did not establish a canonical-runtime acceptance failure."
-  corrected_canonical_environment_probe:
-    workspace_and_parallelism_source: "Only AGENT_RUNTIME_WORKSPACE_ROOT and AGENT_RUNTIME_MAX_PARALLELISM were read from canonical runtime.env; credential values were not printed or passed."
-    exact_six_tool_listing: PASS
-    capacity_observer: PASS
-    fs_read_batch: PASS
-    terminal_exec: PASS
-    terminal_start: PASS
-    terminal_poll: PASS
-    terminal_control: PASS
-  commit_boundary_signature_failure:
-    initial_pending_strict_codesign: PASS
-    commit_time_strict_codesign: FAIL
-    executor_probe_side_effect_evidence:
-      direct_packaged_server_invocation_bypassed_start_sh: true
-      direct_probe_set_pythondontwritebytecode: false
-      frozen_candidate_agent_runtime_pyc_count: 0
-      package_start_sh_sets_pythondontwritebytecode: true
-      exact_modified_installed_path_retained_after_rollback: false
-    classification: "EXECUTOR_PROBE_SIDE_EFFECT_STRONGLY_EVIDENCED"
-    evidence_limit: "The mandatory rollback removed the failed installed generation and transaction before a byte-level delta could be retained, so the exact modified path is not proven. The temporal and packaging evidence strongly indicates the direct stdio probe bypassed the package bytecode-write guard and invalidated the installed signed bundle."
-
-post_failure_restoration:
+post_commit_stability:
+  result: PASS
   transaction_directory_absent: true
-  legacy_app_closure_exact: PASS
-  restored_app_record_count: 2156
-  restored_app_closure_sha256: "3ffd36a75b1626d2aed57764f2076bd0b42a14dbd901a359e11b2abbc6df21fe"
-  ui_launchagent_exact_bytes_and_mode: PASS
-  runtime_launchagent_exact_bytes_and_mode: PASS
-  ui_loaded_state_restored: PASS
-  runtime_loaded_state_restored: PASS
-  desired_state_exact: PASS
-  runtime_env_unchanged: PASS
-  canonical_tunnel_identity: PASS
-  listener_count_127_0_0_1_8080: 1
-  healthz: PASS
-  readyz: PASS
-  retained_candidate_revalidated_after_rollback: PASS
-  restored_legacy_mcp_route: PASS
-  restored_legacy_capacity_observer: PASS
+  installed_candidate_identity: PASS
+  installed_candidate_sha256: "c4be39267c8e1e2b787aeacf41c3b7872b6458058ed05466dda5cae5fca74039"
+  strict_deep_codesign: PASS
+  desired_state: RUNNING
+  observation_1:
+    result: PASS
+    listener_count_127_0_0_1_8080: 1
+    listener_pid: 59458
+    tunnel_client: "/opt/homebrew/bin/tunnel-client"
+    healthz: PASS
+    readyz: PASS
+    generation_identity: PASS
+  observation_2:
+    result: PASS
+    listener_count_127_0_0_1_8080: 1
+    listener_pid: 59458
+    tunnel_client: "/opt/homebrew/bin/tunnel-client"
+    healthz: PASS
+    readyz: PASS
+    generation_identity: PASS
+  stable_generation_and_listener: true
+
+operator_instruction:
+  reload_reconnect_chatgpt_agent_runtime_plugin: ISSUED_AFTER_COMMIT_AND_STABILITY
+  chatgpt_side_connector_continuity_claimed_before_reload: false
 
 operator_state_preservation:
   env_example:
@@ -241,69 +224,59 @@ mutation_boundaries:
   frozen_candidate_rebuilt: false
   frozen_candidate_resigned: false
   frozen_candidate_bytes_mutated: false
-  legacy_app_repaired_or_normalized: false
-  legacy_pycache_deleted: false
-  legacy_manifest_rewritten: false
-  legacy_app_resigned: false
   runtime_env_mutated: false
   tunnel_identity_mutated: false
   source_tests_docs_dependencies_mutated: false
   capacity_parallelism_policy_mutated: false
   main_promoted: false
   tag_or_release_work_performed: false
-  final_active_generation_changed: false
-
-deviations_from_task:
-  - classification: PREFLIGHT_PROBE_DIAGNOSTICS_ONLY
-    description: "Before mutation, diagnostic probes stopped on three probe defects: an incorrectly composed packaged-Python identity string, a zsh variable named path that shadowed PATH, and an over-strict assertion requiring the Homebrew shim path instead of the repository's canonical tunnel basename semantics. Each occurred before any transaction existed, consumed no replacement cycle, and was corrected without changing canonical acceptance predicates."
-  - classification: EXECUTOR_MCP_PROBE_BYPASSED_PACKAGE_BYTECODE_GUARD
-    description: "While PENDING, the fresh stdio MCP E2E invoked the installed packaged Python directly with -m agent_runtime.server rather than entering through package start.sh, and the probe did not set PYTHONDONTWRITEBYTECODE=1. The frozen candidate has zero agent_runtime .pyc files and package start.sh explicitly sets that guard. The MCP proof passed, but commit-time strict deep codesign then failed. The exact modified path was not retained because mandatory rollback immediately removed the failed installed generation."
-  - classification: EXECUTION_TRANSPORT_FALLBACK
-    description: "Remote Desktop Commander was transiently unavailable after PENDING cutover. Agent Runtime MCP was used as an authorized fallback for bounded live proof/read-only diagnostics; ChatGPT sandbox was not used. Remote Desktop Commander returned for rollback and report publication work."
-
-blockers:
-  - "The sole authorized r5 replacement cycle is consumed. candidate_cutover commit rejected the PENDING installed generation because fresh strict deep code-signature verification failed."
-  - "TASK-0047 r5 requires explicit rollback after a stated PENDING failure and forbids a second replacement/retry. Exact legacy restoration completed, so no post-COMMIT stability proof or operator reload/reconnect instruction is authorized."
+  final_active_generation_changed: true
 
 acceptance_evidence:
   - criterion_id: AC-1
     status: PROVEN
-    evidence: "Exact r5/base/remote binding, carried-forward rehearsal PASS, accepted candidate/handoff identity, strict provenance/codesign/runtime closure, preserved operator state, runtime.env mode/hash/parallelism=2, tunnel fingerprint, singleton listener, health/readiness, callable legacy MCP route, and exact opaque rollback pre-state all passed before mutation."
+    evidence: "Exact r6/base/remote binding, carried-forward r4 rehearsal PASS, retained TASK-0049 candidate/handoff identity, strict candidate codesign/closure, preserved operator state, runtime.env mode/hash/parallelism=2, tunnel fingerprint, singleton listener, health/readiness, callable legacy MCP route, and exact restored legacy rollback envelope all passed before mutation."
   - criterion_id: AC-2
     status: PROVEN
-    evidence: "The sole r5 PENDING generation initially matched the TASK-0049 accepted candidate with strict codesign, exact candidate/runtime closure, source/tree/lock/interpreter, canonical runtime.env=2, canonical tunnel, singleton listener, healthz, and readyz."
+    evidence: "The sole r6 PENDING generation matched candidate c4be3926... with exact source 9db648f/tree cfff5ea/lock 80820ea..., strict deep codesign, runtime/external closure, packaged CPython 3.13.13 identity, canonical runtime.env=2, canonical tunnel, singleton listener, healthz, and readyz."
   - criterion_id: AC-3
     status: PROVEN
-    evidence: "Fresh MCP stdio E2E against the exact installed packaged server command listed exactly terminal_exec, terminal_start, terminal_poll, terminal_control, capacity_observer, and fs_read_batch; corrected canonical-environment harmless calls for capacity_observer, benign fs_read_batch, printf-style terminal_exec, and terminal_start->terminal_poll->terminal_control all passed."
+    evidence: "The already-running canonical live MCP route exposed exactly terminal_exec, terminal_start, terminal_poll, terminal_control, capacity_observer, and fs_read_batch. Required harmless calls all passed, including benign fs_read_batch and bounded terminal_start->terminal_poll->terminal_control. No local stdio fallback or direct packaged-Python MCP invocation was used."
   - criterion_id: AC-4
-    status: NOT_PROVEN
-    evidence: "COMMIT was attempted only after the canonical MCP predicates passed, but its mandatory fresh candidate validation failed strict deep codesign. The PENDING transaction was explicitly rolled back, so transaction cleanup by COMMIT and two post-commit stability observations do not exist."
+    status: PROVEN
+    evidence: "After every MCP probe and immediately before COMMIT, fresh codesign --verify --deep --strict passed and repo-native validate-candidate again proved candidate c4be3926... with exact source/tree/lock and closure."
   - criterion_id: AC-5
-    status: NOT_SELF_ATTESTED_PRE_PUBLICATION
-    evidence: "Operational-only scope, main preservation, and operator-state preservation are proven. The report-only commit/push and fresh post-push remote proof occur after this report is authored and are intentionally not self-attested inside the report."
+    status: PROVEN
+    evidence: "candidate_cutover commit returned COMMITTED, removed transaction material, retained exact installed generation, desired state remained RUNNING, and two consecutive bounded observations kept the same singleton listener PID 59458, canonical tunnel path, health/readiness, strict codesign, and generation identity."
   - criterion_id: AC-6
-    status: NOT_RUN
-    evidence: "Successful live generation replacement did not occur; therefore the conditional RELOAD / RECONNECT instruction is not triggered and ChatGPT-side connector continuity is not claimed."
+    status: NOT_SELF_ATTESTED_PRE_PUBLICATION
+    evidence: "Operational-only scope, main preservation, and operator-state preservation are proven before report commit. Report-only commit/push and fresh post-push remote proof occur after this report is authored and are intentionally not self-attested inside the report."
+  - criterion_id: AC-7
+    status: PROVEN
+    evidence: "After successful COMMIT and stability proof, Executor explicitly issued: RELOAD / RECONNECT THE CHATGPT AGENT RUNTIME PLUGIN, and did not claim ChatGPT-side connector continuity before that operator action."
 
 executor_checks:
   - check_id: V-1
     result: PASS
-    evidence: "Exact r5 authority/binding, carried-forward rehearsal, preserved operator state, accepted candidate/handoff current validation, runtime.env=2, canonical tunnel/listener/health/readiness, callable legacy MCP route, and exact restored legacy pre-state passed before mutation."
+    evidence: "Exact r6 authority/base, carried-forward rehearsal, preserved operator state, exact retained candidate/handoff, runtime.env=2, canonical tunnel/listener/health/readiness, callable legacy MCP route, and exact restored legacy state all passed before mutation."
   - check_id: V-2
     result: PASS
     evidence: "Exactly one final PENDING cutover was executed. No rehearsal and no second replacement/retry were performed."
   - check_id: V-3
-    result: BLOCKED_AT_COMMIT_BOUNDARY
-    evidence: "Initial installed candidate verification and canonical exact-six-tool/callability proof passed, but candidate_cutover commit's fresh strict deep codesign validation failed, so the installed generation was no longer acceptable at the commit boundary."
+    result: PASS
+    evidence: "PENDING candidate/live state passed and exact six-tool harmless MCP callability was proven using only the canonical live route, without direct packaged-Python stdio proof or installed-bundle writes."
   - check_id: V-4
-    result: BLOCKED
-    evidence: "COMMIT did not complete. Mandatory explicit rollback restored the exact legacy state; post-commit cleanup/stability observations are inapplicable."
+    result: PASS
+    evidence: "Fresh post-MCP strict deep codesign and exact candidate identity/closure passed immediately before COMMIT."
   - check_id: V-5
-    result: PENDING_EXTERNAL_PUBLICATION_PROOF
-    evidence: "Fresh refs still show origin/dev at the exact execution base and origin/main unchanged. Report-only commit/push and post-push proof are performed after this report content is finalized."
+    result: PASS
+    evidence: "COMMIT succeeded, transaction material was removed, exact installed identity persisted, desired state stayed RUNNING, and two bounded stability observations passed."
   - check_id: V-6
-    result: NOT_RUN
-    evidence: "No successful generation change survived COMMIT, so no reload/reconnect instruction is issued."
+    result: PENDING_EXTERNAL_PUBLICATION_PROOF
+    evidence: "Fresh pre-publication refs show dev at exact execution base and main unchanged; report-only commit/push and fresh post-push proof are performed after report content is finalized."
+  - check_id: V-7
+    result: PASS
+    evidence: "Executor issued the required operator plugin reload/reconnect instruction only after successful COMMIT and stability."
 
 publication:
   implementation_commit: null
@@ -315,4 +288,8 @@ publication:
   main_promoted: false
   next_step: ARCHITECT_REVIEW
 
-result: BLOCKED
+local_hygiene:
+  result: PASS
+  evidence: "No task-owned temporary artifact remains. candidate_cutover transaction material was removed by COMMIT; retained build artifacts are the pre-existing accepted candidate/handoff; unrelated operator state remains preserved."
+
+result: NEEDS_REVIEW
