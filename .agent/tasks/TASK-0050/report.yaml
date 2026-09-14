@@ -1,153 +1,132 @@
 protocol_version: 3
 
 task_id: TASK-0050
-task_revision: 1
-report_revision: 1
+task_revision: 2
+report_revision: 2
 state: BLOCKED
+result: BLOCKED
 
 execution:
   repository: phatnguyen03022001/agent-runtime
   branch: dev
-  execution_surface: CHATGPT_LOCAL
-  exact_base: "02d57e7325d3b14bf6087e2d2621f41ac1be450d"
-  base_bound: true
-  main_before: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  exact_base: "ece2c921f236aed3b9834811f8d08bdcc03c4eda"
+  base_bound_before_publication: true
+  benchmark_execution_surface: Agent Runtime public tools
+  publication_surface: GitHub contents API
+  policy_decision_made: false
+  successor_task_created: false
 
 observed_facts:
-  preflight:
-    origin_dev: "02d57e7325d3b14bf6087e2d2621f41ac1be450d"
-    local_head_after_ff_only: "02d57e7325d3b14bf6087e2d2621f41ac1be450d"
-    operator_state_preserved: true
+  r2_preflight:
+    exact_public_tool_discovery:
+      status: PASS
+      tools:
+        - terminal_exec
+        - terminal_start
+        - terminal_poll
+        - terminal_control
+        - capacity_observer
+        - fs_read_batch
+      count: 6
+    dev_at_exact_base_before_benchmark: true
+    origin_dev_before_publication: "ece2c921f236aed3b9834811f8d08bdcc03c4eda"
+    main_before_publication: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
     runtime_healthz: live
     runtime_readyz: ready
     listener_count_127_0_0_1_8080: 1
     listener_pid: 59458
-    capacity_observer_ceiling: 2
     capacity_observer_thermal_state: nominal
     capacity_observer_swap_used_bytes: 0
-    capacity_observer_active_processors: 8
-    capacity_observer_load1_pre: 2.182
-    capacity_observer_cpu_busy_pct_pre: 4.3
-    capacity_observer_vm_free_bytes_pre: 931610624
-    capacity_observer_vm_inactive_bytes_pre: 3487121408
-    capacity_observer_vm_purgeable_bytes_pre: 48955392
-    capacity_observer_vm_compressor_bytes_pre: 6201344000
-    capacity_observer_disk_available_bytes_pre: 212946391040
-    runtime_env_sha256: "1c853b6c2306cb1fee3c1b5d5e0102c1b266ad41ae409a73b611574efaf5c1f2"
+    runtime_env:
+      sha256: "1c853b6c2306cb1fee3c1b5d5e0102c1b266ad41ae409a73b611574efaf5c1f2"
+      AGENT_RUNTIME_MAX_PARALLELISM: 2
     installed_generation:
-      candidate_sha256: "c4be39267c8e1e2b787aeacf41c3b7872b6458058ed05466dda5cae5fca74039"
-      source_revision: "9db648fb37a2bd8d3eb5c1ac95661adfd0fa4195"
-      source_tree: "cfff5ea2ee2375b2de451c134c629b6db3190aab"
-      record_count: 1027
+      runtime_revision: "9db648fb37a2bd8d3eb5c1ac95661adfd0fa4195"
+      git_tree: "cfff5ea2ee2375b2de451c134c629b6db3190aab"
+      requirements_lock_sha256: "80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
+      manifest_sha256: "88d2d6a4404be04caaf3098522fe38a5be30e26232984bfa1a8d17040daae9a5"
+      record_count: 1021
       strict_deep_codesign: PASS
 
-  benchmark_method:
-    exact_concurrency: "Each measured tier used exactly N terminal_start sessions released by a shared barrier; measured start spread was bounded after release."
-    repeats: 2
-    scratch_policy: "Task-owned scratch only; removed before publication."
-    caller_overhead: "Sequential ChatGPT tool launch caused large ready-time spread; shared barrier excluded that orchestration delay from aggregate workload wall-clock."
-    output_identity_check: "Unique job ids and one result artifact per expected job were checked for loss, duplication, or cross-attribution."
-    workload_definitions:
-      LIGHTWEIGHT_CONTROL_PATH: "Per subrun: 500 git rev-parse tree checks, 50 git ls-tree traversals, final HEAD identity read."
-      REPRESENTATIVE_MIXED_ENGINEERING: "Per subrun: installed Runtime CPython runs 16 deterministic unit tests covering capacity observer and fs_read_batch with bytecode writes disabled."
-      BOUNDED_CPU_IO_HEAVY: "Per subrun: task-owned 64 MiB write+fsync+read+SHA-256 plus 3,000,000-iteration PBKDF2 CPU work in a temporary directory."
-  benchmark_results:
-    LIGHTWEIGHT_CONTROL_PATH:
-      x1: {jobs: 1, success: 1, errors: 0, wall_ms: 6617.083, throughput_vs_x1: 1.000, p50_job_ms: 6617.083, max_job_ms: 6617.083, start_spread_ms: 0.000, identity_ok: true}
-      x2: {jobs: 2, success: 2, errors: 0, wall_ms: 7670.962, throughput_vs_x1: 1.725, p50_job_ms: 7670.757, max_job_ms: 7670.907, start_spread_ms: 0.355, identity_ok: true}
-      x4: {jobs: 4, success: 4, errors: 0, wall_ms: 9496.495, throughput_vs_x1: 2.787, p50_job_ms: 9495.765, max_job_ms: 9496.401, start_spread_ms: 1.899, identity_ok: true}
-      x8: {jobs: 8, success: 8, errors: 0, wall_ms: 12423.543, throughput_vs_x1: 4.261, p50_job_ms: 12358.311, max_job_ms: 12419.143, start_spread_ms: 8.079, identity_ok: true}
-      x10: {status: NOT_RUN}
-    REPRESENTATIVE_MIXED_ENGINEERING:
-      x1: {jobs: 1, success: 1, errors: 0, wall_ms: 1524.872, throughput_vs_x1: 1.000, p50_job_ms: 1524.872, max_job_ms: 1524.872, start_spread_ms: 0.000, identity_ok: true}
-      x2: {jobs: 2, success: 2, errors: 0, wall_ms: 1556.723, throughput_vs_x1: 1.959, p50_job_ms: 1556.028, max_job_ms: 1556.703, start_spread_ms: 0.020, identity_ok: true}
-      x4: {jobs: 4, success: 4, errors: 0, wall_ms: 1722.858, throughput_vs_x1: 3.540, p50_job_ms: 1711.850, max_job_ms: 1722.858, start_spread_ms: 6.140, identity_ok: true}
-      x8: {jobs: 8, success: 8, errors: 0, wall_ms: 2543.538, throughput_vs_x1: 4.796, p50_job_ms: 2486.458, max_job_ms: 2542.070, start_spread_ms: 6.062, identity_ok: true}
-      x10: {status: NOT_RUN}
-    BOUNDED_CPU_IO_HEAVY:
-      x1: {jobs: 1, success: 1, errors: 0, wall_ms: 617.109, throughput_vs_x1: 1.000, p50_job_ms: 617.109, max_job_ms: 617.109, start_spread_ms: 0.000, identity_ok: true}
-      x2: {jobs: 2, success: 2, errors: 0, wall_ms: 637.985, throughput_vs_x1: 1.935, p50_job_ms: 637.168, max_job_ms: 637.807, start_spread_ms: 1.457, identity_ok: true}
-      x4: {jobs: 4, success: 4, errors: 0, wall_ms: 749.226, throughput_vs_x1: 3.295, p50_job_ms: 745.084, max_job_ms: 747.855, start_spread_ms: 2.281, identity_ok: true}
-      x8: {status: NOT_RUN}
-      x10: {status: NOT_RUN}
-  per_job_latency_ms:
-    LIGHTWEIGHT_CONTROL_PATH:
-      x1: [6617.083]
-      x2: [7670.607, 7670.907]
-      x4: [9494.343, 9495.577, 9495.953, 9496.401]
-      x8: [12275.000, 12277.295, 12319.430, 12350.938, 12365.685, 12385.556, 12392.830, 12419.143]
-    REPRESENTATIVE_MIXED_ENGINEERING:
-      x1: [1524.872]
-      x2: [1555.353, 1556.703]
-      x4: [1691.851, 1707.682, 1716.017, 1722.858]
-      x8: [2432.535, 2439.837, 2448.451, 2477.123, 2495.793, 2503.024, 2538.602, 2542.070]
-    BOUNDED_CPU_IO_HEAVY:
-      x1: [617.109]
-      x2: [636.528, 637.807]
-      x4: [742.196, 743.223, 746.945, 747.855]
+  r2_benchmark:
+    status: NOT_STARTED_DUE_TO_HARD_STOP
+    jobs_launched: 0
+    matrix_jobs_completed: 0
+    fresh_r2_measurements_recorded: false
+    tiers_attempted: []
+    x10_attempted: false
+    note: "No r2 workload session was launched. The failed terminal_start invocation did not create a benchmark job."
 
-  correctness:
-    completed_jobs: 37
-    success_count: 37
-    error_count: 0
-    timeout_count: 0
-    lost_result_count: 0
-    duplicated_result_count: 0
-    cross_attributed_result_count: 0
-    corrupted_result_count: 0
-  host_observations:
-    retained_runtime_observer_snapshots:
-      pre_light_x1: {load1: 2.182, cpu_busy_pct: 4.3, thermal_state: nominal, swap_used_bytes: 0, swapout_delta_pages: 0, vm_compressor_bytes: 6201344000, disk_available_bytes: 212946391040}
-      during_light_x1: {load1: 2.050, cpu_busy_pct: 18.8, thermal_state: nominal, swap_used_bytes: 0, swapout_delta_pages: 0, vm_compressor_bytes: 6190956544, disk_available_bytes: 212945252352}
-      post_light_x1: {load1: 2.208, cpu_busy_pct: 2.1, thermal_state: nominal, swap_used_bytes: 0, swapout_delta_pages: 0, vm_compressor_bytes: 6190546944, disk_available_bytes: 212945219584}
-    final_host_observation:
-      load_averages: [2.41, 2.68, 2.53]
-      memory_free_percent: 49
-      swap_total_mib: 0.00
-      swap_used_mib: 0.00
-      thermal_warning_recorded: false
-      performance_warning_recorded: false
-      disk_available_kib: 207834120
-      healthz: live
-      readyz: ready
-      listener_count_127_0_0_1_8080: 1
-      listener_pid: 59458
-    limitation: "Complete pre/during/post host and capacity_observer snapshots were not retained for every completed higher tier before the Runtime connector route became unavailable; therefore host-pressure safety at x2/x4/x8 is not fully proven by this report."
-
-  hard_stop:
+  blocker:
     triggered: true
-    boundary: "After already-launched BOUNDED_CPU_IO_HEAVY x4 sessions completed; before BOUNDED_CPU_IO_HEAVY x8 and before any x10 workload launch."
-    reason: "The ChatGPT-side Agent Runtime public-tool route became unavailable. Direct capacity_observer and terminal_exec invocations returned 'Resource not found', and subsequent tool discovery reported Agent_Runtime absent from the valid namespaces."
-    runtime_process_state_at_stop: "healthz=live, readyz=ready, singleton listener PID 59458; no evidence of Runtime process failure."
-    enforcement: "No higher tier was launched through Remote Desktop Commander as a substitute because that would no longer be a Runtime-mediated public-tool measurement. No Runtime lifecycle/config/source mutation was attempted."
-executor_recommendation:
-  authority: ADVISORY_ONLY
-  policy_decision_made: false
-  tiers:
-    x1:
-      classification: proven safe/effective
-      basis: "All three workload classes completed with exact attribution, zero errors/timeouts, and green retained Runtime/host observations."
-    x2:
-      classification: conditionally useful
-      basis: "All three workload classes completed 7/7 jobs total with zero correctness failures and throughput of 1.725x, 1.959x, and 1.935x versus x1; complete tier-specific host-pressure telemetry was not retained."
-    x4:
-      classification: conditionally useful
-      basis: "All three workload classes completed 12/12 jobs total with zero correctness failures and throughput of 2.787x, 3.540x, and 3.295x versus x1; latency increased and complete tier-specific host-pressure telemetry was not retained."
-    x8:
-      classification: not proven
-      basis: "Light and mixed completed 16/16 jobs with zero correctness failures, but heavy x8 was not launched after the execution transport hard stop."
-    x10:
-      classification: not proven
-      basis: "No x10 workload was launched."
-  recommendation: "Do not derive or implement Parallelism v2 policy from this incomplete run. The functional evidence supports further investigation of x2/x4, but a fresh Runtime-mediated run with complete tier-wise host telemetry is required before policy judgment."
+    classification: EXECUTION_SURFACE_CALLABLE_ROUTE_FAILURE
+    failing_call: "Agent_Runtime.terminal_start"
+    exact_error: "Resource not found: Agent_Runtime.terminal_start"
+    required_record: "Agent_Runtime.terminal_start -> Resource not found"
+    discovery_state: "Exact discovery still advertised all six required Agent Runtime public tools while terminal_start invocation was unusable."
+    capacity_failure_observed: false
+    runtime_process_failure_observed: false
+    interpretation: "This is an execution-surface/callable-route failure, not evidence of insufficient Runtime capacity."
+    enforcement:
+      agent_runtime_retried_after_hard_stop: false
+      rdp_used_as_benchmark_substitute: false
+      matrix_jobs_run_after_hard_stop: false
+      runtime_source_config_lifecycle_mutated: false
 
-acceptance_criteria:
-  AC-1: PROVEN
-  AC-2: BLOCKED_BY_HARD_STOP
-  AC-3: PARTIAL
-  AC-4: PROVEN
-  AC-5: PROVEN
-  AC-6: PENDING_PUBLICATION_PROOF
+  carried_forward_r1_evidence:
+    status: PRIOR_ACCEPTED_EVIDENCE_ONLY
+    source_report_commit: "dfd9bf91c61ebb3af26fc1ea14505e5b5a39b93c"
+    fresh_r2_measurement: false
+    accepted_facts:
+      completed_jobs: 37
+      success_count: 37
+      error_count: 0
+      timeout_count: 0
+      lost_result_count: 0
+      duplicated_result_count: 0
+      cross_attributed_result_count: 0
+      corrupted_result_count: 0
+      all_workloads_completed_tiers: [1, 2, 4]
+      light_completed_x8: true
+      mixed_completed_x8: true
+      heavy_completed_x8: false
+      x10_completed: false
+    limitation: "These facts are carried forward from accepted r1 evidence and are not presented as fresh r2 telemetry or measurement."
+
+  operator_state_preservation:
+    mutation_after_hard_stop: false
+    env_example:
+      preflight_sha256: "bfcd70b76da37e2e40422b38ac328b832739f9b4abff83adf9f720c95f2703ea"
+      preflight_inode: 124865926
+      preflight_size: 351
+      preflight_mode: "0644"
+      fresh_size: 351
+      fresh_mode: "0644"
+      fresh_modified_at: "2026-09-14T17:53:29.124Z"
+      state: PRESERVED_UNRELATED_TRACKED_DRIFT
+    sample_files:
+      chatgpt-sample.txt:
+        preflight_inode: 141031895
+        preflight_size: 383332
+        preflight_mode: "0644"
+        fresh_size: 383332
+        fresh_mode: "0644"
+        fresh_modified_at: "2026-09-14T14:54:34.413Z"
+        content_read: false
+        state: PRESERVED
+      vscode-gpu-sample.txt:
+        preflight_inode: 141047688
+        preflight_size: 523563
+        preflight_mode: "0644"
+        fresh_size: 523563
+        fresh_mode: "0644"
+        fresh_modified_at: "2026-09-14T15:16:11.242Z"
+        content_read: false
+        state: PRESERVED
+    runtime_env_state: PRESERVED_FROM_PRE_HARD_STOP_PROOF
+    installed_runtime_generation_state: PRESERVED_FROM_PRE_HARD_STOP_PROOF
+    note: "Post-stop host control had no allowed access to Runtime paths outside /Users/tienphat/Developer; no Runtime mutation operation was issued."
+
 mutation_boundaries:
   runtime_source_mutated: false
   tests_docs_dependencies_mutated: false
@@ -155,26 +134,31 @@ mutation_boundaries:
   runtime_env_mutated: false
   runtime_lifecycle_mutated: false
   launchagents_mutated: false
+  operator_files_mutated: false
   main_mutated: false
   tags_or_releases_mutated: false
 
-operator_state_preservation:
-  env_example:
-    sha256_before: "bfcd70b76da37e2e40422b38ac328b832739f9b4abff83adf9f720c95f2703ea"
-    inode: 124865926
-    size: 351
-    state: PRESERVED_UNRELATED_TRACKED_DRIFT
-  sample_files:
-    chatgpt-sample.txt: {inode: 141031895, size: 383332, mtime: 1789397674, ctime: 1789397674, mode: "0644", content_read: false}
-    vscode-gpu-sample.txt: {inode: 141047688, size: 523563, mtime: 1789398971, ctime: 1789398971, mode: "0644", content_read: false}
+executor_recommendation:
+  authority: ADVISORY_ONLY
+  policy_decision_made: false
+  recommendation: "Do not derive Parallelism v2 policy from r2 because no fresh r2 matrix job was launched. Retain r1 as prior accepted functional evidence and treat this report as an execution-surface blocker requiring architect review."
+
+acceptance_criteria:
+  AC-1: PARTIAL_PRE_HARD_STOP
+  AC-2: BLOCKED_BY_EXECUTION_SURFACE
+  AC-3: BLOCKED_BY_EXECUTION_SURFACE
+  AC-4: BLOCKED_BY_EXECUTION_SURFACE
+  AC-5: BLOCKED_NO_FRESH_R2_MATRIX
+  AC-6: PROVEN
+  AC-7: PENDING_POST_PUBLICATION_PROOF
 
 publication:
   report_path: .agent/tasks/TASK-0050/report.yaml
+  report_revision: 2
   report_only_commit_required: true
-  report_commit: null
+  commit_count_required: 1
   push_mode: non_force_dev
   force_push: false
   main_promoted: false
+  post_publication_proof: REQUIRED
   next_step: ARCHITECT_REVIEW
-
-result: BLOCKED
