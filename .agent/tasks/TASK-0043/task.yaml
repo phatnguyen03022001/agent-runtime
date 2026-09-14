@@ -1,0 +1,171 @@
+protocol_version: 3
+
+task_id: TASK-0043
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_hardening_followup
+  task_id: TASK-0042
+  gap_id: PROTECTED_RUNTIME_THREAT_CONTRACT
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "6930b8da48c9466389653fc55eb16f49eebbb28f"
+architect_analysis_skills: [security-review, verification, github-workflow]
+execution_skills:
+  required: [executor, security-review, verification, github-workflow]
+  recommended: []
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "Operator-approved fellow-level hardening architecture and TASK-0043 contract on 2026-09-14."
+    role: "Governs honest Protected Runtime threat semantics: defense-in-depth intent filtering, not sandboxing or privilege isolation."
+    precedence: 1
+  - source: "phatnguyen03022001/agent-runtime@0f0e669a77da22cb3c2385c8cc2041932b368079:.agent/tasks/TASK-0042/review.yaml"
+    role: "Accepted provenance/bootstrap baseline; unrelated Runtime semantics remain authoritative."
+    precedence: 2
+  - source: "phatnguyen03022001/architect-profile@97215b78e69b0aebcd87574b7e0cc8c78f2e5c73"
+    role: "Fresh dev pin before TASK-0043 planning."
+    precedence: 3
+  - source: "phatnguyen03022001/agent-skills@6930b8da48c9466389653fc55eb16f49eebbb28f"
+    role: "Fresh dev pin and governing task skill library."
+    precedence: 4
+  - source: "phatnguyen03022001/agent-documents@ff135cde2dbebbffcd0c33415a7abaf1b2e2c4ec"
+    role: "Fresh dev pin before TASK-0043 planning."
+    precedence: 5
+  - source: "phatnguyen03022001/agent-standards@4eb149686329b3a5ad74d66a6fce050d930ada39"
+    role: "Fresh dev pin before TASK-0043 planning."
+    precedence: 6
+  - source: "phatnguyen03022001/agent-runtime@EXECUTION_BASE_AFTER_FINAL_PLANNING_COMMIT"
+    role: "Target self-pin is supplied by execution_base and exact launch HEAD to avoid self-reference."
+    precedence: 7
+
+structure_authority:
+  status: NOT_APPLICABLE
+  source: ""
+  rationale: "Only threat-model/docs wording, MCP descriptive text, and synthetic regressions may change; no enforcement subsystem or privilege boundary is added."
+
+objective: "Canonicalize Protected Runtime as a defense-in-depth recognized-intent filter, prove supported blocking behavior and same-UID indirection limitations synthetically, and remove wording that could imply sandboxing or mechanical isolation."
+
+scope:
+  required_changes:
+    - "Add root THREAT_MODEL.md describing assets, operator authority, covered recognized intents, explicit non-goals, same-UID arbitrary-program limitation, and separate Executor governance rules."
+    - "Tighten README wording so recognized direct/shell/wrapper lifecycle intents are filtered while arbitrary allowed same-UID programs may have effects the classifier cannot observe or prevent."
+    - "Tighten MCP server/tool descriptive wording so clients cannot infer sandbox, filesystem confinement, privilege isolation, or complete prevention semantics."
+    - "Add synthetic classifier-only regressions that preserve supported deny cases and explicitly document uncovered interpreter/script indirection without executing supplied argv."
+    - "Limitation regressions cover the operator-approved Python inline-code, Perl inline-code, and shell script-path interpreter forms. They inspect classification only and never execute those forms."
+    - "State that mechanical prevention of arbitrary same-UID effects requires a separate future isolation architecture and is outside TASK-0043."
+  allowed_existing_files_or_components:
+    - "README.md"
+    - "new root THREAT_MODEL.md"
+    - "agent_runtime/server.py descriptive strings/docstrings only"
+    - "tests/test_protected_runtime.py and narrowly related surface/documentation assertions"
+    - ".agent/tasks/TASK-0043/report.yaml"
+  expected_files_are_restrictive: true
+
+invariants:
+  - "ProtectedRuntimeGuard production classification/enforcement behavior is unchanged."
+  - "Recognized direct process/service/port lifecycle intents continue to be denied and audited."
+  - "The guard is not described as a sandbox, privilege boundary, syscall filter, complete same-UID containment, or substitute for operator/Executor governance."
+  - "Arbitrary allowed programs running under the same UID may perform effects the argv/text classifier cannot observe or prevent; documentation states this explicitly."
+  - "Executor governance still forbids Runtime lifecycle mutation unless the operator explicitly authorizes it."
+  - "No live bypass execution, Runtime lifecycle mutation, port-8080 mutation, tunnel/config/installed-package mutation, main promotion, tag, or release occurs."
+  - "CHATGPT_LOCAL means reasoning in ChatGPT and local execution/file operations use Agent Runtime by default. ChatGPT sandbox is not authorized. If Agent Runtime connector execution is unavailable, Remote Desktop Commander may be used only for bounded file/Git/test operations and the fallback must be reported."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+forbidden_changes:
+  - "Do not add interpreter-specific classifier rules for Python, Perl, Ruby, Node, shell scripts, or similar indirection cases."
+  - "Do not change agent_runtime/protection.py behavior, executor/session process semantics, lifecycle/start/install/package/config code, public schemas, tool set, timing, filesystem semantics, CI, or dependency files."
+  - "Do not add a new sandbox, privilege-separation helper, container, syscall-filter layer, or other isolation architecture."
+  - "Do not execute synthetic limitation payloads against the live Runtime or any real process."
+  - "Do not install, activate, reload, restart, stop, or otherwise lifecycle-mutate live Agent Runtime or port 8080."
+  - "Do not mutate runtime.env, tunnel identity, listener state, desired state, installed package, main, tags, or releases."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "The canonical threat model separates recognized-intent filtering from mechanical isolation and lists covered intents plus explicit same-UID non-goals."
+    evidence_required: "THREAT_MODEL.md and README inspection show no sandbox/containment overclaim and preserve operator/Executor lifecycle authority."
+  - id: AC-2
+    requirement: "MCP descriptive text states terminal tools may mutate the host and Protected Runtime filtering is defense-in-depth rather than complete isolation."
+    evidence_required: "Real MCP Client or exact server metadata assertions prove revised descriptions/instructions are surfaced without changing tool names, schemas, annotations, or call behavior."
+  - id: AC-3
+    requirement: "Existing recognized lifecycle intents remain synthetically denied with existing categories and audit behavior."
+    evidence_required: "Focused protection regressions cover representative direct process-match/service-lifecycle/port-lifecycle/shell-wrapper cases without spawning or affecting live Runtime processes."
+  - id: AC-4
+    requirement: "Interpreter/script indirection limitations are executable-spec documentation rather than hidden assumptions."
+    evidence_required: "Synthetic classifier-only regressions prove the three operator-approved interpreter-indirection forms are outside protected-intent classification and are never executed by tests."
+  - id: AC-5
+    requirement: "No production enforcement expansion or isolation redesign occurs."
+    evidence_required: "Exact base-to-candidate diff proves no behavioral change to protection.py, executor/session/lifecycle/package/config/dependency/CI surfaces; only authorized docs/descriptive strings/tests change."
+  - id: AC-6
+    requirement: "The stabilized candidate passes focused protection/surface tests, broader affected verification, and canonical ./verify exactly once after bytes stabilize."
+    evidence_required: "Record focused and affected counts, ./verify exit/test count and exact candidate identity; full-suite verification is not the default inner loop."
+  - id: AC-7
+    requirement: "Publication is one implementation commit followed by one report-only commit on dev, non-force, with main unchanged, then stop for Architect review."
+    evidence_required: "Fresh pre/post publication refs and exact lineage."
+
+verification:
+  executor_checks:
+    - id: V-1
+      command_or_check: "During iteration run only targeted threat-model/protection/server-metadata regressions; synthetic limitation cases must never spawn the supplied argv or affect a process."
+      required: true
+    - id: V-2
+      command_or_check: "After bytes stabilize, run the broader affected protection/MCP-surface/documentation verification once."
+      required: true
+    - id: V-3
+      command_or_check: "Run ./verify once in full on the exact stabilized implementation candidate."
+      required: true
+    - id: V-4
+      command_or_check: "Inspect exact base-to-candidate diff for production enforcement, lifecycle, package/config, dependency, CI, live Runtime, main, tag, or release violations."
+      required: true
+    - id: V-5
+      command_or_check: "Fresh-resolve origin/dev and origin/main immediately before non-force publication and again after publication; fail closed on drift."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "NONE"
+    expected_signal: "NOT_REQUIRED_FOR_THIS_EXECUTION_TASK"
+
+publication:
+  implementation_commit_required: true
+  report_path: .agent/tasks/TASK-0043/report.yaml
+  required_report_revision: 1
+  push: non_force_dev
+  stop_for_architect_review: true
+
+git_authority:
+  create_branch: false
+  create_worktree: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
