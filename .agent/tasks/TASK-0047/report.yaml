@@ -1,13 +1,13 @@
 protocol_version: 3
 
 task_id: TASK-0047
-task_revision: 1
-report_revision: 1
+task_revision: 2
+report_revision: 2
 state: REPORTED
 
 task_source:
   path: .agent/tasks/TASK-0047/task.yaml
-  commit: "cdf731875cfc23a9598b9dc5996f22ec07e80664"
+  commit: "d850bb34c632a5355e378f54e0dfed3b6a15c357"
 
 execution:
   repository: phatnguyen03022001/agent-runtime
@@ -15,8 +15,8 @@ execution:
     name: dev
     role: integration
   execution_surface: CHATGPT_LOCAL
-  authorized_base_head: "cdf731875cfc23a9598b9dc5996f22ec07e80664"
-  final_execution_head: "cdf731875cfc23a9598b9dc5996f22ec07e80664"
+  authorized_base_head: "d850bb34c632a5355e378f54e0dfed3b6a15c357"
+  final_execution_head: "d850bb34c632a5355e378f54e0dfed3b6a15c357"
 
 skill_library:
   repository: phatnguyen03022001/agent-skills
@@ -26,123 +26,188 @@ capability_preflight:
   phase: EXECUTION
   required:
     - local_native_execution
-    - live_mcp_six_tool_e2e
+    - live_mcp_client
     - repository_content_write
     - git_commit
     - non_force_dev_publication
   available:
-    - local_native_read_execution_via_agent_runtime
+    - local_native_execution
+    - live_mcp_client
     - repository_content_write
     - git_commit
     - non_force_dev_publication
-  missing:
-    - live_mcp_six_tool_e2e
-  passed: false
+  missing: []
+  passed: true
 
 authoritative_verification:
   required: false
   performed: false
   result: NOT_REQUIRED_FOR_THIS_EXECUTION_TASK
-  evidence: "TASK-0047 revision 1 requires Executor verification gates but no separate authoritative verifier."
+  evidence: "TASK-0047 revision 2 requires Executor verification gates but no separate authoritative verifier."
 
 pushed: false
 
 execution_transport:
   primary: Remote Desktop Commander
-  primary_command_execution: BLOCKED_BY_PLATFORM_SAFETY
-  fallback: Agent Runtime
-  fallback_scope: "Read-only pre-mutation Git diagnostics and report-only publication plumbing; no live Runtime lifecycle mutation was attempted."
   chatgpt_sandbox_used: false
+  chatgpt_agent_runtime_connector_callability: UNAVAILABLE
+  connector_evidence: "Direct ChatGPT Agent Runtime tool calls returned Resource not found before live mutation; this did not block r2 because an installed-package MCP stdio client route was proven callable."
+
+pre_live_binding:
+  remote_dev: "d850bb34c632a5355e378f54e0dfed3b6a15c357"
+  remote_main: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  local_branch: dev
+  local_head: "d850bb34c632a5355e378f54e0dfed3b6a15c357"
+  tracked_clean: true
+  task_blob: "3b8c0657443334ed65b1b78018662f33e1a41779"
+  incoming_untracked_collisions: false
+  preserved_untracked_files:
+    - path: chatgpt-sample.txt
+      inode: 141031895
+      size: 383332
+      mtime: 1789397674
+      ctime: 1789397674
+      mode: "100644"
+    - path: vscode-gpu-sample.txt
+      inode: 141047688
+      size: 523563
+      mtime: 1789398971
+      ctime: 1789398971
+      mode: "100644"
+  preservation_evidence: "The two operator files were never content-read or opened for write. Their path, inode, size, mtime, ctime, and mode were identical before binding and after all pre-live diagnostics."
 
 frozen_candidate:
-  status: UPSTREAM_ACCEPTED_NOT_LOCALLY_REVALIDATED
   app_path: "/Users/tienphat/Developer/agent-runtime/build/Agent Runtime.app"
   handoff_path: "/Users/tienphat/Developer/agent-runtime/build/Agent Runtime.candidate.json"
   source_revision: "b108ef7dc2c53fb5d9fe3f14d658b5f4d032ab44"
   source_tree: "2c1380186513916d4a901bff765dea1ec1f7c910"
+  requirements_lock_sha256: "80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
   candidate_sha256: "701c536a3b67496921ff2a0a5eae6bb28eb315bb69a5710d230eb8bea8ae24af"
   handoff_sha256: "1d7ffcad995162ad0f63292b7c5186e8912dff1168105741d4a15ffa104cd847"
   runtime_payload_sha256: "de4e94d0cddb3f038fca0a18c12ed62da44fb0121eb117d20791aa996c47e476"
-  requirements_lock_sha256: "80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
   packaged_python_identity: "cpython 3.13.13 / cpython-313 / cpython-313-darwin / darwin / arm64"
-  evidence: "The accepted TASK-0046 Architect review revalidated the retained handoff SHA-256, candidate digest, and strict codesign. TASK-0047 local revalidation did not run because the stop-on-failure pre-mutation bundle failed at its first local-binding job."
+  strict_deep_codesign: PASS
+  provenance_validation: PASS
+  evidence: "The retained candidate and external handoff matched the exact frozen candidate digest, handoff SHA-256, source revision, source tree, and requirements.lock identity; strict deep codesign passed. No rebuild or re-sign occurred."
 
-pre_mutation_gate:
-  remote_dev: "cdf731875cfc23a9598b9dc5996f22ec07e80664"
-  remote_main: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
-  remote_binding: PASS
-  local_repository: "/Users/tienphat/Developer/agent-runtime"
-  local_branch: dev
-  local_head: "9e09615a2796364b480397bcc37d77711db8b468"
-  local_clean_exact_base: BLOCKED
-  preserved_unknown_work:
-    - "chatgpt-sample.txt"
-    - "vscode-gpu-sample.txt"
-  live_mcp_client_route: BLOCKED
-  observed_chatgpt_agent_runtime_tools:
+canonical_live_config:
+  path: "$HOME/Library/Application Support/Agent Runtime/runtime.env"
+  regular_non_symlink: true
+  mode: "0600"
+  sha256: "1c853b6c2306cb1fee3c1b5d5e0102c1b266ad41ae409a73b611574efaf5c1f2"
+  required_keys_present: true
+  workspace_valid: true
+  parallelism: "2"
+  mutated: false
+  credential_values_exposed: false
+
+mcp_preflight:
+  route: "Official MCP stdio client against the currently installed package-owned Python and agent_runtime.server with PYTHONDONTWRITEBYTECODE=1."
+  result: PASS
+  public_tools:
     - terminal_exec
     - terminal_start
     - terminal_poll
     - terminal_control
     - capacity_observer
-  missing_required_live_tool:
-    - fs_read_batch
-  static_source_expected_tools: 6
-  static_source_substitution_allowed: false
-  replacement_cycles_authorized: 2
-  replacement_cycles_used: 0
-  live_mutation_started: false
-  evidence: "The first execution bundle stopped at J1 because TASK-0047/task.yaml was absent from local HEAD. Follow-up read-only Git diagnosis proved local dev at 9e09615a with two pre-existing untracked files while remote dev was the exact authorized base. The current ChatGPT Agent Runtime connector exposes five invokable tools and no fs_read_batch route, so the required real six-tool post-cutover MCP capability is unavailable before mutation."
+  capacity_observer_call: PASS
+  process_exit_code: 0
+  evidence: "The pre-cutover installed generation exposed the expected five-tool surface and accepted a real capacity_observer MCP call. Revision 2 does not require fs_read_batch until the frozen candidate is active."
 
-mutation_boundaries:
+rollback_envelope:
+  ui_launchagent:
+    present: true
+    regular_non_symlink: true
+    mode: "0644"
+    loaded: true
+  runtime_launchagent:
+    present: true
+    regular_non_symlink: true
+    mode: "0600"
+    loaded: true
+    label: com.picmao.agent-runtime-runtime
+    program: "$HOME/Applications/Agent Runtime.app/Contents/Resources/runtime/start.sh"
+    tunnel_client: /opt/homebrew/bin/tunnel-client
+  desired_state:
+    present: true
+    regular_non_symlink: true
+    mode: "0600"
+  listener_count_127_0_0_1_8080: 1
+  listener_canonical: true
+  healthz: PASS
+  readyz: PASS
+  previous_app_present: true
+  previous_app_strict_codesign: FAIL
+  previous_app_codesign_reason: "Strict verification reports added runtime-generated __pycache__/*.pyc resources inside the signed bundle."
+  previous_app_provenance_identity: FAIL
+  previous_app_provenance_reason: "Current package_provenance.embedded_candidate_identity rejects the installed legacy runtime manifest with 'runtime manifest shape is invalid'."
+  result: BLOCKED
+  evidence: "The accepted candidate_cutover.py calls _verify_owned_app() on any existing installed app before staging it as rollback material; _verify_owned_app() requires strict codesign, current embedded provenance identity, candidate closure, and strict codesign again. The current installed app fails both strict codesign and current embedded provenance parsing, so it cannot become a trusted rollback target under the authorized transactional path."
+
+live_execution:
+  replacement_cycles_authorized: 2
+  replacement_cycles_carried_from_revision_1: 0
+  replacement_cycles_used_revision_2: 0
   rollback_rehearsal_performed: false
   final_cutover_performed: false
-  cutover_commit_performed: false
-  live_runtime_started_restarted_or_refreshed: false
-  runtime_env_mutated: false
+  final_commit_performed: false
+  live_runtime_lifecycle_mutation_performed: false
+  reason: "Execution stopped before the first live mutation because V-2 could not establish a valid previous-app rollback envelope."
+
+mutation_boundaries:
   candidate_rebuilt: false
   candidate_resigned: false
+  candidate_bytes_mutated: false
   source_tests_docs_mutated: false
+  runtime_env_mutated: false
   tunnel_identity_mutated: false
+  desired_state_mutated: false
+  installed_app_mutated_by_task: false
+  launchagents_mutated: false
   main_promoted: false
   tag_or_release_work_performed: false
 
+blockers:
+  - "The pre-cutover installed Agent Runtime.app is not a valid rollback source for the current accepted transactional cutover path: strict codesign fails because pre-existing runtime-generated Python bytecode cache files were added inside the signed bundle."
+  - "The same installed app also fails current embedded provenance parsing because its legacy runtime manifest shape is not accepted by package_provenance.embedded_candidate_identity."
+  - "Removing the cache files, rewriting the legacy manifest, bypassing _verify_owned_app, or substituting another rollback source is not authorized by TASK-0047 revision 2 and would alter the exact pre-cutover rollback state."
+
 acceptance_evidence:
   - criterion_id: AC-1
-    status: BLOCKED
-    evidence: "Fresh remote refs matched the authorized base/main, but the designated local checkout was neither exact-base nor clean, and the required live six-tool MCP client route was unavailable. The gate stopped before candidate/config/rollback-envelope revalidation and before any live mutation."
+    status: PROVEN
+    evidence: "Remote dev/main, exact r2 task/base, tracked-clean local binding, non-colliding preserved untracked files, frozen candidate/handoff/provenance/codesign, canonical runtime.env mode/validation/parallelism=2, and a real callable installed-package MCP client route were all proven before live mutation."
   - criterion_id: AC-2
-    status: NOT_RUN
-    evidence: "Rollback rehearsal was forbidden because AC-1 pre-live gating did not pass; zero replacement cycles were consumed."
+    status: BLOCKED
+    evidence: "The pre-state service/listener/config envelope was captured, but the previous installed app cannot be accepted by candidate_cutover.py as rollback material because strict codesign and current embedded provenance identity both fail before any app swap. No rehearsal cycle was started."
   - criterion_id: AC-3
     status: NOT_RUN
-    evidence: "No rehearsal occurred, so no post-rollback retained-candidate revalidation or second cutover was authorized."
+    evidence: "No rollback rehearsal occurred, so post-rollback frozen-candidate revalidation and second cutover were not authorized."
   - criterion_id: AC-4
     status: NOT_RUN
-    evidence: "Final cutover and active-generation proof were not attempted."
+    evidence: "The final frozen-candidate cutover and active-generation acceptance proof were not attempted."
   - criterion_id: AC-5
-    status: BLOCKED
-    evidence: "The current ChatGPT Local Agent Runtime connector exposed terminal_exec, terminal_start, terminal_poll, terminal_control, and capacity_observer only; fs_read_batch was absent, so no actual client route could list/call the exact required six-tool live surface. Static server source showing six handlers was not accepted as live E2E evidence."
+    status: NOT_RUN
+    evidence: "Six-tool post-activation MCP E2E was not attempted because the frozen candidate was never activated. The five-tool pre-cutover surface was expected and successfully callable."
   - criterion_id: AC-6
     status: NOT_RUN
     evidence: "No final PENDING transaction existed, so COMMIT and post-commit stability proof were not applicable."
   - criterion_id: AC-7
     status: NOT_PROVEN
-    evidence: "Before report authorship, remote dev was exact cdf7318 and main exact c49d777 with no implementation/source commit. The report cannot self-attest its own future publication; report-only diff and post-publication refs are resolved after the report commit."
+    evidence: "Before report publication, dev remained the exact authorized base and main remained unchanged; no implementation/source/config/live-state commit exists. Report-only diff and post-publication refs are resolved after this artifact is committed."
 
 executor_checks:
   - check_id: V-1
-    result: BLOCKED
-    evidence: "The stop-on-failure preflight bundle failed on exact local binding before candidate/config validation; separately, the required live MCP client capability is missing because fs_read_batch is not exposed by the current connector."
+    result: PASS
+    evidence: "Exact r2 binding, frozen candidate identity/codesign, runtime.env=2, untracked-file preservation metadata, and a callable installed-package MCP route with the expected five tools plus successful capacity_observer call all passed."
   - check_id: V-2
-    result: NOT_RUN
-    evidence: "Rollback-envelope capture did not run after the failed V-1 gate."
+    result: BLOCKED
+    evidence: "Service/listener/health facts were captured, but the existing installed app fails the current cutover path's mandatory rollback-source codesign and embedded-provenance checks."
   - check_id: V-3
     result: NOT_RUN
-    evidence: "No rehearsal PENDING cutover or ROLLBACK was attempted."
+    evidence: "No trial PENDING cutover or ROLLBACK was attempted."
   - check_id: V-4
     result: NOT_RUN
-    evidence: "No retained-candidate revalidation after rollback or final PENDING cutover was attempted."
+    evidence: "No post-rollback candidate revalidation or final PENDING cutover was attempted."
   - check_id: V-5
     result: NOT_RUN
     evidence: "No final installed-generation or six-tool live MCP acceptance proof was attempted."
@@ -151,7 +216,7 @@ executor_checks:
     evidence: "No final COMMIT or post-commit stability observation was attempted."
   - check_id: V-7
     result: NOT_PROVEN
-    evidence: "Pre-publication remote refs were exact and this report is constructed from the exact authorized base tree with no worktree adoption. Same-commit publication proof is intentionally resolved outside this report after publication."
+    evidence: "Pre-publication remote refs and report-only scope are checked immediately before commit/push; post-publication refs are resolved outside this self-referential report."
 
 publication:
   implementation_commit: null
@@ -162,12 +227,5 @@ publication:
   force_push: false
   main_promoted: false
   next_step: ARCHITECT_REVIEW
-
-blockers:
-  - "The designated local dev checkout is at 9e09615a2796364b480397bcc37d77711db8b468 rather than the exact authorized base and contains two pre-existing untracked files. Executor authority does not permit reset, stash, delete, or adoption of that unknown work to manufacture a clean base."
-  - "The current ChatGPT Local Agent Runtime connector has no fs_read_batch action, so TASK-0047 cannot preflight a sufficient real client route for the mandatory exact six-tool post-cutover E2E proof."
-
-deviations_from_task:
-  - "Remote Desktop Commander file inspection worked, but its command-execution surface was blocked by the platform safety layer even for a read-only pwd probe. The already-authorized Agent Runtime surface was used only for bounded read-only Git diagnostics and report-only Git plumbing."
 
 result: BLOCKED
