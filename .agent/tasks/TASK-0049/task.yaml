@@ -1,0 +1,158 @@
+protocol_version: 3
+
+task_id: TASK-0049
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  task_id: TASK-0047
+  gap_id: LAUNCHAGENT_REFRESH_SEQUENCING_DEFECT
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+execution_skills:
+  required: [executor, verification, security-review, github-workflow]
+  recommended: [simplicity]
+
+authority_sources:
+  - source: "phatnguyen03022001/agent-runtime@3cabfbd037f214b8e42d69556139ce460ccae260:.agent/tasks/TASK-0047/review.yaml"
+    role: "Authoritative r3 BLOCKED review identifying LaunchAgent refresh sequencing defects for both Runtime and UI services."
+    precedence: 1
+  - source: "phatnguyen03022001/agent-runtime@2b11eff944c4506250f66dccf2508c4f7bf6e242:.agent/tasks/TASK-0047/report.yaml"
+    role: "Exact r3 live failure and successful rollback evidence."
+    precedence: 2
+  - source: "phatnguyen03022001/agent-runtime@6731a0f7b012cc628b4112ccfa77c5cc46f0a986:.agent/tasks/TASK-0048/review.yaml"
+    role: "Accepted rollback-envelope source fix and frozen-candidate contract to preserve."
+    precedence: 3
+
+objective: "Make candidate_cutover.py refresh both owned LaunchAgents deterministically across app replacement by explicitly waiting for deregistration to reach service absence before bootstrap, verifying newly registered service identity before activation, and preserving actionable bounded launchctl diagnostics; then verify and freeze one new non-installed candidate for a later TASK-0047 revision."
+
+execution_transport:
+  primary: Remote Desktop Commander
+  chatgpt_sandbox_default: FORBIDDEN
+  sandbox_exception: "Use OpenAI/ChatGPT sandbox only for a materially required capability unavailable through Remote Desktop Commander or another already-authorized surface, and record the bounded reason in report.yaml."
+
+scope:
+  required_changes:
+    - "Fix the existing LaunchAgent refresh path in macos/candidate_cutover.py for BOTH com.picmao.agent-runtime-ui and com.picmao.agent-runtime-runtime."
+    - "When an owned service is loaded and its app/plist identity is being replaced, explicitly bootout the old service and perform a bounded state-aware wait until launchctl proves that service is absent before bootstrapping the new plist."
+    - "Do not use an arbitrary fixed sleep as correctness. Poll only the relevant launchd state with a bounded deadline and fail closed on timeout."
+    - "Do not use unbounded retries. A bounded re-check may tolerate transient launchd state only when the exact state transition remains observable and test-covered."
+    - "Do not reuse the old UI registration via kickstart -k after replacing the app bundle. Register the new UI plist/app identity through the same explicit owned-service refresh contract."
+    - "After bootstrap, verify the expected owned service is registered under the exact label and expected program path before activation/continuation."
+    - "Preserve bounded launchctl failure diagnostics: operation, return code, and bounded stdout/stderr sufficient to identify launchd errors without leaking unrelated environment or secrets."
+    - "Preserve TASK-0048 opaque legacy rollback snapshot semantics and all strict provenance/codesign/closure checks for incoming and newly installed candidates."
+    - "Add focused regressions reproducing the observed Runtime error-37 Operation-already-in-progress transition, delayed service disappearance, timeout/fail-closed behavior, UI old-registration replacement, diagnostic retention, and rollback behavior."
+    - "After implementation bytes stabilize, create one implementation commit, run canonical ./verify once on that exact commit, then build/freeze one final non-installed candidate through the existing deterministic freeze path and retain its exact handoff for later TASK-0047 continuation."
+  allowed_existing_files_or_components:
+    - "macos/candidate_cutover.py"
+    - "focused candidate-cutover tests"
+    - "existing freeze/provenance helpers only if narrowly required"
+    - ".agent/tasks/TASK-0049/report.yaml"
+  expected_files_are_restrictive: false
+
+invariants:
+  - "LaunchAgent refresh correctness comes from observed service state, not timing guesses."
+  - "Both UI and Runtime LaunchAgents must use the same ownership-safe deregister/absence/register identity model where replacement requires a new registration."
+  - "Failure diagnostics must remain bounded and must not expose runtime.env credential values."
+  - "Transactional rollback remains exact and fail-closed."
+  - "No live Runtime install, activation, stop, start, restart, reload, cutover, rollback, COMMIT, runtime.env, tunnel/listener, port 8080, LaunchAgent, main, tag, or release mutation occurs in TASK-0049."
+  - "The unrelated .env.example drift and the two operator files chatgpt-sample.txt and vscode-gpu-sample.txt remain untouched; do not inspect the two files' contents, move, delete, overwrite, stash, clean, adopt, or commit them."
+
+non_goals:
+  - "Do not change Agent Runtime UX behavior that is already responsive."
+  - "Do not change AGENT_RUNTIME_MAX_ACTIVE_SESSIONS semantics."
+  - "Do not change AGENT_RUNTIME_MAX_PARALLELISM semantics, agent_runtime/capacity.py, V1_EVIDENCE_CEILING, or parallel scaling policy in this task. Parallelism optimization is a separate downstream task after cutover stability is proven."
+
+forbidden_changes:
+  - "Do not add arbitrary sleep-based correctness or infinite/unbounded retry loops."
+  - "Do not bypass candidate verification, LaunchAgent ownership checks, rollback verification, or service identity verification."
+  - "Do not normalize, repair, rewrite, delete caches from, or re-sign the current live legacy app."
+  - "Do not run the live cutover in this task."
+  - "Do not change dependencies, public MCP semantics, runtime.env, tunnel identity, capacity policy, main, tags, or releases."
+  - "Do not create successor tasks as Executor."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Runtime service replacement waits for observable bootout completion before bootstrap and handles the exact r3 error-37 race deterministically."
+    evidence_required: "Focused tests reproduce bootstrap-before-removal failure and PASS with bounded service-absence polling; timeout fails closed."
+  - id: AC-2
+    requirement: "UI replacement no longer reuses an old registration after app replacement."
+    evidence_required: "Focused tests prove the old UI registration is explicitly removed when required, the new plist/app identity is bootstrapped, and the expected program path is verified before continuation."
+  - id: AC-3
+    requirement: "launchctl failures preserve actionable bounded diagnostics without secret leakage."
+    evidence_required: "Tests prove operation/return-code/bounded stdout-stderr retention and redaction/absence of runtime.env credential values."
+  - id: AC-4
+    requirement: "TASK-0048 rollback and strict candidate trust boundaries remain intact."
+    evidence_required: "Affected cutover tests PASS for opaque legacy rollback, snapshot tamper, PARTIAL semantics, incoming/staged/installed candidate validation, and exact service/config restoration."
+  - id: AC-5
+    requirement: "Canonical full repository verification passes exactly once on the final implementation commit before candidate freeze."
+    evidence_required: "Record ./verify result, test count, exit code, exact implementation commit/tree, and rerun rationale only if later source changes invalidate it."
+  - id: AC-6
+    requirement: "One new final sealed non-installed candidate containing the sequencing fix is built/frozen and retained without live activation."
+    evidence_required: "Record exact candidate/handoff paths and SHA-256 identities, source revision/tree, lock identity, packaged Python identity, strict codesign, manifest/external closure, and no-leakage checks."
+  - id: AC-7
+    requirement: "Published dev lineage is one implementation commit followed by one report-only commit, non-force, with main unchanged and unrelated local operator state preserved."
+    evidence_required: "Fresh remote refs, exact base -> implementation -> report lineage, report-only diff proof, and final local preservation evidence."
+
+verification:
+  executor_checks:
+    - id: V-1
+      command_or_check: "Use targeted candidate-cutover tests during iteration; reproduce the observed Runtime error-37 sequencing failure and UI stale-registration behavior before changing behavior."
+      required: true
+    - id: V-2
+      command_or_check: "Prove bounded service-absence polling, timeout failure, new service identity verification, and bounded launchctl diagnostics."
+      required: true
+    - id: V-3
+      command_or_check: "Prove rollback and strict candidate verification remain materially unchanged."
+      required: true
+    - id: V-4
+      command_or_check: "Create the final implementation commit and run ./verify once on that exact commit."
+      required: true
+    - id: V-5
+      command_or_check: "Build/freeze one final non-installed candidate from the exact implementation commit and retain the candidate plus handoff for downstream TASK-0047."
+      required: true
+    - id: V-6
+      command_or_check: "Fresh-resolve origin/dev and origin/main before and after non-force publication; preserve .env.example drift and the two untracked operator files untouched."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "NONE"
+
+publication:
+  implementation_commit_required: true
+  report_path: .agent/tasks/TASK-0049/report.yaml
+  required_report_revision: 1
+  push: non_force_dev
+  stop_for_architect_review: true
+
+git_authority:
+  create_branch: false
+  create_worktree: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+live_boundary:
+  allowed: "Source/test changes plus non-installed deterministic candidate construction/freeze only."
+  forbidden: "Any mutation of the currently installed/live Runtime, its LaunchAgents, desired state, runtime.env, tunnel/listener/port 8080, or live lifecycle."
+
+blocking_decisions: []
+execution_ready: true
