@@ -1,0 +1,212 @@
+protocol_version: 3
+
+task_id: TASK-0044
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_freeze_gap_followup
+  task_id: TASK-0043
+  gap_id: EXACT_CANDIDATE_HANDOFF_AND_TRANSACTIONAL_CUTOVER
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "6930b8da48c9466389653fc55eb16f49eebbb28f"
+
+architect_analysis_skills: [reliability, security-review, verification, github-workflow]
+
+execution_skills:
+  required: [executor, reliability, security-review, verification, github-workflow]
+  recommended: []
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "Operator-approved revised Agent Runtime freeze decomposition plus independent adversarial freeze-gap review on 2026-09-14."
+    role: "Governs the exact-candidate continuity and rollback blockers: a frozen candidate must be installed without rebuild/re-sign, previous known-good state must remain recoverable until explicit commit, and stronger unrelated subsystems are rejected."
+    precedence: 1
+  - source: "phatnguyen03022001/agent-runtime@908fcfcf7535a7e9bea92aad662eee0fbb778ca6:.agent/tasks/TASK-0043/review.yaml"
+    role: "Accepted threat-contract baseline and explicit live-freeze configuration note; all unaffected TASK-0043 semantics remain authoritative."
+    precedence: 2
+  - source: "phatnguyen03022001/agent-runtime@0f0e669a77da22cb3c2385c8cc2041932b368079:.agent/tasks/TASK-0042/review.yaml"
+    role: "Accepted immutable-source, hash-locked dependency, manifest-closure, codesign, and reconstructible-provenance baseline, including the post-sign pyc self-mutation observation."
+    precedence: 3
+  - source: "phatnguyen03022001/architect-profile@97215b78e69b0aebcd87574b7e0cc8c78f2e5c73"
+    role: "Fresh dev pin observed immediately before TASK-0044 planning."
+    precedence: 4
+  - source: "phatnguyen03022001/agent-skills@6930b8da48c9466389653fc55eb16f49eebbb28f"
+    role: "Fresh dev pin observed immediately before TASK-0044 planning and governing task skill library for this task."
+    precedence: 5
+  - source: "phatnguyen03022001/agent-documents@ff135cde2dbebbffcd0c33415a7abaf1b2e2c4ec"
+    role: "Fresh dev pin observed immediately before TASK-0044 planning."
+    precedence: 6
+  - source: "phatnguyen03022001/agent-standards@4eb149686329b3a5ad74d66a6fce050d930ada39"
+    role: "Fresh dev pin observed immediately before TASK-0044 planning."
+    precedence: 7
+  - source: "phatnguyen03022001/agent-runtime@EXECUTION_BASE_AFTER_FINAL_PLANNING_COMMIT"
+    role: "Target repository self-pin is supplied by execution_base and exact launch HEAD; pre-planning source tree was caf76470659c184f036b8f3ec14f01b4220a9993."
+    precedence: 8
+
+structure_authority:
+  status: NOT_APPLICABLE
+  source: ""
+  rationale: "The task tightens the existing package/install/cutover pipeline and may add only a narrowly scoped helper inside the existing macos ownership boundary; no new service, daemon, framework, or source ownership layer is authorized."
+
+objective: "Make one finalized signed Agent Runtime application bundle a stable external candidate that can be verified, handed off, installed, and later accepted or rolled back without rebuilding or re-signing it, while retaining recoverable known-good package and launch state until an explicit post-cutover commit."
+
+scope:
+  required_changes:
+    - "Separate package construction from prebuilt-candidate installation/activation. Provide an explicit install/cutover path that consumes an already-built Agent Runtime.app plus an expected external candidate identity and that cannot invoke package_app.sh, rebuild Python/Swift payloads, regenerate manifests, or re-sign candidate bytes. Existing convenience build-and-install behavior may remain only as composition of distinct build then prebuilt-install phases; the prebuilt path itself must remain rebuild-free."
+    - "Define one deterministic external post-sign candidate-closure identity over the complete logical Agent Runtime.app bundle. The closure contains every regular file below the app root, including _CodeSignature and every other signing-owned regular file; symlinks and unsupported non-regular entries are rejected. Directories are implicit. Each canonical record is relative POSIX path + TAB + four-digit lowercase octal permission mode + TAB + decimal byte size + TAB + lowercase SHA-256 + LF. Paths must be relative, UTF-8, unique, contain no NUL/TAB/CR/LF or dot/dot-dot traversal component, and records are sorted by UTF-8 path bytes. The external candidate digest is SHA-256 of the concatenated canonical records. Ownership, timestamps, directory metadata, and extended attributes are not candidate identity."
+    - "Candidate closure is external to the app bundle and is computed only after payload construction, runtime-manifest generation, all required candidate-mutating probes, signing, strict codesign verification, and final runtime-manifest closure verification. A machine-readable handoff may carry schema version, bundle identifier, source revision/tree, record count, and closure digest, but the app must not contain its own final external digest."
+    - "Preserve TASK-0042 embedded provenance as an independent layer: exact source revision/tree, requirements.lock identity, runtime-manifest file closure, and strict codesign remain mandatory. External whole-bundle closure augments rather than replaces runtime manifest or codesign. Bit-for-bit reproducible build is not claimed or required."
+    - "Decouple prebuilt-candidate validation from the invoking checkout HEAD. The installer must validate candidate-owned embedded revision/tree/lock provenance plus the caller-supplied expected external candidate identity; current git rev-parse HEAD of the checkout running the installer must not be the sole or required candidate identity. A valid candidate built from an accepted earlier immutable commit must remain installable from a later checkout containing only planning/review artifacts."
+    - "Recompute and verify the same external candidate closure after candidate staging and again after placement at the installed app path. Reject omitted, substituted, mode-changed, content-changed, unexpected, symlinked, post-sign mutated, invalid-codesign, invalid-manifest, or wrong-candidate state before it can be certified."
+    - "Make post-seal candidate mutation fail closed. No live install/activation path may silently repair, rebuild, regenerate, or re-sign a sealed candidate. Any byte/mode mutation after seal invalidates the candidate identity and requires a new candidate to be built and sealed by the later freeze-candidate task."
+    - "Provide the smallest transactional cutover mechanism that establishes verified rollback material and transaction metadata before the first destructive package/LaunchAgent mutation, stages the accepted candidate, swaps/validates installed bytes, updates only the required UI/Runtime LaunchAgent state, and leaves the transaction pending for an external caller to commit only after later live acceptance. Exact CLI/function decomposition is Executor-local HOW."
+    - "Retain the previous verified Agent Runtime.app and the minimum previous UI/Runtime LaunchAgent file/loaded-state plus persisted desired-Runtime-state facts necessary to restore the pre-cutover state. Do not copy or log secret runtime.env values into transaction metadata. Canonical runtime.env itself is not mutated by this task's cutover mechanism."
+    - "Expose an explicit bounded COMMIT and ROLLBACK contract, or an equivalently simple caller-visible boundary. Until COMMIT, the previous known-good state remains recoverable and must not be deleted. COMMIT may discard rollback material only after the caller has completed downstream live acceptance. ROLLBACK restores the prior package and relevant launch/desired-state state and verifies the restored known-good ownership/readiness predicates available without running downstream freeze proof."
+    - "Reject a second cutover while one transaction remains pending. Pending rollback material must not be auto-deleted merely because a process exits or a later command starts. If rollback itself cannot complete, fail closed, preserve remaining forensic/rollback material, and report partial state rather than claiming success."
+    - "Support deterministic synthetic failure injection or equivalent fixture control for material post-mutation stages so rollback behavior can be proven without lifecycle-mutating the operator's live Runtime. At minimum cover failure after app swap, failure after installed-candidate verification, LaunchAgent registration failure, and activation/refresh failure."
+    - "Assess whether existing PID/process start identity, LaunchAgent ownership, executable path, listener ownership, health/readiness, and installed-artifact closure facts are sufficient for downstream TASK-0046 to distinguish the pre-cutover Runtime generation from the freshly activated generation. Add only the smallest non-secret observability support if current source cannot expose those facts; do not perform the live generation proof in TASK-0044."
+    - "Preserve the accepted live-freeze configuration blocker as an explicit downstream condition. TASK-0044 must not overwrite canonical runtime.env or force checkout/live AGENT_RUNTIME_MAX_PARALLELISM equality for cosmetic consistency. If implementation discovers a source coupling that makes later proof of the intended canonical value impossible, stop BLOCKED for Architect judgment rather than silently choosing 2 or 4."
+    - "Update README/package/install documentation only as required to describe prebuilt candidate identity, no-rebuild activation, pending cutover, commit/rollback semantics, and downstream freeze ownership."
+  allowed_existing_files_or_components:
+    - "install.sh"
+    - "macos/package_app.sh"
+    - "macos/package_provenance.py and at most one narrowly scoped package/cutover helper under existing macos/ ownership if justified by simplicity"
+    - "macos/runtime_config.py, macos/recover_runtime_service.py, start.sh, and existing Swift process-ownership/lifecycle surfaces only when the required cutover/observability contract materially needs them"
+    - "tests/test_package_provenance.py, tests/test_surface_and_scripts.py, tests/test_runtime_config.py, tests/test_service_recovery.py, tests/test_supervised_lifecycle.py, tests/test_tunnel_identity.py, existing macOS lifecycle/ownership tests, and narrowly focused new regressions"
+    - "README.md"
+    - ".agent/tasks/TASK-0044/report.yaml"
+  expected_files_are_restrictive: false
+
+invariants:
+  - "TASK-0041 bounded MCP contracts, TASK-0042 provenance/bootstrap semantics, and TASK-0043 defense-in-depth threat contract remain unchanged except where TASK-0044 explicitly strengthens package/install/cutover behavior."
+  - "One sealed candidate identity denotes one exact logical app-bundle file/mode closure after signing; same Git revision/tree alone is not treated as proof of same candidate bytes."
+  - "Codesign, embedded runtime-manifest closure, and external whole-bundle candidate closure are independent mandatory checks at their applicable boundaries."
+  - "The prebuilt install/cutover path never rebuilds, re-signs, or mutates the accepted candidate."
+  - "Until explicit COMMIT, previous known-good package and required launch/desired-state rollback material remain recoverable."
+  - "Failure before COMMIT never certifies the candidate; rollback is deterministic where the previous state was mutated, and rollback failure is a fail-closed partial-state result."
+  - "A pending transaction cannot be silently superseded by another cutover."
+  - "Canonical runtime.env, tunnel identity, credentials, port 8080, and the operator's installed/live Runtime are not mutated during TASK-0044 execution."
+  - "No credential/tunnel secret may appear in candidate identity, rollback metadata, logs, tests, task/report artifacts, or Git."
+  - "Protected Runtime remains a defense-in-depth recognized-intent filter, not a sandbox, privilege boundary, syscall filter, or complete same-UID isolation mechanism."
+  - "CHATGPT_LOCAL local execution/file operations use Agent Runtime by default. OpenAI execution sandbox is not authorized for ordinary TASK-0044 work; lack of a required current-phase capability fails closed or uses only an already-authorized sufficient fallback."
+
+forbidden_changes:
+  - "Do not create TASK-0045/TASK-0046, CI freeze workflows, final candidate artifacts, live freeze evidence, promotion artifacts, tags, or releases in this task."
+  - "Do not run install/cutover against the operator's live Agent Runtime, start/stop/restart/reload the live Runtime, mutate port 8080, runtime.env, tunnel identity, listener state, desired-state marker, live LaunchAgents, or installed app. Use synthetic/temp fixtures only."
+  - "Do not change public MCP tools/schemas/semantics, fs_read_batch contracts, capacity/timing behavior, or ProtectedRuntimeGuard enforcement."
+  - "Do not add interpreter-specific deny rules, custom sandbox/SBPL/Seatbelt policy, privilege-separation architecture, containers, syscall filters, or any platform-policy bypass/evasion mechanism."
+  - "Do not add a deployment service, orchestrator, queue, generalized transaction framework, artifact registry, cache manager, generalized workspace manager, or dependency merely to implement this contract."
+  - "Do not claim bit-for-bit reproducible builds."
+  - "Do not change requirements/dependencies unless a revised Architect contract explicitly authorizes it."
+  - "Do not promote to main or mutate main, tags, releases, repository metadata, or branch topology."
+
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Package construction and prebuilt installation are mechanically separable; the prebuilt candidate path accepts a caller-supplied candidate/expected identity and cannot invoke build/package/signing regeneration."
+    evidence_required: "Focused tests instrument the build/package path and prove zero build/re-sign invocation during valid prebuilt installation; source inspection proves any convenience build-and-install entry composes the two phases rather than hiding rebuild inside activation."
+  - id: AC-2
+    requirement: "External candidate identity deterministically closes over every regular signed app-bundle file and relevant permission mode after all mutating probes/signing, with unambiguous canonical records and no self-reference."
+    evidence_required: "Independent fixture recomputation matches the implementation digest exactly; tests cover stable ordering, mode inclusion, symlink/non-regular rejection, path ambiguity rejection, signing metadata inclusion, and digest change for one-file or mode mutation."
+  - id: AC-3
+    requirement: "A prebuilt candidate is validated from candidate-owned embedded provenance plus the expected external candidate identity rather than requiring equality with the invoking checkout HEAD."
+    evidence_required: "Fixture/integration tests accept one valid sealed candidate while the invoking checkout identity is intentionally different, and independently reject wrong expected revision/tree/lock/closure identity, invalid codesign, or invalid runtime manifest."
+  - id: AC-4
+    requirement: "Candidate identity is preserved through staging and installed placement and post-seal mutation cannot be silently repaired or certified."
+    evidence_required: "Tests independently reject omitted, extra, substituted, mode-changed, byte-mutated, symlinked, and post-sign/post-seal state at staging or installed validation; exact source inspection proves live activation has no rebuild/re-sign fallback."
+  - id: AC-5
+    requirement: "Cutover retains a verified known-good rollback envelope before the first destructive mutation and exposes explicit pending, commit, and rollback semantics sufficient for later live acceptance."
+    evidence_required: "Synthetic/temp-fixture tests prove previous app plus minimum launch/desired-state facts exist before mutation, survive through pending cutover, are removed only after explicit COMMIT, and a second cutover is rejected while pending."
+  - id: AC-6
+    requirement: "Material failures after mutation fail closed and restore the previous known-good package/launch/desired-state state without operator-live mutation."
+    evidence_required: "Deterministic injected failures after app swap, after installed validation, during LaunchAgent registration, and during activation/refresh each prove candidate success is withheld and rollback restores the fixture's prior state; rollback-failure injection proves partial state/evidence is retained and success is not reported."
+  - id: AC-7
+    requirement: "TASK-0044 leaves downstream active-generation proof achievable without inventing sandbox/process-attestation infrastructure."
+    evidence_required: "Report identifies the exact existing or minimally added non-secret facts TASK-0046 can use to distinguish pre/post Runtime generations and listener ownership; if those facts cannot be supplied inside authorized scope, execution stops BLOCKED rather than weakening downstream proof."
+  - id: AC-8
+    requirement: "No candidate probe or source-test path mutates a sealed candidate unnoticed, including Python bytecode creation."
+    evidence_required: "Regression proves the chosen probe/test strategy either suppresses writes or probes a disposable pre-seal copy, then final codesign, embedded manifest closure, and external candidate closure remain unchanged after all candidate validation probes."
+  - id: AC-9
+    requirement: "The accepted AGENT_RUNTIME_MAX_PARALLELISM checkout/live mismatch is neither silently normalized nor forgotten, and TASK-0044 performs no live config mutation."
+    evidence_required: "Exact diff/live-boundary audit plus report handoff records the mismatch as a downstream freeze condition unless an explicit later Architect decision resolves the intended canonical value."
+  - id: AC-10
+    requirement: "The stabilized implementation passes focused rollback/candidate-identity tests, broader affected package/install/lifecycle verification, and canonical ./verify once on the exact final implementation candidate without touching the live Runtime."
+    evidence_required: "Record focused/affected test counts, one stabilized ./verify result/count, exact implementation SHA/tree, and explicit evidence that all activation/rollback tests used synthetic/temp fixtures."
+  - id: AC-11
+    requirement: "Published dev lineage contains one final implementation candidate commit followed by one report-only commit, non-force, with main unchanged, then stops for Architect review."
+    evidence_required: "Fresh remote refs before/after publication and exact implementation/report lineage."
+
+verification:
+  executor_checks:
+    - id: V-1
+      command_or_check: "During iteration run only minimum targeted candidate-closure, prebuilt-install, transaction, rollback, and affected ownership/config regressions against synthetic/temp fixtures. Do not use the live installation as a test target."
+      required: true
+    - id: V-2
+      command_or_check: "After implementation bytes stabilize, run the broader affected package/provenance/install/recovery/lifecycle test set once; group independent deterministic checks only when they share no mutable state."
+      required: true
+    - id: V-3
+      command_or_check: "Create the final implementation candidate commit, ensure exact candidate state is clean, then run canonical ./verify once on that exact implementation candidate. If bytes change, rerun only invalidated final gates on the replacement exact candidate."
+      required: true
+    - id: V-4
+      command_or_check: "Build one non-installed test package only as needed to prove the new source mechanics; finish all candidate-mutating probes before computing its external closure, then prove strict codesign + embedded manifest closure + external whole-bundle closure. No live install/activation is permitted."
+      required: true
+    - id: V-5
+      command_or_check: "Run deterministic synthetic rollback failure cases for post-swap, post-validation, LaunchAgent-registration, activation/refresh, concurrent-pending, and rollback-failure boundaries; preserve attributable result per injected stage."
+      required: true
+    - id: V-6
+      command_or_check: "Inspect exact task-base-to-candidate diff for public MCP/protection/dependency/CI/live-Runtime/main/tag/release violations and prove no sealed-candidate rebuild/re-sign fallback remains."
+      required: true
+    - id: V-7
+      command_or_check: "Fresh-resolve origin/dev and origin/main immediately before non-force publication and again after publication; fail closed on drift."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "NONE"
+    expected_signal: "NOT_REQUIRED_FOR_THIS_EXECUTION_TASK"
+
+publication:
+  implementation_commit_required: true
+  report_path: .agent/tasks/TASK-0044/report.yaml
+  required_report_revision: 1
+  push: non_force_dev
+  stop_for_architect_review: true
+
+git_authority:
+  create_branch: false
+  create_worktree: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
