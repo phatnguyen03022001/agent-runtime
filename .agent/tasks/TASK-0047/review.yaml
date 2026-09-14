@@ -1,52 +1,55 @@
 protocol_version: 3
 
 task_id: TASK-0047
-task_revision: 2
-review_revision: 2
+task_revision: 3
+review_revision: 3
 state: BLOCKED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0047/report.yaml
-  commit: "87ecb4cde685b8391471993ac8afeb8a4b7c1ecb"
-  report_revision: 2
+  commit: "2b11eff944c4506250f66dccf2508c4f7bf6e242"
+  report_revision: 3
 
 reviewed_base:
-  commit: "d850bb34c632a5355e378f54e0dfed3b6a15c357"
+  commit: "13944c22510337de0616d9152f56fcb53c5ec1dd"
 
 contract_compliance:
   protocol_version: PASS
   identity: PASS
   execution_base: PASS
   publication_scope: PASS
-  fail_closed_pre_mutation: PASS
-  live_mutation_boundary: PASS
+  fail_closed_live_failure: PASS
+  transactional_rollback: PASS
+  replacement_cycle_boundary: PASS
 
 criterion_judgment:
   AC-1: PASS
   AC-2: BLOCKED
-  AC-3: NOT_RUN
+  AC-3: PASS
   AC-4: NOT_RUN
   AC-5: NOT_RUN
   AC-6: NOT_RUN
   AC-7: PASS
 
 accepted_evidence:
-  - "Executor proved exact r2 binding, frozen candidate/handoff/provenance/codesign, canonical runtime.env mode 0600 with AGENT_RUNTIME_MAX_PARALLELISM=2, preserved operator files, and a real callable five-tool pre-cutover MCP route."
-  - "Executor stopped before every live mutation with replacement_cycles_used=0/2; no candidate rebuild/re-sign, install, cutover, start, rollback, COMMIT, runtime.env, tunnel, listener, LaunchAgent, main, tag, or release mutation occurred."
-  - "Published lineage is exactly d850bb34c632a5355e378f54e0dfed3b6a15c357 -> 87ecb4cde685b8391471993ac8afeb8a4b7c1ecb and the direct-child diff changes only .agent/tasks/TASK-0047/report.yaml; main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
-  - "The rollback envelope blocker is concrete: current candidate_cutover.py requires _verify_owned_app() for an existing installed app, while the live legacy app fails strict codesign because runtime-generated __pycache__/*.pyc files were added inside the bundle and also fails current embedded provenance parsing because its legacy runtime manifest shape is incompatible."
+  - "Exact r3 binding, accepted TASK-0048 candidate, canonical runtime.env/tunnel/listener/health state, opaque rollback closure, and five-tool pre-cutover MCP route all passed before mutation."
+  - "Exactly one rehearsal replacement attempt was consumed; failure occurred before PENDING at Runtime LaunchAgent registration, and transactional rollback restored the exact legacy app/service/config state."
+  - "Retained candidate remained byte-identical and strict-valid after rollback; no rebuild, re-sign, legacy normalization, live config mutation, source mutation, main promotion, tag, or release occurred."
+  - "Published r3 lineage is exactly 13944c22510337de0616d9152f56fcb53c5ec1dd -> 2b11eff944c4506250f66dccf2508c4f7bf6e242; the direct-child diff changes only .agent/tasks/TASK-0047/report.yaml and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "Fresh macOS unified-log evidence identifies the Runtime failure: bootout began at 01:43:47.201, bootstrap was invoked at 01:43:47.206, launchd rejected it with error 37 Operation already in progress, and the old service was only removed at 01:43:47.222."
+  - "The same trace exposes a UI lifecycle defect: kickstart -k reused the old UI registration after app replacement and the candidate UI launch hit macOS Launch Constraint/codesigning rejection."
 
 architect_finding:
-  classification: CUTOVER_BACKWARD_COMPATIBILITY_DEFECT
-  description: "The accepted cutover implementation cannot upgrade from the currently installed legacy Runtime because it requires the previous installation to satisfy the new generation's candidate provenance/codesign contract before it can even be snapshotted as rollback material. Mutating the legacy app to satisfy the new verifier or bypassing new-candidate verification would destroy rollback fidelity or weaken the candidate trust boundary."
+  classification: LAUNCHAGENT_REFRESH_SEQUENCING_DEFECT
+  description: "candidate_cutover.py assumes bootout completion is ready for immediate bootstrap and reuses the old UI registration after replacing app bytes. The owned LaunchAgent refresh sequence must become state-aware and observable for both services."
 
 continuation:
   action: NEW_BOUNDED_SOURCE_TASK_REQUIRED
-  preserve_replacement_cycles_used: 0
-  required_design: "Teach the existing cutover path to preserve an exact legacy installed app as opaque rollback pre-state using a deterministic byte-level rollback envelope, while keeping strict current provenance/codesign validation mandatory for every new candidate and installed new generation. Rollback must restore the exact captured legacy bytes and service/config state; no cleanup or normalization of the legacy app is permitted before capture."
+  preserve_completed_r3_replacement_cycles: 1
+  required_design: "For both owned LaunchAgents, make deregistration-to-absence explicit before registering the new plist/app identity; capture bounded launchctl return code/stdout/stderr on failure; verify newly registered service identity before activation; preserve exact transactional rollback and strict candidate verification. Avoid arbitrary sleeps and unbounded retry loops."
   return_to_live_cutover_after_acceptance: true
-
 notes:
-  - "Do not revise TASK-0047 again to authorize deleting __pycache__, rewriting the legacy manifest, or bypassing verification of the new candidate."
+  - "Do not retry TASK-0047 r3; its rehearsal attempt was consumed and AC-2 remains unsatisfied."
+  - "A later TASK-0047 revision may receive fresh bounded replacement-cycle authority only after the LaunchAgent sequencing fix and a new sealed candidate are accepted."
   - "No live mutation is authorized by this review."
