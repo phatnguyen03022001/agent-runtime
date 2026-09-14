@@ -1,18 +1,18 @@
 protocol_version: 3
 
 task_id: TASK-0047
-task_revision: 1
-review_revision: 1
+task_revision: 2
+review_revision: 2
 state: BLOCKED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0047/report.yaml
-  commit: "073751f27769286c858232ddd868d798aa08eebb"
-  report_revision: 1
+  commit: "87ecb4cde685b8391471993ac8afeb8a4b7c1ecb"
+  report_revision: 2
 
 reviewed_base:
-  commit: "cdf731875cfc23a9598b9dc5996f22ec07e80664"
+  commit: "d850bb34c632a5355e378f54e0dfed3b6a15c357"
 
 contract_compliance:
   protocol_version: PASS
@@ -23,31 +23,30 @@ contract_compliance:
   live_mutation_boundary: PASS
 
 criterion_judgment:
-  AC-1: BLOCKED
-  AC-2: NOT_RUN
+  AC-1: PASS
+  AC-2: BLOCKED
   AC-3: NOT_RUN
   AC-4: NOT_RUN
-  AC-5: BLOCKED
+  AC-5: NOT_RUN
   AC-6: NOT_RUN
   AC-7: PASS
 
 accepted_evidence:
-  - "Executor stopped before live mutation with replacement_cycles_used=0/2 and published exactly one report-only commit 073751f27769286c858232ddd868d798aa08eebb; main remained c49d777efa09db7f6c51bd8d8616db4623499fb8."
-  - "Fresh local inspection confirms the designated checkout remained at 9e09615a2796364b480397bcc37d77711db8b468 with two preserved untracked operator files chatgpt-sample.txt and vscode-gpu-sample.txt."
-  - "Fresh installed-app inspection proves the currently installed Runtime itself exposes exactly five PUBLIC_TOOL_NAMES and does not contain fs_read_batch; this is not merely host connector cache evidence."
+  - "Executor proved exact r2 binding, frozen candidate/handoff/provenance/codesign, canonical runtime.env mode 0600 with AGENT_RUNTIME_MAX_PARALLELISM=2, preserved operator files, and a real callable five-tool pre-cutover MCP route."
+  - "Executor stopped before every live mutation with replacement_cycles_used=0/2; no candidate rebuild/re-sign, install, cutover, start, rollback, COMMIT, runtime.env, tunnel, listener, LaunchAgent, main, tag, or release mutation occurred."
+  - "Published lineage is exactly d850bb34c632a5355e378f54e0dfed3b6a15c357 -> 87ecb4cde685b8391471993ac8afeb8a4b7c1ecb and the direct-child diff changes only .agent/tasks/TASK-0047/report.yaml; main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "The rollback envelope blocker is concrete: current candidate_cutover.py requires _verify_owned_app() for an existing installed app, while the live legacy app fails strict codesign because runtime-generated __pycache__/*.pyc files were added inside the bundle and also fails current embedded provenance parsing because its legacy runtime manifest shape is incompatible."
 
 architect_finding:
-  classification: ARCHITECT_TASK_PRECONDITION_DEFECT
-  description: "TASK-0047 r1 incorrectly required the future six-tool surface as a pre-mutation capability. Because the currently installed generation is the accepted older five-tool Runtime, requiring fs_read_batch before replacing that generation makes the live cutover gate circular. The exact six-tool MCP proof remains mandatory after candidate activation and before COMMIT, but not before the first cutover mutation."
+  classification: CUTOVER_BACKWARD_COMPATIBILITY_DEFECT
+  description: "The accepted cutover implementation cannot upgrade from the currently installed legacy Runtime because it requires the previous installation to satisfy the new generation's candidate provenance/codesign contract before it can even be snapshotted as rollback material. Mutating the legacy app to satisfy the new verifier or bypassing new-candidate verification would destroy rollback fidelity or weaken the candidate trust boundary."
 
 continuation:
-  action: REVISE_TASK
-  task_id: TASK-0047
-  next_task_revision: 2
+  action: NEW_BOUNDED_SOURCE_TASK_REQUIRED
   preserve_replacement_cycles_used: 0
-  local_sync_rule: "A proven non-destructive fast-forward of the designated local dev checkout is allowed only when the two existing untracked files are preserved byte-for-byte and do not collide with incoming tracked paths; no reset, stash, clean, delete, move, overwrite, or adoption is authorized."
-  mcp_preflight_rule: "Before live mutation prove a real MCP client route is currently callable; do not require that the pre-cutover installed generation already exposes fs_read_batch. Require exact six-tool live E2E only after the frozen candidate is active and before COMMIT."
+  required_design: "Teach the existing cutover path to preserve an exact legacy installed app as opaque rollback pre-state using a deterministic byte-level rollback envelope, while keeping strict current provenance/codesign validation mandatory for every new candidate and installed new generation. Rollback must restore the exact captured legacy bytes and service/config state; no cleanup or normalization of the legacy app is permitted before capture."
+  return_to_live_cutover_after_acceptance: true
 
 notes:
-  - "No candidate rebuild/re-sign or live lifecycle action is requested by this review."
-  - "TASK-0047 r1 remains truthfully BLOCKED; continuation requires a newly published exact revision/base."
+  - "Do not revise TASK-0047 again to authorize deleting __pycache__, rewriting the legacy manifest, or bypassing verification of the new candidate."
+  - "No live mutation is authorized by this review."
