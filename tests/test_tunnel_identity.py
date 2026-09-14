@@ -189,12 +189,21 @@ fi
         shutil.copy2(ROOT / "requirements.lock", repo / "requirements.lock")
         self._write(repo / "verify", "#!/usr/bin/env bash\nexit 0\n", 0o700)
         venv_python = repo / ".venv" / "bin" / "python"
-        self._write(venv_python, "#!/usr/bin/env bash\nexit 0\n", 0o700)
+        canonical_python = (
+            "#!/usr/bin/env bash\n"
+            "if [[ \"${1-}\" == \"-c\" ]]; then\n"
+            "  printf '%s\\n' $'cpython\\t3.13.13\\tcpython-313\\tcpython-313-darwin\\tdarwin\\tarm64\\t/fake/python3.13'\n"
+            "fi\n"
+            "exit 0\n"
+        )
+        self._write(venv_python, canonical_python, 0o700)
+        self._write(bin_dir / "python3.13", canonical_python, 0o700)
         package = repo / "macos" / "package_app.sh"
         config_helper = repo / "macos" / "runtime_config.py"
         config_helper.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / "macos/runtime_config.py", config_helper)
         shutil.copy2(ROOT / "macos/package_provenance.py", repo / "macos" / "package_provenance.py")
+        shutil.copy2(ROOT / "macos/packaging_python.sh", repo / "macos" / "packaging_python.sh")
         shutil.copy2(ROOT / "macos/candidate_cutover.py", repo / "macos" / "candidate_cutover.py")
         self._write(package, r'''#!/usr/bin/env bash
 set -euo pipefail

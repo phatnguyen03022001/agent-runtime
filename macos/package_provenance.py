@@ -89,7 +89,7 @@ def export_head(repo: Path, destination: Path) -> tuple[str, str]:
                 raise PackageProvenanceError("Git archive source staging must not contain symlinks")
             if not (member.isfile() or member.isdir()):
                 raise PackageProvenanceError("Git archive source staging contains a non-regular entry")
-        bundle.extractall(destination, members=members)
+        bundle.extractall(destination, members=members, filter="data")
     return revision, tree
 
 

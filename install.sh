@@ -50,19 +50,14 @@ fi
 
 [[ "$(uname -s)" == "Darwin" ]] || fail "agent-runtime install.sh supports macOS only."
 command -v git >/dev/null 2>&1 || fail "git is required."
-command -v python3 >/dev/null 2>&1 || fail "Python 3.11+ is required."
+source "$ROOT/macos/packaging_python.sh"
+PACKAGING_PYTHON="$(resolve_packaging_python "INSTALL ERROR")"
 command -v tunnel-client >/dev/null 2>&1 || fail "tunnel-client is required; install the official OpenAI tunnel-client first."
 command -v xcrun >/dev/null 2>&1 || fail "Xcode command-line tools are required for the native menu-bar app."
 command -v launchctl >/dev/null 2>&1 || fail "launchctl is required for native Runtime supervision."
 xcrun --find swift >/dev/null 2>&1 || fail "Swift is required for the native menu-bar app."
 TUNNEL_CLIENT="$(command -v tunnel-client)"
 LAUNCHCTL="$(command -v launchctl)"
-
-python3 - <<'PY' || exit 2
-import sys
-if sys.version_info < (3, 11):
-    raise SystemExit("INSTALL ERROR: Python 3.11+ is required.")
-PY
 
 GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 [[ -n "$GIT_ROOT" ]] || fail "run install.sh from a Git clone of agent-runtime."
@@ -89,10 +84,11 @@ RUNTIME_PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 if [[ ! -e "$ROOT/.venv" ]]; then
   echo "[1/8] Creating local Python environment..."
-  python3 -m venv "$ROOT/.venv"
+  "$PACKAGING_PYTHON" -m venv "$ROOT/.venv"
 fi
 [[ -d "$ROOT/.venv" && ! -L "$ROOT/.venv" && -x "$ROOT/.venv/bin/python" ]] \
   || fail "existing .venv is not a usable local virtual environment."
+validate_packaging_python "$ROOT/.venv/bin/python" "INSTALL ERROR"
 
 "$ROOT/.venv/bin/python" -m pip install --require-hashes -r "$ROOT/requirements.lock"
 PYTHON="$ROOT/.venv/bin/python" "$ROOT/verify"

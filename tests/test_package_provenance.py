@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import importlib.util
 import json
 import os
 import shutil
 import subprocess
 import tempfile
+import tarfile
+import warnings
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -67,7 +70,7 @@ class PackageProvenanceTests(unittest.TestCase):
             with self.assertRaisesRegex(provenance.PackageProvenanceError, "clean"):
                 provenance.export_head(repo, temp / "untracked-dirty")
 
-    def test_export_head_does_not_require_tarfile_filter_keyword_and_rejects_symlinks(self) -> None:
+    def test_export_head_uses_explicit_data_filter_without_warning_and_rejects_symlinks(self) -> None:
         provenance = load_module()
         with tempfile.TemporaryDirectory() as raw:
             temp = Path(raw)
@@ -80,18 +83,61 @@ class PackageProvenanceTests(unittest.TestCase):
             git(repo, "add", "payload.txt")
             git(repo, "commit", "-qm", "fixture")
             real_extractall = provenance.tarfile.TarFile.extractall
+            observed_filters: list[object] = []
 
-            def legacy_extractall(self, path=".", members=None, *, numeric_owner=False):
-                return real_extractall(self, path=path, members=members, numeric_owner=numeric_owner)
+            def recording_extractall(self, path=".", members=None, *, numeric_owner=False, filter=None):
+                observed_filters.append(filter)
+                return real_extractall(self, path=path, members=members, numeric_owner=numeric_owner, filter=filter)
 
-            with mock.patch.object(provenance.tarfile.TarFile, "extractall", legacy_extractall):
-                provenance.export_head(repo, temp / "legacy-stage")
+            with mock.patch.object(provenance.tarfile.TarFile, "extractall", recording_extractall):
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter("always")
+                    provenance.export_head(repo, temp / "safe-stage")
+
+            self.assertEqual(observed_filters, ["data"])
+            self.assertFalse(
+                any(isinstance(item.message, DeprecationWarning) and "filter" in str(item.message).lower() for item in caught),
+                caught,
+            )
 
             (repo / "link.txt").symlink_to("payload.txt")
             git(repo, "add", "link.txt")
             git(repo, "commit", "-qm", "symlink")
             with self.assertRaisesRegex(provenance.PackageProvenanceError, "symlink|regular"):
                 provenance.export_head(repo, temp / "symlink-stage")
+
+    def test_export_head_rejects_traversal_hardlinks_and_nonregular_entries_before_extraction(self) -> None:
+        provenance = load_module()
+
+        def archive_bytes(kind: str) -> bytes:
+            buffer = io.BytesIO()
+            with tarfile.open(fileobj=buffer, mode="w") as archive:
+                if kind == "traversal":
+                    info = tarfile.TarInfo("../escape")
+                    payload = b"x"
+                    info.size = len(payload)
+                    archive.addfile(info, io.BytesIO(payload))
+                elif kind == "hardlink":
+                    info = tarfile.TarInfo("hardlink")
+                    info.type = tarfile.LNKTYPE
+                    info.linkname = "payload.txt"
+                    archive.addfile(info)
+                elif kind == "fifo":
+                    info = tarfile.TarInfo("fifo")
+                    info.type = tarfile.FIFOTYPE
+                    archive.addfile(info)
+                else:
+                    raise AssertionError(kind)
+            return buffer.getvalue()
+
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            for kind, message in (("traversal", "unsafe path"), ("hardlink", "symlink|regular"), ("fifo", "non-regular")):
+                with self.subTest(kind=kind):
+                    with mock.patch.object(provenance, "git_identity", return_value=("a" * 40, "b" * 40)):
+                        with mock.patch.object(provenance, "_run_git", return_value=archive_bytes(kind)):
+                            with self.assertRaisesRegex(provenance.PackageProvenanceError, message):
+                                provenance.export_head(temp, temp / f"stage-{kind}")
 
     def _make_manifest_fixture(self, provenance, root: Path):
         runtime = root / "runtime"
@@ -199,6 +245,21 @@ class PackageProvenanceTests(unittest.TestCase):
                 with self.subTest(name=name):
                     with self.assertRaises(provenance.PackageProvenanceError):
                         provenance.validate_manifest(rt, mf, expected_revision, expected_tree, expected_lock)
+
+    def test_lock_authorizes_canonical_cp313_macos_arm64_native_artifacts(self) -> None:
+        lock_text = (ROOT / "requirements.lock").read_text()
+        self.assertIn("CPython 3.13.x / cp313 / macOS arm64", lock_text)
+        expected = {
+            "cffi==2.1.1": "19ee6127ee34de7d83ce3d371ebc5ed91addbdcc39f9ab15ce4eb35a4e534971",
+            "cryptography==50.0.1": "b8f852c65863251b9e3a1b8c150ce21e59b522dbb6a7d4bc80e680d38388e986",
+            "pydantic_core==2.46.5": "f332f0e72a5a0400141f830744e141bf9f97917878dbe968669e8a7fefea78ff",
+            "rpds-py==2026.6.3": "f4d78253f6996be4901669ad25319f842f740eccf4d58e3c7f3dd39e6dde1d8f",
+        }
+        lock_lines = {line.split(" --hash=", 1)[0]: line for line in lock_text.splitlines() if " --hash=" in line}
+        for requirement, digest in expected.items():
+            self.assertIn(requirement, lock_lines)
+            self.assertIn(f"--hash=sha256:{digest}", lock_lines[requirement])
+        self.assertNotIn("661c298b4821edebead0c91edd2b00374d67ad7c5a1f7a91d4442633b79d6a72", lock_text)
 
     def test_package_contract_uses_lock_fresh_venv_and_no_checkout_venv_copy(self) -> None:
         package = (ROOT / "macos" / "package_app.sh").read_text()

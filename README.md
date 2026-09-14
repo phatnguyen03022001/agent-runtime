@@ -179,6 +179,34 @@ that staged source. Python runtime dependencies come from checked-in
 `requirements.lock` through `pip --require-hashes` into a fresh package-owned
 virtual environment; checkout `.venv` contents are never copied into the app.
 
+Candidate construction uses one canonical packaging interpreter identity:
+CPython 3.13.x, `cp313`, macOS, arm64. Packaging and the normal install path
+resolve the versioned `python3.13` executable and validate that identity before
+any dependency install. If the versioned executable is intentionally outside
+`PATH`, set `AGENT_RUNTIME_PACKAGING_PYTHON` to its absolute path; the override
+is validated identically and does not make that machine-specific path package
+authority. A generic `python3` is never an implicit packaging fallback, and an
+existing checkout `.venv` must satisfy the same identity before it can install
+the lock.
+
+`requirements.txt` is the direct resolution input. `requirements.lock` is the
+complete selected-artifact authorization for that single canonical target. To
+regenerate or audit it, use the canonical interpreter, resolve the complete
+closure from `requirements.txt` with `pip download --only-binary=:all:`, read
+Name/Version from each selected wheel's `METADATA`, hash those exact wheel
+bytes with SHA-256, and emit one exact `name==version --hash=sha256:<digest>`
+line per selected distribution sorted by normalized project name. Then create
+a fresh `--without-pip` venv and install the generated lock with
+`pip --require-hashes`; the installed Name/Version set must equal the lock set
+exactly. A version-set change is a dependency-contract change and must not be
+silently accepted as a hash refresh. This procedure is intentionally
+single-target; it does not generate a multi-platform wheel matrix. For a
+hash-only audit, use the exact versions already in `requirements.lock` as pip
+constraints while resolving `requirements.txt`, require the selected closure
+to equal the lock set, and compare every selected wheel hash. An unconstrained
+regeneration that changes any selected version must stop for dependency-change
+authority before replacing the checked-in lock.
+
 `Contents/Resources/runtime-manifest.json` records the exact Git revision and
 tree, the `requirements.lock` SHA-256, every regular file below
 `Contents/Resources/runtime` with path/size/SHA-256, and an aggregate digest

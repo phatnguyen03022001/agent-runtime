@@ -9,13 +9,8 @@ CONTENTS="$APP/Contents"
 MACOS="$CONTENTS/MacOS"
 RESOURCES="$CONTENTS/Resources"
 RUNTIME="$RESOURCES/runtime"
-PYTHON_BIN="$(command -v python3 || true)"
-[[ -n "$PYTHON_BIN" && -x "$PYTHON_BIN" ]] \
-  || { echo "PACKAGE ERROR: Python 3.11+ is required" >&2; exit 2; }
-"$PYTHON_BIN" - <<'PY' || { echo "PACKAGE ERROR: Python 3.11+ is required" >&2; exit 2; }
-import sys
-raise SystemExit(0 if sys.version_info >= (3, 11) else 1)
-PY
+source "$PACKAGE_ROOT/packaging_python.sh"
+PYTHON_BIN="$(resolve_packaging_python "PACKAGE ERROR")"
 
 TEMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/agent-runtime-package.XXXXXX")"
 cleanup() {
