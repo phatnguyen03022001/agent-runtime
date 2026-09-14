@@ -360,6 +360,68 @@ class CandidateCutoverTests(unittest.TestCase):
             self.assertFalse(fx["transaction"].exists())
 
 
+    def _make_legacy_previous_app(self, provenance, fx) -> tuple[bytes, bytes]:
+        manifest = fx["target"] / "Contents" / "Resources" / "runtime-manifest.json"
+        manifest_bytes = b'{"legacy_runtime_manifest": true}\n'
+        manifest.write_bytes(manifest_bytes)
+        pycache = fx["target"] / "Contents" / "Resources" / "runtime" / "agent_runtime" / "__pycache__"
+        pycache.mkdir()
+        bytecode = pycache / "server.cpython-313.pyc"
+        bytecode_bytes = b"legacy-runtime-generated-bytecode\n"
+        bytecode.write_bytes(bytecode_bytes)
+        with self.assertRaises(provenance.PackageProvenanceError):
+            provenance.embedded_candidate_identity(fx["target"])
+        with self.assertRaises(provenance.PackageProvenanceError):
+            provenance._verify_codesign(fx["target"])
+        return manifest_bytes, bytecode_bytes
+
+    def test_legacy_previous_app_is_snapshotted_and_restored_opaquely(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            provenance, cutover, fx = self._fixture(raw)
+            manifest_bytes, bytecode_bytes = self._make_legacy_previous_app(provenance, fx)
+            previous_closure = provenance.candidate_closure(fx["target"])
+            try:
+                result = self._cutover(cutover, fx)
+            except cutover.CutoverError as exc:
+                self.fail(f"legacy previous app must be accepted as opaque rollback material: {exc}")
+            self.assertEqual(result["status"], "PENDING")
+            cutover.rollback_transaction(fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501)
+            self.assertEqual(provenance.candidate_closure(fx["target"]), previous_closure)
+            self.assertEqual((fx["target"] / "Contents" / "Resources" / "runtime-manifest.json").read_bytes(), manifest_bytes)
+            self.assertEqual((fx["target"] / "Contents" / "Resources" / "runtime" / "agent_runtime" / "__pycache__" / "server.cpython-313.pyc").read_bytes(), bytecode_bytes)
+
+    def test_changed_rollback_snapshot_fails_before_replacing_current_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            provenance, cutover, fx = self._fixture(raw)
+            self._cutover(cutover, fx)
+            backup = fx["transaction"] / "previous-app" / "Contents" / "MacOS" / "AgentRuntimeMenuBar"
+            backup.write_bytes(backup.read_bytes() + b"tampered\n")
+            with self.assertRaisesRegex(cutover.CutoverError, "rollback"):
+                cutover.rollback_transaction(fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501)
+            metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
+            self.assertEqual(metadata["status"], "PARTIAL")
+            try:
+                provenance.validate_candidate(fx["target"], fx["handoff"])
+            except provenance.PackageProvenanceError as exc:
+                self.fail(f"failed rollback must leave the current candidate intact: {exc}")
+
+    def test_malformed_rollback_snapshot_metadata_fails_before_replacing_current_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            provenance, cutover, fx = self._fixture(raw)
+            self._cutover(cutover, fx)
+            metadata_path = fx["transaction"] / "metadata.json"
+            metadata = json.loads(metadata_path.read_text())
+            metadata["previous"]["app_present"] = "yes"
+            metadata_path.write_text(json.dumps(metadata) + "\n")
+            with self.assertRaisesRegex(cutover.CutoverError, "rollback"):
+                cutover.rollback_transaction(fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501)
+            metadata = json.loads(metadata_path.read_text())
+            self.assertEqual(metadata["status"], "PARTIAL")
+            try:
+                provenance.validate_candidate(fx["target"], fx["handoff"])
+            except provenance.PackageProvenanceError as exc:
+                self.fail(f"malformed rollback metadata must leave the current candidate intact: {exc}")
+
     def test_prebuilt_install_entry_never_invokes_package_builder_or_resigns(self) -> None:
         provenance = load_module(PROVENANCE_PATH, "package_provenance_prebuilt_entry")
         with tempfile.TemporaryDirectory() as raw:

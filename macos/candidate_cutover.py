@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import stat
 import plistlib
 import shutil
 import subprocess
@@ -71,12 +73,66 @@ def _copy_app(source: Path, destination: Path) -> None:
     shutil.copytree(source, destination, copy_function=shutil.copy2, symlinks=False)
 
 
-def _verify_owned_app(app: Path) -> dict[str, object]:
-    provenance._verify_codesign(app)
-    identity = provenance.embedded_candidate_identity(app)
-    closure = provenance.candidate_closure(app)
-    provenance._verify_codesign(app)
-    return {**identity, **closure}
+def _rollback_app_closure(app: Path) -> dict[str, object]:
+    if app.is_symlink() or not app.is_dir():
+        raise CutoverError("rollback app root must be a regular non-symlink directory")
+    records: list[tuple[bytes, dict[str, object]]] = []
+    paths = [app]
+    for current, dirs, files in os.walk(app, topdown=True, followlinks=False):
+        root = Path(current)
+        paths.extend(root / name for name in dirs)
+        paths.extend(root / name for name in files)
+    for candidate in paths:
+        info = candidate.lstat()
+        relative = "." if candidate == app else candidate.relative_to(app).as_posix()
+        mode = stat.S_IMODE(info.st_mode)
+        if stat.S_ISDIR(info.st_mode):
+            record: dict[str, object] = {"path": relative, "type": "directory", "mode": mode}
+        elif stat.S_ISREG(info.st_mode):
+            digest = hashlib.sha256()
+            with candidate.open("rb") as handle:
+                for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            record = {
+                "path": relative,
+                "type": "file",
+                "mode": mode,
+                "size": info.st_size,
+                "sha256": digest.hexdigest(),
+            }
+        elif stat.S_ISLNK(info.st_mode):
+            record = {"path": relative, "type": "symlink", "target": os.readlink(candidate)}
+        else:
+            raise CutoverError(f"rollback app contains unsupported entry: {candidate}")
+        records.append((os.fsencode(relative), record))
+    records.sort(key=lambda item: item[0])
+    canonical = json.dumps(
+        [record for _, record in records],
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return {"record_count": len(records), "sha256": hashlib.sha256(canonical).hexdigest()}
+
+
+def _require_rollback_app_closure(value: object) -> dict[str, object]:
+    if not isinstance(value, dict) or set(value) != {"record_count", "sha256"}:
+        raise CutoverError("rollback app closure metadata is invalid")
+    count = value.get("record_count")
+    digest = value.get("sha256")
+    if not isinstance(count, int) or isinstance(count, bool) or count < 1:
+        raise CutoverError("rollback app closure metadata is invalid")
+    if not isinstance(digest, str) or len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+        raise CutoverError("rollback app closure metadata is invalid")
+    return {"record_count": count, "sha256": digest}
+
+
+def _copy_rollback_app(source: Path, destination: Path) -> None:
+    if source.is_symlink() or not source.is_dir():
+        raise CutoverError("rollback app source must be a regular non-symlink directory")
+    if destination.exists() or destination.is_symlink():
+        raise CutoverError("rollback app copy destination must not already exist")
+    shutil.copytree(source, destination, copy_function=shutil.copy2, symlinks=True)
 
 
 def _validate_previous_launchagent(path: Path, label: str, target_app: Path) -> bool:
@@ -275,20 +331,26 @@ def _restore_transaction(
     previous = metadata.get("previous")
     if not isinstance(previous, dict):
         raise CutoverError("cutover transaction previous-state metadata is invalid")
+    app_present = previous.get("app_present")
+    if not isinstance(app_present, bool):
+        raise CutoverError("rollback previous-app presence metadata is invalid")
     _inject(fail_stages, "rollback_restore_app")
 
     if target_app.is_symlink():
         raise CutoverError("installed app became a symlink before rollback")
+    if app_present:
+        expected_closure = _require_rollback_app_closure(previous.get("app_closure"))
+        backup = transaction_dir / "previous-app"
+        if _rollback_app_closure(backup) != expected_closure:
+            raise CutoverError("rollback app snapshot closure does not match rollback envelope")
     if target_app.exists():
         if not target_app.is_dir():
             raise CutoverError("installed app path is not a directory during rollback")
         shutil.rmtree(target_app)
-    if previous.get("app_present"):
-        backup = transaction_dir / "previous-app"
-        _copy_app(backup, target_app)
-        actual = _verify_owned_app(target_app)
-        if actual != previous.get("app_identity"):
-            raise CutoverError("restored previous app identity does not match rollback envelope")
+    if app_present:
+        _copy_rollback_app(backup, target_app)
+        if _rollback_app_closure(target_app) != expected_closure:
+            raise CutoverError("restored previous app closure does not match rollback envelope")
 
     paths = metadata.get("paths")
     if not isinstance(paths, dict):
@@ -382,7 +444,7 @@ def cutover_candidate(
     desired_state = state_dir / "protected-runtime-running"
     previous: dict[str, object] = {
         "app_present": False,
-        "app_identity": None,
+        "app_closure": None,
         "ui_loaded": _service_loaded(launchctl, ui_service),
         "runtime_loaded": _service_loaded(launchctl, runtime_service),
         "desired_state_present": desired_state.exists(),
@@ -409,12 +471,14 @@ def cutover_candidate(
         if target_app.exists() or target_app.is_symlink():
             if target_app.is_symlink() or not target_app.is_dir():
                 raise CutoverError("existing installed app path is unsafe")
-            previous_identity = _verify_owned_app(target_app)
-            _copy_app(target_app, transaction_dir / "previous-app")
-            if _verify_owned_app(transaction_dir / "previous-app") != previous_identity:
-                raise CutoverError("previous app rollback copy changed identity")
+            previous_closure = _rollback_app_closure(target_app)
+            _copy_rollback_app(target_app, transaction_dir / "previous-app")
+            if _rollback_app_closure(transaction_dir / "previous-app") != previous_closure:
+                raise CutoverError("previous app rollback copy changed closure")
+            if _rollback_app_closure(target_app) != previous_closure:
+                raise CutoverError("previous installed app changed while creating rollback snapshot")
             previous["app_present"] = True
-            previous["app_identity"] = previous_identity
+            previous["app_closure"] = previous_closure
 
         shutil.copy2(handoff_path, transaction_dir / "candidate-handoff.json")
         staged = transaction_dir / "staged-candidate"
