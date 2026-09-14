@@ -1,0 +1,174 @@
+protocol_version: 3
+
+task_id: TASK-0050
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_parallelism_evidence
+  prerequisite_review_commit: "7aa1d80a4d73414366c5eecf73d3556ab45bc849"
+  gap_id: PARALLEL_CAPACITY_V2_EVIDENCE
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+execution_skills:
+  required: [executor, verification]
+  recommended: [simplicity, performance]
+
+objective: "Collect reproducible host and Runtime-mediated evidence for safe/effective parallel execution at x1/x2/x4/x8/x10 without changing Runtime source, capacity policy, live configuration, or lifecycle state; report evidence and a bounded recommendation for Architect judgment only."
+
+execution_transport:
+  primary: Agent Runtime public tools for Runtime-mediated measurements
+  secondary: Remote Desktop Commander for host observation and isolated benchmark coordination when needed
+  chatgpt_sandbox_default: FORBIDDEN
+
+current_contract:
+  runtime_public_tools:
+    - terminal_exec
+    - terminal_start
+    - terminal_poll
+    - terminal_control
+    - capacity_observer
+    - fs_read_batch
+  current_default_max_parallelism: 2
+  current_v1_evidence_ceiling: 2
+  current_live_parallelism: 2
+  observer_role: ADVISORY_ONLY
+
+benchmark_design:
+  tiers: [1, 2, 4, 8, 10]
+  workload_classes:
+    - id: LIGHTWEIGHT_CONTROL_PATH
+      intent: "Small independent command/read operations representative of ordinary repository inspection and control-path work."
+    - id: REPRESENTATIVE_MIXED_ENGINEERING
+      intent: "Independent bounded engineering operations combining repository reads, deterministic test/build-like work, and modest CPU/I/O without persistent mutation."
+    - id: BOUNDED_CPU_IO_HEAVY
+      intent: "Independent bounded stress work that exercises CPU and filesystem pressure without touching live Runtime state or operator files."
+  methodology:
+    - "Establish x1 baseline for every workload class before higher tiers."
+    - "At each tier launch exactly N semantically independent jobs concurrently; do not simulate concurrency by serial loops."
+    - "Use identical job definitions within a workload class across tiers."
+    - "Use bounded temporary/scratch paths only for generated benchmark data; remove only task-owned scratch artifacts."
+    - "Collect pre/during/post capacity_observer snapshots where practical without treating current v1 x2 recommendation as an execution prohibition for this evidence task."
+    - "Record caller/orchestration overhead separately when it materially affects observed wall-clock."
+    - "Do not infer safe policy from a single lucky run; repeat enough to distinguish obvious noise from stable behavior, but avoid gratuitous stress."
+
+required_metrics:
+  - aggregate_wall_clock
+  - per_job_latency_distribution
+  - throughput_relative_to_x1
+  - completion_success_count
+  - timeout_or_error_count
+  - output_attribution_or_session_identity_failure_count
+  - cpu_busy_and_load
+  - memory_headroom
+  - compressor_and_swap_activity
+  - thermal_state
+  - disk_headroom
+  - listener_count_127_0_0_1_8080
+  - healthz
+  - readyz
+  - Runtime tool/session correctness
+
+hard_stop_conditions:
+  - "Runtime healthz or readyz becomes non-green."
+  - "Listener ownership becomes ambiguous, duplicated, or lost."
+  - "Any lost, duplicated, cross-attributed, or corrupted command/session result."
+  - "Thermal state reaches serious or critical."
+  - "Meaningful swapout/resource-pressure behavior indicates host instability."
+  - "A benchmark tier causes repeated timeout/error behavior incompatible with normal engineering use."
+  - "Any action would require Runtime start/stop/restart/reload/cutover, runtime.env mutation, or source mutation."
+
+scope:
+  required_changes:
+    - "Fresh-resolve dev/main and bind exact execution base while preserving unrelated operator state."
+    - "Verify the currently installed accepted generation remains healthy before benchmarking."
+    - "Run the benchmark matrix x1/x2/x4/x8/x10 across the three defined workload classes, subject to hard-stop conditions."
+    - "Capture sufficient evidence to compare scaling efficiency, latency degradation, correctness, and host pressure."
+    - "Produce a recommendation that distinguishes proven-safe/effective tiers, unsupported tiers, and any conditional tiers."
+    - "Publish only .agent/tasks/TASK-0050/report.yaml revision 1."
+
+invariants:
+  - "Benchmark first; policy later. Executor must not decide or implement Parallelism v2 policy."
+  - "Do not assume V1_EVIDENCE_CEILING=2 should be removed or increased."
+  - "Runtime remains advisory-only; no scheduler, queue, manager, worker pool, retry engine, or orchestration policy belongs in Runtime."
+  - "Preserve current responsive UX/session semantics."
+  - "No source/tests/docs/dependency mutation in this task."
+  - "No runtime.env mutation and no live lifecycle mutation."
+  - "Preserve unrelated .env.example drift and chatgpt-sample.txt / vscode-gpu-sample.txt; do not content-read, stage, commit, stash, clean, reset, move, delete, overwrite, or adopt them."
+
+forbidden_changes:
+  - "Do not edit agent_runtime/capacity.py, V1_EVIDENCE_CEILING, server/tool semantics, tests, README, dependencies, packaging, LaunchAgents, runtime.env, main, tags, or releases."
+  - "Do not start, stop, restart, reload, cut over, or roll back Agent Runtime."
+  - "Do not change AGENT_RUNTIME_MAX_PARALLELISM in canonical live configuration."
+  - "Do not treat x10 as a target; it is an evidence boundary."
+  - "Do not create successor tasks as Executor."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact task/base/current installed generation and preserved operator state are proven before measurement."
+  - id: AC-2
+    requirement: "Comparable x1/x2/x4/x8/x10 evidence is collected for all workload classes unless a hard-stop condition legitimately terminates higher tiers; any skipped tier is explicitly justified."
+  - id: AC-3
+    requirement: "Evidence includes correctness, throughput/wall-clock, latency, CPU/load, memory/compressor/swap, thermal, disk, listener, health/readiness, and Runtime session/tool integrity."
+  - id: AC-4
+    requirement: "No Runtime source/config/lifecycle/policy mutation occurs and operator-owned local state remains untouched."
+  - id: AC-5
+    requirement: "Report separates observed facts from Executor recommendation and does not implement or self-authorize a v2 capacity policy."
+  - id: AC-6
+    requirement: "Exactly one report-only commit is published non-force to dev; main remains unchanged."
+
+verification:
+  executor_checks:
+    - id: V-1
+      command_or_check: "Fresh exact base/ref/operator-state and accepted-live-generation preflight."
+      required: true
+    - id: V-2
+      command_or_check: "Execute benchmark matrix with hard-stop enforcement and preserve raw bounded measurement evidence."
+      required: true
+    - id: V-3
+      command_or_check: "Post-benchmark Runtime health/readiness/listener/generation integrity and operator-state preservation."
+      required: true
+    - id: V-4
+      command_or_check: "Publish TASK-0050 report revision 1 only and fresh-prove report-only lineage/main unchanged."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect reviews report and derives any subsequent capacity policy."
+
+publication:
+  implementation_commit_required: false
+  report_path: .agent/tasks/TASK-0050/report.yaml
+  required_report_revision: 1
+  push: non_force_dev
+  stop_for_architect_review: true
+
+git_authority:
+  create_branch: false
+  create_worktree: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+live_boundary:
+  allowed: "Read-only observation plus bounded benchmark workloads through existing public Runtime execution tools; task-owned scratch workload artifacts only."
+  forbidden: "Runtime lifecycle/config/cutover mutation, source/policy mutation, operator-file mutation, main/tag/release mutation."
+
+blocking_decisions: []
+execution_ready: true
