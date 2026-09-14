@@ -1,0 +1,177 @@
+protocol_version: 3
+
+task_id: TASK-0042
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0042/task.yaml
+  commit: "ef72415b818be4bde776493efa6981aa4969d11c"
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "ef72415b818be4bde776493efa6981aa4969d11c"
+  final_execution_head: "66a9c739a895afde86b9ad76a55923d0dc86963e"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "6930b8da48c9466389653fc55eb16f49eebbb28f"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - repository_content_write
+    - local_native_execution
+    - git_commit
+    - non_force_dev_publication
+  available:
+    - repository_content_write
+    - local_native_execution
+    - git_commit
+    - non_force_dev_publication
+  missing: []
+  passed: true
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: NOT_REQUIRED_FOR_THIS_EXECUTION_TASK
+  evidence: "TASK-0042 revision 1 defines no separate authoritative verifier for this execution phase."
+
+pushed: false
+
+implementation:
+  commit: "66a9c739a895afde86b9ad76a55923d0dc86963e"
+  parent: "ef72415b818be4bde776493efa6981aa4969d11c"
+  tree: "8b676481671c67cb48e6691a11ba0c80cb223bb4"
+  scope_summary: "Added complete hash-locked Python dependency closure, immutable exact-HEAD source staging, a fresh temporary package-owned virtual environment, closed-world Runtime payload provenance/validation, and first-bootstrap process-environment credential fallback without changing public MCP, protection, CI, or live Runtime semantics."
+
+verification:
+  dependency_lock:
+    result: PASS
+    locked_distributions: 28
+    lock_sha256: "d79c066d111d6e866e28bbe924cce10a293751767763c1ed04c3352d4e3444d4"
+    install_mode: "pip --require-hashes"
+    positive_install: PASS
+    tampered_hash_rejected: true
+    missing_hash_rejected: true
+    evidence: "The complete transitive lock installed successfully with --require-hashes; independently modified lock fixtures with a tampered SHA-256 or a missing hash were rejected."
+  focused_task0042:
+    command: ".venv/bin/python -m unittest -v tests.test_package_provenance tests.test_runtime_config tests.test_tunnel_identity"
+    result: PASS
+    tests: 29
+    failures: 0
+    evidence: "Covers clean exact-HEAD export, dirty tracked/untracked rejection, symlink-safe staging, manifest round-trip and adversarial closure failures, fresh lock-owned package venv contract, bootstrap environment fallback/precedence, canonical preservation, mode 0600, atomicity, installer identity, and no credential echo."
+  affected_conformance:
+    command: ".venv/bin/python -m unittest -v tests.test_package_provenance tests.test_runtime_config tests.test_revision4_runtime_config tests.test_tunnel_identity tests.test_surface_and_scripts tests.test_protected_runtime tests.test_service_recovery tests.test_supervised_lifecycle"
+    result: PASS
+    tests: 86
+    failures: 0
+    elapsed_seconds: 50.247
+  full_repository:
+    command: "./verify"
+    result: PASS
+    tests: 181
+    failures: 0
+    exit_code: 0
+    runs_after_stabilization: 1
+    evidence: "Canonical ./verify ran exactly once after candidate stabilization on 66a9c739a895afde86b9ad76a55923d0dc86963e and exited 0; unchanged discovery contains 181 tests and the verifier also runs py_compile and shell syntax checks."
+  package_candidate:
+    command: "./macos/package_app.sh"
+    result: PASS
+    runs_after_stabilization: 1
+    strict_codesign: PASS
+    helper_manifest_validation: PASS
+    independent_manifest_validation: PASS
+    manifest_files: 1021
+    runtime_mcp_version: "2.2.0"
+    checkout_reference_scan: PASS
+    manifest_reference_scan: PASS
+    evidence: "The one non-installed package build from the clean exact candidate succeeded. Independent checks recomputed the complete 1021-file runtime closure and aggregate digest, verified strict deep codesign, found no checkout or configuration references in the packaged artifact, and imported MCP 2.2.0 from the packaged runtime Python."
+  scope_audit:
+    base: "ef72415b818be4bde776493efa6981aa4969d11c"
+    candidate: "66a9c739a895afde86b9ad76a55923d0dc86963e"
+    git_diff_check: PASS
+    public_mcp_files_unchanged: true
+    protection_files_unchanged: true
+    ci_files_unchanged: true
+    checkout_venv_packaging_absent: true
+    live_runtime_or_configuration_mutation: false
+    main_tag_or_release_mutation: false
+    result: PASS
+mutation_boundaries:
+  live_runtime_installed_or_reinstalled: false
+  live_runtime_activated_or_reloaded: false
+  live_runtime_restarted_or_stopped: false
+  runtime_env_mutated: false
+  tunnel_identity_mutated: false
+  listener_binding_mutated: false
+  desired_state_mutated: false
+  installed_package_mutated: false
+  protection_model_mutated: false
+  ci_mutated: false
+  main_promoted: false
+  tag_or_release_work_performed: false
+  origin_main_required: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PROVEN
+    evidence: "requirements.lock contains 28 exact version/hash-pinned runtime distributions. Hash-required installation passed, while independently tampered-hash and missing-hash lock fixtures were rejected."
+  - criterion_id: AC-2
+    status: PROVEN
+    evidence: "Regression tests prove dirty tracked/untracked checkout rejection, exact-HEAD archive export, symlink-safe immutable staging, external Swift scratch, fresh temporary lock-owned virtualenv creation, and absence of checkout .venv copying."
+  - criterion_id: AC-3
+    status: PROVEN
+    evidence: "Manifest generation records exact candidate revision/tree and lock identity plus sorted unique path/size/hash entries. Independent recomputation matched the complete 1021-file runtime closure and canonical aggregate digest, with no checkout/configuration reference in the packaged artifact."
+  - criterion_id: AC-4
+    status: PROVEN
+    evidence: "Adversarial manifest fixtures reject missing, extra, symlinked, size-modified, hash-modified, aggregate-mismatched, malformed JSON/path, duplicate, unsorted, and malformed or mismatched revision/tree/lock identity states. The clean candidate passed strict deep codesign and both helper and independent closure validation."
+  - criterion_id: AC-5
+    status: PROVEN
+    evidence: "Focused runtime-config and installer fixtures prove empty-source process-environment fallback, non-empty source precedence, existing canonical preservation, missing-credential failure, mode 0600, atomic canonical creation, and absence of credential echo."
+  - criterion_id: AC-6
+    status: PROVEN
+    evidence: "The affected package/config/security set passed 86/86. Canonical ./verify ran exactly once after stabilization and exited 0 with unchanged discovery of 181 tests. The one non-installed package build succeeded and independently passed strict codesign, manifest closure, reference scans, and packaged MCP 2.2.0 import."
+  - criterion_id: AC-7
+    status: PROVEN
+    evidence: "V-5 exact base-to-candidate audit passed: only authorized package/config/docs/tests/lock/provenance files changed; public MCP, protection, CI, start.sh, live Runtime/configuration, main, tags, and releases were not mutated; checkout .venv packaging is absent."
+  - criterion_id: AC-8
+    status: PENDING_PUBLICATION
+    evidence: "Implementation candidate is the direct child of the exact task base. This report is the only authorized next commit; fresh pre/post publication origin/dev and origin/main proof is intentionally performed after the report-only commit exists."
+executor_checks:
+  - check_id: V-1
+    result: PASS
+    evidence: "Focused provenance/bootstrap regressions passed 29/29 after TDD stabilization; separate lock checks proved valid hash-required install plus rejection of tampered and missing hashes."
+  - check_id: V-2
+    result: PASS
+    evidence: "The single broader affected package/config/security/lifecycle set passed 86/86 after bytes stabilized."
+  - check_id: V-3
+    result: PASS
+    evidence: "Canonical ./verify ran exactly once on clean implementation candidate 66a9c739a895afde86b9ad76a55923d0dc86963e, exited 0, and unchanged discovery contains 181 tests."
+  - check_id: V-4
+    result: PASS
+    evidence: "The one clean non-installed package build from the exact candidate passed strict codesign, helper and independent 1021-file manifest closure validation, checkout/configuration reference scans, and packaged MCP 2.2.0 import."
+  - check_id: V-5
+    result: PASS
+    evidence: "Exact ef72415b818be4bde776493efa6981aa4969d11c-to-66a9c739a895afde86b9ad76a55923d0dc86963e audit passed git diff --check, forbidden-path checks, public-MCP/protection/CI checks, and checkout-.venv packaging absence checks."
+  - check_id: V-6
+    result: PENDING_PUBLICATION
+    evidence: "Fresh origin/dev and origin/main checks immediately before and after the authorized non-force push are publication-consequence evidence and are intentionally not predicted inside this pre-push report."
+
+publication:
+  implementation_commit: "66a9c739a895afde86b9ad76a55923d0dc86963e"
+  report_path: .agent/tasks/TASK-0042/report.yaml
+  report_commit: null
+  push_mode: non_force_dev
+  pushed: false
+  force_push: false
+  main_promoted: false
+  next_step: ARCHITECT_REVIEW
+
+result: NEEDS_REVIEW
