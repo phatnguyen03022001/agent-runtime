@@ -1,0 +1,95 @@
+protocol_version: 3
+
+task_id: TASK-0054
+task_revision: 1
+review_revision: 1
+state: BLOCKED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0054/report.yaml
+  commit: "5ea87f5301ea087d7da61d0ba0d2dda78ef3993a"
+  report_revision: 1
+
+reviewed_base:
+  commit: "c4e02fb5877911f468691879d54f6ede1cdd19fb"
+
+fresh_architect_verification:
+  report_direct_child_of_base: true
+  report_only_change: true
+  local_head: "5ea87f5301ea087d7da61d0ba0d2dda78ef3993a"
+  local_origin_dev: "5ea87f5301ea087d7da61d0ba0d2dda78ef3993a"
+  local_origin_main: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  local_status:
+    - " M .env.example"
+    - "?? chatgpt-sample.txt"
+    - "?? vscode-gpu-sample.txt"
+  runtime_healthz: live
+  runtime_readyz: ready
+  listener_count_127_0_0_1_8080: 1
+  listener_pid: 14716
+  runtime_env_sha256: "b47b144549659070c759407da4ba0dbedbf3c00014a948d615cff7823f97b2ed"
+  live_max_parallelism: 4
+  installed_bundle:
+    display_name: "Agent Runtime"
+    identifier: com.picmao.agent-runtime
+    executable: AgentRuntimeMenuBar
+    signature: adhoc
+    team_identifier: null
+  launchagents:
+    ui_associated_bundle_identifiers: [com.picmao.agent-runtime]
+    runtime_associated_bundle_identifiers: [com.picmao.agent-runtime]
+  btm_read_only_observation:
+    ui_name: "Agent Runtime"
+    runtime_name: "Agent Runtime"
+    developer_name: null
+    parent_identifier: "Unknown Developer"
+    type: "legacy agent"
+
+contract_compliance:
+  exact_base_and_publication: PASS
+  single_cutover_cycle: PASS
+  accepted_candidate_installed: PASS
+  runtime_env_preserved: PASS
+  runtime_live_ready_singleton: PASS
+  launchagent_metadata_installed: PASS
+  prohibited_mutation_absent: PASS
+  system_settings_target_name: FAIL
+  system_settings_target_icon: FAIL
+  system_settings_developer_attribution: FAIL
+  required_hard_stop_behavior: PASS
+
+criterion_judgment:
+  AC-1: PASS
+  AC-2: PASS
+  AC-3: PASS
+  AC-4: PASS
+  AC-5: PASS
+  AC-6: PASS
+  AC-7: PASS
+  AC-8: BLOCKED_BY_HARD_STOP
+  AC-9: FAIL
+  AC-10: PASS
+
+architect_finding:
+  classification: LEGACY_BACKGROUND_ITEM_ATTRIBUTION_LIMITATION
+  description: "TASK-0054 executed correctly and the accepted TASK-0053 candidate is live, but the user-facing System Settings presentation target is not met. AssociatedBundleIdentifiers alone is insufficient under the current legacy/ad-hoc registration model. Fresh BTM evidence recognizes the app name but reports no developer identity and an Unknown Developer parent; fresh codesign evidence shows the installed app is ad-hoc signed with no TeamIdentifier."
+
+root_cause_evidence:
+  apple_contract: "For legacy LaunchAgents/LaunchDaemons using AssociatedBundleIdentifiers, the Team Identifier of the Program or ProgramArguments executable must match the app bundle; unattributed unsigned helpers fall back to executable presentation."
+  current_model_conflicts:
+    - "Agent Runtime app is ad-hoc signed and has no TeamIdentifier."
+    - "UI legacy LaunchAgent points at AgentRuntimeMenuBar under that ad-hoc bundle."
+    - "Runtime legacy LaunchAgent points first at a shell script, not a signed helper executable with an app-matching TeamIdentifier."
+
+continuation:
+  action: ARCHITECT_DESIGN_DECISION_REQUIRED
+  recommended_direction: "Do not keep layering metadata onto the current legacy plist model. Design a modern app-owned ServiceManagement registration and signing boundary before further live mutation."
+  no_retry_current_candidate: true
+  no_btm_reset: true
+  no_self_authorized_signing_change: true
+
+notes:
+  - "The live Runtime itself is healthy and should not be restarted merely to investigate presentation."
+  - "The missing popover live visual proof is a consequence of the mandatory System Settings hard stop and is not evidence of a popover implementation defect."
+  - "Any next implementation task must be separately authorized after Architect design approval."
