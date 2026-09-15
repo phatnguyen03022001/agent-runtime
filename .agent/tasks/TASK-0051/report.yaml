@@ -1,8 +1,8 @@
 protocol_version: 3
 
 task_id: TASK-0051
-task_revision: 1
-report_revision: 1
+task_revision: 2
+report_revision: 2
 state: BLOCKED
 result: BLOCKED
 
@@ -10,139 +10,157 @@ execution:
   repository: phatnguyen03022001/agent-runtime
   branch: dev
   execution_surface: CHATGPT_LOCAL
-  exact_base: "a40e77feb8a262c23a79728711f8b173280b49f7"
-  origin_dev_before_publication: "a40e77feb8a262c23a79728711f8b173280b49f7"
+  local_transport: Remote Desktop Commander
+  exact_base: "c9555372934a035f144fd212259c11a84c6aad5c"
+  origin_dev_before_publication: "c9555372934a035f144fd212259c11a84c6aad5c"
   origin_main_before_publication: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
-  live_activation_authorized: false
+  local_head_aligned_to_exact_base_by_ff_only: true
+  implementation_changed_in_r2: false
   runtime_lifecycle_action_performed: false
   task_0050_benchmark_rerun: false
+  live_activation_authorized: false
 
-implementation:
-  commit: "a5db2f432c599f1ecbff0eeb670fcc6fab63a130"
-  tree: "56f9ef36ceece0cc1e5b54a34ed429c481879e36"
-  parent: "a40e77feb8a262c23a79728711f8b173280b49f7"
-  changed_paths:
-    - README.md
-    - agent_runtime/capacity.py
-    - tests/test_capacity_observer.py
-  behavior:
-    evidence_ceiling_constant: "V2_EVIDENCE_CEILING=4"
-    healthy_effective_rule: "min(operator configured maximum, 4)"
-    healthy_reason_codes:
-      - CAPACITY_X4_AVAILABLE
-      - LIMIT_V2_MAX_4
-    operator_limit_reason_preserved: LIMIT_OPERATOR_MAX
-    operator_range_preserved: "1..10"
-    default_max_parallelism_preserved: 2
-    pressure_fallback: 1
-    public_mcp_tool_count: 6
-    scheduler_added: false
-    queue_added: false
-    worker_manager_added: false
-    retry_engine_added: false
-    orchestration_policy_added: false
-
-verification:
-  tdd_red:
-    command: "python3 -m unittest tests.test_capacity_observer -v"
-    result: EXPECTED_FAIL
-    failures: 4
-    reason: "Production still exposed v1 x2 ceiling/reason codes before implementation."
-  targeted_green:
-    command: "python3 -m unittest tests.test_capacity_observer -v"
+carried_forward_r1:
+  implementation:
+    commit: "a5db2f432c599f1ecbff0eeb670fcc6fab63a130"
+    tree: "56f9ef36ceece0cc1e5b54a34ed429c481879e36"
+    parent: "a40e77feb8a262c23a79728711f8b173280b49f7"
+    changed_paths:
+      - README.md
+      - agent_runtime/capacity.py
+      - tests/test_capacity_observer.py
+  targeted_capacity:
     result: PASS
     tests: 8
-  broader_affected:
-    initial_environment_attempt:
-      result: ENVIRONMENT_ERROR
-      reason: "Checkout/global Python 3.14 lacked pydantic/jsonschema/mcp dependencies; no source fix was applied."
-    canonical_dependency_environment:
-      command: "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=<checkout> <installed-runtime-python> -m unittest tests.test_capacity_observer tests.test_surface_and_scripts tests.test_mcp_contracts tests.test_fs_read_batch -v"
-      result: PASS
-      tests: 39
-      exact_six_tool_surface: PASS
-  canonical_full:
-    command: "PYTHON=<installed-runtime-python> PYTHONDONTWRITEBYTECODE=1 ./verify"
-    run_count: 1
+    rerun_under_r2: false
+  broader_capacity_and_public_surface:
+    result: PASS
+    tests: 39
+    exact_public_mcp_tool_count: 6
+    rerun_under_r2: false
+  parallelism_v2:
+    evidence_ceiling: 4
+    default_operator_max_parallelism: 2
+    operator_range: "1..10"
+    healthy_effective_rule: "min(operator configured maximum, 4)"
+    pressure_and_unknown_signal_fallback: 1
+    runtime_role: ADVISORY_ONLY
+
+r2_fresh_precondition_proof:
+  repository_identity:
+    head: "c9555372934a035f144fd212259c11a84c6aad5c"
+    origin_dev: "c9555372934a035f144fd212259c11a84c6aad5c"
+    origin_main: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
     implementation_commit: "a5db2f432c599f1ecbff0eeb670fcc6fab63a130"
-    result: FAIL
-    exit_code: 1
-    task_0051_capacity_tests: PASS
-    task_0051_public_surface_tests: PASS
-    failing_tests:
-      - "test_revision4_runtime_config.Revision4RuntimeConfigTests.test_serve_uses_env_owned_identity_without_profile_under_sterile_path"
-      - "test_supervised_lifecycle.SupervisedLifecycleTests.test_ten_concurrent_starts_collapse_and_recovery_stop_start_restart_are_singleton"
-    blocker_root_cause:
-      classification: HOST_OPERATOR_STATE_XCODE_LICENSE_NOT_ACCEPTED
-      proof_command: "/usr/bin/python3 --version"
-      proof_exit_code: 69
-      exact_error: "You have not agreed to the Xcode license agreements. Please run 'sudo xcodebuild -license' from within a Terminal window to review and agree to the Xcode and Apple SDKs license."
-      causal_link: "Both failing legacy lifecycle/config tests transitively invoke /usr/bin/python3; that executable is currently blocked by the unaccepted Xcode license."
+    implementation_tree: "56f9ef36ceece0cc1e5b54a34ed429c481879e36"
+    implementation_parent: "a40e77feb8a262c23a79728711f8b173280b49f7"
+  host_toolchain:
+    python_probe:
+      command: "/usr/bin/python3 --version"
+      exit_code: 0
+      output: "Python 3.9.6"
+    xcode_first_launch_probe:
+      command: "/usr/bin/xcodebuild -checkFirstLaunchStatus"
+      exit_code: 69
+      required_exit_code: 0
+    xcode_license_diagnostic:
+      command: "/usr/bin/xcodebuild -license check"
+      exit_code: 0
+      interpretation: "The Xcode license itself is accepted, but the required first-launch status precondition remains uncleared."
+    xcode_select:
+      command: "/usr/bin/xcode-select -p"
+      exit_code: 0
+      developer_dir: "/Applications/Xcode.app/Contents/Developer"
+    executor_license_mutation_performed: false
+    blocker:
+      classification: HOST_XCODE_FIRST_LAUNCH_STATUS_NOT_CLEARED
+      exact_required_proof_satisfied: false
       task_0051_regression_observed: false
-      operator_state_mutation_authorized: false
-      full_verify_retried: false
+      note: "Canonical revision 2 requires both /usr/bin/python3 and xcodebuild -checkFirstLaunchStatus to exit 0 before replacement verification. The Python probe is cleared; the Xcode first-launch probe is not."
 
-candidate_freeze:
-  status: NOT_RUN_BLOCKED_BY_CANONICAL_VERIFY
-  reason: "TASK-0051 requires canonical full verification to pass before deterministic candidate freeze. The one authorized full verify did not pass."
-  candidate_app_built: false
-  candidate_handoff_written: false
-  candidate_installed: false
-  candidate_activated: false
-
-operator_state:
+runtime_operator_state:
   runtime_env:
-    sha256_before: "1c853b6c2306cb1fee3c1b5d5e0102c1b266ad41ae409a73b611574efaf5c1f2"
-    sha256_after: "1c853b6c2306cb1fee3c1b5d5e0102c1b266ad41ae409a73b611574efaf5c1f2"
-    AGENT_RUNTIME_MAX_PARALLELISM_after: 2
-    mutated: false
+    sha256_before_r2: "1c853b6c2306cb1fee3c1b5d5e0102c1b266ad41ae409a73b611574efaf5c1f2"
+    sha256_fresh_r2: "1c853b6c2306cb1fee3c1b5d5e0102c1b266ad41ae409a73b611574efaf5c1f2"
+    AGENT_RUNTIME_MAX_PARALLELISM: 2
+    mutated_by_r2: false
+  runtime_read_only_state:
+    healthz: live
+    readyz: ready
+    listener_count_127_0_0_1_8080: 1
+    listener_pid: 59458
+    lifecycle_action_performed: false
   env_example:
     state: PRESERVED_UNRELATED_TRACKED_DRIFT
-    staged_by_task: false
-    modified_by_task: false
+    staged_by_r2: false
+    modified_by_r2: false
   sample_files:
-    content_read_by_task: false
-    staged_by_task: false
-    modified_by_task: false
-  runtime_lifecycle_mutated: false
-  port_8080_lifecycle_touched: false
+    chatgpt-sample.txt:
+      state: PRESERVED_UNTRACKED_OPERATOR_FILE
+      content_read_by_r2: false
+      staged_by_r2: false
+      modified_by_r2: false
+    vscode-gpu-sample.txt:
+      state: PRESERVED_UNTRACKED_OPERATOR_FILE
+      content_read_by_r2: false
+      staged_by_r2: false
+      modified_by_r2: false
   main_mutated: false
   tags_or_releases_mutated: false
 
-acceptance_criteria:
-  AC-1: PROVEN
-  AC-2: PROVEN
-  AC-3: PROVEN
-  AC-4: PROVEN
-  AC-5: BLOCKED_BY_HOST_XCODE_LICENSE_STATE
-  AC-6: PROVEN
-  AC-7: PROVEN
-  AC-8: BLOCKED_BY_AC_5
-  AC-9: PENDING_PUBLICATION_PROOF
+verification:
+  targeted_capacity_rerun: false
+  broader_capacity_public_surface_rerun: false
+  replacement_canonical_full:
+    authorized_run_count: 1
+    actual_run_count: 0
+    status: NOT_RUN_PRECONDITION_FAILED
+    implementation_commit: "a5db2f432c599f1ecbff0eeb670fcc6fab63a130"
+    implementation_tree: "56f9ef36ceece0cc1e5b54a34ed429c481879e36"
+    reason: "xcodebuild -checkFirstLaunchStatus exited 69, so the mandatory cleared-host precondition was not satisfied."
+  genuine_implementation_regression_observed: false
+
+candidate_freeze:
+  status: NOT_RUN_PRECONDITION_FAILED
+  deterministic_candidate_built: false
+  candidate_identity_validated: false
+  candidate_provenance_validated: false
+  candidate_installed: false
+  candidate_activated: false
+  reason: "Candidate freeze is authorized only after a passing replacement canonical full verification; that verification was not run because the host precondition failed."
 
 mutation_boundaries:
-  runtime_source_mutated: true
-  tests_mutated: true
-  docs_mutated: true
+  implementation_mutated_under_r2: false
   runtime_env_mutated: false
   live_parallelism_mutated: false
   runtime_lifecycle_mutated: false
+  port_8080_lifecycle_touched: false
   public_mcp_surface_mutated: false
   task_0050_benchmark_rerun: false
+  targeted_or_broader_tests_rerun: false
   env_example_mutated: false
   sample_files_mutated: false
   main_mutated: false
   tags_or_releases_mutated: false
 
+acceptance_criteria:
+  AC-1: PROVEN
+  AC-2: BLOCKED_XCODE_FIRST_LAUNCH_STATUS_EXIT_69
+  AC-3: BLOCKED_BY_AC_2_NOT_RUN
+  AC-4: PROVEN
+  AC-5: BLOCKED_BY_AC_2_AND_AC_3_NOT_RUN
+  AC-6: PROVEN
+  AC-7: PENDING_PUBLICATION_PROOF
+
 executor_recommendation:
   authority: ADVISORY_ONLY
-  recommendation: "Architect review should treat the Parallelism v2 implementation as targeted/broader-verified but not freeze-eligible because canonical full verification is blocked by host Xcode-license operator state. Do not activate or freeze a candidate from this report."
+  recommendation: "Return to Architect review. The operator Xcode license is accepted, but the canonical xcodebuild first-launch precondition still exits 69. Do not run replacement canonical verification or freeze/activate a candidate until a new execution checkpoint proves that required probe exits 0."
 
 publication:
   report_path: .agent/tasks/TASK-0051/report.yaml
-  report_revision: 1
+  report_revision: 2
   implementation_commit: "a5db2f432c599f1ecbff0eeb670fcc6fab63a130"
-  report_commit_required: true
+  report_only_commit_required: true
   push_mode: non_force_dev
   force_push: false
   main_promoted: false
