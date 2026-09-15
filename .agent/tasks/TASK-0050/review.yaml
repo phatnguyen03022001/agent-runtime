@@ -1,62 +1,81 @@
 protocol_version: 3
 
 task_id: TASK-0050
-task_revision: 1
-review_revision: 1
+task_revision: 2
+review_revision: 2
 state: BLOCKED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0050/report.yaml
-  commit: "dfd9bf91c61ebb3af26fc1ea14505e5b5a39b93c"
-  report_revision: 1
+  commit: "c990f8e7e61fdc902abcf4404fc23d791fbb2352"
+  report_revision: 3
 
 reviewed_base:
-  commit: "02d57e7325d3b14bf6087e2d2621f41ac1be450d"
+  commit: "ece2c921f236aed3b9834811f8d08bdcc03c4eda"
+
+fresh_architect_verification:
+  remote_dev: "c990f8e7e61fdc902abcf4404fc23d791fbb2352"
+  remote_main: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  report_parent: "815257c3a79b912eecb26d0997e24a397191a54e"
+  report_only_direct_child: true
+  local_head: "c990f8e7e61fdc902abcf4404fc23d791fbb2352"
+  local_origin_dev: "c990f8e7e61fdc902abcf4404fc23d791fbb2352"
+  local_origin_main: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  runtime_healthz: live
+  runtime_readyz: ready
+  listener_count_127_0_0_1_8080: 1
+  listener_pid: 59458
+  local_status:
+    - " M .env.example"
+    - "?? chatgpt-sample.txt"
+    - "?? vscode-gpu-sample.txt"
 
 contract_compliance:
   protocol_version: PASS
-  identity: PASS
-  execution_base: PASS
-  publication_scope: PASS
-  hard_stop_enforcement: PASS
+  canonical_task_identity: FAIL
+  report_task_revision_binding: FAIL
+  substantive_benchmark_scope: PASS
+  evidence_admissibility: PASS
+  publication_contract: FAIL
   no_policy_mutation: PASS
   no_runtime_mutation: PASS
   operator_state_preservation: PASS
+  main_preservation: PASS
 
 criterion_judgment:
   AC-1: PASS
-  AC-2: BLOCKED
-  AC-3: PARTIAL
+  AC-2: PASS
+  AC-3: PASS
   AC-4: PASS
   AC-5: PASS
   AC-6: PASS
+  AC-7: FAIL
 
 accepted_evidence:
-  - "Published lineage is exactly 02d57e7325d3b14bf6087e2d2621f41ac1be450d -> dfd9bf91c61ebb3af26fc1ea14505e5b5a39b93c and the direct-child diff adds only .agent/tasks/TASK-0050/report.yaml; main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
-  - "Completed Runtime-mediated measurements produced 37/37 successful jobs with zero timeout/error, lost, duplicated, cross-attributed, or corrupted results."
-  - "All three workload classes completed x1/x2/x4. LIGHTWEIGHT_CONTROL_PATH and REPRESENTATIVE_MIXED_ENGINEERING also completed x8."
-  - "Observed throughput versus x1 at x2 was 1.725x / 1.959x / 1.935x and at x4 was 2.787x / 3.540x / 3.295x for light/mixed/heavy respectively. x8 light and mixed reached 4.261x and 4.796x."
-  - "The hard stop occurred because the ChatGPT-side Agent Runtime public-tool route returned Resource not found and disappeared from connector namespaces; the report did not substitute Remote Desktop Commander for missing Runtime-mediated measurements."
-  - "Fresh Architect post-report verification observed local HEAD/origin/dev at dfd9bf91c61ebb3af26fc1ea14505e5b5a39b93c, origin/main unchanged, only the preserved .env.example drift plus the two untracked operator files, exactly one 127.0.0.1:8080 listener, healthz live, and readyz ready."
-  - "Complete tier-wise host/capacity pressure snapshots were not retained for x2/x4/x8, so safe policy cannot yet be derived from r1 even though functional scaling evidence is retained."
+  - "Fresh r2 measurements completed x1/x2/x4/x8 for all three canonical workload classes and x10 light/mixed; the report records clean correctness and attribution across those completed jobs."
+  - "The replacement x10-heavy workload completed 10/10 jobs with one shared-barrier release, wall 879.645834 ms, start spread 2.696375 ms, p50 833.572834 ms, max 877.089875 ms, and throughput 3.272595x versus the fresh r2 x1-heavy baseline."
+  - "x10-heavy correctness and attribution were clean: zero errors, timeouts, lost, duplicate, cross-attributed, or corrupted results; payload SHA-256 and PBKDF2 detail matched the fresh x1 baseline."
+  - "x10-heavy pressure evidence remained within hard-stop bounds: thermal nominal, public swapout delta zero, Runtime healthz live, readyz ready, and one listener PID 59458 throughout the observed workload window."
+  - "The earlier failed x10-heavy launch crossed no shared barrier and executed zero heavy jobs because the scratch worker was missing; the later successful workload is therefore usable measurement evidence rather than a repeated stress sample."
+  - "GitHub compare proves c990f8e7e61fdc902abcf4404fc23d791fbb2352 is exactly one commit ahead of 815257c3a79b912eecb26d0997e24a397191a54e and modifies only .agent/tasks/TASK-0050/report.yaml."
+  - "Fresh Architect local verification observed HEAD/origin/dev at c990f8e7e61fdc902abcf4404fc23d791fbb2352, origin/main unchanged, only the preserved .env.example drift and two untracked operator files, Runtime live/ready, and exactly one 127.0.0.1:8080 listener PID 59458."
 
 architect_finding:
-  classification: EXECUTION_SURFACE_LOSS
-  description: "TASK-0050 r1 stopped because the ChatGPT-side Agent Runtime connector route disappeared while the local Runtime remained healthy and singleton. This is not evidence of a Runtime capacity failure. Functional scaling evidence already collected remains valid, but the missing x8-heavy/x10 matrix and incomplete tier-wise pressure telemetry prevent policy judgment."
+  classification: TASK_AUTHORITY_PUBLICATION_MISMATCH
+  description: "The measurement evidence is substantively admissible under TASK-0050 revision 2: x10-heavy was required by the canonical benchmark objective, task-owned scratch was allowed, and the failed pre-barrier launch executed zero workload jobs. However, no canonical TASK-0050 revision 3 exists in repository history. At reviewed report commit c990f8e7e61fdc902abcf4404fc23d791fbb2352, task.yaml remains task_revision 2 while report.yaml claims task_revision 3/report_revision 3 and an r3 authority. The revision-2 publication contract also required report revision 2 and exactly one report-only publication. Therefore TASK-0050 cannot be accepted from this report even though the capacity evidence itself may be carried forward without rerunning stress."
 
 continuation:
-  action: REVISE_TASK_0050_FOR_COMPLETION_AND_TELEMETRY_CONFIRMATION
-  carry_forward_functional_evidence: true
+  action: REVISE_TASK_0050_FOR_EVIDENCE_ADOPTION_AND_CLOSURE
+  rerun_benchmark: false
+  carry_forward_measurement_evidence: true
   required_work:
-    - "In a new ChatGPT conversation with the Agent Runtime connector present, fresh-prove exact six-tool discovery before measurement."
-    - "Use the exact same three workload definitions and concurrency semantics as r1."
-    - "Run bounded telemetry-confirmation passes at x1/x2/x4 so each tier has comparable pre/during/post pressure observations."
-    - "Complete BOUNDED_CPU_IO_HEAVY x8, then x10 for all three workload classes only if hard-stop conditions remain clear."
-    - "Do not substitute Remote Desktop Commander for Runtime-mediated workload execution if the public-tool route disappears again."
-    - "Do not derive or implement Parallelism v2 policy; Architect judgment remains downstream."
+    - "Architect must publish a canonical TASK-0050 revision 3 that authorizes evidence adoption and protocol-correct closure only; it must not retroactively claim to have authorized prior execution."
+    - "Executor must perform no new benchmark workload and no Runtime lifecycle/config/source mutation."
+    - "Executor must publish a corrected append-only report bound to canonical task revision 3, explicitly identifying c990f8e7e61fdc902abcf4404fc23d791fbb2352 as the adopted evidence source and correcting the prior nonexistent-r3 authority claim."
+    - "Historical commits 815257c3a79b912eecb26d0997e24a397191a54e and c990f8e7e61fdc902abcf4404fc23d791fbb2352 must remain untouched; no rewrite, reset, squash, revert, or force-push."
+    - "The corrected report must be exactly one report-only commit from the canonical revision-3 execution base, with main unchanged and operator state preserved."
 
 notes:
-  - "Do not discard or rerun r1 functional measurements merely for lineage ceremony; r2 confirmation exists to close telemetry gaps and unfinished tiers."
-  - "Runtime source/config/lifecycle remains frozen during evidence collection."
-  - "Parallelism v2 implementation remains unauthorized until Architect reviews complete evidence."
+  - "Do not rerun x1/x2/x4/x8/x10 merely to repair metadata or lineage."
+  - "Do not derive or implement Parallelism v2 policy until TASK-0050 receives protocol-correct Architect acceptance."
