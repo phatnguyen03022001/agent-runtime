@@ -1,14 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0051
-task_revision: 1
+task_revision: 2
 state: APPROVED
 
 origin:
-  type: architect_parallelism_v2_implementation
-  accepted_evidence_review: "f4cdf4656ad736b6831bf1155f05a4cd18843d66"
-  source_task: TASK-0050
-  policy_id: PARALLELISM_V2_STATIC_CEILING_4
+  type: architect_parallelism_v2_verification_recovery
+  prior_implementation_commit: "a5db2f432c599f1ecbff0eeb670fcc6fab63a130"
+  prior_report_commit: "33c054fb9b02ef130587a1eabd102b00b0524c7a"
+  prior_review_commit: "2b9fed8152886bf31bf7148f3ee8b2ad76f20ef0"
+  blocker_id: HOST_OPERATOR_STATE_XCODE_LICENSE_NOT_ACCEPTED
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -24,70 +25,77 @@ execution_base:
   capture: after_final_planning_commit
   require_exact_match: true
 
-objective: "Implement and freeze Parallelism v2 as a simple evidence-based healthy-host advisory ceiling of x4 while preserving existing pressure gates, operator upper bounds, Runtime UX/session semantics, and the exact six-tool public MCP surface."
+objective: "Resume TASK-0051 after operator acceptance of the Xcode license by re-proving the cleared host precondition, running exactly one replacement canonical full verification on the unchanged Parallelism v2 implementation, and freezing the deterministic candidate only if that verification passes."
 
-policy:
-  evidence_based_ceiling_v2: 4
-  operator_configured_range: [1, 10]
-  default_operator_max_parallelism: 2
-  effective_rule: "Healthy host advisory ceiling is min(operator configured maximum, 4); any existing pressure/unknown-signal gate remains conservative at x1."
-  runtime_role: ADVISORY_ONLY
-  live_activation_in_this_task: false
+carried_forward:
+  implementation_commit: "a5db2f432c599f1ecbff0eeb670fcc6fab63a130"
+  implementation_tree: "56f9ef36ceece0cc1e5b54a34ed429c481879e36"
+  targeted_capacity_tests: "8/8 PASS"
+  broader_capacity_and_public_surface_tests: "39/39 PASS"
+  exact_public_mcp_tool_count: 6
+  policy:
+    evidence_based_ceiling_v2: 4
+    default_operator_max_parallelism: 2
+    effective_rule: "min(operator configured maximum, 4) on healthy host; existing pressure/unknown-signal gates remain x1"
+  rerun_targeted_or_broader_required: false
 
-required_changes:
-  - "Replace the v1 evidence ceiling x2 with a clearly named v2 evidence ceiling x4 in agent_runtime/capacity.py."
-  - "For healthy signals, expose x4 evidence availability and a v2 max-four reason code; preserve LIMIT_OPERATOR_MAX when operator maximum is lower."
-  - "Preserve all existing pressure predicates and conservative x1 fallback semantics without weakening CPU/load/thermal/swap/memory/disk/unknown-signal gates."
-  - "Keep AGENT_RUNTIME_MAX_PARALLELISM validation range 1..10 and DEFAULT_MAX_PARALLELISM=2 unchanged."
-  - "Update targeted capacity-observer tests so configured 1/2/4/10 prove operator-bound and x4-ceiling behavior exactly."
-  - "Update relevant durable documentation to describe Parallelism v2 x4 evidence ceiling and stress evidence boundary x10 without implying x8/x10 are normal targets."
-  - "Preserve the exact six public MCP tools: terminal_exec, terminal_start, terminal_poll, terminal_control, capacity_observer, fs_read_batch."
-  - "Run targeted affected tests during iteration, then canonical full verification once before report/freeze."
-  - "Freeze a candidate using the repository's existing deterministic candidate/provenance workflow; do not install or activate it live."
+operator_precondition:
+  prior_failure: "/usr/bin/python3 and xcodebuild were blocked with exit 69 because Xcode license was not accepted."
+  operator_action_completed: "Operator manually reviewed and accepted the Xcode license outside Executor scope."
+  required_fresh_proof:
+    - "/usr/bin/python3 --version exits 0."
+    - "xcodebuild -checkFirstLaunchStatus exits 0."
+  executor_must_not_accept_license: true
+
+required_work:
+  - "Fresh-prove exact revision-2 execution base, origin/main preservation, operator-state preservation, and cleared Xcode-license precondition."
+  - "Do not change the implementation unless the replacement canonical verify exposes a genuine TASK-0051 regression; if that occurs, stop and report rather than broadening scope."
+  - "Run exactly one replacement canonical ./verify on the unchanged implementation commit/tree using the repository's canonical dependency/runtime environment."
+  - "Do not rerun targeted 8/8 or broader 39/39 suites merely for ceremony."
+  - "If and only if canonical verify passes, freeze a deterministic candidate using the existing provenance workflow and validate candidate identity/provenance as required by repository contracts."
+  - "Do not install or activate the candidate live."
+  - "Publish an updated TASK-0051 report that clearly carries forward revision-1 evidence and records the revision-2 replacement verification/freeze outcome."
 
 must_not:
-  - "Do not add a scheduler, queue, worker manager, retry engine, orchestration layer, or new public MCP tool."
-  - "Do not change runtime.env or the live AGENT_RUNTIME_MAX_PARALLELISM value."
-  - "Do not start/stop/restart/reload/cutover the live Runtime or touch port 8080 lifecycle."
-  - "Do not promote main, create tags/releases, or perform live activation."
-  - "Do not touch unrelated .env.example drift."
+  - "Do not run sudo xcodebuild -license or mutate operator license state."
+  - "Do not rerun TASK-0050 benchmark/stress work."
+  - "Do not rerun targeted/broader TASK-0051 test suites unless a genuine new failure requires bounded diagnosis."
+  - "Do not change runtime.env or live AGENT_RUNTIME_MAX_PARALLELISM=2."
+  - "Do not start/stop/restart/reload/cutover Runtime or touch port 8080 lifecycle."
+  - "Do not add scheduler/queue/worker-manager/retry/orchestration behavior or alter the six-tool public MCP surface."
+  - "Do not touch main/tags/releases."
+  - "Do not alter unrelated .env.example drift."
   - "Do not content-read, stage, commit, stash, clean, reset, move, delete, overwrite, or adopt chatgpt-sample.txt or vscode-gpu-sample.txt."
-  - "Do not rerun TASK-0050 benchmark/stress matrix."
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "Execution starts from the exact TASK-0051 handoff snapshot and preserves main/operator state."
+    requirement: "Execution starts from the exact revision-2 handoff snapshot with prior implementation/report/review lineage preserved and main/operator state unchanged."
   - id: AC-2
-    requirement: "Healthy capacity evaluation uses evidence ceiling x4, with effective ceiling min(operator max, 4), while default operator max remains 2."
+    requirement: "Fresh host proof shows /usr/bin/python3 and xcodebuild first-launch/license checks no longer fail with exit 69."
   - id: AC-3
-    requirement: "All existing pressure/unknown-signal conditions still force conservative x1 and no pressure predicate is weakened."
+    requirement: "Exactly one replacement canonical full verification runs on implementation commit a5db2f432c599f1ecbff0eeb670fcc6fab63a130 / tree 56f9ef36ceece0cc1e5b54a34ed429c481879e36 and passes."
   - id: AC-4
-    requirement: "Targeted tests cover configured 1, 2, 4, and 10 plus existing pressure/failure cases and pass."
+    requirement: "No unnecessary rerun of targeted 8/8 or broader 39/39 evidence occurs."
   - id: AC-5
-    requirement: "Canonical full verification passes exactly as required by repository proof contract."
+    requirement: "If canonical verification passes, deterministic candidate freeze and provenance/identity validation pass without live install or activation."
   - id: AC-6
-    requirement: "Documentation accurately states v2 x4 advisory ceiling, x10 stress boundary, and no scheduler/orchestration authority."
+    requirement: "Runtime lifecycle/config/live parallelism, six-tool public MCP surface, main/tags/releases, and operator files remain unchanged."
   - id: AC-7
-    requirement: "Exact six-tool public MCP surface and Runtime/session UX semantics are unchanged."
-  - id: AC-8
-    requirement: "A deterministic candidate is frozen with provenance/identity proof but not installed or activated live."
-  - id: AC-9
-    requirement: "Implementation/report publication is non-force dev only; main/tags/releases and operator files remain untouched."
+    requirement: "Updated report publishes non-force on dev and stops at ARCHITECT_REVIEW."
 
 verification:
-  iteration_strategy: "Run minimum affected/targeted tests while editing."
-  handoff_strategy: "Run broader affected capacity/public-surface verification."
-  acceptance_strategy: "Run canonical full verification once on the final implementation tree, then candidate/provenance validation required by repository workflow."
+  canonical_replacement_verify_count: 1
+  candidate_freeze_requires_verify_pass: true
   full_suite_is_not_default_inner_loop: true
 
 publication:
-  implementation_commit_required: true
+  implementation_commit_required: false
   report_path: .agent/tasks/TASK-0051/report.yaml
   push: non_force_dev
   stop_for_architect_review: true
 
 candidate_boundary:
-  build_and_freeze: true
+  build_and_freeze_if_verify_passes: true
   live_install: false
   live_activation: false
   successor_activation_task: TASK-0052
