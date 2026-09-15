@@ -1,0 +1,150 @@
+protocol_version: 3
+
+task_id: TASK-0051
+task_revision: 1
+report_revision: 1
+state: BLOCKED
+result: BLOCKED
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: dev
+  execution_surface: CHATGPT_LOCAL
+  exact_base: "a40e77feb8a262c23a79728711f8b173280b49f7"
+  origin_dev_before_publication: "a40e77feb8a262c23a79728711f8b173280b49f7"
+  origin_main_before_publication: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  live_activation_authorized: false
+  runtime_lifecycle_action_performed: false
+  task_0050_benchmark_rerun: false
+
+implementation:
+  commit: "a5db2f432c599f1ecbff0eeb670fcc6fab63a130"
+  tree: "56f9ef36ceece0cc1e5b54a34ed429c481879e36"
+  parent: "a40e77feb8a262c23a79728711f8b173280b49f7"
+  changed_paths:
+    - README.md
+    - agent_runtime/capacity.py
+    - tests/test_capacity_observer.py
+  behavior:
+    evidence_ceiling_constant: "V2_EVIDENCE_CEILING=4"
+    healthy_effective_rule: "min(operator configured maximum, 4)"
+    healthy_reason_codes:
+      - CAPACITY_X4_AVAILABLE
+      - LIMIT_V2_MAX_4
+    operator_limit_reason_preserved: LIMIT_OPERATOR_MAX
+    operator_range_preserved: "1..10"
+    default_max_parallelism_preserved: 2
+    pressure_fallback: 1
+    public_mcp_tool_count: 6
+    scheduler_added: false
+    queue_added: false
+    worker_manager_added: false
+    retry_engine_added: false
+    orchestration_policy_added: false
+
+verification:
+  tdd_red:
+    command: "python3 -m unittest tests.test_capacity_observer -v"
+    result: EXPECTED_FAIL
+    failures: 4
+    reason: "Production still exposed v1 x2 ceiling/reason codes before implementation."
+  targeted_green:
+    command: "python3 -m unittest tests.test_capacity_observer -v"
+    result: PASS
+    tests: 8
+  broader_affected:
+    initial_environment_attempt:
+      result: ENVIRONMENT_ERROR
+      reason: "Checkout/global Python 3.14 lacked pydantic/jsonschema/mcp dependencies; no source fix was applied."
+    canonical_dependency_environment:
+      command: "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=<checkout> <installed-runtime-python> -m unittest tests.test_capacity_observer tests.test_surface_and_scripts tests.test_mcp_contracts tests.test_fs_read_batch -v"
+      result: PASS
+      tests: 39
+      exact_six_tool_surface: PASS
+  canonical_full:
+    command: "PYTHON=<installed-runtime-python> PYTHONDONTWRITEBYTECODE=1 ./verify"
+    run_count: 1
+    implementation_commit: "a5db2f432c599f1ecbff0eeb670fcc6fab63a130"
+    result: FAIL
+    exit_code: 1
+    task_0051_capacity_tests: PASS
+    task_0051_public_surface_tests: PASS
+    failing_tests:
+      - "test_revision4_runtime_config.Revision4RuntimeConfigTests.test_serve_uses_env_owned_identity_without_profile_under_sterile_path"
+      - "test_supervised_lifecycle.SupervisedLifecycleTests.test_ten_concurrent_starts_collapse_and_recovery_stop_start_restart_are_singleton"
+    blocker_root_cause:
+      classification: HOST_OPERATOR_STATE_XCODE_LICENSE_NOT_ACCEPTED
+      proof_command: "/usr/bin/python3 --version"
+      proof_exit_code: 69
+      exact_error: "You have not agreed to the Xcode license agreements. Please run 'sudo xcodebuild -license' from within a Terminal window to review and agree to the Xcode and Apple SDKs license."
+      causal_link: "Both failing legacy lifecycle/config tests transitively invoke /usr/bin/python3; that executable is currently blocked by the unaccepted Xcode license."
+      task_0051_regression_observed: false
+      operator_state_mutation_authorized: false
+      full_verify_retried: false
+
+candidate_freeze:
+  status: NOT_RUN_BLOCKED_BY_CANONICAL_VERIFY
+  reason: "TASK-0051 requires canonical full verification to pass before deterministic candidate freeze. The one authorized full verify did not pass."
+  candidate_app_built: false
+  candidate_handoff_written: false
+  candidate_installed: false
+  candidate_activated: false
+
+operator_state:
+  runtime_env:
+    sha256_before: "1c853b6c2306cb1fee3c1b5d5e0102c1b266ad41ae409a73b611574efaf5c1f2"
+    sha256_after: "1c853b6c2306cb1fee3c1b5d5e0102c1b266ad41ae409a73b611574efaf5c1f2"
+    AGENT_RUNTIME_MAX_PARALLELISM_after: 2
+    mutated: false
+  env_example:
+    state: PRESERVED_UNRELATED_TRACKED_DRIFT
+    staged_by_task: false
+    modified_by_task: false
+  sample_files:
+    content_read_by_task: false
+    staged_by_task: false
+    modified_by_task: false
+  runtime_lifecycle_mutated: false
+  port_8080_lifecycle_touched: false
+  main_mutated: false
+  tags_or_releases_mutated: false
+
+acceptance_criteria:
+  AC-1: PROVEN
+  AC-2: PROVEN
+  AC-3: PROVEN
+  AC-4: PROVEN
+  AC-5: BLOCKED_BY_HOST_XCODE_LICENSE_STATE
+  AC-6: PROVEN
+  AC-7: PROVEN
+  AC-8: BLOCKED_BY_AC_5
+  AC-9: PENDING_PUBLICATION_PROOF
+
+mutation_boundaries:
+  runtime_source_mutated: true
+  tests_mutated: true
+  docs_mutated: true
+  runtime_env_mutated: false
+  live_parallelism_mutated: false
+  runtime_lifecycle_mutated: false
+  public_mcp_surface_mutated: false
+  task_0050_benchmark_rerun: false
+  env_example_mutated: false
+  sample_files_mutated: false
+  main_mutated: false
+  tags_or_releases_mutated: false
+
+executor_recommendation:
+  authority: ADVISORY_ONLY
+  recommendation: "Architect review should treat the Parallelism v2 implementation as targeted/broader-verified but not freeze-eligible because canonical full verification is blocked by host Xcode-license operator state. Do not activate or freeze a candidate from this report."
+
+publication:
+  report_path: .agent/tasks/TASK-0051/report.yaml
+  report_revision: 1
+  implementation_commit: "a5db2f432c599f1ecbff0eeb670fcc6fab63a130"
+  report_commit_required: true
+  push_mode: non_force_dev
+  force_push: false
+  main_promoted: false
+  tags_or_releases_touched: false
+  next_step: ARCHITECT_REVIEW
