@@ -1,0 +1,198 @@
+protocol_version: 3
+
+task_id: TASK-0053
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: NEEDS_REVIEW
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: dev
+  execution_surface: CHATGPT_LOCAL
+  local_transport: Agent Runtime MCP/tunnel
+  exact_base: "f637e3c7a64f97d3d846f9f452e26bf86c5e99e2"
+  implementation_commit: "4a6895bcdf6be306167ba73bfea2f8e04e7c6b45"
+  implementation_tree: "d77bfcb0c669a4f061f077bc5025bad3b131c89d"
+  implementation_parent: "f637e3c7a64f97d3d846f9f452e26bf86c5e99e2"
+  origin_dev_before_publication: "f637e3c7a64f97d3d846f9f452e26bf86c5e99e2"
+  origin_main_before_publication: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  local_head_aligned_to_exact_base_by_ff_only: true
+  branch_created: false
+  worktree_created: false
+
+implementation:
+  popover_facts:
+    order: [Endpoint, PID, Health, Ready, Sessions, Parallel, Protection]
+    parallel_semantics: CONFIGURED_OPERATOR_MAXIMUM_ONLY
+    format: "<N> max"
+    expected_configured_value: "4 max"
+    active_or_inflight_label_used: false
+  configured_parallelism:
+    source: AGENT_RUNTIME_MAX_PARALLELISM
+    parser_owner: AgentRuntimeCore.RuntimeConfiguredParallelism
+    exposed_by: RuntimeConfiguration.parallelLimit
+    fallback: 2
+    valid_range: "1..10"
+    capacity_observer_queried_by_ui: false
+  popover_status:
+    symbol: circle.fill
+    owned_color: systemGreen
+    unavailable_color: systemRed
+    owned_semantics: online
+    stopped_external_ambiguous_semantics: offline_or_unconfirmed
+    accessibility_preserved: true
+  menu_bar_status:
+    symbol: bolt.horizontal.circle.fill
+    behavior_changed: false
+  launchagent_attribution:
+    associated_bundle_identifiers: [com.picmao.agent-runtime]
+    ui_label: com.picmao.agent-runtime-ui
+    runtime_label: com.picmao.agent-runtime-runtime
+    labels_changed: false
+    program_arguments_changed: false
+    lifecycle_semantics_changed: false
+  app_identity:
+    CFBundleDisplayName: Agent Runtime
+    CFBundleName: Agent Runtime
+    CFBundleIdentifier: com.picmao.agent-runtime
+    CFBundleExecutable: AgentRuntimeMenuBar
+    app_icon_source_sha256: "510665e0d9751790933dd1514fa8b9a5d680ed931a627b1ab70925825920b596"
+    candidate_icon_sha256: "510665e0d9751790933dd1514fa8b9a5d680ed931a627b1ab70925825920b596"
+    app_icon_byte_identical: true
+
+changed_files:
+  - macos/Sources/AgentRuntimeCore/NativeRuntimeBackend.swift
+  - macos/Sources/AgentRuntimeMenuBar/AppDelegate.swift
+  - macos/Sources/AgentRuntimeMenuBar/ControlPanelController.swift
+  - macos/Tests/AgentRuntimeCoreTests/RuntimeConfigurationTests.swift
+  - macos/Tests/AgentRuntimeMenuBarTests/PresentationTests.swift
+  - macos/candidate_cutover.py
+  - tests/test_candidate_cutover.py
+
+tdd_evidence:
+  configured_parallelism:
+    red: "Focused Swift compile failed because RuntimeConfiguredParallelism and RuntimeConfiguration.parallelLimit did not exist."
+    green: "RuntimeConfigurationTests 3/3 PASS; presentation fact contract PASS."
+  popover_status:
+    red: "Focused Swift compile failed because RuntimePopoverStatusIndicator did not exist."
+    green: "Popover circle.fill semantics PASS; existing menu-bar glyph preservation test PASS."
+  launchagent_attribution:
+    red: "Focused Python test failed with KeyError for missing AssociatedBundleIdentifiers."
+    green: "Generated UI and Runtime LaunchAgent attribution/identity test PASS."
+
+focused_verification:
+  presentation:
+    command: "swift test --filter PresentationTests"
+    result: PASS
+    tests: 9
+  candidate_cutover:
+    command: "python -m unittest tests.test_candidate_cutover"
+    result: PASS
+    tests: 25
+
+broader_affected_verification:
+  swift:
+    command: "swift test"
+    result: PASS
+    tests: 33
+  python:
+    command: ".venv/bin/python -m unittest tests.test_candidate_cutover tests.test_candidate_freeze tests.test_package_provenance tests.test_revision4_runtime_config tests.test_surface_and_scripts tests.test_mcp_contracts"
+    result: PASS
+    tests: 67
+  diagnostic:
+    occurred: true
+    first_command_used_noncanonical_system_python_3_9: true
+    failure_class: INTERPRETER_ENVIRONMENT_MISMATCH
+    root_cause: "System Python 3.9 lacks required language/library/runtime support used by the canonical repository environment."
+    code_changed_for_diagnostic: false
+    corrected_by_using_canonical_repo_venv: true
+
+canonical_full_verification:
+  authorized_count: 1
+  actual_count: 1
+  execution_checkout: "/Users/tienphat/Developer/task0053.usuXy1/repo"
+  checkout_kind: clean_local_scratch_clone
+  source_revision: "4a6895bcdf6be306167ba73bfea2f8e04e7c6b45"
+  source_tree: "d77bfcb0c669a4f061f077bc5025bad3b131c89d"
+  command: "PYTHON=/Users/tienphat/Developer/agent-runtime/.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify"
+  result: PASS
+  exit_code: 0
+  tests: 221
+  second_full_verify_run: false
+
+candidate_freeze:
+  required_after_verify_pass: true
+  frozen_candidate_count: 1
+  successful_freeze_count: 1
+  candidate_app: "/Users/tienphat/Developer/task0053.usuXy1/repo/build/Agent Runtime.app"
+  candidate_handoff: "/Users/tienphat/Developer/task0053.usuXy1/repo/build/Agent Runtime.candidate.json"
+  source_revision: "4a6895bcdf6be306167ba73bfea2f8e04e7c6b45"
+  source_tree: "d77bfcb0c669a4f061f077bc5025bad3b131c89d"
+  requirements_lock_sha256: "80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
+  candidate_sha256: "045344a067f17a1274e1460de8ed90aac2e2862ed65973385e311918351593af"
+  candidate_handoff_sha256: "9be98dc55573029e8142c5551bd0c03aadd28c7171240529d45ad73f83c671fb"
+  record_count: 1027
+  strict_deep_codesign: PASS
+  provenance_validation: PASS
+  retained_candidate_validation: PASS
+  installed_live: false
+  activated_live: false
+  packaging_interpreter:
+    path: "/opt/homebrew/Caskroom/miniconda/base/bin/python3.13"
+    identity: "CPython 3.13.13 / cp313 / macOS arm64"
+    pip_available: true
+
+preservation:
+  live_runtime_lifecycle_action_performed: false
+  live_parallelism_mutated: false
+  live_runtime_env_mutated: false
+  mcp_semantics_mutated: false
+  public_six_tool_surface_mutated: false
+  parallelism_v2_policy_mutated: false
+  AgentRuntimeMenuBar_renamed: false
+  SMAppService_migration_performed: false
+  keychain_accessed: false
+  signing_identity_discovery_performed: false
+  app_icon_changed: false
+  main_mutated: false
+  tags_or_releases_mutated: false
+  env_example:
+    state: PRESERVED_PREEXISTING_TRACKED_DRIFT
+    staged: false
+    modified_by_task: false
+  chatgpt-sample.txt:
+    state: PRESERVED_UNTRACKED_OPERATOR_FILE
+    content_read: false
+    staged: false
+    modified_by_task: false
+  vscode-gpu-sample.txt:
+    state: PRESERVED_UNTRACKED_OPERATOR_FILE
+    content_read: false
+    staged: false
+    modified_by_task: false
+
+acceptance_criteria:
+  AC-1: PROVEN
+  AC-2: PROVEN
+  AC-3: PROVEN
+  AC-4: PROVEN
+  AC-5: PROVEN
+  AC-6: PROVEN
+  AC-7: PROVEN
+  AC-8: PROVEN
+  AC-9: PROVEN_ON_PUBLICATION
+
+executor_recommendation:
+  authority: ADVISORY_ONLY
+  recommendation: "TASK-0053 implementation and frozen non-installed candidate are ready for Architect review."
+
+publication:
+  report_path: .agent/tasks/TASK-0053/report.yaml
+  task_revision: 1
+  report_revision: 1
+  report_only_commit_required: true
+  push_mode: non_force_dev
+  force_push: false
+  promote_to_main: false
+  next_step: ARCHITECT_REVIEW
