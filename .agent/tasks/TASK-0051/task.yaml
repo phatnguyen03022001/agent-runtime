@@ -1,0 +1,103 @@
+protocol_version: 3
+
+task_id: TASK-0051
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_parallelism_v2_implementation
+  accepted_evidence_review: "f4cdf4656ad736b6831bf1155f05a4cd18843d66"
+  source_task: TASK-0050
+  policy_id: PARALLELISM_V2_STATIC_CEILING_4
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+objective: "Implement and freeze Parallelism v2 as a simple evidence-based healthy-host advisory ceiling of x4 while preserving existing pressure gates, operator upper bounds, Runtime UX/session semantics, and the exact six-tool public MCP surface."
+
+policy:
+  evidence_based_ceiling_v2: 4
+  operator_configured_range: [1, 10]
+  default_operator_max_parallelism: 2
+  effective_rule: "Healthy host advisory ceiling is min(operator configured maximum, 4); any existing pressure/unknown-signal gate remains conservative at x1."
+  runtime_role: ADVISORY_ONLY
+  live_activation_in_this_task: false
+
+required_changes:
+  - "Replace the v1 evidence ceiling x2 with a clearly named v2 evidence ceiling x4 in agent_runtime/capacity.py."
+  - "For healthy signals, expose x4 evidence availability and a v2 max-four reason code; preserve LIMIT_OPERATOR_MAX when operator maximum is lower."
+  - "Preserve all existing pressure predicates and conservative x1 fallback semantics without weakening CPU/load/thermal/swap/memory/disk/unknown-signal gates."
+  - "Keep AGENT_RUNTIME_MAX_PARALLELISM validation range 1..10 and DEFAULT_MAX_PARALLELISM=2 unchanged."
+  - "Update targeted capacity-observer tests so configured 1/2/4/10 prove operator-bound and x4-ceiling behavior exactly."
+  - "Update relevant durable documentation to describe Parallelism v2 x4 evidence ceiling and stress evidence boundary x10 without implying x8/x10 are normal targets."
+  - "Preserve the exact six public MCP tools: terminal_exec, terminal_start, terminal_poll, terminal_control, capacity_observer, fs_read_batch."
+  - "Run targeted affected tests during iteration, then canonical full verification once before report/freeze."
+  - "Freeze a candidate using the repository's existing deterministic candidate/provenance workflow; do not install or activate it live."
+
+must_not:
+  - "Do not add a scheduler, queue, worker manager, retry engine, orchestration layer, or new public MCP tool."
+  - "Do not change runtime.env or the live AGENT_RUNTIME_MAX_PARALLELISM value."
+  - "Do not start/stop/restart/reload/cutover the live Runtime or touch port 8080 lifecycle."
+  - "Do not promote main, create tags/releases, or perform live activation."
+  - "Do not touch unrelated .env.example drift."
+  - "Do not content-read, stage, commit, stash, clean, reset, move, delete, overwrite, or adopt chatgpt-sample.txt or vscode-gpu-sample.txt."
+  - "Do not rerun TASK-0050 benchmark/stress matrix."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Execution starts from the exact TASK-0051 handoff snapshot and preserves main/operator state."
+  - id: AC-2
+    requirement: "Healthy capacity evaluation uses evidence ceiling x4, with effective ceiling min(operator max, 4), while default operator max remains 2."
+  - id: AC-3
+    requirement: "All existing pressure/unknown-signal conditions still force conservative x1 and no pressure predicate is weakened."
+  - id: AC-4
+    requirement: "Targeted tests cover configured 1, 2, 4, and 10 plus existing pressure/failure cases and pass."
+  - id: AC-5
+    requirement: "Canonical full verification passes exactly as required by repository proof contract."
+  - id: AC-6
+    requirement: "Documentation accurately states v2 x4 advisory ceiling, x10 stress boundary, and no scheduler/orchestration authority."
+  - id: AC-7
+    requirement: "Exact six-tool public MCP surface and Runtime/session UX semantics are unchanged."
+  - id: AC-8
+    requirement: "A deterministic candidate is frozen with provenance/identity proof but not installed or activated live."
+  - id: AC-9
+    requirement: "Implementation/report publication is non-force dev only; main/tags/releases and operator files remain untouched."
+
+verification:
+  iteration_strategy: "Run minimum affected/targeted tests while editing."
+  handoff_strategy: "Run broader affected capacity/public-surface verification."
+  acceptance_strategy: "Run canonical full verification once on the final implementation tree, then candidate/provenance validation required by repository workflow."
+  full_suite_is_not_default_inner_loop: true
+
+publication:
+  implementation_commit_required: true
+  report_path: .agent/tasks/TASK-0051/report.yaml
+  push: non_force_dev
+  stop_for_architect_review: true
+
+candidate_boundary:
+  build_and_freeze: true
+  live_install: false
+  live_activation: false
+  successor_activation_task: TASK-0052
+
+git_authority:
+  create_branch: false
+  create_worktree: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
