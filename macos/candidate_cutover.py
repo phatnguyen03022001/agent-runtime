@@ -24,6 +24,7 @@ import package_provenance as provenance
 TRANSACTION_SCHEMA = 1
 UI_LABEL = "com.picmao.agent-runtime-ui"
 RUNTIME_LABEL = "com.picmao.agent-runtime-runtime"
+APP_BUNDLE_IDENTIFIER = "com.picmao.agent-runtime"
 RUNTIME_PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 SERVICE_ABSENCE_TIMEOUT_SECONDS = 5.0
 SERVICE_POLL_INTERVAL_SECONDS = 0.05
@@ -308,6 +309,7 @@ def _ui_plist(target_app: Path) -> bytes:
     return plistlib.dumps(
         {
             "Label": UI_LABEL,
+            "AssociatedBundleIdentifiers": [APP_BUNDLE_IDENTIFIER],
             "ProgramArguments": [str(target_app / "Contents/MacOS/AgentRuntimeMenuBar")],
             "RunAtLoad": True,
             "KeepAlive": False,
@@ -321,6 +323,7 @@ def _runtime_plist(target_app: Path, home: Path, tunnel_client: Path, desired_st
     return plistlib.dumps(
         {
             "Label": RUNTIME_LABEL,
+            "AssociatedBundleIdentifiers": [APP_BUNDLE_IDENTIFIER],
             "ProgramArguments": [
                 str(target_app / "Contents/Resources/runtime/start.sh"),
                 "--serve",

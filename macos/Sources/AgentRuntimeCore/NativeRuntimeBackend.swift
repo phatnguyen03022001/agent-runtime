@@ -158,6 +158,27 @@ public enum RuntimeSessionCapacity {
     }
 }
 
+public enum RuntimeConfiguredParallelism {
+    public static let fallback = 2
+    public static let validRange = 1...10
+
+    public static func effective(from envFile: URL?) -> Int {
+        guard let envFile,
+              let text = try? String(contentsOf: envFile, encoding: .utf8) else {
+            return fallback
+        }
+        for line in text.split(whereSeparator: \.isNewline) {
+            let parts = line.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            guard parts.count == 2, parts[0] == "AGENT_RUNTIME_MAX_PARALLELISM" else { continue }
+            if let value = Int(parts[1].trimmingCharacters(in: .whitespaces)), validRange.contains(value) {
+                return value
+            }
+            return fallback
+        }
+        return fallback
+    }
+}
+
 public struct RuntimeConfiguration: Sendable {
     public let runtimeRoot: String
     public let envFileURL: URL?
@@ -165,6 +186,7 @@ public struct RuntimeConfiguration: Sendable {
     public let transitionTimeout: TimeInterval
     public let requiresReadiness: Bool
     public let sessionLimit: Int
+    public let parallelLimit: Int
 
     // Kept as a source-compatible label for fixture callers. In the installed
     // product this value is the package-owned Resources/runtime directory.
@@ -174,7 +196,8 @@ public struct RuntimeConfiguration: Sendable {
         transitionTimeout: TimeInterval = 10,
         envFileURL: URL? = nil,
         requiresReadiness: Bool = false,
-        sessionLimit: Int? = nil
+        sessionLimit: Int? = nil,
+        parallelLimit: Int? = nil
     ) {
         self.runtimeRoot = URL(fileURLWithPath: checkoutRoot).standardizedFileURL.path
         self.envFileURL = envFileURL
@@ -184,6 +207,7 @@ public struct RuntimeConfiguration: Sendable {
         self.transitionTimeout = transitionTimeout
         self.requiresReadiness = requiresReadiness
         self.sessionLimit = sessionLimit ?? RuntimeSessionCapacity.effective(from: envFileURL)
+        self.parallelLimit = parallelLimit ?? RuntimeConfiguredParallelism.effective(from: envFileURL)
     }
 
     public init(
@@ -192,7 +216,8 @@ public struct RuntimeConfiguration: Sendable {
         desiredStateURL: URL? = nil,
         transitionTimeout: TimeInterval = 10,
         requiresReadiness: Bool = true,
-        sessionLimit: Int? = nil
+        sessionLimit: Int? = nil,
+        parallelLimit: Int? = nil
     ) {
         self.init(
             checkoutRoot: runtimeRoot,
@@ -200,7 +225,8 @@ public struct RuntimeConfiguration: Sendable {
             transitionTimeout: transitionTimeout,
             envFileURL: envFileURL,
             requiresReadiness: requiresReadiness,
-            sessionLimit: sessionLimit
+            sessionLimit: sessionLimit,
+            parallelLimit: parallelLimit
         )
     }
 

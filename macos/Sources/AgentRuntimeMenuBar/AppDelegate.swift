@@ -186,9 +186,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func refreshStatus() {
         let sessionLimit = runtimeConfiguration?.sessionLimit ?? RuntimeSessionCapacity.fallback
+        let parallelLimit = runtimeConfiguration?.parallelLimit ?? RuntimeConfiguredParallelism.fallback
         guard let controller else {
             let status = RuntimeStatus.ambiguous(configurationError ?? "Configuration unavailable")
-            present(status, sessionLimit: sessionLimit)
+            present(status, sessionLimit: sessionLimit, parallelLimit: parallelLimit)
             return
         }
         runtimeQueue.async { [weak self, controller] in
@@ -226,12 +227,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func present(
         _ status: RuntimeStatus,
-        sessionLimit: Int? = nil
+        sessionLimit: Int? = nil,
+        parallelLimit: Int? = nil
     ) {
         controlPanel.apply(
             status: status,
             audit: auditReader.read(),
-            sessionLimit: sessionLimit ?? runtimeConfiguration?.sessionLimit ?? RuntimeSessionCapacity.fallback
+            sessionLimit: sessionLimit ?? runtimeConfiguration?.sessionLimit ?? RuntimeSessionCapacity.fallback,
+            parallelLimit: parallelLimit ?? runtimeConfiguration?.parallelLimit ?? RuntimeConfiguredParallelism.fallback
         )
         updateStatusItem(for: status)
         playOfflineNotificationIfNeeded(for: status)

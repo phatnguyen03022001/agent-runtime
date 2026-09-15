@@ -265,6 +265,27 @@ def make_prior_plist(path: Path, label: str, marker: str) -> bytes:
 
 
 class CandidateCutoverTests(unittest.TestCase):
+    def test_generated_launchagents_associate_agent_runtime_bundle_without_changing_identity(self) -> None:
+        cutover = load_module(CUTOVER_PATH, "candidate_cutover_launchagent_attribution")
+        home = Path("/Users/test")
+        target = home / "Applications" / "Agent Runtime.app"
+        tunnel_client = Path("/usr/local/bin/tunnel-client")
+        desired_state = home / "Library/Application Support/Agent Runtime/protected-runtime-running"
+
+        ui = plistlib.loads(cutover._ui_plist(target))
+        runtime = plistlib.loads(cutover._runtime_plist(target, home, tunnel_client, desired_state))
+
+        self.assertEqual(ui["AssociatedBundleIdentifiers"], ["com.picmao.agent-runtime"])
+        self.assertEqual(runtime["AssociatedBundleIdentifiers"], ["com.picmao.agent-runtime"])
+        self.assertEqual(ui["Label"], "com.picmao.agent-runtime-ui")
+        self.assertEqual(ui["ProgramArguments"], [str(target / "Contents/MacOS/AgentRuntimeMenuBar")])
+        self.assertEqual(runtime["Label"], "com.picmao.agent-runtime-runtime")
+        self.assertEqual(
+            runtime["ProgramArguments"],
+            [str(target / "Contents/Resources/runtime/start.sh"), "--serve", str(tunnel_client)],
+        )
+        self.assertEqual(runtime["KeepAlive"], {"PathState": {str(desired_state): True}})
+
     def _fixture(self, raw: str):
         provenance = load_module(PROVENANCE_PATH, "package_provenance_txn")
         cutover = load_module(CUTOVER_PATH, "candidate_cutover_test")

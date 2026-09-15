@@ -35,6 +35,35 @@ enum RuntimeStatusIndicator: Equatable {
     }
 }
 
+enum RuntimePopoverStatusIndicator: Equatable {
+    case online
+    case offlineOrUnconfirmed
+
+    init(status: RuntimeStatus) {
+        if case .owned = status {
+            self = .online
+        } else {
+            self = .offlineOrUnconfirmed
+        }
+    }
+
+    var symbolName: String { "circle.fill" }
+
+    var color: NSColor {
+        switch self {
+        case .online: return .systemGreen
+        case .offlineOrUnconfirmed: return .systemRed
+        }
+    }
+
+    var accessibilityLabel: String {
+        switch self {
+        case .online: return "Online; owned Runtime is live and ready"
+        case .offlineOrUnconfirmed: return "Offline or unconfirmed; Runtime ownership is not confirmed online"
+        }
+    }
+}
+
 struct RuntimeLifecycleSlot {
     let action: RuntimeAction
     let isEnabled: Bool
@@ -49,7 +78,7 @@ enum RuntimeFactLayout {
 }
 
 struct RuntimePopoverPresentation {
-    let indicator: RuntimeStatusIndicator
+    let indicator: RuntimePopoverStatusIndicator
     let accessibilitySummary: String
     let facts: [RuntimeFact]
     let lifecycleSlot: RuntimeLifecycleSlot
@@ -57,7 +86,8 @@ struct RuntimePopoverPresentation {
     static func make(
         status: RuntimeStatus,
         audit: ProtectionAuditSnapshot,
-        sessionLimit: Int
+        sessionLimit: Int,
+        parallelLimit: Int = RuntimeConfiguredParallelism.fallback
     ) -> RuntimePopoverPresentation {
         let availability = RuntimePolicy.actions(for: status)
         let lifecycleSlot: RuntimeLifecycleSlot
@@ -79,6 +109,7 @@ struct RuntimePopoverPresentation {
                 RuntimeFact(label: "Health", value: "—"),
                 RuntimeFact(label: "Ready", value: "—"),
                 RuntimeFact(label: "Sessions", value: "\(sessionLimit) max"),
+                RuntimeFact(label: "Parallel", value: "\(parallelLimit) max"),
                 RuntimeFact(label: "Protection", value: protection),
             ]
         case .owned(let identity):
@@ -88,6 +119,7 @@ struct RuntimePopoverPresentation {
                 RuntimeFact(label: "Health", value: "live"),
                 RuntimeFact(label: "Ready", value: "ready"),
                 RuntimeFact(label: "Sessions", value: "\(sessionLimit) max"),
+                RuntimeFact(label: "Parallel", value: "\(parallelLimit) max"),
                 RuntimeFact(label: "Protection", value: protection),
             ]
         case .external(let pids):
@@ -98,6 +130,7 @@ struct RuntimePopoverPresentation {
                 RuntimeFact(label: "Health", value: "Unverified"),
                 RuntimeFact(label: "Ready", value: "Unverified"),
                 RuntimeFact(label: "Sessions", value: "\(sessionLimit) max"),
+                RuntimeFact(label: "Parallel", value: "\(parallelLimit) max"),
                 RuntimeFact(label: "Protection", value: protection),
             ]
         case .ambiguous:
@@ -107,12 +140,13 @@ struct RuntimePopoverPresentation {
                 RuntimeFact(label: "Health", value: "Unverified"),
                 RuntimeFact(label: "Ready", value: "Unverified"),
                 RuntimeFact(label: "Sessions", value: "\(sessionLimit) max"),
+                RuntimeFact(label: "Parallel", value: "\(parallelLimit) max"),
                 RuntimeFact(label: "Protection", value: protection),
             ]
         }
 
         return RuntimePopoverPresentation(
-            indicator: RuntimeStatusIndicator(status: status),
+            indicator: RuntimePopoverStatusIndicator(status: status),
             accessibilitySummary: accessibilitySummary(for: status),
             facts: facts,
             lifecycleSlot: lifecycleSlot
@@ -221,12 +255,14 @@ final class ControlPanelController: NSViewController {
     func apply(
         status: RuntimeStatus,
         audit: ProtectionAuditSnapshot = ProtectionAuditSnapshot(),
-        sessionLimit: Int = RuntimeSessionCapacity.fallback
+        sessionLimit: Int = RuntimeSessionCapacity.fallback,
+        parallelLimit: Int = RuntimeConfiguredParallelism.fallback
     ) {
         let presentation = RuntimePopoverPresentation.make(
             status: status,
             audit: audit,
-            sessionLimit: sessionLimit
+            sessionLimit: sessionLimit,
+            parallelLimit: parallelLimit
         )
         lifecycleAction = presentation.lifecycleSlot.action
         lifecycleButton.isHidden = false
@@ -261,7 +297,7 @@ final class ControlPanelController: NSViewController {
     }
 
     private func makeFactsGrid() -> NSGridView {
-        let labels = ["Endpoint", "PID", "Health", "Ready", "Sessions", "Protection"]
+        let labels = ["Endpoint", "PID", "Health", "Ready", "Sessions", "Parallel", "Protection"]
         let rows: [[NSView]] = labels.map { label in
             let labelField = NSTextField(labelWithString: label)
             labelField.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
@@ -304,7 +340,7 @@ final class ControlPanelController: NSViewController {
         }
     }
 
-    private func updateStatusIndicator(_ indicator: RuntimeStatusIndicator, summary: String) {
+    private func updateStatusIndicator(_ indicator: RuntimePopoverStatusIndicator, summary: String) {
         let configuration = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
         let image = NSImage(systemSymbolName: indicator.symbolName, accessibilityDescription: indicator.accessibilityLabel)?
             .withSymbolConfiguration(configuration)

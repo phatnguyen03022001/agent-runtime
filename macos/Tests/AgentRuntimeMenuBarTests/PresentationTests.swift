@@ -47,13 +47,14 @@ final class PresentationTests: XCTestCase {
         let presentation = RuntimePopoverPresentation.make(
             status: .owned(servingIdentity),
             audit: ProtectionAuditSnapshot(),
-            sessionLimit: 64
+            sessionLimit: 64,
+            parallelLimit: 4
         )
         XCTAssertEqual(
             presentation.facts.map(\.label),
-            ["Endpoint", "PID", "Health", "Ready", "Sessions", "Protection"]
+            ["Endpoint", "PID", "Health", "Ready", "Sessions", "Parallel", "Protection"]
         )
-        XCTAssertEqual(presentation.facts.map(\.value), ["127.0.0.1:8080", "42", "live", "ready", "64 max", "Clear"])
+        XCTAssertEqual(presentation.facts.map(\.value), ["127.0.0.1:8080", "42", "live", "ready", "64 max", "4 max", "Clear"])
     }
 
     func testLifecyclePresentationKeepsOneStablePolicyControlledActionSlot() {
@@ -81,6 +82,20 @@ final class PresentationTests: XCTestCase {
             )
             if case .stop = unavailable.lifecycleSlot.action {} else { XCTFail("unavailable Runtime should retain a Stop slot") }
             XCTAssertFalse(unavailable.lifecycleSlot.isEnabled)
+        }
+    }
+
+    func testPopoverHeaderUsesCircleStatusDotWithTruthfulSemantics() {
+        let online = RuntimePopoverStatusIndicator(status: .owned(servingIdentity))
+        XCTAssertEqual(online.symbolName, "circle.fill")
+        XCTAssertEqual(online.color, .systemGreen)
+        XCTAssertTrue(online.accessibilityLabel.contains("Online"))
+
+        for status in [RuntimeStatus.stopped, .external([99]), .ambiguous("health unavailable")] {
+            let unavailable = RuntimePopoverStatusIndicator(status: status)
+            XCTAssertEqual(unavailable.symbolName, "circle.fill")
+            XCTAssertEqual(unavailable.color, .systemRed)
+            XCTAssertTrue(unavailable.accessibilityLabel.contains("Offline or unconfirmed"))
         }
     }
 
