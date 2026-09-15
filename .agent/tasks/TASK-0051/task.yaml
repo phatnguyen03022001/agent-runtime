@@ -1,15 +1,16 @@
 protocol_version: 3
 
 task_id: TASK-0051
-task_revision: 2
+task_revision: 3
 state: APPROVED
 
 origin:
-  type: architect_parallelism_v2_verification_recovery
+  type: architect_parallelism_v2_post_first_launch_verification_recovery
   prior_implementation_commit: "a5db2f432c599f1ecbff0eeb670fcc6fab63a130"
-  prior_report_commit: "33c054fb9b02ef130587a1eabd102b00b0524c7a"
-  prior_review_commit: "2b9fed8152886bf31bf7148f3ee8b2ad76f20ef0"
-  blocker_id: HOST_OPERATOR_STATE_XCODE_LICENSE_NOT_ACCEPTED
+  prior_implementation_tree: "56f9ef36ceece0cc1e5b54a34ed429c481879e36"
+  prior_report_commit: "c1e98524372edc3ef55417fc8499c3e440d5addc"
+  prior_review_commit: "b04344ba26e1d62cf3e02f0ae09db9ec9a071213"
+  cleared_blocker_id: HOST_XCODE_FIRST_LAUNCH_STATUS_NOT_CLEARED
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -25,7 +26,7 @@ execution_base:
   capture: after_final_planning_commit
   require_exact_match: true
 
-objective: "Resume TASK-0051 after operator acceptance of the Xcode license by re-proving the cleared host precondition, running exactly one replacement canonical full verification on the unchanged Parallelism v2 implementation, and freezing the deterministic candidate only if that verification passes."
+objective: "Resume TASK-0051 after operator completion of Xcode First Launch, fresh-prove the cleared host precondition, run exactly one replacement canonical full verification against the unchanged Parallelism v2 implementation, and freeze/validate the deterministic candidate only if that verification passes."
 
 carried_forward:
   implementation_commit: "a5db2f432c599f1ecbff0eeb670fcc6fab63a130"
@@ -33,33 +34,40 @@ carried_forward:
   targeted_capacity_tests: "8/8 PASS"
   broader_capacity_and_public_surface_tests: "39/39 PASS"
   exact_public_mcp_tool_count: 6
+  rerun_targeted_or_broader_required: false
   policy:
     evidence_based_ceiling_v2: 4
     default_operator_max_parallelism: 2
     effective_rule: "min(operator configured maximum, 4) on healthy host; existing pressure/unknown-signal gates remain x1"
-  rerun_targeted_or_broader_required: false
 
 operator_precondition:
-  prior_failure: "/usr/bin/python3 and xcodebuild were blocked with exit 69 because Xcode license was not accepted."
-  operator_action_completed: "Operator manually reviewed and accepted the Xcode license outside Executor scope."
-  required_fresh_proof:
+  operator_action_completed: "Operator manually completed Xcode First Launch outside Executor scope."
+  architect_fresh_observation_before_task_publication:
+    python_version: "Python 3.9.6"
+    python_exit_code: 0
+    xcode_license_check_exit_code: 0
+    xcode_first_launch_check_exit_code: 0
+  executor_required_fresh_proof:
     - "/usr/bin/python3 --version exits 0."
-    - "xcodebuild -checkFirstLaunchStatus exits 0."
-  executor_must_not_accept_license: true
+    - "/usr/bin/xcodebuild -license check exits 0."
+    - "/usr/bin/xcodebuild -checkFirstLaunchStatus exits 0."
+  executor_must_not_mutate_xcode_license_or_first_launch_state: true
 
 required_work:
-  - "Fresh-prove exact revision-2 execution base, origin/main preservation, operator-state preservation, and cleared Xcode-license precondition."
-  - "Do not change the implementation unless the replacement canonical verify exposes a genuine TASK-0051 regression; if that occurs, stop and report rather than broadening scope."
-  - "Run exactly one replacement canonical ./verify on the unchanged implementation commit/tree using the repository's canonical dependency/runtime environment."
+  - "Fresh-prove exact revision-3 execution base, origin/main preservation, operator-state preservation, Runtime live/ready/singleton state, and all three cleared host-toolchain probes."
+  - "Preserve implementation commit/tree exactly; do not edit implementation before verification."
+  - "Run exactly one replacement canonical ./verify on implementation commit a5db2f432c599f1ecbff0eeb670fcc6fab63a130 / tree 56f9ef36ceece0cc1e5b54a34ed429c481879e36 using the repository's canonical dependency/runtime environment."
   - "Do not rerun targeted 8/8 or broader 39/39 suites merely for ceremony."
-  - "If and only if canonical verify passes, freeze a deterministic candidate using the existing provenance workflow and validate candidate identity/provenance as required by repository contracts."
+  - "If canonical verify exposes a genuine TASK-0051 regression, stop and report the exact failure; do not self-authorize a code fix or second full verify."
+  - "If canonical verify passes, freeze one deterministic candidate using the existing repository provenance workflow and validate candidate identity/provenance/contracts."
   - "Do not install or activate the candidate live."
-  - "Publish an updated TASK-0051 report that clearly carries forward revision-1 evidence and records the revision-2 replacement verification/freeze outcome."
+  - "Publish TASK-0051 report revision 3 recording carried-forward evidence, fresh host proof, the single replacement canonical verification, and candidate freeze/validation outcome."
 
 must_not:
-  - "Do not run sudo xcodebuild -license or mutate operator license state."
+  - "Do not run xcodebuild -license, xcodebuild -runFirstLaunch, or otherwise mutate operator Xcode state."
   - "Do not rerun TASK-0050 benchmark/stress work."
-  - "Do not rerun targeted/broader TASK-0051 test suites unless a genuine new failure requires bounded diagnosis."
+  - "Do not rerun targeted 8/8 or broader 39/39 TASK-0051 suites unless the canonical verify failure requires bounded read-only diagnosis; no replacement execution is authorized."
+  - "Do not modify the Parallelism v2 implementation unless a successor Architect revision explicitly authorizes it."
   - "Do not change runtime.env or live AGENT_RUNTIME_MAX_PARALLELISM=2."
   - "Do not start/stop/restart/reload/cutover Runtime or touch port 8080 lifecycle."
   - "Do not add scheduler/queue/worker-manager/retry/orchestration behavior or alter the six-tool public MCP surface."
@@ -69,33 +77,36 @@ must_not:
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "Execution starts from the exact revision-2 handoff snapshot with prior implementation/report/review lineage preserved and main/operator state unchanged."
+    requirement: "Execution starts from the exact revision-3 handoff snapshot with prior implementation/report/review lineage preserved and main/operator state unchanged."
   - id: AC-2
-    requirement: "Fresh host proof shows /usr/bin/python3 and xcodebuild first-launch/license checks no longer fail with exit 69."
+    requirement: "Fresh host proof shows /usr/bin/python3, xcodebuild license check, and xcodebuild first-launch check all exit 0 before canonical verification."
   - id: AC-3
-    requirement: "Exactly one replacement canonical full verification runs on implementation commit a5db2f432c599f1ecbff0eeb670fcc6fab63a130 / tree 56f9ef36ceece0cc1e5b54a34ed429c481879e36 and passes."
+    requirement: "Exactly one replacement canonical full verification runs on unchanged implementation commit a5db2f432c599f1ecbff0eeb670fcc6fab63a130 / tree 56f9ef36ceece0cc1e5b54a34ed429c481879e36 and passes."
   - id: AC-4
-    requirement: "No unnecessary rerun of targeted 8/8 or broader 39/39 evidence occurs."
+    requirement: "Targeted 8/8 and broader 39/39 evidence are carried forward without ceremonial rerun."
   - id: AC-5
-    requirement: "If canonical verification passes, deterministic candidate freeze and provenance/identity validation pass without live install or activation."
+    requirement: "After canonical verification passes, exactly one deterministic candidate is frozen and candidate identity/provenance validation passes without live installation or activation."
   - id: AC-6
-    requirement: "Runtime lifecycle/config/live parallelism, six-tool public MCP surface, main/tags/releases, and operator files remain unchanged."
+    requirement: "Runtime lifecycle/config/live parallelism, exact six-tool public MCP surface, main/tags/releases, and operator files remain unchanged."
   - id: AC-7
-    requirement: "Updated report publishes non-force on dev and stops at ARCHITECT_REVIEW."
+    requirement: "Report revision 3 publishes non-force on dev and stops at ARCHITECT_REVIEW."
 
 verification:
   canonical_replacement_verify_count: 1
+  second_full_verify_authorized: false
   candidate_freeze_requires_verify_pass: true
   full_suite_is_not_default_inner_loop: true
 
 publication:
   implementation_commit_required: false
   report_path: .agent/tasks/TASK-0051/report.yaml
+  required_report_revision: 3
   push: non_force_dev
   stop_for_architect_review: true
 
 candidate_boundary:
   build_and_freeze_if_verify_passes: true
+  candidate_count: 1
   live_install: false
   live_activation: false
   successor_activation_task: TASK-0052
