@@ -13,7 +13,7 @@ from .errors import RuntimeValidationError
 
 MAX_PARALLELISM_ENV = "AGENT_RUNTIME_MAX_PARALLELISM"
 DEFAULT_MAX_PARALLELISM = 2
-V1_EVIDENCE_CEILING = 2
+V2_EVIDENCE_CEILING = 4
 SAMPLE_WINDOW_SECONDS = 0.05
 SAMPLE_WINDOW_MS = 50
 MIN_MEMORY_HEADROOM_BYTES = 1024**3
@@ -296,8 +296,8 @@ def _evaluate(signals: CapacitySignals, operator_max: int) -> dict[str, Any]:
         evidence_ceiling = 1
         reasons = evidence_reasons
     else:
-        evidence_ceiling = V1_EVIDENCE_CEILING
-        reasons = ["CAPACITY_X2_AVAILABLE", "LIMIT_V1_MAX_2"]
+        evidence_ceiling = V2_EVIDENCE_CEILING
+        reasons = ["CAPACITY_X4_AVAILABLE", "LIMIT_V2_MAX_4"]
     if operator_max < evidence_ceiling:
         reasons = ["LIMIT_OPERATOR_MAX", *reasons]
 

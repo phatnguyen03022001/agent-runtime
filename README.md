@@ -131,15 +131,17 @@ The MCP server exposes exactly six public tools:
   fail without file I/O. Line indexes are limited to 2147483647. It is read-only
   and exposes no caller limit knobs.
 
-Capacity Observer v1 reports only an x1/x2 host-capacity ceiling. The effective
-ceiling is `min(AGENT_RUNTIME_MAX_PARALLELISM, evidence_based_ceiling_v1)`, so an
-operator maximum of `1` always serializes, `2` permits x1/x2, and values `3`
-through `10` still cannot raise v1 above x2. Architect/Executor remains
-responsible for proving semantic independence before using any parallelism.
-The observer uses only aggregate public macOS CPU/load, VM/swap, thermal, and
-workspace-filesystem capacity signals; probe failures and critical unknowns
-conservatively return x1. It keeps no telemetry history and performs no global
-process inventory.
+Capacity Observer v2 reports an advisory healthy-host ceiling up to x4. The
+effective healthy ceiling is `min(AGENT_RUNTIME_MAX_PARALLELISM, 4)`: the
+operator range remains `1` through `10`, the default remains `2`, and operator
+limits below x4 remain authoritative. Existing CPU/load, thermal, swap, memory,
+disk, and unknown-signal pressure gates conservatively return x1. x8 and x10
+remain benchmark/stress evidence points, not normal Runtime targets. The
+observer remains advisory-only: it does not schedule or orchestrate work, and
+Architect/Executor remains responsible for proving semantic independence before
+using parallelism. It uses only aggregate public macOS CPU/load, VM/swap,
+thermal, and workspace-filesystem capacity signals, keeps no telemetry history,
+and performs no global process inventory.
 
 Persistent session state is memory-only. The operator-configurable positive
 integer `AGENT_RUNTIME_MAX_ACTIVE_SESSIONS` controls active PTY capacity. Its

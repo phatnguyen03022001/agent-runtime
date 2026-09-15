@@ -40,15 +40,21 @@ class CapacityObserverTests(unittest.TestCase):
         result = self._observe("1")
         self.assertEqual(result["capacity_parallelism_ceiling"], 1)
         self.assertIn("LIMIT_OPERATOR_MAX", result["reason_codes"])
-        self.assertIn("CAPACITY_X2_AVAILABLE", result["reason_codes"])
+        self.assertIn("CAPACITY_X4_AVAILABLE", result["reason_codes"])
+        self.assertIn("LIMIT_V2_MAX_4", result["reason_codes"])
 
-    def test_operator_limits_two_and_ten_never_raise_v1_above_two(self) -> None:
-        for configured in ("2", "10"):
+    def test_operator_limits_two_four_and_ten_follow_v2_ceiling(self) -> None:
+        cases = {"2": 2, "4": 4, "10": 4}
+        for configured, expected in cases.items():
             with self.subTest(configured=configured):
                 result = self._observe(configured)
-                self.assertEqual(result["capacity_parallelism_ceiling"], 2)
-                self.assertIn("CAPACITY_X2_AVAILABLE", result["reason_codes"])
-                self.assertIn("LIMIT_V1_MAX_2", result["reason_codes"])
+                self.assertEqual(result["capacity_parallelism_ceiling"], expected)
+                self.assertIn("CAPACITY_X4_AVAILABLE", result["reason_codes"])
+                self.assertIn("LIMIT_V2_MAX_4", result["reason_codes"])
+                if expected < 4:
+                    self.assertIn("LIMIT_OPERATOR_MAX", result["reason_codes"])
+                else:
+                    self.assertNotIn("LIMIT_OPERATOR_MAX", result["reason_codes"])
 
     def test_invalid_operator_limit_fails_instead_of_clamping(self) -> None:
         for configured in ("", "0", "11", "-1", "2.0", "many"):
