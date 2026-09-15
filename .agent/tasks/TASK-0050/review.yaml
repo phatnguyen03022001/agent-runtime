@@ -1,26 +1,27 @@
 protocol_version: 3
 
 task_id: TASK-0050
-task_revision: 2
-review_revision: 2
-state: BLOCKED
+task_revision: 3
+review_revision: 3
+state: ACCEPTED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0050/report.yaml
-  commit: "c990f8e7e61fdc902abcf4404fc23d791fbb2352"
-  report_revision: 3
+  commit: "a1b021f1dd7cbff627302687fa45b83d0c0e76b8"
+  report_revision: 4
 
 reviewed_base:
-  commit: "ece2c921f236aed3b9834811f8d08bdcc03c4eda"
+  commit: "96e56e3007640d1dc51c89b8e8bbd8f698ad4ecf"
 
 fresh_architect_verification:
-  remote_dev: "c990f8e7e61fdc902abcf4404fc23d791fbb2352"
+  remote_dev: "a1b021f1dd7cbff627302687fa45b83d0c0e76b8"
   remote_main: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
-  report_parent: "815257c3a79b912eecb26d0997e24a397191a54e"
+  report_parent: "96e56e3007640d1dc51c89b8e8bbd8f698ad4ecf"
   report_only_direct_child: true
-  local_head: "c990f8e7e61fdc902abcf4404fc23d791fbb2352"
-  local_origin_dev: "c990f8e7e61fdc902abcf4404fc23d791fbb2352"
+  report_only_changed_path: ".agent/tasks/TASK-0050/report.yaml"
+  local_head: "a1b021f1dd7cbff627302687fa45b83d0c0e76b8"
+  local_origin_dev: "a1b021f1dd7cbff627302687fa45b83d0c0e76b8"
   local_origin_main: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
   runtime_healthz: live
   runtime_readyz: ready
@@ -33,12 +34,13 @@ fresh_architect_verification:
 
 contract_compliance:
   protocol_version: PASS
-  canonical_task_identity: FAIL
-  report_task_revision_binding: FAIL
-  substantive_benchmark_scope: PASS
-  evidence_admissibility: PASS
-  publication_contract: FAIL
-  no_policy_mutation: PASS
+  canonical_task_identity: PASS
+  exact_base_binding: PASS
+  evidence_adoption_scope: PASS
+  no_benchmark_under_r3: PASS
+  authority_correction: PASS
+  historical_lineage_preservation: PASS
+  report_only_publication: PASS
   no_runtime_mutation: PASS
   operator_state_preservation: PASS
   main_preservation: PASS
@@ -50,32 +52,40 @@ criterion_judgment:
   AC-4: PASS
   AC-5: PASS
   AC-6: PASS
-  AC-7: FAIL
 
 accepted_evidence:
-  - "Fresh r2 measurements completed x1/x2/x4/x8 for all three canonical workload classes and x10 light/mixed; the report records clean correctness and attribution across those completed jobs."
-  - "The replacement x10-heavy workload completed 10/10 jobs with one shared-barrier release, wall 879.645834 ms, start spread 2.696375 ms, p50 833.572834 ms, max 877.089875 ms, and throughput 3.272595x versus the fresh r2 x1-heavy baseline."
-  - "x10-heavy correctness and attribution were clean: zero errors, timeouts, lost, duplicate, cross-attributed, or corrupted results; payload SHA-256 and PBKDF2 detail matched the fresh x1 baseline."
-  - "x10-heavy pressure evidence remained within hard-stop bounds: thermal nominal, public swapout delta zero, Runtime healthz live, readyz ready, and one listener PID 59458 throughout the observed workload window."
-  - "The earlier failed x10-heavy launch crossed no shared barrier and executed zero heavy jobs because the scratch worker was missing; the later successful workload is therefore usable measurement evidence rather than a repeated stress sample."
-  - "GitHub compare proves c990f8e7e61fdc902abcf4404fc23d791fbb2352 is exactly one commit ahead of 815257c3a79b912eecb26d0997e24a397191a54e and modifies only .agent/tasks/TASK-0050/report.yaml."
-  - "Fresh Architect local verification observed HEAD/origin/dev at c990f8e7e61fdc902abcf4404fc23d791fbb2352, origin/main unchanged, only the preserved .env.example drift and two untracked operator files, Runtime live/ready, and exactly one 127.0.0.1:8080 listener PID 59458."
+  - "Canonical revision 3 begins at 96e56e3007640d1dc51c89b8e8bbd8f698ad4ecf and performs evidence-adoption/publication closure only; no benchmark or Runtime workload was executed under revision 3."
+  - "Report revision 4 explicitly adopts measurement evidence from c990f8e7e61fdc902abcf4404fc23d791fbb2352 and does not claim that prior x10-heavy execution was revision-3-authorized."
+  - "The full requested x1/x2/x4/x8/x10 matrix across all three workload classes is admissible and complete, with correctness and attribution integrity complete and no observed benchmark hard-stop failure."
+  - "The adopted x10-heavy sample completed 10/10 jobs with one shared-barrier release, wall 879.645834 ms, throughput 3.272595x versus fresh x1 heavy, zero result-integrity failures, nominal thermal state, zero public swapout delta, and Runtime live/ready/singleton throughout the observed window."
+  - "Historical commits 815257c3a79b912eecb26d0997e24a397191a54e and c990f8e7e61fdc902abcf4404fc23d791fbb2352 remain preserved without rewrite or revert."
+  - "GitHub compare proves a1b021f1dd7cbff627302687fa45b83d0c0e76b8 is exactly one commit ahead of 96e56e3007640d1dc51c89b8e8bbd8f698ad4ecf and modifies only .agent/tasks/TASK-0050/report.yaml."
+  - "Fresh Architect local verification observed only the preserved .env.example drift and two untracked operator sample files; Runtime remains live/ready with exactly one listener PID 59458."
 
 architect_finding:
-  classification: TASK_AUTHORITY_PUBLICATION_MISMATCH
-  description: "The measurement evidence is substantively admissible under TASK-0050 revision 2: x10-heavy was required by the canonical benchmark objective, task-owned scratch was allowed, and the failed pre-barrier launch executed zero workload jobs. However, no canonical TASK-0050 revision 3 exists in repository history. At reviewed report commit c990f8e7e61fdc902abcf4404fc23d791fbb2352, task.yaml remains task_revision 2 while report.yaml claims task_revision 3/report_revision 3 and an r3 authority. The revision-2 publication contract also required report revision 2 and exactly one report-only publication. Therefore TASK-0050 cannot be accepted from this report even though the capacity evidence itself may be carried forward without rerunning stress."
+  classification: PARALLEL_CAPACITY_EVIDENCE_COMPLETE
+  description: "TASK-0050 now has protocol-correct closure and sufficient combined evidence for Architect capacity-policy judgment. Higher tiers remained functionally correct through x10, but x8 light reached temporary CPU saturation and the observer reduced advisory capacity to x1 before recovering, showing that x8/x10 are useful stress boundaries rather than appropriate default evidence ceilings for responsive engineering work."
+
+parallelism_v2_policy:
+  decision_owner: ARCHITECT
+  implementation_authorized: true
+  evidence_based_ceiling: 4
+  operator_max_remains_upper_bound: true
+  effective_ceiling_rule: "min(operator configured maximum, evidence_based_ceiling_v2, existing pressure-derived advisory limit)"
+  rationale:
+    - "x4 produced substantial parallel throughput gains across all canonical workload classes while preserving correctness, attribution, health, readiness, listener integrity, thermal state, and swapout safety in the accepted evidence."
+    - "x8 and x10 continued to scale, but diminishing returns and x8-light temporary CPU saturation reduce headroom for interactive UX and unrelated host work."
+    - "A static evidence ceiling of x4 is simpler and more predictable than introducing a new adaptive scheduler or queue; Runtime remains advisory-only."
+  explicitly_not_authorized:
+    - "No scheduler, queue, worker manager, retry engine, or orchestration layer."
+    - "No automatic Runtime lifecycle action."
+    - "No live runtime.env change in the implementation/freeze task."
 
 continuation:
-  action: REVISE_TASK_0050_FOR_EVIDENCE_ADOPTION_AND_CLOSURE
-  rerun_benchmark: false
-  carry_forward_measurement_evidence: true
-  required_work:
-    - "Architect must publish a canonical TASK-0050 revision 3 that authorizes evidence adoption and protocol-correct closure only; it must not retroactively claim to have authorized prior execution."
-    - "Executor must perform no new benchmark workload and no Runtime lifecycle/config/source mutation."
-    - "Executor must publish a corrected append-only report bound to canonical task revision 3, explicitly identifying c990f8e7e61fdc902abcf4404fc23d791fbb2352 as the adopted evidence source and correcting the prior nonexistent-r3 authority claim."
-    - "Historical commits 815257c3a79b912eecb26d0997e24a397191a54e and c990f8e7e61fdc902abcf4404fc23d791fbb2352 must remain untouched; no rewrite, reset, squash, revert, or force-push."
-    - "The corrected report must be exactly one report-only commit from the canonical revision-3 execution base, with main unchanged and operator state preserved."
+  action: CREATE_TASK_0051_IMPLEMENT_PARALLELISM_V2_CEILING_4
+  separate_live_activation_required: true
+  activation_task_after_candidate_acceptance: TASK-0052
 
 notes:
-  - "Do not rerun x1/x2/x4/x8/x10 merely to repair metadata or lineage."
-  - "Do not derive or implement Parallelism v2 policy until TASK-0050 receives protocol-correct Architect acceptance."
+  - "TASK-0050 is accepted. Do not rerun the benchmark matrix for implementation ceremony."
+  - "Implementation must preserve current UX/session semantics and the exact six-tool public MCP surface."
