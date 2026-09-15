@@ -1,100 +1,98 @@
 protocol_version: 3
 
 task_id: TASK-0051
-task_revision: 1
-review_revision: 1
+task_revision: 2
+review_revision: 2
 state: BLOCKED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0051/report.yaml
-  commit: "33c054fb9b02ef130587a1eabd102b00b0524c7a"
-  report_revision: 1
+  commit: "c1e98524372edc3ef55417fc8499c3e440d5addc"
+  report_revision: 2
 
 reviewed_base:
-  commit: "a40e77feb8a262c23a79728711f8b173280b49f7"
+  commit: "c9555372934a035f144fd212259c11a84c6aad5c"
 
 implementation:
   commit: "a5db2f432c599f1ecbff0eeb670fcc6fab63a130"
   tree: "56f9ef36ceece0cc1e5b54a34ed429c481879e36"
-  direct_child_of_base: true
-  changed_paths:
-    - README.md
-    - agent_runtime/capacity.py
-    - tests/test_capacity_observer.py
+  changed_under_r2: false
 
 fresh_architect_verification:
-  local_head: "33c054fb9b02ef130587a1eabd102b00b0524c7a"
-  local_origin_dev: "33c054fb9b02ef130587a1eabd102b00b0524c7a"
+  local_head: "c1e98524372edc3ef55417fc8499c3e440d5addc"
+  local_origin_dev: "c1e98524372edc3ef55417fc8499c3e440d5addc"
   local_origin_main: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  report_direct_child_of_base: true
+  report_only_change: true
+  host_python_probe:
+    command: "/usr/bin/python3 --version"
+    exit_code: 0
+    output: "Python 3.9.6"
+  xcode_license_probe:
+    command: "/usr/bin/xcodebuild -license check"
+    exit_code: 0
+  xcode_first_launch_probe:
+    command: "/usr/bin/xcodebuild -checkFirstLaunchStatus"
+    exit_code: 69
   runtime_healthz: live
   runtime_readyz: ready
   listener_count_127_0_0_1_8080: 1
   listener_pid: 59458
-  host_python_probe:
-    command: "/usr/bin/python3 --version"
-    exit_code: 69
-    classification: XCODE_LICENSE_NOT_ACCEPTED
-  xcode_first_launch_probe:
-    command: "/usr/bin/xcodebuild -checkFirstLaunchStatus"
-    exit_code: 69
   local_status:
     - " M .env.example"
     - "?? chatgpt-sample.txt"
     - "?? vscode-gpu-sample.txt"
 
 contract_compliance:
-  protocol_version: PASS
   identity_and_lineage: PASS
-  parallelism_v2_behavior: PASS
-  pressure_fallback_semantics: PASS
-  targeted_verification: PASS
-  broader_affected_verification: PASS
-  six_tool_public_surface: PASS
-  canonical_full_verification: BLOCKED
-  deterministic_candidate_freeze: BLOCKED
+  implementation_preservation: PASS
+  carried_forward_targeted_8_of_8: PASS
+  carried_forward_broader_39_of_39: PASS
+  xcode_license_accepted: PASS
+  xcode_first_launch_precondition: BLOCKED
+  replacement_canonical_verification: NOT_RUN
+  deterministic_candidate_freeze: NOT_RUN
   no_live_activation: PASS
   operator_state_preservation: PASS
   main_preservation: PASS
 
 criterion_judgment:
   AC-1: PASS
-  AC-2: PASS
-  AC-3: PASS
+  AC-2: BLOCKED
+  AC-3: BLOCKED_NOT_RUN
   AC-4: PASS
-  AC-5: BLOCKED
+  AC-5: BLOCKED_NOT_RUN
   AC-6: PASS
   AC-7: PASS
-  AC-8: BLOCKED
-  AC-9: PASS
 
 accepted_evidence:
-  - "Implementation commit a5db2f432c599f1ecbff0eeb670fcc6fab63a130 is exactly one commit ahead of the TASK-0051 base and changes only README.md, agent_runtime/capacity.py, and tests/test_capacity_observer.py."
-  - "Targeted capacity verification passed 8/8 and broader affected verification passed 39/39 including the exact six-tool MCP surface."
-  - "Parallelism v2 implementation exposes V2_EVIDENCE_CEILING=4, healthy min(operator configured maximum, 4), unchanged DEFAULT_MAX_PARALLELISM=2, preserved operator range 1..10, and conservative x1 pressure/unknown-signal fallback."
-  - "Canonical full verification was executed exactly once and failed only in two legacy lifecycle/config tests."
-  - "Fresh Architect host probes independently reproduce the external precondition failure: /usr/bin/python3 --version and xcodebuild -checkFirstLaunchStatus both exit 69 because the Xcode license has not been accepted."
-  - "The report commit 33c054fb9b02ef130587a1eabd102b00b0524c7a is exactly one report-only commit after the implementation commit."
-  - "Runtime remains live/ready with one listener PID 59458; live parallelism/runtime.env were not changed; main and operator files remain preserved."
+  - "TASK-0051 implementation remains exactly a5db2f432c599f1ecbff0eeb670fcc6fab63a130 / tree 56f9ef36ceece0cc1e5b54a34ed429c481879e36; r2 made no implementation change."
+  - "Targeted capacity 8/8 PASS and broader capacity/public-surface 39/39 PASS are valid carried-forward evidence and were not rerun."
+  - "The operator accepted the Xcode license: /usr/bin/python3 now exits 0 and /usr/bin/xcodebuild -license check exits 0."
+  - "The remaining blocker is independent Xcode first-launch state: /usr/bin/xcodebuild -checkFirstLaunchStatus still exits 69."
+  - "Because the mandatory r2 precondition was not satisfied, Executor correctly did not run the replacement canonical ./verify and did not freeze/install/activate a candidate."
+  - "GitHub comparison proves report c1e98524372edc3ef55417fc8499c3e440d5addc is exactly one report-only commit after r2 base c9555372934a035f144fd212259c11a84c6aad5c."
+  - "Runtime remains live/ready and singleton PID 59458; main and operator drift/sample files remain preserved."
 
 architect_finding:
-  classification: HOST_TOOLCHAIN_PRECONDITION_XCODE_LICENSE
+  classification: HOST_XCODE_FIRST_LAUNCH_STATUS_NOT_CLEARED
   task_regression_proven: false
-  description: "TASK-0051 implementation evidence is acceptable through targeted and broader verification, but the task cannot be accepted or frozen because canonical full verification did not pass. The observed failure is independently attributable to host operator state: macOS /usr/bin/python3 is blocked by an unaccepted Xcode license. This is not evidence of a Parallelism v2 regression."
+  description: "The license blocker is resolved, but Xcode still reports pending First Launch tasks. This is host toolchain initialization state, not evidence of a Parallelism v2 regression. Canonical verification and candidate freeze remain blocked until the operator completes Xcode First Launch initialization."
 
 continuation:
-  action: OPERATOR_ACCEPT_XCODE_LICENSE_THEN_REVISE_TASK_0051_FOR_VERIFICATION_AND_FREEZE
+  action: OPERATOR_RUN_XCODE_FIRST_LAUNCH_THEN_REVISE_TASK_0051_FOR_VERIFY_AND_FREEZE
   implementation_commit_to_preserve: "a5db2f432c599f1ecbff0eeb670fcc6fab63a130"
   rerun_targeted_tests_required: false
   rerun_broader_affected_required: false
-  rerun_task_0050_benchmark: false
-  required_work:
-    - "Operator accepts the Xcode license outside Executor authority."
-    - "Architect then publishes a bounded TASK-0051 revision authorizing one replacement canonical full verification against the unchanged implementation candidate."
-    - "If that full verification passes, freeze and validate the deterministic candidate using the existing provenance workflow without live install/activation."
-    - "If verification fails for any reason not attributable to the resolved Xcode-license precondition, stop and return to Architect review before changing implementation."
+  required_operator_action:
+    - "Run sudo /usr/bin/xcodebuild -runFirstLaunch outside Executor authority."
+    - "Then verify /usr/bin/xcodebuild -checkFirstLaunchStatus exits 0."
+  after_operator_repair:
+    - "Architect may authorize one replacement canonical full verification against the unchanged implementation."
+    - "If it passes, freeze and validate the deterministic candidate without live installation or activation."
 
 notes:
-  - "Do not run sudo xcodebuild -license from Executor scope."
-  - "Do not rerun canonical full verification before the operator precondition is repaired and new Architect authority exists."
-  - "Do not install, activate, restart, reload, stop, or cut over the live Runtime."
+  - "Do not run xcodebuild -runFirstLaunch from Executor scope."
+  - "Do not rerun canonical verification before checkFirstLaunchStatus exits 0."
+  - "Do not restart, reload, stop, install, activate, or cut over the live Runtime."
