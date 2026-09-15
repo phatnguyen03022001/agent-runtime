@@ -1,0 +1,279 @@
+protocol_version: 3
+
+task_id: TASK-0055
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_runtime_first_pilot_gap_closure
+  predecessor_task: TASK-0054
+  predecessor_review: "a8a0e02005b9a5910fb70790346f5357cce5b1fa"
+  predecessor_review_state: BLOCKED
+  successor_reason: "Close the repository-owned root cause proven by TASK-0054 without retrying the blocked legacy/ad-hoc live candidate."
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+classification: BOUNDED
+
+scope:
+  expected_files_are_restrictive: false
+  allowed_existing_files_or_components:
+    - "macOS app/package/service-registration component under macos/"
+    - "candidate cutover/recovery and package provenance components"
+    - "install/uninstall command surface"
+    - "README.md Runtime-owned documentation"
+    - "focused Python and Swift tests for the authorized components"
+
+structure_authority:
+  status: RESOLVED
+  source: "Accepted Runtime Vision plus TASK-0054 blocked responsible-code evidence and current macOS package/service ownership."
+  rationale: >-
+    Executor may add or reorganize only local files inside the existing macOS app/package/service-registration component when
+    required for SMAppService metadata or a signed responsible executable. No new top-level ownership, reusable shared service,
+    registry, scheduler, daemon-management subsystem, or cross-repository component boundary is authorized.
+
+capability_requirements:
+  EXECUTION:
+    - repository_content_read
+    - repository_content_write
+    - native_repository_execution
+    - git_history_read
+    - git_commit
+    - git_push
+    - remote_ref_read
+
+objective: >-
+  Replace the source-level legacy macOS background-item ownership model with an app-owned ServiceManagement contract,
+  make canonical candidate signing explicit and non-ad-hoc, add owner-safe uninstall semantics, and update Runtime-owned
+  documentation for provider identity, prerequisites, permissions, lifecycle, and cleanup. This is source/package-contract
+  implementation only: do not build a real signed candidate, install, register, unregister, activate, stop, restart, or otherwise
+  mutate the live Agent Runtime in this task.
+accepted_inputs:
+  architecture_vision_sha256: "b541598baf48df2c79108fe7d0b09ce1c15045ef051403e80be42b8197342754"
+  capability_lab_v2_plan_sha256: "06316330a75a5aa8a58c3b86326573fdc69ab9dd3b331eb8d4000f2e68a104ad"
+  repository_pattern_plan_sha256: "5e0004a6897850cea4b7f77982c8a471f288eef7ac9d1bd37e3f65b95c2241e2"
+  pattern_evidence_ready: false
+
+approved_design:
+  runtime_identity:
+    role: "Agent Runtime remains a bounded local execution provider; MCP is protocol; connection/tunnel/stdio are transport routes."
+    client_scope: "Do not hard-code architectural ownership to ChatGPT, Codex, Antigravity, or any executor-surface registry."
+  service_ownership:
+    platform_floor: "Preserve the existing macOS 13 minimum."
+    main_app_login: "Use app-owned ServiceManagement registration rather than writing a new UI plist into ~/Library/LaunchAgents."
+    runtime_agent: >-
+      Package the Runtime LaunchAgent plist inside the Agent Runtime app bundle and manage it with SMAppService. Its BundleProgram
+      must resolve to code inside the app bundle that is code-signed under the same TeamIdentifier as the main app. The launchd
+      responsible code must not be the package-owned shell script itself. Exact helper/executable shape is Executor-local HOW so
+      long as existing package-owned Runtime start/serve and desired-state semantics are preserved.
+    legacy_compatibility: >-
+      The currently installed legacy LaunchAgents are migration/rollback input only. New-generation registration must not keep
+      layering AssociatedBundleIdentifiers or additional metadata onto the legacy model as the primary solution.
+    approval_semantics: >-
+      Registration/authorization status must be observable as enabled, requires-approval, not-registered, or not-found without
+      conflating OS approval with Runtime/task authority. No automatic approval bypass or BTM reset is permitted.
+  signing:
+    canonical_candidate: >-
+      Canonical candidate packaging must require an explicit non-ad-hoc signing identity supplied by a separately authorized
+      caller/operator. Missing or ad-hoc identity fails closed before canonical candidate creation.
+    responsible_code: >-
+      Candidate validation/provenance must prove a non-null TeamIdentifier for the main app and the Runtime LaunchAgent responsible
+      executable and prove the TeamIdentifier is the same. Preserve bundle identifier com.picmao.agent-runtime and user-facing
+      identity Agent Runtime.
+    identity_discovery: "Forbidden. Do not inspect Keychain or enumerate signing identities in this task."
+    real_signing_this_task: false
+  uninstall:
+    contract: >-
+      Add one explicit owner-safe uninstall path for the installed product. It must unregister only Agent Runtime-owned modern
+      services and, when exact ownership is proven, remove legacy Agent Runtime LaunchAgent artifacts left by the previous model;
+      stop before destructive cleanup on ambiguous ownership or a pending transaction.
+    retained_state: >-
+      Preserve the operator-owned canonical runtime.env by default and report it as retained configuration. Do not imply that
+      uninstall, task completion, service stop, or package removal deletes unrelated caches, containers, credentials, or host state.
+    forbidden_cleanup: "No sfltool resetbtm, TCC reset, global login-item purge, container cleanup, cache sweep, or unrelated process cleanup."
+  permissions:
+    baseline: >-
+      Do not request/document Accessibility, Automation/Apple Events, Screen & System Audio Recording, Full Disk Access,
+      Files & Folders, Developer Tools, Input Monitoring, or Local Network as blanket Runtime prerequisites unless code actually
+      consumes them. ServiceManagement Background Activity approval is a distinct operator-controlled lifecycle precondition.
+    denial: >-
+      If required Background Activity approval is denied or revoked, report the service authorization state and fail closed for
+      automatic background launch; do not widen privileges or mutate permissions.
+  prerequisites:
+    rule: "Classify actual prerequisites by consumer; Homebrew is an optional acquisition mechanism, never an architecture prerequisite."
+    minimum_documentation: >-
+      Distinguish macOS/system utilities, Apple developer toolchain for source/native builds, host-global tunnel-client,
+      canonical CPython 3.13 packaging interpreter, project-local Python dependencies, and Runtime-bundled dependencies.
+  activation_boundary: >-
+    Source/package-contract work is not live activation authority. Real signing, candidate freeze, install/cutover, service
+    registration/unregistration, System Settings presentation proof, and any port-8080 lifecycle mutation require a separate
+    successor task with explicit operator authority and an explicit signing identity.
+
+current_repo_facts:
+  - "TASK-0054 is durably BLOCKED after one successful cutover because System Settings showed AgentRuntimeMenuBar, a generic executable icon, and unidentified developer attribution."
+  - "Fresh TASK-0054 review evidence records the installed app as ad-hoc signed with TeamIdentifier null and the current services as legacy agents."
+  - "macos/package_app.sh currently canonicalizes candidates with codesign --sign - (ad-hoc)."
+  - "macos/candidate_cutover.py currently writes UI and Runtime plist files into ~/Library/LaunchAgents and registers them with launchctl."
+  - "The Runtime LaunchAgent currently points first at the package-owned runtime/start.sh script."
+  - "Info.plist already preserves Agent Runtime / com.picmao.agent-runtime / AgentRuntimeMenuBar and macOS 13 minimum."
+  - "No explicit installed-product uninstall command/contract exists today."
+  - "The public MCP surface is exactly six bounded tools and is not part of this change."
+
+required_changes:
+  - >-
+    Introduce the smallest app-owned ServiceManagement implementation for the main app login behavior and Runtime LaunchAgent,
+    using app-bundle-owned service metadata and preserving current desired-state/KeepAlive semantics without creating a new
+    scheduler, daemon manager, registry, or policy service.
+  - >-
+    Update packaging/candidate provenance so canonical candidate creation cannot silently use ad-hoc signing and so responsible-code
+    TeamIdentifier consistency is mechanically validated when a real signed candidate is later produced. Keep signing identity
+    input explicit; never discover it from Keychain.
+  - >-
+    Update transactional cutover/recovery source logic and fixtures so a future separately authorized activation can migrate from
+    the current legacy registration to the modern app-owned registration once, and can restore the exact previous legacy generation
+    if that future cutover fails before commit. Do not perform that migration live in this task.
+  - >-
+    Add an owner-safe uninstall implementation and tests covering modern registration, verified legacy remnants, installed app,
+    desired/transient Runtime-owned state, pending-transaction refusal, ambiguous-ownership refusal, and default preservation of
+    canonical runtime.env.
+  - >-
+    Provide deterministic operator-facing registration/authorization diagnostics for the new service model without a live-state
+    database, watcher, background poller, permission registry, or authority registry.
+  - >-
+    Update README Runtime-owned facts: execution-provider/protocol/transport distinctions; generic client compatibility; actual
+    prerequisite classes; no blanket TCC permission baseline; Background Activity approval/denial behavior; build/package/install/
+    activate/update/rollback/uninstall/cleanup distinctions; retained runtime.env semantics; and explicit no-container-cleanup scope.
+  - >-
+    Add focused causal tests first, then implement the smallest repo-native changes. Preserve exact tool schemas/annotations,
+    workspace semantics, protected-runtime behavior, Runtime config semantics, Parallelism v2, and package provenance guarantees
+    except for the intentionally strengthened service/signing/uninstall contract.
+
+must_not:
+  - "Do not start, stop, restart, reload, rebind, replace, install, cut over, register, unregister, or otherwise mutate the live Agent Runtime or port 8080."
+  - "Do not mutate runtime.env, desired live Runtime state, current LaunchAgents, Background Task Management state, System Settings, or macOS permission/TCC state."
+  - "Do not access Keychain, run signing-identity discovery, select an operator certificate, or perform real non-ad-hoc candidate signing in this task."
+  - "Do not run ./install.sh in its live install/cutover/uninstall modes; lifecycle behavior must be proved with fixtures/mocks/source-level tests only."
+  - "Do not run sfltool resetbtm or kill/restart System Settings, cfprefsd, backgroundtaskmanagementd, launchd, or unrelated processes."
+  - "Do not add or remove MCP tools; do not change six-tool names, schemas, annotations, output bounds, session semantics, capacity policy, or protection semantics."
+  - "Do not add a planner, scheduler, queue, worker manager, workflow engine, capability router, permission registry, provider registry, watcher, cleanup daemon, or durable live-state database."
+  - "Do not add Docker/OrbStack/Apple Container ownership or cleanup behavior."
+  - "Do not install/update Homebrew, Python, Xcode, tunnel-client, packages, certificates, or any other host-global prerequisite."
+  - "Do not add a universal AGENTS.md, Capability Index, generated Development Set, test dependency graph, or other Pattern materialization still gated by Lab/cross-owner decisions."
+  - "Do not touch main/tags/releases or change branch topology."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Execution starts from the exact TASK-0055 handoff base; origin/main, live Runtime, port 8080, runtime.env, permissions, host packages, and containers remain observationally unchanged."
+  - id: AC-2
+    requirement: >-
+      New-generation source no longer treats manually written ~/Library/LaunchAgents plists as its primary registration model:
+      main-app login and Runtime LaunchAgent ownership are represented through app-owned ServiceManagement metadata/API, with
+      the Runtime agent's BundleProgram resolving to app-bundle code rather than runtime/start.sh as responsible code.
+  - id: AC-3
+    requirement: >-
+      Canonical packaging fails closed on absent/ad-hoc signing identity before canonical candidate creation; candidate validation
+      is capable of proving non-null, matching TeamIdentifier across the main app and Runtime responsible executable. No Keychain
+      discovery or real signing identity is required or accessed by this task's verification.
+  - id: AC-4
+    requirement: >-
+      Transactional migration fixtures prove a future authorized cutover can move from the current legacy state to modern app-owned
+      registration without dual/stale ownership and can restore the exact prior legacy registration/package/desired-state facts on
+      pre-commit failure. No live migration is run here.
+  - id: AC-5
+    requirement: >-
+      Uninstall fixtures prove only verified Agent Runtime-owned installation/service/transient state is removed, ambiguous or
+      pending-transaction state fails closed, and canonical runtime.env is retained by default. No BTM/TCC/global cleanup occurs.
+  - id: AC-6
+    requirement: >-
+      Registration diagnostics distinguish enabled/requires-approval/not-registered/not-found and never treat OS permission,
+      Background Activity approval, or registration status as task/governance authority or as a reason to restart Runtime.
+  - id: AC-7
+    requirement: >-
+      README accurately documents Agent Runtime as a bounded local execution provider, MCP as protocol, transport separately,
+      generic client compatibility, real prerequisite consumers, permission baseline, operator lifecycle boundary, and exact
+      install/update/rollback/uninstall/cleanup semantics without claiming sandboxing or automatic environment cleanup.
+  - id: AC-8
+    requirement: "Exact six-tool MCP surface, schemas/annotations, Runtime scope, workspace non-sandbox semantics, config contract, protection behavior, Parallelism v2, and candidate content-digest guarantees remain unchanged except for the approved signing/service provenance strengthening."
+  - id: AC-9
+    requirement: >-
+      Focused affected tests pass during iteration; final Python canonical verification, full Swift tests, release Swift build,
+      shell/source checks, git diff --check, and exact scope inspection pass on the final implementation tree. No real app candidate
+      is signed/frozen/installed in this task.
+  - id: AC-10
+    requirement: "One implementation candidate and one report-only child publish non-force to dev, then stop at ARCHITECT_REVIEW; main/tags/releases remain unchanged."
+
+verification:
+  iteration_strategy: >-
+    TDD/minimum affected proof first: focused candidate-cutover/package-provenance/install-surface tests plus focused Swift
+    ServiceManagement/registration-status tests. Do not rerun the whole Python/Swift suites after every edit.
+  handoff_strategy: >-
+    On the final implementation tree run PYTHON=.venv/bin/python ./verify, full xcrun swift test --package-path macos,
+    xcrun swift build --package-path macos -c release, git diff --check, and exact changed-surface inspection.
+  acceptance_strategy: >-
+    Canonical/full proof is the final source-level Python + Swift verification above. Real candidate signing/freezing and live
+    System Settings attribution are intentionally excluded and require separately authorized successor authority.
+  live_runtime_probe_required: false
+  live_service_registration_required: false
+  real_codesign_identity_required: false
+  candidate_freeze_required: false
+
+publication:
+  implementation_commit_required: true
+  report_path: .agent/tasks/TASK-0055/report.yaml
+  required_report_revision: 1
+  push: non_force_dev
+  stop_for_architect_review: true
+authority_boundaries:
+  git:
+    dev_commit: true
+    dev_push_non_force: true
+    main: false
+    tags: false
+    releases: false
+  live_runtime:
+    lifecycle_mutation: false
+    port_8080_mutation: false
+    runtime_env_mutation: false
+    service_registration_mutation: false
+  permissions:
+    grant_revoke_reset: false
+    system_settings_mutation: false
+  package_install:
+    source_packaging_contract_change: true
+    real_signing: false
+    candidate_freeze: false
+    live_install: false
+    live_cutover: false
+    uninstall_live_product: false
+  host:
+    package_install_update: false
+    container_cleanup: false
+    unrelated_cleanup: false
+
+rollback_recovery_constraints:
+  - "Preserve forward Git history; no reset/force-push/squash of shared dev history."
+  - "Modern-registration source must retain tested rollback compatibility with the exact legacy predecessor state until a later live activation is accepted."
+  - "A future activation failure must restore the previous known-good package/registration/desired-state facts or stop with attributable pending transaction evidence; this task performs no such live recovery."
+  - "Uninstall is not rollback, rollback is not uninstall, and neither implies deletion of retained runtime.env or unrelated host state."
+
+git_authority:
+  create_branch: false
+  create_worktree: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
