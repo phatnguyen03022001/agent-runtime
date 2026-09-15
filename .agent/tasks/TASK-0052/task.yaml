@@ -1,0 +1,143 @@
+protocol_version: 3
+
+task_id: TASK-0052
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_parallelism_v2_live_activation
+  accepted_predecessor_task: TASK-0051
+  accepted_predecessor_review: "0c5448737e42436aeb4ff85cd8ed5ac2160f9a7b"
+  accepted_candidate_sha256: "6ec81d337995b36195585556847b525090f8647374ad9ac6633dc7f28dc3369a"
+  accepted_candidate_handoff_sha256: "d26c1f34f1bdf6bc06776b07fd6a26692a3a621aecf5b9965bbc33dc1c8b2796"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+objective: "Activate the exact accepted TASK-0051 Parallelism v2 candidate live, change the live operator maximum from 2 to 4, perform exactly one bounded canonical cutover cycle, and prove the resulting Runtime generation/config/public MCP surface without rebuilding, re-signing, benchmarking, or redesigning policy."
+
+accepted_candidate:
+  app_path: "/Users/tienphat/Developer/agent-runtime/build/Agent Runtime.app"
+  handoff_path: "/Users/tienphat/Developer/agent-runtime/build/Agent Runtime.candidate.json"
+  candidate_sha256: "6ec81d337995b36195585556847b525090f8647374ad9ac6633dc7f28dc3369a"
+  handoff_sha256: "d26c1f34f1bdf6bc06776b07fd6a26692a3a621aecf5b9965bbc33dc1c8b2796"
+  source_revision: "a5db2f432c599f1ecbff0eeb670fcc6fab63a130"
+  source_tree: "56f9ef36ceece0cc1e5b54a34ed429c481879e36"
+  requirements_lock_sha256: "80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
+  record_count: 1027
+
+live_config_change:
+  file: "$HOME/Library/Application Support/Agent Runtime/runtime.env"
+  key: AGENT_RUNTIME_MAX_PARALLELISM
+  required_before: 2
+  required_after: 4
+  preserve_all_other_config: true
+
+lifecycle_authority:
+  exact_cutover_cycles_authorized: 1
+  purpose: "Install/activate the accepted frozen candidate and load the live max-parallelism change."
+  arbitrary_restart_forbidden: true
+  retry_cycle_authorized: false
+  second_cutover_cycle_authorized: false
+  port_8080_authority: "Only the minimum stop/start/reload operations intrinsically required by the existing canonical candidate cutover workflow are authorized during the single cycle."
+
+required_work:
+  - "Fresh-prove exact TASK-0052 execution base, origin/main preservation, operator-file preservation, current installed Runtime identity, live/ready/singleton state, and live AGENT_RUNTIME_MAX_PARALLELISM=2 before mutation."
+  - "Fresh-validate the accepted candidate/handoff hashes, source revision/tree, lock hash, record count, strict deep codesign, and retained provenance before any live mutation."
+  - "Do not rebuild, re-sign, repackage, or modify the accepted candidate."
+  - "Change only AGENT_RUNTIME_MAX_PARALLELISM from 2 to 4 in the canonical runtime.env while preserving all other configuration bytes/semantics as required by the repository workflow."
+  - "Perform exactly one canonical candidate cutover/install activation cycle using the accepted candidate. No retry or second cycle is authorized."
+  - "After activation, prove installed generation equals the accepted candidate source revision/tree/lock and no stale transaction/cutover state remains."
+  - "Prove Runtime healthz=live, readyz=ready, and exactly one listener on 127.0.0.1:8080 after cutover."
+  - "Prove live runtime.env has AGENT_RUNTIME_MAX_PARALLELISM=4 and no unrelated config change."
+  - "Prove the exact six public MCP tools remain terminal_exec, terminal_start, terminal_poll, terminal_control, capacity_observer, fs_read_batch."
+  - "Run bounded live MCP callability proof: capacity_observer, fs_read_batch, terminal_exec, and one harmless terminal_start -> terminal_poll -> terminal_control lifecycle."
+  - "capacity_observer must remain advisory-only, never exceed ceiling 4, and preserve conservative pressure/unknown-signal behavior. A pressure-limited result below 4 is valid if its reason codes/signals justify it."
+  - "Publish TASK-0052 report revision 1 and stop at ARCHITECT_REVIEW."
+
+must_not:
+  - "Do not rebuild, re-sign, repackage, patch, or otherwise modify the accepted candidate."
+  - "Do not run TASK-0050 benchmark/stress work or any new throughput benchmark."
+  - "Do not rerun TASK-0051 targeted/broader/full test suites merely for ceremony."
+  - "Do not change Parallelism v2 source/policy during activation."
+  - "Do not add scheduler/queue/worker-manager/retry/orchestration behavior or alter the six-tool public MCP surface."
+  - "Do not perform more than one Runtime cutover cycle."
+  - "Do not perform a second restart/reload/stop-start cycle if the first activation fails; report BLOCKED instead."
+  - "Do not touch main/tags/releases."
+  - "Do not alter unrelated .env.example drift."
+  - "Do not content-read, stage, commit, stash, clean, reset, move, delete, overwrite, or adopt chatgpt-sample.txt or vscode-gpu-sample.txt."
+  - "Do not mutate Xcode/license/first-launch state."
+
+verification:
+  pre_cutover:
+    - "Exact base/refs/operator-state proof."
+    - "Accepted candidate identity/provenance/codesign proof."
+    - "Installed old generation and live max-parallelism=2 proof."
+  post_cutover:
+    - "Installed accepted generation identity/tree/lock proof."
+    - "runtime.env max-parallelism=4 proof with unrelated configuration preserved."
+    - "health/ready/singleton listener proof."
+    - "exact six-tool discovery plus bounded callability proof."
+    - "capacity_observer advisory ceiling/reason-code proof."
+  canonical_full_suite_required: false
+  benchmark_required: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Execution begins from the exact TASK-0052 handoff snapshot with main and operator state preserved."
+  - id: AC-2
+    requirement: "Pre-cutover accepted candidate/handoff identity, provenance, source revision/tree, lock, record count, and strict codesign all match TASK-0051 acceptance exactly."
+  - id: AC-3
+    requirement: "Exactly one bounded canonical cutover cycle activates the accepted candidate; no rebuild/re-sign/repackage/retry cycle occurs."
+  - id: AC-4
+    requirement: "Installed Runtime generation after cutover equals source a5db2f432c599f1ecbff0eeb670fcc6fab63a130 / tree 56f9ef36ceece0cc1e5b54a34ed429c481879e36 / accepted lock hash."
+  - id: AC-5
+    requirement: "Live runtime.env changes only AGENT_RUNTIME_MAX_PARALLELISM from 2 to 4, with unrelated configuration preserved."
+  - id: AC-6
+    requirement: "Post-cutover Runtime is live/ready with exactly one 127.0.0.1:8080 listener and no stale transaction state."
+  - id: AC-7
+    requirement: "Exact six-tool public MCP surface and bounded live callability proof pass; capacity_observer remains advisory-only with effective ceiling no greater than 4 and conservative pressure behavior preserved."
+  - id: AC-8
+    requirement: "No benchmark replay, policy redesign, main/tag/release mutation, or operator-file mutation occurs."
+  - id: AC-9
+    requirement: "Report revision 1 publishes non-force on dev and stops at ARCHITECT_REVIEW."
+
+publication:
+  implementation_commit_required: false
+  report_path: .agent/tasks/TASK-0052/report.yaml
+  required_report_revision: 1
+  push: non_force_dev
+  stop_for_architect_review: true
+
+mcp_proof:
+  prefer_running_canonical_live_route: true
+  local_stdio_if_materially_required:
+    preserve_immutable_package: true
+    require_no_bytecode_writes: true
+    python_guard: "PYTHONDONTWRITEBYTECODE=1 or Python -B"
+
+failure_policy:
+  first_cutover_failure: "STOP_AND_REPORT_BLOCKED"
+  retry_allowed: false
+  rollback_authority: "Only if the existing canonical cutover transaction itself requires its bounded rollback semantics within the same single authorized cycle; no second activation attempt is authorized."
+
+git_authority:
+  create_branch: false
+  create_worktree: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
