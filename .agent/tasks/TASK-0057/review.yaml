@@ -1,0 +1,69 @@
+protocol_version: 3
+
+task_id: TASK-0057
+task_revision: 1
+review_revision: 1
+state: REVISION_REQUIRED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0057/report.yaml
+  commit: "31b7544c2558d38ba154f25c8633e941f523baf1"
+  report_revision: 1
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  skill_rules: PASS
+  scope: PASS
+  structure_policy: PASS
+  git_authority: PASS
+  acceptance_criteria: FAIL
+  verifier_evidence: NOT_REQUIRED
+
+criterion_judgment:
+  AC-1: PASS
+  AC-2: PASS
+  AC-3: PASS
+  AC-4: PASS
+  AC-5: PASS
+  AC-6: PASS
+  AC-7: PASS
+  AC-8: PASS
+  AC-9: FAIL
+  AC-10: PASS
+  AC-11: PASS
+  AC-12: PASS
+
+findings:
+  - id: FINDING-1
+    severity: BLOCKING
+    criterion: AC-9
+    location: agent_runtime/executor.py
+    description: >-
+      terminal_exec now builds its returned stdout/stderr dictionary before the
+      bounded reader threads are joined in the finally block. In Python the return
+      expression is evaluated before finally executes, so stdout_capture.text() and
+      stderr_capture.text() can be sampled before the remaining pipe bytes are drained.
+      This can return incomplete output even though the finally block later drains and
+      releases the lease, regressing the pre-existing terminal_exec output contract.
+    required_correction: >-
+      Complete bounded reader-thread drain/close handling before materializing the
+      returned stdout/stderr values, while preserving the x6 lease through that drain.
+      Add a deterministic regression test that would fail if return payload capture is
+      evaluated before the delayed reader finishes.
+
+acceptance_basis:
+  - "Fresh GitHub review resolved TASK-0057 revision 1 at exact base bb6cf7cd4cbceac42a5f3bcecfe0b99cd2ad69f6 and report commit 31b7544c2558d38ba154f25c8633e941f523baf1."
+  - "Fresh lineage proves implementation 36c058ec0b8230f282f3431f58ff386f33d76e6b is the single direct child of the planning base and report commit 31b7544c2558d38ba154f25c8633e941f523baf1 is the report-only direct child of that implementation."
+  - "Fresh remote refs prove dev was exactly the report commit before review publication and main remained c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "The x6 admission design, fail-fast overload, PTY lifetime accounting, graceful cleanup ownership, and isolated evidence are materially consistent with the task."
+  - "Acceptance is blocked solely by FINDING-1 because AC-9 explicitly requires the existing terminal output contract to remain intact."
+
+next_action: "Revise TASK-0057 to correct FINDING-1, add a deterministic output-drain regression, rerun affected/full verification, publish a new implementation candidate and report, then return for Architect review."
