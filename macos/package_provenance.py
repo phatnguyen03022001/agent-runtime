@@ -461,6 +461,40 @@ def seal_candidate(app: Path, handoff_path: Path) -> dict[str, object]:
     return data
 
 
+def publish_candidate(app: Path, handoff_path: Path, candidates_root: Path) -> dict[str, object]:
+    if app.name != "Agent Runtime.app" or handoff_path.name != "Agent Runtime.candidate.json":
+        raise PackageProvenanceError("candidate publication paths use unexpected names")
+    if app.parent != handoff_path.parent:
+        raise PackageProvenanceError("candidate app and handoff must share one staging directory")
+    staging_root = app.parent
+    if staging_root.is_symlink() or not staging_root.is_dir():
+        raise PackageProvenanceError("candidate staging directory must be a regular directory")
+
+    candidate = validate_candidate(app, handoff_path)
+    candidate_sha = _validate_identity(candidate.get("candidate_sha256"), HEX64, "candidate closure")
+    final_root = candidates_root / candidate_sha
+    if final_root.exists() or final_root.is_symlink():
+        raise PackageProvenanceError("candidate output already exists")
+
+    candidates_root.mkdir(parents=True, exist_ok=True)
+    if final_root.exists() or final_root.is_symlink():
+        raise PackageProvenanceError("candidate output already exists")
+    try:
+        os.rename(staging_root, final_root)
+    except FileExistsError as exc:
+        raise PackageProvenanceError("candidate output already exists") from exc
+    except OSError as exc:
+        raise PackageProvenanceError("candidate publication failed: " + str(exc)) from exc
+
+    final_app = final_root / app.name
+    final_handoff = final_root / handoff_path.name
+    return {
+        **candidate,
+        "candidate_app": str(final_app),
+        "candidate_handoff": str(final_handoff),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -482,6 +516,10 @@ def main() -> int:
     seal = subparsers.add_parser("seal")
     seal.add_argument("app", type=Path)
     seal.add_argument("handoff", type=Path)
+    publish = subparsers.add_parser("publish")
+    publish.add_argument("app", type=Path)
+    publish.add_argument("handoff", type=Path)
+    publish.add_argument("candidates_root", type=Path)
     candidate_validate = subparsers.add_parser("validate-candidate")
     candidate_validate.add_argument("app", type=Path)
     candidate_validate.add_argument("handoff", type=Path)
@@ -502,6 +540,12 @@ def main() -> int:
             )
         elif args.command == "seal":
             print(json.dumps(seal_candidate(args.app, args.handoff), sort_keys=True))
+        elif args.command == "publish":
+            published = publish_candidate(args.app, args.handoff, args.candidates_root)
+            print(
+                f"{published['candidate_app']}\t{published['candidate_handoff']}\t"
+                f"{published['candidate_sha256']}"
+            )
         else:
             print(json.dumps(validate_candidate(args.app, args.handoff), sort_keys=True))
     except PackageProvenanceError as exc:

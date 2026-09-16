@@ -251,9 +251,16 @@ if check.returncode != 0:
 PY
 
 echo "[4/8] Building package-owned Runtime payload and menu-bar app..."
-"$ROOT/macos/package_app.sh" >/dev/null
-SOURCE_APP="$ROOT/build/Agent Runtime.app"
-CANDIDATE_HANDOFF="$ROOT/build/Agent Runtime.candidate.json"
+PACKAGE_OUTPUT="$("$ROOT/macos/package_app.sh")" || fail "candidate packaging failed."
+SOURCE_APP="$(printf '%s\n' "$PACKAGE_OUTPUT" | sed -n 's/^candidate_app=//p')"
+CANDIDATE_HANDOFF="$(printf '%s\n' "$PACKAGE_OUTPUT" | sed -n 's/^candidate_handoff=//p')"
+CANDIDATE_SHA256="$(printf '%s\n' "$PACKAGE_OUTPUT" | sed -n 's/^candidate_sha256=//p')"
+[[ -n "$SOURCE_APP" && "$SOURCE_APP" != *$'\n'* ]] || fail "candidate package app result is invalid."
+[[ -n "$CANDIDATE_HANDOFF" && "$CANDIDATE_HANDOFF" != *$'\n'* ]] || fail "candidate package handoff result is invalid."
+[[ "$CANDIDATE_SHA256" =~ ^[0-9a-f]{64}$ ]] || fail "candidate package SHA-256 result is invalid."
+EXPECTED_CANDIDATE_ROOT="$ROOT/build/candidates/$CANDIDATE_SHA256"
+[[ "$SOURCE_APP" == "$EXPECTED_CANDIDATE_ROOT/Agent Runtime.app" ]] || fail "candidate package app path is unexpected."
+[[ "$CANDIDATE_HANDOFF" == "$EXPECTED_CANDIDATE_ROOT/Agent Runtime.candidate.json" ]] || fail "candidate package handoff path is unexpected."
 [[ -d "$SOURCE_APP" && ! -L "$SOURCE_APP" ]] || fail "packaged app candidate is missing or unsafe."
 [[ -f "$CANDIDATE_HANDOFF" && ! -L "$CANDIDATE_HANDOFF" ]] || fail "external candidate handoff is missing or unsafe."
 

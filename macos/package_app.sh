@@ -3,19 +3,23 @@ set -euo pipefail
 
 PACKAGE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 REPO_ROOT="$(cd "$PACKAGE_ROOT/.." && pwd -P)"
-APP="$REPO_ROOT/build/Agent Runtime.app"
-CANDIDATE_HANDOFF="$REPO_ROOT/build/Agent Runtime.candidate.json"
-CONTENTS="$APP/Contents"
-MACOS="$CONTENTS/MacOS"
-RESOURCES="$CONTENTS/Resources"
-RUNTIME="$RESOURCES/runtime"
+BUILD_ROOT="$REPO_ROOT/build"
+CANDIDATES_ROOT="$REPO_ROOT/build/candidates"
 source "$PACKAGE_ROOT/packaging_python.sh"
 PYTHON_BIN="$(resolve_packaging_python "PACKAGE ERROR")"
 SIGNING_IDENTITY="${AGENT_RUNTIME_CODESIGN_IDENTITY:-}"
 [[ -n "$SIGNING_IDENTITY" && "$SIGNING_IDENTITY" != "-" ]] \
   || { echo "PACKAGE ERROR: AGENT_RUNTIME_CODESIGN_IDENTITY must name an explicit non-ad-hoc signing identity" >&2; exit 2; }
 
-TEMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/agent-runtime-package.XXXXXX")"
+mkdir -p "$BUILD_ROOT"
+TEMP_ROOT="$(mktemp -d "$BUILD_ROOT/.agent-runtime-package.XXXXXX")"
+STAGED_PUBLICATION="$TEMP_ROOT/candidate"
+APP="$STAGED_PUBLICATION/Agent Runtime.app"
+CANDIDATE_HANDOFF="$STAGED_PUBLICATION/Agent Runtime.candidate.json"
+CONTENTS="$APP/Contents"
+MACOS="$CONTENTS/MacOS"
+RESOURCES="$CONTENTS/Resources"
+RUNTIME="$RESOURCES/runtime"
 cleanup() {
   chmod -R u+w "$TEMP_ROOT" 2>/dev/null || true
   rm -rf "$TEMP_ROOT"
@@ -45,15 +49,13 @@ SERVICE_PLIST="$SOURCE_PACKAGE_ROOT/AppBundle/Library/LaunchAgents/com.picmao.ag
   || { echo "PACKAGE ERROR: app-owned Runtime LaunchAgent metadata is missing" >&2; exit 2; }
 
 SWIFT_SCRATCH="$TEMP_ROOT/swift-build"
-/usr/bin/xcrun swift build --package-path "$SOURCE_PACKAGE_ROOT" --scratch-path "$SWIFT_SCRATCH" -c release
+/usr/bin/xcrun swift build --package-path "$SOURCE_PACKAGE_ROOT" --scratch-path "$SWIFT_SCRATCH" -c release >&2
 BIN_DIR="$(/usr/bin/xcrun swift build --package-path "$SOURCE_PACKAGE_ROOT" --scratch-path "$SWIFT_SCRATCH" -c release --show-bin-path)"
 BINARY="$BIN_DIR/AgentRuntimeMenuBar"
 RUNTIME_SERVICE_BINARY="$BIN_DIR/AgentRuntimeRuntimeService"
 [[ -x "$BINARY" ]] || { echo "PACKAGE ERROR: missing AgentRuntimeMenuBar binary" >&2; exit 2; }
 [[ -x "$RUNTIME_SERVICE_BINARY" ]] || { echo "PACKAGE ERROR: missing AgentRuntimeRuntimeService binary" >&2; exit 2; }
 
-rm -rf "$APP"
-rm -f "$CANDIDATE_HANDOFF"
 mkdir -p "$MACOS" "$RESOURCES" "$RUNTIME/agent_runtime" "$CONTENTS/Library/LaunchAgents"
 cp "$SOURCE_PACKAGE_ROOT/AppBundle/Info.plist" "$CONTENTS/Info.plist"
 cp "$BINARY" "$MACOS/AgentRuntimeMenuBar"
@@ -94,5 +96,13 @@ chmod 755 "$RUNTIME/start.sh" "$RUNTIME/.venv/bin/python"
   "$RUNTIME" "$RESOURCES/runtime-manifest.json" \
   "$RUNTIME_REVISION" "$RUNTIME_TREE" "$SOURCE_ROOT/requirements.lock"
 "$PYTHON_BIN" "$SOURCE_PACKAGE_ROOT/package_provenance.py" seal "$APP" "$CANDIDATE_HANDOFF" >/dev/null
+PUBLISHED="$("$PYTHON_BIN" "$SOURCE_PACKAGE_ROOT/package_provenance.py" publish \
+  "$APP" "$CANDIDATE_HANDOFF" "$CANDIDATES_ROOT")" \
+  || { echo "PACKAGE ERROR: candidate publication failed" >&2; exit 2; }
+IFS=$'\t' read -r FINAL_APP FINAL_HANDOFF CANDIDATE_SHA256 <<< "$PUBLISHED"
+[[ -n "$FINAL_APP" && -n "$FINAL_HANDOFF" && "$CANDIDATE_SHA256" =~ ^[0-9a-f]{64}$ ]] \
+  || { echo "PACKAGE ERROR: candidate publication result is invalid" >&2; exit 2; }
 
-echo "$APP"
+printf 'candidate_app=%s\n' "$FINAL_APP"
+printf 'candidate_handoff=%s\n' "$FINAL_HANDOFF"
+printf 'candidate_sha256=%s\n' "$CANDIDATE_SHA256"

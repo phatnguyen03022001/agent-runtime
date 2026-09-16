@@ -76,6 +76,31 @@ def require_candidate_identity(
     return candidate
 
 
+def parse_package_result(repo: Path, stdout: str) -> tuple[Path, Path, str]:
+    values: dict[str, str] = {}
+    required = {"candidate_app", "candidate_handoff", "candidate_sha256"}
+    for line in stdout.splitlines():
+        if not line:
+            continue
+        key, separator, value = line.partition("=")
+        if not separator or key not in required or key in values or not value:
+            raise FreezeCandidateError("candidate package result is malformed")
+        values[key] = value
+    if set(values) != required:
+        raise FreezeCandidateError("candidate package result is incomplete")
+
+    candidate_sha = _require_identity(values["candidate_sha256"], HEX64, "reported candidate SHA-256")
+    candidates_root = (repo / "build" / "candidates").resolve(strict=False)
+    expected_root = candidates_root / candidate_sha
+    app = Path(values["candidate_app"]).resolve(strict=False)
+    handoff = Path(values["candidate_handoff"]).resolve(strict=False)
+    if app != expected_root / "Agent Runtime.app":
+        raise FreezeCandidateError("candidate package reported an unexpected app path")
+    if handoff != expected_root / "Agent Runtime.candidate.json":
+        raise FreezeCandidateError("candidate package reported an unexpected handoff path")
+    return app, handoff, candidate_sha
+
+
 def freeze_candidate(
     repo: Path,
     expected_revision: str,
@@ -91,20 +116,27 @@ def freeze_candidate(
         [str(package)],
         cwd=repo,
         stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        text=True,
         check=False,
     )
     if result.returncode != 0:
         raise FreezeCandidateError(f"candidate package construction failed with exit {result.returncode}")
+    app, handoff, reported_sha = parse_package_result(repo, result.stdout)
     require_source_identity(repo, expected_revision, expected_tree, expected_lock_sha256)
-    app = repo / "build" / "Agent Runtime.app"
-    handoff = repo / "build" / "Agent Runtime.candidate.json"
     try:
         candidate = provenance.validate_candidate(app, handoff)
     except provenance.PackageProvenanceError as exc:
         raise FreezeCandidateError(str(exc)) from exc
     require_candidate_identity(candidate, expected_revision, expected_tree, expected_lock_sha256)
+    if candidate.get("candidate_sha256") != reported_sha:
+        raise FreezeCandidateError("reported candidate SHA-256 does not match validated candidate")
     require_source_identity(repo, expected_revision, expected_tree, expected_lock_sha256)
-    return candidate
+    return {
+        **candidate,
+        "candidate_app": str(app),
+        "candidate_handoff": str(handoff),
+    }
 
 
 def main() -> int:
@@ -127,8 +159,8 @@ def main() -> int:
         print("FREEZE ERROR: " + str(exc), file=sys.stderr)
         return 2
     print("FREEZE PASS")
-    print(f"candidate_app={repo / 'build' / 'Agent Runtime.app'}")
-    print(f"candidate_handoff={repo / 'build' / 'Agent Runtime.candidate.json'}")
+    print(f"candidate_app={candidate['candidate_app']}")
+    print(f"candidate_handoff={candidate['candidate_handoff']}")
     print(f"candidate_sha256={candidate['candidate_sha256']}")
     return 0
 

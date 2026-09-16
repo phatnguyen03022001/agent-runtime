@@ -285,6 +285,72 @@ class PackageProvenanceTests(unittest.TestCase):
         self.assertIn("--require-hashes", installer)
         self.assertIn('chmod 600 "$ENV_FILE"', installer)
 
+    def _staged_candidate(self, root: Path, label: str) -> tuple[Path, Path]:
+        stage = root / label
+        app = stage / "Agent Runtime.app"
+        app.mkdir(parents=True)
+        (app / "payload.txt").write_text(label + "\n")
+        handoff = stage / "Agent Runtime.candidate.json"
+        handoff.write_text(label + "\n")
+        return app, handoff
+
+    def test_candidate_publication_preserves_distinct_outputs_and_rejects_collision(self) -> None:
+        provenance = load_module()
+        self.assertTrue(hasattr(provenance, "publish_candidate"), "publish_candidate must exist")
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            candidates = root / "candidates"
+            app_a, handoff_a = self._staged_candidate(root, "stage-a")
+            app_b, handoff_b = self._staged_candidate(root, "stage-b")
+            app_collision, handoff_collision = self._staged_candidate(root, "stage-collision")
+            candidate_a = {"candidate_sha256": "a" * 64}
+            candidate_b = {"candidate_sha256": "b" * 64}
+            with mock.patch.object(
+                provenance,
+                "validate_candidate",
+                side_effect=[candidate_a, candidate_b, candidate_a],
+            ):
+                published_a = provenance.publish_candidate(app_a, handoff_a, candidates)
+                a_app_bytes = (Path(published_a["candidate_app"]) / "payload.txt").read_bytes()
+                a_handoff_bytes = Path(published_a["candidate_handoff"]).read_bytes()
+                published_b = provenance.publish_candidate(app_b, handoff_b, candidates)
+                self.assertNotEqual(published_a["candidate_app"], published_b["candidate_app"] )
+                self.assertEqual((Path(published_a["candidate_app"]) / "payload.txt").read_bytes(), a_app_bytes)
+                self.assertEqual(Path(published_a["candidate_handoff"]).read_bytes(), a_handoff_bytes)
+                with self.assertRaisesRegex(provenance.PackageProvenanceError, "already exists"):
+                    provenance.publish_candidate(app_collision, handoff_collision, candidates)
+            self.assertEqual((Path(published_a["candidate_app"]) / "payload.txt").read_bytes(), a_app_bytes)
+            self.assertEqual(Path(published_a["candidate_handoff"]).read_bytes(), a_handoff_bytes)
+            self.assertTrue(app_collision.parent.is_dir())
+
+    def test_candidate_publication_validation_failure_leaves_no_final_candidate(self) -> None:
+        provenance = load_module()
+        self.assertTrue(hasattr(provenance, "publish_candidate"), "publish_candidate must exist")
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            candidates = root / "candidates"
+            app, handoff = self._staged_candidate(root, "stage-fail")
+            with mock.patch.object(
+                provenance,
+                "validate_candidate",
+                side_effect=provenance.PackageProvenanceError("synthetic validation failure"),
+            ):
+                with self.assertRaisesRegex(provenance.PackageProvenanceError, "synthetic validation failure"):
+                    provenance.publish_candidate(app, handoff, candidates)
+            self.assertTrue(app.parent.is_dir())
+            self.assertFalse(candidates.exists())
+
+    def test_package_contract_stages_then_publishes_without_singleton_deletion(self) -> None:
+        package = (ROOT / "macos" / "package_app.sh").read_text()
+        self.assertIn('CANDIDATES_ROOT="$REPO_ROOT/build/candidates"', package)
+        self.assertIn('STAGED_PUBLICATION="$TEMP_ROOT/candidate"', package)
+        self.assertIn('package_provenance.py" publish', package)
+        self.assertNotIn('rm -rf "$APP"', package)
+        self.assertNotIn('rm -f "$CANDIDATE_HANDOFF"', package)
+        self.assertNotIn('APP="$REPO_ROOT/build/Agent Runtime.app"', package)
+        self.assertNotIn('CANDIDATE_HANDOFF="$REPO_ROOT/build/Agent Runtime.candidate.json"', package)
+
+
 
 if __name__ == "__main__":
     unittest.main()

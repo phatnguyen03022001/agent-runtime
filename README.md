@@ -274,14 +274,22 @@ tree, the `requirements.lock` SHA-256, every regular file below
 `Contents/Resources/runtime` with path/size/SHA-256, and an aggregate digest
 over the sorted canonical file list. After all candidate-mutating build work,
 signing, strict codesign verification, and final runtime-manifest validation,
-packaging writes the external `build/Agent Runtime.candidate.json` handoff.
-Its candidate digest closes over every regular file in the logical app bundle,
+packaging seals the app and external handoff in run-owned staging, then
+publishes the pair under `build/candidates/<candidate_sha256>/`. The published
+`Agent Runtime.app` and `Agent Runtime.candidate.json` are sibling artifacts,
+and the package/freeze result reports both exact paths plus the candidate
+SHA-256. Existing candidate directories are immutable collision boundaries;
+there is no authoritative mutable `latest` or singleton candidate path.
+
+The candidate digest closes over every regular file in the logical app bundle,
 including signing-owned files, using sorted UTF-8 relative path, four-digit
 permission mode, byte size, and SHA-256 records. Symlinks and unsupported
 non-regular entries are rejected. Staging and installed placement must preserve
 that exact external closure as well as strict codesign and embedded manifest
 closure. This is reconstructible provenance, not a claim of bit-for-bit
-reproducible builds.
+reproducible builds. Candidate immutability is prospective for newly frozen
+artifacts; it does not reconstruct or restore the historical TASK-0056 bytes
+that were already overwritten under the legacy singleton paths.
 
 ## Verification
 

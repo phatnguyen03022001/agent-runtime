@@ -233,7 +233,11 @@ fi
         shutil.copy2(ROOT / "macos/candidate_cutover.py", repo / "macos" / "candidate_cutover.py")
         self._write(package, r'''#!/usr/bin/env bash
 set -euo pipefail
-APP="$PWD/build/Agent Runtime.app"
+BUILD_ROOT="$PWD/build"
+CANDIDATES_ROOT="$BUILD_ROOT/candidates"
+STAGE="$BUILD_ROOT/.fixture-package.$$"
+APP="$STAGE/Agent Runtime.app"
+HANDOFF="$STAGE/Agent Runtime.candidate.json"
 RUNTIME="$APP/Contents/Resources/runtime"
 SERVICE_DIR="$APP/Contents/Library/LaunchAgents"
 mkdir -p "$APP/Contents/MacOS" "$SERVICE_DIR" "$RUNTIME/agent_runtime" "$RUNTIME/.venv/bin"
@@ -328,9 +332,16 @@ TREE="$(git rev-parse 'HEAD^{tree}')"
 /usr/bin/python3 "$PWD/macos/package_provenance.py" manifest \
   "$RUNTIME" "$APP/Contents/Resources/runtime-manifest.json" \
   "$REVISION" "$TREE" "$PWD/requirements.lock"
+printf '%s\n' "$$" > "$APP/Contents/Resources/fixture-build-id"
 /usr/bin/codesign --force --deep --sign - "$APP" >/dev/null 2>&1
 /usr/bin/python3 "$PWD/macos/package_provenance.py" seal \
-  "$APP" "$PWD/build/Agent Runtime.candidate.json" >/dev/null
+  "$APP" "$HANDOFF" >/dev/null
+PUBLISHED="$(/usr/bin/python3 "$PWD/macos/package_provenance.py" publish \
+  "$APP" "$HANDOFF" "$CANDIDATES_ROOT")"
+IFS=$'\t' read -r FINAL_APP FINAL_HANDOFF CANDIDATE_SHA256 <<< "$PUBLISHED"
+printf 'candidate_app=%s\n' "$FINAL_APP"
+printf 'candidate_handoff=%s\n' "$FINAL_HANDOFF"
+printf 'candidate_sha256=%s\n' "$CANDIDATE_SHA256"
 ''', 0o700)
         subprocess.run(["git", "-C", str(repo), "config", "user.email", "test@example.invalid"], check=True)
         subprocess.run(["git", "-C", str(repo), "config", "user.name", "Test"], check=True)

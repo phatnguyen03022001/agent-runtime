@@ -49,8 +49,15 @@ class CandidateFreezeTests(unittest.TestCase):
         package.write_text(
             "#!/bin/sh\nset -eu\n"
             "repo=$(cd \"$(dirname \"$0\")/..\" && pwd)\n"
-            "mkdir -p \"$repo/build/Agent Runtime.app\"\n"
-            "printf '{}\\n' > \"$repo/build/Agent Runtime.candidate.json\"\n"
+            "fixture=${FREEZE_FIXTURE_ID:-candidate-a}\n"
+            "sha=${FREEZE_FIXTURE_SHA:-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd}\n"
+            "out=\"$repo/build/candidates/$sha\"\n"
+            "mkdir -p \"$out/Agent Runtime.app\"\n"
+            "printf '%s\\n' \"$fixture\" > \"$out/Agent Runtime.app/payload.txt\"\n"
+            "printf '{\"fixture\":\"%s\"}\\n' \"$fixture\" > \"$out/Agent Runtime.candidate.json\"\n"
+            "printf 'candidate_app=%s\\n' \"$out/Agent Runtime.app\"\n"
+            "printf 'candidate_handoff=%s\\n' \"$out/Agent Runtime.candidate.json\"\n"
+            "printf 'candidate_sha256=%s\\n' \"$sha\"\n"
             "if [ \"${FREEZE_FIXTURE_DRIFT:-}\" = 1 ]; then printf 'drift\\n' >> \"$repo/payload.txt\"; fi\n"
         )
         package.chmod(0o755)
@@ -121,7 +128,7 @@ class CandidateFreezeTests(unittest.TestCase):
                     )
 
 
-    def test_freeze_runs_package_then_validates_existing_external_handoff(self) -> None:
+    def test_freeze_uses_exact_package_reported_candidate_pair(self) -> None:
         freeze = load_freeze_module()
         with tempfile.TemporaryDirectory() as raw:
             repo, revision, tree, lock_sha = self._repo(Path(raw))
@@ -134,13 +141,75 @@ class CandidateFreezeTests(unittest.TestCase):
                 "record_count": 7,
                 "candidate_sha256": "d" * 64,
             }
-            with mock.patch.object(freeze.provenance, "validate_candidate", return_value=expected) as validate:
-                actual = freeze.freeze_candidate(repo, revision, tree, lock_sha)
+            environment = {"FREEZE_FIXTURE_ID": "candidate-a", "FREEZE_FIXTURE_SHA": "d" * 64}
+            with mock.patch.dict("os.environ", environment):
+                with mock.patch.object(freeze.provenance, "validate_candidate", return_value=expected) as validate:
+                    actual = freeze.freeze_candidate(repo, revision, tree, lock_sha)
             resolved = repo.resolve()
-            app = resolved / "build" / "Agent Runtime.app"
-            handoff = resolved / "build" / "Agent Runtime.candidate.json"
+            app = resolved / "build" / "candidates" / ("d" * 64) / "Agent Runtime.app"
+            handoff = resolved / "build" / "candidates" / ("d" * 64) / "Agent Runtime.candidate.json"
             validate.assert_called_once_with(app, handoff)
-            self.assertEqual(actual, expected)
+            self.assertEqual(actual["candidate_app"], str(app))
+            self.assertEqual(actual["candidate_handoff"], str(handoff))
+            self.assertEqual(actual["candidate_sha256"], "d" * 64)
+            self.assertEqual(actual["source_revision"], revision)
+
+    def test_two_freezes_keep_both_candidate_outputs_byte_preserved(self) -> None:
+        freeze = load_freeze_module()
+        with tempfile.TemporaryDirectory() as raw:
+            repo, revision, tree, lock_sha = self._repo(Path(raw))
+            candidates = []
+            for marker in ("a", "b"):
+                candidate_sha = marker * 64
+                candidate = {
+                    "schema": 1,
+                    "bundle_identifier": "com.picmao.agent-runtime",
+                    "source_revision": revision,
+                    "source_tree": tree,
+                    "requirements_lock_sha256": lock_sha,
+                    "record_count": 7,
+                    "candidate_sha256": candidate_sha,
+                }
+                environment = {
+                    "FREEZE_FIXTURE_ID": f"candidate-{marker}",
+                    "FREEZE_FIXTURE_SHA": candidate_sha,
+                }
+                with mock.patch.dict("os.environ", environment):
+                    with mock.patch.object(
+                        freeze.provenance, "validate_candidate", return_value=candidate
+                    ):
+                        candidates.append(
+                            freeze.freeze_candidate(repo, revision, tree, lock_sha)
+                        )
+
+            first_app = Path(candidates[0]["candidate_app"])
+            first_handoff = Path(candidates[0]["candidate_handoff"])
+            second_app = Path(candidates[1]["candidate_app"])
+            second_handoff = Path(candidates[1]["candidate_handoff"])
+            self.assertNotEqual(first_app.parent, second_app.parent)
+            self.assertEqual((first_app / "payload.txt").read_bytes(), b"candidate-a\n")
+            self.assertEqual(first_handoff.read_bytes(), b'{"fixture":"candidate-a"}\n')
+            self.assertEqual((second_app / "payload.txt").read_bytes(), b"candidate-b\n")
+            self.assertEqual(second_handoff.read_bytes(), b'{"fixture":"candidate-b"}\n')
+
+    def test_freeze_rejects_package_reported_sha_mismatch(self) -> None:
+        freeze = load_freeze_module()
+        with tempfile.TemporaryDirectory() as raw:
+            repo, revision, tree, lock_sha = self._repo(Path(raw))
+            candidate = {
+                "schema": 1,
+                "bundle_identifier": "com.picmao.agent-runtime",
+                "source_revision": revision,
+                "source_tree": tree,
+                "requirements_lock_sha256": lock_sha,
+                "record_count": 7,
+                "candidate_sha256": "e" * 64,
+            }
+            environment = {"FREEZE_FIXTURE_ID": "candidate-b", "FREEZE_FIXTURE_SHA": "d" * 64}
+            with mock.patch.dict("os.environ", environment):
+                with mock.patch.object(freeze.provenance, "validate_candidate", return_value=candidate):
+                    with self.assertRaisesRegex(freeze.FreezeCandidateError, "reported candidate SHA-256"):
+                        freeze.freeze_candidate(repo, revision, tree, lock_sha)
 
     def test_freeze_fails_if_source_becomes_dirty_during_package_build(self) -> None:
         freeze = load_freeze_module()
