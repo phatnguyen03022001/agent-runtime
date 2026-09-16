@@ -1,20 +1,20 @@
 protocol_version: 3
 
 task_id: TASK-0058
-task_revision: 1
-review_revision: 1
-state: REVISION_REQUIRED
+task_revision: 2
+review_revision: 2
+state: ACCEPTED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0058/report.yaml
-  commit: "18ed25c14d193a8be09de1bdd8af40326ddf170e"
-  report_revision: 1
+  commit: "49cf0d44a5e30661d3c78c6adc44bf355531ce16"
+  report_revision: 2
 
 reviewed_candidate:
-  planning_base: "2696de3754c3924d3176c93fd32949e7790b66af"
-  implementation_commit: "f006b5929dedb2d7f835dc57343fa2be6464bd51"
-  report_commit: "18ed25c14d193a8be09de1bdd8af40326ddf170e"
+  planning_base: "c67ba221ce39bad48ab7f9026976c987c4a2fa22"
+  implementation_commit: "167bc5868ee97019100e5fb18ea7c40ec3366b05"
+  report_commit: "49cf0d44a5e30661d3c78c6adc44bf355531ce16"
 
 independence:
   reviewer_role: ARCHITECT
@@ -27,45 +27,50 @@ contract_compliance:
   scope: PASS
   structure_policy: PASS
   git_authority: PASS
-  acceptance_criteria: FAIL
+  acceptance_criteria: PASS
 
 criterion_judgment:
   AC-1: PASS
-  AC-2: FAIL
+  AC-2: PASS
   AC-3: PASS
   AC-4: PASS
-  AC-5: PASS
-  AC-6: PASS
-  AC-7: PASS
 
-findings:
+finding_closure:
   - id: FINDING-1
-    severity: BLOCKING
-    criterion: AC-2
-    location: macos/package_provenance.py::publish_candidate
-    description: >-
-      Publication checks final_root.exists() and then calls os.rename(staging_root, final_root).
-      On Unix, renaming a directory onto an existing empty destination directory may silently
-      replace that destination. Therefore another publisher or process can create the SHA
-      destination between the final existence check and rename, and canonical publication can
-      replace that destination instead of deterministically failing closed. The current test
-      proves only a pre-existing sequential collision and does not exercise this TOCTOU race.
-      This is weaker than TASK-0058's invariant that an existing candidate destination is never
-      mutated and collision/reuse fails closed.
-    required_correction: >-
-      Make final publication an atomic no-replace operation on supported macOS semantics, or an
-      equivalently race-safe mechanism that cannot replace an existing destination. Add a
-      deterministic regression that injects/creates the destination after preflight but before
-      publication and proves failure with all pre-existing destination bytes unchanged. Preserve
-      the same-filesystem staged publication model and all other TASK-0058 contracts.
+    prior_review: "63485c835cc3b17fa0a0adcf97ccbcb8080a085b"
+    status: CLOSED
+    evidence: >-
+      Corrective implementation 167bc5868ee97019100e5fb18ea7c40ec3366b05 replaces the
+      replacement-capable os.rename publication primitive with macOS renamex_np using
+      RENAME_EXCL and no replacement-capable fallback. The deterministic regression creates
+      the final SHA destination after preflight and before the real publication primitive,
+      observes collision failure, and proves the raced destination inode, mode, mtime, and
+      contents remain unchanged while staging remains intact.
 
 acceptance_basis:
-  - "Fresh GitHub refs resolved dev exactly at report commit 18ed25c14d193a8be09de1bdd8af40326ddf170e and main unchanged at c49d777efa09db7f6c51bd8d8616db4623499fb8."
-  - "Fresh lineage proves implementation f006b5929dedb2d7f835dc57343fa2be6464bd51 is the single direct child of planning base 2696de3754c3924d3176c93fd32949e7790b66af and report 18ed25c14d193a8be09de1bdd8af40326ddf170e is its report-only direct child."
-  - "SHA-addressed candidate directories, explicit app/handoff/SHA output, staging-before-publication, exact freeze binding, prospective-only TASK-0056 wording, and downstream explicit-path compatibility are materially correct."
-  - "Acceptance is blocked solely by the final publication collision race because the task requires mechanical immutability, not only sequential collision detection."
+  - "Fresh GitHub review resolved TASK-0058 revision 2 at exact report commit 49cf0d44a5e30661d3c78c6adc44bf355531ce16."
+  - "Fresh lineage proves corrective implementation 167bc5868ee97019100e5fb18ea7c40ec3366b05 is the single direct child of planning base c67ba221ce39bad48ab7f9026976c987c4a2fa22 and report 49cf0d44a5e30661d3c78c6adc44bf355531ce16 is the report-only direct child."
+  - "Corrective diff is restricted to macos/package_provenance.py and tests/test_package_provenance.py, matching the revision-2 correction-only scope."
+  - "Executor evidence records PASS for the deterministic TOCTOU regression, 113 affected tests, repository-native ./verify with 327 tests, static checks, and git diff --check."
+  - "Fresh remote refs before review publication prove dev exactly at the reviewed report and main unchanged at c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "No real freeze/signing, Keychain discovery, installed Runtime/tunnel/port 8080, ServiceManagement/launchd, runtime.env, desired-state, installed app, or live-cutover mutation was performed."
+
+accepted_contract:
+  candidate_identity: "build/candidates/<candidate_sha256>/"
+  publication: "same-filesystem staged publication with atomic no-replace final commit"
+  collision_behavior: "fail closed without replacing or mutating an existing destination"
+  mutable_latest_alias_authoritative: false
+  freeze_reports_exact_paths: true
+  historical_task0056_bytes_restored: false
+
+successor_boundary:
+  packaging_candidate_immutability_fixed: true
+  real_candidate_freeze_performed: false
+  installed_runtime_updated: false
+  live_x6_activation_proven: false
+  promotion_or_release_authorized: false
 
 next_action: >-
-  Revise TASK-0058 narrowly to make candidate publication atomically no-replace on macOS, add a
-  deterministic TOCTOU collision regression, rerun affected/full verification, publish one
-  corrective implementation commit and one report-only direct child, then return for Architect review.
+  TASK-0058 is accepted as source/test evidence. Any real candidate freeze/signing, exact transport
+  concurrency proof, installation/live activation, cutover commit, promotion, or release requires
+  separate current authority and must preserve the operator-only Runtime lifecycle boundary.
