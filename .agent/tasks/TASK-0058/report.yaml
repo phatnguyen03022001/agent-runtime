@@ -1,0 +1,122 @@
+protocol_version: 3
+
+task_id: TASK-0058
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: NEEDS_REVIEW
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: dev
+  execution_surface: CHATGPT_LOCAL
+  native_execution_tool: "Remote Desktop Commander MCP"
+  exact_task_base: "2696de3754c3924d3176c93fd32949e7790b66af"
+  implementation_commit: "f006b5929dedb2d7f835dc57343fa2be6464bd51"
+  report_only_commit: PENDING
+  skill_library_revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+  branch_created: false
+  worktree_created: false
+  external_workspace_created: false
+  nested_executor_used: false
+  force_push: false
+  main_mutated: false
+
+implementation:
+  candidate_output_pattern: "build/candidates/<candidate_sha256>/"
+  candidate_app_name: "Agent Runtime.app"
+  candidate_handoff_name: "Agent Runtime.candidate.json"
+  staging_pattern: "build/.agent-runtime-package.XXXXXX/candidate/"
+  publication_boundary: "The sealed app/handoff pair is validated in run-owned staging and then published by one same-filesystem directory rename."
+  collision_policy: "An existing candidate SHA destination is rejected before publication; canonical code does not delete, truncate, merge into, or replace it."
+  package_result_contract:
+    - candidate_app
+    - candidate_handoff
+    - candidate_sha256
+  freeze_binding: "freeze_candidate.py accepts only the exact SHA-derived package result pair and revalidates the reported candidate SHA against candidate provenance."
+  downstream_cutover: "Default install consumes the explicit package-reported app/handoff pair; cutover state and lifecycle semantics are unchanged."
+  historical_scope: "Prospective preservation only. Historical TASK-0056 bytes overwritten by the legacy singleton path were not reconstructed or claimed."
+
+verification:
+  red_green:
+    result: PASS
+    evidence:
+      - "RED: focused tests failed because freeze still validated legacy singleton paths, package output SHA mismatches were ignored, publish_candidate did not exist, and package_app.sh still deleted singleton outputs."
+      - "GREEN: the same focused contracts passed after staged SHA-addressed publication and exact-pair freeze validation were implemented."
+  focused_candidate_freeze:
+    command: ".venv/bin/python -m unittest tests.test_candidate_freeze -v"
+    result: PASS
+    evidence: "8 tests passed, including two distinct synthetic freeze outputs remaining byte-preserved."
+  affected_packaging_cutover:
+    command: ".venv/bin/python -m unittest tests.test_candidate_freeze tests.test_package_provenance tests.test_candidate_cutover tests.test_tunnel_identity -v"
+    result: PASS
+    evidence: "112 tests passed."
+  repository_native:
+    command: "./verify"
+    result: PASS
+    evidence: "326 tests passed."
+  diff_check:
+    command: "git diff --check"
+    result: PASS
+  shell_and_python_static:
+    command: "bash -n install.sh macos/package_app.sh; python -m py_compile affected Python files"
+    result: PASS
+  swift_native:
+    result: NOT_APPLICABLE
+    evidence: "No Swift/native source or native runtime behavior was changed; the task permits Swift/native tests only when materially affected."
+  real_freeze_or_signing:
+    performed: false
+    evidence: "Only deterministic temp/test-owned fixtures were used; no real candidate freeze or signing flow was invoked."
+
+acceptance_criteria:
+  AC-1: PROVEN
+  AC-2: PROVEN
+  AC-3: PROVEN
+  AC-4: PROVEN
+  AC-5: PROVEN
+  AC-6: PROVEN
+  AC-7: PROVEN_ON_PUBLICATION
+
+acceptance_evidence:
+  AC-1: "Canonical package/freeze paths are SHA-addressed under build/candidates and exact app/handoff/SHA values are surfaced to consumers; legacy singleton writes/deletes are covered by negative assertions."
+  AC-2: "Publication tests create distinct candidate outputs, preserve candidate A bytes after candidate B, and reject a reused candidate SHA while rechecking A app/handoff bytes unchanged."
+  AC-3: "Injected candidate validation failure occurs before candidates_root/final publication exists; package staging is outside the final candidate path and final publication is one directory rename after sealing/validation."
+  AC-4: "Freeze tests require exact SHA-derived reported paths, reject reported SHA/provenance mismatch, preserve revision/tree/requirements.lock checks, and keep two independent outputs distinct."
+  AC-5: "README and this report explicitly state the fix is prospective and does not reconstruct or restore overwritten TASK-0056 bytes."
+  AC-6: "Changed-path review contains only packaging/freeze/install compatibility, tests, and README; ./verify passed all 326 tests including TASK-0057 admission/x6 coverage. No live Runtime state was mutated."
+  AC-7: "Implementation f006b5929dedb2d7f835dc57343fa2be6464bd51 was non-force published to dev from the exact task base. This report is authored for the required report-only direct child; final lineage is proved after report publication."
+
+preservation:
+  pre_existing_build_candidates_deleted_moved_or_repurposed: false
+  historical_task0056_bytes_reconstructed: false
+  installed_runtime_lifecycle_mutated: false
+  secure_tunnel_mutated: false
+  port_8080_mutated: false
+  runtime_env_mutated: false
+  desired_state_mutated: false
+  service_management_or_launchd_mutated: false
+  live_cutover_mutated: false
+  system_settings_mutated: false
+  tcc_or_btm_mutated: false
+  installed_app_bytes_mutated: false
+  keychain_identity_discovery_performed: false
+  security_find_identity_performed: false
+  real_candidate_signing_performed: false
+  task0057_x6_semantics_changed: false
+
+publication:
+  implementation_commit: "f006b5929dedb2d7f835dc57343fa2be6464bd51"
+  implementation_pushed_to_dev: true
+  report_path: .agent/tasks/TASK-0058/report.yaml
+  report_only_commit_required: true
+  report_only_commit: PENDING
+  required_lineage: "implementation commit followed by this report-only direct child"
+  push_mode: non_force_dev
+  force_push: false
+  promote_to_main: false
+  main_baseline: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  next_step: ARCHITECT_REVIEW
+
+executor_recommendation:
+  authority: ADVISORY_ONLY
+  recommendation: "TASK-0058 source hardening is ready for Architect review. Future frozen candidates are independently addressable and collision-protected; no real freeze/signing or live Runtime lifecycle action was performed."
