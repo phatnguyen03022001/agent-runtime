@@ -1,0 +1,210 @@
+protocol_version: 3
+
+task_id: TASK-0056
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_signed_candidate_freeze
+  predecessor_task: TASK-0055
+  predecessor_review: "18b7694785f83ed50e0a7be087e8bd19cf4b9d52"
+  predecessor_review_state: ACCEPTED
+  successor_reason: "Materialize exactly one real non-ad-hoc signed immutable candidate from the TASK-0055 accepted source without live installation or service mutation."
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration_and_evidence
+
+classification: BOUNDED
+
+candidate_source:
+  revision: "3767161cda27a0c9df0bed77a60445322141a90c"
+  tree: "df0215a1ef3434c000435e71bbfe35e7c97ee411"
+  requirements_lock_sha256: "80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
+  accepted_by_review: "18b7694785f83ed50e0a7be087e8bd19cf4b9d52"
+  exact_match_required: true
+
+observed_read_only_inputs:
+  architecture_vision_sha256: "4029dc5a70f5a0f3cec0141e8cbc5deb3314bd8b146365551b766b961cf0568e"
+  capability_lab_v2_plan_sha256: "a1f938f2cf1595ef9922e369aeae365af4d6c6cd966611315e1f031c806d13a2"
+  repository_pattern_plan_sha256: "02816d8e22e87bd800ed7aba8af13f2b7f2c0735f225a608ca8fdad4f5f22e81"
+  role: "Read-only successor-planning traceability only. TASK-0055 accepted source/review remains the direct candidate authority."
+
+objective: >-
+  Produce exactly one immutable real-signed Agent Runtime candidate from the exact TASK-0055 accepted implementation revision,
+  prove its source/tree/requirements-lock identity, strict code-signature validity, non-ad-hoc responsible-code identity, matching
+  non-null TeamIdentifier for the main app and Runtime helper, and external candidate handoff closure. Preserve that exact local
+  candidate for the separately authorized live-activation successor. Do not install, activate, register, unregister, restart, stop,
+  or otherwise mutate the live Agent Runtime in this task.
+
+workspace_contract:
+  only_repository: "/Users/tienphat/Developer/agent-runtime"
+  create_other_repo_copy: false
+  create_worktree: false
+  create_workspace: false
+  create_external_scratch_project: false
+  detached_checkout_same_repo_allowed: true
+  persistent_candidate_paths:
+    app: "build/Agent Runtime.app"
+    handoff: "build/Agent Runtime.candidate.json"
+  candidate_must_remain_unmodified_after_freeze: true
+
+signing_contract:
+  input: AGENT_RUNTIME_CODESIGN_IDENTITY
+  source: "Explicit operator-supplied environment value only."
+  missing_or_dash: "STOP before candidate construction and report OPERATOR_INPUT_REQUIRED."
+  identity_discovery: false
+  keychain_enumeration: false
+  security_find_identity: false
+  automatic_identity_selection: false
+  codesign_with_explicit_identity: true
+  os_key_use: >-
+    Standard codesign access to the private key corresponding to the explicitly supplied identity is authorized. If macOS requires
+    interactive operator approval, stop for the operator; do not bypass, weaken, or automate Keychain security.
+  report_full_certificate_subject: false
+  report_team_identifier: true
+
+execution_sequence:
+  - >-
+    Start on local dev. Fresh-observe HEAD, origin/dev, origin/main, git status, and the TASK-0056 planning commit. Require a clean
+    tracked working tree. Ignored existing build artifacts may be removed only inside this repository before freeze if needed to
+    avoid candidate ambiguity; never clean the repository broadly.
+  - >-
+    Confirm the exact accepted candidate source revision, tree, and requirements.lock SHA-256 without modifying source. Confirm
+    AGENT_RUNTIME_CODESIGN_IDENTITY is present and not '-'. Do not enumerate Keychain or discover alternatives.
+  - >-
+    Within the same repository only, switch to detached HEAD at candidate_source.revision. Do not create a branch or worktree.
+    Re-prove HEAD/tree/requirements-lock identity and clean tracked state before packaging.
+  - >-
+    Invoke macos/freeze_candidate.py exactly once for the accepted revision/tree/lock identity with the explicit signing environment.
+    Do not rebuild or re-sign after successful freeze.
+  - >-
+    Validate the frozen candidate in place: package provenance validate-candidate, codesign --verify --deep --strict, app bundle
+    identifier/display identity, embedded Runtime helper identity, main/helper TeamIdentifier presence and equality, candidate handoff
+    source identity, candidate closure digest, and SHA-256 of the external handoff file.
+  - >-
+    Do not install or open the candidate. Do not invoke candidate cutover. Keep build/Agent Runtime.app and
+    build/Agent Runtime.candidate.json byte-preserved after successful verification.
+  - >-
+    Switch the same repository back to dev only after candidate verification. Require origin/dev still points to the TASK-0056
+    planning commit. Add only .agent/tasks/TASK-0056/report.yaml, commit it as a report-only child, push non-force to dev, then stop
+    for ARCHITECT_REVIEW. The ignored build candidate remains local and must not be rebuilt or deleted.
+
+verification:
+  source_suite_rerun_required: false
+  rationale: >-
+    TASK-0055 fresh Architect verification already accepted exactly this source revision with 239 Python tests, 38 Swift tests,
+    release build, and diff check. TASK-0056 verifies materialization/signing identity rather than repeating source acceptance.
+  required:
+    - "Exact source revision == 3767161cda27a0c9df0bed77a60445322141a90c."
+    - "Exact source tree == df0215a1ef3434c000435e71bbfe35e7c97ee411."
+    - "requirements.lock SHA-256 == 80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e."
+    - "macos/freeze_candidate.py returns success exactly once."
+    - "macos/package_provenance.py validate-candidate succeeds on the frozen app + handoff."
+    - "codesign --verify --deep --strict succeeds on build/Agent Runtime.app."
+    - "Main app and AgentRuntimeRuntimeService each expose a non-null TeamIdentifier and the values match."
+    - "Candidate is not ad-hoc signed."
+    - "Candidate handoff schema is 2 and binds the exact source revision/tree/lock plus responsible executable identities."
+    - "Record candidate_sha256 and SHA-256 of build/Agent Runtime.candidate.json."
+    - "Revalidation after all reads proves candidate and handoff are unchanged."
+
+must_not:
+  - "Do not modify source implementation or tests."
+  - "Do not create another folder, repository copy, worktree, workspace, or external scratch tree."
+  - "Do not use Codex, Antigravity, Claude, nested executors, or another writer."
+  - "Do not discover, enumerate, select, import, export, create, revoke, or modify signing certificates/identities."
+  - "Do not print private keys, credentials, runtime.env contents, tunnel IDs, API keys, certificate private material, or Keychain contents."
+  - "Do not run ./install.sh, --install-prebuilt, --commit-cutover, --rollback-cutover, --uninstall, or --recover-runtime-service."
+  - "Do not start, stop, restart, reset, kill, rebind, or replace the live Agent Runtime or protected port 8080."
+  - "Do not register/unregister SMAppService or mutate legacy LaunchAgents, Background Task Management, TCC, or System Settings."
+  - "Do not mutate runtime.env or desired live Runtime state."
+  - "Do not run sfltool resetbtm or restart launchd/System Settings/backgroundtaskmanagementd/cfprefsd."
+  - "Do not install/update Homebrew, Python, Xcode, tunnel-client, packages, certificates, or host-global dependencies."
+  - "Do not mutate main, tags, releases, authority-set repositories, 01/02/03 planning files, or AGENTS.md."
+  - "Do not rebuild/re-sign after one successful candidate freeze; the successful candidate is the immutable activation input."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Candidate is materialized from the exact TASK-0055 accepted implementation revision/tree/requirements.lock identity and no other source revision."
+  - id: AC-2
+    requirement: "Exactly one successful freeze produces build/Agent Runtime.app and build/Agent Runtime.candidate.json; no successful candidate is subsequently rebuilt or re-signed."
+  - id: AC-3
+    requirement: "Canonical packaging uses the explicit operator-supplied non-ad-hoc signing identity; no identity discovery/enumeration/automatic selection occurs."
+  - id: AC-4
+    requirement: "Strict deep codesign verification passes and both main app and Runtime responsible helper expose the same non-null TeamIdentifier."
+  - id: AC-5
+    requirement: "Candidate provenance/handoff schema v2 validates and binds exact source revision/tree/requirements lock, TeamIdentifier, main executable, Runtime helper, record count, and candidate closure digest."
+  - id: AC-6
+    requirement: "External handoff SHA-256 and candidate closure digest are recorded and revalidated unchanged at task completion; local candidate/handoff remain present for live activation."
+  - id: AC-7
+    requirement: "No source/test/docs implementation mutation occurs; no full source suite is rerun absent a concrete signing/materialization failure requiring source diagnosis."
+  - id: AC-8
+    requirement: "Live Runtime, port 8080, runtime.env, desired state, ServiceManagement/LaunchAgent registration, permissions, System Settings, packages, containers, main/tags/releases remain unmodified."
+  - id: AC-9
+    requirement: "One report-only commit publishes non-force to dev and records the immutable candidate evidence, then execution stops for ARCHITECT_REVIEW."
+
+failure_policy:
+  signing_identity_missing: "STOP before build; do not discover an identity."
+  signing_prompt_requires_operator: "Pause at the OS prompt for explicit operator action; do not bypass security."
+  source_identity_drift: "STOP before build."
+  packaging_or_signing_failure: "STOP with attributable evidence; do not broaden scope or retry with a different identity."
+  post_freeze_validation_failure: "Preserve artifacts for diagnosis; do not rebuild/re-sign automatically."
+  remote_dev_drift: "STOP before report publication; do not merge/rebase/force-push."
+
+report_contract:
+  path: .agent/tasks/TASK-0056/report.yaml
+  report_revision: 1
+  required_fields:
+    - "task planning commit and accepted TASK-0055 review/source identities"
+    - "source revision/tree/requirements-lock SHA-256"
+    - "candidate local app and handoff paths"
+    - "candidate_sha256"
+    - "candidate handoff SHA-256"
+    - "handoff schema"
+    - "TeamIdentifier"
+    - "main/runtime responsible executable paths"
+    - "explicit signing input supplied: true/false, without publishing full certificate subject"
+    - "strict codesign verification result"
+    - "candidate provenance validation result"
+    - "freeze invocation count and successful freeze count"
+    - "candidate byte-preservation revalidation result"
+    - "all live-mutation boundaries false"
+  source_implementation_commit_required: false
+  report_only_commit_required: true
+  push: non_force_dev
+  stop_for_architect_review: true
+
+authority_boundaries:
+  git:
+    detached_checkout_same_repo: true
+    create_branch: false
+    create_worktree: false
+    source_commit: false
+    report_commit: true
+    dev_push_non_force: true
+    main: false
+    tags: false
+    releases: false
+  signing:
+    explicit_real_signing: true
+    identity_discovery: false
+    keychain_enumeration: false
+    certificate_mutation: false
+  live_runtime:
+    lifecycle_mutation: false
+    port_8080_mutation: false
+    runtime_env_mutation: false
+    service_registration_mutation: false
+  host:
+    package_install_update: false
+    container_cleanup: false
+    permission_mutation: false
+    unrelated_cleanup: false
+
+blocking_decisions: []
+execution_ready: true
