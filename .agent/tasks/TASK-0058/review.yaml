@@ -1,0 +1,71 @@
+protocol_version: 3
+
+task_id: TASK-0058
+task_revision: 1
+review_revision: 1
+state: REVISION_REQUIRED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0058/report.yaml
+  commit: "18ed25c14d193a8be09de1bdd8af40326ddf170e"
+  report_revision: 1
+
+reviewed_candidate:
+  planning_base: "2696de3754c3924d3176c93fd32949e7790b66af"
+  implementation_commit: "f006b5929dedb2d7f835dc57343fa2be6464bd51"
+  report_commit: "18ed25c14d193a8be09de1bdd8af40326ddf170e"
+
+independence:
+  reviewer_role: ARCHITECT
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  scope: PASS
+  structure_policy: PASS
+  git_authority: PASS
+  acceptance_criteria: FAIL
+
+criterion_judgment:
+  AC-1: PASS
+  AC-2: FAIL
+  AC-3: PASS
+  AC-4: PASS
+  AC-5: PASS
+  AC-6: PASS
+  AC-7: PASS
+
+findings:
+  - id: FINDING-1
+    severity: BLOCKING
+    criterion: AC-2
+    location: macos/package_provenance.py::publish_candidate
+    description: >-
+      Publication checks final_root.exists() and then calls os.rename(staging_root, final_root).
+      On Unix, renaming a directory onto an existing empty destination directory may silently
+      replace that destination. Therefore another publisher or process can create the SHA
+      destination between the final existence check and rename, and canonical publication can
+      replace that destination instead of deterministically failing closed. The current test
+      proves only a pre-existing sequential collision and does not exercise this TOCTOU race.
+      This is weaker than TASK-0058's invariant that an existing candidate destination is never
+      mutated and collision/reuse fails closed.
+    required_correction: >-
+      Make final publication an atomic no-replace operation on supported macOS semantics, or an
+      equivalently race-safe mechanism that cannot replace an existing destination. Add a
+      deterministic regression that injects/creates the destination after preflight but before
+      publication and proves failure with all pre-existing destination bytes unchanged. Preserve
+      the same-filesystem staged publication model and all other TASK-0058 contracts.
+
+acceptance_basis:
+  - "Fresh GitHub refs resolved dev exactly at report commit 18ed25c14d193a8be09de1bdd8af40326ddf170e and main unchanged at c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "Fresh lineage proves implementation f006b5929dedb2d7f835dc57343fa2be6464bd51 is the single direct child of planning base 2696de3754c3924d3176c93fd32949e7790b66af and report 18ed25c14d193a8be09de1bdd8af40326ddf170e is its report-only direct child."
+  - "SHA-addressed candidate directories, explicit app/handoff/SHA output, staging-before-publication, exact freeze binding, prospective-only TASK-0056 wording, and downstream explicit-path compatibility are materially correct."
+  - "Acceptance is blocked solely by the final publication collision race because the task requires mechanical immutability, not only sequential collision detection."
+
+next_action: >-
+  Revise TASK-0058 narrowly to make candidate publication atomically no-replace on macOS, add a
+  deterministic TOCTOU collision regression, rerun affected/full verification, publish one
+  corrective implementation commit and one report-only direct child, then return for Architect review.
