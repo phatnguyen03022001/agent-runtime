@@ -15,6 +15,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from .capacity import HeavyExecutionAdmission, HeavyExecutionLease, heavy_execution_admission
 from .errors import RuntimeStateError, RuntimeValidationError
 from .executor import (
     _minimal_child_env,
@@ -27,7 +28,8 @@ from .protection import _PROTECTED_GUARD
 from .timing import TimingContext, current_call_context, emit_process_end
 
 SESSION_LIMIT_ENV = "AGENT_RUNTIME_MAX_ACTIVE_SESSIONS"
-DEFAULT_SESSION_LIMIT = 64
+MAX_ACTIVE_SESSIONS = 6
+DEFAULT_SESSION_LIMIT = MAX_ACTIVE_SESSIONS
 IDLE_TTL_SECONDS = 600.0
 MAX_RETAINED_OUTPUT_BYTES = 64 * 1024
 MAX_POLL_OUTPUT_BYTES = 16 * 1024
@@ -39,25 +41,21 @@ _REAPER_INTERVAL_SECONDS = 1.0
 
 
 def effective_session_limit(raw_value: str | None = None) -> int:
-    """Return the operator-configured positive session limit.
-
-    The setting is intentionally unbounded above by Agent Runtime policy. The
-    operating system and available PTY/process resources remain the practical
-    ceiling. Missing, malformed, or non-positive values use the documented
-    safe fallback instead of silently selecting a low replacement cap.
-    """
+    """Return the bounded operator-configured persistent PTY limit."""
 
     candidate = os.environ.get(SESSION_LIMIT_ENV, "") if raw_value is None else raw_value
     try:
         value = int(candidate.strip())
     except (AttributeError, TypeError, ValueError):
         return DEFAULT_SESSION_LIMIT
-    return value if value > 0 else DEFAULT_SESSION_LIMIT
+    return value if 1 <= value <= MAX_ACTIVE_SESSIONS else DEFAULT_SESSION_LIMIT
 
 
 def _validated_session_limit(value: int) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-        raise RuntimeValidationError("max_active_sessions must be a positive integer")
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= MAX_ACTIVE_SESSIONS:
+        raise RuntimeValidationError(
+            f"max_active_sessions must be an integer from 1 through {MAX_ACTIVE_SESSIONS}"
+        )
     return value
 
 
@@ -82,6 +80,7 @@ class _Session:
     process_started_wall: float = 0.0
     process_started_mono: float = 0.0
     protected_input_buffer: str = ""
+    heavy_lease: HeavyExecutionLease | None = None
 
     def __post_init__(self) -> None:
         self.changed = threading.Condition(self.lock)
@@ -95,6 +94,7 @@ class TerminalSessionManager:
         idle_ttl_seconds: float = IDLE_TTL_SECONDS,
         reaper_interval: float = _REAPER_INTERVAL_SECONDS,
         max_active_sessions: int | None = None,
+        admission: HeavyExecutionAdmission | None = None,
         start_reaper: bool = True,
     ) -> None:
         self._clock = clock
@@ -105,6 +105,7 @@ class TerminalSessionManager:
             if max_active_sessions is None
             else _validated_session_limit(max_active_sessions)
         )
+        self._admission = heavy_execution_admission() if admission is None else admission
         self._sessions: dict[str, _Session] = {}
         self._lock = threading.RLock()
         self._stop_reaper = threading.Event()
@@ -129,8 +130,10 @@ class TerminalSessionManager:
                     f"configured maximum {self.max_active_sessions} active terminal sessions reached"
                 )
 
-            master_fd, slave_fd = pty.openpty()
+            lease = self._admission.acquire()
+            master_fd = slave_fd = -1
             try:
+                master_fd, slave_fd = pty.openpty()
                 process = subprocess.Popen(
                     checked_argv,
                     cwd=str(checked_cwd),
@@ -143,8 +146,11 @@ class TerminalSessionManager:
                     close_fds=True,
                 )
             except BaseException:
-                os.close(master_fd)
-                os.close(slave_fd)
+                if master_fd >= 0:
+                    os.close(master_fd)
+                if slave_fd >= 0:
+                    os.close(slave_fd)
+                lease.release()
                 raise
             os.close(slave_fd)
 
@@ -158,21 +164,28 @@ class TerminalSessionManager:
                 timing_context=current_call_context(),
                 process_started_wall=time.time(),
                 process_started_mono=time.monotonic(),
+                heavy_lease=lease,
             )
             self._sessions[session.session_id] = session
 
-        threading.Thread(
-            target=self._reader,
-            args=(session,),
-            name=f"terminal-reader-{session.session_id}",
-            daemon=True,
-        ).start()
-        threading.Thread(
-            target=self._monitor,
-            args=(session,),
-            name=f"terminal-monitor-{session.session_id}",
-            daemon=True,
-        ).start()
+        try:
+            threading.Thread(
+                target=self._reader,
+                args=(session,),
+                name=f"terminal-reader-{session.session_id}",
+                daemon=True,
+            ).start()
+            threading.Thread(
+                target=self._monitor,
+                args=(session,),
+                name=f"terminal-monitor-{session.session_id}",
+                daemon=True,
+            ).start()
+        except BaseException:
+            self._cleanup_process(session, "startup_failure")
+            with self._lock:
+                self._sessions.pop(session.session_id, None)
+            raise
         return self.poll(session.session_id, cursor=0, wait_ms=0)
 
     def poll(self, session_id: str, cursor: int = 0, wait_ms: int = 0) -> dict[str, Any]:
@@ -358,10 +371,10 @@ class TerminalSessionManager:
         with session.cleanup_lock:
             if session.finalized:
                 return
-            _terminate_process_group(session.process)
-            session.reader_done.wait(_READER_DRAIN_SECONDS)
-            with session.changed:
-                if not session.finalized:
+            try:
+                _terminate_process_group(session.process)
+                session.reader_done.wait(_READER_DRAIN_SECONDS)
+                with session.changed:
                     session.exit_code = session.process.returncode
                     session.status = "exited"
                     try:
@@ -371,14 +384,17 @@ class TerminalSessionManager:
                     session.finalized = True
                     self._retain_completed_session(session)
                     session.changed.notify_all()
-            emit_process_end(
-                session.timing_context,
-                tool_name="terminal_start",
-                process_kind="persistent_pty",
-                started_wall=session.process_started_wall,
-                started_mono=session.process_started_mono,
-                termination_state=termination_state,
-            )
+                emit_process_end(
+                    session.timing_context,
+                    tool_name="terminal_start",
+                    process_kind="persistent_pty",
+                    started_wall=session.process_started_wall,
+                    started_mono=session.process_started_mono,
+                    termination_state=termination_state,
+                )
+            finally:
+                if session.finalized and session.heavy_lease is not None:
+                    session.heavy_lease.release()
 
     def _retain_completed_session(self, session: _Session) -> None:
         with self._lock:

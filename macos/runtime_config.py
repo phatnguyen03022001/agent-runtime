@@ -15,6 +15,7 @@ REQUIRED = (
 )
 OPTIONAL = {"AGENT_RUNTIME_MAX_ACTIVE_SESSIONS", "AGENT_RUNTIME_MAX_PARALLELISM"}
 ENTRY = re.compile(r"([A-Z_][A-Z0-9_]*)=(.*)")
+MAX_ACTIVE_SESSIONS = 6
 
 
 def fail(message: str) -> "NoReturn":
@@ -59,6 +60,12 @@ def validate(path: Path, *, require_mode: bool) -> bytes:
     parallelism = values.get("AGENT_RUNTIME_MAX_PARALLELISM")
     if parallelism is not None and (re.fullmatch(r"[1-9][0-9]*", parallelism) is None or not 1 <= int(parallelism) <= 10):
         fail("AGENT_RUNTIME_MAX_PARALLELISM must be an integer from 1 through 10")
+    session_limit = values.get("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS")
+    if session_limit is not None and (
+        re.fullmatch(r"[1-9][0-9]*", session_limit) is None
+        or not 1 <= int(session_limit) <= MAX_ACTIVE_SESSIONS
+    ):
+        fail(f"AGENT_RUNTIME_MAX_ACTIVE_SESSIONS must be an integer from 1 through {MAX_ACTIVE_SESSIONS}")
     return raw
 
 
@@ -76,6 +83,12 @@ def _bootstrap_payload(source: Path, workspace_root: Path) -> bytes:
     parallelism = values.get("AGENT_RUNTIME_MAX_PARALLELISM")
     if parallelism is not None and (re.fullmatch(r"[1-9][0-9]*", parallelism) is None or not 1 <= int(parallelism) <= 10):
         fail("AGENT_RUNTIME_MAX_PARALLELISM must be an integer from 1 through 10")
+    session_limit = values.get("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS")
+    if session_limit is not None and (
+        re.fullmatch(r"[1-9][0-9]*", session_limit) is None
+        or not 1 <= int(session_limit) <= MAX_ACTIVE_SESSIONS
+    ):
+        fail(f"AGENT_RUNTIME_MAX_ACTIVE_SESSIONS must be an integer from 1 through {MAX_ACTIVE_SESSIONS}")
 
     rendered: list[str] = []
     seen_secrets: set[str] = set()

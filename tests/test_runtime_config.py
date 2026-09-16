@@ -20,7 +20,7 @@ class RuntimeConfigTests(unittest.TestCase):
             "CONTROL_PLANE_API_KEY=test-key\n"
             "CONTROL_PLANE_TUNNEL_ID=test-tunnel\n"
             f"AGENT_RUNTIME_WORKSPACE_ROOT={workspace_value}\n"
-            "AGENT_RUNTIME_MAX_ACTIVE_SESSIONS=22\n"
+            "AGENT_RUNTIME_MAX_ACTIVE_SESSIONS=6\n"
         )
         path.chmod(0o600)
 
@@ -47,7 +47,7 @@ class RuntimeConfigTests(unittest.TestCase):
                 self.assertIn(f"AGENT_RUNTIME_WORKSPACE_ROOT={derived}\n", text)
                 self.assertIn("CONTROL_PLANE_API_KEY=test-key\n", text)
                 self.assertIn("CONTROL_PLANE_TUNNEL_ID=test-tunnel\n", text)
-                self.assertIn("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS=22\n", text)
+                self.assertIn("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS=6\n", text)
                 self.assertEqual(stat.S_IMODE(canonical.stat().st_mode), 0o600)
 
     def test_existing_canonical_file_is_byte_preserved(self) -> None:
@@ -205,6 +205,23 @@ class RuntimeConfigTests(unittest.TestCase):
                 )
                 canonical.chmod(0o600)
                 with self.assertRaisesRegex(SystemExit, "AGENT_RUNTIME_MAX_PARALLELISM"):
+                    runtime_config.validate(canonical, require_mode=True)
+
+    def test_session_limit_rejects_values_outside_the_x6_contract(self) -> None:
+        for configured in ("", "0", "7", "22", "many"):
+            with self.subTest(configured=configured), tempfile.TemporaryDirectory() as raw:
+                temp = Path(raw)
+                workspace = temp / "workspace"
+                workspace.mkdir()
+                canonical = temp / "runtime.env"
+                canonical.write_text(
+                    "CONTROL_PLANE_API_KEY=test-key\n"
+                    "CONTROL_PLANE_TUNNEL_ID=test-tunnel\n"
+                    f"AGENT_RUNTIME_WORKSPACE_ROOT={workspace}\n"
+                    f"AGENT_RUNTIME_MAX_ACTIVE_SESSIONS={configured}\n"
+                )
+                canonical.chmod(0o600)
+                with self.assertRaisesRegex(SystemExit, "AGENT_RUNTIME_MAX_ACTIVE_SESSIONS"):
                     runtime_config.validate(canonical, require_mode=True)
 
 

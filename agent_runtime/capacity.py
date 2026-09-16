@@ -4,16 +4,19 @@ import ctypes
 import math
 import os
 import re
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .errors import RuntimeValidationError
+from .errors import RuntimeCapacityError, RuntimeValidationError
 
 MAX_PARALLELISM_ENV = "AGENT_RUNTIME_MAX_PARALLELISM"
 DEFAULT_MAX_PARALLELISM = 2
-V2_EVIDENCE_CEILING = 4
+HARD_EXECUTION_CEILING = 6
+V2_EVIDENCE_CEILING = HARD_EXECUTION_CEILING
+HEAVY_CAPACITY_ERROR = "terminal execution capacity exhausted"
 SAMPLE_WINDOW_SECONDS = 0.05
 SAMPLE_WINDOW_MS = 50
 MIN_MEMORY_HEADROOM_BYTES = 1024**3
@@ -121,6 +124,75 @@ def _configured_max_parallelism() -> int:
     if not 1 <= value <= 10:
         raise RuntimeValidationError(f"{MAX_PARALLELISM_ENV} must be an integer from 1 through 10")
     return value
+
+
+def hard_execution_limit() -> int:
+    """Return the immutable-at-runtime process-local execution ceiling.
+
+    The operator setting may lower the ceiling, but never increase it beyond
+    the supported x6 envelope.  Capacity observation is deliberately not part
+    of this decision: it remains advisory and has no admission ownership.
+    """
+
+    return min(_configured_max_parallelism(), HARD_EXECUTION_CEILING)
+
+
+class HeavyExecutionLease:
+    """One idempotently releasable ownership token for a heavy workload."""
+
+    def __init__(self, admission: "HeavyExecutionAdmission") -> None:
+        self._admission = admission
+        self._released = False
+        self._lock = threading.Lock()
+
+    def release(self) -> bool:
+        with self._lock:
+            if self._released:
+                return False
+            self._released = True
+        self._admission._release()
+        return True
+
+
+class HeavyExecutionAdmission:
+    """A fail-fast process-local admission boundary for terminal roots."""
+
+    def __init__(self, limit: int | None = None) -> None:
+        configured = hard_execution_limit() if limit is None else limit
+        if isinstance(configured, bool) or not isinstance(configured, int) or not 1 <= configured <= HARD_EXECUTION_CEILING:
+            raise RuntimeValidationError(
+                f"heavy execution limit must be an integer from 1 through {HARD_EXECUTION_CEILING}"
+            )
+        self.limit = configured
+        self._active = 0
+        self._lock = threading.Lock()
+
+    def acquire(self) -> HeavyExecutionLease:
+        with self._lock:
+            if self._active >= self.limit:
+                raise RuntimeCapacityError(HEAVY_CAPACITY_ERROR)
+            self._active += 1
+        return HeavyExecutionLease(self)
+
+    @property
+    def active(self) -> int:
+        with self._lock:
+            return self._active
+
+    def _release(self) -> None:
+        with self._lock:
+            if self._active <= 0:
+                raise RuntimeError("heavy execution admission underflow")
+            self._active -= 1
+
+
+_HEAVY_EXECUTION_ADMISSION = HeavyExecutionAdmission()
+
+
+def heavy_execution_admission() -> HeavyExecutionAdmission:
+    """Return the single Runtime-owned heavy execution admission boundary."""
+
+    return _HEAVY_EXECUTION_ADMISSION
 
 
 def _libsystem() -> ctypes.CDLL:
@@ -297,7 +369,7 @@ def _evaluate(signals: CapacitySignals, operator_max: int) -> dict[str, Any]:
         reasons = evidence_reasons
     else:
         evidence_ceiling = V2_EVIDENCE_CEILING
-        reasons = ["CAPACITY_X4_AVAILABLE", "LIMIT_V2_MAX_4"]
+        reasons = ["CAPACITY_X6_AVAILABLE", "LIMIT_V2_MAX_6"]
     if operator_max < evidence_ceiling:
         reasons = ["LIMIT_OPERATOR_MAX", *reasons]
 

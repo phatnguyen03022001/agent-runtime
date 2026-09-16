@@ -283,7 +283,11 @@ class TerminalSessionTests(unittest.TestCase):
     def test_operator_configured_concurrent_starts_respect_configured_capacity(self) -> None:
         from agent_runtime.session import TerminalSessionManager
 
-        manager = TerminalSessionManager(max_active_sessions=4, start_reaper=False)
+        from agent_runtime.capacity import HeavyExecutionAdmission
+
+        manager = TerminalSessionManager(
+            max_active_sessions=4, admission=HeavyExecutionAdmission(4), start_reaper=False
+        )
         self.addCleanup(manager.shutdown)
         barrier = threading.Barrier(5)
         results: list[str] = []
@@ -319,7 +323,11 @@ class TerminalSessionTests(unittest.TestCase):
     def test_explicit_operator_capacity_is_validated_and_enforced(self) -> None:
         from agent_runtime.session import TerminalSessionManager
 
-        manager = TerminalSessionManager(max_active_sessions=3, start_reaper=False)
+        from agent_runtime.capacity import HeavyExecutionAdmission
+
+        manager = TerminalSessionManager(
+            max_active_sessions=3, admission=HeavyExecutionAdmission(3), start_reaper=False
+        )
         self.addCleanup(manager.shutdown)
         sessions = [
             manager.start(
@@ -336,32 +344,38 @@ class TerminalSessionTests(unittest.TestCase):
         for result in sessions:
             manager.control(str(result["session_id"]), "terminate")
 
-    def test_configured_capacity_supports_twenty_persistent_sessions(self) -> None:
+    def test_configured_capacity_supports_six_persistent_sessions(self) -> None:
+        from agent_runtime.capacity import HeavyExecutionAdmission
         from agent_runtime.session import TerminalSessionManager
 
-        manager = TerminalSessionManager(max_active_sessions=20, start_reaper=False)
+        manager = TerminalSessionManager(
+            max_active_sessions=6, admission=HeavyExecutionAdmission(6), start_reaper=False
+        )
         self.addCleanup(manager.shutdown)
         sessions = [
             manager.start(
                 [sys.executable, "-u", "-c", "import time; time.sleep(5)"],
                 str(self.cwd),
             )
-            for _ in range(20)
+            for _ in range(6)
         ]
-        self.assertEqual(len(sessions), 20)
+        self.assertEqual(len(sessions), 6)
         self.assertEqual(
             sum(session.status == "running" for session in manager._sessions.values()),
-            20,
+            6,
         )
         for result in sessions:
             manager.control(str(result["session_id"]), "terminate")
 
-    def test_twenty_concurrent_terminal_start_calls_fill_configured_capacity(self) -> None:
+    def test_six_concurrent_terminal_start_calls_fill_configured_capacity(self) -> None:
+        from agent_runtime.capacity import HeavyExecutionAdmission
         from agent_runtime.session import TerminalSessionManager
 
-        manager = TerminalSessionManager(max_active_sessions=20, start_reaper=False)
+        manager = TerminalSessionManager(
+            max_active_sessions=6, admission=HeavyExecutionAdmission(6), start_reaper=False
+        )
         self.addCleanup(manager.shutdown)
-        barrier = threading.Barrier(20)
+        barrier = threading.Barrier(6)
 
         def launch(index: int) -> dict[str, object]:
             barrier.wait()
@@ -370,24 +384,25 @@ class TerminalSessionTests(unittest.TestCase):
                 str(self.cwd),
             )
 
-        with ThreadPoolExecutor(max_workers=20) as executor:
-            sessions = list(executor.map(launch, range(20)))
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            sessions = list(executor.map(launch, range(6)))
         self.session_ids.extend(str(result["session_id"]) for result in sessions)
-        self.assertEqual(len(sessions), 20)
+        self.assertEqual(len(sessions), 6)
         self.assertEqual(
             sum(session.status == "running" for session in manager._sessions.values()),
-            20,
+            6,
         )
 
     def test_session_limit_setting_uses_positive_integer_and_safe_fallback(self) -> None:
         from agent_runtime.session import DEFAULT_SESSION_LIMIT, effective_session_limit
 
-        self.assertEqual(effective_session_limit("20"), 20)
+        self.assertEqual(effective_session_limit("6"), 6)
         self.assertEqual(effective_session_limit("1"), 1)
         self.assertEqual(effective_session_limit(""), DEFAULT_SESSION_LIMIT)
         self.assertEqual(effective_session_limit("invalid"), DEFAULT_SESSION_LIMIT)
         self.assertEqual(effective_session_limit("0"), DEFAULT_SESSION_LIMIT)
         self.assertEqual(effective_session_limit("-2"), DEFAULT_SESSION_LIMIT)
+        self.assertEqual(effective_session_limit("7"), DEFAULT_SESSION_LIMIT)
 
     def test_idle_ttl_is_fixed_and_reaper_expires_without_a_follow_up_call(self) -> None:
         from agent_runtime.session import IDLE_TTL_SECONDS, TerminalSessionManager

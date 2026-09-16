@@ -37,7 +37,7 @@ from .contracts import (
     WaitMilliseconds,
 )
 from .errors import RuntimeStateError, RuntimeValidationError
-from .executor import execute_terminal
+from .executor import execute_terminal, shutdown_terminal_executions
 from .fs_read import read_files_batch
 from .protection import ProtectedRuntimeDenied
 from .session import (
@@ -271,9 +271,10 @@ _install_timing_middleware()
 
 
 def _handle_termination_signal(signum: int, _frame: Any) -> None:
-    """Clean up persistent sessions before preserving the signal's default exit."""
+    """Clean up Runtime-owned terminal roots before default signal exit."""
 
     try:
+        shutdown_terminal_executions()
         shutdown_terminal_sessions()
     finally:
         signal.signal(signum, signal.SIG_DFL)

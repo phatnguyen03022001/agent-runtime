@@ -47,7 +47,7 @@ MCP_COMMAND="command=${RUNTIME_PYTHON// /\\ } -m agent_runtime.server,channel=ma
 MCP_COMMAND_NORMALIZED="command=$RUNTIME_PYTHON -m agent_runtime.server,channel=main"
 HEALTH_URL="http://127.0.0.1:8080"
 RUNTIME_PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-DEFAULT_SESSION_LIMIT=64
+DEFAULT_SESSION_LIMIT=6
 
 acquire_lock() {
   mkdir -p "$STATE_DIR"
@@ -109,7 +109,7 @@ effective_session_limit() {
   if [[ -f "$ENV_FILE" && ! -L "$ENV_FILE" ]]; then
     value="$(awk -F= '$1 == "AGENT_RUNTIME_MAX_ACTIVE_SESSIONS" { print substr($0, index($0, "=") + 1); exit }' "$ENV_FILE")"
   fi
-  if [[ "$value" =~ ^[1-9][0-9]*$ ]]; then
+  if [[ "$value" =~ ^[1-6]$ ]]; then
     printf '%s\n' "$value"
   else
     printf '%s\n' "$DEFAULT_SESSION_LIMIT"
@@ -282,6 +282,9 @@ if not workspace.is_absolute() or not workspace.is_dir():
 parallelism = values.get("AGENT_RUNTIME_MAX_PARALLELISM")
 if parallelism is not None and (re.fullmatch(r"[1-9][0-9]*", parallelism) is None or not 1 <= int(parallelism) <= 10):
     fail("AGENT_RUNTIME_MAX_PARALLELISM must be an integer from 1 through 10.")
+session_limit = values.get("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS")
+if session_limit is not None and (re.fullmatch(r"[1-9][0-9]*", session_limit) is None or not 1 <= int(session_limit) <= 6):
+    fail("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS must be an integer from 1 through 6.")
 
 runtime_env = {
     "PATH": runtime_path,

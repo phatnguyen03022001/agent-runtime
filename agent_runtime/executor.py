@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from .capacity import heavy_execution_admission
 from .errors import RuntimeValidationError
 from .protection import _PROTECTED_GUARD
 from .timing import current_call_context, emit_process_end
@@ -19,6 +20,42 @@ MAX_OUTPUT_BYTES = 64 * 1024
 _READ_CHUNK_BYTES = 8192
 _TERMINATE_GRACE_SECONDS = 0.5
 _PRESERVED_ENV_NAMES = ("PATH", "HOME", "USER", "TMPDIR", "LANG")
+
+
+class _ActiveExecutionRegistry:
+    """Cleanup ownership for in-flight one-shot process groups only."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._processes: dict[subprocess.Popen[bytes], threading.Event] = {}
+
+    def add(self, process: subprocess.Popen[bytes]) -> None:
+        with self._lock:
+            self._processes[process] = threading.Event()
+
+    def discard(self, process: subprocess.Popen[bytes]) -> None:
+        with self._lock:
+            completed = self._processes.pop(process, None)
+        if completed is not None:
+            completed.set()
+
+    def shutdown(self) -> None:
+        with self._lock:
+            processes = tuple(self._processes.items())
+        for process, _completed in processes:
+            try:
+                _terminate_process_group(process)
+            except (OSError, subprocess.SubprocessError):
+                # Best-effort shutdown must continue to the remaining owned
+                # groups; their owning execute_terminal call still finalizes.
+                pass
+        for _process, completed in processes:
+            # execute_terminal owns the bounded pipe drain and lease release.
+            # Let it finish before the Runtime restores default signal handling.
+            completed.wait(2.0)
+
+
+_ACTIVE_EXECUTIONS = _ActiveExecutionRegistry()
 
 
 class _BoundedCapture:
@@ -177,39 +214,37 @@ def execute_terminal(
     root = _workspace_root()
     checked_cwd = _validated_cwd(cwd, root)
 
-    process = subprocess.Popen(
-        checked_argv,
-        cwd=str(checked_cwd),
-        env=_minimal_child_env(),
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        shell=False,
-        start_new_session=True,
-    )
-    process_context = current_call_context()
-    process_started_wall = time.time()
-    process_started_mono = time.monotonic()
+    lease = heavy_execution_admission().acquire()
+    process: subprocess.Popen[bytes] | None = None
+    process_context = None
+    process_started_wall = 0.0
+    process_started_mono = 0.0
     process_event_emitted = False
-    assert process.stdout is not None
-    assert process.stderr is not None
-
     stdout_capture = _BoundedCapture(MAX_OUTPUT_BYTES)
     stderr_capture = _BoundedCapture(MAX_OUTPUT_BYTES)
-    stdout_thread = threading.Thread(
-        target=stdout_capture.consume,
-        args=(process.stdout,),
-        daemon=True,
-    )
-    stderr_thread = threading.Thread(
-        target=stderr_capture.consume,
-        args=(process.stderr,),
-        daemon=True,
-    )
-    stdout_thread.start()
-    stderr_thread.start()
-
+    stdout_thread: threading.Thread | None = None
+    stderr_thread: threading.Thread | None = None
     try:
+        process = subprocess.Popen(
+            checked_argv,
+            cwd=str(checked_cwd),
+            env=_minimal_child_env(),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=False,
+            start_new_session=True,
+        )
+        _ACTIVE_EXECUTIONS.add(process)
+        process_context = current_call_context()
+        process_started_wall = time.time()
+        process_started_mono = time.monotonic()
+        assert process.stdout is not None
+        assert process.stderr is not None
+        stdout_thread = threading.Thread(target=stdout_capture.consume, args=(process.stdout,), daemon=True)
+        stderr_thread = threading.Thread(target=stderr_capture.consume, args=(process.stderr,), daemon=True)
+        stdout_thread.start()
+        stderr_thread.start()
         timed_out = False
         try:
             process.wait(timeout=timeout)
@@ -230,15 +265,6 @@ def execute_terminal(
         )
         process_event_emitted = True
 
-        stdout_thread.join(timeout=1.0)
-        stderr_thread.join(timeout=1.0)
-        if stdout_thread.is_alive():
-            process.stdout.close()
-            stdout_thread.join(timeout=1.0)
-        if stderr_thread.is_alive():
-            process.stderr.close()
-            stderr_thread.join(timeout=1.0)
-
         return {
             "cwd": str(checked_cwd),
             "argv": checked_argv,
@@ -250,12 +276,35 @@ def execute_terminal(
             "stderr_truncated": stderr_capture.truncated,
         }
     finally:
-        if not process_event_emitted:
-            emit_process_end(
-                process_context,
-                tool_name="terminal_exec",
-                process_kind="one_shot",
-                started_wall=process_started_wall,
-                started_mono=process_started_mono,
-                termination_state="error",
-            )
+        try:
+            if process is not None:
+                if not process_event_emitted:
+                    emit_process_end(
+                        process_context,
+                        tool_name="terminal_exec",
+                        process_kind="one_shot",
+                        started_wall=process_started_wall,
+                        started_mono=process_started_mono,
+                        termination_state="error",
+                    )
+                try:
+                    _terminate_process_group(process)
+                finally:
+                    try:
+                        for thread, stream in ((stdout_thread, process.stdout), (stderr_thread, process.stderr)):
+                            if thread is None:
+                                continue
+                            thread.join(timeout=1.0)
+                            if thread.is_alive() and stream is not None:
+                                stream.close()
+                                thread.join(timeout=1.0)
+                    finally:
+                        _ACTIVE_EXECUTIONS.discard(process)
+        finally:
+            lease.release()
+
+
+def shutdown_terminal_executions() -> None:
+    """Terminate all Runtime-owned in-flight one-shot process groups."""
+
+    _ACTIVE_EXECUTIONS.shutdown()

@@ -139,7 +139,8 @@ public final class PSRuntimeDiscovery: RuntimeDiscovering, @unchecked Sendable {
 }
 
 public enum RuntimeSessionCapacity {
-    public static let fallback = 64
+    public static let fallback = 6
+    public static let validRange = 1...6
 
     public static func effective(from envFile: URL?) -> Int {
         guard let envFile,
@@ -149,7 +150,7 @@ public enum RuntimeSessionCapacity {
         for line in text.split(whereSeparator: \.isNewline) {
             let parts = line.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
             guard parts.count == 2, parts[0] == "AGENT_RUNTIME_MAX_ACTIVE_SESSIONS" else { continue }
-            if let value = Int(parts[1].trimmingCharacters(in: .whitespaces)), value > 0 {
+            if let value = Int(parts[1].trimmingCharacters(in: .whitespaces)), validRange.contains(value) {
                 return value
             }
             return fallback

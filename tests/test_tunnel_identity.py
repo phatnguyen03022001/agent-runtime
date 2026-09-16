@@ -461,13 +461,13 @@ esac
             repo, home, bin_dir, capture = self._install_fixture(Path(raw))
             env_file = self._env(repo, "same-id")
             with env_file.open("a") as handle:
-                handle.write("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS=22\n")
+                handle.write("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS=6\n")
             source_before = env_file.read_bytes()
             result = self._run_install(repo, home, bin_dir, capture)
             self.assertEqual(result.returncode, 0, result.stderr)
             text = env_file.read_text()
             self.assertIn("CONTROL_PLANE_TUNNEL_ID=same-id", text)
-            self.assertIn("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS=22", text)
+            self.assertIn("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS=6", text)
             self.assertNotIn("AGENT_RUNTIME_TUNNEL_PROFILE=", text)
             self.assertFalse((home / ".config/tunnel-client/agent-runtime.yaml").exists())
             self.assertIn("argv=doctor --control-plane.poll-channel main", capture.read_text())
@@ -486,7 +486,7 @@ esac
             self.assertEqual(env_file.read_bytes(), source_before)
             canonical_text = canonical.read_text()
             self.assertIn(f"AGENT_RUNTIME_WORKSPACE_ROOT={repo.parent.resolve()}\n", canonical_text)
-            self.assertIn("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS=22\n", canonical_text)
+            self.assertIn("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS=6\n", canonical_text)
 
     def test_install_accepts_a_verified_homebrew_style_tunnel_symlink(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

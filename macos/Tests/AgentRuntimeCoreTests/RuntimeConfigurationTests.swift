@@ -21,6 +21,14 @@ final class RuntimeConfigurationTests: XCTestCase {
         XCTAssertEqual(configuration.parallelLimit, 4)
     }
 
+    func testSessionCapacityIsBoundedToOneThroughSix() throws {
+        XCTAssertEqual(RuntimeSessionCapacity.fallback, 6)
+        XCTAssertEqual(RuntimeSessionCapacity.effective(from: try temporaryEnv("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS=1\n")), 1)
+        XCTAssertEqual(RuntimeSessionCapacity.effective(from: try temporaryEnv("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS=6\n")), 6)
+        XCTAssertEqual(RuntimeSessionCapacity.effective(from: try temporaryEnv("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS=7\n")), 6)
+        XCTAssertEqual(RuntimeSessionCapacity.effective(from: try temporaryEnv("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS=invalid\n")), 6)
+    }
+
     private func temporaryEnv(_ contents: String) throws -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

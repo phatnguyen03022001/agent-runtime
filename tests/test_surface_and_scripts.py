@@ -419,12 +419,12 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertIn('"$RUNTIME/agent_runtime/"', package)
         self.assertNotIn("checkout-path.txt", package)
 
-    def test_configurable_session_limit_is_documented_and_not_hard_capped_at_three(self) -> None:
+    def test_configurable_session_limit_is_documented_and_hard_capped_at_six(self) -> None:
         source = (ROOT / "agent_runtime/session.py").read_text()
         docs = (ROOT / "README.md").read_text()
-        self.assertNotIn("MAX_ACTIVE_SESSIONS = 3", source)
+        self.assertIn("MAX_ACTIVE_SESSIONS = 6", source)
         self.assertIn("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS", source)
-        self.assertIn("DEFAULT_SESSION_LIMIT = 64", source)
+        self.assertIn("DEFAULT_SESSION_LIMIT = MAX_ACTIVE_SESSIONS", source)
         self.assertIn("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS", docs)
         self.assertIn("session-limit", docs)
 

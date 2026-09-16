@@ -71,6 +71,8 @@ it. The checkout file remains only source development/bootstrap input.
 are read from the canonical file. `AGENT_RUNTIME_MAX_PARALLELISM` accepts only
 integers from `1` through `10`; when absent its effective default is `2`. Invalid
 values fail configuration validation instead of being silently clamped. The
+shared heavy-execution admission limit is always `min(operator setting, 6)`, so
+an operator value above six never expands the supported execution envelope. The
 accepted tunnel fingerprint is `6aa2b81d6dd8`. Never print the complete tunnel
 ID or API key.
 The historical `~/.config/tunnel-client/agent-runtime.yaml` profile must stay
@@ -164,22 +166,27 @@ The MCP server exposes exactly six public tools:
   fail without file I/O. Line indexes are limited to 2147483647. It is read-only
   and exposes no caller limit knobs.
 
-Capacity Observer v2 reports an advisory healthy-host ceiling up to x4. The
-effective healthy ceiling is `min(AGENT_RUNTIME_MAX_PARALLELISM, 4)`: the
+Capacity Observer v2 reports an advisory healthy-host ceiling up to x6. The
+effective healthy ceiling is `min(AGENT_RUNTIME_MAX_PARALLELISM, 6)`: the
 operator range remains `1` through `10`, the default remains `2`, and operator
-limits below x4 remain authoritative. Existing CPU/load, thermal, swap, memory,
-disk, and unknown-signal pressure gates conservatively return x1. x8 and x10
-remain benchmark/stress evidence points, not normal Runtime targets. The
-observer remains advisory-only: it does not schedule or orchestrate work, and
-Architect/Executor remains responsible for proving semantic independence before
-using parallelism. It uses only aggregate public macOS CPU/load, VM/swap,
-thermal, and workspace-filesystem capacity signals, keeps no telemetry history,
-and performs no global process inventory.
+limits below x6 remain authoritative. Existing CPU/load, thermal, swap, memory,
+disk, and unknown-signal pressure gates conservatively return x1. The observer
+remains advisory-only: it does not schedule, admit, queue, retry, or orchestrate
+work. The independent process-local admission boundary remains authoritative
+even if the observer is stale or reports a higher value. It uses only aggregate
+public macOS CPU/load, VM/swap, thermal, and workspace-filesystem capacity
+signals, keeps no telemetry history, and performs no global process inventory.
 
-Persistent session state is memory-only. The operator-configurable positive
-integer `AGENT_RUNTIME_MAX_ACTIVE_SESSIONS` controls active PTY capacity. Its
-documented safe fallback is `64` when unset, malformed, or non-positive; there
-is no replacement low fixed cap. Inspect the effective value with:
+Persistent session state is memory-only. The operator-configurable integer
+`AGENT_RUNTIME_MAX_ACTIVE_SESSIONS` controls active PTY capacity and accepts
+only `1` through `6`; its safe fallback is `6` when unset or malformed. A live
+PTY holds one shared heavy-execution lease for its full lifetime, and a
+one-shot `terminal_exec` holds one through process-group cleanup and output
+drain. Across both tool types Runtime admits at most six heavy roots; a seventh
+request fails immediately with a stable capacity error before creating a
+subprocess or PTY. Runtime deliberately provides no queue, delayed admission,
+automatic retry, scheduler, worker pool, fairness guarantee, or per-caller
+quota. Inspect the effective PTY value with:
 
 ```bash
 ./start.sh session-limit
@@ -187,9 +194,12 @@ is no replacement low fixed cap. Inspect the effective value with:
 
 Changing this setting does not rotate the tunnel or restart Runtime by itself;
 the new value applies on the next explicit operator Start or Restart.
-Lifecycle serialization is separate from ordinary terminal execution, so
-independent `terminal_exec` and `terminal_start` workloads do not share the
-lifecycle lock.
+Lifecycle serialization is separate from ordinary terminal execution. On a
+graceful Runtime `SIGTERM` or `SIGINT`, Runtime cleans the process groups it
+currently owns for both in-flight one-shot executions and persistent PTYs.
+This is best-effort cleanup ownership, not a job registry or recovery system;
+same-UID malicious or pathological children can still escape ordinary process
+management or exhaust host resources.
 
 `AGENT_RUNTIME_WORKSPACE_ROOT` selects the allowed working-directory tree. It
 is not mechanical filesystem confinement: executable arguments retain the

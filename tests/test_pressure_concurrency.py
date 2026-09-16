@@ -6,7 +6,9 @@ import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from unittest import mock
 
+from agent_runtime import capacity
 from agent_runtime.executor import execute_terminal
 
 
@@ -25,7 +27,7 @@ class PressureConcurrencyTests(unittest.TestCase):
             os.environ["AGENT_RUNTIME_WORKSPACE_ROOT"] = self.previous_root
         self.temp.cleanup()
 
-    def test_twenty_independent_terminal_exec_operations_complete_without_lifecycle_serialization(self) -> None:
+    def test_six_independent_terminal_exec_operations_complete_within_the_hard_limit(self) -> None:
         def run(index: int) -> tuple[int, str]:
             result = execute_terminal(
                 [
@@ -40,13 +42,14 @@ class PressureConcurrencyTests(unittest.TestCase):
             )
             return result["exit_code"], result["stdout"]
 
-        with ThreadPoolExecutor(max_workers=20) as executor:
-            results = list(executor.map(run, range(20)))
+        admission = capacity.HeavyExecutionAdmission(6)
+        with mock.patch.object(capacity, "_HEAVY_EXECUTION_ADMISSION", admission), ThreadPoolExecutor(max_workers=6) as executor:
+            results = list(executor.map(run, range(6)))
 
-        self.assertEqual([code for code, _output in results], [0] * 20)
+        self.assertEqual([code for code, _output in results], [0] * 6)
         self.assertEqual(
             {output.strip() for _code, output in results},
-            {f"exec-{index}" for index in range(20)},
+            {f"exec-{index}" for index in range(6)},
         )
 
 
