@@ -21,8 +21,17 @@ if str(MACOS_ROOT) not in sys.path:
     sys.path.insert(0, str(MACOS_ROOT))
 import package_provenance as provenance
 
-TRANSACTION_SCHEMA = 2
+TRANSACTION_SCHEMA = 3
+SCHEMA2_RECOVERY_SCHEMA = 2
 LEGACY_RECOVERY_SCHEMA = 1
+TRANSACTION_PHASES = {"PRE_SWAP", "APP_SWAPPED"}
+AGGREGATE_ONLY_SERVICE_MANAGEMENT_REVISIONS = {
+    "4fbf5b1b0ef3708c8fff479ca6718344f3bfd3c0",
+}
+SPLIT_SERVICE_MANAGEMENT_REVISIONS = {
+    "03dd4ede4205680335ce851fb1f2992371544937",
+    "7077257837bdaf76ef1558fe78b900ec3af68788",
+}
 UI_LABEL = "com.picmao.agent-runtime-ui"
 RUNTIME_LABEL = "com.picmao.agent-runtime-runtime"
 APP_BUNDLE_IDENTIFIER = "com.picmao.agent-runtime"
@@ -69,6 +78,29 @@ def _service_management(app: Path, operation: str) -> dict[str, str]:
     if any(not isinstance(value[key], str) or value[key] not in SERVICE_STATES for key in value):
         raise CutoverError("ServiceManagement diagnostics contain an unknown state")
     return value
+
+
+def _runtime_manifest_revision(app: Path) -> str:
+    manifest_path = app / "Contents" / "Resources" / "runtime-manifest.json"
+    try:
+        manifest = provenance._load_manifest(manifest_path)
+    except provenance.PackageProvenanceError as exc:
+        raise CutoverError("predecessor Runtime manifest is invalid") from exc
+    revision = manifest.get("runtime_revision")
+    if manifest.get("schema") != provenance.SCHEMA or manifest.get("owner") != provenance.OWNER:
+        raise CutoverError("predecessor Runtime manifest ownership is invalid")
+    if not isinstance(revision, str) or provenance.HEX40.fullmatch(revision) is None:
+        raise CutoverError("predecessor Runtime revision is invalid")
+    return revision
+
+
+def _predecessor_service_contract(app: Path) -> str:
+    revision = _runtime_manifest_revision(app)
+    if revision in AGGREGATE_ONLY_SERVICE_MANAGEMENT_REVISIONS:
+        return "aggregate-v1"
+    if revision in SPLIT_SERVICE_MANAGEMENT_REVISIONS:
+        return "split-v1"
+    return "unknown"
 
 
 def _bounded_launchctl_text(value: str) -> str:
@@ -177,6 +209,58 @@ def _validate_operation_ledger(value: object) -> dict[str, bool]:
     if any(not isinstance(value[key], bool) for key in expected):
         raise CutoverError("cutover operation ledger is malformed")
     return {key: bool(value[key]) for key in _empty_operation_ledger()}
+
+
+def _validate_transaction_phase(value: object) -> str:
+    if not isinstance(value, str) or value not in TRANSACTION_PHASES:
+        raise CutoverError("cutover transaction phase is invalid")
+    return value
+
+
+def _aggregate_refresh_is_reversible(main_state: str, runtime: dict[str, object]) -> bool:
+    main_registered = main_state in REGISTERED_SERVICE_STATES
+    classification = runtime.get("classification")
+    runtime_restorable = classification in {"healthy-registered", "awaiting-approval"}
+    runtime_stale = classification == "stale-registered"
+    return (main_registered and runtime_restorable) or (not main_registered and runtime_stale)
+
+
+def _unregister_predecessor_runtime_for_refresh(
+    target_app: Path,
+    *,
+    contract: str,
+    modern_before: dict[str, object],
+    runtime_before: dict[str, object],
+    operations: dict[str, bool],
+) -> None:
+    main_before = modern_before.get("main_app")
+    if main_before not in SERVICE_STATES:
+        raise CutoverError("pre-swap main-app ServiceManagement state is invalid")
+    if contract == "unknown":
+        raise CutoverError("predecessor ServiceManagement contract is unsupported")
+    if contract == "aggregate-v1":
+        if not _aggregate_refresh_is_reversible(str(main_before), runtime_before):
+            raise CutoverError("predecessor aggregate ServiceManagement contract cannot be refreshed reversibly")
+        after = _service_management(target_app, "unregister")
+        if runtime_before["registration_state"] in REGISTERED_SERVICE_STATES:
+            if after["runtime_agent"] not in ABSENT_SERVICE_STATES:
+                raise CutoverError("predecessor aggregate Runtime unregister did not converge")
+            operations["runtime_unregistered"] = True
+        if main_before in REGISTERED_SERVICE_STATES:
+            if after["main_app"] not in ABSENT_SERVICE_STATES:
+                raise CutoverError("predecessor aggregate main-app unregister did not converge")
+            operations["main_unregistered"] = True
+        elif after["main_app"] not in ABSENT_SERVICE_STATES:
+            raise CutoverError("predecessor aggregate unregister changed absent main-app ownership unexpectedly")
+        return
+    if contract != "split-v1":
+        raise CutoverError("predecessor ServiceManagement contract is unsupported")
+    after = _service_management(target_app, "unregister-runtime")
+    if after["runtime_agent"] not in ABSENT_SERVICE_STATES:
+        raise CutoverError("pre-existing Runtime registration did not unregister for refresh")
+    if after["main_app"] != main_before:
+        raise CutoverError("split Runtime unregister changed main-app ownership unexpectedly")
+    operations["runtime_unregistered"] = True
 
 
 def _wait_for_service_absence(
@@ -457,6 +541,33 @@ def _restore_file(snapshot: dict[str, object], backup: Path, target: Path) -> No
         target.unlink()
 
 
+def _verify_snapshot_file_unchanged(snapshot: object, backup: Path, target: Path) -> None:
+    if not isinstance(snapshot, dict) or set(snapshot) != {"present", "mode"}:
+        raise CutoverError("rollback file snapshot metadata is malformed")
+    present = snapshot.get("present")
+    mode = snapshot.get("mode")
+    if not isinstance(present, bool):
+        raise CutoverError("rollback file snapshot metadata is malformed")
+    if present:
+        if not isinstance(mode, int) or isinstance(mode, bool):
+            raise CutoverError("rollback file snapshot metadata is malformed")
+        if backup.is_symlink() or not backup.is_file():
+            raise CutoverError(f"rollback backup is missing or unsafe: {backup}")
+        if target.is_symlink() or not target.is_file():
+            raise CutoverError(f"pre-swap rollback target changed: {target}")
+        if target.stat().st_mode & 0o7777 != mode or target.read_bytes() != backup.read_bytes():
+            raise CutoverError(f"pre-swap rollback target changed: {target}")
+    elif target.exists() or target.is_symlink():
+        raise CutoverError(f"pre-swap rollback target unexpectedly exists: {target}")
+
+
+def _verify_desired_state_unchanged(path: Path, expected_present: bool) -> None:
+    if path.is_symlink() or (path.exists() and not path.is_file()):
+        raise CutoverError("desired-state rollback target is unsafe")
+    if path.exists() != expected_present:
+        raise CutoverError("desired-state changed during pre-swap cutover")
+
+
 def _inject(fail_stages: set[str], stage: str) -> None:
     if stage in fail_stages:
         raise CutoverError(f"injected {stage} failure")
@@ -585,19 +696,44 @@ def _restore_preexisting_modern_state(
     before = metadata.get("modern_ownership_before")
     if not isinstance(before, dict) or set(before) != {"main_app", "runtime"}:
         raise CutoverError("pre-swap ServiceManagement ownership metadata is malformed")
+    main_before = before.get("main_app")
+    if main_before not in SERVICE_STATES:
+        raise CutoverError("pre-swap main-app ServiceManagement state is malformed")
     runtime = _validate_runtime_ownership_record(before["runtime"])
     ledger = _validate_operation_ledger(metadata.get("operations"))
+    contract = metadata.get("predecessor_service_contract", "unknown")
+    if contract not in {"aggregate-v1", "split-v1", "unknown", "none"}:
+        raise CutoverError("predecessor ServiceManagement contract metadata is invalid")
 
-    if ledger["main_unregistered"] and before["main_app"] in REGISTERED_SERVICE_STATES:
-        _service_management(target_app, "register-main")
+    restore_main = ledger["main_unregistered"] and main_before in REGISTERED_SERVICE_STATES
+    restore_runtime = (
+        ledger["runtime_unregistered"]
+        and runtime["classification"] in {"healthy-registered", "awaiting-approval"}
+    )
+    if not restore_main and not restore_runtime:
+        return
 
-    if ledger["runtime_unregistered"] and runtime["classification"] in {"healthy-registered", "awaiting-approval"}:
-        restored = _service_management(target_app, "register-runtime")
-        if restored["runtime_agent"] not in REGISTERED_SERVICE_STATES:
-            raise CutoverError("pre-existing Runtime ServiceManagement state could not be restored")
-        if runtime["classification"] == "healthy-registered":
-            expected = target_app / "Contents/MacOS/AgentRuntimeRuntimeService"
-            _require_service_identity(launchctl, f"gui/{uid}/{RUNTIME_LABEL}", expected)
+    if contract == "aggregate-v1":
+        if restore_main != restore_runtime:
+            raise CutoverError("aggregate predecessor ownership cannot be restored independently")
+        restored = _service_management(target_app, "register")
+        if restored["main_app"] not in REGISTERED_SERVICE_STATES or restored["runtime_agent"] not in REGISTERED_SERVICE_STATES:
+            raise CutoverError("pre-existing aggregate ServiceManagement ownership could not be restored")
+    elif contract == "split-v1":
+        if restore_main:
+            restored = _service_management(target_app, "register-main")
+            if restored["main_app"] not in REGISTERED_SERVICE_STATES:
+                raise CutoverError("pre-existing main-app ServiceManagement state could not be restored")
+        if restore_runtime:
+            restored = _service_management(target_app, "register-runtime")
+            if restored["runtime_agent"] not in REGISTERED_SERVICE_STATES:
+                raise CutoverError("pre-existing Runtime ServiceManagement state could not be restored")
+    else:
+        raise CutoverError("predecessor ServiceManagement contract cannot restore removed ownership")
+
+    if restore_runtime and runtime["classification"] == "healthy-registered":
+        expected = target_app / "Contents/MacOS/AgentRuntimeRuntimeService"
+        _require_service_identity(launchctl, f"gui/{uid}/{RUNTIME_LABEL}", expected)
 
 
 def _unregister_modern_generation(
@@ -653,15 +789,13 @@ def _restore_transaction(
     fail_stages: set[str],
 ) -> None:
     metadata = _load_metadata(transaction_dir)
+    phase = _validate_transaction_phase(metadata.get("phase"))
     previous = metadata.get("previous")
     if not isinstance(previous, dict):
         raise CutoverError("cutover transaction previous-state metadata is invalid")
     app_present = previous.get("app_present")
     if not isinstance(app_present, bool):
         raise CutoverError("rollback previous-app presence metadata is invalid")
-    if target_app.is_symlink() or not target_app.is_dir():
-        raise CutoverError("installed app path is unsafe before rollback")
-    provenance.validate_candidate(target_app, transaction_dir / "candidate-handoff.json")
 
     expected_closure: dict[str, object] | None = None
     backup = transaction_dir / "previous-app"
@@ -670,24 +804,72 @@ def _restore_transaction(
         if _rollback_app_closure(backup) != expected_closure:
             raise CutoverError("rollback app snapshot closure does not match rollback envelope")
 
+    paths = metadata.get("paths")
+    if not isinstance(paths, dict) or set(paths) != {"target_app", "ui_plist", "runtime_plist", "desired_state"}:
+        raise CutoverError("cutover transaction path metadata is invalid")
+    if Path(str(paths["target_app"])) != target_app:
+        raise CutoverError("cutover transaction target-app path changed")
+    ui_plist = Path(str(paths["ui_plist"]))
+    runtime_plist = Path(str(paths["runtime_plist"]))
+    desired_state = Path(str(paths["desired_state"]))
+
+    if phase == "PRE_SWAP":
+        if app_present:
+            if target_app.is_symlink() or not target_app.is_dir():
+                raise CutoverError("PRE_SWAP phase installed app is missing or unsafe")
+            if expected_closure is None or _rollback_app_closure(target_app) != expected_closure:
+                raise CutoverError("PRE_SWAP phase installed app does not match previous-app closure")
+        elif target_app.exists() or target_app.is_symlink():
+            raise CutoverError("PRE_SWAP phase unexpectedly has an installed app")
+
+        _verify_snapshot_file_unchanged(previous.get("ui_plist"), transaction_dir / "previous-ui.plist", ui_plist)
+        _verify_snapshot_file_unchanged(
+            previous.get("runtime_plist"), transaction_dir / "previous-runtime.plist", runtime_plist
+        )
+        _verify_desired_state_unchanged(desired_state, bool(previous.get("desired_state_present")))
+
+        ui_service = f"gui/{uid}/{UI_LABEL}"
+        if bool(previous.get("ui_loaded")):
+            _require_service_identity(launchctl, ui_service, _launchagent_program(ui_plist, UI_LABEL))
+        elif _service_loaded(launchctl, ui_service):
+            raise CutoverError("PRE_SWAP phase legacy UI loaded state changed")
+
+        if app_present:
+            _restore_preexisting_modern_state(target_app, metadata, launchctl=launchctl, uid=uid)
+
+        before = metadata.get("modern_ownership_before")
+        if not isinstance(before, dict) or set(before) != {"main_app", "runtime"}:
+            raise CutoverError("pre-swap ServiceManagement ownership metadata is malformed")
+        runtime = _validate_runtime_ownership_record(before["runtime"])
+        runtime_service = f"gui/{uid}/{RUNTIME_LABEL}"
+        observed_program = _loaded_service_program(launchctl, runtime_service)
+        if runtime["legacy_label_loaded"]:
+            expected_program = _launchagent_program(runtime_plist, RUNTIME_LABEL)
+        elif runtime["loaded"]:
+            expected_program = Path(str(runtime["loaded_program"]))
+        else:
+            expected_program = None
+        if observed_program != expected_program:
+            raise CutoverError("PRE_SWAP phase Runtime loaded identity was not restored")
+        return
+
+    if target_app.is_symlink() or not target_app.is_dir():
+        raise CutoverError("APP_SWAPPED phase installed app is missing or unsafe")
+    try:
+        provenance.validate_candidate(target_app, transaction_dir / "candidate-handoff.json")
+    except provenance.PackageProvenanceError as exc:
+        raise CutoverError("APP_SWAPPED phase installed app does not match candidate identity") from exc
+
     _compensate_operation_ledger(target_app, metadata.get("operations"))
     _inject(fail_stages, "rollback_restore_app")
 
     if target_app.exists():
-        if not target_app.is_dir():
-            raise CutoverError("installed app path is not a directory during rollback")
         shutil.rmtree(target_app)
     if app_present:
         _copy_rollback_app(backup, target_app)
         if expected_closure is None or _rollback_app_closure(target_app) != expected_closure:
             raise CutoverError("restored previous app closure does not match rollback envelope")
 
-    paths = metadata.get("paths")
-    if not isinstance(paths, dict):
-        raise CutoverError("cutover transaction path metadata is invalid")
-    ui_plist = Path(str(paths["ui_plist"]))
-    runtime_plist = Path(str(paths["runtime_plist"]))
-    desired_state = Path(str(paths["desired_state"]))
     _restore_file(previous["ui_plist"], transaction_dir / "previous-ui.plist", ui_plist)
     _restore_file(previous["runtime_plist"], transaction_dir / "previous-runtime.plist", runtime_plist)
 
@@ -709,7 +891,8 @@ def _restore_transaction(
         ui_loaded=bool(previous.get("ui_loaded")),
         runtime_loaded=runtime_was_loaded,
     )
-    _restore_preexisting_modern_state(target_app, metadata, launchctl=launchctl, uid=uid)
+    if app_present:
+        _restore_preexisting_modern_state(target_app, metadata, launchctl=launchctl, uid=uid)
     if runtime_was_loaded and desired_before:
         runtime_service = f"gui/{uid}/{RUNTIME_LABEL}"
         _require_launchctl_ok(
@@ -803,6 +986,17 @@ def cutover_candidate(
         runtime_before["registration_state"] in REGISTERED_SERVICE_STATES
         and (runtime_before["classification"] == "stale-registered" or generation_changed)
     )
+    predecessor_contract = "none" if not target_app.exists() else "unknown"
+    if runtime_refresh:
+        predecessor_contract = _predecessor_service_contract(target_app)
+    if runtime_refresh and predecessor_contract == "unknown":
+        raise CutoverError("predecessor ServiceManagement contract is unsupported for Runtime refresh")
+    if (
+        runtime_refresh
+        and predecessor_contract == "aggregate-v1"
+        and not _aggregate_refresh_is_reversible(str(modern_before["main_app"]), runtime_before)
+    ):
+        raise CutoverError("predecessor aggregate ServiceManagement contract cannot be refreshed reversibly")
     preserve_modern_runtime = runtime_before["classification"] == "healthy-registered" and not runtime_refresh
 
     previous: dict[str, object] = {
@@ -841,10 +1035,12 @@ def cutover_candidate(
         metadata: dict[str, object] = {
             "schema": TRANSACTION_SCHEMA,
             "status": "PREPARED",
+            "phase": "PRE_SWAP",
             "candidate": expected,
             "previous": previous,
             "modern_ownership_before": modern_before,
             "runtime_generation_changed": generation_changed,
+            "predecessor_service_contract": predecessor_contract,
             "operations": operations,
             "paths": {
                 "target_app": str(target_app),
@@ -860,16 +1056,22 @@ def cutover_candidate(
         if runtime_refresh:
             if not target_app.exists() or not _runtime_bundle_present(target_app):
                 raise CutoverError("registered Runtime ownership cannot be refreshed without the installed owner app")
-            refreshed = _service_management(target_app, "unregister-runtime")
-            if refreshed["runtime_agent"] not in ABSENT_SERVICE_STATES:
-                raise CutoverError("pre-existing Runtime registration did not unregister for refresh")
-            operations["runtime_unregistered"] = True
+            _unregister_predecessor_runtime_for_refresh(
+                target_app,
+                contract=predecessor_contract,
+                modern_before=modern_before,
+                runtime_before=runtime_before,
+                operations=operations,
+            )
             _atomic_json(transaction_dir / "metadata.json", metadata)
+            _inject(failures, "after_predecessor_refresh")
 
         target_app.parent.mkdir(parents=True, exist_ok=True)
         if target_app.exists():
             shutil.rmtree(target_app)
         os.replace(staged, target_app)
+        metadata["phase"] = "APP_SWAPPED"
+        _atomic_json(transaction_dir / "metadata.json", metadata)
         _inject(failures, "after_app_swap")
         provenance.validate_candidate(target_app, transaction_dir / "candidate-handoff.json")
         _inject(failures, "after_installed_validation")
@@ -1102,6 +1304,127 @@ def _recover_schema1_partial(
         raise CutoverError("stale pre-existing Runtime registration was recreated during recovery")
 
 
+def _validate_schema2_preswap_partial_recovery(
+    metadata: dict[str, object],
+    target_app: Path,
+) -> tuple[dict[str, object], dict[str, object], dict[str, object]]:
+    expected_keys = {
+        "schema", "status", "candidate", "previous", "modern_ownership_before",
+        "runtime_generation_changed", "operations", "paths", "last_error",
+    }
+    if set(metadata) != expected_keys or metadata.get("schema") != SCHEMA2_RECOVERY_SCHEMA:
+        raise CutoverError("schema-2 no-live-mutation recovery transaction shape is unsupported")
+    if metadata.get("status") != "PARTIAL":
+        raise CutoverError("schema-2 no-live-mutation recovery requires a PARTIAL transaction")
+    if metadata.get("runtime_generation_changed") is not True:
+        raise CutoverError("schema-2 no-live-mutation recovery generation evidence is invalid")
+    ledger = _validate_operation_ledger(metadata.get("operations"))
+    if any(ledger.values()):
+        raise CutoverError("schema-2 no-live-mutation recovery requires an all-false operation ledger")
+
+    previous = metadata.get("previous")
+    if not isinstance(previous, dict) or set(previous) != {
+        "app_present", "app_closure", "ui_loaded", "runtime_loaded",
+        "desired_state_present", "ui_plist", "runtime_plist",
+    }:
+        raise CutoverError("schema-2 no-live-mutation previous-state metadata is malformed")
+    if (
+        previous.get("app_present") is not True
+        or previous.get("ui_loaded") is not True
+        or previous.get("runtime_loaded") is not False
+        or previous.get("desired_state_present") is not True
+    ):
+        raise CutoverError("schema-2 no-live-mutation recovery does not match the bounded incident")
+    for key in ("ui_plist", "runtime_plist"):
+        snapshot = previous.get(key)
+        if not isinstance(snapshot, dict) or set(snapshot) != {"present", "mode"}:
+            raise CutoverError("schema-2 no-live-mutation predecessor metadata is malformed")
+        if snapshot.get("present") is not True or not isinstance(snapshot.get("mode"), int):
+            raise CutoverError("schema-2 no-live-mutation predecessor metadata is malformed")
+
+    before = metadata.get("modern_ownership_before")
+    if not isinstance(before, dict) or set(before) != {"main_app", "runtime"}:
+        raise CutoverError("schema-2 no-live-mutation modern ownership metadata is malformed")
+    if before.get("main_app") != "not-registered":
+        raise CutoverError("schema-2 no-live-mutation main-app evidence is invalid")
+    runtime = _validate_runtime_ownership_record(before.get("runtime"))
+    if (
+        runtime["registration_state"] != "enabled"
+        or runtime["classification"] != "stale-registered"
+        or runtime["loaded"] is not False
+        or runtime["loaded_program"] != ""
+        or runtime["legacy_label_loaded"] is not False
+    ):
+        raise CutoverError("schema-2 no-live-mutation Runtime evidence is invalid")
+
+    paths = metadata.get("paths")
+    if not isinstance(paths, dict) or set(paths) != {"target_app", "ui_plist", "runtime_plist", "desired_state"}:
+        raise CutoverError("schema-2 no-live-mutation paths are malformed")
+    if Path(str(paths["target_app"])) != target_app:
+        raise CutoverError("schema-2 no-live-mutation target path is invalid")
+    if Path(str(paths["ui_plist"])).name != f"{UI_LABEL}.plist":
+        raise CutoverError("schema-2 no-live-mutation UI path is invalid")
+    if Path(str(paths["runtime_plist"])).name != f"{RUNTIME_LABEL}.plist":
+        raise CutoverError("schema-2 no-live-mutation Runtime path is invalid")
+    if Path(str(paths["desired_state"])).name != "protected-runtime-running":
+        raise CutoverError("schema-2 no-live-mutation desired-state path is invalid")
+
+    candidate = metadata.get("candidate")
+    if not isinstance(candidate, dict) or candidate.get("bundle_identifier") != APP_BUNDLE_IDENTIFIER:
+        raise CutoverError("schema-2 no-live-mutation candidate identity is malformed")
+    return previous, before, paths
+
+
+def _recover_schema2_preswap_partial(
+    transaction_dir: Path,
+    target_app: Path,
+    metadata: dict[str, object],
+    *,
+    launchctl: Path,
+    uid: int,
+) -> None:
+    previous, before, paths = _validate_schema2_preswap_partial_recovery(metadata, target_app)
+    if target_app.is_symlink() or not target_app.is_dir():
+        raise CutoverError("schema-2 no-live-mutation installed app is missing or unsafe")
+    expected_closure = _require_rollback_app_closure(previous.get("app_closure"))
+    backup = transaction_dir / "previous-app"
+    if _rollback_app_closure(backup) != expected_closure:
+        raise CutoverError("schema-2 previous-app snapshot closure does not match recovery envelope")
+    if _rollback_app_closure(target_app) != expected_closure:
+        raise CutoverError("schema-2 current installed app does not match previous-app closure")
+
+    staged = transaction_dir / "staged-candidate"
+    handoff = transaction_dir / "candidate-handoff.json"
+    validated = provenance.validate_candidate(staged, handoff)
+    if validated != metadata.get("candidate"):
+        raise CutoverError("schema-2 staged candidate identity does not match transaction metadata")
+    if _rollback_app_closure(staged) == expected_closure:
+        raise CutoverError("schema-2 staged candidate does not differ from previous app")
+
+    candidate = metadata.get("candidate")
+    assert isinstance(candidate, dict)
+    team = candidate.get("team_identifier")
+    if not isinstance(team, str) or not team:
+        raise CutoverError("schema-2 candidate signing identity is malformed")
+    _validate_recovery_snapshot_signature(backup, expected_closure, team)
+    _validate_recovery_snapshot_signature(target_app, expected_closure, team)
+
+    ui_plist = Path(str(paths["ui_plist"]))
+    runtime_plist = Path(str(paths["runtime_plist"]))
+    desired_state = Path(str(paths["desired_state"]))
+    _verify_snapshot_file_unchanged(previous.get("ui_plist"), transaction_dir / "previous-ui.plist", ui_plist)
+    _verify_snapshot_file_unchanged(
+        previous.get("runtime_plist"), transaction_dir / "previous-runtime.plist", runtime_plist
+    )
+    _verify_desired_state_unchanged(desired_state, True)
+
+    ui_service = f"gui/{uid}/{UI_LABEL}"
+    _require_service_identity(launchctl, ui_service, _launchagent_program(ui_plist, UI_LABEL))
+    runtime_service = f"gui/{uid}/{RUNTIME_LABEL}"
+    if _loaded_service_program(launchctl, runtime_service) is not None:
+        raise CutoverError("schema-2 no-live-mutation Runtime job is unexpectedly loaded")
+
+
 def recover_partial_transaction(
     transaction_dir: Path,
     target_app: Path,
@@ -1112,7 +1435,8 @@ def recover_partial_transaction(
 ) -> dict[str, object]:
     failures = set(fail_stages or ())
     metadata = _load_metadata(
-        transaction_dir, allowed_schemas={LEGACY_RECOVERY_SCHEMA, TRANSACTION_SCHEMA}
+        transaction_dir,
+        allowed_schemas={LEGACY_RECOVERY_SCHEMA, SCHEMA2_RECOVERY_SCHEMA, TRANSACTION_SCHEMA},
     )
     if metadata.get("status") != "PARTIAL":
         raise CutoverError("partial recovery requires a PARTIAL cutover transaction")
@@ -1120,6 +1444,10 @@ def recover_partial_transaction(
         if metadata["schema"] == TRANSACTION_SCHEMA:
             _restore_transaction(
                 transaction_dir, target_app, launchctl=launchctl, uid=uid, fail_stages=failures
+            )
+        elif metadata["schema"] == SCHEMA2_RECOVERY_SCHEMA:
+            _recover_schema2_preswap_partial(
+                transaction_dir, target_app, metadata, launchctl=launchctl, uid=uid
             )
         elif metadata["schema"] == LEGACY_RECOVERY_SCHEMA:
             _recover_schema1_partial(
