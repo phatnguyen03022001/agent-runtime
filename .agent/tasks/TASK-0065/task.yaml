@@ -1,0 +1,211 @@
+protocol_version: 3
+
+task_id: TASK-0065
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_successor_task
+  predecessor_task: TASK-0064
+  predecessor_review: "5b00e1d9f8923d372db894239a1c261734d2aec4"
+  predecessor_review_state: ACCEPTED
+  operator_authorization: >-
+    Operator explicitly authorized exactly one fresh canonical cutover of accepted candidate
+    8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660.
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration_and_evidence
+
+classification: BOUNDED_LIVE_LIFECYCLE_MUTATION
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - verification
+    - simplicity
+  recommended:
+    - github-workflow
+
+accepted_predecessor_checkpoint:
+  source_review: "5b00e1d9f8923d372db894239a1c261734d2aec4"
+  transaction_present: false
+  installed_generation: "4fbf5b1b0ef3708c8fff479ca6718344f3bfd3c0"
+  installed_predecessor_closure_sha256: "3815c89912b20ad343ca4f321f34672003abec2ee8a3ca1dab318fdb409faa8b"
+  installed_predecessor_closure_record_count: 1224
+  runtime_env_sha256: "b47b144549659070c759407da4ba0dbedbf3c00014a948d615cff7823f97b2ed"
+  desired_state_sha256: "e3b0c44298fc1c149afbf4f321f34672003abec2ee8a3ca1dab318fdb409faa8b"
+
+accepted_candidate:
+  candidate_sha256: "8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660"
+  candidate_handoff_sha256: "d8bd8885b4cd0d78e6f419496a97bbc5bda021f37f243f796420b05b851774f3"
+  candidate_app: "/Users/tienphat/Developer/agent-runtime/build/candidates/8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660/Agent Runtime.app"
+  candidate_handoff: "/Users/tienphat/Developer/agent-runtime/build/candidates/8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660/Agent Runtime.candidate.json"
+  source_revision: "b5ac0ed5b461d3a259e4111e1a8f13933985f81f"
+  source_tree: "5d9b40221e42d96aa78cc25bca7e94092e8426a9"
+  requirements_lock_sha256: "80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
+  team_identifier_sha256: "497c6b1fff2701afe7cf7fedb03297efe39b0af5e1081a78fc61bbbafeb9d49c"
+
+cutover_authority:
+  command_family: "macos/candidate_cutover.py cutover"
+  invocation_count: 1
+  home: "/Users/tienphat"
+  launchctl: "/bin/launchctl"
+  uid: 501
+  tunnel_client_argument: "/opt/homebrew/bin/tunnel-client"
+  candidate: accepted_candidate_only
+  commit_cutover_authorized: false
+  rollback_authorized: false
+  resume_authorized: false
+  recover_authorized: false
+  second_cutover_authorized: false
+
+objective: >-
+  Execute exactly one fresh canonical cutover invocation for the accepted immutable TASK-0062 candidate
+  8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660 after freshly proving that the
+  TASK-0064 rollback closure still holds and that no cutover transaction exists. Observe and report the
+  exact canonical result and resulting live state without commit-cutover, rollback, resume, recover,
+  retry, manual repair, or any second lifecycle invocation. This task does not declare final freeze readiness.
+
+scope:
+  required_changes:
+    - "Fresh-resolve local HEAD and origin/dev and require both equal the exact TASK-0065 handoff base. Require designated working tree clean."
+    - "Before mutation, require the cutover transaction path to be absent and prove no symlink substitutes for it. Any transaction presence invalidates authority and requires ARCHITECT_REVIEW without mutation."
+    - "Before mutation, prove the installed app rollback closure SHA-256 is 3815c89912b20ad343ca4f321f34672003abec2ee8a3ca1dab318fdb409faa8b with 1224 records and runtime revision 4fbf5b1b0ef3708c8fff479ca6718344f3bfd3c0."
+    - "Before mutation, prove runtime.env exists, mode 0600, SHA-256 b47b144549659070c759407da4ba0dbedbf3c00014a948d615cff7823f97b2ed, without reading or printing its values."
+    - "Before mutation, prove the desired-state marker exists, mode 0600, and record its current SHA-256. Treat any drift from the TASK-0064 accepted checkpoint as a blocker unless the accepted review explicitly permits it."
+    - "Before mutation, canonical-validate the accepted candidate app/handoff pair and require candidate SHA-256 8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660 and handoff SHA-256 d8bd8885b4cd0d78e6f419496a97bbc5bda021f37f243f796420b05b851774f3."
+    - "Before mutation, run strict deep codesign verification on the exact accepted candidate and require non-null consistent TeamIdentifier ownership; record only digest/equality evidence, never the literal TeamIdentifier."
+    - "Before mutation, prove /bin/launchctl exists and current UID is exactly 501. Resolve /opt/homebrew/bin/tunnel-client, require it is usable as the canonical cutover tunnel-client argument, and record its launcher/source identity without starting a second tunnel client."
+    - "Observe bounded pre-cutover ServiceManagement/launchd/process/listener/health state read-only. Do not repair or normalize predecessor state."
+    - "Immediately before lifecycle mutation, re-prove exact HEAD/origin-dev, clean tree, absent transaction, exact predecessor closure, accepted candidate identity, runtime.env identity, and tunnel-client argument binding."
+    - "Invoke exactly one canonical candidate_cutover.py cutover using the exact accepted candidate app/handoff, --home /Users/tienphat, --launchctl /bin/launchctl, --tunnel-client /opt/homebrew/bin/tunnel-client, and --uid 501. No retry is permitted."
+    - "Treat any non-successful cutover result, approval-required result, partial result, or command failure as a genuine blocker. Do not follow it with rollback, resume, recover, commit, a second cutover, reinstall, manual launchctl/ServiceManagement repair, process start/restart/kill, or hand-edited transaction state."
+    - "After the single invocation, inspect the transaction directory and installed app read-only. If a transaction exists, record schema/status/phase, metadata SHA-256, candidate handoff SHA-256, candidate SHA-256, source revision/tree, operation ledger, and prove it binds exactly to accepted candidate 8017f538...."
+    - "After the single invocation, canonical-validate the installed app against the transaction-owned handoff when present and require the installed candidate identity to equal accepted candidate 8017f538... before reporting PASS."
+    - "Observe post-cutover ServiceManagement, relevant launchd labels, Runtime/tunnel process tree, listener ownership for 127.0.0.1:8080, /healthz and /readyz, and actual running tunnel executable path when available. Do not start/restart/repair anything after observation."
+    - "When a tunnel process exists, record SHA-256 for the actual executable image path reported by the running process, including libexec/tunnel-client when that is the executable image. Keep launcher fingerprint and running-image fingerprint as separate evidence fields."
+    - "Revalidate the immutable accepted candidate after the live invocation and prove its app/handoff bytes remain unchanged."
+    - "Record runtime.env and desired-state post identities without printing secret values; distinguish changes owned by canonical cutover from manual Executor edits."
+    - "Publish only .agent/tasks/TASK-0065/report.yaml to dev, non-force, then stop at ARCHITECT_REVIEW."
+
+allowed_mutation:
+  command_family: "macos/candidate_cutover.py cutover"
+  invocation_count: 1
+  exact_candidate_sha256: "8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660"
+  consequences_owned_by_command:
+    - "transaction creation and canonical transaction metadata/handoff/state"
+    - "installed app swap to accepted candidate"
+    - "transaction-owned ServiceManagement and launchd registration/unregistration"
+    - "Runtime/tunnel process lifecycle caused by canonical ServiceManagement/launchd activation"
+    - "listener/health state resulting from canonical activation"
+    - "transaction-owned desired-state effects when canonical cutover semantics require them"
+
+forbidden_changes:
+  - "Do not invoke candidate_cutover commit, rollback, resume, or recover."
+  - "Do not invoke cutover more than once."
+  - "Do not run freeze_candidate.py, package_app.sh, reinstall, rebuild, reseal, republish, or modify candidate bytes."
+  - "Do not manually start, stop, restart, kill, signal, register, unregister, bootstrap, bootout, kickstart, repair, or normalize Runtime, tunnel, ServiceManagement, or launchd outside the one canonical cutover invocation."
+  - "Do not edit runtime.env, desired-state markers, cutover metadata/handoff, installed-app bytes, LaunchAgent plists, System Settings, TCC, or BTM manually."
+  - "Do not launch a second tunnel client, reconnect manually, authenticate manually, or perform the final MCP continuity proof in this task."
+  - "Do not enumerate Keychain identities, expose signing identity, expose TeamIdentifier literal, print runtime.env values, or disclose credentials/API keys."
+  - "Do not modify production source, tests, dependencies, packaging/lifecycle implementation, README, tags, releases, main, architect-profile, agent-skills, agent-standards, or agent-documents."
+  - "Do not delegate to Codex, Claude, Antigravity, another ChatGPT, or nested executors."
+
+invariants:
+  - "Exactly one fresh cutover invocation is the only authorized live lifecycle mutation."
+  - "The transaction must be absent immediately before cutover."
+  - "The cutover target must be accepted candidate 8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660."
+  - "The accepted candidate remains immutable throughout execution."
+  - "No commit-cutover occurs in TASK-0065."
+  - "No rollback/recovery/repair is performed after cutover success or failure."
+  - "Final system freeze readiness is not asserted by this task."
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0065/report.yaml"
+  unlisted_new_files:
+    allowed: false
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "The exact TASK-0064 rollback closure and exact accepted candidate are freshly re-proven immediately before mutation."
+    evidence_required: "Exact-base/clean-tree proof, absent transaction, predecessor closure/revision, accepted candidate app/handoff validation, runtime.env identity, and exact cutover argument bindings."
+  - id: AC-2
+    requirement: "Exactly one canonical fresh cutover invocation targets accepted candidate 8017f538... with no retry or other lifecycle command."
+    evidence_required: "Exact command family/arguments, invocation_count=1, result/exit evidence, and zero commit/rollback/resume/recover/repair invocations."
+  - id: AC-3
+    requirement: "Any resulting transaction and installed app bind exactly to accepted candidate 8017f538...."
+    evidence_required: "Post-cutover transaction schema/status/phase and hashes plus installed-app canonical validation against transaction-owned handoff."
+  - id: AC-4
+    requirement: "Post-cutover live ownership is observed truthfully without follow-up repair."
+    evidence_required: "ServiceManagement, launchd, Runtime/tunnel process tree, listener 8080, health endpoints, and explicit no-repair evidence."
+  - id: AC-5
+    requirement: "Tunnel evidence distinguishes the canonical launcher from the actual running executable image when a tunnel process exists."
+    evidence_required: "Launcher path/hash plus running process executable path/hash, with libexec/tunnel-client fingerprint when applicable."
+  - id: AC-6
+    requirement: "Accepted candidate bytes remain immutable and local configuration evidence is preserved or changed only by canonical cutover consequences."
+    evidence_required: "Post candidate validation/hash continuity plus runtime.env/desired-state pre/post identities and no manual edits."
+  - id: AC-7
+    requirement: "Repository publication is report-only, non-force to dev, working tree clean, and main unchanged."
+    evidence_required: "Fresh refs, report-only compare proof, clean-tree proof, and unchanged main SHA."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Exact-base/clean-tree, absent-transaction, predecessor closure, accepted-candidate, config, and cutover-argument preflight."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Invoke exactly one canonical accepted-candidate cutover."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Read-only post-cutover transaction and installed-app binding proof."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Read-only live ownership/process/listener/health observation, including actual running tunnel executable fingerprint when present."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Accepted-candidate immutability plus runtime.env/desired-state consequence proof."
+      required: true
+    - id: CHECK-6
+      command_or_check: "Report-only non-force publication, clean tree, fresh dev/main refs."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect review of exact cutover result, transaction/installed-generation binding, live ownership, and immutable-candidate evidence."
+    expected_signal: "Accepted candidate is installed through one canonical cutover and the resulting live state is ready for a separately authorized final live-generation proof."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: ARCHITECT_REVIEW
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
