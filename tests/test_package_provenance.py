@@ -323,6 +323,53 @@ class PackageProvenanceTests(unittest.TestCase):
             self.assertEqual(Path(published_a["candidate_handoff"]).read_bytes(), a_handoff_bytes)
             self.assertTrue(app_collision.parent.is_dir())
 
+    def test_candidate_publication_race_is_atomic_no_replace(self) -> None:
+        provenance = load_module()
+        self.assertTrue(
+            hasattr(provenance, "_rename_candidate_no_replace"),
+            "atomic no-replace publication primitive must exist",
+        )
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            candidates = root / "candidates"
+            app, handoff = self._staged_candidate(root, "stage-race")
+            candidate_sha = "c" * 64
+            candidate = {"candidate_sha256": candidate_sha}
+            final_root = candidates / candidate_sha
+            original_rename = provenance._rename_candidate_no_replace
+            raced_state: dict[str, object] = {}
+
+            def inject_destination_then_publish(source: Path, destination: Path) -> None:
+                self.assertEqual(destination, final_root)
+                destination.mkdir(parents=True)
+                destination.chmod(0o711)
+                os.utime(destination, ns=(1_700_000_000_000_000_000, 1_700_000_000_000_000_000))
+                stat = destination.stat()
+                raced_state.update(
+                    inode=stat.st_ino,
+                    mode=stat.st_mode & 0o777,
+                    mtime_ns=stat.st_mtime_ns,
+                )
+                original_rename(source, destination)
+
+            with mock.patch.object(provenance, "validate_candidate", return_value=candidate):
+                with mock.patch.object(
+                    provenance,
+                    "_rename_candidate_no_replace",
+                    side_effect=inject_destination_then_publish,
+                ):
+                    with self.assertRaisesRegex(provenance.PackageProvenanceError, "already exists"):
+                        provenance.publish_candidate(app, handoff, candidates)
+
+            self.assertTrue(final_root.is_dir())
+            final_stat = final_root.stat()
+            self.assertEqual(final_stat.st_ino, raced_state["inode"])
+            self.assertEqual(final_stat.st_mode & 0o777, raced_state["mode"])
+            self.assertEqual(final_stat.st_mtime_ns, raced_state["mtime_ns"])
+            self.assertEqual(list(final_root.iterdir()), [])
+            self.assertTrue(app.is_dir())
+            self.assertTrue(handoff.is_file())
+
     def test_candidate_publication_validation_failure_leaves_no_final_candidate(self) -> None:
         provenance = load_module()
         self.assertTrue(hasattr(provenance, "publish_candidate"), "publish_candidate must exist")

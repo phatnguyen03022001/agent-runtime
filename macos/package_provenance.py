@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
+import errno
 import hashlib
 import io
 import json
@@ -461,6 +463,26 @@ def seal_candidate(app: Path, handoff_path: Path) -> dict[str, object]:
     return data
 
 
+RENAME_EXCL = 0x00000004
+
+
+def _rename_candidate_no_replace(source: Path, destination: Path) -> None:
+    try:
+        renamex_np = ctypes.CDLL(None, use_errno=True).renamex_np
+    except AttributeError as exc:
+        raise PackageProvenanceError("atomic no-replace publication is unavailable") from exc
+    renamex_np.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+    renamex_np.restype = ctypes.c_int
+    ctypes.set_errno(0)
+    result = renamex_np(os.fsencode(source), os.fsencode(destination), RENAME_EXCL)
+    if result == 0:
+        return
+    error = ctypes.get_errno()
+    if error == errno.EEXIST:
+        raise FileExistsError(error, os.strerror(error), str(destination))
+    raise OSError(error, os.strerror(error), str(destination))
+
+
 def publish_candidate(app: Path, handoff_path: Path, candidates_root: Path) -> dict[str, object]:
     if app.name != "Agent Runtime.app" or handoff_path.name != "Agent Runtime.candidate.json":
         raise PackageProvenanceError("candidate publication paths use unexpected names")
@@ -480,7 +502,7 @@ def publish_candidate(app: Path, handoff_path: Path, candidates_root: Path) -> d
     if final_root.exists() or final_root.is_symlink():
         raise PackageProvenanceError("candidate output already exists")
     try:
-        os.rename(staging_root, final_root)
+        _rename_candidate_no_replace(staging_root, final_root)
     except FileExistsError as exc:
         raise PackageProvenanceError("candidate output already exists") from exc
     except OSError as exc:
