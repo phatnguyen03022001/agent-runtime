@@ -1,0 +1,151 @@
+protocol_version: 3
+
+task_id: TASK-0061
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_successor_task
+  predecessor_task: TASK-0060
+  predecessor_review: "2606aedf1cd29bab3cd7ec1d624d1b6f3f50e2e7"
+  predecessor_review_state: BLOCKED
+  blocker: SIGNING_IDENTITY_NOT_FOUND
+  operator_authorization: "One-time signing identity bootstrap explicitly authorized in the Architect conversation."
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration_and_evidence
+
+classification: BOUNDED_LOCAL_BOOTSTRAP
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - verification
+    - simplicity
+  recommended:
+    - github-workflow
+
+structure_authority:
+  status: RESOLVED
+  source: "TASK-0060 BLOCKED review plus repository-local ignored .env policy."
+  rationale: >-
+    This task discovers exactly one usable local code-signing identity, verifies it only on a temporary test-owned artifact, and persists only its literal name to the gitignored repository-local .env. It does not modify Keychain contents, production source, candidate artifacts, or live Runtime state.
+
+objective: >-
+  Perform a one-time bounded signing-identity bootstrap on the operator's Mac. Discover valid code-signing identities read-only, deterministically select a unique usable Apple Development identity when unambiguous, verify that exact identity can sign and strictly verify a temporary test-owned artifact, then persist only the exact literal identity as AGENT_RUNTIME_CODESIGN_IDENTITY in /Users/tienphat/Developer/agent-runtime/.env for future authorized freeze tasks. Never print or persist unrelated Keychain material or unrelated .env values.
+
+scope:
+  required_changes:
+    - "Fresh-resolve local HEAD and origin/dev and require both equal the exact handoff base before local bootstrap. Require the designated working tree clean before repository publication."
+    - "Run exactly one bounded read-only code-signing identity enumeration using /usr/bin/security find-identity -v -p codesigning. Do not enumerate generic passwords, certificates, keys, internet passwords, or any other Keychain classes."
+    - "Parse the enumeration in-process and retain only valid code-signing identity display names needed for selection. Do not persist SHA-1 fingerprints or unrelated identities in repository artifacts unless necessary to disambiguate a blocker."
+    - "Selection rule: if exactly one valid identity whose display name begins with 'Apple Development:' exists, select it. If zero such identities exist, report BLOCKED. If more than one such identity exists, do not choose arbitrarily; stop at OPERATOR_INPUT_REQUIRED and report only the candidate display names required for operator selection."
+    - "Verify the selected identity without touching Agent Runtime candidate/live state: copy a system executable or construct an equivalent temporary test-owned signable artifact under a run-owned temporary directory, codesign it with exactly the selected identity, run /usr/bin/codesign --verify --strict on that temporary artifact, and read its TeamIdentifier. Remove only the task-owned temporary artifact afterward."
+    - "Persist the selected literal identity to /Users/tienphat/Developer/agent-runtime/.env as AGENT_RUNTIME_CODESIGN_IDENTITY=<literal identity>. The .env is local-only and gitignored. Preserve every unrelated existing .env entry byte-for-byte where practical; never print, report, copy, or expose unrelated .env values."
+    - "Set or preserve restrictive local permissions for .env (0600). Do not copy .env into repository history, reports, build artifacts, or chat output."
+    - "After persistence, read back only the AGENT_RUNTIME_CODESIGN_IDENTITY key and prove exact equality with the selected identity. Do not source or echo the whole .env."
+    - "Do not invoke macos/freeze_candidate.py, package_app.sh, install.sh, candidate cutover, Runtime lifecycle commands, or tunnel lifecycle commands in this task."
+    - "Publish only the canonical report to dev, non-force, then stop for Architect review."
+  allowed_existing_files_or_components:
+    - "/Users/tienphat/Developer/agent-runtime/.env as local ignored operator configuration"
+    - ".agent/tasks/TASK-0061/report.yaml"
+  expected_files_are_restrictive: true
+
+invariants:
+  - "Keychain contents are read-only; no certificate, key, trust setting, password, or Keychain item is created, imported, deleted, modified, unlocked, or exported."
+  - "Exactly one security find-identity -v -p codesigning enumeration is authorized by this task."
+  - "No arbitrary identity selection occurs when multiple Apple Development identities are valid."
+  - "Only AGENT_RUNTIME_CODESIGN_IDENTITY may be added or replaced in repository-local .env; unrelated .env values remain undisclosed and semantically unchanged."
+  - "The selected identity must successfully sign and strictly verify a temporary test-owned artifact before persistence is considered complete."
+  - "No real Agent Runtime candidate freeze/sign/install/activation occurs."
+  - "Installed Runtime, live tunnel/control-plane connection, port 8080, runtime.env, desired-state marker, ServiceManagement/launchd state, live transaction, installed app bytes, System Settings, TCC, and BTM remain untouched."
+
+forbidden_changes:
+  - "Do not run security find-certificate, dump-keychain, find-generic-password, find-internet-password, export, import, add-trusted-cert, unlock-keychain, set-key-partition-list, or any broader Keychain command."
+  - "Do not expose private keys, certificate bodies, passwords, API keys, runtime.env values, or unrelated .env values."
+  - "Do not invoke the real candidate freeze or package pipeline."
+  - "Do not modify production Runtime, packaging, lifecycle, Swift, test, dependency, configuration, README, or verification source."
+  - "Do not start, stop, restart, kill, signal, repair, reinstall, register, unregister, commit-cutover, rollback, or otherwise lifecycle-mutate the live Runtime or tunnel."
+  - "Do not modify main, tags, releases, architect-profile, agent-skills, agent-standards, or agent-documents."
+  - "Do not delegate to another ChatGPT, Codex, Claude, Antigravity, or nested executor."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: ARCHITECT_REVIEW
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0061/report.yaml"
+  unlisted_new_files:
+    allowed: false
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "A unique valid Apple Development identity is discovered under the one-time bounded Keychain authorization, or ambiguity/absence is truthfully reported without arbitrary selection."
+    evidence_required: "Exact allowed enumeration command count and bounded identity-selection result."
+  - id: AC-2
+    requirement: "The selected identity is genuinely usable by codesign and yields a non-null TeamIdentifier on a temporary test-owned artifact."
+    evidence_required: "Temporary codesign invocation, strict verification PASS, selected literal display name, and TeamIdentifier only."
+  - id: AC-3
+    requirement: "The exact selected literal identity is persisted once as AGENT_RUNTIME_CODESIGN_IDENTITY in repository-local gitignored .env with restrictive permissions and unrelated values undisclosed."
+    evidence_required: "Key-only equality proof, .gitignore confirmation, file mode, and no repository diff for .env."
+  - id: AC-4
+    requirement: "No production source, real candidate, installed/live Runtime, tunnel, lifecycle, runtime.env, or Keychain contents are mutated."
+    evidence_required: "Explicit preservation evidence and changed-path review."
+  - id: AC-5
+    requirement: "Canonical report publishes non-force to dev with main unchanged."
+    evidence_required: "Fresh remote refs, report-only lineage, and clean designated working tree."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Fresh exact-base and clean-tree preflight; confirm .env is gitignored without printing its contents."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Run exactly one /usr/bin/security find-identity -v -p codesigning and apply the deterministic Apple Development selection rule."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Sign and strictly verify one temporary test-owned artifact using exactly the selected identity; record TeamIdentifier; delete only task-owned temp artifact."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Persist only AGENT_RUNTIME_CODESIGN_IDENTITY to local .env, mode 0600, prove key-only exact equality, and prove .env remains untracked/ignored."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Fresh-prove no repository source diff beyond report publication, no live mutation, non-force dev publication, clean working tree, and unchanged main."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect review of exact report, bounded Keychain command evidence, temp codesign proof, and local-config preservation evidence."
+    expected_signal: "One durable repo-local operator-authorized signing identity is available for a fresh candidate-freeze task without future manual copy/paste."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
