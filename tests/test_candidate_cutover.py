@@ -310,7 +310,9 @@ class CandidateCutoverTests(unittest.TestCase):
     def test_current_cutover_does_not_generate_legacy_launchagents(self) -> None:
         source = CUTOVER_PATH.read_text()
         current = source[source.index("def cutover_candidate("):source.index("def commit_transaction(")]
-        self.assertIn('_service_management(target_app, "register")', current)
+        self.assertIn('_service_management(target_app, "register-main")', current)
+        self.assertIn('_service_management(target_app, "register-runtime")', current)
+        self.assertNotIn('_service_management(target_app, "register")', current)
         self.assertIn("_remove_legacy_predecessor(", current)
         self.assertNotIn("_ui_plist(", source)
         self.assertNotIn("_runtime_plist(", source)
@@ -347,32 +349,58 @@ class CandidateCutoverTests(unittest.TestCase):
         cutover.provenance._verify_codesign = lambda _app: None
         cutover.provenance._codesign_team_identifier = lambda _path: "TEAMTEST"
         modern_state = {"main_app": "not-registered", "runtime_agent": "not-registered"}
+        service_operations: list[tuple[str, str]] = []
+        launchctl, launch_state, launch_log = make_fake_launchctl(root, ui_loaded=True, runtime_loaded=True)
+        programs_path = root / "launchctl-programs.json"
+        initial_programs = json.loads(programs_path.read_text())
+        initial_programs["gui/501/com.picmao.agent-runtime-ui"] = str(target / "Contents/MacOS/AgentRuntimeMenuBar")
+        initial_programs["gui/501/com.picmao.agent-runtime-runtime"] = str(target / "Contents/Resources/runtime/start.sh")
+        programs_path.write_text(json.dumps(initial_programs, sort_keys=True) + "\n")
 
-        def service_management(_app: Path, operation: str) -> dict[str, str]:
+        def set_modern_runtime_loaded(app: Path, loaded: bool) -> None:
+            service = "gui/501/com.picmao.agent-runtime-runtime"
+            services = set(json.loads(launch_state.read_text()))
+            programs = json.loads(programs_path.read_text())
+            if loaded:
+                services.add(service)
+                programs[service] = str(app / "Contents/MacOS/AgentRuntimeRuntimeService")
+            else:
+                services.discard(service)
+                programs.pop(service, None)
+            launch_state.write_text(json.dumps(sorted(services)) + "\n")
+            programs_path.write_text(json.dumps(programs, sort_keys=True) + "\n")
+
+        def service_management(app: Path, operation: str) -> dict[str, str]:
+            service_operations.append((str(app), operation))
             if operation == "register":
                 modern_state.update(main_app="enabled", runtime_agent="enabled")
+                set_modern_runtime_loaded(app, True)
             elif operation == "register-main":
                 modern_state["main_app"] = "enabled"
             elif operation == "register-runtime":
                 modern_state["runtime_agent"] = "enabled"
+                set_modern_runtime_loaded(app, True)
             elif operation == "unregister":
                 modern_state.update(main_app="not-registered", runtime_agent="not-registered")
+                set_modern_runtime_loaded(app, False)
             elif operation == "unregister-main":
                 modern_state["main_app"] = "not-registered"
             elif operation == "unregister-runtime":
                 modern_state["runtime_agent"] = "not-registered"
+                set_modern_runtime_loaded(app, False)
             elif operation != "status":
                 raise AssertionError(operation)
             return dict(modern_state)
 
         cutover._service_management = service_management
-        launchctl, launch_state, launch_log = make_fake_launchctl(root, ui_loaded=True, runtime_loaded=True)
         return provenance, cutover, {
             "root": root, "home": home, "target": target, "ui_plist": ui_plist,
             "runtime_plist": runtime_plist, "state_dir": state_dir, "transaction": transaction,
             "desired": desired, "runtime_env": runtime_env, "candidate": candidate, "handoff": handoff,
             "launchctl": launchctl, "launch_state": launch_state, "launch_log": launch_log,
             "ui_before": ui_before, "runtime_before": runtime_before, "modern_state": modern_state,
+            "service_operations": service_operations, "programs_path": programs_path,
+            "set_modern_runtime_loaded": set_modern_runtime_loaded,
         }
 
     def _cutover(self, cutover, fx, *, fail_stages=frozenset()):
@@ -383,6 +411,282 @@ class CandidateCutoverTests(unittest.TestCase):
             home=fx["home"], launchctl=fx["launchctl"], tunnel_client=Path("/usr/bin/true"),
             uid=501, fail_stages=set(fail_stages),
         )
+
+    def _set_launch_program(self, fx, service: str, program: Path | None) -> None:
+        loaded = set(json.loads(fx["launch_state"].read_text()))
+        programs = json.loads(fx["programs_path"].read_text())
+        if program is None:
+            loaded.discard(service)
+            programs.pop(service, None)
+        else:
+            loaded.add(service)
+            programs[service] = str(program)
+        fx["launch_state"].write_text(json.dumps(sorted(loaded)) + "\n")
+        fx["programs_path"].write_text(json.dumps(programs, sort_keys=True) + "\n")
+
+    def _schema1_partial_fixture(self, provenance, cutover, fx) -> dict[str, object]:
+        previous_closure = cutover._rollback_app_closure(fx["target"])
+        fx["transaction"].mkdir(parents=True, mode=0o700)
+        shutil.copytree(fx["target"], fx["transaction"] / "previous-app", copy_function=shutil.copy2)
+        shutil.copy2(fx["ui_plist"], fx["transaction"] / "previous-ui.plist")
+        shutil.copy2(fx["runtime_plist"], fx["transaction"] / "previous-runtime.plist")
+        shutil.copy2(fx["handoff"], fx["transaction"] / "candidate-handoff.json")
+        shutil.rmtree(fx["target"])
+        shutil.copytree(fx["candidate"], fx["target"], copy_function=shutil.copy2)
+        fx["ui_plist"].unlink()
+        fx["runtime_plist"].unlink()
+        fx["launch_state"].write_text("[]\n")
+        fx["programs_path"].write_text("{}\n")
+        fx["modern_state"].update(main_app="enabled", runtime_agent="not-found")
+        metadata = {
+            "schema": 1,
+            "status": "PARTIAL",
+            "candidate": json.loads(fx["handoff"].read_text()),
+            "previous": {
+                "app_present": True,
+                "app_closure": previous_closure,
+                "ui_loaded": True,
+                "runtime_loaded": False,
+                "desired_state_present": True,
+                "ui_plist": {"present": True, "mode": 0o600},
+                "runtime_plist": {"present": True, "mode": 0o600},
+            },
+            "paths": {
+                "target_app": str(fx["target"]),
+                "ui_plist": str(fx["ui_plist"]),
+                "runtime_plist": str(fx["runtime_plist"]),
+                "desired_state": str(fx["desired"]),
+            },
+            "modern_registration_before": {"main_app": "not-found", "runtime_agent": "enabled"},
+            "modern_registration": {"main_app": "enabled", "runtime_agent": "enabled"},
+            "last_error": "rollback incomplete: pre-existing modern ServiceManagement state changed during rollback: runtime_agent",
+        }
+        (fx["transaction"] / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
+        return {"previous_closure": previous_closure, "metadata": metadata}
+
+    def test_runtime_enabled_without_modern_job_is_stale_not_healthy(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            classify = getattr(cutover, "_classify_runtime_ownership", None)
+            self.assertIsNotNone(classify, "runtime ownership classification is required")
+            expected = fx["target"] / "Contents/MacOS/AgentRuntimeRuntimeService"
+            self.assertEqual(classify("enabled", None, expected), "stale-registered")
+
+    def test_runtime_enabled_with_exact_modern_job_is_healthy(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            classify = getattr(cutover, "_classify_runtime_ownership", None)
+            self.assertIsNotNone(classify, "runtime ownership classification is required")
+            expected = fx["target"] / "Contents/MacOS/AgentRuntimeRuntimeService"
+            self.assertEqual(classify("enabled", expected, expected), "healthy-registered")
+
+    def test_runtime_enabled_with_wrong_program_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            classify = getattr(cutover, "_classify_runtime_ownership", None)
+            self.assertIsNotNone(classify, "runtime ownership classification is required")
+            expected = fx["target"] / "Contents/MacOS/AgentRuntimeRuntimeService"
+            with self.assertRaisesRegex(cutover.CutoverError, "program identity"):
+                classify("enabled", fx["root"] / "foreign-helper", expected)
+
+    def test_requires_approval_is_distinct_from_enabled_health(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            classify = getattr(cutover, "_classify_runtime_ownership", None)
+            self.assertIsNotNone(classify, "runtime ownership classification is required")
+            expected = fx["target"] / "Contents/MacOS/AgentRuntimeRuntimeService"
+            self.assertEqual(classify("requires-approval", None, expected), "awaiting-approval")
+
+    def test_changed_helper_generation_forces_runtime_refresh(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            provenance, cutover, fx = self._fixture(raw)
+            fx["modern_state"].update(main_app="enabled", runtime_agent="enabled")
+            self._set_launch_program(
+                fx,
+                "gui/501/com.picmao.agent-runtime-runtime",
+                fx["target"] / "Contents/MacOS/AgentRuntimeRuntimeService",
+            )
+            helper = fx["candidate"] / "Contents/MacOS/AgentRuntimeRuntimeService"
+            helper.write_bytes(helper.read_bytes() + b"changed-generation\n")
+            provenance.seal_candidate(fx["candidate"], fx["handoff"])
+            try:
+                result = self._cutover(cutover, fx)
+            except cutover.CutoverError as exc:
+                self.fail(f"changed helper must use transactional refresh, not fail legacy identity checks: {exc}")
+            self.assertEqual(result["status"], "PENDING")
+            operations = [operation for _, operation in fx["service_operations"]]
+            self.assertIn("unregister-runtime", operations)
+            self.assertIn("register-runtime", operations)
+            self.assertLess(operations.index("unregister-runtime"), operations.index("register-runtime"))
+
+    def test_unchanged_healthy_runtime_is_not_destructively_refreshed(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            fx["modern_state"].update(main_app="enabled", runtime_agent="enabled")
+            self._set_launch_program(
+                fx,
+                "gui/501/com.picmao.agent-runtime-runtime",
+                fx["target"] / "Contents/MacOS/AgentRuntimeRuntimeService",
+            )
+            try:
+                result = self._cutover(cutover, fx)
+            except cutover.CutoverError as exc:
+                self.fail(f"unchanged healthy modern ownership must survive cutover: {exc}")
+            self.assertEqual(result["status"], "PENDING")
+            operations = [operation for _, operation in fx["service_operations"]]
+            self.assertNotIn("unregister-runtime", operations)
+            self.assertNotIn("register-runtime", operations)
+            self.assertNotIn("register", operations)
+
+    def test_post_register_enabled_without_loaded_job_cannot_be_pending(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            fx["launch_state"].write_text(json.dumps(["gui/501/com.picmao.agent-runtime-ui"]) + "\n")
+            fx["programs_path"].write_text(json.dumps({
+                "gui/501/com.picmao.agent-runtime-ui": str(fx["target"] / "Contents/MacOS/AgentRuntimeMenuBar")
+            }) + "\n")
+            fx["modern_state"].update(main_app="not-found", runtime_agent="not-registered")
+            operations: list[str] = []
+
+            def service_management(_app: Path, operation: str) -> dict[str, str]:
+                operations.append(operation)
+                if operation == "register-main":
+                    fx["modern_state"]["main_app"] = "enabled"
+                elif operation == "register-runtime":
+                    fx["modern_state"]["runtime_agent"] = "enabled"
+                elif operation == "unregister-main":
+                    fx["modern_state"]["main_app"] = "not-registered"
+                elif operation == "register":
+                    fx["modern_state"].update(main_app="enabled", runtime_agent="enabled")
+                elif operation == "unregister-runtime":
+                    fx["modern_state"]["runtime_agent"] = "not-registered"
+                elif operation != "status":
+                    raise AssertionError(operation)
+                return dict(fx["modern_state"])
+
+            cutover._service_management = service_management
+            with self.assertRaisesRegex(cutover.CutoverError, "rollback restored"):
+                self._cutover(cutover, fx)
+            self.assertFalse(fx["transaction"].exists())
+
+    def test_new_cutover_records_schema2_pre_swap_ownership_and_operation_ledger(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            result = self._cutover(cutover, fx)
+            self.assertEqual(result["status"], "PENDING")
+            metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
+            self.assertEqual(metadata["schema"], 2)
+            self.assertIn("modern_ownership_before", metadata)
+            self.assertIn("runtime", metadata["modern_ownership_before"])
+            runtime = metadata["modern_ownership_before"]["runtime"]
+            self.assertIn(runtime["classification"], {"healthy-registered", "stale-registered", "absent", "awaiting-approval"})
+            self.assertIn("helper_sha256", runtime)
+            self.assertIn("plist_sha256", runtime)
+            self.assertEqual(
+                set(metadata["operations"]),
+                {"main_registered", "main_unregistered", "runtime_unregistered", "runtime_registered"},
+            )
+
+    def test_future_rollback_does_not_resurrect_stale_preexisting_runtime_registration(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            provenance, cutover, fx = self._fixture(raw)
+            fx["modern_state"].update(main_app="not-found", runtime_agent="enabled")
+            self._set_launch_program(fx, "gui/501/com.picmao.agent-runtime-runtime", None)
+            helper = fx["candidate"] / "Contents/MacOS/AgentRuntimeRuntimeService"
+            helper.write_bytes(helper.read_bytes() + b"refresh-required\n")
+            provenance.seal_candidate(fx["candidate"], fx["handoff"])
+            with self.assertRaisesRegex(cutover.CutoverError, "rollback restored"):
+                self._cutover(cutover, fx, fail_stages={"activation_refresh"})
+            self.assertIn(fx["modern_state"]["runtime_agent"], {"not-found", "not-registered"})
+            operations = [operation for _, operation in fx["service_operations"]]
+            self.assertIn("unregister-runtime", operations)
+            self.assertEqual(operations.count("register-runtime"), 1)
+
+    def test_schema1_partial_recovery_restores_exact_previous_state_without_stale_runtime_registration(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            provenance, cutover, fx = self._fixture(raw)
+            incident = self._schema1_partial_fixture(provenance, cutover, fx)
+            recover = getattr(cutover, "recover_partial_transaction", None)
+            self.assertIsNotNone(recover, "bounded partial recovery path is required")
+            result = recover(fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501)
+            self.assertEqual(result["status"], "RECOVERED")
+            self.assertFalse(fx["transaction"].exists())
+            self.assertEqual(cutover._rollback_app_closure(fx["target"]), incident["previous_closure"])
+            self.assertEqual(fx["ui_plist"].read_bytes(), fx["ui_before"])
+            self.assertEqual(fx["runtime_plist"].read_bytes(), fx["runtime_before"])
+            self.assertEqual(set(json.loads(fx["launch_state"].read_text())), {"gui/501/com.picmao.agent-runtime-ui"})
+            self.assertEqual(fx["modern_state"]["runtime_agent"], "not-found")
+
+    def test_schema1_partial_recovery_unregisters_created_main_only(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            provenance, cutover, fx = self._fixture(raw)
+            self._schema1_partial_fixture(provenance, cutover, fx)
+            recover = getattr(cutover, "recover_partial_transaction", None)
+            self.assertIsNotNone(recover, "bounded partial recovery path is required")
+            fx["service_operations"].clear()
+            recover(fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501)
+            operations = [operation for _, operation in fx["service_operations"]]
+            self.assertIn("unregister-main", operations)
+            self.assertNotIn("unregister-runtime", operations)
+            self.assertNotIn("register-runtime", operations)
+
+    def test_schema1_partial_recovery_never_executes_service_management_from_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            provenance, cutover, fx = self._fixture(raw)
+            self._schema1_partial_fixture(provenance, cutover, fx)
+            recover = getattr(cutover, "recover_partial_transaction", None)
+            self.assertIsNotNone(recover, "bounded partial recovery path is required")
+            fx["service_operations"].clear()
+            recover(fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501)
+            self.assertTrue(fx["service_operations"])
+            self.assertTrue(all("cutover-transaction/previous-app" not in app for app, _ in fx["service_operations"]))
+
+    def test_failed_partial_recovery_retains_transaction_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            provenance, cutover, fx = self._fixture(raw)
+            self._schema1_partial_fixture(provenance, cutover, fx)
+            recover = getattr(cutover, "recover_partial_transaction", None)
+            self.assertIsNotNone(recover, "bounded partial recovery path is required")
+            with self.assertRaisesRegex(cutover.CutoverError, "recovery incomplete"):
+                recover(
+                    fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501,
+                    fail_stages={"recover_restore_app"},
+                )
+            self.assertTrue(fx["transaction"].is_dir())
+            metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
+            self.assertEqual(metadata["status"], "PARTIAL")
+            self.assertIn("recovery incomplete", metadata["last_error"])
+
+    def test_partial_recovery_rejects_unsupported_schema(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            provenance, cutover, fx = self._fixture(raw)
+            self._schema1_partial_fixture(provenance, cutover, fx)
+            metadata_path = fx["transaction"] / "metadata.json"
+            metadata = json.loads(metadata_path.read_text())
+            metadata["schema"] = 999
+            metadata_path.write_text(json.dumps(metadata) + "\n")
+            recover = getattr(cutover, "recover_partial_transaction", None)
+            self.assertIsNotNone(recover, "bounded partial recovery path is required")
+            with self.assertRaisesRegex(cutover.CutoverError, "schema"):
+                recover(fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501)
+
+    def test_operation_ledger_only_compensates_transaction_created_state(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            compensate = getattr(cutover, "_compensate_operation_ledger", None)
+            self.assertIsNotNone(compensate, "operation-ledger compensation is required")
+            fx["modern_state"].update(main_app="enabled", runtime_agent="enabled")
+            fx["service_operations"].clear()
+            ledger = {
+                "main_registered": True,
+                "main_unregistered": False,
+                "runtime_unregistered": False,
+                "runtime_registered": False,
+            }
+            compensate(fx["target"], ledger)
+            operations = [operation for _, operation in fx["service_operations"]]
+            self.assertEqual(operations, ["status", "unregister-main", "status"])
+            self.assertEqual(fx["modern_state"]["runtime_agent"], "enabled")
 
     def test_cutover_stays_pending_blocks_second_cutover_and_commit_discards_rollback_only(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -467,6 +771,10 @@ class CandidateCutoverTests(unittest.TestCase):
                 fx["root"], ui_loaded=True, runtime_loaded=True, bootout_delay_prints=2,
             )
             fx.update(launchctl=launchctl, launch_state=launch_state, launch_log=launch_log)
+            programs = json.loads(fx["programs_path"].read_text())
+            programs["gui/501/com.picmao.agent-runtime-ui"] = str(fx["target"] / "Contents/MacOS/AgentRuntimeMenuBar")
+            programs["gui/501/com.picmao.agent-runtime-runtime"] = str(fx["target"] / "Contents/Resources/runtime/start.sh")
+            fx["programs_path"].write_text(json.dumps(programs, sort_keys=True) + "\n")
             result = self._cutover(cutover, fx)
             self.assertEqual(result["status"], "PENDING")
             log = launch_log.read_text().splitlines()

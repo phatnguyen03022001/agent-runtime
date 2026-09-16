@@ -244,6 +244,15 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         for function in functions.values():
             self.assertNotIn("env", [arg.arg for arg in function.args.args])
 
+    def test_install_exposes_bounded_partial_cutover_recovery_command(self) -> None:
+        text = (ROOT / "install.sh").read_text()
+        self.assertIn("--recover-partial-cutover)", text)
+        branch = text[text.index("--recover-partial-cutover)"):]
+        self.assertIn("run_cutover_helper recover", branch)
+        self.assertIn("--launchctl", branch)
+        self.assertNotIn("resetbtm", branch)
+        self.assertNotIn("sfltool", branch)
+
     def test_start_uses_launchd_singleton_and_canonical_env_backed_serve_mode(self) -> None:
         text = (ROOT / "start.sh").read_text()
         self.assertIn("com.picmao.agent-runtime-runtime", text)
@@ -275,7 +284,8 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertEqual(service["KeepAlive"], {"SuccessfulExit": False})
         self.assertIs(service["RunAtLoad"], False)
         self.assertIn("protected-runtime-running", cutover)
-        self.assertIn('_service_management(target_app, "register")', cutover)
+        self.assertIn('_service_management(target_app, "register-runtime")', cutover)
+        self.assertIn('_service_management(target_app, "unregister-runtime")', cutover)
         self.assertIn('"desired_state_present": desired_state.exists()', cutover)
 
     def test_installer_is_narrow_and_derives_workspace_root_from_checkout_parent(self) -> None:
@@ -362,7 +372,9 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertIn("SMAppServiceControl(service: .mainApp)", controller)
         self.assertIn("SMAppServiceControl(service: .agent(plistName: runtimePlistName))", controller)
         self.assertIs(service["RunAtLoad"], False)
-        self.assertIn('_service_management(target_app, "register")', cutover)
+        self.assertIn('_service_management(target_app, "register-main")', cutover)
+        self.assertIn('_service_management(target_app, "register-runtime")', cutover)
+        self.assertIn("--recover-partial-cutover", installer)
         self.assertIn("Agent Runtime.app", installer)
         self.assertIn("--health.listen-addr", installer)
         self.assertNotIn("tunnel-client run", installer + cutover)

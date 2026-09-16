@@ -33,6 +33,12 @@ case "${1-}" in
     command -v launchctl >/dev/null 2>&1 || fail "launchctl is required for candidate rollback."
     run_cutover_helper rollback --home "$HOME" --launchctl "$(command -v launchctl)"
     ;;
+  --recover-partial-cutover)
+    [[ "$#" == "1" ]] || fail "usage: ./install.sh --recover-partial-cutover"
+    [[ "$(uname -s)" == "Darwin" ]] || fail "partial cutover recovery supports macOS only."
+    command -v launchctl >/dev/null 2>&1 || fail "launchctl is required for partial cutover recovery."
+    run_cutover_helper recover --home "$HOME" --launchctl "$(command -v launchctl)"
+    ;;
   --uninstall)
     [[ "$#" == "1" ]] || fail "usage: ./install.sh --uninstall"
     [[ "$(uname -s)" == "Darwin" ]] || fail "Agent Runtime uninstall supports macOS only."

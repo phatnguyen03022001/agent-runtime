@@ -71,6 +71,12 @@ def make_modern_candidate(app: Path, service_state: Path) -> None:
         "  if value['main_app'] in ('not-found', 'not-registered'): value['main_app'] = 'enabled'\n"
         "  if value['runtime_agent'] in ('not-found', 'not-registered'): value['runtime_agent'] = 'requires-approval'\n"
         "  state.write_text(json.dumps(value) + '\\n')\n"
+        "elif op == 'register-main':\n"
+        "  if value['main_app'] in ('not-found', 'not-registered'): value['main_app'] = 'enabled'\n"
+        "  state.write_text(json.dumps(value) + '\\n')\n"
+        "elif op == 'register-runtime':\n"
+        "  if value['runtime_agent'] in ('not-found', 'not-registered'): value['runtime_agent'] = 'requires-approval'\n"
+        "  state.write_text(json.dumps(value) + '\\n')\n"
         "elif op == 'unregister':\n"
         "  if value['main_app'] in ('enabled', 'requires-approval'): value['main_app'] = 'not-registered'\n"
         "  if value['runtime_agent'] in ('enabled', 'requires-approval'): value['runtime_agent'] = 'not-registered'\n"
@@ -120,6 +126,11 @@ class ModernCutoverTests(unittest.TestCase):
         handoff = root / "candidate.json"
         handoff.write_text("{}\n")
         launchctl, launch_state, launch_log = make_fake_launchctl(root, ui_loaded=True, runtime_loaded=True)
+        programs_path = root / "launchctl-programs.json"
+        programs = json.loads(programs_path.read_text())
+        programs[f"gui/501/{UI_LABEL}"] = str(target / "Contents/MacOS/AgentRuntimeMenuBar")
+        programs[f"gui/501/{RUNTIME_LABEL}"] = str(target / "Contents/Resources/runtime/start.sh")
+        programs_path.write_text(json.dumps(programs, sort_keys=True) + "\n")
         expected = {
             "schema": 2,
             "bundle_identifier": "com.picmao.agent-runtime",
@@ -237,7 +248,7 @@ class ModernCutoverTests(unittest.TestCase):
             self.assertEqual(operations, ["status", "unregister-runtime", "status"])
             self.assertEqual(state, {"main_app": "not-found", "runtime_agent": "not-registered"})
 
-    def test_post_registration_rollback_preserves_preexisting_runtime_registration(self) -> None:
+    def test_post_registration_rollback_does_not_resurrect_stale_runtime_registration(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             cutover, fx = self.fixture(raw)
             fx["service_state"].write_text(
@@ -245,10 +256,9 @@ class ModernCutoverTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(cutover.CutoverError, "rollback restored"):
                 self.run_cutover(cutover, fx, fail_stages={"activation_refresh"})
-            self.assertEqual(
-                json.loads(fx["service_state"].read_text()),
-                {"main_app": "not-registered", "runtime_agent": "enabled"},
-            )
+            restored_state = json.loads(fx["service_state"].read_text())
+            self.assertIn(restored_state["main_app"], {"not-found", "not-registered"})
+            self.assertEqual(restored_state["runtime_agent"], "not-registered")
             self.assertEqual(fx["ui"].read_bytes(), fx["ui_before"])
             self.assertEqual(fx["runtime"].read_bytes(), fx["runtime_before"])
 

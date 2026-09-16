@@ -250,16 +250,57 @@ cat > "$APP/Contents/MacOS/AgentRuntimeMenuBar" <<'EOF'
 set -euo pipefail
 [[ "${1-}" == "--service-management" ]] || exit 0
 STATE="$HOME/Library/Application Support/Agent Runtime/test-service-state.json"
+LAUNCHCTL_BIN="$(command -v launchctl)"
+FAKE_BIN="$(dirname "$LAUNCHCTL_BIN")"
+LOADED="$FAKE_BIN/launchd-loaded"
+PROGRAMS="$FAKE_BIN/launchd-programs"
+MACOS_DIR="${0%/*}"
+CONTENTS_DIR="${MACOS_DIR%/*}"
+APP_ROOT="${CONTENTS_DIR%/*}"
+SERVICE="gui/$(id -u)/com.picmao.agent-runtime-runtime"
+PROGRAM="$APP_ROOT/Contents/MacOS/AgentRuntimeRuntimeService"
 mkdir -p "$(dirname "$STATE")"
+update_state() {
+  /usr/bin/python3 - "$STATE" "$1" "$2" <<'PY'
+import json, sys
+from pathlib import Path
+path, key, value = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+state = {"main_app": "not-registered", "runtime_agent": "not-registered"}
+if path.is_file(): state.update(json.loads(path.read_text()))
+state[key] = value
+path.write_text(json.dumps(state, sort_keys=True) + "\n")
+print(json.dumps(state, sort_keys=True))
+PY
+}
+load_runtime() {
+  touch "$LOADED"
+  mkdir -p "$PROGRAMS"
+  grep -Fxq -- "$SERVICE" "$LOADED" || printf '%s\n' "$SERVICE" >> "$LOADED"
+  printf '%s\n' "$PROGRAM" > "$PROGRAMS/com.picmao.agent-runtime-runtime"
+}
+unload_runtime() {
+  if [[ -f "$LOADED" ]]; then
+    tmp="$LOADED.tmp"
+    grep -Fvx -- "$SERVICE" "$LOADED" > "$tmp" || true
+    mv "$tmp" "$LOADED"
+  fi
+  rm -f "$PROGRAMS/com.picmao.agent-runtime-runtime"
+}
 case "${2-}" in
   status)
     if [[ -f "$STATE" ]]; then cat "$STATE"; else printf '%s\n' '{"main_app":"not-registered","runtime_agent":"not-registered"}'; fi
     ;;
+  register-main) update_state main_app enabled ;;
+  register-runtime) load_runtime; update_state runtime_agent enabled ;;
+  unregister-main) update_state main_app not-registered ;;
+  unregister-runtime) unload_runtime; update_state runtime_agent not-registered ;;
   register)
+    load_runtime
     printf '%s\n' '{"main_app":"enabled","runtime_agent":"enabled"}' > "$STATE"
     cat "$STATE"
     ;;
   unregister)
+    unload_runtime
     printf '%s\n' '{"main_app":"not-registered","runtime_agent":"not-registered"}' > "$STATE"
     cat "$STATE"
     ;;
