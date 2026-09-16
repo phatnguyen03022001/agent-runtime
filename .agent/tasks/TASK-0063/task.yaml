@@ -1,0 +1,170 @@
+protocol_version: 3
+
+task_id: TASK-0063
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_successor_task
+  predecessor_task: TASK-0062
+  predecessor_review: "9160fd063f0e93e31c7a1b6525d6aa8e7040fc47"
+  predecessor_review_state: ACCEPTED
+  gap_id: LIVE_ACTIVATION_PREFLIGHT
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration_and_evidence
+
+classification: BOUNDED_READ_ONLY_LIVE_PREFLIGHT
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - verification
+    - simplicity
+  recommended:
+    - github-workflow
+
+structure_authority:
+  status: RESOLVED
+  source: "Accepted TASK-0062 signed immutable candidate plus canonical schema-5 candidate_cutover.py transaction model."
+  rationale: >-
+    Before any operator-authorized lifecycle mutation, current live state must be freshly observed.
+    Historical cutover checkpoints are not authority for present machine state.
+
+objective: >-
+  Perform a strictly read-only preflight for activation of accepted candidate
+  8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660. Prove the local candidate
+  and handoff still match accepted TASK-0062 evidence; freshly observe the installed Agent Runtime app,
+  schema-5 cutover transaction state if any, ServiceManagement/launchd ownership, Runtime/tunnel process
+  state, selected tunnel-client identity, and port-8080 availability; then report the exact canonical
+  next lifecycle route without executing it. Do not start, stop, restart, register, unregister, resume,
+  rollback, recover, commit-cutover, install, activate, replace app bytes, or otherwise mutate live state.
+
+accepted_candidate:
+  candidate_sha256: "8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660"
+  candidate_handoff_sha256: "d8bd8885b4cd0d78e6f419496a97bbc5bda021f37f243f796420b05b851774f3"
+  local_candidate_app: "/Users/tienphat/Developer/agent-runtime/build/candidates/8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660/Agent Runtime.app"
+  local_candidate_handoff: "/Users/tienphat/Developer/agent-runtime/build/candidates/8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660/Agent Runtime.candidate.json"
+  source_revision: "b5ac0ed5b461d3a259e4111e1a8f13933985f81f"
+  source_tree: "5d9b40221e42d96aa78cc25bca7e94092e8426a9"
+  requirements_lock_sha256: "80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
+
+scope:
+  required_changes:
+    - "Fresh-resolve local HEAD and origin/dev and require both equal the exact TASK-0063 handoff base. Require designated working tree clean before observation."
+    - "Read-only validate the exact accepted candidate app/handoff pair using canonical provenance tooling. Require candidate SHA-256 and handoff SHA-256 equality with accepted TASK-0062 evidence. Do not rebuild, freeze, reseal, republish, chmod, touch, or otherwise mutate candidate bytes."
+    - "Freshly inspect the canonical installed target at ~/Applications/Agent Runtime.app without changing it. Record existence, bundle identifier, bounded runtime-manifest revision/tree identity when available, strict codesign validity, TeamIdentifier non-null/equality digest-only evidence when available, and identity-critical hashes needed to distinguish installed bytes from the accepted candidate."
+    - "Freshly inspect ~/Library/Application Support/Agent Runtime/cutover-transaction. If absent, record ABSENT. If present, read only canonical transaction metadata and record schema, status, phase, candidate/predecessor identity fields, transaction-owned paths, and any approval/recovery markers needed to determine the legal canonical next route. Do not edit, rename, remove, recover, commit, resume, or rollback the transaction."
+    - "Inspect canonical source macos/candidate_cutover.py at the exact handoff base sufficiently to map the observed transaction state to the available cutover/commit/resume/rollback/recover commands. Do not execute any candidate_cutover subcommand."
+    - "Read-only inspect ServiceManagement state using only a status/query surface if the installed app exposes one. Inspect launchd with launchctl print for com.picmao.agent-runtime-ui, com.picmao.agent-runtime-runtime, and com.picmao.agent-runtime-runtime-service. Record loaded/absent state and loaded program path where available. Do not bootstrap, bootout, kickstart, enable, disable, register, unregister, repair, or approve services."
+    - "Read-only observe relevant Agent Runtime UI/helper/server/tunnel processes and the listener on local port 8080. Record process identity/PID/program path only as needed; redact environment/arguments if they contain secrets. Do not signal, kill, restart, spawn, or attach a debugger."
+    - "Resolve the tunnel-client path using the same current source selection order and record executable path, resolved path, version/build identity, and SHA-256 without reading control-plane credentials. Do not start a second tunnel client or authenticate/reconnect."
+    - "If an already-running local health endpoint on port 8080 can be queried with a side-effect-free GET/read-only probe, record its bounded status. Do not make requests that mutate Runtime or tunnel state."
+    - "Do not read or print runtime.env secret values, .env unrelated values, API keys, tunnel credentials, private keys, certificate bodies, or signing identity literal. File existence/mode/hash metadata may be recorded only when needed and non-secret."
+    - "Report raw observed state and one bounded route classification for Architect decision: FRESH_CUTOVER_ELIGIBLE, RESUME_CANDIDATE, ROLLBACK_REQUIRED, RECOVERY_REQUIRED, APPROVAL_REQUIRED, ALREADY_ON_ACCEPTED_CANDIDATE, or BLOCKED_UNKNOWN_STATE. The classification is evidence, not authority to execute that route."
+    - "Publish only .agent/tasks/TASK-0063/report.yaml to dev non-force, then stop for Architect review."
+  allowed_existing_files_or_components:
+    - ".agent/tasks/TASK-0063/report.yaml"
+  expected_files_are_restrictive: true
+
+invariants:
+  - "This task is read-only with respect to installed/live Runtime, tunnel, launchd, ServiceManagement, candidate bytes, cutover transaction, runtime.env, desired state, System Settings, TCC, BTM, and Keychain."
+  - "No candidate_cutover cutover/commit/resume/rollback/recover subcommand executes."
+  - "No Runtime or tunnel lifecycle mutation occurs."
+  - "No new process/service is intentionally spawned except bounded read-only inspection commands and the canonical report commit/push workflow."
+  - "Historical live state is not treated as current evidence; all conclusions use fresh observations from this task."
+  - "Accepted candidate 8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660 remains byte-identical and unmodified."
+
+forbidden_changes:
+  - "Do not install, activate, start, stop, restart, kill, signal, register, unregister, resume, rollback, recover, commit-cutover, bootout, bootstrap, kickstart, enable, disable, repair, or replace live Runtime/tunnel/app/service state."
+  - "Do not invoke freeze_candidate.py or package_app.sh."
+  - "Do not modify or delete cutover transaction files."
+  - "Do not modify runtime.env, repository-local .env, desired-state markers, installed app bytes, launchd plists, ServiceManagement registration, System Settings, TCC, BTM, or Keychain."
+  - "Do not enumerate Keychain signing identities."
+  - "Do not expose secrets or signing identity literal."
+  - "Do not modify production source, tests, dependencies, README, main, tags, releases, or other repositories."
+  - "Do not delegate to Codex, Claude, Antigravity, another ChatGPT, or nested executors."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: ARCHITECT_REVIEW
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0063/report.yaml"
+  unlisted_new_files:
+    allowed: false
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "The accepted candidate and handoff still exist locally, validate canonically, and exactly match TASK-0062 candidate/handoff identities without byte mutation."
+    evidence_required: "Canonical validate result, candidate SHA-256, handoff SHA-256, and preservation proof."
+  - id: AC-2
+    requirement: "Current installed app and cutover transaction state are freshly and completely classified without mutation."
+    evidence_required: "Installed-app identity summary plus transaction absent/present schema/status/phase and bounded identity fields."
+  - id: AC-3
+    requirement: "Current ServiceManagement/launchd/process/tunnel/port-8080 state is freshly observed read-only with modern versus legacy ownership distinguished."
+    evidence_required: "Bounded status/label/program/process/listener evidence with secrets redacted."
+  - id: AC-4
+    requirement: "Exact tunnel-client executable identity is freshly fingerprinted without authentication or control-plane mutation."
+    evidence_required: "Selected path, resolved path, version/build identity, and SHA-256."
+  - id: AC-5
+    requirement: "One evidence-grounded canonical next-route classification is produced without executing lifecycle mutation."
+    evidence_required: "Observed state mapped against current candidate_cutover transaction contract and explicit statement that route was not executed."
+  - id: AC-6
+    requirement: "No live/candidate/config/security state is mutated and canonical report publishes report-only to dev with main unchanged."
+    evidence_required: "Preservation matrix, fresh refs, report-only lineage, clean working tree, unchanged main."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Exact-base/clean-tree preflight and read-only canonical candidate identity validation."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Read-only installed-app and schema-5 transaction observation."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Read-only ServiceManagement/launchd/process/tunnel/8080 observation with modern/legacy ownership distinction."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Tunnel-client fingerprint and source-contract route mapping without executing candidate_cutover subcommands."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Fresh prove zero live mutation, accepted candidate unchanged, report-only publication, clean working tree, and unchanged main."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect review of exact fresh live preflight evidence before requesting operator lifecycle authorization."
+    expected_signal: "Architect can issue one bounded lifecycle task with no guesswork about current transaction or service state."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
