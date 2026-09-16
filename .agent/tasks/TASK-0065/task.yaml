@@ -49,7 +49,7 @@ accepted_predecessor_checkpoint:
   installed_predecessor_closure_sha256: "3815c89912b20ad343ca4f321f34672003abec2ee8a3ca1dab318fdb409faa8b"
   installed_predecessor_closure_record_count: 1224
   runtime_env_sha256: "b47b144549659070c759407da4ba0dbedbf3c00014a948d615cff7823f97b2ed"
-  desired_state_sha256: "e3b0c44298fc1c149afbf4f321f34672003abec2ee8a3ca1dab318fdb409faa8b"
+  desired_state_sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 accepted_candidate:
   candidate_sha256: "8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660"
@@ -88,12 +88,12 @@ scope:
     - "Before mutation, require the cutover transaction path to be absent and prove no symlink substitutes for it. Any transaction presence invalidates authority and requires ARCHITECT_REVIEW without mutation."
     - "Before mutation, prove the installed app rollback closure SHA-256 is 3815c89912b20ad343ca4f321f34672003abec2ee8a3ca1dab318fdb409faa8b with 1224 records and runtime revision 4fbf5b1b0ef3708c8fff479ca6718344f3bfd3c0."
     - "Before mutation, prove runtime.env exists, mode 0600, SHA-256 b47b144549659070c759407da4ba0dbedbf3c00014a948d615cff7823f97b2ed, without reading or printing its values."
-    - "Before mutation, prove the desired-state marker exists, mode 0600, and record its current SHA-256. Treat any drift from the TASK-0064 accepted checkpoint as a blocker unless the accepted review explicitly permits it."
+    - "Before mutation, prove the desired-state marker exists, mode 0600, SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855, without reading secret values. Any drift invalidates authority."
     - "Before mutation, canonical-validate the accepted candidate app/handoff pair and require candidate SHA-256 8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660 and handoff SHA-256 d8bd8885b4cd0d78e6f419496a97bbc5bda021f37f243f796420b05b851774f3."
     - "Before mutation, run strict deep codesign verification on the exact accepted candidate and require non-null consistent TeamIdentifier ownership; record only digest/equality evidence, never the literal TeamIdentifier."
     - "Before mutation, prove /bin/launchctl exists and current UID is exactly 501. Resolve /opt/homebrew/bin/tunnel-client, require it is usable as the canonical cutover tunnel-client argument, and record its launcher/source identity without starting a second tunnel client."
     - "Observe bounded pre-cutover ServiceManagement/launchd/process/listener/health state read-only. Do not repair or normalize predecessor state."
-    - "Immediately before lifecycle mutation, re-prove exact HEAD/origin-dev, clean tree, absent transaction, exact predecessor closure, accepted candidate identity, runtime.env identity, and tunnel-client argument binding."
+    - "Immediately before lifecycle mutation, re-prove exact HEAD/origin-dev, clean tree, absent transaction, exact predecessor closure, accepted candidate identity, runtime.env and desired-state identities, and tunnel-client argument binding."
     - "Invoke exactly one canonical candidate_cutover.py cutover using the exact accepted candidate app/handoff, --home /Users/tienphat, --launchctl /bin/launchctl, --tunnel-client /opt/homebrew/bin/tunnel-client, and --uid 501. No retry is permitted."
     - "Treat any non-successful cutover result, approval-required result, partial result, or command failure as a genuine blocker. Do not follow it with rollback, resume, recover, commit, a second cutover, reinstall, manual launchctl/ServiceManagement repair, process start/restart/kill, or hand-edited transaction state."
     - "After the single invocation, inspect the transaction directory and installed app read-only. If a transaction exists, record schema/status/phase, metadata SHA-256, candidate handoff SHA-256, candidate SHA-256, source revision/tree, operation ledger, and prove it binds exactly to accepted candidate 8017f538...."
@@ -147,7 +147,7 @@ structure_policy:
 acceptance_criteria:
   - id: AC-1
     requirement: "The exact TASK-0064 rollback closure and exact accepted candidate are freshly re-proven immediately before mutation."
-    evidence_required: "Exact-base/clean-tree proof, absent transaction, predecessor closure/revision, accepted candidate app/handoff validation, runtime.env identity, and exact cutover argument bindings."
+    evidence_required: "Exact-base/clean-tree proof, absent transaction, predecessor closure/revision, accepted candidate app/handoff validation, runtime.env/desired-state identities, and exact cutover argument bindings."
   - id: AC-2
     requirement: "Exactly one canonical fresh cutover invocation targets accepted candidate 8017f538... with no retry or other lifecycle command."
     evidence_required: "Exact command family/arguments, invocation_count=1, result/exit evidence, and zero commit/rollback/resume/recover/repair invocations."
