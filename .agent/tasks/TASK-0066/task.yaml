@@ -1,0 +1,179 @@
+protocol_version: 3
+
+task_id: TASK-0066
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_successor_task
+  predecessor_task: TASK-0065
+  predecessor_review: "1c519ceb5bc6f2d1bff9349b339d0f21d185b267"
+  predecessor_review_state: ACCEPTED
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration_and_evidence
+
+classification: READ_ONLY_LIVE_FAILURE_DIAGNOSIS
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - verification
+    - simplicity
+  recommended:
+    - github-workflow
+
+accepted_live_checkpoint:
+  source_report_commit: "16ad30f862c449f6ba2f6cffaf41bd05db8a67b5"
+  accepted_candidate_sha256: "8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660"
+  accepted_candidate_handoff_sha256: "d8bd8885b4cd0d78e6f419496a97bbc5bda021f37f243f796420b05b851774f3"
+  candidate_source_revision: "b5ac0ed5b461d3a259e4111e1a8f13933985f81f"
+  transaction:
+    schema: 5
+    status: PENDING
+    phase: APP_SWAPPED
+    metadata_sha256: "589436ead0cc3c53ea0c32a26eda98e19e2ead5564f6ae298752903566e8f661"
+  installed_app_matches_accepted_candidate: true
+  runtime_env_sha256: "b47b144549659070c759407da4ba0dbedbf3c00014a948d615cff7823f97b2ed"
+  desired_state_sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  observed_failure:
+    modern_runtime_registered: true
+    modern_runtime_running: false
+    tunnel_running: false
+    port_8080_listener: false
+    health_ready: false
+    launchd_last_exit_code: 1
+
+objective: >-
+  Determine the exact read-only cause, or the narrowest evidence-backed cause class, of the accepted installed
+  generation's modern Runtime repeatedly exiting with launchd last exit code 1. Preserve the current schema-5
+  PENDING / APP_SWAPPED transaction and all live lifecycle state exactly. Produce the smallest safe canonical
+  next-action classification for Architect review. Do not start, restart, repair, recover, resume, rollback,
+  commit-cutover, reinstall, execute the Runtime helper manually, or otherwise mutate Runtime/tunnel lifecycle state.
+
+scope:
+  required_changes:
+    - "Fresh-resolve local HEAD and origin/dev and require both equal the exact TASK-0066 handoff base. Require designated working tree clean."
+    - "Fresh-observe the cutover transaction before diagnosis. Require schema=5, status=PENDING, phase=APP_SWAPPED, metadata SHA-256=589436ead0cc3c53ea0c32a26eda98e19e2ead5564f6ae298752903566e8f661, candidate handoff SHA-256=d8bd8885b4cd0d78e6f419496a97bbc5bda021f37f243f796420b05b851774f3, and candidate SHA-256=8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660. Drift is a blocker; do not mutate."
+    - "Canonical-validate the installed app against the transaction-owned handoff and require exact accepted candidate identity 8017f538.... Revalidate the immutable repository candidate too."
+    - "Record fresh ServiceManagement status and bounded launchctl print evidence for com.picmao.agent-runtime-runtime-service, including state, runs, last exit code, program/bundle-program identity where exposed, throttle/restart fields where exposed, and loaded ownership. Never print unrelated environment values."
+    - "Use bounded read-only macOS unified-log inspection for the accepted Runtime generation around the post-cutover failure window and current retries. Filter narrowly to AgentRuntimeRuntimeService / Agent Runtime relevant process, subsystem, or executable evidence. Persist only lines necessary to prove the failure cause; redact any credential, token, key, password, secret, API-key, or unrelated personal data before report persistence."
+    - "Inspect the installed accepted Runtime helper and launchd contract read-only: existence/type/mode, strict codesign, TeamIdentifier equality by digest only, LaunchAgent plist label and BundleProgram, resolved executable path, xattrs/quarantine presence, and dynamic-library dependencies when relevant. Do not modify xattrs or permissions."
+    - "Inspect the exact candidate-source startup/config code at revision b5ac0ed5b461d3a259e4111e1a8f13933985f81f needed to interpret the observed exit path. Read only the minimum files/functions necessary; do not infer from newer task metadata."
+    - "Validate runtime.env only through a bounded secret-safe read path. Record path, mode, file SHA-256, duplicate-key/malformed-line status, required-key presence/non-empty booleans or value digests only when necessary to distinguish the failure. Never echo, source, persist, or print literal secret/config values."
+    - "Inspect the canonical tunnel-client argument and actual Homebrew runtime image files read-only: launcher path/hash, launcher source path/hash, libexec/tunnel-client existence/type/mode/hash/version if available. Do not launch or authenticate tunnel-client."
+    - "Inspect current process/listener/health state read-only and record whether launchd autonomous retry observations change during diagnosis. Autonomous OS retries are observations, not Executor lifecycle actions. Do not trigger them."
+    - "Correlate launchd/log/config/package/source evidence into one cause classification. Use PROVEN_* only when direct evidence closes the causal chain. Otherwise return INSUFFICIENT_EVIDENCE with the exact missing proof boundary; do not guess."
+    - "Classify the smallest next canonical route as exactly one of: SOURCE_OR_PACKAGING_FIX_REQUIRED, LOCAL_CONFIG_FIX_REQUIRED, OS_APPROVAL_OR_POLICY_REQUIRED, BOUNDED_LIFECYCLE_RETRY_REQUIRED, ROLLBACK_REQUIRED, or NO_SAFE_MUTATING_ROUTE_YET. This route is advisory only and authorizes no mutation."
+    - "Re-prove transaction metadata/handoff, installed accepted-candidate identity, repository candidate identity, runtime.env SHA-256, desired-state SHA-256, and absence of manual lifecycle mutation before publication."
+    - "Publish only .agent/tasks/TASK-0066/report.yaml to dev, non-force, then stop at ARCHITECT_REVIEW."
+
+forbidden_changes:
+  - "Do not invoke candidate_cutover cutover, commit, rollback, resume, or recover."
+  - "Do not start, stop, restart, kill, signal, kickstart, bootstrap, bootout, register, unregister, repair, reinstall, or manually execute AgentRuntimeRuntimeService or tunnel-client."
+  - "Do not open/launch the Agent Runtime app to induce lifecycle behavior."
+  - "Do not edit runtime.env, desired-state markers, transaction metadata/handoff, installed-app bytes, candidate bytes, LaunchAgent plists, ServiceManagement state, launchd state, xattrs, permissions, TCC, BTM, or System Settings."
+  - "Do not source runtime.env or print its literal values."
+  - "Do not enumerate Keychain identities or disclose signing identity/TeamIdentifier literals."
+  - "Do not modify production source, tests, dependencies, packaging/lifecycle implementation, README, tags, releases, main, architect-profile, agent-skills, agent-standards, or agent-documents."
+  - "Do not delegate to Codex, Claude, Antigravity, another ChatGPT, or nested executors."
+
+invariants:
+  - "This task is read-only with respect to live Runtime/tunnel/cutover/config state."
+  - "The accepted candidate and installed generation remain 8017f538... throughout the diagnosis."
+  - "The schema-5 PENDING / APP_SWAPPED transaction remains uncommitted and unmodified."
+  - "No final freeze readiness assertion is allowed."
+  - "No mutating next route is executed in this task."
+
+cause_classification:
+  allowed:
+    - PROVEN_RUNTIME_SOURCE_FAILURE
+    - PROVEN_PACKAGING_OR_LAUNCH_CONTRACT_FAILURE
+    - PROVEN_LOCAL_CONFIG_FAILURE
+    - PROVEN_TUNNEL_CLIENT_FAILURE
+    - PROVEN_OS_POLICY_OR_APPROVAL_FAILURE
+    - INSUFFICIENT_EVIDENCE
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0066/report.yaml"
+  unlisted_new_files:
+    allowed: false
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact accepted transaction and installed-generation binding remain valid throughout diagnosis."
+    evidence_required: "Fresh transaction hashes/state plus installed and repository candidate canonical validation before and after diagnosis."
+  - id: AC-2
+    requirement: "Runtime exit behavior is characterized with bounded launchd and unified-log evidence without lifecycle mutation."
+    evidence_required: "Fresh launchctl state/runs/last-exit evidence and narrowly filtered, secret-redacted relevant log evidence."
+  - id: AC-3
+    requirement: "Launch/package/config/tunnel prerequisites are inspected read-only and tied to exact candidate source semantics."
+    evidence_required: "Helper/plist/codesign/path/dependency evidence, secret-safe runtime.env validation, tunnel launcher/libexec evidence, and minimum source-path interpretation at b5ac0ed5...."
+  - id: AC-4
+    requirement: "Cause classification is direct-evidence-backed and does not overclaim."
+    evidence_required: "Explicit causal chain for PROVEN_* or explicit missing-proof boundary for INSUFFICIENT_EVIDENCE."
+  - id: AC-5
+    requirement: "A smallest next canonical route is classified without executing it."
+    evidence_required: "Exactly one route from the authorized route taxonomy with rationale and required future authority boundary."
+  - id: AC-6
+    requirement: "No live/config/candidate/source mutation occurs and repository publication is report-only."
+    evidence_required: "Pre/post hashes/state, zero lifecycle invocation evidence, fresh refs/compare, clean tree, and unchanged main."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Exact-base/clean-tree and exact accepted transaction/installed/candidate binding preflight."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Read-only launchctl/ServiceManagement/process/listener/health diagnosis and bounded unified-log extraction."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Read-only installed helper/plist/codesign/dependency/xattr, secret-safe runtime.env, tunnel launcher/libexec, and exact-source interpretation."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Evidence-backed cause and next-route classification with no mutation."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Post-diagnosis preservation proof plus report-only non-force dev publication and fresh main proof."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect review of exact diagnosis report and preservation evidence."
+    expected_signal: "The accepted live generation's exit code 1 has an evidence-backed cause or an explicit remaining proof boundary, with no lifecycle mutation."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: ARCHITECT_REVIEW
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
