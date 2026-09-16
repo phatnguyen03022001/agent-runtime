@@ -49,6 +49,14 @@ class RuntimeLabelSplitTests(unittest.TestCase):
         self.assertIn(f'/{MODERN_RUNTIME_LABEL}"', installer)
         self.assertNotIn(f'/{LEGACY_RUNTIME_LABEL}"', installer)
 
+    def test_modern_ownership_does_not_require_launchctl_program_rendering(self) -> None:
+        source = (ROOT / "macos/candidate_cutover.py").read_text()
+        self.assertIn("def _modern_service_present", source)
+        section = source[source.index("def _modern_ownership_snapshot_from_state"):source.index("def _modern_ownership_snapshot(")]
+        self.assertIn("_modern_service_present", section)
+        self.assertNotIn("_loaded_service_program(launchctl, modern_runtime_service)", section)
+        self.assertNotIn("_loaded_service_program(launchctl, modern_runtime_service)", source)
+
     def test_cutover_exposes_typed_legacy_and_modern_labels(self) -> None:
         cutover = load_cutover()
         self.assertEqual(cutover.LEGACY_RUNTIME_LABEL, LEGACY_RUNTIME_LABEL)
@@ -65,6 +73,7 @@ class RuntimeLabelSplitTests(unittest.TestCase):
                 AssertionError("pure legacy predecessor must not invoke ServiceManagement")
             )
             cutover._loaded_service_program = lambda *_args, **_kwargs: None
+            cutover._modern_service_present = lambda *_args, **_kwargs: False
             snapshot = cutover._modern_ownership_snapshot(
                 target, launchctl=Path("/bin/launchctl"), uid=501, runtime_legacy_program=None
             )
@@ -85,7 +94,12 @@ class RuntimeLabelSplitTests(unittest.TestCase):
                     return legacy_program
                 return None
 
+            def modern_present(_launchctl: Path, service: str) -> bool:
+                calls.append(service)
+                return False
+
             cutover._loaded_service_program = loaded
+            cutover._modern_service_present = modern_present
             snapshot = cutover._modern_ownership_snapshot_from_state(
                 target,
                 {"main_app": "not-found", "runtime_agent": "not-registered"},

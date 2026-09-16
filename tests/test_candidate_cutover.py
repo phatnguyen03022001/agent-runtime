@@ -243,7 +243,7 @@ def make_fake_launchctl(
         "        print(f'{service} = {{')",
         "        print(f'\tpath = /fake/{label}.plist')",
         "        print('\tstate = not running')",
-        "        print(f'\tprogram = {programs[service]}')",
+        "        if service in programs: print(f'\tprogram = {programs[service]}')",
         "        print('}')",
         "    else:",
         "        print(f'Could not find service \"{service.rsplit(chr(47), 1)[-1]}\" in domain for user gui: 501', file=sys.stderr)",
@@ -447,6 +447,18 @@ class CandidateCutoverTests(unittest.TestCase):
         fx["launch_state"].write_text(json.dumps(sorted(loaded)) + "\n")
         fx["programs_path"].write_text(json.dumps(programs, sort_keys=True) + "\n")
 
+    def _set_launch_service_without_program(self, fx, service: str, present: bool) -> None:
+        loaded = set(json.loads(fx["launch_state"].read_text()))
+        programs = json.loads(fx["programs_path"].read_text())
+        if present:
+            loaded.add(service)
+            programs.pop(service, None)
+        else:
+            loaded.discard(service)
+            programs.pop(service, None)
+        fx["launch_state"].write_text(json.dumps(sorted(loaded)) + "\n")
+        fx["programs_path"].write_text(json.dumps(programs, sort_keys=True) + "\n")
+
     def _approval_error(self, cutover, operation: str, state: dict[str, str]):
         error_type = getattr(cutover, "ServiceManagementApprovalRequired", None)
         self.assertIsNotNone(error_type, "typed ServiceManagement approval result is required")
@@ -518,7 +530,11 @@ class CandidateCutoverTests(unittest.TestCase):
         helper.write_bytes(helper.read_bytes() + b"schema2-current-incident\n")
         provenance.seal_candidate(fx["candidate"], fx["handoff"])
         previous_closure = cutover._rollback_app_closure(fx["target"])
-        previous_identity = cutover._runtime_bundle_identity(fx["target"])
+        previous_identity_current = cutover._runtime_bundle_identity(fx["target"])
+        previous_identity = {
+            key: previous_identity_current[key]
+            for key in ("helper_program", "helper_sha256", "plist_sha256")
+        }
         fx["modern_state"].update(main_app="not-registered", runtime_agent="enabled")
         self._set_launch_program(fx, f"gui/501/{LEGACY_RUNTIME_LABEL}", None)
         fx["transaction"].mkdir(parents=True, mode=0o700)
@@ -847,25 +863,157 @@ class CandidateCutoverTests(unittest.TestCase):
             _, cutover, fx = self._fixture(raw)
             classify = getattr(cutover, "_classify_runtime_ownership", None)
             self.assertIsNotNone(classify, "runtime ownership classification is required")
-            expected = fx["target"] / "Contents/MacOS/AgentRuntimeRuntimeService"
-            self.assertEqual(classify("enabled", None, expected), "stale-registered")
+            self.assertEqual(classify("enabled", False), "stale-registered")
 
     def test_runtime_enabled_with_exact_modern_job_is_healthy(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             _, cutover, fx = self._fixture(raw)
             classify = getattr(cutover, "_classify_runtime_ownership", None)
             self.assertIsNotNone(classify, "runtime ownership classification is required")
-            expected = fx["target"] / "Contents/MacOS/AgentRuntimeRuntimeService"
-            self.assertEqual(classify("enabled", expected, expected), "healthy-registered")
+            self.assertEqual(classify("enabled", True), "healthy-registered")
 
-    def test_runtime_enabled_with_wrong_program_fails_closed(self) -> None:
+    def test_runtime_classifier_rejects_non_boolean_launchd_presence(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
-            _, cutover, fx = self._fixture(raw)
+            _, cutover, _fx = self._fixture(raw)
             classify = getattr(cutover, "_classify_runtime_ownership", None)
             self.assertIsNotNone(classify, "runtime ownership classification is required")
+            with self.assertRaisesRegex(cutover.CutoverError, "presence evidence"):
+                classify("enabled", "gui/501/foreign")
+
+    def test_modern_bundleprogram_service_without_textual_program_can_be_healthy(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            fx["modern_state"]["runtime_agent"] = "enabled"
+            service = f"gui/501/{MODERN_RUNTIME_LABEL}"
+            self._set_launch_service_without_program(fx, service, True)
+            snapshot = cutover._modern_ownership_snapshot_from_state(
+                fx["target"], dict(fx["modern_state"]), launchctl=fx["launchctl"], uid=501,
+                runtime_legacy_program=fx["target"] / "Contents/Resources/runtime/start.sh",
+            )
+            runtime = snapshot["runtime"]
+            self.assertEqual(runtime["classification"], "healthy-registered")
+            self.assertTrue(runtime["launchd_present"])
+            self.assertEqual(runtime["loaded_program"], "")
+            self.assertEqual(runtime["bundle_program"], "Contents/MacOS/AgentRuntimeRuntimeService")
+
+    def test_legacy_exact_program_verifier_rejects_service_without_program_field(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            service = f"gui/501/{LEGACY_RUNTIME_LABEL}"
+            self._set_launch_service_without_program(fx, service, True)
+            with self.assertRaisesRegex(cutover.CutoverError, "program is unavailable"):
+                cutover._loaded_service_program(fx["launchctl"], service)
+
+    def test_modern_service_header_must_match_exact_target(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            fx["modern_state"]["runtime_agent"] = "enabled"
             expected = fx["target"] / "Contents/MacOS/AgentRuntimeRuntimeService"
-            with self.assertRaisesRegex(cutover.CutoverError, "program identity"):
-                classify("enabled", fx["root"] / "foreign-helper", expected)
+            original = cutover._service_print
+            def wrong_header(launchctl, service):
+                if service.endswith('/' + MODERN_RUNTIME_LABEL):
+                    return subprocess.CompletedProcess(
+                        [str(launchctl), 'print', service], 0,
+                        stdout=f"gui/501/{LEGACY_RUNTIME_LABEL} = {{\n\tprogram = {expected}\n}}\n", stderr=""
+                    )
+                return original(launchctl, service)
+            cutover._service_print = wrong_header
+            with self.assertRaisesRegex(cutover.CutoverError, "label|target"):
+                cutover._modern_ownership_snapshot_from_state(
+                    fx["target"], dict(fx["modern_state"]), launchctl=fx["launchctl"], uid=501,
+                    runtime_legacy_program=fx["target"] / "Contents/Resources/runtime/start.sh",
+                )
+
+    def test_modern_enabled_service_present_wrong_plist_label_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            fx["modern_state"]["runtime_agent"] = "enabled"
+            service = f"gui/501/{MODERN_RUNTIME_LABEL}"
+            self._set_launch_service_without_program(fx, service, True)
+            plist = fx["target"] / "Contents/Library/LaunchAgents" / f"{MODERN_RUNTIME_LABEL}.plist"
+            payload = plistlib.loads(plist.read_bytes())
+            payload["Label"] = LEGACY_RUNTIME_LABEL
+            plist.write_bytes(plistlib.dumps(payload))
+            with self.assertRaisesRegex(cutover.CutoverError, "Label"):
+                cutover._modern_ownership_snapshot_from_state(
+                    fx["target"], dict(fx["modern_state"]), launchctl=fx["launchctl"], uid=501,
+                    runtime_legacy_program=None,
+                )
+
+    def test_modern_enabled_service_present_wrong_bundleprogram_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            fx["modern_state"]["runtime_agent"] = "enabled"
+            service = f"gui/501/{MODERN_RUNTIME_LABEL}"
+            self._set_launch_program(fx, service, fx["target"] / "Contents/MacOS/AgentRuntimeRuntimeService")
+            plist = fx["target"] / "Contents/Library/LaunchAgents" / f"{MODERN_RUNTIME_LABEL}.plist"
+            payload = plistlib.loads(plist.read_bytes())
+            payload["BundleProgram"] = "Contents/MacOS/ForeignHelper"
+            plist.write_bytes(plistlib.dumps(payload))
+            with self.assertRaisesRegex(cutover.CutoverError, "BundleProgram"):
+                cutover._modern_ownership_snapshot_from_state(
+                    fx["target"], dict(fx["modern_state"]), launchctl=fx["launchctl"], uid=501,
+                    runtime_legacy_program=None,
+                )
+
+    def test_modern_enabled_service_present_missing_helper_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            fx["modern_state"]["runtime_agent"] = "enabled"
+            service = f"gui/501/{MODERN_RUNTIME_LABEL}"
+            helper = fx["target"] / "Contents/MacOS/AgentRuntimeRuntimeService"
+            self._set_launch_program(fx, service, helper)
+            helper.unlink()
+            with self.assertRaisesRegex(cutover.CutoverError, "helper.*missing|helper.*unsafe"):
+                cutover._modern_ownership_snapshot_from_state(
+                    fx["target"], dict(fx["modern_state"]), launchctl=fx["launchctl"], uid=501,
+                    runtime_legacy_program=None,
+                )
+
+    def test_modern_enabled_service_present_symlink_helper_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            fx["modern_state"]["runtime_agent"] = "enabled"
+            service = f"gui/501/{MODERN_RUNTIME_LABEL}"
+            helper = fx["target"] / "Contents/MacOS/AgentRuntimeRuntimeService"
+            foreign = fx["root"] / "foreign-helper"
+            foreign.write_text("foreign\n")
+            helper.unlink()
+            helper.symlink_to(foreign)
+            self._set_launch_program(fx, service, helper)
+            with self.assertRaisesRegex(cutover.CutoverError, "helper.*missing|helper.*unsafe"):
+                cutover._modern_ownership_snapshot_from_state(
+                    fx["target"], dict(fx["modern_state"]), launchctl=fx["launchctl"], uid=501,
+                    runtime_legacy_program=None,
+                )
+
+    def test_absent_registration_with_unexpected_modern_service_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            fx["modern_state"]["runtime_agent"] = "not-registered"
+            service = f"gui/501/{MODERN_RUNTIME_LABEL}"
+            self._set_launch_service_without_program(fx, service, True)
+            with self.assertRaisesRegex(cutover.CutoverError, "without registered ServiceManagement ownership"):
+                cutover._modern_ownership_snapshot_from_state(
+                    fx["target"], dict(fx["modern_state"]), launchctl=fx["launchctl"], uid=501,
+                    runtime_legacy_program=None,
+                )
+
+    def test_schema5_cutover_accepts_bundleprogram_job_without_textual_program(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            original = cutover._service_management
+            def service_management(app: Path, operation: str) -> dict[str, str]:
+                state = original(app, operation)
+                if operation == "register-runtime":
+                    self._set_launch_service_without_program(fx, f"gui/501/{MODERN_RUNTIME_LABEL}", True)
+                return state
+            cutover._service_management = service_management
+            result = self._cutover(cutover, fx)
+            self.assertEqual(result["status"], "PENDING")
+            runtime = json.loads((fx["transaction"] / "metadata.json").read_text())["modern_ownership_after"]["runtime"]
+            self.assertTrue(runtime["launchd_present"])
+            self.assertEqual(runtime["loaded_program"], "")
 
     def test_register_runtime_requires_approval_reaches_pending_with_created_ledger(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -976,6 +1124,20 @@ class CandidateCutoverTests(unittest.TestCase):
             self.assertEqual(metadata["status"], "PENDING")
             self.assertTrue(metadata["operations"]["runtime_registered"])
 
+    def test_resume_enabled_bundleprogram_job_without_textual_program_transitions_pending(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            self._awaiting_approval(cutover, fx)
+            fx["modern_state"]["runtime_agent"] = "enabled"
+            self._set_launch_service_without_program(fx, f"gui/501/{MODERN_RUNTIME_LABEL}", True)
+            result = cutover.resume_transaction(
+                fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501
+            )
+            self.assertEqual(result["status"], "PENDING")
+            runtime = json.loads((fx["transaction"] / "metadata.json").read_text())["modern_ownership_after"]["runtime"]
+            self.assertTrue(runtime["launchd_present"])
+            self.assertEqual(runtime["loaded_program"], "")
+
     def test_resume_requires_approval_stays_awaiting_without_retry(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             _, cutover, fx = self._fixture(raw)
@@ -1031,13 +1193,15 @@ class CandidateCutoverTests(unittest.TestCase):
             operations = [operation for _, operation in fx["service_operations"]]
             self.assertEqual(operations.count("register-runtime"), 1)
 
-    def test_resume_wrong_helper_fails_closed_and_retains_checkpoint(self) -> None:
+    def test_resume_mutated_helper_fails_candidate_provenance_and_retains_checkpoint(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
-            _, cutover, fx = self._fixture(raw)
+            provenance, cutover, fx = self._fixture(raw)
             self._awaiting_approval(cutover, fx)
             fx["modern_state"]["runtime_agent"] = "enabled"
-            self._set_launch_program(fx, f"gui/501/{MODERN_RUNTIME_LABEL}", fx["root"] / "foreign-helper")
-            with self.assertRaisesRegex(cutover.CutoverError, "program identity"):
+            self._set_launch_service_without_program(fx, f"gui/501/{MODERN_RUNTIME_LABEL}", True)
+            helper = fx["target"] / "Contents/MacOS/AgentRuntimeRuntimeService"
+            helper.write_bytes(helper.read_bytes() + b"tampered-after-checkpoint\n")
+            with self.assertRaisesRegex(Exception, "candidate identity"):
                 cutover.resume_transaction(
                     fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501
                 )
@@ -1182,8 +1346,7 @@ class CandidateCutoverTests(unittest.TestCase):
             _, cutover, fx = self._fixture(raw)
             classify = getattr(cutover, "_classify_runtime_ownership", None)
             self.assertIsNotNone(classify, "runtime ownership classification is required")
-            expected = fx["target"] / "Contents/MacOS/AgentRuntimeRuntimeService"
-            self.assertEqual(classify("requires-approval", None, expected), "awaiting-approval")
+            self.assertEqual(classify("requires-approval", False), "awaiting-approval")
 
     def test_changed_helper_generation_forces_runtime_refresh(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

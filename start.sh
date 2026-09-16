@@ -36,7 +36,11 @@ SERVICE="$DOMAIN/$CURRENT_RUNTIME_LAUNCHD_LABEL"
 STATE_DIR="$HOME/Library/Application Support/Agent Runtime"
 DESIRED_STATE="$STATE_DIR/protected-runtime-running"
 LOCK_DIR="$STATE_DIR/lifecycle.lock"
-SERVICE_MANAGEMENT_EXECUTABLE="$HOME/Applications/Agent Runtime.app/Contents/MacOS/AgentRuntimeMenuBar"
+INSTALLED_APP="$HOME/Applications/Agent Runtime.app"
+SERVICE_MANAGEMENT_EXECUTABLE="$INSTALLED_APP/Contents/MacOS/AgentRuntimeMenuBar"
+RUNTIME_SERVICE_PLIST="$INSTALLED_APP/Contents/Library/LaunchAgents/$CURRENT_RUNTIME_LAUNCHD_LABEL.plist"
+RUNTIME_SERVICE_HELPER="$INSTALLED_APP/Contents/MacOS/AgentRuntimeRuntimeService"
+RUNTIME_BUNDLE_PROGRAM="Contents/MacOS/AgentRuntimeRuntimeService"
 ACTION="${1:-start}"
 RUNTIME_PYTHON="$ROOT/.venv/bin/python"
 MCP_COMMAND="command=${RUNTIME_PYTHON// /\\ } -m agent_runtime.server,channel=main"
@@ -62,9 +66,26 @@ service_loaded() {
   launchctl print "$SERVICE" >/dev/null 2>&1
 }
 
-require_modern_registration() {
+require_modern_package_ownership() {
   [[ -x "$SERVICE_MANAGEMENT_EXECUTABLE" && ! -L "$SERVICE_MANAGEMENT_EXECUTABLE" ]] \
     || fail "ServiceManagement owner app is missing; install/activate the current Agent Runtime generation first."
+  [[ -f "$RUNTIME_SERVICE_PLIST" && ! -L "$RUNTIME_SERVICE_PLIST" ]] \
+    || fail "ServiceManagement Runtime plist is missing or unsafe."
+  [[ -x "$RUNTIME_SERVICE_HELPER" && -f "$RUNTIME_SERVICE_HELPER" && ! -L "$RUNTIME_SERVICE_HELPER" ]] \
+    || fail "ServiceManagement Runtime helper is missing or unsafe."
+  local plist_label bundle_program
+  plist_label="$(/usr/libexec/PlistBuddy -c 'Print :Label' "$RUNTIME_SERVICE_PLIST" 2>/dev/null)" \
+    || fail "ServiceManagement Runtime plist Label is unavailable."
+  bundle_program="$(/usr/libexec/PlistBuddy -c 'Print :BundleProgram' "$RUNTIME_SERVICE_PLIST" 2>/dev/null)" \
+    || fail "ServiceManagement Runtime plist BundleProgram is unavailable."
+  [[ "$plist_label" == "$CURRENT_RUNTIME_LAUNCHD_LABEL" ]] \
+    || fail "ServiceManagement Runtime plist Label does not match the current Runtime identity."
+  [[ "$bundle_program" == "$RUNTIME_BUNDLE_PROGRAM" ]] \
+    || fail "ServiceManagement Runtime BundleProgram does not match the installed helper."
+}
+
+require_modern_registration() {
+  require_modern_package_ownership
   local snapshot
   if ! snapshot="$("$SERVICE_MANAGEMENT_EXECUTABLE" --service-management status 2>/dev/null)"; then
     fail "ServiceManagement registration status is unavailable."

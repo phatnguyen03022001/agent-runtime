@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import plistlib
 import signal
 import subprocess
 import tempfile
@@ -47,6 +48,17 @@ printf '{"main_app":"%s","runtime_agent":"%s"}\n' "$main_state" "$runtime_state"
 """
         )
         modern_main.chmod(0o700)
+        installed_app = self.home / "Applications" / "Agent Runtime.app"
+        helper = installed_app / "Contents" / "MacOS" / "AgentRuntimeRuntimeService"
+        helper.write_text("#!/bin/bash\nexit 0\n")
+        helper.chmod(0o700)
+        service_plist = installed_app / "Contents" / "Library" / "LaunchAgents" / "com.picmao.agent-runtime-runtime-service.plist"
+        service_plist.parent.mkdir(parents=True)
+        service_plist.write_bytes(plistlib.dumps({
+            "Label": "com.picmao.agent-runtime-runtime-service",
+            "BundleProgram": "Contents/MacOS/AgentRuntimeRuntimeService",
+        }))
+        self.service_plist = service_plist
         (self.state / "loaded").write_text("")
         self._write_fakes()
         self.env = {
@@ -266,6 +278,16 @@ esac
         )
         self.assertEqual(restarted.returncode, 0, restarted.stderr)
         self.assertNotEqual(self.wait_for_pid_change(first), first)
+
+    def test_start_fails_closed_when_modern_bundleprogram_contract_is_wrong(self) -> None:
+        payload = plistlib.loads(self.service_plist.read_bytes())
+        payload["BundleProgram"] = "Contents/MacOS/ForeignHelper"
+        self.service_plist.write_bytes(plistlib.dumps(payload))
+        result = self.run_start("start")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("BundleProgram", result.stderr)
+        self.assertFalse((self.home / "Library/Application Support/Agent Runtime/protected-runtime-running").exists())
+        self.assertFalse((self.state / "starts.log").exists())
 
     def test_start_fails_closed_when_runtime_agent_is_not_registered_even_if_main_is_enabled(self) -> None:
         result = self.run_start(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import plistlib
 import shutil
 import subprocess
 import tempfile
@@ -128,6 +129,16 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
             "exit 2\n"
         )
         service_owner.chmod(0o700)
+        installed_app = home / "Applications/Agent Runtime.app"
+        helper = installed_app / "Contents/MacOS/AgentRuntimeRuntimeService"
+        helper.write_text("#!/bin/sh\nexit 0\n")
+        helper.chmod(0o700)
+        service_plist = installed_app / "Contents/Library/LaunchAgents/com.picmao.agent-runtime-runtime-service.plist"
+        service_plist.parent.mkdir(parents=True)
+        service_plist.write_bytes(plistlib.dumps({
+            "Label": "com.picmao.agent-runtime-runtime-service",
+            "BundleProgram": "Contents/MacOS/AgentRuntimeRuntimeService",
+        }))
         command = (
             "/opt/homebrew/bin/tunnel-client run "
             "--control-plane.poll-channel main "

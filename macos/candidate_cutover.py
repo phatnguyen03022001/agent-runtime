@@ -36,6 +36,7 @@ SPLIT_SERVICE_MANAGEMENT_REVISIONS = {
 UI_LABEL = "com.picmao.agent-runtime-ui"
 LEGACY_RUNTIME_LABEL = "com.picmao.agent-runtime-runtime"
 MODERN_RUNTIME_LABEL = "com.picmao.agent-runtime-runtime-service"
+MODERN_RUNTIME_BUNDLE_PROGRAM = "Contents/MacOS/AgentRuntimeRuntimeService"
 APP_BUNDLE_IDENTIFIER = "com.picmao.agent-runtime"
 RUNTIME_PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 SERVICE_ABSENCE_TIMEOUT_SECONDS = 5.0
@@ -179,6 +180,16 @@ def _loaded_service_program(launchctl: Path, service: str) -> Path | None:
     return Path(programs[0])
 
 
+def _modern_service_present(launchctl: Path, service: str) -> bool:
+    result = _service_print(launchctl, service)
+    if result is None:
+        return False
+    lines = [line for line in result.stdout.splitlines() if line.strip()]
+    if not lines or lines[0].strip() != f"{service} = {{":
+        raise CutoverError(f"LaunchAgent identity mismatch: label does not match {service}")
+    return True
+
+
 def _sha256_file(path: Path, description: str) -> str:
     if path.is_symlink() or not path.is_file():
         raise CutoverError(f"{description} is missing or unsafe")
@@ -212,28 +223,43 @@ def _validate_runtime_config_identity(value: object, state_dir: Path) -> dict[st
 
 def _runtime_bundle_identity(app: Path) -> dict[str, str]:
     helper = app / "Contents" / "MacOS" / "AgentRuntimeRuntimeService"
-    plist = app / "Contents" / "Library" / "LaunchAgents" / f"{MODERN_RUNTIME_LABEL}.plist"
+    launch_dir = app / "Contents" / "Library" / "LaunchAgents"
+    plist = launch_dir / f"{MODERN_RUNTIME_LABEL}.plist"
+    legacy_plist = launch_dir / f"{LEGACY_RUNTIME_LABEL}.plist"
+    if legacy_plist.exists() or legacy_plist.is_symlink():
+        raise CutoverError("legacy Runtime LaunchAgent plist cannot substitute for modern ownership")
+    if plist.is_symlink() or not plist.is_file():
+        raise CutoverError("Runtime LaunchAgent plist is missing or unsafe")
+    try:
+        payload = plistlib.loads(plist.read_bytes())
+    except (OSError, plistlib.InvalidFileException) as exc:
+        raise CutoverError("Runtime LaunchAgent plist is malformed") from exc
+    if payload.get("Label") != MODERN_RUNTIME_LABEL:
+        raise CutoverError("Runtime LaunchAgent plist Label does not match modern ownership")
+    bundle_program = payload.get("BundleProgram")
+    if bundle_program != MODERN_RUNTIME_BUNDLE_PROGRAM:
+        raise CutoverError("Runtime LaunchAgent BundleProgram does not match modern ownership")
+    resolved = app / str(bundle_program)
+    if resolved != helper:
+        raise CutoverError("Runtime LaunchAgent BundleProgram resolves to an unexpected helper")
     return {
+        "bundle_program": str(bundle_program),
         "helper_program": str(helper),
         "helper_sha256": _sha256_file(helper, "Runtime helper"),
         "plist_sha256": _sha256_file(plist, "Runtime LaunchAgent plist"),
     }
 
 
-def _classify_runtime_ownership(
-    registration_state: str,
-    loaded_program: Path | None,
-    expected_program: Path,
-) -> str:
+def _classify_runtime_ownership(registration_state: str, launchd_present: bool) -> str:
     if registration_state not in SERVICE_STATES:
         raise CutoverError("Runtime ServiceManagement state is invalid")
-    if loaded_program is not None and loaded_program != expected_program:
-        raise CutoverError("Runtime LaunchAgent program identity does not match the installed helper")
+    if not isinstance(launchd_present, bool):
+        raise CutoverError("Runtime launchd presence evidence is invalid")
     if registration_state == "enabled":
-        return "healthy-registered" if loaded_program is not None else "stale-registered"
+        return "healthy-registered" if launchd_present else "stale-registered"
     if registration_state == "requires-approval":
         return "awaiting-approval"
-    if loaded_program is not None:
+    if launchd_present:
         raise CutoverError("Runtime LaunchAgent is loaded without registered ServiceManagement ownership")
     return "absent"
 
@@ -374,31 +400,46 @@ def _modern_ownership_snapshot_from_state(
     runtime_legacy_program: Path | None,
 ) -> dict[str, object]:
     service_state = _validate_recorded_service_state(service_state)
-    if target_app.exists() and _runtime_bundle_present(target_app):
-        identity = _runtime_bundle_identity(target_app)
-        expected_program = Path(identity["helper_program"])
-    else:
-        identity = {"helper_program": "", "helper_sha256": "", "plist_sha256": ""}
-        expected_program = target_app / "Contents/MacOS/AgentRuntimeRuntimeService"
-
     modern_runtime_service = f"gui/{uid}/{MODERN_RUNTIME_LABEL}"
     legacy_runtime_service = f"gui/{uid}/{LEGACY_RUNTIME_LABEL}"
-    modern_loaded_program = _loaded_service_program(launchctl, modern_runtime_service)
+    modern_present = _modern_service_present(launchctl, modern_runtime_service)
     legacy_loaded_program = _loaded_service_program(launchctl, legacy_runtime_service)
     legacy_loaded = legacy_loaded_program is not None
     if legacy_loaded_program is not None and runtime_legacy_program is not None and legacy_loaded_program != runtime_legacy_program:
         raise CutoverError("legacy Runtime LaunchAgent loaded identity is ambiguous")
-    classification = _classify_runtime_ownership(
-        service_state["runtime_agent"], modern_loaded_program, expected_program
+
+    modern_plist = target_app / "Contents" / "Library" / "LaunchAgents" / f"{MODERN_RUNTIME_LABEL}.plist"
+    needs_identity = (
+        modern_plist.exists()
+        or modern_plist.is_symlink()
+        or modern_present
+        or service_state["runtime_agent"] in REGISTERED_SERVICE_STATES
     )
+    if target_app.exists() and needs_identity:
+        identity = _runtime_bundle_identity(target_app)
+    elif needs_identity:
+        raise CutoverError("modern Runtime ownership exists without an installed owner app")
+    else:
+        identity = {
+            "bundle_program": "",
+            "helper_program": "",
+            "helper_sha256": "",
+            "plist_sha256": "",
+        }
+
+    classification = _classify_runtime_ownership(service_state["runtime_agent"], modern_present)
     return {
         "main_app": service_state["main_app"],
         "runtime": {
             "registration_state": service_state["runtime_agent"],
             "classification": classification,
-            "loaded": modern_loaded_program is not None,
-            "loaded_program": str(modern_loaded_program) if modern_loaded_program is not None else "",
+            "loaded": modern_present,
+            # Compatibility field: launchctl's human-readable program rendering is not
+            # canonical for BundleProgram services, so schema-5 never invents a value.
+            "loaded_program": "",
+            "launchd_present": modern_present,
             "legacy_label_loaded": legacy_loaded,
+            "bundle_program": identity["bundle_program"],
             "helper_program": identity["helper_program"],
             "helper_sha256": identity["helper_sha256"],
             "plist_sha256": identity["plist_sha256"],
@@ -440,11 +481,13 @@ def _runtime_generation_changed(before: dict[str, object], candidate_app: Path) 
 def _validate_runtime_ownership_record(value: object) -> dict[str, object]:
     if not isinstance(value, dict):
         raise CutoverError("pre-swap Runtime ownership metadata is malformed")
-    required = {
+    historical = {
         "registration_state", "classification", "loaded", "loaded_program", "legacy_label_loaded",
         "helper_program", "helper_sha256", "plist_sha256",
     }
-    if set(value) != required:
+    current = historical | {"launchd_present", "bundle_program"}
+    keys = frozenset(value)
+    if keys not in {frozenset(historical), frozenset(current)}:
         raise CutoverError("pre-swap Runtime ownership metadata is malformed")
     if value["registration_state"] not in SERVICE_STATES:
         raise CutoverError("pre-swap Runtime ownership metadata is malformed")
@@ -454,6 +497,11 @@ def _validate_runtime_ownership_record(value: object) -> dict[str, object]:
         raise CutoverError("pre-swap Runtime ownership metadata is malformed")
     for key in ("loaded_program", "helper_program", "helper_sha256", "plist_sha256"):
         if not isinstance(value[key], str):
+            raise CutoverError("pre-swap Runtime ownership metadata is malformed")
+    if keys == frozenset(current):
+        if not isinstance(value["launchd_present"], bool) or value["launchd_present"] != value["loaded"]:
+            raise CutoverError("pre-swap Runtime ownership metadata is malformed")
+        if value["loaded_program"] != "" or not isinstance(value["bundle_program"], str):
             raise CutoverError("pre-swap Runtime ownership metadata is malformed")
     return dict(value)
 
@@ -813,8 +861,14 @@ def _restore_preexisting_modern_state(
         raise CutoverError("predecessor ServiceManagement contract cannot restore removed ownership")
 
     if restore_runtime and runtime["classification"] == "healthy-registered":
-        expected = target_app / "Contents/MacOS/AgentRuntimeRuntimeService"
-        _require_service_identity(launchctl, f"gui/{uid}/{_transaction_modern_runtime_label(metadata)}", expected)
+        service = f"gui/{uid}/{_transaction_modern_runtime_label(metadata)}"
+        if "launchd_present" in runtime:
+            _runtime_bundle_identity(target_app)
+            if not _modern_service_present(launchctl, service):
+                raise CutoverError("restored modern Runtime launchd service is absent")
+        else:
+            expected = target_app / "Contents/MacOS/AgentRuntimeRuntimeService"
+            _require_service_identity(launchctl, service, expected)
 
 
 def _unregister_modern_generation(
@@ -1009,15 +1063,22 @@ def _restore_transaction(
         runtime = _validate_runtime_ownership_record(before["runtime"])
         transaction_runtime_label = _transaction_modern_runtime_label(metadata)
         runtime_service = f"gui/{uid}/{transaction_runtime_label}"
-        observed_program = _loaded_service_program(launchctl, runtime_service)
-        if metadata.get("schema") == SCHEMA4_ROLLBACK_SCHEMA and runtime["legacy_label_loaded"]:
-            expected_program = _launchagent_program(runtime_plist, LEGACY_RUNTIME_LABEL)
-        elif runtime["loaded"]:
-            expected_program = Path(str(runtime["loaded_program"]))
+        if "launchd_present" in runtime:
+            observed_present = _modern_service_present(launchctl, runtime_service)
+            if observed_present != bool(runtime["launchd_present"]):
+                raise CutoverError("PRE_SWAP phase modern Runtime launchd presence was not restored")
+            if observed_present:
+                _runtime_bundle_identity(target_app)
         else:
-            expected_program = None
-        if observed_program != expected_program:
-            raise CutoverError("PRE_SWAP phase Runtime loaded identity was not restored")
+            observed_program = _loaded_service_program(launchctl, runtime_service)
+            if metadata.get("schema") == SCHEMA4_ROLLBACK_SCHEMA and runtime["legacy_label_loaded"]:
+                expected_program = _launchagent_program(runtime_plist, LEGACY_RUNTIME_LABEL)
+            elif runtime["loaded"]:
+                expected_program = Path(str(runtime["loaded_program"]))
+            else:
+                expected_program = None
+            if observed_program != expected_program:
+                raise CutoverError("PRE_SWAP phase Runtime loaded identity was not restored")
         return
 
     if target_app.is_symlink() or not target_app.is_dir():
@@ -1118,6 +1179,7 @@ def cutover_candidate(
     if candidate_app.resolve() == target_app.resolve(strict=False):
         raise CutoverError("prebuilt candidate must be external to the installed app path")
     expected = provenance.validate_candidate(candidate_app, handoff_path)
+    _runtime_bundle_identity(candidate_app)
 
     domain = f"gui/{uid}"
     ui_service = f"{domain}/{UI_LABEL}"
