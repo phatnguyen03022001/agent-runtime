@@ -1,0 +1,176 @@
+protocol_version: 3
+
+task_id: TASK-0064
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_successor_task
+  predecessor_task: TASK-0063
+  predecessor_review: "ff2115210d75d618ca928c5ef2ca05c79d87ce47"
+  predecessor_review_state: ACCEPTED
+  operator_authorization: >-
+    Operator explicitly authorized bounded rollback of the existing mismatched schema-5 transaction only.
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration_and_evidence
+
+classification: BOUNDED_LIVE_LIFECYCLE_MUTATION
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - verification
+    - simplicity
+  recommended:
+    - github-workflow
+
+accepted_live_checkpoint:
+  source_report_commit: "450eaec15c452a0a4ebb9df16387e91b9a3a3cec"
+  transaction:
+    schema: 5
+    status: PENDING
+    phase: APP_SWAPPED
+    metadata_sha256: "5f4a608bc1d2d8dca6a869ad32f6f12fe551664fecaaaf1f6dba9703d03ee023"
+    candidate_handoff_sha256: "515a4b642836874d90f6124f8a099bed3a2fc890891f4d344fc38906d56351ff"
+    candidate_sha256: "c96600db380a0330a57b272622d0b2a0a91c18f338ae8e8360e50d643f5ae2c4"
+    previous_runtime_revision: "4fbf5b1b0ef3708c8fff479ca6718344f3bfd3c0"
+  installed_app_matches_transaction_candidate: true
+  accepted_candidate_sha256: "8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660"
+  accepted_candidate_handoff_sha256: "d8bd8885b4cd0d78e6f419496a97bbc5bda021f37f243f796420b05b851774f3"
+  route: ROLLBACK_REQUIRED
+
+objective: >-
+  Execute exactly one canonical rollback of the currently present mismatched schema-5 PENDING / APP_SWAPPED
+  transaction identified above. The rollback must restore the transaction-owned predecessor state using the
+  repository's canonical candidate_cutover rollback path, then prove rollback closure and preservation of the
+  accepted TASK-0062 candidate. Do not cut over, resume, recover, commit, install, freeze, rebuild, repair, or
+  activate the accepted candidate in this task.
+
+scope:
+  required_changes:
+    - "Fresh-resolve local HEAD and origin/dev and require both equal the exact handoff base. Require designated working tree clean."
+    - "Before lifecycle mutation, fresh-observe the transaction and require schema=5, status=PENDING, phase=APP_SWAPPED, metadata SHA-256=5f4a608bc1d2d8dca6a869ad32f6f12fe551664fecaaaf1f6dba9703d03ee023, transaction candidate handoff SHA-256=515a4b642836874d90f6124f8a099bed3a2fc890891f4d344fc38906d56351ff, and transaction candidate SHA-256=c96600db380a0330a57b272622d0b2a0a91c18f338ae8e8360e50d643f5ae2c4. If any binding differs, stop without mutation and return ARCHITECT_REVIEW."
+    - "Before lifecycle mutation, require the installed app still validates exactly against the transaction-owned candidate c96600db380a0330a57b272622d0b2a0a91c18f338ae8e8360e50d643f5ae2c4."
+    - "Before lifecycle mutation, canonical-validate the accepted TASK-0062 candidate 8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660 and record its app/handoff identity hashes so post-rollback preservation can be proven. Do not mutate its bytes."
+    - "Record bounded pre-rollback live ownership evidence: ServiceManagement status, relevant launchd labels, Runtime/tunnel process identity, listener ownership for 127.0.0.1:8080, and /healthz + /readyz when available. This is observation only."
+    - "Invoke exactly one canonical candidate_cutover.py rollback for the current user/home with the canonical system launchctl path and current UID. Do not invoke rollback a second time, even for evidence collection."
+    - "Treat any rollback command failure as a genuine blocker. Do not follow it with recover, resume, commit, cutover, reinstall, manual launchctl repair, manual ServiceManagement repair, process kill/start/restart, or hand-edited transaction state."
+    - "After successful rollback, prove transaction closure using read-only inspection. Require the stale schema-5 transaction to be absent or otherwise in the exact canonical terminal state produced by rollback; do not normalize it manually."
+    - "After successful rollback, prove the installed app matches the transaction-owned predecessor restoration evidence and no longer matches the mismatched c96600db candidate. Record predecessor runtime revision/identity without exposing secrets."
+    - "After rollback, observe ServiceManagement, launchd, Runtime/tunnel processes, listener 8080, and health endpoints. Report the exact resulting state truthfully. Do not start/restart/repair anything if services are absent or unhealthy."
+    - "Prove runtime.env and desired-state files are not manually edited by the Executor. Hash-before/hash-after may change only if the canonical rollback itself owns such a change under transaction semantics; any unexpected change must be reported. Never print runtime.env values."
+    - "Revalidate the accepted TASK-0062 candidate after rollback and require exact byte/hash identity continuity."
+    - "Publish only the canonical TASK-0064 report to dev, non-force, then stop for Architect review."
+
+allowed_mutation:
+  command_family: "macos/candidate_cutover.py rollback"
+  invocation_count: 1
+  lifecycle_scope: "existing mismatched schema-5 transaction only"
+  consequences_owned_by_command:
+    - "installed app restoration to recorded predecessor"
+    - "transaction-owned ServiceManagement/launchd state restoration"
+    - "transaction cleanup/terminalization"
+    - "transaction-owned desired-state restoration where canonical rollback semantics require it"
+
+forbidden_changes:
+  - "Do not run candidate_cutover cutover, commit, resume, or recover."
+  - "Do not invoke rollback more than once."
+  - "Do not freeze, package, rebuild, reseal, republish, chmod, touch, or otherwise mutate accepted candidate 8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660."
+  - "Do not install or activate the accepted candidate in this task."
+  - "Do not manually start, stop, restart, kill, signal, register, unregister, bootstrap, bootout, kickstart, repair, or rewrite Runtime/tunnel/ServiceManagement/launchd state outside the one canonical rollback invocation."
+  - "Do not edit runtime.env, desired-state markers, cutover metadata, transaction handoff, installed-app bytes, LaunchAgent plists, or System Settings/TCC/BTM manually."
+  - "Do not enumerate Keychain identities, expose credentials, print runtime.env, or disclose unrelated .env values."
+  - "Do not modify production source, tests, dependencies, packaging, lifecycle implementation, README, tags, releases, main, architect-profile, agent-skills, agent-standards, or agent-documents."
+  - "Do not delegate to Codex, Claude, Antigravity, another ChatGPT, or nested executors."
+
+invariants:
+  - "Exactly one canonical rollback invocation is the only authorized live lifecycle mutation."
+  - "The rollback target must remain the exact accepted mismatched schema-5 transaction; drift before mutation invalidates authority."
+  - "The accepted TASK-0062 candidate remains immutable and uninstalled throughout this task."
+  - "No fresh cutover occurs in this task."
+  - "No manual repair follows rollback success or failure."
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0064/report.yaml"
+  unlisted_new_files:
+    allowed: false
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "The exact accepted schema-5 mismatched transaction and installed-app binding are re-proven immediately before mutation."
+    evidence_required: "Fresh schema/status/phase, transaction metadata SHA-256, transaction candidate/handoff SHA-256, installed-app validation, and exact-base proof."
+  - id: AC-2
+    requirement: "Exactly one canonical rollback invocation succeeds without any other lifecycle command."
+    evidence_required: "Exact rollback invocation count=1, exit/result evidence, and zero cutover/commit/resume/recover/manual repair commands."
+  - id: AC-3
+    requirement: "Rollback closes the mismatched transaction and restores the recorded predecessor state truthfully."
+    evidence_required: "Post-rollback transaction state, installed-app predecessor identity, and proof installed app no longer equals c96600db candidate."
+  - id: AC-4
+    requirement: "Post-rollback live ownership and health are observed without repair or normalization."
+    evidence_required: "ServiceManagement, launchd, process/tunnel/listener, and health observations with explicit no-repair statement."
+  - id: AC-5
+    requirement: "Accepted candidate 8017f538... remains canonical-valid and byte-identical across rollback."
+    evidence_required: "Pre/post canonical validation and exact critical identity/hash continuity."
+  - id: AC-6
+    requirement: "Repository publication is report-only, non-force to dev, working tree clean, and main unchanged."
+    evidence_required: "Fresh refs, compare proof, and clean-tree proof."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Exact-base/clean-tree plus fresh transaction, installed-app, and accepted-candidate binding preflight."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Run exactly one canonical candidate_cutover rollback invocation."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Read-only post-rollback transaction/predecessor restoration proof; no manual repair."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Read-only post-rollback ServiceManagement/launchd/process/listener/health observation and accepted-candidate revalidation."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Report-only non-force publication, clean tree, fresh dev/main refs."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect review of exact report and rollback consequence evidence."
+    expected_signal: "The mismatched transaction is closed and the machine is ready for a separately authorized fresh cutover of the accepted candidate."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: ARCHITECT_REVIEW
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
