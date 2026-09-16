@@ -1,8 +1,8 @@
 protocol_version: 3
 
 task_id: TASK-0057
-task_revision: 1
-report_revision: 1
+task_revision: 2
+report_revision: 2
 state: REPORTED
 result: NEEDS_REVIEW
 
@@ -10,9 +10,9 @@ execution:
   repository: phatnguyen03022001/agent-runtime
   branch: dev
   execution_surface: CODEX_LOCAL
-  exact_task_base: bb6cf7cd4cbceac42a5f3bcecfe0b99cd2ad69f6
-  source_baseline: f5697f6e93830413fd98a969b85f638d7a32010b
-  implementation_commit: 36c058e
+  exact_task_base: 1b428c9987e0a000c5ed78238a4acdfdc6096415
+  source_baseline: 36c058ec0b8230f282f3431f58ff386f33d76e6b
+  implementation_commit: 874ff47
   report_only_commit: PENDING
   force_push: false
   main_mutated: false
@@ -25,8 +25,9 @@ implementation:
     overload_error: "terminal execution capacity exhausted"
     queue_or_retry_added: false
   terminal_exec:
-    lease_lifetime: "pre-Popen through process-group cleanup and bounded output drain"
+    lease_lifetime: "pre-Popen through process-group cleanup, bounded reader drain, and payload materialization"
     shutdown_ownership: "bounded in-flight process registry"
+    output_drain_correction: "reader join/close completes before stdout/stderr are evaluated for the returned payload"
   terminal_start:
     lease_lifetime: "pre-openpty through live PTY finalization"
     effective_session_range: "1..6"
@@ -39,6 +40,13 @@ implementation:
     owned_roots: [terminal_exec, terminal_start]
 
 verification:
+  focused_output_drain:
+    command: ".venv/bin/python -m unittest tests.test_task0057_admission.HeavyExecutionAdmissionTests.test_terminal_exec_materializes_output_only_after_delayed_reader_drain -v"
+    result: PASS
+    evidence:
+      - "A three-party barrier held both stdout/stderr reader threads before drain."
+      - "While blocked, terminal_exec had not completed and the shared heavy lease remained active."
+      - "After deterministic release, the returned payload contained complete stdout and stderr."
   focused_x6:
     command: ".venv/bin/python -m unittest tests.test_task0057_admission -v"
     result: PASS
@@ -66,14 +74,7 @@ acceptance_criteria:
   AC-2: PROVEN
   AC-3: PROVEN
   AC-4: PROVEN
-  AC-5: PROVEN
-  AC-6: PROVEN
-  AC-7: PROVEN
-  AC-8: PROVEN
-  AC-9: PROVEN
-  AC-10: PROVEN
-  AC-11: PROVEN
-  AC-12: PENDING_NON_FORCE_PUBLICATION
+  AC-5: PENDING_NON_FORCE_PUBLICATION
 
 preservation:
   installed_runtime_lifecycle_mutated: false
