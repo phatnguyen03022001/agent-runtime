@@ -1,16 +1,19 @@
 protocol_version: 3
 
 task_id: TASK-0061
-task_revision: 2
+task_revision: 3
 state: APPROVED
 
 origin:
   type: architect_revision
-  predecessor_task_revision: 1
-  predecessor_review: "160d456942af9820c44e67b15f287867c585141c"
+  predecessor_task_revision: 2
+  predecessor_review: "c013a185a3049bff1c06a963ec20d77d029dd739"
   predecessor_review_state: REVISION_REQUIRED
-  blocking_finding: FINDING-1
-  operator_authorization: "The operator authorized the one-time signing identity bootstrap. Revision 2 is the correction continuation of that bootstrap after revision 1 lost the selected literal before any Keychain mutation or persistence."
+  blocking_finding: FINDING-2
+  operator_authorization: >-
+    The operator authorized the one-time signing identity bootstrap. Revision 3 is the final
+    correction continuation after revisions 1 and 2 both lost the uniquely selected literal before
+    any Keychain mutation, successful identity signing proof, or local identity persistence.
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -42,11 +45,11 @@ execution_skills:
     - github-workflow
 
 authority_sources:
-  - source: "phatnguyen03022001/agent-runtime@160d456942af9820c44e67b15f287867c585141c:.agent/tasks/TASK-0061/review.yaml"
-    role: "Architect correction authority for the revision-1 temp-path guard defect."
+  - source: "phatnguyen03022001/agent-runtime@c013a185a3049bff1c06a963ec20d77d029dd739:.agent/tasks/TASK-0061/review.yaml"
+    role: "Architect correction authority for revision-2 temp-artifact construction defect."
     precedence: 1
-  - source: "phatnguyen03022001/agent-runtime@c5e9ceadb960a3edf161504b5f30d32b73ad4dc8:.agent/tasks/TASK-0061/report.yaml"
-    role: "Revision-1 evidence proving one enumeration was consumed, unique selection was reached, and no Keychain/live mutation occurred."
+  - source: "phatnguyen03022001/agent-runtime@f11bfe9bf5d4ce19824851b6c0f423e5d6b26d19:.agent/tasks/TASK-0061/report.yaml"
+    role: "Revision-2 evidence proving corrected path guards, one replacement enumeration, no Keychain mutation, and no local identity persistence."
     precedence: 2
   - source: "phatnguyen03022001/agent-skills@1826d33bd1e467896c133109b37db8b0656b3276"
     role: "Pinned execution/reliability/verification/simplicity governance authority."
@@ -58,20 +61,27 @@ structure_authority:
   rationale: "No production source or architecture change is required."
 
 objective: >-
-  Complete the same one-time operator-authorized signing identity bootstrap after revision 1 failed on an invalid /tmp versus /private/tmp guard. Perform every non-sensitive preflight and canonical temp-root guard before identity discovery, then run exactly one replacement bounded codesigning identity enumeration, verify the uniquely selected Apple Development identity on one temporary test-owned artifact, and persist only its exact literal name as AGENT_RUNTIME_CODESIGN_IDENTITY in the repository-local gitignored .env.
+  Complete the same operator-authorized signing identity bootstrap with all non-identity-dependent
+  temporary artifact and codesign mechanics proven before discovery. Then run exactly one final
+  replacement bounded codesigning identity enumeration, deterministically select a unique Apple
+  Development identity, verify exactly that identity on one task-owned temporary artifact, and persist
+  only its literal value as AGENT_RUNTIME_CODESIGN_IDENTITY in the repository-local gitignored .env.
 
 scope:
   required_changes:
     - "Fresh-resolve local HEAD and origin/dev and require both equal the exact handoff base. Require designated working tree clean."
-    - "Before any Keychain command, complete all non-sensitive preflight: confirm .env is ignored/untracked without printing it; establish a task-owned temporary root; canonicalize the system temp root and task temp root with realpath/Path.resolve semantics; prove the task root is a descendant of the canonical system temp root. Never compare resolved /private/tmp paths against literal /tmp."
-    - "Revision 1 already consumed one enumeration. Revision 2 authorizes exactly one replacement invocation of /usr/bin/security find-identity -v -p codesigning solely because the prior selected literal was lost by the execution guard defect. No further enumeration is authorized."
-    - "Parse the replacement enumeration in-process. If exactly one valid display name begins with 'Apple Development:', select it. If zero, report BLOCKED. If more than one, stop OPERATOR_INPUT_REQUIRED and expose only the candidate display names needed for operator choice. Do not persist SHA-1 fingerprints or unrelated identities."
-    - "After unique selection, retain the selected literal in-process and, if needed for crash-safe command composition, only in a mode-0600 task-owned temp file inside the already-validated temp root. Never place it in repository history or chat output."
-    - "Verify exactly that selected identity on one task-owned temporary signable artifact. Run codesign signing, /usr/bin/codesign --verify --strict, and read only the resulting TeamIdentifier. Require non-null TeamIdentifier. Cleanup only task-owned temporary artifacts."
-    - "Only after temporary signing verification passes, add or replace exactly one AGENT_RUNTIME_CODESIGN_IDENTITY entry in /Users/tienphat/Developer/agent-runtime/.env. If the key is absent, append it; if exactly one exists, replace that entry; if duplicate entries exist, fail closed before writing. Preserve unrelated existing .env bytes/order as far as practical and never print unrelated values."
-    - "Set/preserve .env mode 0600. Read back only AGENT_RUNTIME_CODESIGN_IDENTITY and prove exact equality with the selected literal without sourcing or echoing the whole file. Prove .env remains ignored and untracked."
+    - "Before any Keychain command, confirm .env is ignored/untracked without printing it, reject duplicate AGENT_RUNTIME_CODESIGN_IDENTITY entries, create a task-owned temporary root, canonicalize system/task temp roots with realpath/Path.resolve semantics, and prove the task root is a descendant of the canonical system temp root."
+    - "Before any Keychain command, construct the complete temporary signing path. Create task-owned Mach-O probe copies from /usr/bin/true using byte-only copy semantics such as explicit binary read/write or shutil.copyfile. Do NOT use shutil.copy2, shutil.copystat, shutil.copy, metadata-preserving cp flags, or any operation intended to preserve source xattrs/file flags/ownership metadata. Set executable permissions explicitly on the new task-owned files."
+    - "Before any Keychain command, prove the temp artifact itself is signable by ad-hoc signing a separate preflight probe with /usr/bin/codesign --force --sign -, then run /usr/bin/codesign --verify --strict on that preflight probe. This ad-hoc probe must not access or enumerate Keychain identities."
+    - "Only after every non-sensitive path/copy/ad-hoc-signing preflight passes, revision 3 authorizes exactly one final replacement invocation of /usr/bin/security find-identity -v -p codesigning. Revisions 1 and 2 already consumed their respective attempts; no additional enumeration beyond this single revision-3 invocation is authorized."
+    - "Parse the revision-3 enumeration in-process. If exactly one valid display name begins with 'Apple Development:', select it. If zero exist, report BLOCKED. If more than one exist, stop OPERATOR_INPUT_REQUIRED and disclose only the candidate display names needed for operator choice. Do not persist SHA-1 fingerprints or unrelated identities."
+    - "Immediately after unique selection, retain the exact selected literal in a mode-0600 task-owned temp file inside the already-validated temp root before running any identity-dependent command. Do not print the literal in chat or repository artifacts."
+    - "Using the unsigned identity probe already constructed before discovery, sign it with exactly the selected identity, run /usr/bin/codesign --verify --strict, and read only whether TeamIdentifier is non-null plus a SHA-256 digest of the TeamIdentifier for report evidence. Do not publish the TeamIdentifier literal."
+    - "Only after exact-identity signing verification passes, add or replace exactly one AGENT_RUNTIME_CODESIGN_IDENTITY entry in /Users/tienphat/Developer/agent-runtime/.env. Preserve unrelated existing .env bytes/order as far as practical and never print unrelated values."
+    - "Set/preserve .env mode 0600. Read back only AGENT_RUNTIME_CODESIGN_IDENTITY, prove exact equality with the selected literal in-process, and record only a SHA-256 digest of the literal in the report. Prove .env remains ignored and untracked."
+    - "Cleanup task-owned temporary artifacts after persistence/evidence capture. Never delete or rewrite unrelated temp files."
     - "Do not invoke freeze_candidate.py, package_app.sh, install.sh, candidate cutover, Runtime lifecycle commands, or tunnel lifecycle commands."
-    - "Update the canonical TASK-0061 report with revision-2 evidence, publish it report-only to dev non-force, then stop for Architect review."
+    - "Update the canonical TASK-0061 report with revision-3 evidence, publish it report-only to dev non-force, then stop for Architect review."
   allowed_existing_files_or_components:
     - "/Users/tienphat/Developer/agent-runtime/.env as local ignored operator configuration"
     - ".agent/tasks/TASK-0061/report.yaml"
@@ -79,18 +89,21 @@ scope:
 
 invariants:
   - "Keychain remains read-only; no certificate, key, password, trust setting, or Keychain item is created, imported, deleted, modified, unlocked, or exported."
-  - "Exactly one replacement security find-identity -v -p codesigning invocation is authorized in revision 2; combined historical count after success is two because revision 1's result was lost by the guard defect."
-  - "All temp-root/path guards complete before the replacement enumeration."
+  - "Exactly one revision-3 replacement security find-identity -v -p codesigning invocation is authorized; no fourth enumeration is authorized by this task."
+  - "All path, byte-copy, executable-permission, and ad-hoc codesign/strict-verify mechanics complete successfully before the revision-3 enumeration."
+  - "No metadata-preserving source copy operation is used for temporary signing probes."
   - "No arbitrary identity selection occurs when multiple Apple Development identities are valid."
-  - "Only AGENT_RUNTIME_CODESIGN_IDENTITY may be added/replaced in repository-local .env; unrelated values remain undisclosed and semantically unchanged."
+  - "The selected identity literal is never committed, reported, or printed; only its local .env value and report SHA-256 digest may exist after success."
+  - "Only AGENT_RUNTIME_CODESIGN_IDENTITY may be added/replaced in repo-local .env; unrelated values remain undisclosed and semantically unchanged."
   - "The selected identity must sign and strictly verify the temporary artifact with a non-null TeamIdentifier before .env persistence."
   - "No real Agent Runtime candidate freeze/sign/install/activation occurs."
   - "Installed Runtime, live tunnel/control-plane connection, port 8080, runtime.env, desired-state marker, ServiceManagement/launchd state, live transaction, installed app bytes, System Settings, TCC, and BTM remain untouched."
 
 forbidden_changes:
-  - "Do not run more than the one replacement security find-identity invocation."
+  - "Do not run more than the one revision-3 replacement security find-identity invocation."
   - "Do not run security find-certificate, dump-keychain, find-generic-password, find-internet-password, export, import, add-trusted-cert, unlock-keychain, set-key-partition-list, or broader Keychain commands."
-  - "Do not expose private keys, certificate bodies, passwords, API keys, runtime.env values, unrelated .env values, or the selected identity in repository artifacts beyond the report fields explicitly required by this task."
+  - "Do not use shutil.copy2, shutil.copystat, shutil.copy, metadata-preserving cp options, or source-metadata cloning for temporary signing probes."
+  - "Do not expose the selected signing identity literal, private keys, certificate bodies, passwords, API keys, runtime.env values, unrelated .env values, or literal TeamIdentifier in repository artifacts or chat output."
   - "Do not invoke real candidate freeze/package/install/cutover or mutate production Runtime, packaging, lifecycle, Swift, tests, dependencies, README, or verification source."
   - "Do not lifecycle-mutate Runtime/tunnel or modify main, tags, releases, architect-profile, agent-skills, agent-standards, or agent-documents."
   - "Do not delegate to another ChatGPT, Codex, Claude, Antigravity, or nested executor."
@@ -113,41 +126,41 @@ structure_policy:
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "All non-sensitive temp/path guards pass before discovery, and exactly one replacement bounded codesigning enumeration deterministically resolves a unique Apple Development identity or truthfully reports ambiguity/absence."
-    evidence_required: "Canonical temp-root proof, replacement enumeration count, and bounded selection result."
+    requirement: "All non-sensitive temp/path/byte-copy/ad-hoc-signing mechanics pass before discovery, then exactly one revision-3 replacement bounded enumeration deterministically resolves a unique Apple Development identity or truthfully reports ambiguity/absence."
+    evidence_required: "Canonical temp-root proof, byte-only copy proof, ad-hoc codesign/strict-verify PASS, revision-3 enumeration count, and bounded selection result."
   - id: AC-2
     requirement: "The selected identity successfully signs and strictly verifies one temporary test-owned artifact and yields a non-null TeamIdentifier."
-    evidence_required: "Temporary codesign/verify PASS and TeamIdentifier evidence."
+    evidence_required: "Exact-identity temporary codesign/verify PASS, selected-identity SHA-256 digest, TeamIdentifier non-null=true, and TeamIdentifier SHA-256 digest."
   - id: AC-3
     requirement: "The exact selected literal identity is persisted once as AGENT_RUNTIME_CODESIGN_IDENTITY in repo-local ignored .env with mode 0600; unrelated values remain undisclosed and unchanged."
-    evidence_required: "Key-only equality proof, duplicate-key guard result, .gitignore confirmation, file mode, and untracked/ignored proof."
+    evidence_required: "Key-only equality PASS, selected-identity SHA-256 digest matching AC-2, duplicate-key guard, file mode, ignored/untracked proof, and no literal identity disclosure."
   - id: AC-4
     requirement: "No production source, candidate, installed/live Runtime, tunnel, lifecycle, runtime.env, or Keychain contents are mutated."
     evidence_required: "Explicit preservation evidence and changed-path review."
   - id: AC-5
-    requirement: "Revision-2 report publishes non-force to dev with clean report-only lineage and main unchanged."
+    requirement: "Revision-3 report publishes non-force to dev with clean report-only lineage and main unchanged."
     evidence_required: "Fresh refs and compare proof."
 
 verification:
   executor_checks:
     - id: CHECK-1
-      command_or_check: "Exact-base/clean-tree/.env-ignore preflight and canonical temp-root guard, all before Keychain discovery."
+      command_or_check: "Exact-base/clean-tree/.env-ignore/duplicate-key/canonical-temp preflight plus byte-only probe creation and ad-hoc codesign strict verification, all before Keychain discovery."
       required: true
     - id: CHECK-2
-      command_or_check: "Run exactly one replacement /usr/bin/security find-identity -v -p codesigning and apply deterministic Apple Development selection."
+      command_or_check: "Run exactly one revision-3 replacement /usr/bin/security find-identity -v -p codesigning and apply deterministic Apple Development selection."
       required: true
     - id: CHECK-3
-      command_or_check: "Sign and strictly verify one temporary artifact; require non-null TeamIdentifier; cleanup task-owned temp state."
+      command_or_check: "Persist selected literal immediately to task-owned mode-0600 temp state, sign/strict-verify the identity probe with that exact identity, and prove non-null TeamIdentifier without disclosing literal identity/team values."
       required: true
     - id: CHECK-4
-      command_or_check: "Persist only AGENT_RUNTIME_CODESIGN_IDENTITY to local .env, reject duplicate-key ambiguity, mode 0600, key-only exact equality, ignored/untracked proof."
+      command_or_check: "Persist only AGENT_RUNTIME_CODESIGN_IDENTITY to local .env, mode 0600, key-only exact equality, ignored/untracked proof, and selected-literal digest continuity."
       required: true
     - id: CHECK-5
-      command_or_check: "Fresh-prove report-only publication, clean working tree, no live mutation, and unchanged main."
+      command_or_check: "Cleanup task-owned temp state; fresh-prove report-only publication, clean working tree, no live mutation, and unchanged main."
       required: true
   authoritative_verification:
     required: false
-    mechanism: "Architect review of exact report, corrected temp-path handling, bounded replacement enumeration, temp codesign proof, and local-config preservation evidence."
+    mechanism: "Architect review of exact revision-3 report and local-config/privacy-preserving evidence."
     expected_signal: "One durable repo-local signing identity is available for future authorized freeze tasks without manual copy/paste."
 
 git_authority:
