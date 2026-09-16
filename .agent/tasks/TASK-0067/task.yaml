@@ -1,0 +1,190 @@
+protocol_version: 3
+
+task_id: TASK-0067
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_successor_task
+  predecessor_task: TASK-0066
+  predecessor_review: "883420e15daa880226ed1238e7ec12480e175cca"
+  predecessor_review_state: ACCEPTED
+  operator_authorization: >-
+    Operator explicitly authorized bounded secret-safe correction of AGENT_RUNTIME_MAX_ACTIVE_SESSIONS
+    in canonical runtime.env only.
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration_and_evidence
+
+classification: BOUNDED_LOCAL_CONFIG_MUTATION
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - verification
+    - simplicity
+  recommended:
+    - github-workflow
+
+accepted_checkpoint:
+  source_review: "883420e15daa880226ed1238e7ec12480e175cca"
+  accepted_candidate_sha256: "8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660"
+  accepted_candidate_handoff_sha256: "d8bd8885b4cd0d78e6f419496a97bbc5bda021f37f243f796420b05b851774f3"
+  transaction:
+    schema: 5
+    status: PENDING
+    phase: APP_SWAPPED
+    metadata_sha256: "589436ead0cc3c53ea0c32a26eda98e19e2ead5564f6ae298752903566e8f661"
+  installed_app_matches_accepted_candidate: true
+  runtime_env:
+    path: "/Users/tienphat/Library/Application Support/Agent Runtime/runtime.env"
+    mode: "0600"
+    sha256: "b47b144549659070c759407da4ba0dbedbf3c00014a948d615cff7823f97b2ed"
+    failing_key: AGENT_RUNTIME_MAX_ACTIVE_SESSIONS
+    current_value_literal_persisted: false
+    current_value_sha256: "a68b412c4282555f15546cf6e1fc42893b7e07f271557ceb021821098dd66c1b"
+    current_value_integer_syntax: true
+    current_value_in_range_1_through_6: false
+  desired_state_sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+correction:
+  key: AGENT_RUNTIME_MAX_ACTIVE_SESSIONS
+  exact_new_value: "6"
+  exact_new_value_sha256: "e7f6c011776e8db7cd330b54174fd76f7d0216b612387a5ffcfb81e6f0919683"
+  rationale: >-
+    Exact accepted candidate source revision b5ac0ed5b461d3a259e4111e1a8f13933985f81f requires an integer in 1..6
+    and defines DEFAULT_SESSION_LIMIT=6. The correction therefore uses the canonical upper/default session limit 6
+    rather than inventing a new operating value.
+
+objective: >-
+  Secret-safely change exactly one canonical runtime.env entry, AGENT_RUNTIME_MAX_ACTIVE_SESSIONS, to exact value 6.
+  Preserve every other byte/value/order entry as far as the one-line replacement permits, preserve mode 0600, and
+  leave the schema-5 transaction, installed candidate, desired-state marker, ServiceManagement, launchd, Runtime,
+  tunnel, port 8080, and candidate bytes otherwise untouched. Do not execute any lifecycle retry, repair, restart,
+  cutover, commit-cutover, rollback, resume, or recover action. Autonomous launchd behavior may be observed but must
+  not be triggered or manipulated by the Executor.
+
+scope:
+  required_changes:
+    - "Fresh-resolve local HEAD and origin/dev and require both equal the exact TASK-0067 handoff base. Require designated working tree clean."
+    - "Before mutation, fresh-prove transaction schema=5, status=PENDING, phase=APP_SWAPPED, metadata SHA-256=589436ead0cc3c53ea0c32a26eda98e19e2ead5564f6ae298752903566e8f661, candidate handoff SHA-256=d8bd8885b4cd0d78e6f419496a97bbc5bda021f37f243f796420b05b851774f3, and candidate SHA-256=8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660. Drift is a blocker."
+    - "Canonical-validate installed and repository candidate identity before mutation and require exact accepted candidate 8017f538.... Do not mutate either."
+    - "Secret-safely inspect canonical runtime.env. Require regular non-symlink file, mode 0600, exact pre SHA-256 b47b144549659070c759407da4ba0dbedbf3c00014a948d615cff7823f97b2ed, no malformed relevant structure, and exactly one AGENT_RUNTIME_MAX_ACTIVE_SESSIONS entry whose value digest equals a68b412c4282555f15546cf6e1fc42893b7e07f271557ceb021821098dd66c1b. Never print or persist the current literal value or unrelated values."
+    - "Before mutation, compute a secret-safe masked-content identity that replaces only the target value with a fixed sentinel in memory. This masked identity will be used to prove all non-target content remains unchanged after mutation. Do not persist masked file contents."
+    - "Perform exactly one bounded local config rewrite. Replace only the value bytes of the single AGENT_RUNTIME_MAX_ACTIVE_SESSIONS entry with exact value 6. Preserve line position/order, newline convention, comments, and all unrelated bytes/values."
+    - "Use a same-directory task-owned temporary file with mode 0600 and atomic os.replace/rename semantics so the canonical file is never left partially written. Do not use shell source, sed -i, or any command that could echo values."
+    - "After replacement, fsync/close as appropriate, require canonical runtime.env remains a regular non-symlink file with mode 0600, exactly one target entry, exact target value digest e7f6c011776e8db7cd330b54174fd76f7d0216b612387a5ffcfb81e6f0919683, and valid accepted 1..6 contract."
+    - "Recompute the same masked-content identity and require exact equality with pre-mutation masked identity. Also require line count/order and all unrelated relevant-key presence/non-empty booleans remain unchanged. Never print unrelated literals."
+    - "Record pre/post runtime.env full-file SHA-256, target value digests, mode, duplicate/malformed status, and masked-content equality only. Do not persist secret values."
+    - "Observe transaction metadata, installed/repository candidate identity, desired-state SHA-256, ServiceManagement/launchd/process/listener/health state after mutation read-only. Autonomous launchd retries or natural Runtime/tunnel transitions are observations only; do not trigger, stop, restart, repair, or normalize them."
+    - "If autonomous launchd activity causes Runtime/tunnel state to change after the config correction, record the exact observed state without claiming that a lifecycle retry was executed by the Executor. Do not perform final MCP/tunnel proof in this task."
+    - "Publish only .agent/tasks/TASK-0067/report.yaml to dev, non-force, then stop at ARCHITECT_REVIEW."
+
+allowed_mutation:
+  file: "/Users/tienphat/Library/Application Support/Agent Runtime/runtime.env"
+  key: AGENT_RUNTIME_MAX_ACTIVE_SESSIONS
+  exact_new_value: "6"
+  mutation_count: 1
+  mutation_scope: "single target entry value replacement only"
+  incidental_os_consequences:
+    - "Autonomous launchd retry already scheduled by existing KeepAlive policy may naturally observe the corrected file. Such OS activity is observation-only and is not an Executor lifecycle command."
+
+forbidden_changes:
+  - "Do not edit, add, remove, reorder, normalize, trim, quote, or otherwise alter any runtime.env entry except the exact value of AGENT_RUNTIME_MAX_ACTIVE_SESSIONS."
+  - "Do not print, echo, source, persist, or disclose CONTROL_PLANE_API_KEY, CONTROL_PLANE_TUNNEL_ID, AGENT_RUNTIME_WORKSPACE_ROOT, unrelated runtime.env values, or the old invalid target literal."
+  - "Do not invoke candidate_cutover cutover, commit, rollback, resume, or recover."
+  - "Do not start, stop, restart, kill, signal, kickstart, bootstrap, bootout, register, unregister, repair, reinstall, or manually execute AgentRuntimeRuntimeService or tunnel-client."
+  - "Do not open/launch Agent Runtime to induce lifecycle behavior."
+  - "Do not mutate desired-state, transaction metadata/handoff, installed app, repository candidate, ServiceManagement, launchd configuration, xattrs, permissions outside maintaining runtime.env mode 0600, TCC, BTM, System Settings, Keychain, or port 8080 ownership."
+  - "Do not modify production source, tests, dependencies, packaging, README, tags, releases, main, architect-profile, agent-skills, agent-standards, or agent-documents."
+  - "Do not delegate to Codex, Claude, Antigravity, another ChatGPT, or nested executors."
+
+invariants:
+  - "Exactly one canonical runtime.env target-value rewrite is authorized."
+  - "AGENT_RUNTIME_MAX_ACTIVE_SESSIONS post-value is exactly 6."
+  - "All non-target runtime.env content remains byte-identical under masked-content proof."
+  - "runtime.env remains mode 0600 and non-symlink."
+  - "The schema-5 PENDING / APP_SWAPPED transaction remains uncommitted and is not manually mutated."
+  - "No Executor-triggered Runtime/tunnel lifecycle action occurs."
+  - "No final freeze-readiness assertion is allowed in TASK-0067."
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0067/report.yaml"
+  unlisted_new_files:
+    allowed: false
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact accepted live/config/candidate bindings are freshly proven before mutation."
+    evidence_required: "Exact-base/clean-tree, transaction identity, installed/repository candidate validation, runtime.env pre hash/mode/target digest/duplicate status, and desired-state identity."
+  - id: AC-2
+    requirement: "Exactly one secret-safe target-only runtime.env rewrite sets AGENT_RUNTIME_MAX_ACTIVE_SESSIONS to exact value 6."
+    evidence_required: "Mutation count=1, atomic same-directory replacement evidence, post target digest=e7f6c011..., mode 0600, and no secret literals in report/output."
+  - id: AC-3
+    requirement: "All non-target runtime.env content remains unchanged."
+    evidence_required: "Pre/post masked-content identity equality, unchanged line/order structure, unchanged unrelated relevant-key presence/non-empty booleans, and no duplicate/malformed entries."
+  - id: AC-4
+    requirement: "No lifecycle, transaction, candidate, installed-app, ServiceManagement, or launchd mutation is executed by the Executor."
+    evidence_required: "Zero lifecycle invocation evidence plus pre/post transaction/candidate/desired-state preservation. Any autonomous OS retry is clearly classified as observation-only."
+  - id: AC-5
+    requirement: "Repository publication is report-only, non-force to dev, working tree clean, and main unchanged."
+    evidence_required: "Fresh refs, compare proof, clean-tree proof, and unchanged main SHA."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Exact-base/clean-tree plus transaction/candidate/runtime.env/desired-state preflight."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Exactly one same-directory atomic secret-safe target-value replacement to exact value 6."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Post runtime.env target digest/mode/duplicate/malformed and masked-content equality proof."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Read-only post transaction/candidate/desired-state/ServiceManagement/launchd/process/listener/health observation with zero Executor lifecycle commands."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Report-only non-force publication, clean tree, fresh dev/main refs."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect review of exact secret-safe correction and preservation evidence."
+    expected_signal: "Canonical runtime.env is valid with AGENT_RUNTIME_MAX_ACTIVE_SESSIONS=6 and no unrelated mutation; any next lifecycle action remains separately authority-bound."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: ARCHITECT_REVIEW
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
