@@ -1,0 +1,192 @@
+protocol_version: 3
+
+task_id: TASK-0055
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: NEEDS_REVIEW
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: dev
+  execution_surface: CHATGPT_LOCAL
+  local_transport: "Remote Desktop Commander fallback; Agent Runtime MCP binding was unavailable and was not restarted"
+  exact_base: "1c41958e79087e2e255f51d7bfa8d6ff94323c90"
+  implementation_commit: "3767161cda27a0c9df0bed77a60445322141a90c"
+  implementation_tree: "df0215a1ef3434c000435e71bbfe35e7c97ee411"
+  implementation_parent: "1c41958e79087e2e255f51d7bfa8d6ff94323c90"
+  origin_dev_before_publication: "1c41958e79087e2e255f51d7bfa8d6ff94323c90"
+  origin_main_before_publication: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  branch_created: false
+  worktree_created: false
+  nested_executor_used: false
+
+implementation:
+  service_ownership:
+    main_app_login: SMAppService.mainApp
+    runtime_agent_plist: macos/AppBundle/Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist
+    runtime_agent_api: SMAppService.agent(plistName:)
+    runtime_responsible_executable: Contents/MacOS/AgentRuntimeRuntimeService
+    legacy_launchagents_role: MIGRATION_AND_ROLLBACK_ONLY
+    current_generation_fresh_legacy_bootstrap: false
+    start_restart_missing_registration_behavior: FAIL_CLOSED
+    recovery_current_generation_legacy_fallback: BLOCKED
+    rollback_unregisters_modern_before_legacy_restore: true
+  diagnostics:
+    states: [enabled, requires-approval, not-registered, not-found]
+    os_approval_is_task_authority: false
+    watcher_or_registry_added: false
+  signing:
+    explicit_identity_input: AGENT_RUNTIME_CODESIGN_IDENTITY
+    ad_hoc_identity_allowed_for_canonical_packaging: false
+    keychain_identity_discovery: false
+    candidate_schema: 2
+    main_team_identifier_required: true
+    runtime_team_identifier_required: true
+    matching_team_identifier_required: true
+  uninstall:
+    command: ./install.sh --uninstall
+    pending_transaction_refusal: true
+    ambiguous_ownership_refusal: true
+    modern_service_unregistration: ATTRIBUTABLE_ONLY
+    verified_legacy_remnant_removal: true
+    transient_state_removal: BOUNDED_RUNTIME_OWNED_ONLY
+    runtime_env_retained_by_default: true
+    modern_and_legacy_failure_compensation: true
+    global_btm_or_tcc_cleanup: false
+    container_or_cache_cleanup: false
+  documentation:
+    provider_protocol_transport_distinction: true
+    generic_client_compatibility: true
+    prerequisites_by_consumer: true
+    no_blanket_tcc_baseline: true
+    background_activity_denial_fail_closed: true
+    operation_boundaries_documented: true
+    retained_runtime_env_documented: true
+
+changed_files:
+  - README.md
+  - install.sh
+  - start.sh
+  - macos/Package.swift
+  - macos/AppBundle/Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist
+  - macos/Sources/AgentRuntimeMenuBar/ServiceManagementController.swift
+  - macos/Sources/AgentRuntimeMenuBar/main.swift
+  - macos/Sources/AgentRuntimeRuntimeService/main.swift
+  - macos/Tests/AgentRuntimeMenuBarTests/ServiceManagementTests.swift
+  - macos/candidate_cutover.py
+  - macos/package_app.sh
+  - macos/package_provenance.py
+  - macos/recover_runtime_service.py
+  - macos/uninstall.py
+  - tests/test_candidate_cutover.py
+  - tests/test_revision4_runtime_config.py
+  - tests/test_service_recovery.py
+  - tests/test_supervised_lifecycle.py
+  - tests/test_surface_and_scripts.py
+  - tests/test_task0055_cutover.py
+  - tests/test_task0055_macos_contract.py
+  - tests/test_tunnel_identity.py
+  - tests/test_uninstall.py
+
+tdd_evidence:
+  service_management:
+    red: "Registration/status/rollback compensation tests were introduced before the Swift ServiceManagement coordinator existed."
+    green: "ServiceManagementTests pass with idempotent registration, four-state diagnostics, and unregister compensation."
+  migration:
+    red: "Legacy cutover fixtures initially asserted freshly generated LaunchAgents and failed against the modern ownership contract."
+    green: "Migration fixtures prove legacy removal, modern registration, dual-ownership rejection, and exact legacy rollback restoration."
+  uninstall:
+    red: "A causal modern+legacy fixture proved a second legacy bootout failure left modern ownership unregistered."
+    green: "Uninstall now restores already-removed legacy registration and re-registers modern ownership before returning the original failure; tests/test_uninstall.py passes 8/8."
+  lifecycle_recovery:
+    red: "Current-generation and partial-modern fixtures exposed legacy recovery/bootstrap paths that remained reachable."
+    green: "Start/Restart require enabled ServiceManagement registration and recovery blocks both bundled metadata and helper markers before legacy mutation."
+  schema_v2_fixture_reconciliation:
+    red: "Canonical verification initially failed because install/tunnel fixtures still produced schema-v1 candidates without the Runtime responsible executable."
+    green: "Fixtures now construct schema-v2 modern candidates; production provenance retains strict codesign and TeamIdentifier enforcement."
+
+verification:
+  focused_uninstall:
+    command: "PYTHON=.venv/bin/python .venv/bin/python -m unittest -v tests.test_uninstall"
+    result: PASS
+    tests: 8
+  canonical_python:
+    command: "PYTHON=.venv/bin/python ./verify"
+    result: PASS
+    tests: 239
+    exit_code: 0
+  swift_full:
+    command: "xcrun swift test --package-path macos"
+    result: PASS
+    tests: 38
+    failures: 0
+  swift_release_build:
+    command: "xcrun swift build --package-path macos -c release"
+    result: PASS
+    exit_code: 0
+  diff_check:
+    command: "git diff --check"
+    result: PASS
+  source_scope_inspection:
+    result: PASS
+    implementation_files: 23
+    agent_runtime_python_surface_changed: false
+    AGENTS_md_changed: false
+    task_yaml_changed: false
+    planning_docs_changed: false
+    forbidden_keychain_discovery_in_production: false
+    live_install_or_service_command_executed: false
+  real_signing:
+    performed: false
+  candidate_freeze:
+    performed: false
+
+preservation:
+  live_runtime_start_stop_restart_reset: false
+  port_8080_mutation: false
+  live_service_registration_mutation: false
+  live_launchagent_mutation: false
+  runtime_env_mutation: false
+  desired_live_state_mutation: false
+  system_settings_mutation: false
+  permission_or_tcc_mutation: false
+  keychain_accessed: false
+  signing_identity_discovery_performed: false
+  host_package_install_update: false
+  container_cleanup: false
+  unrelated_cleanup: false
+  public_six_tool_surface_mutated: false
+  runtime_config_contract_mutated: false
+  workspace_semantics_mutated: false
+  protected_runtime_semantics_mutated: false
+  parallelism_v2_mutated: false
+  main_mutated: false
+  tags_or_releases_mutated: false
+
+acceptance_criteria:
+  AC-1: PROVEN
+  AC-2: PROVEN
+  AC-3: PROVEN
+  AC-4: PROVEN
+  AC-5: PROVEN
+  AC-6: PROVEN
+  AC-7: PROVEN
+  AC-8: PROVEN
+  AC-9: PROVEN
+  AC-10: PROVEN_ON_PUBLICATION
+
+publication:
+  report_path: .agent/tasks/TASK-0055/report.yaml
+  task_revision: 1
+  report_revision: 1
+  implementation_commit: "3767161cda27a0c9df0bed77a60445322141a90c"
+  report_only_commit_required: true
+  push_mode: non_force_dev
+  force_push: false
+  promote_to_main: false
+  next_step: ARCHITECT_REVIEW
+
+executor_recommendation:
+  authority: ADVISORY_ONLY
+  recommendation: "TASK-0055 source/package-contract implementation is ready for independent Architect review. Real signing, activation, registration, restart/continuity proof, and System Settings attribution remain successor-task work."
