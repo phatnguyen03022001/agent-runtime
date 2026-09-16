@@ -258,7 +258,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .withSymbolConfiguration(configuration)
         image?.isTemplate = true
         button.image = image
-        button.contentTintColor = indicator.color
+        button.contentTintColor = nil
+        button.appearsDisabled = indicator.appearsDisabled
         let summary = RuntimePopoverPresentation.accessibilitySummary(for: status)
         button.toolTip = summary
         button.setAccessibilityValue(summary)

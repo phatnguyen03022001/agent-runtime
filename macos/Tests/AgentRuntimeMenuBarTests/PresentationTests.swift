@@ -99,19 +99,97 @@ final class PresentationTests: XCTestCase {
         }
     }
 
-    func testMenuBarGlyphIsPreservedWhileTintMapsServingState() {
-        let indicators = [
-            RuntimeStatusIndicator(status: .owned(servingIdentity)),
-            RuntimeStatusIndicator(status: .stopped),
-            RuntimeStatusIndicator(status: .external([99])),
-            RuntimeStatusIndicator(status: .ambiguous("health unavailable")),
-        ]
+    func testMenuBarStatusItemFollowsNativeAppearanceAndCommunicatesState() {
+        let online = RuntimeStatusIndicator(status: .owned(servingIdentity))
+        XCTAssertEqual(online, .online)
+        XCTAssertEqual(online.symbolName, "bolt.horizontal.circle.fill")
+        XCTAssertFalse(online.appearsDisabled)
+        XCTAssertTrue(online.accessibilityLabel.contains("Serving"))
 
-        XCTAssertEqual(indicators.map(\.symbolName), Array(repeating: "bolt.horizontal.circle.fill", count: indicators.count))
-        XCTAssertEqual(indicators[0], .green)
-        XCTAssertEqual(indicators[1], .red)
-        XCTAssertEqual(indicators[2], .red)
-        XCTAssertEqual(indicators[3], .red)
+        for status in [RuntimeStatus.stopped, .external([99]), .ambiguous("health unavailable")] {
+            let offline = RuntimeStatusIndicator(status: status)
+            XCTAssertEqual(offline, .offlineOrUnconfirmed)
+            XCTAssertEqual(offline.symbolName, "bolt.horizontal.circle")
+            XCTAssertTrue(offline.appearsDisabled)
+            XCTAssertTrue(offline.accessibilityLabel.contains("Not serving"))
+        }
+
+        // Verify template image configuration
+        let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
+        let onlineImage = NSImage(systemSymbolName: online.symbolName, accessibilityDescription: online.accessibilityLabel)?
+            .withSymbolConfiguration(config)
+        XCTAssertNotNil(onlineImage)
+        onlineImage?.isTemplate = true
+        XCTAssertTrue(onlineImage?.isTemplate == true)
+
+        let offlineImage = NSImage(systemSymbolName: RuntimeStatusIndicator(status: .stopped).symbolName, accessibilityDescription: nil)?
+            .withSymbolConfiguration(config)
+        XCTAssertNotNil(offlineImage)
+        offlineImage?.isTemplate = true
+        XCTAssertTrue(offlineImage?.isTemplate == true)
+    }
+
+    @MainActor
+    func testStatusItemButtonRemainsClickableWithoutForcedTint() {
+        let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        guard let button = statusItem.button else {
+            return XCTFail("status item button must be available")
+        }
+
+        // Simulate online update
+        let onlineStatus = RuntimeStatus.owned(servingIdentity)
+        let onlineIndicator = RuntimeStatusIndicator(status: onlineStatus)
+        button.image = NSImage(systemSymbolName: onlineIndicator.symbolName, accessibilityDescription: onlineIndicator.accessibilityLabel)
+        button.image?.isTemplate = true
+        button.contentTintColor = nil
+        button.appearsDisabled = onlineIndicator.appearsDisabled
+        let onlineSummary = RuntimePopoverPresentation.accessibilitySummary(for: onlineStatus)
+        button.toolTip = onlineSummary
+        button.setAccessibilityValue(onlineSummary)
+
+        XCTAssertFalse(button.appearsDisabled)
+        XCTAssertNil(button.contentTintColor)
+        XCTAssertTrue(button.isEnabled)
+        XCTAssertEqual(button.toolTip, onlineSummary)
+
+        // Simulate offline update
+        let stoppedStatus = RuntimeStatus.stopped
+        let offlineIndicator = RuntimeStatusIndicator(status: stoppedStatus)
+        button.image = NSImage(systemSymbolName: offlineIndicator.symbolName, accessibilityDescription: offlineIndicator.accessibilityLabel)
+        button.image?.isTemplate = true
+        button.contentTintColor = nil
+        button.appearsDisabled = offlineIndicator.appearsDisabled
+        let stoppedSummary = RuntimePopoverPresentation.accessibilitySummary(for: stoppedStatus)
+        button.toolTip = stoppedSummary
+        button.setAccessibilityValue(stoppedSummary)
+
+        XCTAssertTrue(button.appearsDisabled)
+        XCTAssertNil(button.contentTintColor)
+        XCTAssertTrue(button.isEnabled, "Button must remain clickable when Runtime is offline")
+        XCTAssertEqual(button.toolTip, stoppedSummary)
+    }
+
+    @MainActor
+    func testLiquidGlassAvailabilityAndFallbackContracts() {
+        let content = NSView(frame: NSRect(x: 0, y: 0, width: 304, height: 100))
+        let background = LiquidGlassSupport.makeBackgroundView(embedding: content)
+
+        if #available(macOS 26.0, *) {
+            XCTAssertTrue(LiquidGlassSupport.isLiquidGlassSupported)
+            guard let glass = background as? NSGlassEffectView else {
+                return XCTFail("background must be an NSGlassEffectView on macOS 26+")
+            }
+            XCTAssertEqual(glass.style, .regular)
+            XCTAssertNil(glass.tintColor)
+            XCTAssertEqual(glass.cornerRadius, 10.0)
+            XCTAssertTrue(glass.contentView === content)
+            if #available(macOS 27.0, *) {
+                XCTAssertTrue(glass.effectIsInteractive)
+            }
+        } else {
+            XCTAssertFalse(LiquidGlassSupport.isLiquidGlassSupported)
+            XCTAssertTrue(background.subviews.contains(content))
+        }
     }
 
     @MainActor

@@ -7,30 +7,41 @@ struct RuntimeFact: Equatable {
 }
 
 enum RuntimeStatusIndicator: Equatable {
-    case green
-    case red
+    case online
+    case offlineOrUnconfirmed
 
     init(status: RuntimeStatus) {
         if case .owned = status {
-            self = .green
+            self = .online
         } else {
-            self = .red
+            self = .offlineOrUnconfirmed
         }
     }
 
-    var symbolName: String { "bolt.horizontal.circle.fill" }
-
-    var color: NSColor {
+    var symbolName: String {
         switch self {
-        case .green: return .systemGreen
-        case .red: return .systemRed
+        case .online:
+            return "bolt.horizontal.circle.fill"
+        case .offlineOrUnconfirmed:
+            return "bolt.horizontal.circle"
+        }
+    }
+
+    var appearsDisabled: Bool {
+        switch self {
+        case .online:
+            return false
+        case .offlineOrUnconfirmed:
+            return true
         }
     }
 
     var accessibilityLabel: String {
         switch self {
-        case .green: return "Serving; health live and readiness ready"
-        case .red: return "Not serving or health and readiness are unconfirmed"
+        case .online:
+            return "Serving; health live and readiness ready"
+        case .offlineOrUnconfirmed:
+            return "Not serving or health and readiness are unconfirmed"
         }
     }
 }
@@ -194,8 +205,9 @@ final class ControlPanelController: NSViewController {
     }
 
     override func loadView() {
-        view = NSView(frame: NSRect(x: 0, y: 0, width: 304, height: 1))
-        view.setAccessibilityLabel("Agent Runtime controls")
+        let contentContainer = NSView()
+        contentContainer.translatesAutoresizingMaskIntoConstraints = false
+        contentContainer.setAccessibilityLabel("Agent Runtime controls")
 
         let title = NSTextField(labelWithString: "Agent Runtime")
         title.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
@@ -238,17 +250,20 @@ final class ControlPanelController: NSViewController {
         rootStack.alignment = .leading
         rootStack.spacing = 8
         rootStack.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(rootStack)
+        contentContainer.addSubview(rootStack)
         NSLayoutConstraint.activate([
-            rootStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 14),
-            rootStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -14),
-            rootStack.topAnchor.constraint(equalTo: view.topAnchor, constant: 13),
-            rootStack.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -10),
+            rootStack.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor, constant: 14),
+            rootStack.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor, constant: -14),
+            rootStack.topAnchor.constraint(equalTo: contentContainer.topAnchor, constant: 13),
+            rootStack.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor, constant: -10),
             factsGrid.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
             header.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
             lifecycleButton.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
             divider.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
         ])
+
+        view = LiquidGlassSupport.makeBackgroundView(embedding: contentContainer)
+        view.setAccessibilityLabel("Agent Runtime controls")
         resizeToFitContent()
     }
 
