@@ -1,0 +1,97 @@
+protocol_version: 3
+
+task_id: TASK-0057
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: NEEDS_REVIEW
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: dev
+  execution_surface: CODEX_LOCAL
+  exact_task_base: bb6cf7cd4cbceac42a5f3bcecfe0b99cd2ad69f6
+  source_baseline: f5697f6e93830413fd98a969b85f638d7a32010b
+  implementation_commit: 36c058e
+  report_only_commit: PENDING
+  force_push: false
+  main_mutated: false
+
+implementation:
+  shared_admission:
+    module: agent_runtime.capacity
+    hard_ceiling: 6
+    operator_limit: "min(AGENT_RUNTIME_MAX_PARALLELISM, 6)"
+    overload_error: "terminal execution capacity exhausted"
+    queue_or_retry_added: false
+  terminal_exec:
+    lease_lifetime: "pre-Popen through process-group cleanup and bounded output drain"
+    shutdown_ownership: "bounded in-flight process registry"
+  terminal_start:
+    lease_lifetime: "pre-openpty through live PTY finalization"
+    effective_session_range: "1..6"
+    safe_fallback: 6
+  capacity_observer:
+    healthy_advisory_ceiling: 6
+    admission_owner: false
+  signal_cleanup:
+    signals: [SIGTERM, SIGINT]
+    owned_roots: [terminal_exec, terminal_start]
+
+verification:
+  focused_x6:
+    command: ".venv/bin/python -m unittest tests.test_task0057_admission -v"
+    result: PASS
+    evidence:
+      - "Three test-owned terminal_exec roots plus three PTY roots occupied all six leases."
+      - "Seventh terminal_exec and terminal_start requests raised the stable capacity error before Popen/openpty."
+      - "capacity_observer, fs_read_batch, terminal_poll, and terminal_control remained usable while all six leases were occupied."
+      - "Spawn failure, success, timeout, natural exit, explicit terminate/shutdown race, idle reap, and repeated x6 PTY cycles left no active lease."
+      - "An isolated fake-MCP Runtime subprocess received SIGTERM and removed an in-flight one-shot process group."
+  repository_python:
+    command: "./verify"
+    result: PASS
+  native_configuration:
+    command: "xcrun swift test --package-path macos"
+    result: PASS
+  native_configuration_focus:
+    command: "xcrun swift test --package-path macos --filter RuntimeConfigurationTests"
+    result: PASS
+  diff_check:
+    command: "git diff --check"
+    result: PASS
+
+acceptance_criteria:
+  AC-1: PROVEN
+  AC-2: PROVEN
+  AC-3: PROVEN
+  AC-4: PROVEN
+  AC-5: PROVEN
+  AC-6: PROVEN
+  AC-7: PROVEN
+  AC-8: PROVEN
+  AC-9: PROVEN
+  AC-10: PROVEN
+  AC-11: PROVEN
+  AC-12: PENDING_NON_FORCE_PUBLICATION
+
+preservation:
+  installed_runtime_lifecycle_mutated: false
+  secure_tunnel_mutated: false
+  port_8080_mutated: false
+  runtime_env_mutated: false
+  service_management_or_launchd_mutated: false
+  desired_state_mutated: false
+  system_settings_or_tcc_mutated: false
+  live_cutover_mutated: false
+  installed_app_bytes_mutated: false
+
+publication:
+  report_path: .agent/tasks/TASK-0057/report.yaml
+  required_lineage: "implementation commit followed by this report-only direct child"
+  push_mode: non_force_dev
+  next_step: ARCHITECT_REVIEW
+
+executor_recommendation:
+  authority: ADVISORY_ONLY
+  recommendation: "The isolated x6 candidate is ready for Architect review; no installed Runtime lifecycle action was taken."
