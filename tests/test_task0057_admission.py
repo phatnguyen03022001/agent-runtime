@@ -185,6 +185,35 @@ class HeavyExecutionAdmissionTests(unittest.TestCase):
         self.assertEqual(idle.reap_idle_once(), [str(expiring["session_id"])])
         self.assertEqual(self.admission.active, 0)
 
+    def test_terminal_exec_materializes_output_only_after_delayed_reader_drain(self) -> None:
+        reader_barrier = threading.Barrier(3)
+        release_readers = threading.Event()
+        original_consume = executor._BoundedCapture.consume
+
+        def delayed_consume(capture: executor._BoundedCapture, stream) -> None:
+            reader_barrier.wait(timeout=5)
+            self.assertTrue(release_readers.wait(timeout=5))
+            original_consume(capture, stream)
+
+        with mock.patch.object(executor._BoundedCapture, "consume", delayed_consume), ThreadPoolExecutor(
+            max_workers=1
+        ) as workers:
+            future = workers.submit(
+                executor.execute_terminal,
+                [sys.executable, "-c", "import sys; print('stdout'); print('stderr', file=sys.stderr)"],
+                str(self.cwd),
+                5,
+            )
+            reader_barrier.wait(timeout=5)
+            self.assertFalse(future.done())
+            self.assertEqual(self.admission.active, 1)
+            release_readers.set()
+            result = future.result(timeout=5)
+
+        self.assertEqual(result["stdout"], "stdout\n")
+        self.assertEqual(result["stderr"], "stderr\n")
+        self.assertEqual(self.admission.active, 0)
+
     def test_isolated_runtime_sigterm_cleans_an_inflight_one_shot_group(self) -> None:
         ready = self.cwd / "runtime-ready"
         child_pid = self.cwd / "one-shot-pid"

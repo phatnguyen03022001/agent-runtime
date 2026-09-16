@@ -196,6 +196,22 @@ def _terminate_process_group(process: subprocess.Popen[bytes]) -> None:
         process.wait()
 
 
+def _drain_reader_threads(
+    process: subprocess.Popen[bytes],
+    stdout_thread: threading.Thread | None,
+    stderr_thread: threading.Thread | None,
+) -> None:
+    """Complete the bounded pipe-reader lifecycle before observing captures."""
+
+    for thread, stream in ((stdout_thread, process.stdout), (stderr_thread, process.stderr)):
+        if thread is None:
+            continue
+        thread.join(timeout=1.0)
+        if thread.is_alive() and stream is not None:
+            stream.close()
+            thread.join(timeout=1.0)
+
+
 def execute_terminal(
     argv: list[str],
     cwd: str,
@@ -264,6 +280,7 @@ def execute_terminal(
             termination_state=process_termination,
         )
         process_event_emitted = True
+        _drain_reader_threads(process, stdout_thread, stderr_thread)
 
         return {
             "cwd": str(checked_cwd),
@@ -291,13 +308,7 @@ def execute_terminal(
                     _terminate_process_group(process)
                 finally:
                     try:
-                        for thread, stream in ((stdout_thread, process.stdout), (stderr_thread, process.stderr)):
-                            if thread is None:
-                                continue
-                            thread.join(timeout=1.0)
-                            if thread.is_alive() and stream is not None:
-                                stream.close()
-                                thread.join(timeout=1.0)
+                        _drain_reader_threads(process, stdout_thread, stderr_thread)
                     finally:
                         _ACTIVE_EXECUTIONS.discard(process)
         finally:
