@@ -21,7 +21,7 @@ if str(MACOS_ROOT) not in sys.path:
     sys.path.insert(0, str(MACOS_ROOT))
 import package_provenance as provenance
 
-TRANSACTION_SCHEMA = 3
+TRANSACTION_SCHEMA = 4
 SCHEMA2_RECOVERY_SCHEMA = 2
 LEGACY_RECOVERY_SCHEMA = 1
 TRANSACTION_PHASES = {"PRE_SWAP", "APP_SWAPPED"}
@@ -39,6 +39,7 @@ RUNTIME_PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 SERVICE_ABSENCE_TIMEOUT_SECONDS = 5.0
 SERVICE_POLL_INTERVAL_SECONDS = 0.05
 LAUNCHCTL_DIAGNOSTIC_LIMIT = 1536
+SERVICE_MANAGEMENT_APPROVAL_EXIT_STATUS = 3
 
 
 class CutoverError(RuntimeError):
@@ -61,11 +62,32 @@ REGISTERED_SERVICE_STATES = {"enabled", "requires-approval"}
 ABSENT_SERVICE_STATES = {"not-registered", "not-found"}
 
 
+class ServiceManagementApprovalRequired(CutoverError):
+    def __init__(self, operation: str, state: dict[str, str]) -> None:
+        super().__init__(f"ServiceManagement {operation} requires explicit user approval")
+        self.operation = operation
+        self.state = dict(state)
+
+
 def _service_management(app: Path, operation: str) -> dict[str, str]:
     executable = app / "Contents" / "MacOS" / "AgentRuntimeMenuBar"
     if executable.is_symlink() or not executable.is_file():
         raise CutoverError("candidate ServiceManagement executable is missing or unsafe")
     result = _run([str(executable), "--service-management", operation])
+    if result.returncode == SERVICE_MANAGEMENT_APPROVAL_EXIT_STATUS:
+        try:
+            value = json.loads(result.stdout)
+        except json.JSONDecodeError as exc:
+            raise CutoverError("ServiceManagement approval diagnostics are malformed") from exc
+        expected_keys = {"main_app", "runtime_agent", "operation", "outcome"}
+        if not isinstance(value, dict) or set(value) != expected_keys:
+            raise CutoverError("ServiceManagement approval diagnostics are malformed")
+        if value.get("operation") != operation or value.get("outcome") != "approval-required":
+            raise CutoverError("ServiceManagement approval diagnostics are inconsistent")
+        state = {"main_app": value.get("main_app"), "runtime_agent": value.get("runtime_agent")}
+        if any(not isinstance(state[key], str) or state[key] not in SERVICE_STATES for key in state):
+            raise CutoverError("ServiceManagement approval diagnostics contain an unknown state")
+        raise ServiceManagementApprovalRequired(operation, state)
     if result.returncode != 0:
         detail = result.stderr.strip() or result.stdout.strip() or f"exit {result.returncode}"
         raise CutoverError(f"ServiceManagement {operation} failed: {detail[:300]}")
@@ -165,6 +187,27 @@ def _sha256_file(path: Path, description: str) -> str:
     return digest.hexdigest()
 
 
+def _runtime_config_identity(state_dir: Path) -> dict[str, object]:
+    path = state_dir / "runtime.env"
+    if path.is_symlink() or not path.is_file():
+        raise CutoverError("Runtime config is missing or unsafe")
+    return {
+        "path": str(path),
+        "mode": stat.S_IMODE(path.stat().st_mode),
+        "sha256": _sha256_file(path, "Runtime config"),
+    }
+
+
+def _validate_runtime_config_identity(value: object, state_dir: Path) -> dict[str, object]:
+    expected_keys = {"path", "mode", "sha256"}
+    if not isinstance(value, dict) or set(value) != expected_keys:
+        raise CutoverError("Runtime config metadata is malformed")
+    current = _runtime_config_identity(state_dir)
+    if value != current:
+        raise CutoverError("Runtime config changed while cutover approval was pending")
+    return current
+
+
 def _runtime_bundle_identity(app: Path) -> dict[str, str]:
     helper = app / "Contents" / "MacOS" / "AgentRuntimeRuntimeService"
     plist = app / "Contents" / "Library" / "LaunchAgents" / f"{RUNTIME_LABEL}.plist"
@@ -199,16 +242,21 @@ def _empty_operation_ledger() -> dict[str, bool]:
         "main_unregistered": False,
         "runtime_unregistered": False,
         "runtime_registered": False,
+        "runtime_approval_requested": False,
     }
 
 
-def _validate_operation_ledger(value: object) -> dict[str, bool]:
-    expected = set(_empty_operation_ledger())
-    if not isinstance(value, dict) or set(value) != expected:
+def _validate_operation_ledger(value: object, *, allow_legacy: bool = False) -> dict[str, bool]:
+    current = _empty_operation_ledger()
+    expected = set(current)
+    legacy = expected - {"runtime_approval_requested"}
+    if not isinstance(value, dict) or (set(value) != expected and not (allow_legacy and set(value) == legacy)):
         raise CutoverError("cutover operation ledger is malformed")
-    if any(not isinstance(value[key], bool) for key in expected):
+    if any(not isinstance(value[key], bool) for key in value):
         raise CutoverError("cutover operation ledger is malformed")
-    return {key: bool(value[key]) for key in _empty_operation_ledger()}
+    result = dict(current)
+    result.update({key: bool(item) for key, item in value.items()})
+    return result
 
 
 def _validate_transaction_phase(value: object) -> str:
@@ -315,19 +363,19 @@ def _runtime_bundle_present(app: Path) -> bool:
     )
 
 
-def _modern_ownership_snapshot(
+def _modern_ownership_snapshot_from_state(
     target_app: Path,
+    service_state: dict[str, str],
     *,
     launchctl: Path,
     uid: int,
     runtime_legacy_program: Path | None,
 ) -> dict[str, object]:
+    service_state = _validate_recorded_service_state(service_state)
     if target_app.exists() and _runtime_bundle_present(target_app):
-        service_state = _service_management(target_app, "status")
         identity = _runtime_bundle_identity(target_app)
         expected_program = Path(identity["helper_program"])
     else:
-        service_state = {"main_app": "not-found", "runtime_agent": "not-found"}
         identity = {"helper_program": "", "helper_sha256": "", "plist_sha256": ""}
         expected_program = target_app / "Contents/MacOS/AgentRuntimeRuntimeService"
 
@@ -354,6 +402,26 @@ def _modern_ownership_snapshot(
             "plist_sha256": identity["plist_sha256"],
         },
     }
+
+
+def _modern_ownership_snapshot(
+    target_app: Path,
+    *,
+    launchctl: Path,
+    uid: int,
+    runtime_legacy_program: Path | None,
+) -> dict[str, object]:
+    if target_app.exists() and _runtime_bundle_present(target_app):
+        service_state = _service_management(target_app, "status")
+    else:
+        service_state = {"main_app": "not-found", "runtime_agent": "not-found"}
+    return _modern_ownership_snapshot_from_state(
+        target_app,
+        service_state,
+        launchctl=launchctl,
+        uid=uid,
+        runtime_legacy_program=runtime_legacy_program,
+    )
 
 
 def _runtime_generation_changed(before: dict[str, object], candidate_app: Path) -> bool:
@@ -675,12 +743,16 @@ def _validate_recorded_service_state(value: object) -> dict[str, str]:
 def _compensate_operation_ledger(target_app: Path, ledger_value: object) -> None:
     ledger = _validate_operation_ledger(ledger_value)
     state = _service_management(target_app, "status")
-    if ledger["runtime_registered"] and state["runtime_agent"] in REGISTERED_SERVICE_STATES:
+    runtime_created = ledger["runtime_registered"] or (
+        ledger["runtime_approval_requested"]
+        and state["runtime_agent"] in REGISTERED_SERVICE_STATES
+    )
+    if runtime_created:
         state = _service_management(target_app, "unregister-runtime")
     if ledger["main_registered"] and state["main_app"] in REGISTERED_SERVICE_STATES:
         state = _service_management(target_app, "unregister-main")
     verified = _service_management(target_app, "status")
-    if ledger["runtime_registered"] and verified["runtime_agent"] not in ABSENT_SERVICE_STATES:
+    if runtime_created and verified["runtime_agent"] not in ABSENT_SERVICE_STATES:
         raise CutoverError("transaction-created Runtime ServiceManagement state remained active")
     if ledger["main_registered"] and verified["main_app"] not in ABSENT_SERVICE_STATES:
         raise CutoverError("transaction-created main-app ServiceManagement state remained active")
@@ -778,6 +850,90 @@ def _unregister_modern_generation(
                 raise CutoverError(f"pre-existing modern ServiceManagement state was not preserved: {key}")
         elif verified[key] not in ABSENT_SERVICE_STATES:
             raise CutoverError(f"transaction-created modern ServiceManagement state remained active: {key}")
+
+
+def _validate_approval_transaction_envelope(
+    transaction_dir: Path,
+    target_app: Path,
+    metadata: dict[str, object],
+) -> tuple[Path, Path, Path]:
+    if metadata.get("schema") != TRANSACTION_SCHEMA:
+        raise CutoverError("approval checkpoint transaction schema is unsupported")
+    if _validate_transaction_phase(metadata.get("phase")) != "APP_SWAPPED":
+        raise CutoverError("approval checkpoint requires APP_SWAPPED phase")
+    validated_candidate = provenance.validate_candidate(
+        target_app, transaction_dir / "candidate-handoff.json"
+    )
+    if metadata.get("candidate") != validated_candidate:
+        raise CutoverError("installed candidate identity does not match transaction metadata")
+
+    previous = metadata.get("previous")
+    if not isinstance(previous, dict) or set(previous) != {
+        "app_present", "app_closure", "ui_loaded", "runtime_loaded",
+        "desired_state_present", "ui_plist", "runtime_plist",
+    }:
+        raise CutoverError("approval checkpoint rollback metadata is malformed")
+    app_present = previous.get("app_present")
+    if not isinstance(app_present, bool):
+        raise CutoverError("approval checkpoint rollback metadata is malformed")
+    if app_present:
+        expected = _require_rollback_app_closure(previous.get("app_closure"))
+        backup = transaction_dir / "previous-app"
+        if _rollback_app_closure(backup) != expected:
+            raise CutoverError("approval checkpoint rollback app evidence changed")
+    elif (transaction_dir / "previous-app").exists():
+        raise CutoverError("approval checkpoint rollback app evidence is inconsistent")
+    for name, backup_name in (("ui_plist", "previous-ui.plist"), ("runtime_plist", "previous-runtime.plist")):
+        snapshot = previous.get(name)
+        if not isinstance(snapshot, dict) or set(snapshot) != {"present", "mode"}:
+            raise CutoverError("approval checkpoint rollback file metadata is malformed")
+        present = snapshot.get("present")
+        mode = snapshot.get("mode")
+        backup = transaction_dir / backup_name
+        if not isinstance(present, bool):
+            raise CutoverError("approval checkpoint rollback file metadata is malformed")
+        if present:
+            if not isinstance(mode, int) or isinstance(mode, bool):
+                raise CutoverError("approval checkpoint rollback file metadata is malformed")
+            if backup.is_symlink() or not backup.is_file():
+                raise CutoverError("approval checkpoint rollback file evidence is missing")
+            if stat.S_IMODE(backup.stat().st_mode) != mode:
+                raise CutoverError("approval checkpoint rollback file evidence changed")
+        elif backup.exists() or backup.is_symlink():
+            raise CutoverError("approval checkpoint rollback file evidence is inconsistent")
+
+    home = target_app.parent.parent
+    launch_dir = home / "Library" / "LaunchAgents"
+    state_dir = home / "Library" / "Application Support" / "Agent Runtime"
+    paths = metadata.get("paths")
+    expected_paths = {
+        "target_app": str(target_app),
+        "ui_plist": str(launch_dir / f"{UI_LABEL}.plist"),
+        "runtime_plist": str(launch_dir / f"{RUNTIME_LABEL}.plist"),
+        "desired_state": str(state_dir / "protected-runtime-running"),
+    }
+    if paths != expected_paths:
+        raise CutoverError("approval checkpoint path metadata changed")
+    if transaction_dir != state_dir / "cutover-transaction":
+        raise CutoverError("approval checkpoint transaction path changed")
+    _verify_desired_state_unchanged(
+        Path(expected_paths["desired_state"]), bool(previous.get("desired_state_present"))
+    )
+    _validate_runtime_config_identity(metadata.get("runtime_config"), state_dir)
+    return Path(expected_paths["ui_plist"]), Path(expected_paths["runtime_plist"]), state_dir
+
+
+def _require_legacy_ownership_absent(
+    *,
+    launchctl: Path,
+    uid: int,
+    ui_plist: Path,
+    runtime_plist: Path,
+) -> None:
+    if ui_plist.exists() or ui_plist.is_symlink() or runtime_plist.exists() or runtime_plist.is_symlink():
+        raise CutoverError("legacy LaunchAgent ownership reappeared during approval checkpoint")
+    if _service_loaded(launchctl, f"gui/{uid}/{UI_LABEL}"):
+        raise CutoverError("legacy UI LaunchAgent ownership reappeared during approval checkpoint")
 
 
 def _restore_transaction(
@@ -958,6 +1114,7 @@ def cutover_candidate(
     desired_state = state_dir / "protected-runtime-running"
     if desired_state.is_symlink() or (desired_state.exists() and not desired_state.is_file()):
         raise CutoverError("desired Runtime state marker is unsafe")
+    runtime_config = _runtime_config_identity(state_dir)
 
     ui_present = _validate_previous_launchagent(ui_plist, UI_LABEL, target_app)
     runtime_present = _validate_previous_launchagent(runtime_plist, RUNTIME_LABEL, target_app)
@@ -1042,6 +1199,7 @@ def cutover_candidate(
             "runtime_generation_changed": generation_changed,
             "predecessor_service_contract": predecessor_contract,
             "operations": operations,
+            "runtime_config": runtime_config,
             "paths": {
                 "target_app": str(target_app),
                 "ui_plist": str(ui_plist),
@@ -1113,7 +1271,46 @@ def cutover_candidate(
             candidate_runtime["registration_state"] = state["runtime_agent"]
 
         if candidate_runtime["classification"] == "absent":
-            state = _service_management(target_app, "register-runtime")
+            try:
+                state = _service_management(target_app, "register-runtime")
+            except ServiceManagementApprovalRequired as approval:
+                if approval.operation != "register-runtime":
+                    raise CutoverError("Runtime approval result operation is inconsistent")
+                state = _validate_recorded_service_state(approval.state)
+                if state["runtime_agent"] not in ABSENT_SERVICE_STATES:
+                    raise CutoverError("approval-denied Runtime result falsely claims registered ownership")
+                operations["runtime_approval_requested"] = True
+                metadata["operations"] = operations
+                metadata["modern_registration"] = state
+                post = _modern_ownership_snapshot_from_state(
+                    target_app,
+                    state,
+                    launchctl=launchctl,
+                    uid=uid,
+                    runtime_legacy_program=None,
+                )
+                post_runtime = _validate_runtime_ownership_record(post["runtime"])
+                metadata["modern_ownership_after"] = post
+                _atomic_json(transaction_dir / "metadata.json", metadata)
+                if post_runtime["classification"] != "absent" or post_runtime["loaded"]:
+                    raise CutoverError("approval-denied Runtime ownership is inconsistent")
+                checkpoint_ui_plist, checkpoint_runtime_plist, _ = _validate_approval_transaction_envelope(
+                    transaction_dir, target_app, metadata
+                )
+                _require_legacy_ownership_absent(
+                    launchctl=launchctl,
+                    uid=uid,
+                    ui_plist=checkpoint_ui_plist,
+                    runtime_plist=checkpoint_runtime_plist,
+                )
+                provenance.validate_candidate(target_app, transaction_dir / "candidate-handoff.json")
+                metadata["status"] = "AWAITING_APPROVAL"
+                _atomic_json(transaction_dir / "metadata.json", metadata)
+                return {
+                    "status": "AWAITING_APPROVAL",
+                    "outcome": "OPERATOR_INPUT_REQUIRED",
+                    "candidate": expected,
+                }
             if state["runtime_agent"] not in REGISTERED_SERVICE_STATES:
                 raise CutoverError("Runtime ServiceManagement registration did not converge")
             operations["runtime_registered"] = True
@@ -1318,7 +1515,7 @@ def _validate_schema2_preswap_partial_recovery(
         raise CutoverError("schema-2 no-live-mutation recovery requires a PARTIAL transaction")
     if metadata.get("runtime_generation_changed") is not True:
         raise CutoverError("schema-2 no-live-mutation recovery generation evidence is invalid")
-    ledger = _validate_operation_ledger(metadata.get("operations"))
+    ledger = _validate_operation_ledger(metadata.get("operations"), allow_legacy=True)
     if any(ledger.values()):
         raise CutoverError("schema-2 no-live-mutation recovery requires an all-false operation ledger")
 
@@ -1466,6 +1663,106 @@ def recover_partial_transaction(
     return {"status": "RECOVERED"}
 
 
+def resume_transaction(
+    transaction_dir: Path,
+    target_app: Path,
+    *,
+    launchctl: Path,
+    uid: int,
+) -> dict[str, object]:
+    metadata = _load_metadata(transaction_dir)
+    if metadata.get("status") != "AWAITING_APPROVAL":
+        raise CutoverError("resume requires an AWAITING_APPROVAL cutover transaction")
+    ui_plist, runtime_plist, _ = _validate_approval_transaction_envelope(
+        transaction_dir, target_app, metadata
+    )
+    operations = _validate_operation_ledger(metadata.get("operations"))
+    if not operations["runtime_approval_requested"]:
+        raise CutoverError("approval checkpoint has no transaction-owned Runtime approval request")
+    _require_legacy_ownership_absent(
+        launchctl=launchctl,
+        uid=uid,
+        ui_plist=ui_plist,
+        runtime_plist=runtime_plist,
+    )
+
+    def persist(post: dict[str, object], status: str) -> dict[str, object]:
+        runtime = _validate_runtime_ownership_record(post["runtime"])
+        metadata["modern_registration"] = {
+            "main_app": str(post["main_app"]),
+            "runtime_agent": str(runtime["registration_state"]),
+        }
+        metadata["modern_ownership_after"] = post
+        metadata["operations"] = operations
+        metadata["status"] = status
+        _atomic_json(transaction_dir / "metadata.json", metadata)
+        if status == "PENDING":
+            return {"status": "PENDING", "candidate": metadata["candidate"]}
+        return {
+            "status": "AWAITING_APPROVAL",
+            "outcome": "OPERATOR_INPUT_REQUIRED",
+            "candidate": metadata["candidate"],
+        }
+
+    post = _modern_ownership_snapshot(
+        target_app, launchctl=launchctl, uid=uid, runtime_legacy_program=None
+    )
+    runtime = _validate_runtime_ownership_record(post["runtime"])
+    if runtime["registration_state"] == "enabled":
+        if runtime["classification"] != "healthy-registered":
+            raise CutoverError("enabled Runtime ServiceManagement state has no healthy loaded Runtime job")
+        operations["runtime_registered"] = True
+        provenance.validate_candidate(target_app, transaction_dir / "candidate-handoff.json")
+        return persist(post, "PENDING")
+    if runtime["registration_state"] == "requires-approval":
+        if runtime["classification"] != "awaiting-approval":
+            raise CutoverError("Runtime approval state is inconsistent")
+        operations["runtime_registered"] = True
+        return persist(post, "AWAITING_APPROVAL")
+    if runtime["classification"] != "absent" or runtime["loaded"]:
+        raise CutoverError("Runtime approval checkpoint ownership is ambiguous")
+
+    try:
+        registered_state = _service_management(target_app, "register-runtime")
+    except ServiceManagementApprovalRequired as approval:
+        if approval.operation != "register-runtime":
+            raise CutoverError("Runtime approval result operation is inconsistent")
+        actual = _validate_recorded_service_state(approval.state)
+        if actual["runtime_agent"] not in ABSENT_SERVICE_STATES:
+            raise CutoverError("approval-denied Runtime result falsely claims registered ownership")
+        post = _modern_ownership_snapshot_from_state(
+            target_app,
+            actual,
+            launchctl=launchctl,
+            uid=uid,
+            runtime_legacy_program=None,
+        )
+        runtime = _validate_runtime_ownership_record(post["runtime"])
+        if runtime["classification"] != "absent" or runtime["loaded"]:
+            raise CutoverError("approval-denied Runtime ownership is inconsistent")
+        operations["runtime_approval_requested"] = True
+        return persist(post, "AWAITING_APPROVAL")
+
+    if registered_state["runtime_agent"] not in REGISTERED_SERVICE_STATES:
+        raise CutoverError("Runtime ServiceManagement registration did not converge during resume")
+    post = _modern_ownership_snapshot(
+        target_app, launchctl=launchctl, uid=uid, runtime_legacy_program=None
+    )
+    runtime = _validate_runtime_ownership_record(post["runtime"])
+    if runtime["registration_state"] == "requires-approval":
+        if runtime["classification"] != "awaiting-approval":
+            raise CutoverError("Runtime approval state is inconsistent after resume registration")
+        operations["runtime_registered"] = True
+        return persist(post, "AWAITING_APPROVAL")
+    if runtime["registration_state"] == "enabled":
+        if runtime["classification"] != "healthy-registered":
+            raise CutoverError("enabled Runtime ServiceManagement state has no healthy loaded Runtime job")
+        operations["runtime_registered"] = True
+        provenance.validate_candidate(target_app, transaction_dir / "candidate-handoff.json")
+        return persist(post, "PENDING")
+    raise CutoverError("Runtime registration result is inconsistent during resume")
+
+
 def commit_transaction(transaction_dir: Path, target_app: Path) -> dict[str, object]:
     metadata = _load_metadata(transaction_dir)
     if metadata.get("status") != "PENDING":
@@ -1503,6 +1800,10 @@ def main() -> int:
     cutover.add_argument("--uid", type=int, default=os.getuid())
     commit = sub.add_parser("commit")
     commit.add_argument("--home", type=Path, default=Path.home())
+    resume = sub.add_parser("resume")
+    resume.add_argument("--home", type=Path, default=Path.home())
+    resume.add_argument("--launchctl", type=Path, required=True)
+    resume.add_argument("--uid", type=int, default=os.getuid())
     rollback = sub.add_parser("rollback")
     rollback.add_argument("--home", type=Path, default=Path.home())
     rollback.add_argument("--launchctl", type=Path, required=True)
@@ -1530,6 +1831,10 @@ def main() -> int:
             )
         elif args.command == "commit":
             result = commit_transaction(transaction_dir, target_app)
+        elif args.command == "resume":
+            result = resume_transaction(
+                transaction_dir, target_app, launchctl=args.launchctl, uid=args.uid
+            )
         elif args.command == "rollback":
             result = rollback_transaction(
                 transaction_dir,

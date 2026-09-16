@@ -32,6 +32,7 @@ protocol ServiceControlling: AnyObject {
 enum ServiceRegistrationError: Error, LocalizedError {
     case serviceNotFound(String)
     case rollbackFailed(String)
+    case approvalRequired
 
     var errorDescription: String? {
         switch self {
@@ -39,7 +40,17 @@ enum ServiceRegistrationError: Error, LocalizedError {
             return "ServiceManagement metadata was not found for \(name)."
         case .rollbackFailed(let detail):
             return "ServiceManagement rollback failed: \(detail)"
+        case .approvalRequired:
+            return "ServiceManagement registration requires explicit user approval."
         }
+    }
+
+    static func isApprovalRequired(_ error: Error) -> Bool {
+        let value = error as NSError
+        if #available(macOS 15.0, *) {
+            return value.domain == SMAppServiceErrorDomain && value.code == 1
+        }
+        return false
     }
 }
 
@@ -190,8 +201,13 @@ final class ServiceRegistrationCoordinator {
                 try service.register()
                 return true
             } catch {
-                if service.status == .requiresApproval {
+                let postErrorStatus = service.status
+                if postErrorStatus == .requiresApproval {
                     return true
+                }
+                if ServiceRegistrationError.isApprovalRequired(error),
+                   postErrorStatus == .notRegistered || postErrorStatus == .notFound {
+                    throw ServiceRegistrationError.approvalRequired
                 }
                 throw error
             }
@@ -210,6 +226,23 @@ final class ServiceRegistrationCoordinator {
 }
 
 enum ServiceManagementCommand {
+    static let approvalRequiredExitStatus: Int32 = 3
+
+    static func approvalRequiredJSONData(
+        operation: String,
+        snapshot: ServiceRegistrationSnapshot
+    ) throws -> Data {
+        try JSONSerialization.data(
+            withJSONObject: [
+                "main_app": snapshot.mainApp.rawValue,
+                "runtime_agent": snapshot.runtimeAgent.rawValue,
+                "operation": operation,
+                "outcome": "approval-required",
+            ],
+            options: [.sortedKeys]
+        )
+    }
+
     static func run(arguments: [String]) -> Int32? {
         guard arguments.count >= 3, arguments[1] == "--service-management" else {
             return nil
@@ -233,6 +266,19 @@ enum ServiceManagementCommand {
             FileHandle.standardOutput.write(data)
             FileHandle.standardOutput.write(Data("\n".utf8))
             return 0
+        } catch ServiceRegistrationError.approvalRequired {
+            do {
+                let data = try approvalRequiredJSONData(
+                    operation: arguments[2],
+                    snapshot: coordinator.snapshot()
+                )
+                FileHandle.standardOutput.write(data)
+                FileHandle.standardOutput.write(Data("\n".utf8))
+                return approvalRequiredExitStatus
+            } catch {
+                fputs("SERVICE MANAGEMENT ERROR: could not encode approval-required result\n", stderr)
+                return 2
+            }
         } catch {
             fputs("SERVICE MANAGEMENT ERROR: \(error.localizedDescription)\n", stderr)
             return 2

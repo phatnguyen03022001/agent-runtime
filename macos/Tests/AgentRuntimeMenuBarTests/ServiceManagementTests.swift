@@ -1,5 +1,6 @@
 @testable import AgentRuntimeMenuBar
 import XCTest
+import ServiceManagement
 
 final class ServiceManagementTests: XCTestCase {
     func testStatusSnapshotPreservesAllFourOperatorVisibleStates() throws {
@@ -199,6 +200,81 @@ final class ServiceManagementTests: XCTestCase {
         XCTAssertEqual(runtime.status, .notRegistered)
     }
 
+    func testSMAppServiceDomainCodeOneIsApprovalRequired() {
+        let error = NSError(
+            domain: approvalErrorDomain,
+            code: 1,
+            userInfo: [NSLocalizedDescriptionKey: "approval text is not part of classification"]
+        )
+        XCTAssertTrue(ServiceRegistrationError.isApprovalRequired(error))
+    }
+
+    func testSameLocalizedTextFromAnotherDomainIsNotApprovalRequired() {
+        let error = NSError(
+            domain: "ExampleDomain",
+            code: 1,
+            userInfo: [NSLocalizedDescriptionKey: "Operation not permitted"]
+        )
+        XCTAssertFalse(ServiceRegistrationError.isApprovalRequired(error))
+    }
+
+    func testAnotherSMAppServiceErrorCodeIsNotApprovalRequired() {
+        let error = NSError(
+            domain: approvalErrorDomain,
+            code: 2,
+            userInfo: [NSLocalizedDescriptionKey: "Operation not permitted"]
+        )
+        XCTAssertFalse(ServiceRegistrationError.isApprovalRequired(error))
+    }
+
+    func testApprovalNSErrorStillReconcilesPostErrorRequiresApprovalAsCreatedRegistration() throws {
+        let main = FakeService(status: .enabled)
+        let runtime = FakeService(
+            status: .notRegistered,
+            registerError: NSError(domain: approvalErrorDomain, code: 1),
+            statusAfterRegisterError: .requiresApproval
+        )
+        let coordinator = ServiceRegistrationCoordinator(mainApp: main, runtimeAgent: runtime)
+
+        let snapshot = try coordinator.registerRuntimeAgent()
+
+        XCTAssertEqual(snapshot, ServiceRegistrationSnapshot(mainApp: .enabled, runtimeAgent: .requiresApproval))
+        XCTAssertEqual(runtime.registerCount, 1)
+    }
+
+    func testApprovalNSErrorWithAbsentPostStatusThrowsTypedApprovalRequired() {
+        let main = FakeService(status: .enabled)
+        let runtime = FakeService(
+            status: .notRegistered,
+            registerError: NSError(domain: approvalErrorDomain, code: 1)
+        )
+        let coordinator = ServiceRegistrationCoordinator(mainApp: main, runtimeAgent: runtime)
+
+        XCTAssertThrowsError(try coordinator.registerRuntimeAgent()) { error in
+            guard case ServiceRegistrationError.approvalRequired = error else {
+                return XCTFail("expected typed approvalRequired, got \(error)")
+            }
+        }
+        XCTAssertEqual(runtime.status, .notRegistered)
+    }
+
+    func testApprovalRequiredCLIContractIsStructuredAndUsesDedicatedExitStatus() throws {
+        let snapshot = ServiceRegistrationSnapshot(mainApp: .enabled, runtimeAgent: .notRegistered)
+        let data = try ServiceManagementCommand.approvalRequiredJSONData(
+            operation: "register-runtime",
+            snapshot: snapshot
+        )
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: String])
+
+        XCTAssertEqual(ServiceManagementCommand.approvalRequiredExitStatus, 3)
+        XCTAssertEqual(payload, [
+            "main_app": "enabled",
+            "runtime_agent": "not-registered",
+            "operation": "register-runtime",
+            "outcome": "approval-required",
+        ])
+    }
+
     func testUnregisterCompensatesRuntimeWhenMainUnregisterFails() throws {
         let main = FakeService(status: .enabled, unregisterError: FixtureError.failed)
         let runtime = FakeService(status: .enabled)
@@ -246,6 +322,13 @@ final class ServiceManagementTests: XCTestCase {
         XCTAssertEqual(runtime.unregisterCount, 1)
         XCTAssertEqual(main.unregisterCount, 1)
     }
+}
+
+private var approvalErrorDomain: String {
+    if #available(macOS 15.0, *) {
+        return SMAppServiceErrorDomain
+    }
+    return "SMAppServiceErrorDomain"
 }
 
 private enum FixtureError: Error { case failed }

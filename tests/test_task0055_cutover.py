@@ -115,6 +115,9 @@ class ModernCutoverTests(unittest.TestCase):
         desired = state_dir / "protected-runtime-running"
         state_dir.mkdir(parents=True)
         desired.touch()
+        runtime_env = state_dir / "runtime.env"
+        runtime_env.write_text("CONTROL_PLANE_API_KEY=test-only\n")
+        runtime_env.chmod(0o600)
         ui = home / "Library" / "LaunchAgents" / f"{UI_LABEL}.plist"
         runtime = home / "Library" / "LaunchAgents" / f"{RUNTIME_LABEL}.plist"
         make_legacy_app(target)

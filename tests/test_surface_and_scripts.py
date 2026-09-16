@@ -253,6 +253,23 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertNotIn("resetbtm", branch)
         self.assertNotIn("sfltool", branch)
 
+    def test_install_exposes_bounded_resume_cutover_command(self) -> None:
+        text = (ROOT / "install.sh").read_text()
+        self.assertIn("--resume-cutover)", text)
+        branch_start = text.index("--resume-cutover)")
+        branch = text[branch_start:]
+        self.assertIn("run_cutover_helper resume", branch)
+        self.assertIn("--launchctl", branch)
+        self.assertNotIn("register-runtime", branch.split(";;", 1)[0])
+        self.assertNotIn("sfltool", branch.split(";;", 1)[0])
+
+    def test_approval_detection_never_matches_localized_error_text(self) -> None:
+        swift = (ROOT / "macos/Sources/AgentRuntimeMenuBar/ServiceManagementController.swift").read_text()
+        python = (ROOT / "macos/candidate_cutover.py").read_text()
+        self.assertNotIn('"Operation not permitted"', swift)
+        self.assertNotIn('"Operation not permitted"', python)
+        self.assertIn("SMAppServiceErrorDomain", swift)
+
     def test_start_uses_launchd_singleton_and_canonical_env_backed_serve_mode(self) -> None:
         text = (ROOT / "start.sh").read_text()
         self.assertIn("com.picmao.agent-runtime-runtime", text)

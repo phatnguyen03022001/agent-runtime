@@ -23,6 +23,12 @@ case "${1-}" in
     run_cutover_helper cutover "$2" "$3" --home "$HOME" \
       --launchctl "$(command -v launchctl)" --tunnel-client "$(command -v tunnel-client)"
     ;;
+  --resume-cutover)
+    [[ "$#" == "1" ]] || fail "usage: ./install.sh --resume-cutover"
+    [[ "$(uname -s)" == "Darwin" ]] || fail "candidate cutover resume supports macOS only."
+    command -v launchctl >/dev/null 2>&1 || fail "launchctl is required for candidate cutover resume."
+    run_cutover_helper resume --home "$HOME" --launchctl "$(command -v launchctl)"
+    ;;
   --commit-cutover)
     [[ "$#" == "1" ]] || fail "usage: ./install.sh --commit-cutover"
     run_cutover_helper commit --home "$HOME"

@@ -337,6 +337,7 @@ class CandidateCutoverTests(unittest.TestCase):
         desired.touch()
         runtime_env = state_dir / "runtime.env"
         runtime_env.write_text("CONTROL_PLANE_API_KEY=super-secret\n")
+        runtime_env.chmod(0o600)
         previous = CandidateClosureTests()._signed_app(
             provenance, root / "previous", marker="previous", revision=predecessor_revision
         )
@@ -438,6 +439,32 @@ class CandidateCutoverTests(unittest.TestCase):
             programs[service] = str(program)
         fx["launch_state"].write_text(json.dumps(sorted(loaded)) + "\n")
         fx["programs_path"].write_text(json.dumps(programs, sort_keys=True) + "\n")
+
+    def _approval_error(self, cutover, operation: str, state: dict[str, str]):
+        error_type = getattr(cutover, "ServiceManagementApprovalRequired", None)
+        self.assertIsNotNone(error_type, "typed ServiceManagement approval result is required")
+        return error_type(operation, dict(state))
+
+    def _awaiting_approval(self, cutover, fx):
+        fx["modern_state"].update(main_app="not-registered", runtime_agent="not-registered")
+
+        def service_management(app: Path, operation: str) -> dict[str, str]:
+            fx["service_operations"].append((str(app), operation))
+            if operation == "register-main":
+                fx["modern_state"]["main_app"] = "enabled"
+            elif operation == "register-runtime":
+                raise self._approval_error(cutover, operation, fx["modern_state"])
+            elif operation == "unregister-main":
+                fx["modern_state"]["main_app"] = "not-registered"
+            elif operation == "unregister-runtime":
+                fx["modern_state"]["runtime_agent"] = "not-registered"
+                fx["set_modern_runtime_loaded"](app, False)
+            elif operation != "status":
+                raise AssertionError(operation)
+            return dict(fx["modern_state"])
+
+        cutover._service_management = service_management
+        return self._cutover(cutover, fx)
 
     def _schema1_partial_fixture(self, provenance, cutover, fx) -> dict[str, object]:
         previous_closure = cutover._rollback_app_closure(fx["target"])
@@ -546,7 +573,7 @@ class CandidateCutoverTests(unittest.TestCase):
             result = self._cutover(cutover, fx)
             self.assertEqual(result["status"], "PENDING")
             metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
-            self.assertEqual(metadata["schema"], 3)
+            self.assertEqual(metadata["schema"], 4)
             self.assertEqual(metadata["predecessor_service_contract"], "aggregate-v1")
             old_ops = [op for revision, op in fx["service_revision_operations"] if revision == old_revision]
             self.assertIn("unregister", old_ops)
@@ -670,7 +697,7 @@ class CandidateCutoverTests(unittest.TestCase):
             self._cutover(cutover, fx)
             metadata_path = fx["transaction"] / "metadata.json"
             metadata = json.loads(metadata_path.read_text())
-            metadata["schema"] = 3
+            metadata["schema"] = 4
             metadata["phase"] = "PRE_SWAP"
             metadata_path.write_text(json.dumps(metadata, indent=2) + "\n")
             with self.assertRaisesRegex(cutover.CutoverError, "phase|previous.*closure"):
@@ -685,7 +712,7 @@ class CandidateCutoverTests(unittest.TestCase):
             self._cutover(cutover, fx)
             metadata_path = fx["transaction"] / "metadata.json"
             metadata = json.loads(metadata_path.read_text())
-            metadata["schema"] = 3
+            metadata["schema"] = 4
             metadata["phase"] = "APP_SWAPPED"
             metadata_path.write_text(json.dumps(metadata, indent=2) + "\n")
             shutil.rmtree(fx["target"])
@@ -752,6 +779,275 @@ class CandidateCutoverTests(unittest.TestCase):
             self.assertEqual(metadata["modern_ownership_after"]["runtime"]["classification"], "awaiting-approval")
             self.assertFalse(metadata["modern_ownership_after"]["runtime"]["loaded"])
             self.assertIn("register-runtime", service_operations)
+
+    def test_service_management_exit_three_is_typed_without_parsing_prose(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            cutover = load_module(CUTOVER_PATH, "candidate_cutover_cli_contract")
+            app = Path(raw) / "Agent Runtime.app"
+            executable = app / "Contents/MacOS/AgentRuntimeMenuBar"
+            executable.parent.mkdir(parents=True)
+            executable.write_text("#!/bin/sh\nexit 0\n")
+            executable.chmod(0o755)
+            cutover._run = lambda argv: subprocess.CompletedProcess(
+                argv,
+                3,
+                stdout=json.dumps({
+                    "main_app": "enabled",
+                    "runtime_agent": "not-registered",
+                    "operation": "register-runtime",
+                    "outcome": "approval-required",
+                }) + "\n",
+                stderr="Operation not permitted",
+            )
+            with self.assertRaises(Exception) as raised:
+                cutover._service_management(app, "register-runtime")
+            error_type = getattr(cutover, "ServiceManagementApprovalRequired", None)
+            self.assertIsNotNone(error_type)
+            self.assertIsInstance(raised.exception, error_type)
+            self.assertEqual(raised.exception.operation, "register-runtime")
+            self.assertEqual(raised.exception.state["runtime_agent"], "not-registered")
+
+    def test_approval_denial_reaches_awaiting_approval_without_claiming_registration(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            provenance, cutover, fx = self._fixture(raw)
+            result = self._awaiting_approval(cutover, fx)
+            self.assertEqual(result["status"], "AWAITING_APPROVAL")
+            metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
+            self.assertEqual(metadata["schema"], 4)
+            self.assertEqual(metadata["status"], "AWAITING_APPROVAL")
+            self.assertEqual(metadata["phase"], "APP_SWAPPED")
+            self.assertFalse(metadata["operations"]["runtime_registered"])
+            self.assertTrue(metadata["operations"]["runtime_approval_requested"])
+            self.assertEqual(metadata["modern_registration"]["runtime_agent"], "not-registered")
+            self.assertEqual(metadata["modern_ownership_after"]["runtime"]["classification"], "absent")
+            self.assertFalse(metadata["modern_ownership_after"]["runtime"]["loaded"])
+            provenance.validate_candidate(fx["target"], fx["transaction"] / "candidate-handoff.json")
+            self.assertTrue((fx["transaction"] / "previous-app").is_dir())
+            self.assertFalse(fx["ui_plist"].exists())
+            self.assertFalse(fx["runtime_plist"].exists())
+
+    def test_commit_rejects_awaiting_approval(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            self._awaiting_approval(cutover, fx)
+            with self.assertRaisesRegex(cutover.CutoverError, "pending"):
+                cutover.commit_transaction(fx["transaction"], fx["target"])
+            self.assertTrue(fx["transaction"].is_dir())
+
+    def test_resume_enabled_exact_helper_transitions_to_pending(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            self._awaiting_approval(cutover, fx)
+            fx["modern_state"]["runtime_agent"] = "enabled"
+            fx["set_modern_runtime_loaded"](fx["target"], True)
+            result = cutover.resume_transaction(
+                fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501
+            )
+            self.assertEqual(result["status"], "PENDING")
+            metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
+            self.assertEqual(metadata["status"], "PENDING")
+            self.assertTrue(metadata["operations"]["runtime_registered"])
+
+    def test_resume_requires_approval_stays_awaiting_without_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            self._awaiting_approval(cutover, fx)
+            fx["modern_state"]["runtime_agent"] = "requires-approval"
+            fx["service_operations"].clear()
+            result = cutover.resume_transaction(
+                fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501
+            )
+            self.assertEqual(result["status"], "AWAITING_APPROVAL")
+            self.assertEqual(result["outcome"], "OPERATOR_INPUT_REQUIRED")
+            operations = [operation for _, operation in fx["service_operations"]]
+            self.assertNotIn("register-runtime", operations)
+            metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
+            self.assertTrue(metadata["operations"]["runtime_registered"])
+
+    def test_resume_absent_retries_once_and_typed_denial_stays_awaiting(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            self._awaiting_approval(cutover, fx)
+            fx["service_operations"].clear()
+            result = cutover.resume_transaction(
+                fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501
+            )
+            self.assertEqual(result["status"], "AWAITING_APPROVAL")
+            self.assertEqual(result["outcome"], "OPERATOR_INPUT_REQUIRED")
+            operations = [operation for _, operation in fx["service_operations"]]
+            self.assertEqual(operations.count("register-runtime"), 1)
+            metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
+            self.assertFalse(metadata["operations"]["runtime_registered"])
+            self.assertTrue(metadata["operations"]["runtime_approval_requested"])
+
+    def test_resume_absent_successful_registration_exact_helper_transitions_pending(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            self._awaiting_approval(cutover, fx)
+            fx["service_operations"].clear()
+
+            def service_management(app: Path, operation: str) -> dict[str, str]:
+                fx["service_operations"].append((str(app), operation))
+                if operation == "register-runtime":
+                    fx["modern_state"]["runtime_agent"] = "enabled"
+                    fx["set_modern_runtime_loaded"](app, True)
+                elif operation != "status":
+                    raise AssertionError(operation)
+                return dict(fx["modern_state"])
+
+            cutover._service_management = service_management
+            result = cutover.resume_transaction(
+                fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501
+            )
+            self.assertEqual(result["status"], "PENDING")
+            operations = [operation for _, operation in fx["service_operations"]]
+            self.assertEqual(operations.count("register-runtime"), 1)
+
+    def test_resume_wrong_helper_fails_closed_and_retains_checkpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            self._awaiting_approval(cutover, fx)
+            fx["modern_state"]["runtime_agent"] = "enabled"
+            self._set_launch_program(fx, "gui/501/com.picmao.agent-runtime-runtime", fx["root"] / "foreign-helper")
+            with self.assertRaisesRegex(cutover.CutoverError, "program identity"):
+                cutover.resume_transaction(
+                    fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501
+                )
+            metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
+            self.assertEqual(metadata["status"], "AWAITING_APPROVAL")
+
+    def test_resume_legacy_ownership_reappeared_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            self._awaiting_approval(cutover, fx)
+            shutil.copy2(fx["transaction"] / "previous-ui.plist", fx["ui_plist"])
+            with self.assertRaisesRegex(cutover.CutoverError, "legacy"):
+                cutover.resume_transaction(
+                    fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501
+                )
+            self.assertTrue(fx["transaction"].is_dir())
+
+    def test_resume_config_drift_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            self._awaiting_approval(cutover, fx)
+            fx["runtime_env"].write_text("CONTROL_PLANE_API_KEY=changed-secret\n")
+            fx["runtime_env"].chmod(0o600)
+            with self.assertRaisesRegex(cutover.CutoverError, "config"):
+                cutover.resume_transaction(
+                    fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501
+                )
+            self.assertTrue(fx["transaction"].is_dir())
+
+    def test_resume_desired_state_drift_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            self._awaiting_approval(cutover, fx)
+            fx["desired"].unlink()
+            with self.assertRaisesRegex(cutover.CutoverError, "desired-state"):
+                cutover.resume_transaction(
+                    fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501
+                )
+            self.assertTrue(fx["transaction"].is_dir())
+
+    def test_resume_fails_closed_for_no_transaction_pending_partial_and_unsupported_schema(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            resume = getattr(cutover, "resume_transaction", None)
+            self.assertIsNotNone(resume, "resume transaction surface is required")
+            with self.assertRaises(cutover.CutoverError):
+                resume(fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501)
+
+            self._awaiting_approval(cutover, fx)
+            metadata_path = fx["transaction"] / "metadata.json"
+            original = json.loads(metadata_path.read_text())
+            for status, schema in (("PENDING", 4), ("PARTIAL", 4), ("AWAITING_APPROVAL", 999)):
+                with self.subTest(status=status, schema=schema):
+                    value = dict(original)
+                    value["status"] = status
+                    value["schema"] = schema
+                    metadata_path.write_text(json.dumps(value, indent=2) + "\n")
+                    with self.assertRaises(cutover.CutoverError):
+                        resume(fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501)
+            metadata_path.write_text(json.dumps(original, indent=2) + "\n")
+
+    def test_resume_path_drift_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            self._awaiting_approval(cutover, fx)
+            metadata_path = fx["transaction"] / "metadata.json"
+            metadata = json.loads(metadata_path.read_text())
+            metadata["paths"]["target_app"] = str(fx["root"] / "wrong.app")
+            metadata_path.write_text(json.dumps(metadata, indent=2) + "\n")
+            with self.assertRaisesRegex(cutover.CutoverError, "path|target"):
+                cutover.resume_transaction(
+                    fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501
+                )
+
+    def test_resume_candidate_identity_mismatch_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            self._awaiting_approval(cutover, fx)
+            executable = fx["target"] / "Contents/MacOS/AgentRuntimeMenuBar"
+            executable.write_bytes(executable.read_bytes() + b"tampered\n")
+            with self.assertRaises(Exception):
+                cutover.resume_transaction(
+                    fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501
+                )
+            self.assertTrue(fx["transaction"].is_dir())
+
+    def test_rollback_from_awaiting_approval_restores_exact_predecessor(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            provenance, cutover, fx = self._fixture(raw)
+            previous_closure = provenance.candidate_closure(fx["target"])
+            self._awaiting_approval(cutover, fx)
+            cutover.rollback_transaction(
+                fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501
+            )
+            self.assertFalse(fx["transaction"].exists())
+            self.assertEqual(provenance.candidate_closure(fx["target"]), previous_closure)
+            self.assertEqual(fx["ui_plist"].read_bytes(), fx["ui_before"])
+            self.assertEqual(fx["runtime_plist"].read_bytes(), fx["runtime_before"])
+
+    def test_rollback_approval_request_does_not_invent_runtime_unregister_authority(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            self._awaiting_approval(cutover, fx)
+            fx["service_operations"].clear()
+            cutover.rollback_transaction(
+                fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501
+            )
+            operations = [operation for _, operation in fx["service_operations"]]
+            self.assertNotIn("unregister-runtime", operations)
+
+    def test_rollback_awaiting_approval_compensates_runtime_only_after_registration_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            self._awaiting_approval(cutover, fx)
+            fx["modern_state"]["runtime_agent"] = "requires-approval"
+            fx["service_operations"].clear()
+            cutover.rollback_transaction(
+                fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501
+            )
+            operations = [operation for _, operation in fx["service_operations"]]
+            self.assertIn("unregister-runtime", operations)
+
+    def test_arbitrary_runtime_registration_error_still_rolls_back(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            provenance, cutover, fx = self._fixture(raw)
+            previous_closure = provenance.candidate_closure(fx["target"])
+            original = cutover._service_management
+
+            def service_management(app: Path, operation: str) -> dict[str, str]:
+                if operation == "register-runtime":
+                    raise cutover.CutoverError("arbitrary registration failure")
+                return original(app, operation)
+
+            cutover._service_management = service_management
+            with self.assertRaisesRegex(cutover.CutoverError, "rollback restored"):
+                self._cutover(cutover, fx)
+            self.assertFalse(fx["transaction"].exists())
+            self.assertEqual(provenance.candidate_closure(fx["target"]), previous_closure)
 
     def test_requires_approval_is_distinct_from_enabled_health(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -835,13 +1131,13 @@ class CandidateCutoverTests(unittest.TestCase):
                 self._cutover(cutover, fx)
             self.assertFalse(fx["transaction"].exists())
 
-    def test_new_cutover_records_schema3_pre_swap_ownership_and_operation_ledger(self) -> None:
+    def test_new_cutover_records_schema4_pre_swap_ownership_and_operation_ledger(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             _, cutover, fx = self._fixture(raw)
             result = self._cutover(cutover, fx)
             self.assertEqual(result["status"], "PENDING")
             metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
-            self.assertEqual(metadata["schema"], 3)
+            self.assertEqual(metadata["schema"], 4)
             self.assertEqual(metadata["phase"], "APP_SWAPPED")
             self.assertIn("modern_ownership_before", metadata)
             self.assertIn("runtime", metadata["modern_ownership_before"])
@@ -851,7 +1147,7 @@ class CandidateCutoverTests(unittest.TestCase):
             self.assertIn("plist_sha256", runtime)
             self.assertEqual(
                 set(metadata["operations"]),
-                {"main_registered", "main_unregistered", "runtime_unregistered", "runtime_registered"},
+                {"main_registered", "main_unregistered", "runtime_unregistered", "runtime_registered", "runtime_approval_requested"},
             )
 
     def test_future_rollback_does_not_resurrect_stale_preexisting_runtime_registration(self) -> None:
@@ -951,6 +1247,7 @@ class CandidateCutoverTests(unittest.TestCase):
                 "main_unregistered": False,
                 "runtime_unregistered": False,
                 "runtime_registered": False,
+                "runtime_approval_requested": False,
             }
             compensate(fx["target"], ledger)
             operations = [operation for _, operation in fx["service_operations"]]
