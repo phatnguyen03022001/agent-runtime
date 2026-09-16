@@ -1,0 +1,200 @@
+protocol_version: 3
+
+task_id: TASK-0057
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: user_request
+  gap_id: AGENT_RUNTIME_ALWAYS_ON_X6_CONCURRENCY
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration_and_evidence
+
+classification: BOUNDED
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - verification
+  - simplicity
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - verification
+    - simplicity
+  recommended:
+    - github-workflow
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "Current operator decision on 2026-09-17: Agent Runtime is always-on shared local infrastructure; support roughly 6-10+ connected logical ChatGPT/MCP callers, but hard-bound concurrent heavy execution to six; ordinary agents may inspect/use Runtime but must not start, stop, restart, kill, repair, re-register, or rebind protected port 8080."
+    role: "Primary product/operational authority for the x6 supported envelope and lifecycle boundary."
+    precedence: 1
+  - source: "phatnguyen03022001/agent-runtime@f5697f6e93830413fd98a969b85f638d7a32010b"
+    role: "Exact current target source baseline and existing six-tool/runtime/session/capacity behavior."
+    precedence: 2
+  - source: "phatnguyen03022001/agent-skills@1826d33bd1e467896c133109b37db8b0656b3276"
+    role: "Pinned Architect/Executor/reliability/verification/simplicity governance authority."
+    precedence: 3
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing agent_runtime package, existing tests, and existing Runtime documentation."
+  rationale: "This is bounded reliability hardening of the current six-tool provider. No scheduler, worker framework, queue, service, database, tenancy layer, or new top-level subsystem is required."
+
+objective: >-
+  Harden Agent Runtime so one shared Runtime instance remains responsive under the supported operating envelope of up to six concurrent heavy execution workloads while approximately 6-10+ logical callers may remain connected. Enforce one process-local fail-fast heavy admission boundary shared by terminal_exec and terminal_start, keep persistent PTY work bounded within that same total, preserve read/observe/control availability, and provide graceful cleanup for both persistent PTYs and in-flight one-shot executions. Prove the x6 behavior deterministically without restarting or otherwise lifecycle-mutating the installed live Runtime.
+
+scope:
+  required_changes:
+    - "Introduce one shared Runtime heavy-execution admission invariant: active terminal_exec workloads plus live terminal_start PTY workloads MUST never exceed six, and any lower operator-configured parallelism remains authoritative."
+    - "Admission MUST be non-blocking/fail-fast before subprocess or PTY creation. When no heavy slot is available, the request returns one deterministic Runtime capacity error and performs no Popen/openpty/spawn side effect. Runtime MUST NOT add a queue, retry loop, scheduler, worker pool, or delayed admission path."
+    - "terminal_exec MUST hold exactly one heavy permit from immediately before spawn until the process/group cleanup and bounded output-drain lifecycle is complete, releasing exactly once on success, timeout, spawn failure, exception, and graceful Runtime shutdown."
+    - "terminal_start MUST acquire one heavy permit before PTY/process creation and transfer ownership of that permit to the session for the entire live PTY lifetime. It releases exactly once on startup failure, natural exit, explicit terminate, idle reap, concurrent cleanup race resolution, or graceful Runtime shutdown. Returning from terminal_start MUST NOT release the permit while the PTY process remains live."
+    - "Persistent PTY capacity MUST have an effective hard maximum of six and MUST NOT retain the current 64/unbounded-above policy. Preserve an operator-lowerable setting only if its valid/default semantics can never raise active PTY capacity above six; prefer a direct bounded 1..6 contract over redundant capacity axes."
+    - "capacity_observer remains read-only/advisory and must not become a scheduler or admission owner. Its healthy-host recommended ceiling may reach six only when source logic and required x6 evidence support that claim; degraded host signals may continue to recommend lower values. The hard admission boundary remains authoritative even when observer/config values are higher or stale."
+    - "terminal_poll, terminal_control, capacity_observer, and fs_read_batch MUST NOT consume a new heavy permit. Existing control operations on an already-live PTY operate on that PTY's existing lease."
+    - "Add the minimum bounded active terminal_exec ownership/cleanup state needed so graceful Runtime SIGTERM/SIGINT cleanup covers in-flight one-shot execution process groups as well as persistent PTY sessions. This state is cleanup ownership only, not a job registry, queue, scheduler, durable store, or orchestration layer."
+    - "Preserve existing output bounds, timeouts, process-group cleanup, PTY idle reap, completed-session retention, workspace validation, protected-runtime filtering, six public tool names, and truthful MCP tool annotations."
+    - "Update README/runtime configuration documentation only as needed to state the x6 hard execution envelope, fail-fast overload behavior, PTY bound, advisory-versus-hard capacity distinction, graceful cleanup boundary, and explicit non-goals for malicious/pathological same-UID children."
+    - "Implement deterministic isolated concurrency tests proving x6 admission, mixed exec+PTY accounting, fail-fast overload without spawn, exactly-once permit release across all terminal paths, cleanup races, read/observe/control responsiveness while six heavy slots are occupied, and absence of permit/session/thread/FD leaks over repeated bounded cycles."
+    - "Run an isolated x6 MCP/runtime integration proof using test-owned/synthetic subprocesses only. It MUST NOT invoke or stress the installed production Runtime service, secure tunnel, ServiceManagement state, or protected port 8080."
+    - "Publish one implementation commit and one report-only direct child to dev, both non-force, then stop for Architect review."
+  allowed_existing_files_or_components:
+    - "agent_runtime execution/admission/session/server/capacity/contracts/error/timing modules as materially required"
+    - "tests covering execution/session/server/capacity/runtime lifecycle behavior"
+    - "README.md and .env.example only when required to keep the configuration/public contract accurate"
+    - ".agent/tasks/TASK-0057/report.yaml"
+  expected_files_are_restrictive: false
+
+invariants:
+  - "The six public MCP tool names remain exactly terminal_exec, terminal_start, terminal_poll, terminal_control, capacity_observer, and fs_read_batch."
+  - "At every instant, active terminal_exec roots + live terminal_start PTY roots <= 6."
+  - "An operator-configured value below six may lower capacity; no configuration or observer state may raise the hard execution ceiling above six."
+  - "The seventh and later concurrent heavy requests fail fast before spawn while all six heavy permits are occupied."
+  - "Runtime contains no Runtime-side execution queue and performs no automatic overload retry."
+  - "Read/observe/control tools do not require a newly available heavy slot."
+  - "No permit is leaked or released twice on success, timeout, spawn failure, natural exit, terminate, idle reap, cleanup race, or graceful shutdown."
+  - "Agent Runtime remains same-UID host execution, not a sandbox or hard resource-isolation system. x6 admission does not claim protection from fork bombs, escaped descendants, malicious memory/CPU/disk exhaustion, or kernel/OS failure."
+  - "Normal task authority does not grant lifecycle authority over the installed Runtime, secure tunnel, ServiceManagement registration, desired-state marker, runtime.env, or port 8080."
+
+forbidden_changes:
+  - "Do not start, stop, restart, kill, signal, repair, reinstall, commit-cutover, rollback, register, unregister, or otherwise lifecycle-mutate the installed live Agent Runtime or tunnel."
+  - "Do not mutate protected port 8080, runtime.env, desired-state markers, System Settings, Background Task Management, TCC, launchd/ServiceManagement live state, installed app bytes, or the current live cutover transaction."
+  - "Do not change MCP terminal tool annotations to falsely claim read-only/non-destructive/non-open-world behavior or otherwise attempt to bypass OpenAI platform safety gating."
+  - "Do not change the six-tool public surface or add a seventh admission/scheduler tool."
+  - "Do not add a bounded/unbounded FIFO queue, scheduler, worker pool, daemon supervisor, watchdog, database, durable job registry, per-client tenancy/quota system, per-pair lane system, distributed lock, or orchestration framework."
+  - "Do not add OS-level child CPU/RAM/NPROC/NOFILE/FSIZE limits in this task."
+  - "Do not claim fairness between callers, malicious-child containment, fork-bomb survival, zero orphaning after SIGKILL/kernel failure, or zero-downtime crash recovery."
+  - "Do not fix the separate packaging-artifact overwrite defect in this task; that is an independent acceptance boundary."
+  - "Do not modify architect-profile, agent-skills, agent-standards, agent-documents, 01/02/03 planning files, main, tags, releases, branch topology, or unrelated Runtime UX/ServiceManagement code."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0057/report.yaml"
+  unlisted_new_files:
+    allowed: true
+    max: 2
+    within:
+      - "agent_runtime/"
+      - "tests/"
+    purpose: "A small admission/cleanup helper or focused test helper is allowed only when existing coherent modules cannot hold the implementation cleanly. No new top-level subsystem is authorized."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "One hard process-local heavy admission boundary enforces terminal_exec + live terminal_start <= 6, with lower operator configuration still authoritative and no path above six."
+    evidence_required: "Focused deterministic concurrency tests plus direct implementation inspection proving the shared accounting invariant."
+  - id: AC-2
+    requirement: "The seventh and later concurrent heavy requests fail immediately before process/PTY creation with one stable Runtime capacity error and no Runtime-side queue/retry."
+    evidence_required: "Barrier-based overload tests instrument Popen/openpty/spawn calls and prove exactly six admitted roots with all excess requests rejected before spawn."
+  - id: AC-3
+    requirement: "terminal_start holds its heavy lease for the entire PTY lifetime and terminal_exec holds its lease through process-group cleanup/output drain; every terminal path releases exactly once."
+    evidence_required: "Lifecycle matrix covering spawn failure, normal exit, timeout, terminate, idle reap, concurrent cleanup, and graceful shutdown, including double-release/leak detection."
+  - id: AC-4
+    requirement: "Persistent PTY capacity cannot exceed six and the prior effective default/unbounded-above 64 policy no longer permits >6 active PTYs."
+    evidence_required: "Configuration/session tests for default, lower values, boundary six, and >6/malformed behavior plus source/docs inspection."
+  - id: AC-5
+    requirement: "capacity_observer remains advisory/read-only and its healthy recommendation may reach six without owning scheduling; degraded signals continue to reduce recommendations."
+    evidence_required: "Capacity unit tests proving healthy x6 and degraded lower ceilings while the separate hard admission invariant remains authoritative."
+  - id: AC-6
+    requirement: "Read/observe/control operations remain usable while all six heavy slots are occupied and do not consume additional heavy permits."
+    evidence_required: "Deterministic integration test holds six synthetic heavy workloads behind a barrier and completes capacity_observer, fs_read_batch, terminal_poll, and an applicable terminal_control action before releasing the heavy barrier."
+  - id: AC-7
+    requirement: "Graceful Runtime SIGTERM/SIGINT cleanup owns and cleans both active terminal_exec process groups and persistent PTY sessions without deadlock, leak, or double finalization."
+    evidence_required: "Isolated Runtime subprocess tests; no signal is sent to the installed production Runtime."
+  - id: AC-8
+    requirement: "Repeated bounded x6 cycles do not accumulate active sessions, retained completed sessions beyond the existing bound, Runtime-owned worker threads, PTY FDs, or heavy permits."
+    evidence_required: "Deterministic repeated-cycle resource-leak assertions with attributable before/after counts inside the isolated test process."
+  - id: AC-9
+    requirement: "Existing six-tool names, truthful tool annotations, timeout/output/workspace/protected-runtime contracts, and same-UID non-sandbox threat boundary remain intact."
+    evidence_required: "Existing regression suite plus focused contract/source assertions and README consistency check."
+  - id: AC-10
+    requirement: "Installed/live Runtime infrastructure remains completely untouched during implementation and verification."
+    evidence_required: "Execution report explicitly records no install/start/stop/restart/SMAppService/launchd/8080/runtime.env/live-cutover mutation and all load tests are isolated/test-owned."
+  - id: AC-11
+    requirement: "Repository-native full verification passes on the exact implementation candidate and the implementation diff contains no unrelated packaging, lifecycle, dependency, governance, or UX changes."
+    evidence_required: "./verify plus applicable native/runtime focused tests, git diff --check, exact changed-path review, and final clean-tree proof."
+  - id: AC-12
+    requirement: "Implementation and report are published as one implementation commit followed by one report-only direct child on dev, non-force, with main unchanged."
+    evidence_required: "Fresh remote ref and commit-lineage proof after publication."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Run focused deterministic RED->GREEN admission/lifetime/overload/cleanup tests before relying on the full suite."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Run isolated x6 mixed execution integration/load proof without touching the installed live Runtime/tunnel/8080."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Run repository-native ./verify and any materially applicable existing native tests; run git diff --check."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Fresh-prove implementation commit -> report-only direct child lineage, non-force dev publication, clean designated local working copy, and unchanged main."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect review of exact report/candidate evidence."
+    expected_signal: "Every AC is directly evidenced; no live Runtime lifecycle mutation occurred."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
