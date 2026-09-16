@@ -1,20 +1,20 @@
 protocol_version: 3
 
 task_id: TASK-0061
-task_revision: 2
-review_revision: 2
-state: REVISION_REQUIRED
+task_revision: 3
+review_revision: 3
+state: ACCEPTED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0061/report.yaml
-  commit: "f11bfe9bf5d4ce19824851b6c0f423e5d6b26d19"
-  report_revision: 2
+  commit: "a0899eb524327924e4adb2ed951ef4ba8da0bf45"
+  report_revision: 3
 
 reviewed_candidate:
-  planning_base: "25e8429f6aaea7d4755ab85ce669282081ea38c3"
+  planning_base: "d6688ac639c3dd5d347f25b1ad72704b766afc04"
   implementation_commit: null
-  report_commit: "f11bfe9bf5d4ce19824851b6c0f423e5d6b26d19"
+  report_commit: "a0899eb524327924e4adb2ed951ef4ba8da0bf45"
 
 independence:
   reviewer_role: ARCHITECT
@@ -27,61 +27,50 @@ contract_compliance:
   scope: PASS
   structure_policy: PASS
   git_authority: PASS
-  acceptance_criteria: BLOCKED
+  acceptance_criteria: PASS
 
 criterion_judgment:
   AC-1: PASS
-  AC-2: BLOCKED
-  AC-3: BLOCKED
+  AC-2: PASS
+  AC-3: PASS
   AC-4: PASS
   AC-5: PASS
 
-findings:
-  - id: FINDING-2
-    severity: BLOCKING
-    boundary: TEMPORARY_SIGNING_PROOF
-    classification: EXECUTION_ARTIFACT_CONSTRUCTION_DEFECT
-    description: >-
-      Revision 2 correctly fixed the /tmp versus /private/tmp guard and consumed exactly one
-      authorized replacement codesigning enumeration, deterministically selecting one Apple
-      Development identity. Execution then failed before codesign because shutil.copy2 attempted
-      to preserve macOS metadata/file flags from /usr/bin/true and received PermissionError while
-      constructing the task-owned temporary signing artifact. This is a temp-artifact construction
-      defect in the execution bundle, not a Keychain, certificate, repository-source, packaging,
-      or Runtime defect.
-    required_correction: >-
-      Revise the same bootstrap narrowly. Before any further Keychain enumeration, construct and
-      prove the complete temporary signing path using byte-only copy semantics that do not preserve
-      source metadata/file flags, and perform a separate ad-hoc codesign/strict-verify preflight on
-      a task-owned probe. Only after every non-identity-dependent signing-path operation passes may
-      one final replacement codesigning enumeration run. Immediately retain the selected literal
-      in a mode-0600 task-owned temp file, then verify that exact identity and persist only
-      AGENT_RUNTIME_CODESIGN_IDENTITY to the gitignored repo-local .env on success.
-
 acceptance_basis:
-  - "Fresh GitHub review resolved dev exactly at revision-2 blocker report commit f11bfe9bf5d4ce19824851b6c0f423e5d6b26d19 before this review publication."
-  - "Fresh lineage proves the revision-2 report is the single direct child of planning base 25e8429f6aaea7d4755ab85ce669282081ea38c3 and modifies only .agent/tasks/TASK-0061/report.yaml."
-  - "All corrected non-sensitive path guards passed before revision-2 discovery, including canonical /private/tmp descendant proof and .env ignore/untracked/duplicate-key guards."
-  - "Exactly one revision-2 replacement /usr/bin/security find-identity -v -p codesigning invocation occurred and deterministically selected exactly one Apple Development identity."
-  - "No temporary codesign, .env identity persistence, candidate freeze/package/install, production-source mutation, Keychain mutation, or live Runtime/tunnel/lifecycle mutation occurred."
-  - "The blocking failure is specifically shutil.copy2 metadata/file-flag preservation on the task-owned probe; it occurred before codesign and does not constitute evidence that the selected signing identity is unusable."
+  - "Fresh GitHub review resolved dev exactly at revision-3 report commit a0899eb524327924e4adb2ed951ef4ba8da0bf45 before review publication, while main remained c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "Fresh lineage proves revision-3 report a0899eb524327924e4adb2ed951ef4ba8da0bf45 is the single direct child of planning base d6688ac639c3dd5d347f25b1ad72704b766afc04 and changes only .agent/tasks/TASK-0061/report.yaml."
+  - "All non-sensitive temp/path/byte-copy/executable-permission/ad-hoc signing mechanics passed before the revision-3 Keychain enumeration."
+  - "Exactly one revision-3 /usr/bin/security find-identity -v -p codesigning invocation occurred and deterministically selected exactly one Apple Development identity."
+  - "The selected identity successfully signed the task-owned probe, strict codesign verification passed, and TeamIdentifier was non-null. Only SHA-256 digests were persisted in repository evidence."
+  - "AGENT_RUNTIME_CODESIGN_IDENTITY was persisted to the repository-local ignored and untracked .env with mode 0600, and key-only exact-equality proof matched the selected-identity digest caba6bba7c64a3efb58eafa09c300ca030ccb71a65cb2bc1a929cfc63a17e3e7."
+  - "No production source, real candidate, installed/live Runtime, tunnel, port 8080, runtime.env, desired state, ServiceManagement/launchd state, installed app bytes, System Settings, TCC, BTM, or Keychain contents were mutated."
+
+accepted_contract:
+  signing_identity_bootstrap_complete: true
+  local_identity_authority_location: "/Users/tienphat/Developer/agent-runtime/.env"
+  local_identity_key: "AGENT_RUNTIME_CODESIGN_IDENTITY"
+  selected_identity_sha256: "caba6bba7c64a3efb58eafa09c300ca030ccb71a65cb2bc1a929cfc63a17e3e7"
+  local_env_mode: "0600"
+  local_env_gitignored: true
+  local_env_untracked: true
+  exact_identity_codesign_verified: true
+  strict_codesign_verified: true
+  team_identifier_non_null: true
+  literal_identity_disclosure_forbidden: true
+  future_manual_identity_copy_paste_required: false
 
 successor_boundary:
-  revision_1_enumeration_consumed: true
-  revision_2_replacement_enumeration_consumed: true
-  selected_literal_durably_retained: false
-  temp_path_guard_fixed: true
-  temp_artifact_byte_copy_preflight_required: true
-  signing_identity_verified: false
-  local_env_identity_persisted: false
-  keychain_mutated: false
-  production_source_defect_proven: false
-  live_runtime_mutated: false
+  signing_identity_ready_for_authorized_freeze: true
+  further_identity_enumeration_required: false
+  real_candidate_freeze_complete: false
+  installed_runtime_updated: false
+  live_x6_activation_proven: false
+  promotion_or_release_authorized: false
 
 next_action: >-
-  Revise TASK-0061 narrowly to revision 3. Permit exactly one final replacement codesigning identity
-  enumeration under the operator's already-granted one-time bootstrap authorization because both
-  prior attempts lost the selected literal before any Keychain mutation or local identity persistence.
-  Require complete byte-copy and ad-hoc temp-signing preflight before that enumeration. Do not retry
-  revision 2 as written. Return for Architect review after exact-identity signing proof and local .env
-  persistence, or on a genuine identity-specific blocker.
+  The one-time signing identity bootstrap is complete. Future authorized candidate-freeze tasks may read
+  only AGENT_RUNTIME_CODESIGN_IDENTITY from the repository-local ignored .env, verify its SHA-256 digest
+  against this accepted bootstrap evidence, and use that exact local value without asking the operator
+  to paste the certificate name again. Do not enumerate Keychain identities unless a future explicit
+  operator authority supersedes this accepted local configuration. Real candidate freeze, installation,
+  live activation, cutover, promotion, and release still require separate authority.
