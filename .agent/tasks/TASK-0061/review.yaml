@@ -1,0 +1,78 @@
+protocol_version: 3
+
+task_id: TASK-0061
+task_revision: 1
+review_revision: 1
+state: REVISION_REQUIRED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0061/report.yaml
+  commit: "c5e9ceadb960a3edf161504b5f30d32b73ad4dc8"
+  report_revision: 1
+
+reviewed_candidate:
+  planning_base: "1def7e26c005a38858941d9b0c8ac43502fafc49"
+  implementation_commit: null
+  report_commit: "c5e9ceadb960a3edf161504b5f30d32b73ad4dc8"
+
+independence:
+  reviewer_role: ARCHITECT
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  scope: PASS
+  structure_policy: PASS
+  git_authority: PASS
+  acceptance_criteria: BLOCKED
+
+criterion_judgment:
+  AC-1: PARTIAL
+  AC-2: BLOCKED
+  AC-3: BLOCKED
+  AC-4: PASS
+  AC-5: PASS
+
+findings:
+  - id: FINDING-1
+    severity: BLOCKING
+    boundary: TEMPORARY_SIGNING_PROOF
+    classification: EXECUTION_GUARD_DEFECT
+    description: >-
+      The executor correctly ran the single authorized codesigning identity enumeration and reached
+      the unique Apple Development selection branch. Execution then rejected a valid task-owned temp
+      directory because the bundle guard compared the resolved macOS path /private/tmp/... against
+      literal /tmp. The selected literal existed only in process memory and was lost when that bundle
+      terminated. This is an execution-bundle path-canonicalization defect, not a Keychain, certificate,
+      repository-source, or Runtime defect.
+    required_correction: >-
+      Re-run the bounded bootstrap under revised authority with all temp-root/path guards resolved and
+      proven before identity enumeration. Authorize exactly one replacement codesigning enumeration
+      because revision 1 produced no durable identity and made no Keychain mutation. Use canonicalized
+      tempfile/realpath semantics, then verify the selected identity on one task-owned temporary
+      artifact and persist only AGENT_RUNTIME_CODESIGN_IDENTITY to repo-local .env if verification passes.
+
+acceptance_basis:
+  - "Fresh GitHub review resolved dev exactly at blocker report commit c5e9ceadb960a3edf161504b5f30d32b73ad4dc8 before review publication."
+  - "The blocker report is the single direct child of planning base 1def7e26c005a38858941d9b0c8ac43502fafc49 and contains only TASK-0061 report evidence."
+  - "Exactly one /usr/bin/security find-identity -v -p codesigning invocation occurred under revision 1; exactly one valid Apple Development identity was selected deterministically."
+  - "No temporary codesign, .env identity persistence, candidate freeze, production source mutation, Keychain mutation, or live Runtime/tunnel/lifecycle mutation occurred."
+  - "The failure arose before temporary signing from /tmp versus /private/tmp canonical-path handling, so repeating the entire revision-1 bundle is forbidden but a narrowly revised bootstrap can lawfully recover."
+
+successor_boundary:
+  revision_1_enumeration_consumed: true
+  selected_literal_durably_retained: false
+  signing_identity_verified: false
+  local_env_identity_persisted: false
+  keychain_mutated: false
+  production_source_defect_proven: false
+  live_runtime_mutated: false
+
+next_action: >-
+  Revise TASK-0061 narrowly. Permit exactly one replacement codesigning identity enumeration under
+  the operator's already-granted one-time bootstrap authorization, but require all temp path guards
+  and non-sensitive preflight to complete first. Do not retry revision 1. Return for Architect review
+  after temporary signing proof and local .env persistence, or on a genuine blocker.
