@@ -1,0 +1,162 @@
+protocol_version: 3
+
+task_id: TASK-0059
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_successor_task
+  predecessor_task: TASK-0058
+  predecessor_review: "a43e4e2d4515474692ba3f6b066a8a5fcabf7ac6"
+  predecessor_review_state: ACCEPTED
+  gap_id: EXACT_TRANSPORT_MULTI_CALLER_PROOF
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration_and_evidence
+
+classification: BOUNDED_VERIFICATION
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - verification
+    - simplicity
+  recommended:
+    - github-workflow
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing MCP conformance, tunnel identity, TASK-0057 x6 admission tests, and current start/tunnel contracts."
+  rationale: "This is an evidence task. Prefer extending existing tests or one focused tests/ file; do not add production architecture unless a later Architect task explicitly authorizes it."
+
+objective: >-
+  Close the remaining transport/concurrency evidence gap for the accepted x6 Runtime design. Prove, without touching the installed/live Runtime, that one shared Runtime/MCP stdio path can safely serve approximately 6-10 logical callers while the backend enforces a hard six-heavy-work ceiling, preserves request/result isolation, and keeps cheap read/observe/control work responsive. Bind the result to the exact locally selected tunnel-client binary/fingerprint. If the exact tunnel-client binary cannot be exercised locally without live control-plane credentials or shared-service mutation, prove that limitation precisely and stop with a bounded evidence gap rather than weakening isolation or touching production state.
+
+scope:
+  required_changes:
+    - "Fresh-resolve exact local and GitHub task/base identity before work."
+    - "Identify the exact tunnel-client executable selected by the current Agent Runtime start contract using read-only observation only. Record canonical absolute path, SHA-256, executable metadata, and version/build output when supported. Do not read, print, copy, or expose control-plane API keys or runtime.env secret values."
+    - "Add or extend deterministic isolated tests for one shared MCP stdio child serving 8 logical concurrent callers. The proof MUST demonstrate request/result correlation with no cross-talk or response swapping under concurrent mixed calls."
+    - "The isolated proof MUST include six simultaneously-held heavy workloads at the accepted TASK-0057 boundary and concurrent cheap operations that do not consume a new heavy lease. Prove heavy peak never exceeds six and the seventh heavy request fails before spawn."
+    - "Cheap operations under saturation MUST include at least capacity_observer and fs_read_batch. Include terminal_poll/control only where a synthetic live PTY fixture can exercise them deterministically without touching live Runtime state."
+    - "Prefer deterministic barriers/events over latency thresholds. Do not use flaky wall-clock performance assertions as the primary proof."
+    - "Attempt an exact tunnel-client shared-stdio executable-level proof only in an isolated temporary HOME/config/workspace with no live Runtime lifecycle mutation, no port 8080 reuse, and no real operator credential exposure. If the exact binary requires a live authenticated control-plane channel that cannot be safely simulated with existing supported seams, record the exact blocker and classify the remaining claim narrowly; do not invent a fake proof."
+    - "Check the accepted exact tunnel-client candidate for timeout/error behavior relevant to shared stdio: one logical request failure or timeout must not be misreported as proven transport survival unless the exact executable-level evidence demonstrates it. Existing upstream behavior may be cited only as context, never as proof for the installed candidate."
+    - "No production Runtime source fix is authorized in this task. If deterministic evidence reveals a Runtime or transport defect requiring production code changes, preserve the failing regression/evidence where appropriate, report the defect, and stop at ARCHITECT_REVIEW for a successor correction task."
+    - "Run focused new/affected tests, existing MCP/tunnel/TASK-0057 concurrency tests, ./verify, and git diff --check."
+    - "If repository test/evidence files are changed, publish exactly one test/evidence implementation commit followed by one report-only direct child to dev, non-force. If no repository file change is needed, publish only the canonical report according to existing protocol and state the no-implementation condition explicitly."
+  allowed_existing_files_or_components:
+    - "tests/test_mcp_client_conformance.py"
+    - "tests/test_mcp_contracts.py"
+    - "tests/test_tunnel_identity.py"
+    - "tests/test_task0057_admission.py"
+    - "one new focused tests/test_task0059_transport.py only if materially clearer than extending existing tests"
+    - "README.md only if an accepted transport claim is currently inaccurate and needs evidence-only wording correction"
+    - ".agent/tasks/TASK-0059/report.yaml"
+  expected_files_are_restrictive: true
+
+invariants:
+  - "Installed Runtime, tunnel, port 8080, runtime.env contents, desired-state markers, ServiceManagement/launchd state, live cutover transaction, installed app bytes, System Settings, TCC, and Keychain remain untouched."
+  - "No start/stop/restart/kill/signal/register/unregister/repair/reinstall/commit-cutover/rollback action is performed against the live Runtime or tunnel."
+  - "No real control-plane secret is printed, copied into fixtures, committed, or exposed in report evidence."
+  - "TASK-0057 hard heavy ceiling remains six; this task does not raise or lower it."
+  - "TASK-0058 candidate immutability behavior remains unchanged."
+  - "Exact tunnel-client evidence and synthetic/shared-MCP evidence are labeled separately; one must not be substituted for the other."
+  - "No queue, scheduler, worker pool, tenancy layer, watchdog, database, daemon, or new execution architecture is introduced."
+
+forbidden_changes:
+  - "Do not mutate production Runtime source in agent_runtime/ or macOS lifecycle/package source in macos/, start.sh, or install.sh."
+  - "Do not use the live tunnel/control-plane connection as a stress target."
+  - "Do not read or disclose runtime.env secret values or enumerate Keychain/signing identities."
+  - "Do not start another Agent Runtime instance bound to port 8080."
+  - "Do not restart or intentionally crash the installed Runtime/tunnel to prove recovery."
+  - "Do not delegate to another Codex, ChatGPT, Claude, Antigravity, or nested executor."
+  - "Do not modify main, tags, releases, architect-profile, agent-skills, agent-standards, or agent-documents."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: ARCHITECT_REVIEW
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0059/report.yaml"
+  unlisted_new_files:
+    allowed: true
+    max: 1
+    within:
+      - "tests/"
+    purpose: "One focused deterministic transport/concurrency proof file."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "The exact locally selected tunnel-client binary is fingerprinted without exposing credentials or mutating live state."
+    evidence_required: "Absolute path, SHA-256, executable metadata, and version/build output when supported, plus read-only proof tying selection to the current start contract."
+  - id: AC-2
+    requirement: "One shared isolated MCP stdio child correctly serves 8 concurrent logical callers with deterministic request/result isolation and no cross-talk."
+    evidence_required: "Deterministic mixed-call concurrency test with unique caller/request markers and exact result matching."
+  - id: AC-3
+    requirement: "Under six held heavy workloads, the seventh heavy request fails before spawn while capacity_observer and fs_read_batch remain callable through the same isolated MCP path."
+    evidence_required: "Barrier-based proof showing heavy peak <=6, seventh spawn count unchanged, and cheap calls complete before heavy barrier release."
+  - id: AC-4
+    requirement: "The exact tunnel-client executable-level shared-stdio/timeout claim is either directly proven in isolation or truthfully classified as a remaining external/credential-bound proof gap with exact reason."
+    evidence_required: "Exact executable-level transcript/evidence or precise blocker tied to the fingerprinted binary. Upstream master behavior alone is insufficient."
+  - id: AC-5
+    requirement: "No live Runtime/tunnel/lifecycle/config/credential mutation occurred and TASK-0057/TASK-0058 accepted behavior remains intact."
+    evidence_required: "Explicit preservation evidence, focused affected tests, ./verify, git diff --check, and changed-path review."
+  - id: AC-6
+    requirement: "Publication follows protocol and dev lineage is fresh-proven with main unchanged."
+    evidence_required: "Fresh remote refs and exact commit lineage at report publication."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Fingerprint exact local tunnel-client selection read-only; redact/avoid all secrets."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Run deterministic 8-logical-caller shared-MCP stdio concurrency proof with unique request/result markers."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Run deterministic six-heavy saturation + seventh fail-fast + cheap-call responsiveness proof through the isolated MCP path."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Attempt exact tunnel-client executable-level shared-stdio/timeout proof only through safe isolated seams; otherwise record exact blocker without touching live connection."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Run focused affected suites, ./verify, git diff --check, and fresh publication/lineage checks."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect review of exact report, test diff, binary fingerprint evidence, and preservation evidence."
+    expected_signal: "The x6 backend is proven under 8 logical shared-MCP callers, and the exact tunnel-client-specific claim is either directly proven or narrowly isolated as the only remaining external proof gap."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
