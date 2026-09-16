@@ -1,0 +1,107 @@
+protocol_version: 3
+
+task_id: TASK-0061
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: BLOCKED
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: dev
+  execution_surface: CHATGPT_LOCAL
+  native_execution_tool: "Remote Desktop Commander MCP"
+  exact_task_base: "1def7e26c005a38858941d9b0c8ac43502fafc49"
+  source_revision: "1def7e26c005a38858941d9b0c8ac43502fafc49"
+  source_tree: "c7c443ae7647dd2d05c3b402d07d1c44d614c452"
+  skill_library_revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+  branch_created: false
+  worktree_created: false
+  nested_executor_used: false
+
+bootstrap:
+  security_find_identity_command: "/usr/bin/security find-identity -v -p codesigning"
+  security_find_identity_invocation_count: 1
+  apple_development_identity_count: 1
+  deterministic_selection_reached: true
+  selected_literal_retained_after_failure: false
+  temporary_codesign_attempted: false
+  strict_verification_attempted: false
+  team_identifier_read: false
+  env_key_persisted: false
+  env_key_present_after_failure: false
+  env_gitignored: true
+  env_tracked: false
+
+verification:
+  exact_base_preflight: PASS
+  clean_tree_preflight: PASS
+  bounded_identity_enumeration: PASS
+  deterministic_unique_selection: PASS
+  temporary_codesign: NOT_RUN
+  strict_codesign_verify: NOT_RUN
+  team_identifier: NOT_RUN
+  env_persistence: NOT_RUN
+  env_key_equality: NOT_RUN
+  env_mode_0600: NOT_RUN
+  temp_cleanup: PASS
+
+preservation:
+  keychain_mutated: false
+  production_source_modified: false
+  real_candidate_freeze_invoked: false
+  package_pipeline_invoked: false
+  installed_runtime_lifecycle_mutated: false
+  secure_tunnel_mutated: false
+  port_8080_mutated: false
+  runtime_env_mutated: false
+  desired_state_mutated: false
+  service_management_or_launchd_mutated: false
+  live_transaction_mutated: false
+  installed_app_bytes_mutated: false
+  system_settings_tcc_btm_mutated: false
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PARTIAL
+    evidence: >-
+      Exactly one authorized codesigning identity enumeration ran. It reached the deterministic unique-selection branch with exactly one valid Apple Development identity, but the selected display name was not emitted or durably retained after the subsequent temporary-path guard failure.
+  - criterion_id: AC-2
+    status: BLOCKED
+    evidence: >-
+      Temporary signing, strict codesign verification, and TeamIdentifier extraction did not run because execution stopped before artifact construction.
+  - criterion_id: AC-3
+    status: BLOCKED
+    evidence: >-
+      AGENT_RUNTIME_CODESIGN_IDENTITY was not persisted. Repository-local .env remained gitignored and untracked, and no allowed key was added.
+  - criterion_id: AC-4
+    status: PROVEN
+    evidence: >-
+      No production source, real candidate, installed/live Runtime, tunnel, lifecycle, runtime.env, desired-state marker, ServiceManagement/launchd state, installed app bytes, System Settings, TCC, or BTM mutation was invoked.
+  - criterion_id: AC-5
+    status: PARTIAL
+    evidence: >-
+      Report-only publication is authorized. Canonical remote publication is established only by the post-push remote-ref proof and is not self-attested by this report commit.
+
+blocker:
+  classification: EXECUTION_EVIDENCE_LOST_AFTER_SINGLE_AUTHORIZED_ENUMERATION
+  boundary: TEMPORARY_SIGNING_PROOF
+  description: >-
+    The one authorized security find-identity enumeration completed and deterministically found exactly one Apple Development identity. Before temporary signing, the execution bundle rejected the task-owned temp directory because its guard compared the resolved macOS path /private/tmp against literal /tmp. The selected identity existed only in process memory and was not emitted or persisted before process termination. Re-running security find-identity would violate TASK-0061's exactly-once invariant, so execution cannot lawfully continue this bootstrap lineage.
+  recovery_constraint: >-
+    Do not run a second identity enumeration under TASK-0061 revision 1. Architect action is required before any renewed bootstrap attempt.
+
+local_hygiene:
+  task_temp_root: "/private/tmp/agent-runtime-task0061.ob4wt7f6"
+  cleanup: PASS
+  retained_temp_artifacts: false
+
+publication:
+  report_path: .agent/tasks/TASK-0061/report.yaml
+  report_only_commit_required: true
+  report_commit: null
+  push_mode: non_force_dev
+  force_push: false
+  promote_to_main: false
+  main_baseline: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  next_step: ARCHITECT_REVIEW
