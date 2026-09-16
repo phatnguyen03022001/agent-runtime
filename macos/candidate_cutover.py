@@ -48,6 +48,7 @@ def _run(argv: list[str]) -> subprocess.CompletedProcess[str]:
 
 SERVICE_STATES = {"enabled", "requires-approval", "not-registered", "not-found"}
 REGISTERED_SERVICE_STATES = {"enabled", "requires-approval"}
+ABSENT_SERVICE_STATES = {"not-registered", "not-found"}
 
 
 def _service_management(app: Path, operation: str) -> dict[str, str]:
@@ -374,22 +375,56 @@ def _restore_loaded_state(
             raise CutoverError(f"restored LaunchAgent loaded state mismatch: {service}")
 
 
-def _unregister_modern_generation(transaction_dir: Path, target_app: Path) -> None:
+def _validate_recorded_service_state(value: object) -> dict[str, str]:
+    if not isinstance(value, dict) or set(value) != {"main_app", "runtime_agent"}:
+        raise CutoverError("recorded ServiceManagement state is malformed")
+    if any(not isinstance(value[key], str) or value[key] not in SERVICE_STATES for key in value):
+        raise CutoverError("recorded ServiceManagement state is malformed")
+    return {"main_app": value["main_app"], "runtime_agent": value["runtime_agent"]}
+
+
+def _unregister_modern_generation(
+    transaction_dir: Path,
+    target_app: Path,
+    *,
+    registration_before: dict[str, str] | None = None,
+) -> None:
     if not target_app.exists() and not target_app.is_symlink():
         return
     if target_app.is_symlink() or not target_app.is_dir():
         raise CutoverError("installed app path is unsafe before modern rollback")
     provenance.validate_candidate(target_app, transaction_dir / "candidate-handoff.json")
+    if registration_before is None:
+        metadata = _load_metadata(transaction_dir)
+        recorded = metadata.get("modern_registration_before")
+        if recorded is None:
+            return
+        registration_before = _validate_recorded_service_state(recorded)
+    else:
+        registration_before = _validate_recorded_service_state(registration_before)
+
     state = _service_management(target_app, "status")
-    if "not-found" in state.values():
-        raise CutoverError("modern ServiceManagement state is not attributable during rollback")
-    if any(value in REGISTERED_SERVICE_STATES for value in state.values()):
-        state = _service_management(target_app, "unregister")
-    if state != {"main_app": "not-registered", "runtime_agent": "not-registered"}:
-        raise CutoverError("modern ServiceManagement unregister did not converge")
+    created = {
+        key: registration_before[key] in ABSENT_SERVICE_STATES and state[key] in REGISTERED_SERVICE_STATES
+        for key in ("main_app", "runtime_agent")
+    }
+    for key in ("main_app", "runtime_agent"):
+        if registration_before[key] in REGISTERED_SERVICE_STATES and state[key] not in REGISTERED_SERVICE_STATES:
+            raise CutoverError(f"pre-existing modern ServiceManagement state changed during rollback: {key}")
+
+    if created["runtime_agent"]:
+        _service_management(target_app, "unregister-runtime")
+    if created["main_app"]:
+        _service_management(target_app, "unregister-main")
+
     verified = _service_management(target_app, "status")
-    if verified != {"main_app": "not-registered", "runtime_agent": "not-registered"}:
-        raise CutoverError("modern ServiceManagement state remained active after unregister")
+    for key in ("main_app", "runtime_agent"):
+        before = registration_before[key]
+        if before in REGISTERED_SERVICE_STATES:
+            if verified[key] != before:
+                raise CutoverError(f"pre-existing modern ServiceManagement state was not preserved: {key}")
+        elif verified[key] not in ABSENT_SERVICE_STATES:
+            raise CutoverError(f"transaction-created modern ServiceManagement state remained active: {key}")
 
 
 def _restore_transaction(
@@ -407,7 +442,9 @@ def _restore_transaction(
     app_present = previous.get("app_present")
     if not isinstance(app_present, bool):
         raise CutoverError("rollback previous-app presence metadata is invalid")
-    _unregister_modern_generation(transaction_dir, target_app)
+    _unregister_modern_generation(
+        transaction_dir, target_app, registration_before=metadata.get("modern_registration_before")
+    )
     _inject(fail_stages, "rollback_restore_app")
 
     if target_app.is_symlink():
@@ -595,7 +632,12 @@ def cutover_candidate(
             runtime_was_loaded=bool(previous["runtime_loaded"]),
         )
         _inject(failures, "launchagent_registration")
+        registration_before = _service_management(target_app, "status")
+        metadata["modern_registration_before"] = registration_before
+        _atomic_json(transaction_dir / "metadata.json", metadata)
         modern_state = _service_management(target_app, "register")
+        metadata["modern_registration"] = modern_state
+        _atomic_json(transaction_dir / "metadata.json", metadata)
         if any(value not in REGISTERED_SERVICE_STATES for value in modern_state.values()):
             raise CutoverError("modern ServiceManagement registration did not converge")
         for service in (ui_service, runtime_service):
@@ -605,7 +647,6 @@ def cutover_candidate(
             raise CutoverError("legacy LaunchAgent files remained after modern registration")
         _inject(failures, "activation_refresh")
         provenance.validate_candidate(target_app, transaction_dir / "candidate-handoff.json")
-        metadata["modern_registration"] = modern_state
         metadata["status"] = "PENDING"
         _atomic_json(transaction_dir / "metadata.json", metadata)
         return {"status": "PENDING", "candidate": expected}

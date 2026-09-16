@@ -18,6 +18,8 @@ UI_LABEL = "com.picmao.agent-runtime-ui"
 RUNTIME_LABEL = "com.picmao.agent-runtime-runtime"
 SERVICE_PLIST = f"{RUNTIME_LABEL}.plist"
 KNOWN_SERVICE_STATES = {"enabled", "requires-approval", "not-registered", "not-found"}
+REGISTERED_SERVICE_STATES = {"enabled", "requires-approval"}
+ABSENT_SERVICE_STATES = {"not-registered", "not-found"}
 
 
 class UninstallError(RuntimeError):
@@ -134,10 +136,22 @@ def _bootstrap_legacy(
         raise UninstallError(f"restored legacy service did not converge for {label}")
 
 
-def _restore_modern_registration(app: Path) -> None:
-    restored = _service_snapshot(app, "register")
-    if any(value not in {"enabled", "requires-approval"} for value in restored.values()):
-        raise UninstallError("modern ServiceManagement compensation did not converge")
+def _restore_modern_registration(app: Path, before: dict[str, str]) -> None:
+    current = _service_snapshot(app, "status")
+    operations = {
+        "main_app": "register-main",
+        "runtime_agent": "register-runtime",
+    }
+    for key in ("main_app", "runtime_agent"):
+        if before[key] in REGISTERED_SERVICE_STATES and current[key] in ABSENT_SERVICE_STATES:
+            current = _service_snapshot(app, operations[key])
+    verified = _service_snapshot(app, "status")
+    for key in ("main_app", "runtime_agent"):
+        if before[key] in REGISTERED_SERVICE_STATES:
+            if verified[key] not in REGISTERED_SERVICE_STATES:
+                raise UninstallError(f"modern ServiceManagement compensation did not restore {key}")
+        elif verified[key] not in ABSENT_SERVICE_STATES:
+            raise UninstallError(f"modern ServiceManagement compensation invented registration for {key}")
 
 
 def _preflight_transient(
@@ -205,14 +219,16 @@ def uninstall_product(*, home: Path, launchctl: Path, uid: int | None = None) ->
     _preflight_transient(lifecycle_lock, directory=True, require_empty=True)
 
     modern_unregistered = False
+    modern_before: dict[str, str] | None = None
     if modern:
-        before = _service_snapshot(app, "status")
-        if "not-found" in before.values():
+        modern_before = _service_snapshot(app, "status")
+        if any(value in REGISTERED_SERVICE_STATES for value in modern_before.values()):
+            after = _service_snapshot(app, "unregister")
+            if any(value not in ABSENT_SERVICE_STATES for value in after.values()):
+                raise UninstallError("modern services did not converge to an absent state")
+            modern_unregistered = True
+        elif any(value not in ABSENT_SERVICE_STATES for value in modern_before.values()):
             raise UninstallError("modern ServiceManagement ownership is ambiguous")
-        after = _service_snapshot(app, "unregister")
-        if after != {"main_app": "not-registered", "runtime_agent": "not-registered"}:
-            raise UninstallError("modern services did not converge to not-registered")
-        modern_unregistered = True
 
     booted_out: list[tuple[Path, str, Path]] = []
     try:
@@ -227,9 +243,9 @@ def uninstall_product(*, home: Path, launchctl: Path, uid: int | None = None) ->
                 _bootstrap_legacy(launchctl, uid, path, label, expected_program)
             except UninstallError as compensation_error:
                 compensation_errors.append(str(compensation_error))
-        if modern_unregistered:
+        if modern_unregistered and modern_before is not None:
             try:
-                _restore_modern_registration(app)
+                _restore_modern_registration(app, modern_before)
             except UninstallError as compensation_error:
                 compensation_errors.append(str(compensation_error))
         if compensation_errors:

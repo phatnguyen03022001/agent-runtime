@@ -15,6 +15,54 @@ final class ServiceManagementTests: XCTestCase {
         XCTAssertEqual(ServiceRegistrationState.notFound.rawValue, "not-found")
     }
 
+    func testRegisterAttemptsNotFoundServicesInsteadOfRejectingLocally() throws {
+        let main = FakeService(status: .notFound)
+        let runtime = FakeService(status: .notRegistered)
+        let coordinator = ServiceRegistrationCoordinator(mainApp: main, runtimeAgent: runtime)
+
+        let snapshot = try coordinator.register()
+
+        XCTAssertEqual(snapshot, ServiceRegistrationSnapshot(mainApp: .enabled, runtimeAgent: .enabled))
+        XCTAssertEqual(main.registerCount, 1)
+        XCTAssertEqual(runtime.registerCount, 1)
+    }
+
+    func testRegisterAttemptsNotFoundRuntimeAgent() throws {
+        let main = FakeService(status: .enabled)
+        let runtime = FakeService(status: .notFound)
+        let coordinator = ServiceRegistrationCoordinator(mainApp: main, runtimeAgent: runtime)
+
+        let snapshot = try coordinator.register()
+
+        XCTAssertEqual(snapshot, ServiceRegistrationSnapshot(mainApp: .enabled, runtimeAgent: .enabled))
+        XCTAssertEqual(main.registerCount, 0)
+        XCTAssertEqual(runtime.registerCount, 1)
+    }
+
+    func testMainRegistrationFailureDoesNotDisturbPreexistingRuntimeOwnership() throws {
+        let main = FakeService(status: .notRegistered, registerError: FixtureError.failed)
+        let runtime = FakeService(status: .enabled)
+        let coordinator = ServiceRegistrationCoordinator(mainApp: main, runtimeAgent: runtime)
+
+        XCTAssertThrowsError(try coordinator.register())
+        XCTAssertEqual(main.registerCount, 1)
+        XCTAssertEqual(runtime.registerCount, 0)
+        XCTAssertEqual(runtime.unregisterCount, 0)
+        XCTAssertEqual(runtime.status, .enabled)
+    }
+
+    func testMainRegistrationFailureStillAttemptsRuntimeAndCompensatesOnlyNewRuntimeState() throws {
+        let main = FakeService(status: .notRegistered, registerError: FixtureError.failed)
+        let runtime = FakeService(status: .notRegistered)
+        let coordinator = ServiceRegistrationCoordinator(mainApp: main, runtimeAgent: runtime)
+
+        XCTAssertThrowsError(try coordinator.register())
+        XCTAssertEqual(main.registerCount, 1)
+        XCTAssertEqual(runtime.registerCount, 1)
+        XCTAssertEqual(runtime.unregisterCount, 1)
+        XCTAssertEqual(runtime.status, .notRegistered)
+    }
+
     func testRegisterIsIdempotentAndRollsBackOnlyRegistrationItCreated() throws {
         let main = FakeService(status: .notRegistered)
         let runtime = FakeService(status: .notRegistered, registerError: FixtureError.failed)
@@ -58,6 +106,18 @@ final class ServiceManagementTests: XCTestCase {
         XCTAssertEqual(runtime.status, .notRegistered)
         XCTAssertEqual(main.status, .enabled)
     }
+    func testUnregisterTreatsNotFoundAsAbsentWithoutCallingUnregister() throws {
+        let main = FakeService(status: .notFound)
+        let runtime = FakeService(status: .enabled)
+        let coordinator = ServiceRegistrationCoordinator(mainApp: main, runtimeAgent: runtime)
+
+        let snapshot = try coordinator.unregister()
+
+        XCTAssertEqual(snapshot, ServiceRegistrationSnapshot(mainApp: .notFound, runtimeAgent: .notRegistered))
+        XCTAssertEqual(main.unregisterCount, 0)
+        XCTAssertEqual(runtime.unregisterCount, 1)
+    }
+
     func testUnregisterLeavesBothServicesNotRegistered() throws {
         let main = FakeService(status: .enabled)
         let runtime = FakeService(status: .requiresApproval)

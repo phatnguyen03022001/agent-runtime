@@ -351,8 +351,16 @@ class CandidateCutoverTests(unittest.TestCase):
         def service_management(_app: Path, operation: str) -> dict[str, str]:
             if operation == "register":
                 modern_state.update(main_app="enabled", runtime_agent="enabled")
+            elif operation == "register-main":
+                modern_state["main_app"] = "enabled"
+            elif operation == "register-runtime":
+                modern_state["runtime_agent"] = "enabled"
             elif operation == "unregister":
                 modern_state.update(main_app="not-registered", runtime_agent="not-registered")
+            elif operation == "unregister-main":
+                modern_state["main_app"] = "not-registered"
+            elif operation == "unregister-runtime":
+                modern_state["runtime_agent"] = "not-registered"
             elif operation != "status":
                 raise AssertionError(operation)
             return dict(modern_state)

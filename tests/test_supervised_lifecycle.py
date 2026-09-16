@@ -41,8 +41,9 @@ class SupervisedLifecycleTests(unittest.TestCase):
         modern_main.write_text(
             """#!/bin/bash
 [[ "$1" == "--service-management" && "$2" == "status" ]] || exit 2
-state="${FAKE_SM_STATE:-enabled}"
-printf '{"main_app":"%s","runtime_agent":"%s"}\n' "$state" "$state"
+main_state="${FAKE_MAIN_SM_STATE:-${FAKE_SM_STATE:-enabled}}"
+runtime_state="${FAKE_RUNTIME_SM_STATE:-${FAKE_SM_STATE:-enabled}}"
+printf '{"main_app":"%s","runtime_agent":"%s"}\n' "$main_state" "$runtime_state"
 """
         )
         modern_main.chmod(0o700)
@@ -242,6 +243,37 @@ esac
         self.assertFalse((self.state / "duplicates.log").exists())
         self.assertEqual(len((self.state / "starts.log").read_text().splitlines()), 4)
 
+
+    def test_start_allows_main_app_not_found_when_runtime_agent_is_enabled(self) -> None:
+        result = self.run_start(
+            "start",
+            extra_env={"FAKE_MAIN_SM_STATE": "not-found", "FAKE_RUNTIME_SM_STATE": "enabled"},
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIsNotNone(self.current_pid())
+
+    def test_restart_allows_main_app_not_found_when_runtime_agent_is_enabled(self) -> None:
+        started = self.run_start("start")
+        self.assertEqual(started.returncode, 0, started.stderr)
+        first = self.current_pid()
+        self.assertIsNotNone(first)
+
+        restarted = self.run_start(
+            "restart",
+            extra_env={"FAKE_MAIN_SM_STATE": "not-found", "FAKE_RUNTIME_SM_STATE": "enabled"},
+        )
+        self.assertEqual(restarted.returncode, 0, restarted.stderr)
+        self.assertNotEqual(self.wait_for_pid_change(first), first)
+
+    def test_start_fails_closed_when_runtime_agent_is_not_registered_even_if_main_is_enabled(self) -> None:
+        result = self.run_start(
+            "start",
+            extra_env={"FAKE_MAIN_SM_STATE": "enabled", "FAKE_RUNTIME_SM_STATE": "not-registered"},
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Runtime registration", result.stderr)
+        self.assertFalse((self.home / "Library/Application Support/Agent Runtime/protected-runtime-running").exists())
+        self.assertFalse((self.state / "starts.log").exists())
 
     def test_start_fails_closed_when_background_activity_requires_approval(self) -> None:
         result = self.run_start("start", extra_env={"FAKE_SM_STATE": "requires-approval"})

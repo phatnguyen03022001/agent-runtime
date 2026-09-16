@@ -68,10 +68,18 @@ def make_modern_candidate(app: Path, service_state: Path) -> None:
         "value = json.loads(state.read_text())\n"
         "op = sys.argv[-1]\n"
         "if op == 'register':\n"
-        "  value = {'main_app': 'enabled', 'runtime_agent': 'requires-approval'}\n"
+        "  if value['main_app'] in ('not-found', 'not-registered'): value['main_app'] = 'enabled'\n"
+        "  if value['runtime_agent'] in ('not-found', 'not-registered'): value['runtime_agent'] = 'requires-approval'\n"
         "  state.write_text(json.dumps(value) + '\\n')\n"
         "elif op == 'unregister':\n"
-        "  value = {'main_app': 'not-registered', 'runtime_agent': 'not-registered'}\n"
+        "  if value['main_app'] in ('enabled', 'requires-approval'): value['main_app'] = 'not-registered'\n"
+        "  if value['runtime_agent'] in ('enabled', 'requires-approval'): value['runtime_agent'] = 'not-registered'\n"
+        "  state.write_text(json.dumps(value) + '\\n')\n"
+        "elif op == 'unregister-main':\n"
+        "  if value['main_app'] in ('enabled', 'requires-approval'): value['main_app'] = 'not-registered'\n"
+        "  state.write_text(json.dumps(value) + '\\n')\n"
+        "elif op == 'unregister-runtime':\n"
+        "  if value['runtime_agent'] in ('enabled', 'requires-approval'): value['runtime_agent'] = 'not-registered'\n"
         "  state.write_text(json.dumps(value) + '\\n')\n"
         "print(json.dumps(value, sort_keys=True))\n"
     )
@@ -107,7 +115,7 @@ class ModernCutoverTests(unittest.TestCase):
         ui_before, runtime_before = write_legacy_plists(ui, runtime, target, desired)
         candidate = root / "candidate" / "Agent Runtime.app"
         service_state = root / "services.json"
-        service_state.write_text(json.dumps({"main_app": "not-registered", "runtime_agent": "not-registered"}) + "\n")
+        service_state.write_text(json.dumps({"main_app": "not-found", "runtime_agent": "not-registered"}) + "\n")
         make_modern_candidate(candidate, service_state)
         handoff = root / "candidate.json"
         handoff.write_text("{}\n")
@@ -165,6 +173,84 @@ class ModernCutoverTests(unittest.TestCase):
                 {"main_app": "not-registered", "runtime_agent": "not-registered"},
             )
             self.assertTrue(fx["desired"].is_file())
+
+    def test_modern_rollback_accepts_never_registered_main_app(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            cutover, fx = self.fixture(raw)
+            fx["target"].parent.mkdir(parents=True, exist_ok=True)
+            if fx["target"].exists():
+                import shutil
+                shutil.rmtree(fx["target"])
+            import shutil
+            shutil.copytree(fx["candidate"], fx["target"])
+            fx["transaction"].mkdir(parents=True, exist_ok=True)
+            (fx["transaction"] / "candidate-handoff.json").write_text("{}\n")
+            fx["service_state"].write_text(
+                json.dumps({"main_app": "not-found", "runtime_agent": "not-registered"}) + "\n"
+            )
+            operations: list[str] = []
+            original = cutover._service_management
+
+            def observed(app: Path, operation: str):
+                operations.append(operation)
+                return original(app, operation)
+
+            with mock.patch.object(cutover.provenance, "validate_candidate", return_value=fx["expected"]), \
+                 mock.patch.object(cutover, "_service_management", side_effect=observed):
+                cutover._unregister_modern_generation(
+                    fx["transaction"], fx["target"],
+                    registration_before={"main_app": "not-found", "runtime_agent": "not-registered"},
+                )
+
+            self.assertEqual(operations, ["status", "status"])
+
+    def test_modern_rollback_unregisters_registered_runtime_when_main_was_never_registered(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            cutover, fx = self.fixture(raw)
+            fx["target"].parent.mkdir(parents=True, exist_ok=True)
+            if fx["target"].exists():
+                import shutil
+                shutil.rmtree(fx["target"])
+            import shutil
+            shutil.copytree(fx["candidate"], fx["target"])
+            fx["transaction"].mkdir(parents=True, exist_ok=True)
+            (fx["transaction"] / "candidate-handoff.json").write_text("{}\n")
+            state = {"main_app": "not-found", "runtime_agent": "enabled"}
+            operations: list[str] = []
+
+            def service_management(_app: Path, operation: str):
+                operations.append(operation)
+                if operation == "status":
+                    return dict(state)
+                if operation == "unregister-runtime":
+                    state["runtime_agent"] = "not-registered"
+                    return dict(state)
+                raise AssertionError(operation)
+
+            with mock.patch.object(cutover.provenance, "validate_candidate", return_value=fx["expected"]), \
+                 mock.patch.object(cutover, "_service_management", side_effect=service_management):
+                cutover._unregister_modern_generation(
+                    fx["transaction"], fx["target"],
+                    registration_before={"main_app": "not-found", "runtime_agent": "not-registered"},
+                )
+
+            self.assertEqual(operations, ["status", "unregister-runtime", "status"])
+            self.assertEqual(state, {"main_app": "not-found", "runtime_agent": "not-registered"})
+
+    def test_post_registration_rollback_preserves_preexisting_runtime_registration(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            cutover, fx = self.fixture(raw)
+            fx["service_state"].write_text(
+                json.dumps({"main_app": "not-found", "runtime_agent": "enabled"}) + "\n"
+            )
+            with self.assertRaisesRegex(cutover.CutoverError, "rollback restored"):
+                self.run_cutover(cutover, fx, fail_stages={"activation_refresh"})
+            self.assertEqual(
+                json.loads(fx["service_state"].read_text()),
+                {"main_app": "not-registered", "runtime_agent": "enabled"},
+            )
+            self.assertEqual(fx["ui"].read_bytes(), fx["ui_before"])
+            self.assertEqual(fx["runtime"].read_bytes(), fx["runtime_before"])
 
     def test_post_registration_failure_rolls_back_exact_legacy_generation(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

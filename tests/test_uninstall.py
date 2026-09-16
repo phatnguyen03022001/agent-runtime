@@ -42,11 +42,21 @@ def make_app(home: Path, state_file: Path, *, modern: bool) -> Path:
         "value = json.loads(state.read_text())\n"
         "if sys.argv[-1] == 'status': print(json.dumps(value, sort_keys=True))\n"
         "elif sys.argv[-1] == 'unregister':\n"
-        "  value = {'main_app': 'not-registered', 'runtime_agent': 'not-registered'}\n"
+        "  if value['main_app'] in ('enabled', 'requires-approval'): value['main_app'] = 'not-registered'\n"
+        "  if value['runtime_agent'] in ('enabled', 'requires-approval'): value['runtime_agent'] = 'not-registered'\n"
         "  state.write_text(json.dumps(value) + '\\n')\n"
         "  print(json.dumps(value, sort_keys=True))\n"
         "elif sys.argv[-1] == 'register':\n"
-        "  value = {'main_app': 'enabled', 'runtime_agent': 'enabled'}\n"
+        "  if value['main_app'] in ('not-found', 'not-registered'): value['main_app'] = 'enabled'\n"
+        "  if value['runtime_agent'] in ('not-found', 'not-registered'): value['runtime_agent'] = 'enabled'\n"
+        "  state.write_text(json.dumps(value) + '\\n')\n"
+        "  print(json.dumps(value, sort_keys=True))\n"
+        "elif sys.argv[-1] == 'register-main':\n"
+        "  if value['main_app'] in ('not-found', 'not-registered'): value['main_app'] = 'enabled'\n"
+        "  state.write_text(json.dumps(value) + '\\n')\n"
+        "  print(json.dumps(value, sort_keys=True))\n"
+        "elif sys.argv[-1] == 'register-runtime':\n"
+        "  if value['runtime_agent'] in ('not-found', 'not-registered'): value['runtime_agent'] = 'enabled'\n"
         "  state.write_text(json.dumps(value) + '\\n')\n"
         "  print(json.dumps(value, sort_keys=True))\n"
         "else: raise SystemExit(2)\n"
@@ -118,6 +128,35 @@ class UninstallTests(unittest.TestCase):
             self.assertEqual(
                 json.loads(service_state.read_text()),
                 {"main_app": "not-registered", "runtime_agent": "not-registered"},
+            )
+
+    def test_modern_uninstall_accepts_services_that_were_never_registered(self) -> None:
+        uninstall = load_module()
+        with tempfile.TemporaryDirectory() as raw:
+            root, home, service_state, app, _, env, _, _, _ = self.fixture(raw)
+            service_state.write_text(
+                json.dumps({"main_app": "not-found", "runtime_agent": "not-registered"}) + "\n"
+            )
+            before = service_state.read_bytes()
+            result = uninstall.uninstall_product(home=home, launchctl=make_absent_launchctl(root), uid=501)
+            self.assertFalse(app.exists())
+            self.assertTrue(env.is_file())
+            self.assertEqual(service_state.read_bytes(), before)
+            self.assertEqual(result["status"], "UNINSTALLED")
+
+    def test_modern_uninstall_unregisters_registered_runtime_when_main_was_never_registered(self) -> None:
+        uninstall = load_module()
+        with tempfile.TemporaryDirectory() as raw:
+            root, home, service_state, app, _, env, _, _, _ = self.fixture(raw)
+            service_state.write_text(
+                json.dumps({"main_app": "not-found", "runtime_agent": "enabled"}) + "\n"
+            )
+            uninstall.uninstall_product(home=home, launchctl=make_absent_launchctl(root), uid=501)
+            self.assertFalse(app.exists())
+            self.assertTrue(env.is_file())
+            self.assertEqual(
+                json.loads(service_state.read_text()),
+                {"main_app": "not-found", "runtime_agent": "not-registered"},
             )
 
     def test_pending_transaction_refuses_before_any_mutation(self) -> None:
@@ -276,6 +315,52 @@ class UninstallTests(unittest.TestCase):
             self.assertIn(f"bootout gui/501/{UI_LABEL}", log_text)
             self.assertIn(f"bootout gui/501/{RUNTIME_LABEL}", log_text)
             self.assertIn(f"bootstrap gui/501 {ui}", log_text)
+
+    def test_uninstall_compensation_restores_only_preexisting_runtime_registration(self) -> None:
+        uninstall = load_module()
+        with tempfile.TemporaryDirectory() as raw:
+            root, home, service_state, app, _, env, desired, audit, _ = self.fixture(raw, modern=True)
+            service_state.write_text(
+                json.dumps({"main_app": "not-found", "runtime_agent": "enabled"}) + "\n"
+            )
+            launch_dir = home / "Library" / "LaunchAgents"
+            ui = launch_dir / f"{UI_LABEL}.plist"
+            runtime = launch_dir / f"{RUNTIME_LABEL}.plist"
+            write_legacy_plist(ui, UI_LABEL, app)
+            write_legacy_plist(runtime, RUNTIME_LABEL, app)
+            launch_state = root / "legacy-state.txt"
+            launch_state.write_text(f"{UI_LABEL}\n{RUNTIME_LABEL}\n")
+            launchctl = root / "launchctl"
+            launchctl.write_text(
+                "#!/bin/sh\n"
+                f"state={str(launch_state)!r}\n"
+                "case \"$1\" in\n"
+                "  print)\n"
+                "    label=${2##*/}; grep -Fxq \"$label\" \"$state\" || exit 113\n"
+                f"    case \"$label\" in {UI_LABEL}) program='{app / 'Contents/MacOS/AgentRuntimeMenuBar'}' ;;\n"
+                f"      {RUNTIME_LABEL}) program='{app / 'Contents/Resources/runtime/start.sh'}' ;; esac\n"
+                "    printf 'program = %s\\n' \"$program\"; exit 0 ;;\n"
+                "  bootout)\n"
+                "    label=${2##*/}; "
+                f"if [ \"$label\" = {RUNTIME_LABEL!r} ]; then exit 7; fi\n"
+                "    grep -Fvx \"$label\" \"$state\" > \"$state.tmp\" || true; mv \"$state.tmp\" \"$state\"; exit 0 ;;\n"
+                "  bootstrap) label=$(basename \"$3\" .plist); grep -Fxq \"$label\" \"$state\" || echo \"$label\" >> \"$state\"; exit 0 ;;\n"
+                "esac\n"
+                "exit 2\n"
+            )
+            launchctl.chmod(0o755)
+
+            with self.assertRaisesRegex(uninstall.UninstallError, "could not unregister owned legacy service"):
+                uninstall.uninstall_product(home=home, launchctl=launchctl, uid=501)
+
+            self.assertTrue(app.is_dir())
+            self.assertTrue(env.is_file())
+            self.assertTrue(desired.is_file())
+            self.assertTrue(audit.is_file())
+            self.assertEqual(
+                json.loads(service_state.read_text()),
+                {"main_app": "not-found", "runtime_agent": "enabled"},
+            )
 
     def test_verified_unloaded_legacy_remnants_are_removed_without_global_cleanup(self) -> None:
         uninstall = load_module()

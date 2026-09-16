@@ -93,19 +93,40 @@ final class ServiceRegistrationCoordinator {
 
     @discardableResult
     func register() throws -> ServiceRegistrationSnapshot {
-        let mainCreated = try ensureRegistered(mainApp, name: "main app")
+        var mainCreated = false
+        var runtimeCreated = false
+        var firstError: Error?
+
         do {
-            _ = try ensureRegistered(runtimeAgent, name: "Runtime LaunchAgent")
+            mainCreated = try ensureRegistered(mainApp, name: "main app")
         } catch {
-            if mainCreated {
-                do {
-                    try mainApp.unregister()
-                } catch let rollbackError {
-                    throw ServiceRegistrationError.rollbackFailed(rollbackError.localizedDescription)
-                }
-            }
-            throw error
+            firstError = error
         }
+
+        do {
+            runtimeCreated = try ensureRegistered(runtimeAgent, name: "Runtime LaunchAgent")
+        } catch {
+            if firstError == nil {
+                firstError = error
+            }
+        }
+
+        if let firstError {
+            try compensateCreatedRegistrations(mainCreated: mainCreated, runtimeCreated: runtimeCreated)
+            throw firstError
+        }
+        return snapshot()
+    }
+
+    @discardableResult
+    func registerMainApp() throws -> ServiceRegistrationSnapshot {
+        _ = try ensureRegistered(mainApp, name: "main app")
+        return snapshot()
+    }
+
+    @discardableResult
+    func registerRuntimeAgent() throws -> ServiceRegistrationSnapshot {
+        _ = try ensureRegistered(runtimeAgent, name: "Runtime LaunchAgent")
         return snapshot()
     }
 
@@ -127,15 +148,46 @@ final class ServiceRegistrationCoordinator {
         return snapshot()
     }
 
+    @discardableResult
+    func unregisterMainApp() throws -> ServiceRegistrationSnapshot {
+        _ = try ensureUnregistered(mainApp, name: "main app")
+        return snapshot()
+    }
+
+    @discardableResult
+    func unregisterRuntimeAgent() throws -> ServiceRegistrationSnapshot {
+        _ = try ensureUnregistered(runtimeAgent, name: "Runtime LaunchAgent")
+        return snapshot()
+    }
+
+    private func compensateCreatedRegistrations(mainCreated: Bool, runtimeCreated: Bool) throws {
+        var failures: [String] = []
+        if runtimeCreated {
+            do {
+                try runtimeAgent.unregister()
+            } catch {
+                failures.append("Runtime LaunchAgent: \(error.localizedDescription)")
+            }
+        }
+        if mainCreated {
+            do {
+                try mainApp.unregister()
+            } catch {
+                failures.append("main app: \(error.localizedDescription)")
+            }
+        }
+        if !failures.isEmpty {
+            throw ServiceRegistrationError.rollbackFailed(failures.joined(separator: "; "))
+        }
+    }
+
     private func ensureRegistered(_ service: ServiceControlling, name: String) throws -> Bool {
         switch service.status {
         case .enabled, .requiresApproval:
             return false
-        case .notRegistered:
+        case .notRegistered, .notFound:
             try service.register()
             return true
-        case .notFound:
-            throw ServiceRegistrationError.serviceNotFound(name)
         }
     }
 
@@ -144,10 +196,8 @@ final class ServiceRegistrationCoordinator {
         case .enabled, .requiresApproval:
             try service.unregister()
             return true
-        case .notRegistered:
+        case .notRegistered, .notFound:
             return false
-        case .notFound:
-            throw ServiceRegistrationError.serviceNotFound(name)
         }
     }
 }
@@ -163,9 +213,13 @@ enum ServiceManagementCommand {
             switch arguments[2] {
             case "status": snapshot = coordinator.snapshot()
             case "register": snapshot = try coordinator.register()
+            case "register-main": snapshot = try coordinator.registerMainApp()
+            case "register-runtime": snapshot = try coordinator.registerRuntimeAgent()
             case "unregister": snapshot = try coordinator.unregister()
+            case "unregister-main": snapshot = try coordinator.unregisterMainApp()
+            case "unregister-runtime": snapshot = try coordinator.unregisterRuntimeAgent()
             default:
-                fputs("SERVICE MANAGEMENT ERROR: expected status, register, or unregister\n", stderr)
+                fputs("SERVICE MANAGEMENT ERROR: expected status/register/unregister operation\n", stderr)
                 return 2
             }
             let data = try snapshot.jsonData()

@@ -69,9 +69,6 @@ require_modern_registration() {
   if ! snapshot="$("$SERVICE_MANAGEMENT_EXECUTABLE" --service-management status 2>/dev/null)"; then
     fail "ServiceManagement registration status is unavailable."
   fi
-  if ! printf '%s\n' "$snapshot" | grep -Eq '"main_app"[[:space:]]*:[[:space:]]*"enabled"'; then
-    fail "ServiceManagement main-app registration is not enabled: $snapshot"
-  fi
   if ! printf '%s\n' "$snapshot" | grep -Eq '"runtime_agent"[[:space:]]*:[[:space:]]*"enabled"'; then
     fail "ServiceManagement Runtime registration is not enabled: $snapshot"
   fi
