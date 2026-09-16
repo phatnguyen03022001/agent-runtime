@@ -81,6 +81,124 @@ final class ServiceManagementTests: XCTestCase {
     }
 
 
+    func testRegisterRuntimeFromNotRegisteredReportsCreatedEnabledState() throws {
+        let main = FakeService(status: .enabled)
+        let runtime = FakeService(status: .notRegistered)
+        let coordinator = ServiceRegistrationCoordinator(mainApp: main, runtimeAgent: runtime)
+
+        let snapshot = try coordinator.registerRuntimeAgent()
+
+        XCTAssertEqual(snapshot, ServiceRegistrationSnapshot(mainApp: .enabled, runtimeAgent: .enabled))
+        XCTAssertEqual(runtime.registerCount, 1)
+    }
+
+    func testRegisterErrorReconcilesNotRegisteredToRequiresApproval() throws {
+        let main = FakeService(status: .enabled)
+        let runtime = FakeService(
+            status: .notRegistered,
+            registerError: FixtureError.failed,
+            statusAfterRegisterError: .requiresApproval
+        )
+        let coordinator = ServiceRegistrationCoordinator(mainApp: main, runtimeAgent: runtime)
+
+        let snapshot = try coordinator.registerRuntimeAgent()
+
+        XCTAssertEqual(snapshot, ServiceRegistrationSnapshot(mainApp: .enabled, runtimeAgent: .requiresApproval))
+        XCTAssertEqual(runtime.registerCount, 1)
+    }
+
+    func testRegisterErrorReconcilesNotFoundToRequiresApproval() throws {
+        let main = FakeService(status: .enabled)
+        let runtime = FakeService(
+            status: .notFound,
+            registerError: FixtureError.failed,
+            statusAfterRegisterError: .requiresApproval
+        )
+        let coordinator = ServiceRegistrationCoordinator(mainApp: main, runtimeAgent: runtime)
+
+        let snapshot = try coordinator.registerRuntimeAgent()
+
+        XCTAssertEqual(snapshot, ServiceRegistrationSnapshot(mainApp: .enabled, runtimeAgent: .requiresApproval))
+        XCTAssertEqual(runtime.registerCount, 1)
+    }
+
+    func testRegisterErrorStillPropagatesWhenStatusRemainsNotRegistered() throws {
+        let main = FakeService(status: .enabled)
+        let runtime = FakeService(status: .notRegistered, registerError: FixtureError.failed)
+        let coordinator = ServiceRegistrationCoordinator(mainApp: main, runtimeAgent: runtime)
+
+        XCTAssertThrowsError(try coordinator.registerRuntimeAgent()) { error in
+            guard case FixtureError.failed = error else {
+                return XCTFail("expected original FixtureError.failed, got \(error)")
+            }
+        }
+        XCTAssertEqual(runtime.registerCount, 1)
+        XCTAssertEqual(runtime.status, .notRegistered)
+    }
+
+    func testRegisterErrorStillPropagatesWhenStatusRemainsNotFound() throws {
+        let main = FakeService(status: .enabled)
+        let runtime = FakeService(status: .notFound, registerError: FixtureError.failed)
+        let coordinator = ServiceRegistrationCoordinator(mainApp: main, runtimeAgent: runtime)
+
+        XCTAssertThrowsError(try coordinator.registerRuntimeAgent()) { error in
+            guard case FixtureError.failed = error else {
+                return XCTFail("expected original FixtureError.failed, got \(error)")
+            }
+        }
+        XCTAssertEqual(runtime.registerCount, 1)
+        XCTAssertEqual(runtime.status, .notFound)
+    }
+
+    func testRegisterErrorStillPropagatesWhenPostErrorStatusIsEnabled() throws {
+        let main = FakeService(status: .enabled)
+        let runtime = FakeService(
+            status: .notRegistered,
+            registerError: FixtureError.failed,
+            statusAfterRegisterError: .enabled
+        )
+        let coordinator = ServiceRegistrationCoordinator(mainApp: main, runtimeAgent: runtime)
+
+        XCTAssertThrowsError(try coordinator.registerRuntimeAgent()) { error in
+            guard case FixtureError.failed = error else {
+                return XCTFail("expected original FixtureError.failed, got \(error)")
+            }
+        }
+        XCTAssertEqual(runtime.registerCount, 1)
+        XCTAssertEqual(runtime.status, .enabled)
+    }
+
+    func testExistingRequiresApprovalDoesNotRegisterAgain() throws {
+        let main = FakeService(status: .enabled)
+        let runtime = FakeService(status: .requiresApproval, registerError: FixtureError.failed)
+        let coordinator = ServiceRegistrationCoordinator(mainApp: main, runtimeAgent: runtime)
+
+        let snapshot = try coordinator.registerRuntimeAgent()
+
+        XCTAssertEqual(snapshot, ServiceRegistrationSnapshot(mainApp: .enabled, runtimeAgent: .requiresApproval))
+        XCTAssertEqual(runtime.registerCount, 0)
+    }
+
+    func testApprovalCreatedRuntimeRegistrationIsCompensatedWhenEarlierAggregateStepFailed() throws {
+        let main = FakeService(status: .notRegistered, registerError: FixtureError.failed)
+        let runtime = FakeService(
+            status: .notRegistered,
+            registerError: FixtureError.failed,
+            statusAfterRegisterError: .requiresApproval
+        )
+        let coordinator = ServiceRegistrationCoordinator(mainApp: main, runtimeAgent: runtime)
+
+        XCTAssertThrowsError(try coordinator.register()) { error in
+            guard case FixtureError.failed = error else {
+                return XCTFail("expected original FixtureError.failed, got \(error)")
+            }
+        }
+        XCTAssertEqual(main.registerCount, 1)
+        XCTAssertEqual(runtime.registerCount, 1)
+        XCTAssertEqual(runtime.unregisterCount, 1)
+        XCTAssertEqual(runtime.status, .notRegistered)
+    }
+
     func testUnregisterCompensatesRuntimeWhenMainUnregisterFails() throws {
         let main = FakeService(status: .enabled, unregisterError: FixtureError.failed)
         let runtime = FakeService(status: .enabled)
@@ -135,6 +253,7 @@ private enum FixtureError: Error { case failed }
 private final class FakeService: ServiceControlling {
     var status: ServiceRegistrationState
     var registerError: Error?
+    var statusAfterRegisterError: ServiceRegistrationState?
     var unregisterError: Error?
     var registerCount = 0
     var unregisterCount = 0
@@ -142,16 +261,21 @@ private final class FakeService: ServiceControlling {
     init(
         status: ServiceRegistrationState,
         registerError: Error? = nil,
+        statusAfterRegisterError: ServiceRegistrationState? = nil,
         unregisterError: Error? = nil
     ) {
         self.status = status
         self.registerError = registerError
+        self.statusAfterRegisterError = statusAfterRegisterError
         self.unregisterError = unregisterError
     }
 
     func register() throws {
         registerCount += 1
-        if let registerError { throw registerError }
+        if let registerError {
+            if let statusAfterRegisterError { status = statusAfterRegisterError }
+            throw registerError
+        }
         status = .enabled
     }
 

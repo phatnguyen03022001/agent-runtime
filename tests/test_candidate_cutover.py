@@ -721,6 +721,38 @@ class CandidateCutoverTests(unittest.TestCase):
             with self.assertRaisesRegex(cutover.CutoverError, "program identity"):
                 classify("enabled", fx["root"] / "foreign-helper", expected)
 
+    def test_register_runtime_requires_approval_reaches_pending_with_created_ledger(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            fx["modern_state"].update(main_app="not-registered", runtime_agent="not-registered")
+            service_operations: list[str] = []
+
+            def service_management(app: Path, operation: str) -> dict[str, str]:
+                service_operations.append(operation)
+                if operation == "register-main":
+                    fx["modern_state"]["main_app"] = "enabled"
+                elif operation == "register-runtime":
+                    fx["modern_state"]["runtime_agent"] = "requires-approval"
+                    fx["set_modern_runtime_loaded"](app, False)
+                elif operation == "unregister-main":
+                    fx["modern_state"]["main_app"] = "not-registered"
+                elif operation == "unregister-runtime":
+                    fx["modern_state"]["runtime_agent"] = "not-registered"
+                    fx["set_modern_runtime_loaded"](app, False)
+                elif operation != "status":
+                    raise AssertionError(operation)
+                return dict(fx["modern_state"])
+
+            cutover._service_management = service_management
+            result = self._cutover(cutover, fx)
+            self.assertEqual(result["status"], "PENDING")
+            metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
+            self.assertTrue(metadata["operations"]["runtime_registered"])
+            self.assertEqual(metadata["modern_ownership_after"]["runtime"]["registration_state"], "requires-approval")
+            self.assertEqual(metadata["modern_ownership_after"]["runtime"]["classification"], "awaiting-approval")
+            self.assertFalse(metadata["modern_ownership_after"]["runtime"]["loaded"])
+            self.assertIn("register-runtime", service_operations)
+
     def test_requires_approval_is_distinct_from_enabled_health(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             _, cutover, fx = self._fixture(raw)

@@ -186,8 +186,15 @@ final class ServiceRegistrationCoordinator {
         case .enabled, .requiresApproval:
             return false
         case .notRegistered, .notFound:
-            try service.register()
-            return true
+            do {
+                try service.register()
+                return true
+            } catch {
+                if service.status == .requiresApproval {
+                    return true
+                }
+                throw error
+            }
         }
     }
 
