@@ -1,8 +1,8 @@
 protocol_version: 3
 
 task_id: TASK-0058
-task_revision: 1
-report_revision: 1
+task_revision: 2
+report_revision: 2
 state: REPORTED
 result: NEEDS_REVIEW
 
@@ -11,8 +11,12 @@ execution:
   branch: dev
   execution_surface: CHATGPT_LOCAL
   native_execution_tool: "Remote Desktop Commander MCP"
-  exact_task_base: "2696de3754c3924d3176c93fd32949e7790b66af"
-  implementation_commit: "f006b5929dedb2d7f835dc57343fa2be6464bd51"
+  exact_task_base: "c67ba221ce39bad48ab7f9026976c987c4a2fa22"
+  predecessor_review: "63485c835cc3b17fa0a0adcf97ccbcb8080a085b"
+  predecessor_review_state: REVISION_REQUIRED
+  revision_1_implementation_commit: "f006b5929dedb2d7f835dc57343fa2be6464bd51"
+  revision_1_report_commit: "18ed25c14d193a8be09de1bdd8af40326ddf170e"
+  corrective_implementation_commit: "167bc5868ee97019100e5fb18ea7c40ec3366b05"
   report_only_commit: PENDING
   skill_library_revision: "1826d33bd1e467896c133109b37db8b0656b3276"
   branch_created: false
@@ -22,69 +26,97 @@ execution:
   force_push: false
   main_mutated: false
 
-implementation:
-  candidate_output_pattern: "build/candidates/<candidate_sha256>/"
-  candidate_app_name: "Agent Runtime.app"
-  candidate_handoff_name: "Agent Runtime.candidate.json"
-  staging_pattern: "build/.agent-runtime-package.XXXXXX/candidate/"
-  publication_boundary: "The sealed app/handoff pair is validated in run-owned staging and then published by one same-filesystem directory rename."
-  collision_policy: "An existing candidate SHA destination is rejected before publication; canonical code does not delete, truncate, merge into, or replace it."
-  package_result_contract:
-    - candidate_app
-    - candidate_handoff
-    - candidate_sha256
-  freeze_binding: "freeze_candidate.py accepts only the exact SHA-derived package result pair and revalidates the reported candidate SHA against candidate provenance."
-  downstream_cutover: "Default install consumes the explicit package-reported app/handoff pair; cutover state and lifecycle semantics are unchanged."
-  historical_scope: "Prospective preservation only. Historical TASK-0056 bytes overwritten by the legacy singleton path were not reconstructed or claimed."
+correction:
+  finding: FINDING-1
+  scope: "Atomic no-replace final candidate publication only; all accepted revision-1 behavior is preserved."
+  root_cause: >-
+    Revision 1 performed existence checks and then used os.rename for final same-filesystem
+    directory publication. On macOS, rename can replace an existing empty destination directory,
+    leaving a TOCTOU window in which a destination created after preflight could be replaced.
+  platform_contract:
+    api: "renamex_np"
+    flag: RENAME_EXCL
+    flag_value: "0x00000004"
+    availability: "macOS 10.12+"
+    collision_result: EEXIST
+    source: "macOS SDK sys/stdio.h and renamex_np(2) semantics"
+  implementation: >-
+    package_provenance.py now performs the final staging-directory publication through
+    renamex_np(source, destination, RENAME_EXCL), loaded from the process C library with ctypes.
+    EEXIST is mapped to the existing deterministic candidate-output collision error; every other
+    operating-system error fails closed. There is no fallback to replacement-capable os.rename.
+  preserved_revision_1_contracts:
+    - "Run-owned same-filesystem staging remains unchanged."
+    - "Candidate identity remains build/candidates/<candidate_sha256>/."
+    - "candidate_app, candidate_handoff, and candidate_sha256 output fields remain unchanged."
+    - "freeze_candidate exact path/SHA/source/tree/lock binding remains unchanged."
+    - "Candidate provenance, signing, validation, and downstream explicit-path cutover contracts remain unchanged."
+    - "Historical TASK-0056 bytes remain historical evidence only and were not reconstructed or claimed restored."
 
 verification:
+  root_cause_reproduction:
+    result: PASS
+    evidence: >-
+      A temp-only reproduction showed os.rename replacing an empty destination directory: the
+      destination inode changed and the staged payload replaced the raced destination.
   red_green:
     result: PASS
-    evidence:
-      - "RED: focused tests failed because freeze still validated legacy singleton paths, package output SHA mismatches were ignored, publish_candidate did not exist, and package_app.sh still deleted singleton outputs."
-      - "GREEN: the same focused contracts passed after staged SHA-addressed publication and exact-pair freeze validation were implemented."
-  focused_candidate_freeze:
-    command: ".venv/bin/python -m unittest tests.test_candidate_freeze -v"
+    red_evidence: >-
+      The new deterministic race regression failed before production changes because the atomic
+      no-replace publication primitive did not exist.
+    green_evidence: >-
+      The regression injects the final SHA destination after publish_candidate preflight but at
+      the final publication boundary, invokes the real no-replace primitive, observes collision,
+      and proves the raced destination inode, mode, mtime, and emptiness remain exact while the
+      staged app/handoff remain intact.
+  focused_race:
+    command: ".venv/bin/python -m unittest tests.test_package_provenance.PackageProvenanceTests.test_candidate_publication_race_is_atomic_no_replace -v"
     result: PASS
-    evidence: "8 tests passed, including two distinct synthetic freeze outputs remaining byte-preserved."
   affected_packaging_cutover:
-    command: ".venv/bin/python -m unittest tests.test_candidate_freeze tests.test_package_provenance tests.test_candidate_cutover tests.test_tunnel_identity -v"
+    command: ".venv/bin/python -m unittest tests.test_package_provenance tests.test_candidate_freeze tests.test_candidate_cutover tests.test_tunnel_identity -v"
     result: PASS
-    evidence: "112 tests passed."
+    evidence: "113 tests passed."
   repository_native:
     command: "./verify"
     result: PASS
-    evidence: "326 tests passed."
+    evidence: "327 tests passed in 91.904 seconds."
   diff_check:
     command: "git diff --check"
     result: PASS
-  shell_and_python_static:
-    command: "bash -n install.sh macos/package_app.sh; python -m py_compile affected Python files"
+  static_checks:
+    command: ".venv/bin/python -m py_compile macos/package_provenance.py tests/test_package_provenance.py; bash -n macos/package_app.sh install.sh"
     result: PASS
   swift_native:
     result: NOT_APPLICABLE
-    evidence: "No Swift/native source or native runtime behavior was changed; the task permits Swift/native tests only when materially affected."
+    evidence: "No Swift/native source was modified; task revision 2 requires native tests only when native source is materially changed."
   real_freeze_or_signing:
     performed: false
-    evidence: "Only deterministic temp/test-owned fixtures were used; no real candidate freeze or signing flow was invoked."
+    evidence: "Only deterministic temp/test-owned artifacts were used; no real candidate freeze/signing flow or signing-identity discovery was invoked."
 
 acceptance_criteria:
   AC-1: PROVEN
   AC-2: PROVEN
   AC-3: PROVEN
-  AC-4: PROVEN
-  AC-5: PROVEN
-  AC-6: PROVEN
-  AC-7: PROVEN_ON_PUBLICATION
+  AC-4: PROVEN_ON_PUBLICATION
 
 acceptance_evidence:
-  AC-1: "Canonical package/freeze paths are SHA-addressed under build/candidates and exact app/handoff/SHA values are surfaced to consumers; legacy singleton writes/deletes are covered by negative assertions."
-  AC-2: "Publication tests create distinct candidate outputs, preserve candidate A bytes after candidate B, and reject a reused candidate SHA while rechecking A app/handoff bytes unchanged."
-  AC-3: "Injected candidate validation failure occurs before candidates_root/final publication exists; package staging is outside the final candidate path and final publication is one directory rename after sealing/validation."
-  AC-4: "Freeze tests require exact SHA-derived reported paths, reject reported SHA/provenance mismatch, preserve revision/tree/requirements.lock checks, and keep two independent outputs distinct."
-  AC-5: "README and this report explicitly state the fix is prospective and does not reconstruct or restore overwritten TASK-0056 bytes."
-  AC-6: "Changed-path review contains only packaging/freeze/install compatibility, tests, and README; ./verify passed all 326 tests including TASK-0057 admission/x6 coverage. No live Runtime state was mutated."
-  AC-7: "Implementation f006b5929dedb2d7f835dc57343fa2be6464bd51 was non-force published to dev from the exact task base. This report is authored for the required report-only direct child; final lineage is proved after report publication."
+  AC-1: >-
+    Final publication uses macOS renamex_np with RENAME_EXCL. The deterministic TOCTOU regression
+    creates the destination after ordinary preflight and proves collision fails without replacing
+    or changing the raced directory metadata.
+  AC-2: >-
+    Revision-1 sequential collision, two-candidate coexistence, partial-publication safety,
+    SHA-addressed explicit paths, exact freeze/provenance binding, TASK-0056 prospective-only
+    truthfulness, and downstream compatibility all remain covered by the 113-test affected suite.
+  AC-3: >-
+    Repository-native verification passed all 327 tests, including TASK-0057 x6 admission tests.
+    Exact changed-path review contains only package_provenance.py and its focused regression test;
+    no live Runtime or lifecycle surface was mutated.
+  AC-4: >-
+    Corrective implementation 167bc5868ee97019100e5fb18ea7c40ec3366b05 is a direct child of
+    exact task base c67ba221ce39bad48ab7f9026976c987c4a2fa22 and was non-force published to dev.
+    This report is authored for the required report-only direct child; final remote lineage is
+    proved after report publication.
 
 preservation:
   pre_existing_build_candidates_deleted_moved_or_repurposed: false
@@ -105,12 +137,12 @@ preservation:
   task0057_x6_semantics_changed: false
 
 publication:
-  implementation_commit: "f006b5929dedb2d7f835dc57343fa2be6464bd51"
+  implementation_commit: "167bc5868ee97019100e5fb18ea7c40ec3366b05"
   implementation_pushed_to_dev: true
   report_path: .agent/tasks/TASK-0058/report.yaml
   report_only_commit_required: true
   report_only_commit: PENDING
-  required_lineage: "implementation commit followed by this report-only direct child"
+  required_lineage: "corrective implementation commit followed by this report-only direct child"
   push_mode: non_force_dev
   force_push: false
   promote_to_main: false
@@ -119,4 +151,7 @@ publication:
 
 executor_recommendation:
   authority: ADVISORY_ONLY
-  recommendation: "TASK-0058 source hardening is ready for Architect review. Future frozen candidates are independently addressable and collision-protected; no real freeze/signing or live Runtime lifecycle action was performed."
+  recommendation: >-
+    TASK-0058 revision 2 is ready for Architect review. FINDING-1 is corrected with macOS atomic
+    no-replace publication and a deterministic post-preflight race regression; no real freeze,
+    signing, or live Runtime lifecycle action was performed.
