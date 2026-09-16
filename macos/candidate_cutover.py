@@ -21,7 +21,8 @@ if str(MACOS_ROOT) not in sys.path:
     sys.path.insert(0, str(MACOS_ROOT))
 import package_provenance as provenance
 
-TRANSACTION_SCHEMA = 4
+TRANSACTION_SCHEMA = 5
+SCHEMA4_ROLLBACK_SCHEMA = 4
 SCHEMA2_RECOVERY_SCHEMA = 2
 LEGACY_RECOVERY_SCHEMA = 1
 TRANSACTION_PHASES = {"PRE_SWAP", "APP_SWAPPED"}
@@ -33,7 +34,8 @@ SPLIT_SERVICE_MANAGEMENT_REVISIONS = {
     "7077257837bdaf76ef1558fe78b900ec3af68788",
 }
 UI_LABEL = "com.picmao.agent-runtime-ui"
-RUNTIME_LABEL = "com.picmao.agent-runtime-runtime"
+LEGACY_RUNTIME_LABEL = "com.picmao.agent-runtime-runtime"
+MODERN_RUNTIME_LABEL = "com.picmao.agent-runtime-runtime-service"
 APP_BUNDLE_IDENTIFIER = "com.picmao.agent-runtime"
 RUNTIME_PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 SERVICE_ABSENCE_TIMEOUT_SECONDS = 5.0
@@ -210,7 +212,7 @@ def _validate_runtime_config_identity(value: object, state_dir: Path) -> dict[st
 
 def _runtime_bundle_identity(app: Path) -> dict[str, str]:
     helper = app / "Contents" / "MacOS" / "AgentRuntimeRuntimeService"
-    plist = app / "Contents" / "Library" / "LaunchAgents" / f"{RUNTIME_LABEL}.plist"
+    plist = app / "Contents" / "Library" / "LaunchAgents" / f"{MODERN_RUNTIME_LABEL}.plist"
     return {
         "helper_program": str(helper),
         "helper_sha256": _sha256_file(helper, "Runtime helper"),
@@ -359,7 +361,7 @@ def _runtime_bundle_present(app: Path) -> bool:
     return (
         (app / "Contents/MacOS/AgentRuntimeMenuBar").is_file()
         and (app / "Contents/MacOS/AgentRuntimeRuntimeService").is_file()
-        and (app / "Contents/Library/LaunchAgents" / f"{RUNTIME_LABEL}.plist").is_file()
+        and (app / "Contents/Library/LaunchAgents" / f"{MODERN_RUNTIME_LABEL}.plist").is_file()
     )
 
 
@@ -379,13 +381,13 @@ def _modern_ownership_snapshot_from_state(
         identity = {"helper_program": "", "helper_sha256": "", "plist_sha256": ""}
         expected_program = target_app / "Contents/MacOS/AgentRuntimeRuntimeService"
 
-    runtime_service = f"gui/{uid}/{RUNTIME_LABEL}"
-    loaded_program = _loaded_service_program(launchctl, runtime_service)
-    modern_loaded_program = loaded_program
-    legacy_loaded = False
-    if loaded_program is not None and runtime_legacy_program is not None and loaded_program == runtime_legacy_program:
-        legacy_loaded = True
-        modern_loaded_program = None
+    modern_runtime_service = f"gui/{uid}/{MODERN_RUNTIME_LABEL}"
+    legacy_runtime_service = f"gui/{uid}/{LEGACY_RUNTIME_LABEL}"
+    modern_loaded_program = _loaded_service_program(launchctl, modern_runtime_service)
+    legacy_loaded_program = _loaded_service_program(launchctl, legacy_runtime_service)
+    legacy_loaded = legacy_loaded_program is not None
+    if legacy_loaded_program is not None and runtime_legacy_program is not None and legacy_loaded_program != runtime_legacy_program:
+        raise CutoverError("legacy Runtime LaunchAgent loaded identity is ambiguous")
     classification = _classify_runtime_ownership(
         service_state["runtime_agent"], modern_loaded_program, expected_program
     )
@@ -556,7 +558,7 @@ def _copy_rollback_app(source: Path, destination: Path) -> None:
 def _validate_previous_launchagent(path: Path, label: str, target_app: Path) -> bool:
     if not path.exists() and not path.is_symlink():
         return False
-    kind = "Runtime" if label == RUNTIME_LABEL else "UI"
+    kind = "Runtime" if label == LEGACY_RUNTIME_LABEL else "UI"
     if path.is_symlink() or not path.is_file():
         raise CutoverError(f"previous {kind} LaunchAgent is not a regular non-symlink file")
     try:
@@ -652,12 +654,10 @@ def _remove_legacy_predecessor(
     runtime_present: bool,
     ui_was_loaded: bool,
     runtime_was_loaded: bool,
-    preserve_modern_runtime: bool = False,
-    modern_runtime_program: Path | None = None,
 ) -> None:
     domain = f"gui/{uid}"
     ui_service = f"{domain}/{UI_LABEL}"
-    runtime_service = f"{domain}/{RUNTIME_LABEL}"
+    runtime_service = f"{domain}/{LEGACY_RUNTIME_LABEL}"
 
     ui_loaded_now = _service_loaded(launchctl, ui_service)
     if ui_loaded_now != ui_was_loaded:
@@ -679,8 +679,7 @@ def _remove_legacy_predecessor(
         )
         _wait_for_service_absence(launchctl, runtime_service)
     elif runtime_program is not None:
-        if not preserve_modern_runtime or modern_runtime_program is None or runtime_program != modern_runtime_program:
-            raise CutoverError(f"Runtime LaunchAgent ownership changed during cutover: {runtime_service}")
+        raise CutoverError(f"legacy Runtime LaunchAgent ownership changed during cutover: {runtime_service}")
 
     for plist, present in ((ui_plist, ui_present), (runtime_plist, runtime_present)):
         if present:
@@ -693,10 +692,7 @@ def _remove_legacy_predecessor(
     if _service_loaded(launchctl, ui_service):
         raise CutoverError(f"legacy LaunchAgent remained registered after migration: {ui_service}")
     runtime_after = _loaded_service_program(launchctl, runtime_service)
-    if preserve_modern_runtime:
-        if modern_runtime_program is None or runtime_after != modern_runtime_program:
-            raise CutoverError("preserved modern Runtime LaunchAgent identity changed during migration")
-    elif runtime_after is not None:
+    if runtime_after is not None:
         raise CutoverError(f"legacy LaunchAgent remained registered after migration: {runtime_service}")
 
 
@@ -712,7 +708,7 @@ def _restore_loaded_state(
     domain = f"gui/{uid}"
     pairs = (
         (f"{domain}/{UI_LABEL}", ui_plist, ui_loaded),
-        (f"{domain}/{RUNTIME_LABEL}", runtime_plist, runtime_loaded),
+        (f"{domain}/{LEGACY_RUNTIME_LABEL}", runtime_plist, runtime_loaded),
     )
     for service, plist, expected_loaded in pairs:
         if _service_loaded(launchctl, service):
@@ -756,6 +752,19 @@ def _compensate_operation_ledger(target_app: Path, ledger_value: object) -> None
         raise CutoverError("transaction-created Runtime ServiceManagement state remained active")
     if ledger["main_registered"] and verified["main_app"] not in ABSENT_SERVICE_STATES:
         raise CutoverError("transaction-created main-app ServiceManagement state remained active")
+
+
+def _transaction_modern_runtime_label(metadata: dict[str, object], *, current_only: bool = False) -> str:
+    schema = metadata.get("schema")
+    if schema == TRANSACTION_SCHEMA:
+        if metadata.get("modern_runtime_label") != MODERN_RUNTIME_LABEL:
+            raise CutoverError("cutover transaction modern Runtime label identity is invalid")
+        return MODERN_RUNTIME_LABEL
+    if schema == SCHEMA4_ROLLBACK_SCHEMA and not current_only:
+        if "modern_runtime_label" in metadata:
+            raise CutoverError("historical schema-4 transaction unexpectedly records modern Runtime label identity")
+        return LEGACY_RUNTIME_LABEL
+    raise CutoverError("cutover transaction metadata schema is invalid")
 
 
 def _restore_preexisting_modern_state(
@@ -805,7 +814,7 @@ def _restore_preexisting_modern_state(
 
     if restore_runtime and runtime["classification"] == "healthy-registered":
         expected = target_app / "Contents/MacOS/AgentRuntimeRuntimeService"
-        _require_service_identity(launchctl, f"gui/{uid}/{RUNTIME_LABEL}", expected)
+        _require_service_identity(launchctl, f"gui/{uid}/{_transaction_modern_runtime_label(metadata)}", expected)
 
 
 def _unregister_modern_generation(
@@ -857,8 +866,7 @@ def _validate_approval_transaction_envelope(
     target_app: Path,
     metadata: dict[str, object],
 ) -> tuple[Path, Path, Path]:
-    if metadata.get("schema") != TRANSACTION_SCHEMA:
-        raise CutoverError("approval checkpoint transaction schema is unsupported")
+    _transaction_modern_runtime_label(metadata, current_only=True)
     if _validate_transaction_phase(metadata.get("phase")) != "APP_SWAPPED":
         raise CutoverError("approval checkpoint requires APP_SWAPPED phase")
     validated_candidate = provenance.validate_candidate(
@@ -909,7 +917,7 @@ def _validate_approval_transaction_envelope(
     expected_paths = {
         "target_app": str(target_app),
         "ui_plist": str(launch_dir / f"{UI_LABEL}.plist"),
-        "runtime_plist": str(launch_dir / f"{RUNTIME_LABEL}.plist"),
+        "runtime_plist": str(launch_dir / f"{LEGACY_RUNTIME_LABEL}.plist"),
         "desired_state": str(state_dir / "protected-runtime-running"),
     }
     if paths != expected_paths:
@@ -934,6 +942,8 @@ def _require_legacy_ownership_absent(
         raise CutoverError("legacy LaunchAgent ownership reappeared during approval checkpoint")
     if _service_loaded(launchctl, f"gui/{uid}/{UI_LABEL}"):
         raise CutoverError("legacy UI LaunchAgent ownership reappeared during approval checkpoint")
+    if _service_loaded(launchctl, f"gui/{uid}/{LEGACY_RUNTIME_LABEL}"):
+        raise CutoverError("legacy Runtime LaunchAgent ownership reappeared during approval checkpoint")
 
 
 def _restore_transaction(
@@ -944,7 +954,7 @@ def _restore_transaction(
     uid: int,
     fail_stages: set[str],
 ) -> None:
-    metadata = _load_metadata(transaction_dir)
+    metadata = _load_metadata(transaction_dir, allowed_schemas={SCHEMA4_ROLLBACK_SCHEMA, TRANSACTION_SCHEMA})
     phase = _validate_transaction_phase(metadata.get("phase"))
     previous = metadata.get("previous")
     if not isinstance(previous, dict):
@@ -997,10 +1007,11 @@ def _restore_transaction(
         if not isinstance(before, dict) or set(before) != {"main_app", "runtime"}:
             raise CutoverError("pre-swap ServiceManagement ownership metadata is malformed")
         runtime = _validate_runtime_ownership_record(before["runtime"])
-        runtime_service = f"gui/{uid}/{RUNTIME_LABEL}"
+        transaction_runtime_label = _transaction_modern_runtime_label(metadata)
+        runtime_service = f"gui/{uid}/{transaction_runtime_label}"
         observed_program = _loaded_service_program(launchctl, runtime_service)
-        if runtime["legacy_label_loaded"]:
-            expected_program = _launchagent_program(runtime_plist, RUNTIME_LABEL)
+        if metadata.get("schema") == SCHEMA4_ROLLBACK_SCHEMA and runtime["legacy_label_loaded"]:
+            expected_program = _launchagent_program(runtime_plist, LEGACY_RUNTIME_LABEL)
         elif runtime["loaded"]:
             expected_program = Path(str(runtime["loaded_program"]))
         else:
@@ -1050,7 +1061,7 @@ def _restore_transaction(
     if app_present:
         _restore_preexisting_modern_state(target_app, metadata, launchctl=launchctl, uid=uid)
     if runtime_was_loaded and desired_before:
-        runtime_service = f"gui/{uid}/{RUNTIME_LABEL}"
+        runtime_service = f"gui/{uid}/{LEGACY_RUNTIME_LABEL}"
         _require_launchctl_ok(
             _run([str(launchctl), "kickstart", "-k", runtime_service]),
             "could not refresh the restored Runtime LaunchAgent",
@@ -1066,7 +1077,7 @@ def rollback_transaction(
     fail_stages: set[str] | None = None,
 ) -> dict[str, object]:
     failures = set(fail_stages or ())
-    metadata = _load_metadata(transaction_dir)
+    metadata = _load_metadata(transaction_dir, allowed_schemas={SCHEMA4_ROLLBACK_SCHEMA, TRANSACTION_SCHEMA})
     try:
         _restore_transaction(
             transaction_dir,
@@ -1110,14 +1121,15 @@ def cutover_candidate(
 
     domain = f"gui/{uid}"
     ui_service = f"{domain}/{UI_LABEL}"
-    runtime_service = f"{domain}/{RUNTIME_LABEL}"
+    legacy_runtime_service = f"{domain}/{LEGACY_RUNTIME_LABEL}"
+    modern_runtime_service = f"{domain}/{MODERN_RUNTIME_LABEL}"
     desired_state = state_dir / "protected-runtime-running"
     if desired_state.is_symlink() or (desired_state.exists() and not desired_state.is_file()):
         raise CutoverError("desired Runtime state marker is unsafe")
     runtime_config = _runtime_config_identity(state_dir)
 
     ui_present = _validate_previous_launchagent(ui_plist, UI_LABEL, target_app)
-    runtime_present = _validate_previous_launchagent(runtime_plist, RUNTIME_LABEL, target_app)
+    runtime_present = _validate_previous_launchagent(runtime_plist, LEGACY_RUNTIME_LABEL, target_app)
     if (ui_present or runtime_present) and not target_app.exists():
         raise CutoverError("previous LaunchAgent state exists without an installed app rollback target")
 
@@ -1127,7 +1139,7 @@ def cutover_candidate(
         raise CutoverError("legacy UI LaunchAgent loaded identity is ambiguous")
     ui_loaded = ui_loaded_program is not None
 
-    runtime_legacy_program = _launchagent_program(runtime_plist, RUNTIME_LABEL) if runtime_present else None
+    runtime_legacy_program = _launchagent_program(runtime_plist, LEGACY_RUNTIME_LABEL) if runtime_present else None
     modern_before = _modern_ownership_snapshot(
         target_app, launchctl=launchctl, uid=uid, runtime_legacy_program=runtime_legacy_program
     )
@@ -1154,8 +1166,6 @@ def cutover_candidate(
         and not _aggregate_refresh_is_reversible(str(modern_before["main_app"]), runtime_before)
     ):
         raise CutoverError("predecessor aggregate ServiceManagement contract cannot be refreshed reversibly")
-    preserve_modern_runtime = runtime_before["classification"] == "healthy-registered" and not runtime_refresh
-
     previous: dict[str, object] = {
         "app_present": False,
         "app_closure": None,
@@ -1191,6 +1201,7 @@ def cutover_candidate(
 
         metadata: dict[str, object] = {
             "schema": TRANSACTION_SCHEMA,
+            "modern_runtime_label": MODERN_RUNTIME_LABEL,
             "status": "PREPARED",
             "phase": "PRE_SWAP",
             "candidate": expected,
@@ -1243,8 +1254,6 @@ def cutover_candidate(
             runtime_present=runtime_present,
             ui_was_loaded=ui_loaded,
             runtime_was_loaded=runtime_legacy_loaded,
-            preserve_modern_runtime=preserve_modern_runtime,
-            modern_runtime_program=target_app / "Contents/MacOS/AgentRuntimeRuntimeService",
         )
         _inject(failures, "launchagent_registration")
 
@@ -1337,6 +1346,8 @@ def cutover_candidate(
             raise CutoverError("Runtime approval state is inconsistent")
         if _service_loaded(launchctl, ui_service):
             raise CutoverError(f"legacy LaunchAgent remained loaded after modern registration: {ui_service}")
+        if _service_loaded(launchctl, legacy_runtime_service):
+            raise CutoverError(f"legacy LaunchAgent remained loaded after modern registration: {legacy_runtime_service}")
         if ui_plist.exists() or ui_plist.is_symlink() or runtime_plist.exists() or runtime_plist.is_symlink():
             raise CutoverError("legacy LaunchAgent files remained after modern registration")
 
@@ -1407,7 +1418,7 @@ def _validate_schema1_partial_recovery(
         raise CutoverError("schema-1 partial recovery paths are malformed")
     if Path(str(paths["target_app"])) != target_app:
         raise CutoverError("schema-1 partial recovery target does not match the installed app")
-    if Path(str(paths["ui_plist"])).name != f"{UI_LABEL}.plist" or Path(str(paths["runtime_plist"])).name != f"{RUNTIME_LABEL}.plist":
+    if Path(str(paths["ui_plist"])).name != f"{UI_LABEL}.plist" or Path(str(paths["runtime_plist"])).name != f"{LEGACY_RUNTIME_LABEL}.plist":
         raise CutoverError("schema-1 partial recovery predecessor paths are malformed")
     if Path(str(paths["desired_state"])).name != "protected-runtime-running":
         raise CutoverError("schema-1 partial recovery desired-state path is malformed")
@@ -1456,7 +1467,7 @@ def _recover_schema1_partial(
         raise CutoverError("schema-1 partial recovery candidate signing identity is malformed")
     _validate_recovery_snapshot_signature(backup, expected_closure, expected_team)
 
-    runtime_service = f"gui/{uid}/{RUNTIME_LABEL}"
+    runtime_service = f"gui/{uid}/{LEGACY_RUNTIME_LABEL}"
     if _service_loaded(launchctl, runtime_service):
         raise CutoverError("schema-1 partial recovery requires the modern Runtime job to be absent")
     current = _service_management(target_app, "status")
@@ -1561,7 +1572,7 @@ def _validate_schema2_preswap_partial_recovery(
         raise CutoverError("schema-2 no-live-mutation target path is invalid")
     if Path(str(paths["ui_plist"])).name != f"{UI_LABEL}.plist":
         raise CutoverError("schema-2 no-live-mutation UI path is invalid")
-    if Path(str(paths["runtime_plist"])).name != f"{RUNTIME_LABEL}.plist":
+    if Path(str(paths["runtime_plist"])).name != f"{LEGACY_RUNTIME_LABEL}.plist":
         raise CutoverError("schema-2 no-live-mutation Runtime path is invalid")
     if Path(str(paths["desired_state"])).name != "protected-runtime-running":
         raise CutoverError("schema-2 no-live-mutation desired-state path is invalid")
@@ -1617,7 +1628,7 @@ def _recover_schema2_preswap_partial(
 
     ui_service = f"gui/{uid}/{UI_LABEL}"
     _require_service_identity(launchctl, ui_service, _launchagent_program(ui_plist, UI_LABEL))
-    runtime_service = f"gui/{uid}/{RUNTIME_LABEL}"
+    runtime_service = f"gui/{uid}/{LEGACY_RUNTIME_LABEL}"
     if _loaded_service_program(launchctl, runtime_service) is not None:
         raise CutoverError("schema-2 no-live-mutation Runtime job is unexpectedly loaded")
 
@@ -1633,12 +1644,12 @@ def recover_partial_transaction(
     failures = set(fail_stages or ())
     metadata = _load_metadata(
         transaction_dir,
-        allowed_schemas={LEGACY_RECOVERY_SCHEMA, SCHEMA2_RECOVERY_SCHEMA, TRANSACTION_SCHEMA},
+        allowed_schemas={LEGACY_RECOVERY_SCHEMA, SCHEMA2_RECOVERY_SCHEMA, SCHEMA4_ROLLBACK_SCHEMA, TRANSACTION_SCHEMA},
     )
     if metadata.get("status") != "PARTIAL":
         raise CutoverError("partial recovery requires a PARTIAL cutover transaction")
     try:
-        if metadata["schema"] == TRANSACTION_SCHEMA:
+        if metadata["schema"] in {SCHEMA4_ROLLBACK_SCHEMA, TRANSACTION_SCHEMA}:
             _restore_transaction(
                 transaction_dir, target_app, launchctl=launchctl, uid=uid, fail_stages=failures
             )
@@ -1782,7 +1793,7 @@ def _defaults(home: Path) -> tuple[Path, Path, Path, Path, Path]:
     return (
         target_app,
         launch_dir / f"{UI_LABEL}.plist",
-        launch_dir / f"{RUNTIME_LABEL}.plist",
+        launch_dir / f"{LEGACY_RUNTIME_LABEL}.plist",
         state_dir,
         state_dir / "cutover-transaction",
     )

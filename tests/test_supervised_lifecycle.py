@@ -140,6 +140,7 @@ set -e
 state="$FAKE_STATE"
 repo="$FAKE_REPO"
 desired="$HOME/Library/Application Support/Agent Runtime/protected-runtime-running"
+service="gui/501/com.picmao.agent-runtime-runtime-service"
 spawn() {
   if [[ -f "$state/runtime.pid" ]] && kill -0 "$(cat "$state/runtime.pid")" 2>/dev/null; then return 0; fi
   HOME="$HOME" PATH="$PATH" FAKE_STATE="$state" FAKE_REPO="$repo" /usr/bin/python3 - "$repo" <<'PYDETACH'
@@ -159,10 +160,11 @@ PYDETACH
   return 3
 }
 case "$1" in
-  print) [[ -f "$state/loaded" ]] ;;
+  print) [[ "${2:-}" == "$service" && -f "$state/loaded" ]] ;;
   bootstrap) ( set -o noclobber; > "$state/loaded" ) 2>/dev/null || exit 5 ;;
-  kickstart) [[ -f "$state/loaded" ]] || exit 6; spawn ;;
+  kickstart) [[ "${2:-}" == "$service" && -f "$state/loaded" ]] || exit 6; spawn ;;
   kill)
+    [[ "${3:-}" == "$service" ]] || exit 8
     if [[ -n "${FAKE_KILL_NOT_RUNNING:-}" && ! -f "$state/runtime.pid" ]]; then exit 3; fi
     if [[ -f "$state/runtime.pid" ]]; then
       pid=$(cat "$state/runtime.pid")
@@ -222,7 +224,7 @@ esac
         self.assertEqual((self.state / "starts.log").read_text().splitlines(), ["start"])
         self.assertFalse((self.state / "duplicates.log").exists())
 
-        service = "gui/501/com.picmao.agent-runtime-runtime"
+        service = "gui/501/com.picmao.agent-runtime-runtime-service"
         subprocess.run([str(self.bin / "launchctl"), "kill", "SIGTERM", service], env=self.env, check=True)
         recovered = self.wait_for_pid_change(first)
         self.assertEqual(len((self.state / "starts.log").read_text().splitlines()), 2)

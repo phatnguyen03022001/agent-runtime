@@ -30,9 +30,9 @@ else
   ENV_FILE="${RUNTIME_ENV_FILE:-$ROOT/.env}"
 fi
 LEGACY_CONFIG="$HOME/.config/tunnel-client/agent-runtime.yaml"
-LABEL="com.picmao.agent-runtime-runtime"
+CURRENT_RUNTIME_LAUNCHD_LABEL="com.picmao.agent-runtime-runtime-service"
 DOMAIN="gui/$(id -u)"
-SERVICE="$DOMAIN/$LABEL"
+SERVICE="$DOMAIN/$CURRENT_RUNTIME_LAUNCHD_LABEL"
 STATE_DIR="$HOME/Library/Application Support/Agent Runtime"
 DESIRED_STATE="$STATE_DIR/protected-runtime-running"
 LOCK_DIR="$STATE_DIR/lifecycle.lock"

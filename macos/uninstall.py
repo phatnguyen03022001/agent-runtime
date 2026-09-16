@@ -15,8 +15,9 @@ from typing import Sequence
 
 OWNER = "com.picmao.agent-runtime"
 UI_LABEL = "com.picmao.agent-runtime-ui"
-RUNTIME_LABEL = "com.picmao.agent-runtime-runtime"
-SERVICE_PLIST = f"{RUNTIME_LABEL}.plist"
+LEGACY_RUNTIME_LABEL = "com.picmao.agent-runtime-runtime"
+MODERN_RUNTIME_LABEL = "com.picmao.agent-runtime-runtime-service"
+SERVICE_PLIST = f"{MODERN_RUNTIME_LABEL}.plist"
 KNOWN_SERVICE_STATES = {"enabled", "requires-approval", "not-registered", "not-found"}
 REGISTERED_SERVICE_STATES = {"enabled", "requires-approval"}
 ABSENT_SERVICE_STATES = {"not-registered", "not-found"}
@@ -56,7 +57,7 @@ def _validate_app(app: Path) -> bool:
     service = _load_plist(service_plist)
     helper = app / "Contents" / "MacOS" / "AgentRuntimeRuntimeService"
     if (
-        service.get("Label") != RUNTIME_LABEL
+        service.get("Label") != MODERN_RUNTIME_LABEL
         or service.get("BundleProgram") != "Contents/MacOS/AgentRuntimeRuntimeService"
         or helper.is_symlink()
         or not helper.is_file()
@@ -197,7 +198,7 @@ def uninstall_product(*, home: Path, launchctl: Path, uid: int | None = None) ->
 
     launch_dir = home / "Library" / "LaunchAgents"
     legacy: list[tuple[Path, str, Path, bool]] = []
-    for label in (UI_LABEL, RUNTIME_LABEL):
+    for label in (UI_LABEL, LEGACY_RUNTIME_LABEL):
         path = launch_dir / f"{label}.plist"
         if not path.exists() and not path.is_symlink():
             continue

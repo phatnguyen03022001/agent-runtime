@@ -32,7 +32,7 @@ chmod -R a-w "$SOURCE_ROOT"
 SOURCE_PACKAGE_ROOT="$SOURCE_ROOT/macos"
 APP_ICON="$SOURCE_PACKAGE_ROOT/AppBundle/Resources/AppIcon.png"
 NOTIFICATION_SOUND="$SOURCE_PACKAGE_ROOT/AppBundle/Resources/notification.mp3"
-SERVICE_PLIST="$SOURCE_PACKAGE_ROOT/AppBundle/Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist"
+SERVICE_PLIST="$SOURCE_PACKAGE_ROOT/AppBundle/Library/LaunchAgents/com.picmao.agent-runtime-runtime-service.plist"
 [[ -f "$SOURCE_ROOT/requirements.lock" ]] \
   || { echo "PACKAGE ERROR: requirements.lock is missing from exact HEAD" >&2; exit 2; }
 [[ -f "$SOURCE_ROOT/agent_runtime/server.py" ]] \
@@ -58,7 +58,7 @@ mkdir -p "$MACOS" "$RESOURCES" "$RUNTIME/agent_runtime" "$CONTENTS/Library/Launc
 cp "$SOURCE_PACKAGE_ROOT/AppBundle/Info.plist" "$CONTENTS/Info.plist"
 cp "$BINARY" "$MACOS/AgentRuntimeMenuBar"
 cp "$RUNTIME_SERVICE_BINARY" "$MACOS/AgentRuntimeRuntimeService"
-cp "$SERVICE_PLIST" "$CONTENTS/Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist"
+cp "$SERVICE_PLIST" "$CONTENTS/Library/LaunchAgents/com.picmao.agent-runtime-runtime-service.plist"
 cp "$APP_ICON" "$RESOURCES/AppIcon.png"
 cp "$NOTIFICATION_SOUND" "$RESOURCES/notification.mp3"
 /usr/bin/strip -S "$MACOS/AgentRuntimeMenuBar" "$MACOS/AgentRuntimeRuntimeService"

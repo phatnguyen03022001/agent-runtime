@@ -13,7 +13,8 @@ from tests.test_candidate_cutover import make_fake_launchctl
 ROOT = Path(__file__).resolve().parents[1]
 CUTOVER_PATH = ROOT / "macos" / "candidate_cutover.py"
 UI_LABEL = "com.picmao.agent-runtime-ui"
-RUNTIME_LABEL = "com.picmao.agent-runtime-runtime"
+LEGACY_RUNTIME_LABEL = "com.picmao.agent-runtime-runtime"
+MODERN_RUNTIME_LABEL = "com.picmao.agent-runtime-runtime-service"
 
 
 def load_cutover():
@@ -30,6 +31,7 @@ def make_legacy_app(app: Path) -> None:
     main.parent.mkdir(parents=True)
     start.parent.mkdir(parents=True)
     main.write_text("legacy-main\n")
+    main.chmod(0o755)
     start.write_text("#!/bin/sh\nexit 0\n")
     start.chmod(0o755)
 
@@ -41,7 +43,7 @@ def write_legacy_plists(ui: Path, runtime: Path, app: Path, desired: Path) -> tu
         "RunAtLoad": True,
     })
     runtime_payload = plistlib.dumps({
-        "Label": RUNTIME_LABEL,
+        "Label": LEGACY_RUNTIME_LABEL,
         "ProgramArguments": [str(app / "Contents/Resources/runtime/start.sh"), "--serve", "/usr/bin/true"],
         "EnvironmentVariables": {"HOME": str(app.parents[2]), "PATH": "/usr/bin:/bin"},
         "KeepAlive": {"PathState": {str(desired): True}},
@@ -56,7 +58,7 @@ def make_modern_candidate(app: Path, service_state: Path) -> None:
     main = app / "Contents" / "MacOS" / "AgentRuntimeMenuBar"
     helper = app / "Contents" / "MacOS" / "AgentRuntimeRuntimeService"
     runtime = app / "Contents" / "Resources" / "runtime"
-    service_plist = app / "Contents" / "Library" / "LaunchAgents" / f"{RUNTIME_LABEL}.plist"
+    service_plist = app / "Contents" / "Library" / "LaunchAgents" / f"{MODERN_RUNTIME_LABEL}.plist"
     main.parent.mkdir(parents=True)
     runtime.mkdir(parents=True)
     service_plist.parent.mkdir(parents=True)
@@ -99,7 +101,7 @@ def make_modern_candidate(app: Path, service_state: Path) -> None:
         "CFBundleExecutable": "AgentRuntimeMenuBar",
     }))
     service_plist.write_bytes(plistlib.dumps({
-        "Label": RUNTIME_LABEL,
+        "Label": MODERN_RUNTIME_LABEL,
         "BundleProgram": "Contents/MacOS/AgentRuntimeRuntimeService",
     }))
 
@@ -119,7 +121,7 @@ class ModernCutoverTests(unittest.TestCase):
         runtime_env.write_text("CONTROL_PLANE_API_KEY=test-only\n")
         runtime_env.chmod(0o600)
         ui = home / "Library" / "LaunchAgents" / f"{UI_LABEL}.plist"
-        runtime = home / "Library" / "LaunchAgents" / f"{RUNTIME_LABEL}.plist"
+        runtime = home / "Library" / "LaunchAgents" / f"{LEGACY_RUNTIME_LABEL}.plist"
         make_legacy_app(target)
         ui_before, runtime_before = write_legacy_plists(ui, runtime, target, desired)
         candidate = root / "candidate" / "Agent Runtime.app"
@@ -132,7 +134,7 @@ class ModernCutoverTests(unittest.TestCase):
         programs_path = root / "launchctl-programs.json"
         programs = json.loads(programs_path.read_text())
         programs[f"gui/501/{UI_LABEL}"] = str(target / "Contents/MacOS/AgentRuntimeMenuBar")
-        programs[f"gui/501/{RUNTIME_LABEL}"] = str(target / "Contents/Resources/runtime/start.sh")
+        programs[f"gui/501/{LEGACY_RUNTIME_LABEL}"] = str(target / "Contents/Resources/runtime/start.sh")
         programs_path.write_text(json.dumps(programs, sort_keys=True) + "\n")
         expected = {
             "schema": 2,

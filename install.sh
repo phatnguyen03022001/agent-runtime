@@ -205,7 +205,7 @@ check = subprocess.run(
 if check.returncode != 0:
     detail = check.stdout + "\n" + check.stderr
     occupied_listener = "health_listener" in detail and "address already in use" in detail
-    service = "gui/" + str(os.getuid()) + "/com.picmao.agent-runtime-runtime"
+    service = "gui/" + str(os.getuid()) + "/com.picmao.agent-runtime-runtime-service"
     service_loaded = subprocess.run(
         [launchctl, "print", service],
         stdout=subprocess.DEVNULL,

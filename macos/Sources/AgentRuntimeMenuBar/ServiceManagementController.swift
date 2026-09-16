@@ -81,7 +81,7 @@ final class SMAppServiceControl: ServiceControlling {
 }
 
 final class ServiceRegistrationCoordinator {
-    static let runtimePlistName = "com.picmao.agent-runtime-runtime.plist"
+    static let runtimePlistName = "com.picmao.agent-runtime-runtime-service.plist"
 
     private let mainApp: ServiceControlling
     private let runtimeAgent: ServiceControlling

@@ -20,10 +20,10 @@ def load_provenance():
 
 class Task0055MacOSContractTests(unittest.TestCase):
     def test_service_metadata_uses_bundle_program_for_signed_runtime_helper(self) -> None:
-        plist_path = ROOT / "macos" / "AppBundle" / "Library" / "LaunchAgents" / "com.picmao.agent-runtime-runtime.plist"
+        plist_path = ROOT / "macos" / "AppBundle" / "Library" / "LaunchAgents" / "com.picmao.agent-runtime-runtime-service.plist"
         self.assertTrue(plist_path.is_file())
         payload = plistlib.loads(plist_path.read_bytes())
-        self.assertEqual(payload["Label"], "com.picmao.agent-runtime-runtime")
+        self.assertEqual(payload["Label"], "com.picmao.agent-runtime-runtime-service")
         self.assertEqual(payload["BundleProgram"], "Contents/MacOS/AgentRuntimeRuntimeService")
         self.assertNotIn("Program", payload)
         self.assertNotIn("AssociatedBundleIdentifiers", payload)

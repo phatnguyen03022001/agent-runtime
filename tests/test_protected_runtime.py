@@ -7,7 +7,14 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from agent_runtime.protection import ProtectedRuntimeDenied, ProtectedRuntimeGuard
+from agent_runtime.protection import (
+    CURRENT_RUNTIME_LAUNCHD_LABEL,
+    LEGACY_RUNTIME_LAUNCHD_LABEL,
+    MODERN_RUNTIME_LAUNCHD_LABEL,
+    PROTECTED_RUNTIME_LAUNCHD_LABELS,
+    ProtectedRuntimeDenied,
+    ProtectedRuntimeGuard,
+)
 
 
 class ProtectedRuntimeGuardTests(unittest.TestCase):
@@ -20,7 +27,7 @@ class ProtectedRuntimeGuardTests(unittest.TestCase):
         )
         return ProtectedRuntimeGuard(
             runtime_root=runtime_root,
-            launchd_label="com.picmao.agent-runtime-runtime",
+            launchd_label=MODERN_RUNTIME_LAUNCHD_LABEL,
             audit_file=root / "protected-attempts.json",
             process_rows_provider=lambda: [
                 (410, 1, command),
@@ -97,6 +104,26 @@ class ProtectedRuntimeGuardTests(unittest.TestCase):
             self.assert_denied(guard, ["./start.sh", "restart"], "canonical_service_lifecycle")
             self.assert_denied(guard, ["./start.sh", "start"], "canonical_service_lifecycle")
             guard.check(["launchctl", "print", "gui/501/com.apple.WindowServer"], tool_name="terminal_exec")
+
+    def test_runtime_launchd_protection_covers_modern_and_legacy_only(self) -> None:
+        self.assertEqual(CURRENT_RUNTIME_LAUNCHD_LABEL, MODERN_RUNTIME_LAUNCHD_LABEL)
+        self.assertEqual(
+            PROTECTED_RUNTIME_LAUNCHD_LABELS,
+            frozenset({LEGACY_RUNTIME_LAUNCHD_LABEL, MODERN_RUNTIME_LAUNCHD_LABEL}),
+        )
+        with tempfile.TemporaryDirectory() as raw:
+            guard = self.make_guard(Path(raw))
+            for label in (MODERN_RUNTIME_LAUNCHD_LABEL, LEGACY_RUNTIME_LAUNCHD_LABEL):
+                with self.subTest(label=label):
+                    self.assert_denied(
+                        guard,
+                        ["launchctl", "kickstart", f"gui/501/{label}"],
+                        "canonical_service_lifecycle",
+                    )
+            guard.check(
+                ["launchctl", "kickstart", "gui/501/com.picmao.unrelated-runtime"],
+                tool_name="terminal_exec",
+            )
 
     def test_read_only_lsof_on_protected_port_is_allowed(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

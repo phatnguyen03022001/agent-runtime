@@ -272,7 +272,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
 
     def test_start_uses_launchd_singleton_and_canonical_env_backed_serve_mode(self) -> None:
         text = (ROOT / "start.sh").read_text()
-        self.assertIn("com.picmao.agent-runtime-runtime", text)
+        self.assertIn("com.picmao.agent-runtime-runtime-service", text)
         self.assertIn("protected-runtime-running", text)
         self.assertIn("lifecycle.lock", text)
         self.assertIn("--serve", text)
@@ -292,11 +292,11 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         cutover = (ROOT / "macos" / "candidate_cutover.py").read_text()
         service_path = (
             ROOT / "macos" / "AppBundle" / "Library" / "LaunchAgents"
-            / "com.picmao.agent-runtime-runtime.plist"
+            / "com.picmao.agent-runtime-runtime-service.plist"
         )
         service = plistlib.loads(service_path.read_bytes())
         self.assertIn("--install-prebuilt", installer)
-        self.assertEqual(service["Label"], "com.picmao.agent-runtime-runtime")
+        self.assertEqual(service["Label"], "com.picmao.agent-runtime-runtime-service")
         self.assertEqual(service["BundleProgram"], "Contents/MacOS/AgentRuntimeRuntimeService")
         self.assertEqual(service["KeepAlive"], {"SuccessfulExit": False})
         self.assertIs(service["RunAtLoad"], False)
@@ -384,7 +384,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         ).read_text()
         service = plistlib.loads((
             ROOT / "macos" / "AppBundle" / "Library" / "LaunchAgents"
-            / "com.picmao.agent-runtime-runtime.plist"
+            / "com.picmao.agent-runtime-runtime-service.plist"
         ).read_bytes())
         self.assertIn("SMAppServiceControl(service: .mainApp)", controller)
         self.assertIn("SMAppServiceControl(service: .agent(plistName: runtimePlistName))", controller)

@@ -10,7 +10,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-LAUNCHD_LABEL = "com.picmao.agent-runtime-runtime"
+LEGACY_RUNTIME_LAUNCHD_LABEL = "com.picmao.agent-runtime-runtime"
+MODERN_RUNTIME_LAUNCHD_LABEL = "com.picmao.agent-runtime-runtime-service"
+CURRENT_RUNTIME_LAUNCHD_LABEL = MODERN_RUNTIME_LAUNCHD_LABEL
+PROTECTED_RUNTIME_LAUNCHD_LABELS = frozenset({LEGACY_RUNTIME_LAUNCHD_LABEL, MODERN_RUNTIME_LAUNCHD_LABEL})
 PROTECTED_PORT = 8080
 MAX_AUDIT_EVENTS = 20
 
@@ -55,12 +58,14 @@ class ProtectedRuntimeGuard:
         self,
         *,
         runtime_root: Path | None = None,
-        launchd_label: str = LAUNCHD_LABEL,
+        launchd_label: str = CURRENT_RUNTIME_LAUNCHD_LABEL,
+        protected_launchd_labels: frozenset[str] = PROTECTED_RUNTIME_LAUNCHD_LABELS,
         audit_file: Path | None = None,
         process_rows_provider: Callable[[], list[tuple[int, int, str]]] = _read_process_rows,
     ) -> None:
         self.runtime_root = (runtime_root or _default_runtime_root()).expanduser().resolve()
         self.launchd_label = launchd_label
+        self.protected_launchd_labels = frozenset(protected_launchd_labels)
         self.audit_file = (audit_file or _default_audit_file()).expanduser()
         self._process_rows_provider = process_rows_provider
 
@@ -120,7 +125,11 @@ class ProtectedRuntimeGuard:
             if any(name in canonical_names for name in names):
                 return "canonical_process_match"
 
-        if executable == "launchctl" and self.launchd_label in " ".join(argv[1:]):
+        if executable == "launchctl" and any(
+            token == label or token.endswith("/" + label)
+            for token in argv[1:]
+            for label in self.protected_launchd_labels
+        ):
             verb = next((token for token in argv[1:] if not token.startswith("-")), "")
             if verb in {"bootout", "stop", "kill", "kickstart", "bootstrap", "start", "enable", "disable"}:
                 return "canonical_service_lifecycle"

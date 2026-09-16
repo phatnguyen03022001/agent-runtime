@@ -3,6 +3,13 @@ import XCTest
 import ServiceManagement
 
 final class ServiceManagementTests: XCTestCase {
+    func testRuntimePlistNameUsesDistinctModernServiceIdentity() {
+        XCTAssertEqual(
+            ServiceRegistrationCoordinator.runtimePlistName,
+            "com.picmao.agent-runtime-runtime-service.plist"
+        )
+    }
+
     func testStatusSnapshotPreservesAllFourOperatorVisibleStates() throws {
         let main = FakeService(status: .enabled)
         let runtime = FakeService(status: .requiresApproval)

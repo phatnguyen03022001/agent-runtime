@@ -10,7 +10,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 UNINSTALL_PATH = ROOT / "macos" / "uninstall.py"
 UI_LABEL = "com.picmao.agent-runtime-ui"
-RUNTIME_LABEL = "com.picmao.agent-runtime-runtime"
+LEGACY_RUNTIME_LABEL = "com.picmao.agent-runtime-runtime"
+MODERN_RUNTIME_LABEL = "com.picmao.agent-runtime-runtime-service"
 
 
 def load_module():
@@ -64,10 +65,10 @@ def make_app(home: Path, state_file: Path, *, modern: bool) -> Path:
     main.chmod(0o755)
     (runtime / "start.sh").write_text("#!/bin/sh\nexit 0\n")
     if modern:
-        plist = app / "Contents" / "Library" / "LaunchAgents" / f"{RUNTIME_LABEL}.plist"
+        plist = app / "Contents" / "Library" / "LaunchAgents" / f"{MODERN_RUNTIME_LABEL}.plist"
         plist.parent.mkdir(parents=True)
         plist.write_bytes(plistlib.dumps({
-            "Label": RUNTIME_LABEL,
+            "Label": MODERN_RUNTIME_LABEL,
             "BundleProgram": "Contents/MacOS/AgentRuntimeRuntimeService",
         }))
         helper = macos / "AgentRuntimeRuntimeService"
@@ -177,9 +178,9 @@ class UninstallTests(unittest.TestCase):
             _, home, _, app, state_dir, env, _, _, _ = self.fixture(raw, modern=False)
             launch_dir = home / "Library" / "LaunchAgents"
             ui = launch_dir / f"{UI_LABEL}.plist"
-            runtime = launch_dir / f"{RUNTIME_LABEL}.plist"
+            runtime = launch_dir / f"{LEGACY_RUNTIME_LABEL}.plist"
             write_legacy_plist(ui, UI_LABEL, app)
-            write_legacy_plist(runtime, RUNTIME_LABEL, app)
+            write_legacy_plist(runtime, LEGACY_RUNTIME_LABEL, app)
             payload = plistlib.loads(runtime.read_bytes())
             payload["ProgramArguments"][0] = "/tmp/foreign/start.sh"
             runtime.write_bytes(plistlib.dumps(payload))
@@ -232,9 +233,9 @@ class UninstallTests(unittest.TestCase):
             root, home, _, app, _, env, desired, audit, _ = self.fixture(raw, modern=False)
             launch_dir = home / "Library" / "LaunchAgents"
             ui = launch_dir / f"{UI_LABEL}.plist"
-            runtime = launch_dir / f"{RUNTIME_LABEL}.plist"
+            runtime = launch_dir / f"{LEGACY_RUNTIME_LABEL}.plist"
             write_legacy_plist(ui, UI_LABEL, app)
-            write_legacy_plist(runtime, RUNTIME_LABEL, app)
+            write_legacy_plist(runtime, LEGACY_RUNTIME_LABEL, app)
             log = root / "launchctl.log"
             launchctl = root / "launchctl"
             launchctl.write_text(
@@ -243,9 +244,9 @@ class UninstallTests(unittest.TestCase):
                 "case \"$1\" in\n"
                 "  print)\n"
                 f"    case \"$2\" in *{UI_LABEL}) program='{app / 'Contents/MacOS/AgentRuntimeMenuBar'}' ;;\n"
-                f"      *{RUNTIME_LABEL}) program='{app / 'Contents/Resources/runtime/start.sh'}' ;; esac\n"
+                f"      *{LEGACY_RUNTIME_LABEL}) program='{app / 'Contents/Resources/runtime/start.sh'}' ;; esac\n"
                 "    printf 'program = %s\\n' \"$program\"; exit 0 ;;\n"
-                f"  bootout) case \"$2\" in *{RUNTIME_LABEL}) echo 'simulated failure' >&2; exit 7 ;; *) exit 0 ;; esac ;;\n"
+                f"  bootout) case \"$2\" in *{LEGACY_RUNTIME_LABEL}) echo 'simulated failure' >&2; exit 7 ;; *) exit 0 ;; esac ;;\n"
                 "esac\n"
                 "exit 2\n"
             )
@@ -261,7 +262,7 @@ class UninstallTests(unittest.TestCase):
             self.assertTrue(audit.is_file())
             self.assertTrue(env.is_file())
             self.assertIn(f"bootout gui/501/{UI_LABEL}", log.read_text())
-            self.assertIn(f"bootout gui/501/{RUNTIME_LABEL}", log.read_text())
+            self.assertIn(f"bootout gui/501/{LEGACY_RUNTIME_LABEL}", log.read_text())
 
     def test_modern_and_legacy_uninstall_compensates_if_second_legacy_bootout_fails(self) -> None:
         uninstall = load_module()
@@ -269,11 +270,11 @@ class UninstallTests(unittest.TestCase):
             root, home, service_state, app, _, env, desired, audit, _ = self.fixture(raw, modern=True)
             launch_dir = home / "Library" / "LaunchAgents"
             ui = launch_dir / f"{UI_LABEL}.plist"
-            runtime = launch_dir / f"{RUNTIME_LABEL}.plist"
+            runtime = launch_dir / f"{LEGACY_RUNTIME_LABEL}.plist"
             write_legacy_plist(ui, UI_LABEL, app)
-            write_legacy_plist(runtime, RUNTIME_LABEL, app)
+            write_legacy_plist(runtime, LEGACY_RUNTIME_LABEL, app)
             launch_state = root / "legacy-state.txt"
-            launch_state.write_text(f"{UI_LABEL}\n{RUNTIME_LABEL}\n")
+            launch_state.write_text(f"{UI_LABEL}\n{LEGACY_RUNTIME_LABEL}\n")
             log = root / "launchctl.log"
             launchctl = root / "launchctl"
             launchctl.write_text(
@@ -284,11 +285,11 @@ class UninstallTests(unittest.TestCase):
                 "  print)\n"
                 "    label=${2##*/}; grep -Fxq \"$label\" \"$state\" || exit 113\n"
                 f"    case \"$label\" in {UI_LABEL}) program='{app / 'Contents/MacOS/AgentRuntimeMenuBar'}' ;;\n"
-                f"      {RUNTIME_LABEL}) program='{app / 'Contents/Resources/runtime/start.sh'}' ;; esac\n"
+                f"      {LEGACY_RUNTIME_LABEL}) program='{app / 'Contents/Resources/runtime/start.sh'}' ;; esac\n"
                 "    printf 'program = %s\\n' \"$program\"; exit 0 ;;\n"
                 "  bootout)\n"
                 "    label=${2##*/}; "
-                f"if [ \"$label\" = {RUNTIME_LABEL!r} ]; then echo 'simulated failure' >&2; exit 7; fi\n"
+                f"if [ \"$label\" = {LEGACY_RUNTIME_LABEL!r} ]; then echo 'simulated failure' >&2; exit 7; fi\n"
                 "    grep -Fvx \"$label\" \"$state\" > \"$state.tmp\" || true; mv \"$state.tmp\" \"$state\"; exit 0 ;;\n"
                 "  bootstrap) label=$(basename \"$3\" .plist); grep -Fxq \"$label\" \"$state\" || echo \"$label\" >> \"$state\"; exit 0 ;;\n"
                 "esac\n"
@@ -310,10 +311,10 @@ class UninstallTests(unittest.TestCase):
                 {"main_app": "enabled", "runtime_agent": "enabled"},
             )
             self.assertIn(UI_LABEL, launch_state.read_text().splitlines())
-            self.assertIn(RUNTIME_LABEL, launch_state.read_text().splitlines())
+            self.assertIn(LEGACY_RUNTIME_LABEL, launch_state.read_text().splitlines())
             log_text = log.read_text()
             self.assertIn(f"bootout gui/501/{UI_LABEL}", log_text)
-            self.assertIn(f"bootout gui/501/{RUNTIME_LABEL}", log_text)
+            self.assertIn(f"bootout gui/501/{LEGACY_RUNTIME_LABEL}", log_text)
             self.assertIn(f"bootstrap gui/501 {ui}", log_text)
 
     def test_uninstall_compensation_restores_only_preexisting_runtime_registration(self) -> None:
@@ -325,11 +326,11 @@ class UninstallTests(unittest.TestCase):
             )
             launch_dir = home / "Library" / "LaunchAgents"
             ui = launch_dir / f"{UI_LABEL}.plist"
-            runtime = launch_dir / f"{RUNTIME_LABEL}.plist"
+            runtime = launch_dir / f"{LEGACY_RUNTIME_LABEL}.plist"
             write_legacy_plist(ui, UI_LABEL, app)
-            write_legacy_plist(runtime, RUNTIME_LABEL, app)
+            write_legacy_plist(runtime, LEGACY_RUNTIME_LABEL, app)
             launch_state = root / "legacy-state.txt"
-            launch_state.write_text(f"{UI_LABEL}\n{RUNTIME_LABEL}\n")
+            launch_state.write_text(f"{UI_LABEL}\n{LEGACY_RUNTIME_LABEL}\n")
             launchctl = root / "launchctl"
             launchctl.write_text(
                 "#!/bin/sh\n"
@@ -338,11 +339,11 @@ class UninstallTests(unittest.TestCase):
                 "  print)\n"
                 "    label=${2##*/}; grep -Fxq \"$label\" \"$state\" || exit 113\n"
                 f"    case \"$label\" in {UI_LABEL}) program='{app / 'Contents/MacOS/AgentRuntimeMenuBar'}' ;;\n"
-                f"      {RUNTIME_LABEL}) program='{app / 'Contents/Resources/runtime/start.sh'}' ;; esac\n"
+                f"      {LEGACY_RUNTIME_LABEL}) program='{app / 'Contents/Resources/runtime/start.sh'}' ;; esac\n"
                 "    printf 'program = %s\\n' \"$program\"; exit 0 ;;\n"
                 "  bootout)\n"
                 "    label=${2##*/}; "
-                f"if [ \"$label\" = {RUNTIME_LABEL!r} ]; then exit 7; fi\n"
+                f"if [ \"$label\" = {LEGACY_RUNTIME_LABEL!r} ]; then exit 7; fi\n"
                 "    grep -Fvx \"$label\" \"$state\" > \"$state.tmp\" || true; mv \"$state.tmp\" \"$state\"; exit 0 ;;\n"
                 "  bootstrap) label=$(basename \"$3\" .plist); grep -Fxq \"$label\" \"$state\" || echo \"$label\" >> \"$state\"; exit 0 ;;\n"
                 "esac\n"
@@ -368,9 +369,9 @@ class UninstallTests(unittest.TestCase):
             _, home, _, app, _, env, _, _, _ = self.fixture(raw, modern=False)
             launch_dir = home / "Library" / "LaunchAgents"
             ui = launch_dir / f"{UI_LABEL}.plist"
-            runtime = launch_dir / f"{RUNTIME_LABEL}.plist"
+            runtime = launch_dir / f"{LEGACY_RUNTIME_LABEL}.plist"
             write_legacy_plist(ui, UI_LABEL, app)
-            write_legacy_plist(runtime, RUNTIME_LABEL, app)
+            write_legacy_plist(runtime, LEGACY_RUNTIME_LABEL, app)
             result = uninstall.uninstall_product(home=home, launchctl=make_absent_launchctl(Path(raw)), uid=501)
             self.assertFalse(app.exists())
             self.assertFalse(ui.exists())

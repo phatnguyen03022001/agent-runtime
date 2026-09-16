@@ -257,7 +257,7 @@ PROGRAMS="$FAKE_BIN/launchd-programs"
 MACOS_DIR="${0%/*}"
 CONTENTS_DIR="${MACOS_DIR%/*}"
 APP_ROOT="${CONTENTS_DIR%/*}"
-SERVICE="gui/$(id -u)/com.picmao.agent-runtime-runtime"
+SERVICE="gui/$(id -u)/com.picmao.agent-runtime-runtime-service"
 PROGRAM="$APP_ROOT/Contents/MacOS/AgentRuntimeRuntimeService"
 mkdir -p "$(dirname "$STATE")"
 update_state() {
@@ -276,7 +276,7 @@ load_runtime() {
   touch "$LOADED"
   mkdir -p "$PROGRAMS"
   grep -Fxq -- "$SERVICE" "$LOADED" || printf '%s\n' "$SERVICE" >> "$LOADED"
-  printf '%s\n' "$PROGRAM" > "$PROGRAMS/com.picmao.agent-runtime-runtime"
+  printf '%s\n' "$PROGRAM" > "$PROGRAMS/com.picmao.agent-runtime-runtime-service"
 }
 unload_runtime() {
   if [[ -f "$LOADED" ]]; then
@@ -284,7 +284,7 @@ unload_runtime() {
     grep -Fvx -- "$SERVICE" "$LOADED" > "$tmp" || true
     mv "$tmp" "$LOADED"
   fi
-  rm -f "$PROGRAMS/com.picmao.agent-runtime-runtime"
+  rm -f "$PROGRAMS/com.picmao.agent-runtime-runtime-service"
 }
 case "${2-}" in
   status)
@@ -309,11 +309,11 @@ esac
 EOF
 printf '#!/usr/bin/env bash\nexit 0\n' > "$APP/Contents/MacOS/AgentRuntimeRuntimeService"
 chmod +x "$APP/Contents/MacOS/AgentRuntimeMenuBar" "$APP/Contents/MacOS/AgentRuntimeRuntimeService"
-cat > "$SERVICE_DIR/com.picmao.agent-runtime-runtime.plist" <<'EOF'
+cat > "$SERVICE_DIR/com.picmao.agent-runtime-runtime-service.plist" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-<key>Label</key><string>com.picmao.agent-runtime-runtime</string>
+<key>Label</key><string>com.picmao.agent-runtime-runtime-service</string>
 <key>BundleProgram</key><string>Contents/MacOS/AgentRuntimeRuntimeService</string>
 <key>RunAtLoad</key><false/>
 <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
@@ -473,7 +473,7 @@ esac
             self.assertIn("argv=doctor --control-plane.poll-channel main", capture.read_text())
             legacy_plist = home / "Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist"
             self.assertFalse(legacy_plist.exists())
-            bundled_plist = home / "Applications/Agent Runtime.app/Contents/Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist"
+            bundled_plist = home / "Applications/Agent Runtime.app/Contents/Library/LaunchAgents/com.picmao.agent-runtime-runtime-service.plist"
             service = plistlib.loads(bundled_plist.read_bytes())
             self.assertEqual(service["BundleProgram"], "Contents/MacOS/AgentRuntimeRuntimeService")
             service_state = home / "Library/Application Support/Agent Runtime/test-service-state.json"
