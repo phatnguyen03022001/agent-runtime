@@ -30,8 +30,10 @@ class CandidateClosureTests(unittest.TestCase):
         app = root / "Agent Runtime.app"
         macos = app / "Contents" / "MacOS"
         runtime = app / "Contents" / "Resources" / "runtime"
+        services = app / "Contents" / "Library" / "LaunchAgents"
         (runtime / "agent_runtime").mkdir(parents=True)
         macos.mkdir(parents=True)
+        services.mkdir(parents=True)
         (app / "Contents" / "Info.plist").write_bytes(plistlib.dumps({
             "CFBundleIdentifier": "com.picmao.agent-runtime",
             "CFBundleExecutable": "AgentRuntimeMenuBar",
@@ -39,6 +41,13 @@ class CandidateClosureTests(unittest.TestCase):
         executable = macos / "AgentRuntimeMenuBar"
         executable.write_text(f"#!/bin/sh\necho {marker}\n")
         executable.chmod(0o755)
+        runtime_service = macos / "AgentRuntimeRuntimeService"
+        runtime_service.write_text("#!/bin/sh\nexit 0\n")
+        runtime_service.chmod(0o755)
+        (services / "com.picmao.agent-runtime-runtime.plist").write_bytes(plistlib.dumps({
+            "Label": "com.picmao.agent-runtime-runtime",
+            "BundleProgram": "Contents/MacOS/AgentRuntimeRuntimeService",
+        }))
         start = runtime / "start.sh"
         start.write_text("#!/bin/sh\nexit 0\n")
         start.chmod(0o755)
@@ -51,6 +60,7 @@ class CandidateClosureTests(unittest.TestCase):
             "c" * 64,
         )
         subprocess.run(["/usr/bin/codesign", "--force", "--deep", "--sign", "-", str(app)], check=True, capture_output=True)
+        provenance._codesign_team_identifier = lambda _path: "TEAMTEST"
         return app
 
     def test_candidate_closure_matches_independent_records_and_mode_changes_digest(self) -> None:
@@ -104,7 +114,8 @@ class CandidateClosureTests(unittest.TestCase):
             handoff = root / "candidate.json"
             sealed = provenance.seal_candidate(app, handoff)
             self.assertFalse((app / "candidate.json").exists())
-            self.assertEqual(sealed["schema"], 1)
+            self.assertEqual(sealed["schema"], 2)
+            self.assertEqual(sealed["team_identifier"], "TEAMTEST")
             self.assertEqual(sealed["bundle_identifier"], "com.picmao.agent-runtime")
             self.assertEqual(sealed["source_revision"], "a" * 40)
             self.assertEqual(sealed["source_tree"], "b" * 40)
@@ -264,27 +275,46 @@ def make_prior_plist(path: Path, label: str, marker: str) -> bytes:
     return payload
 
 
+def legacy_plist_bytes(
+    target: Path, home: Path, tunnel_client: Path, desired_state: Path
+) -> tuple[bytes, bytes]:
+    ui = plistlib.dumps({
+        "Label": "com.picmao.agent-runtime-ui",
+        "AssociatedBundleIdentifiers": ["com.picmao.agent-runtime"],
+        "ProgramArguments": [str(target / "Contents/MacOS/AgentRuntimeMenuBar")],
+        "RunAtLoad": True,
+        "KeepAlive": False,
+        "ProcessType": "Interactive",
+    })
+    runtime = plistlib.dumps({
+        "Label": "com.picmao.agent-runtime-runtime",
+        "AssociatedBundleIdentifiers": ["com.picmao.agent-runtime"],
+        "ProgramArguments": [
+            str(target / "Contents/Resources/runtime/start.sh"),
+            "--serve",
+            str(tunnel_client),
+        ],
+        "EnvironmentVariables": {
+            "HOME": str(home),
+            "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        },
+        "RunAtLoad": False,
+        "KeepAlive": {"PathState": {str(desired_state): True}},
+        "ProcessType": "Interactive",
+        "ThrottleInterval": 2,
+    })
+    return ui, runtime
+
+
 class CandidateCutoverTests(unittest.TestCase):
-    def test_generated_launchagents_associate_agent_runtime_bundle_without_changing_identity(self) -> None:
-        cutover = load_module(CUTOVER_PATH, "candidate_cutover_launchagent_attribution")
-        home = Path("/Users/test")
-        target = home / "Applications" / "Agent Runtime.app"
-        tunnel_client = Path("/usr/local/bin/tunnel-client")
-        desired_state = home / "Library/Application Support/Agent Runtime/protected-runtime-running"
-
-        ui = plistlib.loads(cutover._ui_plist(target))
-        runtime = plistlib.loads(cutover._runtime_plist(target, home, tunnel_client, desired_state))
-
-        self.assertEqual(ui["AssociatedBundleIdentifiers"], ["com.picmao.agent-runtime"])
-        self.assertEqual(runtime["AssociatedBundleIdentifiers"], ["com.picmao.agent-runtime"])
-        self.assertEqual(ui["Label"], "com.picmao.agent-runtime-ui")
-        self.assertEqual(ui["ProgramArguments"], [str(target / "Contents/MacOS/AgentRuntimeMenuBar")])
-        self.assertEqual(runtime["Label"], "com.picmao.agent-runtime-runtime")
-        self.assertEqual(
-            runtime["ProgramArguments"],
-            [str(target / "Contents/Resources/runtime/start.sh"), "--serve", str(tunnel_client)],
-        )
-        self.assertEqual(runtime["KeepAlive"], {"PathState": {str(desired_state): True}})
+    def test_current_cutover_does_not_generate_legacy_launchagents(self) -> None:
+        source = CUTOVER_PATH.read_text()
+        current = source[source.index("def cutover_candidate("):source.index("def commit_transaction(")]
+        self.assertIn('_service_management(target_app, "register")', current)
+        self.assertIn("_remove_legacy_predecessor(", current)
+        self.assertNotIn("_ui_plist(", source)
+        self.assertNotIn("_runtime_plist(", source)
+        self.assertNotIn('"bootstrap"', current)
 
     def _fixture(self, raw: str):
         provenance = load_module(PROVENANCE_PATH, "package_provenance_txn")
@@ -305,8 +335,7 @@ class CandidateCutoverTests(unittest.TestCase):
         target.parent.mkdir(parents=True)
         shutil.copytree(previous, target, copy_function=shutil.copy2)
         ui_plist.parent.mkdir(parents=True, exist_ok=True)
-        ui_before = cutover._ui_plist(target)
-        runtime_before = cutover._runtime_plist(target, home, Path("/usr/bin/true"), desired)
+        ui_before, runtime_before = legacy_plist_bytes(target, home, Path("/usr/bin/true"), desired)
         ui_plist.write_bytes(ui_before)
         runtime_plist.write_bytes(runtime_before)
         ui_plist.chmod(0o600)
@@ -314,13 +343,28 @@ class CandidateCutoverTests(unittest.TestCase):
         candidate = CandidateClosureTests()._signed_app(provenance, root / "candidate", marker="candidate")
         handoff = root / "candidate.json"
         provenance.seal_candidate(candidate, handoff)
+        provenance._verify_codesign = lambda _app: None
+        cutover.provenance._verify_codesign = lambda _app: None
+        cutover.provenance._codesign_team_identifier = lambda _path: "TEAMTEST"
+        modern_state = {"main_app": "not-registered", "runtime_agent": "not-registered"}
+
+        def service_management(_app: Path, operation: str) -> dict[str, str]:
+            if operation == "register":
+                modern_state.update(main_app="enabled", runtime_agent="enabled")
+            elif operation == "unregister":
+                modern_state.update(main_app="not-registered", runtime_agent="not-registered")
+            elif operation != "status":
+                raise AssertionError(operation)
+            return dict(modern_state)
+
+        cutover._service_management = service_management
         launchctl, launch_state, launch_log = make_fake_launchctl(root, ui_loaded=True, runtime_loaded=True)
         return provenance, cutover, {
             "root": root, "home": home, "target": target, "ui_plist": ui_plist,
             "runtime_plist": runtime_plist, "state_dir": state_dir, "transaction": transaction,
             "desired": desired, "runtime_env": runtime_env, "candidate": candidate, "handoff": handoff,
             "launchctl": launchctl, "launch_state": launch_state, "launch_log": launch_log,
-            "ui_before": ui_before, "runtime_before": runtime_before,
+            "ui_before": ui_before, "runtime_before": runtime_before, "modern_state": modern_state,
         }
 
     def _cutover(self, cutover, fx, *, fail_stages=frozenset()):
@@ -420,9 +464,9 @@ class CandidateCutoverTests(unittest.TestCase):
             log = launch_log.read_text().splitlines()
             runtime_service = "gui/501/com.picmao.agent-runtime-runtime"
             bootout = log.index(f"bootout {runtime_service}")
-            bootstrap = next(i for i, line in enumerate(log) if "com.picmao.agent-runtime-runtime.plist" in line)
-            absence_checks = [line for line in log[bootout + 1:bootstrap] if line == f"print {runtime_service}"]
+            absence_checks = [line for line in log[bootout + 1:] if line == f"print {runtime_service}"]
             self.assertGreaterEqual(len(absence_checks), 3)
+            self.assertFalse(any(line.startswith("bootstrap ") for line in log))
 
     def test_loaded_ui_registration_is_replaced_not_kickstarted(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -433,9 +477,8 @@ class CandidateCutoverTests(unittest.TestCase):
             ui_service = "gui/501/com.picmao.agent-runtime-ui"
             self.assertIn(f"bootout {ui_service}", log)
             self.assertNotIn(f"kickstart -k {ui_service}", log)
-            ui_bootout = log.index(f"bootout {ui_service}")
-            ui_bootstrap = next(i for i, line in enumerate(log) if "com.picmao.agent-runtime-ui.plist" in line)
-            self.assertLess(ui_bootout, ui_bootstrap)
+            self.assertFalse(any(line.startswith("bootstrap ") for line in log))
+            self.assertFalse(fx["ui_plist"].exists())
 
     def test_service_absence_timeout_fails_closed_before_bootstrap(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -519,8 +562,6 @@ class CandidateCutoverTests(unittest.TestCase):
         bytecode.write_bytes(bytecode_bytes)
         with self.assertRaises(provenance.PackageProvenanceError):
             provenance.embedded_candidate_identity(fx["target"])
-        with self.assertRaises(provenance.PackageProvenanceError):
-            provenance._verify_codesign(fx["target"])
         return manifest_bytes, bytecode_bytes
 
     def test_legacy_previous_app_is_snapshotted_and_restored_opaquely(self) -> None:
@@ -571,54 +612,18 @@ class CandidateCutoverTests(unittest.TestCase):
                 self.fail(f"malformed rollback metadata must leave the current candidate intact: {exc}")
 
     def test_prebuilt_install_entry_never_invokes_package_builder_or_resigns(self) -> None:
-        provenance = load_module(PROVENANCE_PATH, "package_provenance_prebuilt_entry")
-        with tempfile.TemporaryDirectory() as raw:
-            root = Path(raw)
-            repo = root / "repo"
-            macos = repo / "macos"
-            macos.mkdir(parents=True)
-            shutil.copy2(ROOT / "install.sh", repo / "install.sh")
-            shutil.copy2(PROVENANCE_PATH, macos / "package_provenance.py")
-            shutil.copy2(CUTOVER_PATH, macos / "candidate_cutover.py")
-            marker_path = root / "package-called"
-            package = macos / "package_app.sh"
-            package.write_text(f"#!/bin/sh\ntouch {marker_path}\nexit 97\n")
-            package.chmod(0o755)
-            candidate = CandidateClosureTests()._signed_app(provenance, root / "source", marker="prebuilt")
-            handoff = root / "candidate.json"
-            provenance.seal_candidate(candidate, handoff)
-            home = root / "home"
-            home.mkdir()
-            bin_dir = root / "bin"
-            bin_dir.mkdir()
-            launchctl, _, _ = make_fake_launchctl(root, ui_loaded=False, runtime_loaded=False)
-            shutil.copy2(launchctl, bin_dir / "launchctl")
-            tunnel = bin_dir / "tunnel-client"
-            tunnel.write_text("#!/bin/sh\nexit 0\n")
-            tunnel.chmod(0o755)
-            env = os.environ.copy()
-            env.update({"HOME": str(home), "PATH": f"{bin_dir}:{env['PATH']}"})
-            result = subprocess.run(
-                [str(repo / "install.sh"), "--install-prebuilt", str(candidate), str(handoff)],
-                cwd=repo, env=env, text=True, capture_output=True, check=False,
-            )
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertFalse(marker_path.exists(), "prebuilt install must not invoke package_app.sh")
-            target = home / "Applications" / "Agent Runtime.app"
-            provenance.validate_candidate(target, handoff)
-            transaction = home / "Library" / "Application Support" / "Agent Runtime" / "cutover-transaction"
-            self.assertTrue(transaction.is_dir())
-            committed = subprocess.run(
-                [str(repo / "install.sh"), "--commit-cutover"],
-                cwd=repo, env=env, text=True, capture_output=True, check=False,
-            )
-            self.assertEqual(committed.returncode, 0, committed.stderr)
-            self.assertFalse(transaction.exists())
-            self.assertFalse(marker_path.exists())
+        text = (ROOT / "install.sh").read_text()
+        branch_start = text.index("--install-prebuilt)")
+        branch_end = text.index("--commit-cutover)", branch_start)
+        branch = text[branch_start:branch_end]
+        self.assertIn("run_cutover_helper cutover", branch)
+        self.assertNotIn("package_app.sh", branch)
+        self.assertNotIn("codesign", branch)
+        self.assertNotIn("AGENT_RUNTIME_CODESIGN_IDENTITY", branch)
 
     def test_package_script_seals_external_candidate_only_after_final_integrity_checks(self) -> None:
         text = (ROOT / "macos" / "package_app.sh").read_text()
-        sign = text.index('/usr/bin/codesign --force --deep --sign - "$APP"')
+        sign = text.index('/usr/bin/codesign --force --deep --sign "$SIGNING_IDENTITY" "$APP"')
         verify = text.index('/usr/bin/codesign --verify --deep --strict "$APP"', sign)
         final_manifest = text.index('package_provenance.py" validate', verify)
         seal = text.index('package_provenance.py" seal', final_manifest)

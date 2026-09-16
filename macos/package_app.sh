@@ -11,6 +11,9 @@ RESOURCES="$CONTENTS/Resources"
 RUNTIME="$RESOURCES/runtime"
 source "$PACKAGE_ROOT/packaging_python.sh"
 PYTHON_BIN="$(resolve_packaging_python "PACKAGE ERROR")"
+SIGNING_IDENTITY="${AGENT_RUNTIME_CODESIGN_IDENTITY:-}"
+[[ -n "$SIGNING_IDENTITY" && "$SIGNING_IDENTITY" != "-" ]] \
+  || { echo "PACKAGE ERROR: AGENT_RUNTIME_CODESIGN_IDENTITY must name an explicit non-ad-hoc signing identity" >&2; exit 2; }
 
 TEMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/agent-runtime-package.XXXXXX")"
 cleanup() {
@@ -29,6 +32,7 @@ chmod -R a-w "$SOURCE_ROOT"
 SOURCE_PACKAGE_ROOT="$SOURCE_ROOT/macos"
 APP_ICON="$SOURCE_PACKAGE_ROOT/AppBundle/Resources/AppIcon.png"
 NOTIFICATION_SOUND="$SOURCE_PACKAGE_ROOT/AppBundle/Resources/notification.mp3"
+SERVICE_PLIST="$SOURCE_PACKAGE_ROOT/AppBundle/Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist"
 [[ -f "$SOURCE_ROOT/requirements.lock" ]] \
   || { echo "PACKAGE ERROR: requirements.lock is missing from exact HEAD" >&2; exit 2; }
 [[ -f "$SOURCE_ROOT/agent_runtime/server.py" ]] \
@@ -37,21 +41,27 @@ NOTIFICATION_SOUND="$SOURCE_PACKAGE_ROOT/AppBundle/Resources/notification.mp3"
   || { echo "PACKAGE ERROR: approved application icon is missing" >&2; exit 2; }
 [[ -f "$NOTIFICATION_SOUND" ]] \
   || { echo "PACKAGE ERROR: approved notification sound is missing" >&2; exit 2; }
+[[ -f "$SERVICE_PLIST" ]] \
+  || { echo "PACKAGE ERROR: app-owned Runtime LaunchAgent metadata is missing" >&2; exit 2; }
 
 SWIFT_SCRATCH="$TEMP_ROOT/swift-build"
 /usr/bin/xcrun swift build --package-path "$SOURCE_PACKAGE_ROOT" --scratch-path "$SWIFT_SCRATCH" -c release
 BIN_DIR="$(/usr/bin/xcrun swift build --package-path "$SOURCE_PACKAGE_ROOT" --scratch-path "$SWIFT_SCRATCH" -c release --show-bin-path)"
 BINARY="$BIN_DIR/AgentRuntimeMenuBar"
+RUNTIME_SERVICE_BINARY="$BIN_DIR/AgentRuntimeRuntimeService"
 [[ -x "$BINARY" ]] || { echo "PACKAGE ERROR: missing AgentRuntimeMenuBar binary" >&2; exit 2; }
+[[ -x "$RUNTIME_SERVICE_BINARY" ]] || { echo "PACKAGE ERROR: missing AgentRuntimeRuntimeService binary" >&2; exit 2; }
 
 rm -rf "$APP"
 rm -f "$CANDIDATE_HANDOFF"
-mkdir -p "$MACOS" "$RESOURCES" "$RUNTIME/agent_runtime"
+mkdir -p "$MACOS" "$RESOURCES" "$RUNTIME/agent_runtime" "$CONTENTS/Library/LaunchAgents"
 cp "$SOURCE_PACKAGE_ROOT/AppBundle/Info.plist" "$CONTENTS/Info.plist"
 cp "$BINARY" "$MACOS/AgentRuntimeMenuBar"
+cp "$RUNTIME_SERVICE_BINARY" "$MACOS/AgentRuntimeRuntimeService"
+cp "$SERVICE_PLIST" "$CONTENTS/Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist"
 cp "$APP_ICON" "$RESOURCES/AppIcon.png"
 cp "$NOTIFICATION_SOUND" "$RESOURCES/notification.mp3"
-/usr/bin/strip -S "$MACOS/AgentRuntimeMenuBar"
+/usr/bin/strip -S "$MACOS/AgentRuntimeMenuBar" "$MACOS/AgentRuntimeRuntimeService"
 
 cp "$SOURCE_ROOT/start.sh" "$RUNTIME/start.sh"
 find "$SOURCE_ROOT/agent_runtime" -maxdepth 1 -type f -name '*.py' -exec cp '{}' "$RUNTIME/agent_runtime/" \;
@@ -78,7 +88,7 @@ chmod 755 "$RUNTIME/start.sh" "$RUNTIME/.venv/bin/python"
 /usr/bin/plutil -lint "$CONTENTS/Info.plist" >/dev/null
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$CONTENTS/Info.plist")" == "true" ]] \
   || { echo "PACKAGE ERROR: LSUIElement must be true" >&2; exit 2; }
-/usr/bin/codesign --force --deep --sign - "$APP" >/dev/null
+/usr/bin/codesign --force --deep --sign "$SIGNING_IDENTITY" "$APP" >/dev/null
 /usr/bin/codesign --verify --deep --strict "$APP"
 "$PYTHON_BIN" "$SOURCE_PACKAGE_ROOT/package_provenance.py" validate \
   "$RUNTIME" "$RESOURCES/runtime-manifest.json" \

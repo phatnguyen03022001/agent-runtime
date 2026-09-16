@@ -1,26 +1,44 @@
 # agent-runtime
 
-`agent-runtime` is an optional local accelerator for ChatGPT engineering work
-on macOS. The Python MCP runtime remains the semantic core; the native
-menu-bar app is the normal intentional lifecycle authority for one protected singleton local service. GitHub/task governance remains outside Runtime.
+`agent-runtime` is a bounded local execution provider for macOS. MCP is the protocol
+exposed by Runtime; tunnel, connection, and stdio are transport routes rather
+than provider identity. Compatible MCP clients may use the provider; the
+architecture is not owned by ChatGPT, Codex, Antigravity, or another client.
+The native menu-bar app owns intentional lifecycle control for one protected singleton
+local service. GitHub/task governance remains outside Runtime.
 
 ## Installed product and tunnel authority
 
 Run `./install.sh` from the canonical checkout to build one sealed candidate
-and enter a transactional cutover for `~/Applications/Agent Runtime.app`.
-The cutover validates the sealed candidate through staging and installed
-placement, refreshes only the owned LaunchAgents, preserves the Runtime desired
-state, and leaves the previous known-good package/LaunchAgent state recoverable
-in a pending transaction. A second cutover is rejected while one is pending.
+and enter a transactional cutover for `~/Applications/Agent Runtime.app`. The
+current generation is owned by Agent Runtime.app through app-owned ServiceManagement:
+`SMAppService.mainApp` owns login launch and the bundled Runtime LaunchAgent owns
+the signed `AgentRuntimeRuntimeService` responsible executable. The previous
+`~/Library/LaunchAgents` model is a migration/rollback predecessor only.
+
+Cutover validates the sealed candidate through staging and installed placement,
+snapshots the exact predecessor package/plist bytes, loaded states, and desired
+state, removes proven legacy ownership, registers the modern services, and
+rejects dual ownership. The transaction becomes pending only after modern
+registration has an attributable valid state. A second cutover is rejected
+while one is pending.
 
 After downstream live acceptance, commit the pending cutover explicitly with
 `./install.sh --commit-cutover`. To restore the previous package and relevant
-LaunchAgent/desired-state facts instead, use `./install.sh --rollback-cutover`.
+LaunchAgent/desired-state facts instead, use `./install.sh --rollback-cutover`;
+rollback first unregisters attributable modern ownership, then restores the exact
+legacy predecessor package, plist bytes, loaded states, and desired-state fact.
 An already sealed bundle can be handed off without rebuilding or re-signing via
 `./install.sh --install-prebuilt <Agent Runtime.app> <candidate.json>`; this path
 validates candidate-owned embedded provenance plus the caller-supplied external
 candidate identity and does not use the invoking checkout HEAD as candidate
 identity. The prebuilt cutover does not modify canonical `runtime.env`.
+
+ServiceManagement diagnostics expose exactly `enabled`, `requires-approval`,
+`not-registered`, and `not-found`. Background Activity approval is
+operator/platform state, not Runtime task authority; Start/Restart fail closed
+when required registration is absent or still requires approval rather than
+recreating a legacy LaunchAgent.
 
 The installed Runtime executes package-owned bytes under:
 
@@ -57,8 +75,21 @@ accepted tunnel fingerprint is `6aa2b81d6dd8`. Never print the complete tunnel
 ID or API key.
 The historical `~/.config/tunnel-client/agent-runtime.yaml` profile must stay
 absent; installation, startup, and recovery fail closed if it reappears.
-Official `tunnel-client` and macOS launchd/system utilities are the only
-external Runtime dependencies.
+
+Prerequisites are classified by consumer: macOS/system utilities support the
+installed lifecycle; the Apple developer toolchain is required for source/native
+builds; the host `tunnel-client` supplies the transport; canonical CPython 3.13
+is the packaging interpreter; project-local Python dependencies support source
+development and verification; and packaged Runtime dependencies are bundled in
+the installed app. Homebrew is optional as an acquisition mechanism, not an
+architecture prerequisite.
+
+There are no blanket TCC permissions for Runtime. Accessibility, Automation/
+Apple Events, Screen & System Audio Recording, Full Disk Access, Files &
+Folders, Developer Tools, Input Monitoring, and Local Network are not baseline
+Runtime permissions. Background Activity is the separate operator-controlled
+ServiceManagement approval described above; denial or revocation is reported and
+fails closed rather than widening permissions.
 
 ## Lifecycle
 
@@ -76,12 +107,14 @@ public lifecycle API.
 - UI launch, login launch, polling, status refresh, installation, repository
   updates, and error handling never silently change desired state.
 
-The Runtime LaunchAgent uses `KeepAlive` keyed to the desired-state marker.
-While desired state is RUNNING, accidental canonical Runtime death is
-recovered automatically without changing tunnel identity or creating a second
-instance. Concurrent operator starts serialize through one lifecycle lock and
-converge on the same launchd service. Foreign or ambiguous ownership of
-`127.0.0.1:8080` fails closed; occupancy alone never authorizes termination.
+The app-owned Runtime LaunchAgent uses `KeepAlive` with unsuccessful-exit
+recovery. Its signed responsible executable checks the desired-state marker
+before launching the package-owned `start.sh --serve` path: explicit Stop
+removes the marker and converges to a successful exit, while unexpected child
+death during desired RUNNING exits non-zero so launchd may recover it. Concurrent
+operator starts serialize through one lifecycle lock and converge on the same
+service. Foreign or ambiguous ownership of `127.0.0.1:8080` fails closed;
+occupancy alone never authorizes termination.
 
 Agent Runtime terminal tools apply a defense-in-depth recognized intent filter
 to direct argv plus the supported shell/wrapper forms they understand. Clear
@@ -165,6 +198,18 @@ operator account's normal host permissions.
 descriptor-relative no-symlink traversal. That bounded read rule does not turn
 the workspace root into general host filesystem confinement.
 
+## Product operation and cleanup boundaries
+
+The operations build, package, candidate freeze, install/cutover, activation, update, rollback, uninstall, and cleanup are distinct authority boundaries. Source packaging does not authorize live activation, and installation/cutover does not imply acceptance or transaction commit. Real service registration, Runtime restart/continuity proof, and System Settings attribution are activation work. Rollback restores a predecessor generation; uninstall removes only proven product-owned state; cleanup is neither of those.
+
+Use `./install.sh --uninstall` for owner-safe product removal. It refuses pending
+transactions or ambiguous ownership, unregisters only attributable modern
+services, removes exact proven legacy remnants and bounded Runtime-owned
+transient state, and removes the installed app. Canonical runtime.env is retained by default. Uninstall and
+cleanup never imply TCC or Background Task Management reset, global login-item
+purge, container removal, global cache sweeping, credential deletion, or
+unrelated process cleanup.
+
 ## Native app development and packaging
 
 Native tests and release packaging do not start the live Runtime:
@@ -172,8 +217,13 @@ Native tests and release packaging do not start the live Runtime:
 ```bash
 xcrun swift test --package-path macos
 xcrun swift build --package-path macos -c release
-./macos/package_app.sh
+AGENT_RUNTIME_CODESIGN_IDENTITY="<explicit non-ad-hoc identity>" ./macos/package_app.sh
 ```
+
+Canonical packaging requires `AGENT_RUNTIME_CODESIGN_IDENTITY` to name an
+explicit non-ad-hoc signing identity. It never discovers or selects identities
+from Keychain. Candidate provenance requires a non-null matching TeamIdentifier
+for the main app and `AgentRuntimeRuntimeService`.
 
 Release packaging fails closed on a dirty Git checkout, exports exact `HEAD`
 into a temporary immutable source staging tree, and builds the app only from

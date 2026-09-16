@@ -36,7 +36,7 @@ SERVICE="$DOMAIN/$LABEL"
 STATE_DIR="$HOME/Library/Application Support/Agent Runtime"
 DESIRED_STATE="$STATE_DIR/protected-runtime-running"
 LOCK_DIR="$STATE_DIR/lifecycle.lock"
-PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+SERVICE_MANAGEMENT_EXECUTABLE="$HOME/Applications/Agent Runtime.app/Contents/MacOS/AgentRuntimeMenuBar"
 ACTION="${1:-start}"
 RUNTIME_PYTHON="$ROOT/.venv/bin/python"
 MCP_COMMAND="command=${RUNTIME_PYTHON// /\\ } -m agent_runtime.server,channel=main"
@@ -62,15 +62,20 @@ service_loaded() {
   launchctl print "$SERVICE" >/dev/null 2>&1
 }
 
-ensure_loaded() {
-  [[ -f "$PLIST" && ! -L "$PLIST" ]] || fail "Missing canonical Runtime LaunchAgent at $PLIST; run ./install.sh first."
-  if service_loaded; then
-    return 0
+require_modern_registration() {
+  [[ -x "$SERVICE_MANAGEMENT_EXECUTABLE" && ! -L "$SERVICE_MANAGEMENT_EXECUTABLE" ]] \
+    || fail "ServiceManagement owner app is missing; install/activate the current Agent Runtime generation first."
+  local snapshot
+  if ! snapshot="$("$SERVICE_MANAGEMENT_EXECUTABLE" --service-management status 2>/dev/null)"; then
+    fail "ServiceManagement registration status is unavailable."
   fi
-  if launchctl bootstrap "$DOMAIN" "$PLIST" >/dev/null 2>&1; then
-    return 0
+  if ! printf '%s\n' "$snapshot" | grep -Eq '"main_app"[[:space:]]*:[[:space:]]*"enabled"'; then
+    fail "ServiceManagement main-app registration is not enabled: $snapshot"
   fi
-  service_loaded || fail "Could not register canonical Runtime LaunchAgent."
+  if ! printf '%s\n' "$snapshot" | grep -Eq '"runtime_agent"[[:space:]]*:[[:space:]]*"enabled"'; then
+    fail "ServiceManagement Runtime registration is not enabled: $snapshot"
+  fi
+  service_loaded || fail "ServiceManagement Runtime LaunchAgent is enabled but not loaded; refusing legacy bootstrap fallback."
 }
 
 set_running() {
@@ -310,7 +315,7 @@ case "$ACTION" in
   start)
     acquire_lock
     preflight_protected_port
-    ensure_loaded
+    require_modern_registration
     if runtime_ready_once; then
       echo "Agent Runtime desired state: RUNNING"
       exit 0
@@ -334,7 +339,7 @@ case "$ACTION" in
   restart)
     acquire_lock
     preflight_protected_port
-    ensure_loaded
+    require_modern_registration
     # PathState KeepAlive would otherwise resurrect the old instance before
     # Restart can prove it stopped. This is an explicit operator transition.
     rm -f "$DESIRED_STATE"

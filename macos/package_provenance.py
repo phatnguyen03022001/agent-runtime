@@ -16,7 +16,7 @@ import tarfile
 from pathlib import Path, PurePosixPath
 
 SCHEMA = 1
-CANDIDATE_SCHEMA = 1
+CANDIDATE_SCHEMA = 2
 OWNER = "com.picmao.agent-runtime"
 HEX40 = re.compile(r"[0-9a-f]{40}")
 HEX64 = re.compile(r"[0-9a-f]{64}")
@@ -39,6 +39,9 @@ CANDIDATE_KEYS = {
     "source_revision",
     "source_tree",
     "requirements_lock_sha256",
+    "team_identifier",
+    "main_executable",
+    "runtime_service_executable",
     "record_count",
     "candidate_sha256",
 }
@@ -310,6 +313,61 @@ def _verify_codesign(app: Path) -> None:
         raise PackageProvenanceError("candidate failed strict deep code-signature verification")
 
 
+MAIN_EXECUTABLE_RELATIVE = "Contents/MacOS/AgentRuntimeMenuBar"
+RUNTIME_SERVICE_EXECUTABLE_RELATIVE = "Contents/MacOS/AgentRuntimeRuntimeService"
+
+
+def _codesign_team_identifier(path: Path) -> str:
+    result = subprocess.run(
+        ["/usr/bin/codesign", "-d", "--verbose=4", str(path)],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise PackageProvenanceError(f"could not inspect code-signing identity for {path.name}")
+    detail = result.stdout + "\n" + result.stderr
+    match = re.search(r"(?m)^TeamIdentifier=(.+)$", detail)
+    if match is None:
+        raise PackageProvenanceError(f"TeamIdentifier is missing for {path.name}")
+    team = match.group(1).strip()
+    if not team or team.lower() in {"not set", "none", "null"}:
+        raise PackageProvenanceError(f"TeamIdentifier is missing for {path.name}")
+    return team
+
+
+def responsible_code_identity(app: Path, team_identifier_reader=None) -> dict[str, object]:
+    info_path = app / "Contents" / "Info.plist"
+    if info_path.is_symlink() or not info_path.is_file():
+        raise PackageProvenanceError("candidate Info.plist must be a regular non-symlink file")
+    try:
+        info = plistlib.loads(info_path.read_bytes())
+    except (OSError, plistlib.InvalidFileException) as exc:
+        raise PackageProvenanceError("candidate Info.plist is malformed") from exc
+    if info.get("CFBundleIdentifier") != OWNER or info.get("CFBundleExecutable") != "AgentRuntimeMenuBar":
+        raise PackageProvenanceError("candidate main app identity is not owned by agent-runtime")
+    main = app / MAIN_EXECUTABLE_RELATIVE
+    runtime_service = app / RUNTIME_SERVICE_EXECUTABLE_RELATIVE
+    for target in (main, runtime_service):
+        if target.is_symlink() or not target.is_file():
+            raise PackageProvenanceError(f"responsible executable is missing or unsafe: {target.name}")
+    reader = team_identifier_reader or _codesign_team_identifier
+    main_team = reader(main)
+    runtime_team = reader(runtime_service)
+    if not isinstance(main_team, str) or not main_team.strip():
+        raise PackageProvenanceError("main app TeamIdentifier is missing")
+    if not isinstance(runtime_team, str) or not runtime_team.strip():
+        raise PackageProvenanceError("Runtime responsible executable TeamIdentifier is missing")
+    if main_team != runtime_team:
+        raise PackageProvenanceError("responsible executable TeamIdentifier does not match main app TeamIdentifier")
+    return {
+        "team_identifier": main_team,
+        "main_executable": MAIN_EXECUTABLE_RELATIVE,
+        "runtime_service_executable": RUNTIME_SERVICE_EXECUTABLE_RELATIVE,
+    }
+
+
 def embedded_candidate_identity(app: Path) -> dict[str, object]:
     info_path = app / "Contents" / "Info.plist"
     if info_path.is_symlink() or not info_path.is_file():
@@ -333,6 +391,7 @@ def embedded_candidate_identity(app: Path) -> dict[str, object]:
         "source_revision": revision,
         "source_tree": tree,
         "requirements_lock_sha256": lock_sha,
+        **responsible_code_identity(app),
     }
 
 
@@ -360,6 +419,13 @@ def _load_candidate_handoff(path: Path) -> dict[str, object]:
     _validate_identity(value["source_revision"], HEX40, "candidate revision")
     _validate_identity(value["source_tree"], HEX40, "candidate tree")
     _validate_identity(value["requirements_lock_sha256"], HEX64, "candidate requirements.lock")
+    team = value["team_identifier"]
+    if not isinstance(team, str) or not team.strip() or team.lower() in {"not set", "none", "null"}:
+        raise PackageProvenanceError("candidate TeamIdentifier is invalid")
+    if value["main_executable"] != MAIN_EXECUTABLE_RELATIVE:
+        raise PackageProvenanceError("candidate main executable identity is invalid")
+    if value["runtime_service_executable"] != RUNTIME_SERVICE_EXECUTABLE_RELATIVE:
+        raise PackageProvenanceError("candidate Runtime responsible executable identity is invalid")
     _validate_identity(value["candidate_sha256"], HEX64, "candidate closure")
     if type(value["record_count"]) is not int or value["record_count"] < 1:
         raise PackageProvenanceError("candidate handoff record count is invalid")

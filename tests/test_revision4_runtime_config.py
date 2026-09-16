@@ -117,9 +117,17 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
         (repo / "start.sh").chmod(0o700)
         (repo / "agent_runtime").mkdir()
         (repo / "agent_runtime/server.py").write_text("# fixture runtime payload\n")
-        plist = home / "Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist"
-        plist.parent.mkdir(parents=True)
-        plist.write_text("fixture\n")
+        service_owner = home / "Applications/Agent Runtime.app/Contents/MacOS/AgentRuntimeMenuBar"
+        service_owner.parent.mkdir(parents=True)
+        service_owner.write_text(
+            "#!/bin/sh\n"
+            "if [ \"${1-}\" = \"--service-management\" ] && [ \"${2-}\" = \"status\" ]; then\n"
+            "  printf '%s\n' '{\"main_app\":\"enabled\",\"runtime_agent\":\"enabled\"}'\n"
+            "  exit 0\n"
+            "fi\n"
+            "exit 2\n"
+        )
+        service_owner.chmod(0o700)
         command = (
             "/opt/homebrew/bin/tunnel-client run "
             "--control-plane.poll-channel main "

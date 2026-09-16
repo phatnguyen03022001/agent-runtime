@@ -259,15 +259,23 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertNotIn("TUNNEL_CLIENT_PROFILE_FILE", text)
         self.assertNotIn("AGENT_RUNTIME_TUNNEL_PROFILE", text)
 
-    def test_installer_registers_one_runtime_launch_agent_without_changing_desired_state(self) -> None:
+    def test_installer_registers_app_owned_runtime_service_without_changing_desired_state(self) -> None:
+        import plistlib
+
         installer = (ROOT / "install.sh").read_text()
         cutover = (ROOT / "macos" / "candidate_cutover.py").read_text()
+        service_path = (
+            ROOT / "macos" / "AppBundle" / "Library" / "LaunchAgents"
+            / "com.picmao.agent-runtime-runtime.plist"
+        )
+        service = plistlib.loads(service_path.read_bytes())
         self.assertIn("--install-prebuilt", installer)
-        self.assertIn("com.picmao.agent-runtime-runtime", cutover)
-        self.assertIn('"KeepAlive": {"PathState": {str(desired_state): True}}', cutover)
+        self.assertEqual(service["Label"], "com.picmao.agent-runtime-runtime")
+        self.assertEqual(service["BundleProgram"], "Contents/MacOS/AgentRuntimeRuntimeService")
+        self.assertEqual(service["KeepAlive"], {"SuccessfulExit": False})
+        self.assertIs(service["RunAtLoad"], False)
         self.assertIn("protected-runtime-running", cutover)
-        self.assertIn('"bootstrap"', cutover)
-        self.assertIn('"kickstart", "-k"', cutover)
+        self.assertIn('_service_management(target_app, "register")', cutover)
         self.assertIn('"desired_state_present": desired_state.exists()', cutover)
 
     def test_installer_is_narrow_and_derives_workspace_root_from_checkout_parent(self) -> None:
@@ -339,12 +347,22 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertIs(info["LSUIElement"], True)
         self.assertEqual(info["CFBundleExecutable"], "AgentRuntimeMenuBar")
 
-    def test_installer_adds_ui_login_launch_without_runtime_autostart(self) -> None:
+    def test_installer_uses_main_app_service_management_for_login_without_runtime_autostart(self) -> None:
+        import plistlib
+
         installer = (ROOT / "install.sh").read_text()
         cutover = (ROOT / "macos" / "candidate_cutover.py").read_text()
-        self.assertIn("com.picmao.agent-runtime-ui", cutover)
-        self.assertIn('"RunAtLoad": True', cutover)
-        self.assertIn('"KeepAlive": False', cutover)
+        controller = (
+            ROOT / "macos" / "Sources" / "AgentRuntimeMenuBar" / "ServiceManagementController.swift"
+        ).read_text()
+        service = plistlib.loads((
+            ROOT / "macos" / "AppBundle" / "Library" / "LaunchAgents"
+            / "com.picmao.agent-runtime-runtime.plist"
+        ).read_bytes())
+        self.assertIn("SMAppServiceControl(service: .mainApp)", controller)
+        self.assertIn("SMAppServiceControl(service: .agent(plistName: runtimePlistName))", controller)
+        self.assertIs(service["RunAtLoad"], False)
+        self.assertIn('_service_management(target_app, "register")', cutover)
         self.assertIn("Agent Runtime.app", installer)
         self.assertIn("--health.listen-addr", installer)
         self.assertNotIn("tunnel-client run", installer + cutover)

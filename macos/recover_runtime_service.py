@@ -357,7 +357,22 @@ class RuntimeServiceRecovery:
         if {p.pid for p in group_members} != {tunnel.pid, children[0].pid}:
             raise RecoveryError("cutover Runtime process group contains unrelated members")
 
+    def _assert_legacy_generation(self) -> None:
+        app = self.home / "Applications" / "Agent Runtime.app"
+        service_plist = app / "Contents" / "Library" / "LaunchAgents" / f"{LABEL}.plist"
+        runtime_helper = app / "Contents" / "MacOS" / "AgentRuntimeRuntimeService"
+        if (
+            service_plist.exists()
+            or service_plist.is_symlink()
+            or runtime_helper.exists()
+            or runtime_helper.is_symlink()
+        ):
+            raise RecoveryError(
+                "legacy Runtime service recovery is disabled for a current-generation ServiceManagement installation"
+            )
+
     def recover(self) -> MigrationPlan:
+        self._assert_legacy_generation()
         initial = self.observe()
         plan = self.plan(initial)
         if plan.kind == "noop":

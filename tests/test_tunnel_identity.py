@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
+import plistlib
 import shutil
 import stat
 import subprocess
@@ -202,14 +204,39 @@ fi
         config_helper = repo / "macos" / "runtime_config.py"
         config_helper.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / "macos/runtime_config.py", config_helper)
-        shutil.copy2(ROOT / "macos/package_provenance.py", repo / "macos" / "package_provenance.py")
+        provenance_copy = repo / "macos" / "package_provenance.py"
+        shutil.copy2(ROOT / "macos/package_provenance.py", provenance_copy)
+        provenance_source = provenance_copy.read_text()
+        team_reader = "def _codesign_team_identifier(path: Path) -> str:\n"
+        if team_reader not in provenance_source:
+            raise AssertionError("package provenance TeamIdentifier reader fixture hook is unavailable")
+        provenance_source = provenance_source.replace(
+            team_reader,
+            team_reader
+            + '    fixture_team = os.environ.get("AGENT_RUNTIME_TEST_TEAM_IDENTIFIER")\n'
+            + '    if fixture_team:\n'
+            + '        return fixture_team\n',
+            1,
+        )
+        verify_reader = "def _verify_codesign(app: Path) -> None:\n"
+        if verify_reader not in provenance_source:
+            raise AssertionError("package provenance codesign verifier fixture hook is unavailable")
+        provenance_source = provenance_source.replace(
+            verify_reader,
+            verify_reader
+            + '    if os.environ.get("AGENT_RUNTIME_TEST_SKIP_CODESIGN_VERIFY") == "1":\n'
+            + '        return\n',
+            1,
+        )
+        provenance_copy.write_text(provenance_source)
         shutil.copy2(ROOT / "macos/packaging_python.sh", repo / "macos" / "packaging_python.sh")
         shutil.copy2(ROOT / "macos/candidate_cutover.py", repo / "macos" / "candidate_cutover.py")
         self._write(package, r'''#!/usr/bin/env bash
 set -euo pipefail
 APP="$PWD/build/Agent Runtime.app"
 RUNTIME="$APP/Contents/Resources/runtime"
-mkdir -p "$APP/Contents/MacOS" "$RUNTIME/agent_runtime" "$RUNTIME/.venv/bin"
+SERVICE_DIR="$APP/Contents/Library/LaunchAgents"
+mkdir -p "$APP/Contents/MacOS" "$SERVICE_DIR" "$RUNTIME/agent_runtime" "$RUNTIME/.venv/bin"
 cat > "$APP/Contents/Info.plist" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -218,8 +245,39 @@ cat > "$APP/Contents/Info.plist" <<'EOF'
 <key>CFBundleExecutable</key><string>AgentRuntimeMenuBar</string>
 </dict></plist>
 EOF
-printf '#!/usr/bin/env bash\nexit 0\n' > "$APP/Contents/MacOS/AgentRuntimeMenuBar"
-chmod +x "$APP/Contents/MacOS/AgentRuntimeMenuBar"
+cat > "$APP/Contents/MacOS/AgentRuntimeMenuBar" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "${1-}" == "--service-management" ]] || exit 0
+STATE="$HOME/Library/Application Support/Agent Runtime/test-service-state.json"
+mkdir -p "$(dirname "$STATE")"
+case "${2-}" in
+  status)
+    if [[ -f "$STATE" ]]; then cat "$STATE"; else printf '%s\n' '{"main_app":"not-registered","runtime_agent":"not-registered"}'; fi
+    ;;
+  register)
+    printf '%s\n' '{"main_app":"enabled","runtime_agent":"enabled"}' > "$STATE"
+    cat "$STATE"
+    ;;
+  unregister)
+    printf '%s\n' '{"main_app":"not-registered","runtime_agent":"not-registered"}' > "$STATE"
+    cat "$STATE"
+    ;;
+  *) exit 2 ;;
+esac
+EOF
+printf '#!/usr/bin/env bash\nexit 0\n' > "$APP/Contents/MacOS/AgentRuntimeRuntimeService"
+chmod +x "$APP/Contents/MacOS/AgentRuntimeMenuBar" "$APP/Contents/MacOS/AgentRuntimeRuntimeService"
+cat > "$SERVICE_DIR/com.picmao.agent-runtime-runtime.plist" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>Label</key><string>com.picmao.agent-runtime-runtime</string>
+<key>BundleProgram</key><string>Contents/MacOS/AgentRuntimeRuntimeService</string>
+<key>RunAtLoad</key><false/>
+<key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+</dict></plist>
+EOF
 printf '#!/usr/bin/env bash\nexit 0\n' > "$RUNTIME/start.sh"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$RUNTIME/.venv/bin/python"
 printf '# fixture runtime payload\n' > "$RUNTIME/agent_runtime/server.py"
@@ -293,7 +351,12 @@ esac
         args: tuple[str, ...] = (),
     ) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
-        env.update({"HOME": str(home), "PATH": f"{bin_dir}:{env['PATH']}"})
+        env.update({
+            "HOME": str(home),
+            "PATH": f"{bin_dir}:{env['PATH']}",
+            "AGENT_RUNTIME_TEST_TEAM_IDENTIFIER": "TEAMTEST",
+            "AGENT_RUNTIME_TEST_SKIP_CODESIGN_VERIFY": "1",
+        })
         for key in ("CONTROL_PLANE_API_KEY", "CONTROL_PLANE_TUNNEL_ID", "TUNNEL_CLIENT_CONFIG", "TUNNEL_CLIENT_PROFILE", "TUNNEL_CLIENT_PROFILE_FILE", "TUNNEL_CLIENT_PROFILE_DIR", "XDG_CONFIG_HOME"):
             env.pop(key, None)
         if api_key is not None:
@@ -367,9 +430,16 @@ esac
             self.assertNotIn("AGENT_RUNTIME_TUNNEL_PROFILE=", text)
             self.assertFalse((home / ".config/tunnel-client/agent-runtime.yaml").exists())
             self.assertIn("argv=doctor --control-plane.poll-channel main", capture.read_text())
-            plist = (home / "Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist").read_text()
-            self.assertIn(str(bin_dir / "tunnel-client"), plist)
-            self.assertIn("/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin", plist)
+            legacy_plist = home / "Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist"
+            self.assertFalse(legacy_plist.exists())
+            bundled_plist = home / "Applications/Agent Runtime.app/Contents/Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist"
+            service = plistlib.loads(bundled_plist.read_bytes())
+            self.assertEqual(service["BundleProgram"], "Contents/MacOS/AgentRuntimeRuntimeService")
+            service_state = home / "Library/Application Support/Agent Runtime/test-service-state.json"
+            self.assertEqual(
+                json.loads(service_state.read_text()),
+                {"main_app": "enabled", "runtime_agent": "enabled"},
+            )
             canonical = home / "Library/Application Support/Agent Runtime/runtime.env"
             self.assertEqual(canonical.stat().st_mode & 0o777, 0o600)
             self.assertEqual(env_file.read_bytes(), source_before)
@@ -387,7 +457,13 @@ esac
             self._env(repo, "same-id")
             result = self._run_install(repo, home, bin_dir, capture)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn(str(client), (home / "Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist").read_text())
+            self.assertTrue(client.is_symlink())
+            self.assertFalse((home / "Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist").exists())
+            service_state = home / "Library/Application Support/Agent Runtime/test-service-state.json"
+            self.assertEqual(
+                json.loads(service_state.read_text()),
+                {"main_app": "enabled", "runtime_agent": "enabled"},
+            )
 
     def test_install_rejects_reappeared_legacy_configuration_without_starting_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

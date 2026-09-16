@@ -36,9 +36,17 @@ class SupervisedLifecycleTests(unittest.TestCase):
             "CONTROL_PLANE_TUNNEL_ID=stable-fixture-id\n"
             "AGENT_RUNTIME_WORKSPACE_ROOT=" + str(self.temp) + "\n"
         )
-        launch_agents = self.home / "Library" / "LaunchAgents"
-        launch_agents.mkdir(parents=True)
-        (launch_agents / "com.picmao.agent-runtime-runtime.plist").write_text("fixture\n")
+        modern_main = self.home / "Applications" / "Agent Runtime.app" / "Contents" / "MacOS" / "AgentRuntimeMenuBar"
+        modern_main.parent.mkdir(parents=True)
+        modern_main.write_text(
+            """#!/bin/bash
+[[ "$1" == "--service-management" && "$2" == "status" ]] || exit 2
+state="${FAKE_SM_STATE:-enabled}"
+printf '{"main_app":"%s","runtime_agent":"%s"}\n' "$state" "$state"
+"""
+        )
+        modern_main.chmod(0o700)
+        (self.state / "loaded").write_text("")
         self._write_fakes()
         self.env = {
             "HOME": str(self.home),
@@ -233,6 +241,14 @@ esac
         self.assertNotEqual(after_start, after_restart)
         self.assertFalse((self.state / "duplicates.log").exists())
         self.assertEqual(len((self.state / "starts.log").read_text().splitlines()), 4)
+
+
+    def test_start_fails_closed_when_background_activity_requires_approval(self) -> None:
+        result = self.run_start("start", extra_env={"FAKE_SM_STATE": "requires-approval"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("ServiceManagement", result.stderr)
+        self.assertFalse((self.home / "Library/Application Support/Agent Runtime/protected-runtime-running").exists())
+        self.assertFalse((self.state / "starts.log").exists())
 
     def test_foreign_8080_listener_fails_closed_without_desired_state_or_signal(self) -> None:
         result = self.run_start("start", extra_env={"FAKE_FOREIGN_PORT_PID": "777"})

@@ -46,6 +46,29 @@ def _run(argv: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
+SERVICE_STATES = {"enabled", "requires-approval", "not-registered", "not-found"}
+REGISTERED_SERVICE_STATES = {"enabled", "requires-approval"}
+
+
+def _service_management(app: Path, operation: str) -> dict[str, str]:
+    executable = app / "Contents" / "MacOS" / "AgentRuntimeMenuBar"
+    if executable.is_symlink() or not executable.is_file():
+        raise CutoverError("candidate ServiceManagement executable is missing or unsafe")
+    result = _run([str(executable), "--service-management", operation])
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or f"exit {result.returncode}"
+        raise CutoverError(f"ServiceManagement {operation} failed: {detail[:300]}")
+    try:
+        value = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise CutoverError("ServiceManagement diagnostics are malformed") from exc
+    if not isinstance(value, dict) or set(value) != {"main_app", "runtime_agent"}:
+        raise CutoverError("ServiceManagement diagnostics are malformed")
+    if any(not isinstance(value[key], str) or value[key] not in SERVICE_STATES for key in value):
+        raise CutoverError("ServiceManagement diagnostics contain an unknown state")
+    return value
+
+
 def _bounded_launchctl_text(value: str) -> str:
     redacted = re.sub(
         r"(?i)\b([A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)[A-Z0-9_]*)\s*(?:=>|=|:)\s*[^\r\n]*",
@@ -128,29 +151,6 @@ def _launchagent_program(plist: Path, expected_label: str) -> Path:
         raise CutoverError(f"LaunchAgent plist identity is invalid: {plist}")
     return Path(str(arguments[0]))
 
-
-def _refresh_service_registration(
-    *,
-    launchctl: Path,
-    domain: str,
-    service: str,
-    plist: Path,
-    expected_label: str,
-    was_loaded: bool,
-    unregister_message: str,
-    register_message: str,
-) -> None:
-    if was_loaded:
-        _require_launchctl_ok(
-            _run([str(launchctl), "bootout", service]),
-            unregister_message,
-        )
-        _wait_for_service_absence(launchctl, service)
-    _require_launchctl_ok(
-        _run([str(launchctl), "bootstrap", domain, str(plist)]),
-        register_message,
-    )
-    _require_service_identity(launchctl, service, _launchagent_program(plist, expected_label))
 
 
 def _atomic_json(path: Path, value: dict[str, object]) -> None:
@@ -305,96 +305,41 @@ def _inject(fail_stages: set[str], stage: str) -> None:
         raise CutoverError(f"injected {stage} failure")
 
 
-def _ui_plist(target_app: Path) -> bytes:
-    return plistlib.dumps(
-        {
-            "Label": UI_LABEL,
-            "AssociatedBundleIdentifiers": [APP_BUNDLE_IDENTIFIER],
-            "ProgramArguments": [str(target_app / "Contents/MacOS/AgentRuntimeMenuBar")],
-            "RunAtLoad": True,
-            "KeepAlive": False,
-            "ProcessType": "Interactive",
-        },
-        fmt=plistlib.FMT_XML,
-    )
 
-
-def _runtime_plist(target_app: Path, home: Path, tunnel_client: Path, desired_state: Path) -> bytes:
-    return plistlib.dumps(
-        {
-            "Label": RUNTIME_LABEL,
-            "AssociatedBundleIdentifiers": [APP_BUNDLE_IDENTIFIER],
-            "ProgramArguments": [
-                str(target_app / "Contents/Resources/runtime/start.sh"),
-                "--serve",
-                str(tunnel_client),
-            ],
-            "EnvironmentVariables": {"HOME": str(home), "PATH": RUNTIME_PATH},
-            "RunAtLoad": False,
-            "KeepAlive": {"PathState": {str(desired_state): True}},
-            "ProcessType": "Interactive",
-            "ThrottleInterval": 2,
-        },
-        fmt=plistlib.FMT_XML,
-    )
-
-
-def _atomic_file(path: Path, payload: bytes, mode: int = 0o600) -> None:
-    if path.is_symlink():
-        raise CutoverError(f"refusing to replace symlinked file: {path}")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_name(path.name + ".cutover")
-    temp.write_bytes(payload)
-    temp.chmod(mode)
-    os.replace(temp, path)
-
-
-def _register_services(
+def _remove_legacy_predecessor(
     *,
     launchctl: Path,
     uid: int,
     ui_plist: Path,
     runtime_plist: Path,
+    ui_present: bool,
+    runtime_present: bool,
     ui_was_loaded: bool,
     runtime_was_loaded: bool,
-    desired_state_present: bool,
-    fail_stages: set[str],
 ) -> None:
     domain = f"gui/{uid}"
-    ui_service = f"{domain}/{UI_LABEL}"
-    runtime_service = f"{domain}/{RUNTIME_LABEL}"
-    _refresh_service_registration(
-        launchctl=launchctl,
-        domain=domain,
-        service=ui_service,
-        plist=ui_plist,
-        expected_label=UI_LABEL,
-        was_loaded=ui_was_loaded,
-        unregister_message="could not unregister the previous menu-bar LaunchAgent",
-        register_message="could not register the menu-bar LaunchAgent",
+    entries = (
+        (f"{domain}/{UI_LABEL}", ui_plist, ui_present, ui_was_loaded),
+        (f"{domain}/{RUNTIME_LABEL}", runtime_plist, runtime_present, runtime_was_loaded),
     )
-
-    _inject(fail_stages, "launchagent_registration")
-    _refresh_service_registration(
-        launchctl=launchctl,
-        domain=domain,
-        service=runtime_service,
-        plist=runtime_plist,
-        expected_label=RUNTIME_LABEL,
-        was_loaded=runtime_was_loaded,
-        unregister_message="could not unregister the previous Runtime LaunchAgent",
-        register_message="could not register the Runtime LaunchAgent",
-    )
-
-    _inject(fail_stages, "activation_refresh")
-    if desired_state_present:
-        _require_launchctl_ok(
-            _run([str(launchctl), "kickstart", "-k", runtime_service]),
-            "could not refresh the desired Runtime generation",
-        )
-
-    _require_service_identity(launchctl, ui_service, _launchagent_program(ui_plist, UI_LABEL))
-    _require_service_identity(launchctl, runtime_service, _launchagent_program(runtime_plist, RUNTIME_LABEL))
+    for service, plist, present, was_loaded in entries:
+        loaded_now = _service_loaded(launchctl, service)
+        if loaded_now != was_loaded:
+            raise CutoverError(f"legacy LaunchAgent state changed during cutover: {service}")
+        if was_loaded:
+            _require_launchctl_ok(
+                _run([str(launchctl), "bootout", service]),
+                f"could not unregister legacy LaunchAgent: {service}",
+            )
+            _wait_for_service_absence(launchctl, service)
+        if present:
+            if plist.is_symlink() or not plist.is_file():
+                raise CutoverError(f"legacy LaunchAgent ownership changed during cutover: {plist}")
+            plist.unlink()
+        if _service_loaded(launchctl, service):
+            raise CutoverError(f"legacy LaunchAgent remained registered after migration: {service}")
+        if plist.exists() or plist.is_symlink():
+            raise CutoverError(f"legacy LaunchAgent file remained after migration: {plist}")
 
 
 def _restore_loaded_state(
@@ -429,6 +374,24 @@ def _restore_loaded_state(
             raise CutoverError(f"restored LaunchAgent loaded state mismatch: {service}")
 
 
+def _unregister_modern_generation(transaction_dir: Path, target_app: Path) -> None:
+    if not target_app.exists() and not target_app.is_symlink():
+        return
+    if target_app.is_symlink() or not target_app.is_dir():
+        raise CutoverError("installed app path is unsafe before modern rollback")
+    provenance.validate_candidate(target_app, transaction_dir / "candidate-handoff.json")
+    state = _service_management(target_app, "status")
+    if "not-found" in state.values():
+        raise CutoverError("modern ServiceManagement state is not attributable during rollback")
+    if any(value in REGISTERED_SERVICE_STATES for value in state.values()):
+        state = _service_management(target_app, "unregister")
+    if state != {"main_app": "not-registered", "runtime_agent": "not-registered"}:
+        raise CutoverError("modern ServiceManagement unregister did not converge")
+    verified = _service_management(target_app, "status")
+    if verified != {"main_app": "not-registered", "runtime_agent": "not-registered"}:
+        raise CutoverError("modern ServiceManagement state remained active after unregister")
+
+
 def _restore_transaction(
     transaction_dir: Path,
     target_app: Path,
@@ -444,6 +407,7 @@ def _restore_transaction(
     app_present = previous.get("app_present")
     if not isinstance(app_present, bool):
         raise CutoverError("rollback previous-app presence metadata is invalid")
+    _unregister_modern_generation(transaction_dir, target_app)
     _inject(fail_stages, "rollback_restore_app")
 
     if target_app.is_symlink():
@@ -620,19 +584,28 @@ def cutover_candidate(
         provenance.validate_candidate(target_app, transaction_dir / "candidate-handoff.json")
         _inject(failures, "after_installed_validation")
 
-        _atomic_file(ui_plist, _ui_plist(target_app))
-        _atomic_file(runtime_plist, _runtime_plist(target_app, home, tunnel_client, desired_state))
-        _register_services(
+        _remove_legacy_predecessor(
             launchctl=launchctl,
             uid=uid,
             ui_plist=ui_plist,
             runtime_plist=runtime_plist,
+            ui_present=ui_present,
+            runtime_present=runtime_present,
             ui_was_loaded=bool(previous["ui_loaded"]),
             runtime_was_loaded=bool(previous["runtime_loaded"]),
-            desired_state_present=bool(previous["desired_state_present"]),
-            fail_stages=failures,
         )
+        _inject(failures, "launchagent_registration")
+        modern_state = _service_management(target_app, "register")
+        if any(value not in REGISTERED_SERVICE_STATES for value in modern_state.values()):
+            raise CutoverError("modern ServiceManagement registration did not converge")
+        for service in (ui_service, runtime_service):
+            if _service_loaded(launchctl, service):
+                raise CutoverError(f"legacy LaunchAgent remained loaded after modern registration: {service}")
+        if ui_plist.exists() or ui_plist.is_symlink() or runtime_plist.exists() or runtime_plist.is_symlink():
+            raise CutoverError("legacy LaunchAgent files remained after modern registration")
+        _inject(failures, "activation_refresh")
         provenance.validate_candidate(target_app, transaction_dir / "candidate-handoff.json")
+        metadata["modern_registration"] = modern_state
         metadata["status"] = "PENDING"
         _atomic_json(transaction_dir / "metadata.json", metadata)
         return {"status": "PENDING", "candidate": expected}

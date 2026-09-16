@@ -33,6 +33,14 @@ case "${1-}" in
     command -v launchctl >/dev/null 2>&1 || fail "launchctl is required for candidate rollback."
     run_cutover_helper rollback --home "$HOME" --launchctl "$(command -v launchctl)"
     ;;
+  --uninstall)
+    [[ "$#" == "1" ]] || fail "usage: ./install.sh --uninstall"
+    [[ "$(uname -s)" == "Darwin" ]] || fail "Agent Runtime uninstall supports macOS only."
+    command -v python3 >/dev/null 2>&1 || fail "Python 3.11+ is required for uninstall."
+    command -v launchctl >/dev/null 2>&1 || fail "launchctl is required for uninstall."
+    exec "$(command -v python3)" "$ROOT/macos/uninstall.py" \
+      --home "$HOME" --launchctl "$(command -v launchctl)"
+    ;;
 esac
 
 if [[ "${1-}" == "--recover-runtime-service" ]]; then

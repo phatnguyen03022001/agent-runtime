@@ -236,6 +236,56 @@ class ServiceRecoveryTests(unittest.TestCase):
         self.assertIn('[str(launchctl), "print", service]', cutover)
         self.assertIn('[str(launchctl), "bootstrap", domain, str(plist)]', cutover)
 
+
+    def test_current_generation_service_metadata_blocks_legacy_recovery_before_mutation(self) -> None:
+        service = (
+            self.home / "Applications" / "Agent Runtime.app" / "Contents" / "Library" / "LaunchAgents" / f"{LABEL}.plist"
+        )
+        service.parent.mkdir(parents=True)
+        service.write_bytes(plistlib.dumps({
+            "Label": LABEL,
+            "BundleProgram": "Contents/MacOS/AgentRuntimeRuntimeService",
+        }))
+
+        class GuardedRecovery(RuntimeServiceRecovery):
+            def __init__(inner, outer):
+                super().__init__(outer.repo, outer.canonical, outer.home, outer.expected)
+                inner.mutations = []
+
+            def observe(inner):
+                return self.stale_observation()
+
+            def _write_canonical_plist(inner):
+                inner.mutations.append("write")
+
+        recovery = GuardedRecovery(self)
+        with self.assertRaisesRegex(RecoveryError, "current-generation"):
+            recovery.recover()
+        self.assertEqual(recovery.mutations, [])
+
+    def test_partial_current_generation_helper_blocks_legacy_recovery_before_mutation(self) -> None:
+        helper = (
+            self.home / "Applications" / "Agent Runtime.app" / "Contents" / "MacOS" / "AgentRuntimeRuntimeService"
+        )
+        helper.parent.mkdir(parents=True)
+        helper.write_text("modern-helper\n")
+
+        class GuardedRecovery(RuntimeServiceRecovery):
+            def __init__(inner, outer):
+                super().__init__(outer.repo, outer.canonical, outer.home, outer.expected)
+                inner.mutations = []
+
+            def observe(inner):
+                return self.stale_observation()
+
+            def _write_canonical_plist(inner):
+                inner.mutations.append("write")
+
+        recovery = GuardedRecovery(self)
+        with self.assertRaisesRegex(RecoveryError, "current-generation"):
+            recovery.recover()
+        self.assertEqual(recovery.mutations, [])
+
     def test_recover_executes_only_bounded_migration_sequence(self) -> None:
         tunnel, child = self.canonical_processes()
         cutover = RuntimeObservation(
