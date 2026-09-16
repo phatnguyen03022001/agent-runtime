@@ -1,0 +1,151 @@
+protocol_version: 3
+
+task_id: TASK-0059
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: NEEDS_REVIEW
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: dev
+  execution_surface: CODEX_LOCAL
+  exact_task_base: "04c31cfb374843fff43140c262c06c63be791852"
+  exact_task_base_match: true
+  canonical_task_source: "GitHub origin/dev at 04c31cfb374843fff43140c262c06c63be791852"
+  predecessor_task: TASK-0058
+  predecessor_review: "a43e4e2d4515474692ba3f6b066a8a5fcabf7ac6"
+  predecessor_review_state: ACCEPTED
+  implementation_commit: "74bda8504a5184361073de04eda2b599aaf0c60a"
+  report_only_commit: PENDING
+  skill_library_revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+  nested_executor_used: false
+  force_push: false
+  main_mutated: false
+
+implementation:
+  changed_files:
+    - "tests/test_task0059_transport.py"
+  added_file_purpose: "Deterministic isolated shared-MCP-stdio correlation and x6 admission evidence."
+  production_runtime_source_modified: false
+  lifecycle_or_configuration_source_modified: false
+  dependency_or_public_contract_modified: false
+  architecture_added: false
+  test_design:
+    shared_transport: "One MCP Client launches one agent_runtime.server child through the real mcp==2.2.0 stdio transport."
+    eight_callers: "Four terminal_exec and four fs_read_batch logical callers use unique markers and a file barrier before release; every returned payload is matched to its caller marker."
+    x6_saturation: "Six terminal_exec calls hold leases behind a barrier; a locked test-owned counter records active and peak child workload count."
+    cheap_operations: "capacity_observer and fs_read_batch are called through the same shared stdio client while all six heavy barriers remain held."
+    seventh_request: "A seventh terminal_exec request is submitted while active=6; its spawn marker must remain absent and the MCP error must contain capacity."
+    determinism: "File barriers, explicit release, and fcntl-locked counters provide synchronization; wall-clock time is used only as a bounded hang guard."
+
+tunnel_client_identity:
+  selection_contract: "macos/Sources/AgentRuntimeRuntimeService/main.swift checks /opt/homebrew/bin/tunnel-client, then /usr/local/bin/tunnel-client, then /usr/bin/tunnel-client, selecting the first executable."
+  selected_absolute_path: "/opt/homebrew/bin/tunnel-client"
+  resolved_absolute_path: "/opt/homebrew/Cellar/tunnel-client/0.0.11/bin/tunnel-client"
+  selected_path_metadata: "mode lrwxr-xr-x; owner tienphat:admin; size 48 bytes; type symbolic link; mtime Aug 19 11:44:46 2026"
+  resolved_file_metadata: "mode -r-xr-xr-x; size 88 bytes; type regular file; mtime Aug 19 11:44:46 2026"
+  content_sha256: "d618f04e125a3b8783d8fa54f01bdb195d20e018cb3c8940b30b8cca70ae26c6"
+  version_command: "/opt/homebrew/bin/tunnel-client --version"
+  version_output: "0.0.11+8d55683eeef80bc5e360d95abf4692454fafc615 (git sha: 8d55683eeef80bc5e360d95abf4692454fafc615)"
+  credential_handling: "No runtime.env, API key, tunnel ID, Keychain value, or operator credential was read or included in evidence."
+
+verification:
+  canonical_identity:
+    command: "git ls-remote origin dev 04c31cfb374843fff43140c262c06c63be791852"
+    result: PASS
+    evidence: "GitHub reported 04c31cfb374843fff43140c262c06c63be791852 as refs/heads/dev; local dev was fast-forwarded from 49cf0d4 to that exact base before work."
+  focused_transport:
+    command: ".venv/bin/python -m unittest tests.test_task0059_transport"
+    result: PASS
+    evidence: "2/2 deterministic tests passed: eight mixed callers correlated through one shared stdio child; six held heavy workloads reached active=6 and peak=6, cheap calls completed before release, the seventh request failed before spawn, and final active count returned to 0."
+  focused_affected:
+    command: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_mcp_client_conformance tests.test_mcp_contracts tests.test_tunnel_identity tests.test_task0057_admission tests.test_task0059_transport"
+    result: PASS
+    evidence: "34/34 tests passed, including the existing MCP contract/conformance, tunnel identity, TASK-0057 x6 admission, and TASK-0059 transport suites."
+  repository_native:
+    command: "PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify"
+    result: PASS
+    evidence: "329/329 tests passed in 151.894 seconds; repository py_compile and bash -n checks included by ./verify also passed."
+  diff_check:
+    command: "git diff --check"
+    result: PASS
+  changed_path_review:
+    result: PASS
+    evidence: "The implementation commit changes only tests/test_task0059_transport.py. No agent_runtime/, macos/, start.sh, install.sh, verify, README.md, dependency, or lifecycle/configuration file changed."
+  isolated_environment_retry:
+    initial_result: ENVIRONMENT_LIMITATION
+    evidence: "A sandboxed focused run could not execute terminal_exec because the Runtime protection inspector was denied execution of /bin/ps; the same tests passed outside the sandbox with the required process-inspection permission."
+  exact_tunnel_doctor:
+    command: "/opt/homebrew/bin/tunnel-client doctor --control-plane.poll-channel main --mcp.command command=/bin/echo,channel=main --health.listen-addr 127.0.0.1:18080 --explain"
+    environment: "env -i with a temporary HOME/TMPDIR, no credential variables, and no live Runtime configuration"
+    result: BLOCKED_AS_EXPECTED
+    exit_code: 2
+    evidence: "The exact selected binary passed config/profile checks but failed at tunnel_id: tunnel ID is required. It created no files in the isolated HOME and did not use port 8080."
+  exact_tunnel_run_probe:
+    command: "/opt/homebrew/bin/tunnel-client run --control-plane.tunnel-id tunnel_00000000000000000000000000000000 --mcp.command command=/bin/cat,channel=main --health.listen-addr 127.0.0.1:18080"
+    environment: "Temporary HOME/TMPDIR, no API key, no runtime.env, no live Runtime lifecycle, bounded three-second alarm"
+    result: BLOCKED_AS_EXPECTED
+    exit_code: 1
+    evidence: "The exact binary stopped before opening an MCP stdio path because control plane API key is required. No authenticated control-plane channel, live tunnel, or stress target was used."
+  executable_level_claim:
+    result: REMAINING_EXTERNAL_PROOF_GAP
+    classification: "Credential-bound external limitation, not a transport failure"
+    reason: "The selected tunnel-client requires an authenticated control-plane API key and a real tunnel identity before run can establish its shared stdio path. Supplying operator credentials or using the live tunnel/control plane is outside this task's invariants."
+    evidence_boundary: "The exact binary fingerprint and safe preflight failures are proven; upstream behavior and synthetic MCP stdio evidence are not substituted for exact tunnel-client survival/timeout proof."
+
+acceptance_criteria:
+  AC-1: PROVEN
+  AC-2: PROVEN
+  AC-3: PROVEN
+  AC-4: PROVEN_AS_NARROW_EXTERNAL_GAP
+  AC-5: PROVEN
+  AC-6: PENDING_REPORT_PUBLICATION
+
+acceptance_evidence:
+  AC-1: "The current start-contract executable selection was read-only fingerprinted at /opt/homebrew/bin/tunnel-client, resolved to the Homebrew 0.0.11 file, with metadata, SHA-256, and version/build output recorded."
+  AC-2: "The real mcp==2.2.0 stdio client launched one server child and concurrently served eight logical mixed callers. Four terminal markers and four file markers matched exactly to their originating requests with no cross-talk or response swap."
+  AC-3: "Six barrier-held terminal_exec requests recorded active=6 and peak=6. capacity_observer and fs_read_batch returned while the barrier was held. The seventh terminal_exec returned the capacity error, its spawn marker was absent, and all six later completed with final active=0."
+  AC-4: "Safe exact-binary probes established the precise blocker: the selected executable cannot reach MCP stdio startup without an authenticated control-plane API key and tunnel identity. The synthetic shared-MCP proof is labeled separately."
+  AC-5: "Only one test evidence file changed. All tests used temporary workspaces/HOMEs; no port 8080, installed Runtime, tunnel lifecycle, desired state, launchd/ServiceManagement, runtime.env, credentials, Keychain, or live cutover state was accessed or mutated."
+  AC-6: "The canonical GitHub dev ref was freshly confirmed at exact base, implementation commit was pushed non-force as a direct child, and main was not mutated. Report-only child and final ref verification remain to be completed."
+
+preservation:
+  installed_runtime_lifecycle_mutated: false
+  secure_tunnel_or_control_plane_mutated: false
+  port_8080_used_or_mutated: false
+  runtime_env_read_or_mutated: false
+  desired_state_mutated: false
+  service_management_or_launchd_mutated: false
+  live_cutover_mutated: false
+  installed_app_bytes_mutated: false
+  system_settings_tcc_or_btm_mutated: false
+  keychain_or_signing_identity_enumerated: false
+  operator_credentials_exposed: false
+  task0057_x6_ceiling_changed: false
+  task0058_candidate_immutability_changed: false
+
+publication:
+  implementation_commit: "74bda8504a5184361073de04eda2b599aaf0c60a"
+  implementation_pushed_to_dev: true
+  implementation_commit_subject: "test: prove shared MCP transport concurrency"
+  implementation_parent: "04c31cfb374843fff43140c262c06c63be791852"
+  report_path: ".agent/tasks/TASK-0059/report.yaml"
+  report_only_commit_required: true
+  report_only_commit: PENDING
+  required_lineage: "implementation commit followed by this report-only direct child"
+  push_mode: non_force_dev
+  force_push: false
+  promote_to_main: false
+  next_step: ARCHITECT_REVIEW
+
+executor_recommendation:
+  authority: ADVISORY_ONLY
+  recommendation: >-
+    TASK-0059 is ready for Architect review. The accepted x6 backend is proven through one
+    shared isolated MCP stdio child serving eight mixed logical callers, with deterministic
+    request/result isolation, six-heavy fail-fast admission, and cheap-call responsiveness.
+    The exact selected tunnel-client is fingerprinted, but its executable-level shared-stdio
+    survival/timeout claim remains narrowly external and credential-bound because safe probes
+    cannot establish an authenticated control-plane channel. No production Runtime or live
+    lifecycle state was touched.
