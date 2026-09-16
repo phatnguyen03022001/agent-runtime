@@ -1,21 +1,21 @@
 protocol_version: 3
 
 task_id: TASK-0061
-task_revision: 2
-report_revision: 2
+task_revision: 3
+report_revision: 3
 state: REPORTED
-result: BLOCKED
+result: PASS
 
 execution:
   repository: phatnguyen03022001/agent-runtime
   branch: dev
   execution_surface: CHATGPT_LOCAL
   native_execution_tool: "Remote Desktop Commander MCP"
-  exact_task_base: "25e8429f6aaea7d4755ab85ce669282081ea38c3"
-  source_revision: "25e8429f6aaea7d4755ab85ce669282081ea38c3"
-  source_tree: "bf8fddc1d904d70a595183f2b1b575166802abe2"
+  exact_task_base: "d6688ac639c3dd5d347f25b1ad72704b766afc04"
+  source_revision: "d6688ac639c3dd5d347f25b1ad72704b766afc04"
+  source_tree: "89f40ece423dd7d0c3f62297c2a171a65f5f8086"
   skill_library_revision: "1826d33bd1e467896c133109b37db8b0656b3276"
-  continuation_of_revision: 1
+  continuation_of_revision: 2
   branch_created: false
   worktree_created: false
   nested_executor_used: false
@@ -25,47 +25,42 @@ preflight:
   clean_tree: PASS
   env_gitignored: PASS
   env_untracked: PASS
-  env_duplicate_key_guard: PASS
+  env_duplicate_key_count: 0
   canonical_system_temp_root: "/private/tmp"
   canonical_temp_descendant_guard: PASS
+  byte_only_probe_copy: PASS
+  explicit_executable_permissions: PASS
+  adhoc_codesign: PASS
+  adhoc_strict_verify: PASS
 
 bootstrap:
   revision_1_enumeration_count: 1
-  revision_2_replacement_enumeration_count: 1
-  combined_historical_enumeration_count: 2
-  revision_2_apple_development_identity_count: 1
+  revision_2_enumeration_count: 1
+  revision_3_enumeration_count: 1
+  combined_historical_enumeration_count: 3
+  revision_3_apple_development_identity_count: 1
   deterministic_unique_selection: PASS
-  selected_literal_durably_retained_after_failure: false
-  temporary_codesign_attempted: false
-  strict_verification_attempted: false
-  team_identifier_read: false
-  env_key_persisted: false
-  env_key_present_after_failure: false
+  selected_literal_temp_retention: PASS
+  selected_identity_sha256: "caba6bba7c64a3efb58eafa09c300ca030ccb71a65cb2bc1a929cfc63a17e3e7"
 
 verification:
-  corrected_temp_path_handling: PASS
-  bounded_replacement_identity_enumeration: PASS
-  deterministic_unique_selection: PASS
-  temporary_codesign: NOT_RUN
-  strict_codesign_verify: NOT_RUN
-  team_identifier: NOT_RUN
-  env_persistence: NOT_RUN
-  env_key_equality: NOT_RUN
+  exact_identity_codesign: PASS
+  strict_codesign_verify: PASS
+  team_identifier_non_null: true
+  team_identifier_sha256: "497c6b1fff2701afe7cf7fedb03297efe39b0af5e1081a78fc61bbbafeb9d49c"
+  env_persistence: PASS
+  env_mode: "0600"
+  env_key_equality: PASS
+  env_selected_identity_sha256: "caba6bba7c64a3efb58eafa09c300ca030ccb71a65cb2bc1a929cfc63a17e3e7"
+  env_gitignored_post: PASS
+  env_untracked_post: PASS
   temp_cleanup: PASS
 
-failure:
-  classification: TEMP_ARTIFACT_COPY_METADATA_PERMISSION_ERROR
-  boundary: TEMPORARY_SIGNING_PROOF
-  operation: "shutil.copy2('/usr/bin/true', task-owned signing probe)"
-  error: "PermissionError: Operation not permitted while copying source file flags to the task-owned temporary artifact."
-  consequence: >-
-    The replacement enumeration completed and uniquely selected one Apple Development identity,
-    but the selected literal was retained only in task-owned temporary state. The copy2 metadata
-    failure occurred before codesign and the task-owned cleanup removed that temporary state.
-    Revision 2 authorizes no further enumeration, so execution cannot lawfully reconstruct the
-    selected literal or continue signing and persistence.
-
 preservation:
+  selected_identity_literal_disclosed: false
+  team_identifier_literal_disclosed: false
+  unrelated_env_values_exposed: false
+  unrelated_env_values_modified: false
   keychain_mutated: false
   production_source_modified: false
   real_candidate_freeze_invoked: false
@@ -79,50 +74,31 @@ preservation:
   live_transaction_mutated: false
   installed_app_bytes_mutated: false
   system_settings_tcc_btm_mutated: false
-  env_unrelated_values_exposed: false
-  env_unrelated_values_modified: false
 
 acceptance_evidence:
   - criterion_id: AC-1
     status: PASS
     evidence: >-
-      All non-sensitive guards completed before discovery, including canonical /private/tmp descendant proof,
-      and exactly one revision-2 replacement enumeration deterministically found one Apple Development identity.
+      All non-sensitive path, byte-copy, executable-permission, and ad-hoc signing mechanics passed before discovery. Exactly one revision-3 replacement enumeration ran and deterministically found one Apple Development identity.
   - criterion_id: AC-2
-    status: BLOCKED
+    status: PASS
     evidence: >-
-      Temporary signing was not reached. Copying /usr/bin/true with shutil.copy2 failed while
-      applying source file flags to the task-owned artifact before codesign invocation.
+      The selected identity signed and strictly verified the task-owned probe. TeamIdentifier was non-null; only SHA-256 digests are recorded.
   - criterion_id: AC-3
-    status: BLOCKED
+    status: PASS
     evidence: >-
-      AGENT_RUNTIME_CODESIGN_IDENTITY remains absent. The repository-local .env remains ignored,
-      untracked, and unrelated values were neither exposed nor modified.
+      The exact selected literal was persisted once to repo-local ignored .env, mode 0600. Key-only equality passed and the persisted-value digest matches the signing digest.
   - criterion_id: AC-4
     status: PASS
     evidence: >-
-      No production source, candidate, installed/live Runtime, tunnel, lifecycle, runtime.env,
-      desired-state, ServiceManagement/launchd, installed-app, System Settings, TCC, BTM, or
-      Keychain mutation occurred.
+      No production source, candidate, installed/live Runtime, tunnel, lifecycle, runtime.env, desired-state, ServiceManagement/launchd, installed-app, System Settings, TCC, BTM, or Keychain mutation occurred.
   - criterion_id: AC-5
     status: PARTIAL
     evidence: >-
-      Revision-2 report-only publication is authorized. Canonical publication is established only
-      by the post-push fresh remote-ref proof and is not self-attested by this report commit.
-
-blocker:
-  classification: REPLACEMENT_ENUMERATION_EVIDENCE_LOST_BEFORE_SIGNING
-  boundary: TEMPORARY_SIGNING_PROOF
-  description: >-
-    The single revision-2 replacement enumeration has been consumed. The selected literal was lost
-    when the task-owned temp root was cleaned after a copy2 file-flag PermissionError. A third
-    security find-identity invocation is forbidden by TASK-0061 revision 2.
-  recovery_constraint: >-
-    Do not run another identity enumeration under revision 2 and do not substitute another Keychain
-    command. Architect revision is required before any renewed bootstrap attempt.
+      Revision-3 report-only publication is authorized. Canonical publication is established only by the post-push fresh remote-ref proof and is not self-attested by this report commit.
 
 local_hygiene:
-  task_temp_root: "/private/tmp/agent-runtime-task0061-r2.e58al6s0"
+  task_temp_root_pattern: "/private/tmp/agent-runtime-task0061-r3.*"
   cleanup: PASS
   retained_temp_artifacts: false
 
