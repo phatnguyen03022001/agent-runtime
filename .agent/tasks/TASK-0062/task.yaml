@@ -1,0 +1,181 @@
+protocol_version: 3
+
+task_id: TASK-0062
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_successor_task
+  predecessor_task: TASK-0061
+  predecessor_review: "301835555ea9cfa9baf2d7bbe9ccc8caa802c652"
+  predecessor_review_state: ACCEPTED
+  gap_id: REAL_IMMUTABLE_SIGNED_CANDIDATE_FREEZE
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration_and_evidence
+
+classification: BOUNDED_RELEASE_PREPARATION
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+  candidate_source_revision: exact_handoff_base
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - verification
+    - simplicity
+  recommended:
+    - github-workflow
+
+structure_authority:
+  status: RESOLVED
+  source: "Accepted TASK-0058 immutable candidate publication contract, TASK-0061 signing identity bootstrap, and existing canonical freeze pipeline."
+  rationale: >-
+    This task creates and proves exactly one real signed immutable candidate. It does not install,
+    activate, restart, cut over, promote, or release the candidate.
+
+objective: >-
+  Produce exactly one real signed SHA-addressed Agent Runtime candidate from the exact TASK-0062
+  handoff base using the accepted canonical freeze pipeline and the already bootstrapped local signing
+  identity. Prove source/tree/requirements.lock identity, signing-identity digest continuity, strict
+  code-sign validity, non-null consistent TeamIdentifier ownership, candidate provenance closure, exact
+  immutable candidate paths, and byte stability after freeze. Do not mutate installed/live Runtime,
+  tunnel, port 8080, ServiceManagement/launchd, desired state, runtime.env, or live cutover state.
+
+local_signing_authority:
+  source: "/Users/tienphat/Developer/agent-runtime/.env"
+  key: "AGENT_RUNTIME_CODESIGN_IDENTITY"
+  expected_value_sha256: "caba6bba7c64a3efb58eafa09c300ca030ccb71a65cb2bc1a929cfc63a17e3e7"
+  keychain_enumeration_allowed: false
+  manual_operator_copy_paste_required: false
+  rules:
+    - "Read only the AGENT_RUNTIME_CODESIGN_IDENTITY entry; do not source, print, dump, or expose the whole .env."
+    - "Require exactly one key occurrence and exact SHA-256 digest continuity before any freeze action."
+    - "Do not run security find-identity or any alternative identity discovery command."
+    - "Pass the exact local value only in the freeze subprocess environment; do not persist the literal in repository artifacts or chat output."
+
+scope:
+  required_changes:
+    - "Fresh-resolve local HEAD and origin/dev and require both equal the exact handoff base before freeze. Require the designated working tree clean."
+    - "Treat exact handoff base as candidate source revision. Compute and record its exact Git tree identity and requirements.lock SHA-256 before freeze."
+    - "Confirm repo-local .env is ignored/untracked, mode 0600, contains exactly one AGENT_RUNTIME_CODESIGN_IDENTITY entry, and the key-only value digest equals caba6bba7c64a3efb58eafa09c300ca030ccb71a65cb2bc1a929cfc63a17e3e7. Do not print the literal or unrelated .env values."
+    - "Invoke macos/freeze_candidate.py exactly once for the exact source revision/tree/requirements.lock identity, with AGENT_RUNTIME_CODESIGN_IDENTITY supplied from the accepted local key only. Do not retry the real freeze merely to gather evidence."
+    - "Require publication under build/candidates/<candidate_sha256>/ with exact sibling Agent Runtime.app and Agent Runtime.candidate.json returned by the canonical freeze contract."
+    - "Record exact candidate_sha256, candidate app path, candidate handoff path, source revision, source tree, requirements.lock SHA-256, app bundle identifier, candidate record count, and relevant non-secret provenance identity fields."
+    - "Run /usr/bin/codesign --verify --deep --strict on the exact frozen app."
+    - "Read bounded codesign metadata from the main app and bundled Runtime service/helper. Require non-null TeamIdentifier values and consistency across required signed executable identities. Record only TeamIdentifier equality/non-null status and a SHA-256 digest, not the literal TeamIdentifier."
+    - "Run canonical candidate validation against the exact frozen app/handoff pair after freeze and require candidate_sha256 equality with the freeze result."
+    - "Hash the external handoff and identity-critical immutable files before and after post-freeze verification. At minimum include the handoff, main executable, Runtime service executable, Runtime start.sh, runtime-manifest.json, and bundled requirements.lock when present. Require exact byte equality."
+    - "Do not reconstruct, reuse, overwrite, or claim restoration of historical TASK-0056 candidate bytes. This is a new prospective immutable artifact under TASK-0058 semantics."
+    - "Do not modify production source to make freeze pass. Any source defect, signing defect, provenance mismatch, immutable-output collision, or environment blocker must be reported and returned to Architect review."
+    - "Publish only the canonical TASK-0062 report to dev, non-force, then stop for Architect review."
+  allowed_existing_files_or_components:
+    - "/Users/tienphat/Developer/agent-runtime/.env as accepted local ignored operator configuration"
+    - "build/candidates/<candidate_sha256>/ as canonical immutable candidate output"
+    - ".agent/tasks/TASK-0062/report.yaml"
+  expected_files_are_restrictive: true
+
+invariants:
+  - "Exactly one real freeze_candidate.py invocation occurs."
+  - "No security find-identity or broader Keychain enumeration occurs."
+  - "Candidate source revision equals exact TASK-0062 handoff base."
+  - "Signing identity digest must match accepted TASK-0061 digest before freeze."
+  - "The candidate is SHA-addressed and immutable under TASK-0058 publication semantics."
+  - "No existing candidate directory is deleted, replaced, merged, truncated, or repurposed."
+  - "No historical TASK-0056 bytes are reconstructed or claimed restored."
+  - "Installed Runtime, live tunnel/control-plane connection, port 8080, runtime.env, desired-state marker, ServiceManagement/launchd state, live transaction, installed app bytes, System Settings, TCC, and BTM remain untouched."
+
+forbidden_changes:
+  - "Do not enumerate Keychain identities or run security find-identity."
+  - "Do not expose the literal signing identity, private keys, certificate bodies, passwords, unrelated .env values, runtime.env values, API keys, or literal TeamIdentifier."
+  - "Do not install or activate the candidate."
+  - "Do not start, stop, restart, kill, signal, repair, reinstall, register, unregister, commit-cutover, rollback, or otherwise lifecycle-mutate live Runtime or tunnel."
+  - "Do not modify production Runtime, packaging, lifecycle, Swift, tests, dependencies, configuration, README, or verification source."
+  - "Do not create a branch, worktree, workspace, registry, queue, scheduler, daemon, database, or service."
+  - "Do not modify main, tags, releases, architect-profile, agent-skills, agent-standards, or agent-documents."
+  - "Do not delegate to Codex, Claude, Antigravity, another ChatGPT, or nested executors."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: ARCHITECT_REVIEW
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0062/report.yaml"
+  unlisted_new_files:
+    allowed: false
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "The accepted local signing identity is resolved without Keychain enumeration and its key-only SHA-256 digest matches TASK-0061 accepted evidence before freeze."
+    evidence_required: "Single-key occurrence, mode 0600, ignored/untracked proof, digest equality, and zero identity-enumeration commands."
+  - id: AC-2
+    requirement: "Exactly one real immutable candidate is frozen from the exact handoff base and exact tree/requirements.lock identity."
+    evidence_required: "Exact source revision/tree/lock identity, one freeze invocation, exact candidate app/handoff paths, and candidate_sha256."
+  - id: AC-3
+    requirement: "The frozen app is strictly code-sign valid and required executable ownership has non-null consistent TeamIdentifier values."
+    evidence_required: "Strict codesign PASS plus bounded TeamIdentifier equality/non-null evidence and digest only."
+  - id: AC-4
+    requirement: "The exact frozen app/handoff pair validates after freeze and remains byte-stable through the verification window."
+    evidence_required: "Canonical provenance validation, candidate identity equality, handoff SHA-256, and critical-file before/after hash equality."
+  - id: AC-5
+    requirement: "TASK-0058 immutability is preserved and no prior candidate or historical TASK-0056 artifact is overwritten/reconstructed."
+    evidence_required: "SHA-addressed destination identity, non-overwrite evidence, and explicit historical-truthfulness statement."
+  - id: AC-6
+    requirement: "No installed/live Runtime, tunnel, port 8080, lifecycle/configuration, credential, ServiceManagement, or Keychain state is mutated."
+    evidence_required: "Explicit preservation evidence and no install/cutover/lifecycle invocation."
+  - id: AC-7
+    requirement: "Canonical report publishes non-force to dev from exact handoff lineage with main unchanged."
+    evidence_required: "Fresh remote refs, report-only lineage, clean designated working tree, and main identity."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Exact-base/clean-tree/source-tree/requirements.lock and key-only signing-authority digest preflight."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Invoke canonical real freeze exactly once and capture exact candidate_app, candidate_handoff, candidate_sha256."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Run strict codesign and bounded TeamIdentifier ownership proof on exact frozen candidate."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Validate exact app/handoff pair and prove critical-file byte stability through post-freeze verification."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Fresh-prove zero live/Keychain mutation, report-only publication, clean designated working tree, and unchanged main."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect review of exact report, candidate/signing/provenance evidence, immutable paths, and preservation evidence."
+    expected_signal: "One exact signed immutable candidate is ready for a separately authorized live activation task."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
