@@ -1,19 +1,23 @@
 protocol_version: 3
 
 task_id: TASK-0057
-task_revision: 1
-review_revision: 1
-state: REVISION_REQUIRED
+task_revision: 2
+review_revision: 2
+state: ACCEPTED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0057/report.yaml
-  commit: "31b7544c2558d38ba154f25c8633e941f523baf1"
-  report_revision: 1
+  commit: "964ece55525baa981b06451819e7f4bf6bffc1b8"
+  report_revision: 2
+
+reviewed_candidate:
+  planning_base: "1b428c9987e0a000c5ed78238a4acdfdc6096415"
+  implementation_commit: "874ff472a0c892cb90504167ca8be92b61a3aac7"
+  report_commit: "964ece55525baa981b06451819e7f4bf6bffc1b8"
 
 independence:
   reviewer_role: ARCHITECT
-  separate_session_from_executor: true
   exact_report_identity_verified: true
 
 contract_compliance:
@@ -24,7 +28,7 @@ contract_compliance:
   scope: PASS
   structure_policy: PASS
   git_authority: PASS
-  acceptance_criteria: FAIL
+  acceptance_criteria: PASS
   verifier_evidence: NOT_REQUIRED
 
 criterion_judgment:
@@ -33,37 +37,44 @@ criterion_judgment:
   AC-3: PASS
   AC-4: PASS
   AC-5: PASS
-  AC-6: PASS
-  AC-7: PASS
-  AC-8: PASS
-  AC-9: FAIL
-  AC-10: PASS
-  AC-11: PASS
-  AC-12: PASS
 
-findings:
+finding_closure:
   - id: FINDING-1
-    severity: BLOCKING
-    criterion: AC-9
-    location: agent_runtime/executor.py
-    description: >-
-      terminal_exec now builds its returned stdout/stderr dictionary before the
-      bounded reader threads are joined in the finally block. In Python the return
-      expression is evaluated before finally executes, so stdout_capture.text() and
-      stderr_capture.text() can be sampled before the remaining pipe bytes are drained.
-      This can return incomplete output even though the finally block later drains and
-      releases the lease, regressing the pre-existing terminal_exec output contract.
-    required_correction: >-
-      Complete bounded reader-thread drain/close handling before materializing the
-      returned stdout/stderr values, while preserving the x6 lease through that drain.
-      Add a deterministic regression test that would fail if return payload capture is
-      evaluated before the delayed reader finishes.
+    prior_review: "678ab944812a593d16396400837f6a016d2b90ad"
+    status: CLOSED
+    evidence: >-
+      Implementation 874ff472a0c892cb90504167ca8be92b61a3aac7 moves the bounded
+      reader-thread drain before stdout/stderr payload materialization. The deterministic
+      barrier regression holds both reader threads, proves terminal_exec remains incomplete
+      and the heavy lease remains active during the drain, then proves complete stdout and
+      stderr after release. The lease still releases only after cleanup/drain completes.
 
 acceptance_basis:
-  - "Fresh GitHub review resolved TASK-0057 revision 1 at exact base bb6cf7cd4cbceac42a5f3bcecfe0b99cd2ad69f6 and report commit 31b7544c2558d38ba154f25c8633e941f523baf1."
-  - "Fresh lineage proves implementation 36c058ec0b8230f282f3431f58ff386f33d76e6b is the single direct child of the planning base and report commit 31b7544c2558d38ba154f25c8633e941f523baf1 is the report-only direct child of that implementation."
-  - "Fresh remote refs prove dev was exactly the report commit before review publication and main remained c49d777efa09db7f6c51bd8d8616db4623499fb8."
-  - "The x6 admission design, fail-fast overload, PTY lifetime accounting, graceful cleanup ownership, and isolated evidence are materially consistent with the task."
-  - "Acceptance is blocked solely by FINDING-1 because AC-9 explicitly requires the existing terminal output contract to remain intact."
+  - "Fresh GitHub review resolved TASK-0057 revision 2 and exact report commit 964ece55525baa981b06451819e7f4bf6bffc1b8."
+  - "Fresh lineage proves corrective implementation 874ff472a0c892cb90504167ca8be92b61a3aac7 is the single direct child of planning base 1b428c9987e0a000c5ed78238a4acdfdc6096415 and report 964ece55525baa981b06451819e7f4bf6bffc1b8 is the report-only direct child of that implementation."
+  - "The corrective implementation changes only agent_runtime/executor.py and tests/test_task0057_admission.py, matching the restrictive revision-2 scope."
+  - "Executor evidence records PASS for the deterministic output-drain regression, the full TASK-0057 x6 focused suite, ./verify, applicable Swift tests, and git diff --check."
+  - "Fresh remote refs before review publication prove dev exactly at the reviewed report and main unchanged at c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "The reviewed task remains source/test isolated: no installed Runtime, tunnel, port 8080, runtime.env, ServiceManagement/launchd state, desired state, installed app bytes, or live cutover state was mutated."
 
-next_action: "Revise TASK-0057 to correct FINDING-1, add a deterministic output-drain regression, rerun affected/full verification, publish a new implementation candidate and report, then return for Architect review."
+accepted_contract:
+  hard_heavy_execution_ceiling: 6
+  accounting: "terminal_exec roots + live terminal_start PTY roots"
+  overload: "seventh and later concurrent heavy requests fail fast before spawn"
+  runtime_queue: false
+  pty_hard_ceiling: 6
+  capacity_observer_role: advisory_only
+  graceful_cleanup_owns_exec_and_pty: true
+  same_uid_sandbox_claim: false
+
+successor_boundary:
+  source_hardening_accepted: true
+  installed_runtime_updated: false
+  live_x6_activation_proven: false
+  packaging_artifact_overwrite_defect_fixed: false
+  promotion_or_release_authorized: false
+
+next_action: >-
+  TASK-0057 is accepted as source/test evidence. Any packaging, installation, live activation,
+  cutover commit, promotion, or release requires separate current authority and must preserve
+  the operator-only Runtime lifecycle boundary.
