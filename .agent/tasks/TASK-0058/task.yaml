@@ -1,0 +1,190 @@
+protocol_version: 3
+
+task_id: TASK-0058
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_successor_task
+  predecessor_task: TASK-0057
+  predecessor_review: "c5bd6870d694270dfb5aa16f359ed4e234d62f66"
+  predecessor_review_state: ACCEPTED
+  gap_id: PACKAGING_CANDIDATE_IMMUTABILITY
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration_and_evidence
+
+classification: BOUNDED
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - verification
+  - simplicity
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - verification
+    - simplicity
+  recommended:
+    - github-workflow
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "phatnguyen03022001/agent-runtime@c5bd6870d694270dfb5aa16f359ed4e234d62f66:.agent/tasks/TASK-0057/review.yaml"
+    role: "Accepted predecessor evidence explicitly recording packaging_artifact_overwrite_defect_fixed=false."
+    precedence: 1
+  - source: "phatnguyen03022001/agent-runtime@c5bd6870d694270dfb5aa16f359ed4e234d62f66:macos/package_app.sh"
+    role: "Current defect surface: packaging writes one mutable singleton app/handoff path and deletes any prior contents."
+    precedence: 2
+  - source: "phatnguyen03022001/agent-runtime@c5bd6870d694270dfb5aa16f359ed4e234d62f66:macos/freeze_candidate.py"
+    role: "Current freeze contract assumes the same mutable singleton output paths."
+    precedence: 3
+  - source: "phatnguyen03022001/agent-skills@1826d33bd1e467896c133109b37db8b0656b3276"
+    role: "Pinned task/execution/reliability/verification/simplicity governance authority."
+    precedence: 4
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing macos packaging/freeze/provenance modules and existing candidate-freeze/package-provenance tests."
+  rationale: "This is bounded hardening of an existing packaging boundary. No new service, subsystem, registry, database, branch, or workspace is needed."
+
+objective: >-
+  Eliminate the packaging artifact overwrite defect so every successfully frozen Agent Runtime candidate can remain byte-preserved and independently addressable. Canonical packaging/freeze must never silently delete, replace, or reuse an existing frozen candidate app or handoff. Build work may use run-owned temporary staging, but successful publication must produce a dedicated candidate output location and fail closed on collisions. Preserve source/provenance/signing semantics and do not touch the installed live Runtime.
+
+scope:
+  required_changes:
+    - "Remove the canonical packaging dependency on one mutable singleton pair build/Agent Runtime.app + build/Agent Runtime.candidate.json. A successful candidate must be published to one dedicated output location containing its app and matching external handoff."
+    - "The candidate output location MUST be explicit or deterministically derived from immutable candidate/source identity, and the exact resulting app/handoff paths MUST be surfaced by the freeze/package contract. Do not introduce a mutable latest/current alias as authoritative candidate identity."
+    - "Packaging MUST construct candidate bytes in run-owned temporary staging first. Publication to the final candidate location occurs only after construction/signing/provenance sealing succeeds sufficiently to identify the intended artifact. A failed packaging run MUST NOT leave a partially published candidate that can be mistaken for a valid frozen artifact."
+    - "Existing candidate output MUST be treated as immutable. Canonical package/freeze code MUST NOT rm -rf, rm -f, truncate, replace, merge into, or otherwise mutate an already-existing candidate app/handoff location. Collision/reuse must fail deterministically before mutation of the existing candidate."
+    - "freeze_candidate.py MUST validate the exact app/handoff paths produced for the current invocation rather than assuming the old singleton paths. Its stdout/result contract must expose those exact paths plus candidate_sha256 without requiring consumers to infer them."
+    - "Preserve the current exact-source revision/tree/requirements.lock checks, package provenance manifest/seal/validate semantics, explicit non-ad-hoc signing requirement, strict codesign validation behavior, responsible executable identity, and candidate SHA-256 semantics."
+    - "Preserve compatibility of downstream candidate validation/cutover inputs by using explicit candidate app/handoff paths; do not redesign cutover state, ServiceManagement, signing policy, Runtime service identity, or live lifecycle behavior."
+    - "Add deterministic isolated tests proving two separate successful synthetic/fake freeze outputs can coexist unchanged, a later freeze cannot overwrite an earlier candidate, an attempted destination collision fails without changing pre-existing bytes, and a packaging failure leaves no valid-looking partial publication."
+    - "Add a regression proving historical accepted-candidate bytes cannot be reconstructed or claimed from overwritten singleton paths; documentation/tests must describe this fix as prospective preservation for new candidates, not restoration of TASK-0056 bytes."
+    - "Run focused candidate-freeze/package-provenance tests, repository-native ./verify, applicable Swift/native tests only if directly affected, and git diff --check. No real candidate freeze/signing run is required for this source-only hardening task."
+    - "Publish one implementation commit and one report-only direct child to dev, non-force, then stop for Architect review."
+  allowed_existing_files_or_components:
+    - "macos/package_app.sh"
+    - "macos/freeze_candidate.py"
+    - "macos/package_provenance.py only if materially necessary to preserve/validate the new explicit artifact paths"
+    - "tests/test_candidate_freeze.py"
+    - "tests/test_package_provenance.py"
+    - "other existing packaging/cutover tests only when directly required by an affected contract"
+    - "README.md only if the user-facing/internal packaging contract needs correction"
+    - ".agent/tasks/TASK-0058/report.yaml"
+  expected_files_are_restrictive: false
+
+invariants:
+  - "A previously published frozen candidate is never mutated by creating another candidate."
+  - "Candidate app and external handoff remain one inseparable identity pair; validation never mixes artifacts from different freeze runs."
+  - "No successful freeze relies on a mutable singleton candidate path as canonical identity."
+  - "A collision with an existing final candidate location fails closed and preserves all existing bytes exactly."
+  - "Failed/incomplete packaging does not publish a valid-looking final candidate location."
+  - "TASK-0056 historical accepted hashes remain historical evidence only; this task must not recreate bytes and claim identity with the lost TASK-0056 artifact."
+  - "TASK-0057 x6 source behavior remains unchanged."
+  - "Installed Runtime, tunnel, port 8080, runtime.env, desired state, ServiceManagement/launchd state, live cutover transaction, System Settings, TCC, and installed app bytes remain untouched."
+
+forbidden_changes:
+  - "Do not invoke a real freeze/signing flow against the designated repository build outputs in this task. Use isolated/temp fixtures for behavioral proof."
+  - "Do not discover/enumerate Keychain identities, run security find-identity, or select a signing identity."
+  - "Do not delete, overwrite, clean, move, or repurpose any pre-existing local build candidate merely because it uses the old singleton path. Treat unknown/pre-existing artifacts as retained evidence/user state."
+  - "Do not start, stop, restart, kill, signal, repair, reinstall, register, unregister, commit-cutover, rollback, or otherwise lifecycle-mutate the installed Runtime/tunnel/port 8080."
+  - "Do not mutate runtime.env, desired-state markers, ServiceManagement/launchd live state, System Settings, TCC, installed app bytes, or current live cutover transaction."
+  - "Do not change x6 concurrency semantics, six MCP tools, MCP annotations, execution admission, session behavior, or Runtime transport behavior."
+  - "Do not add a candidate database, registry service, daemon, scheduler, queue, worker framework, global cache, new repository, worktree, workspace, or top-level subsystem."
+  - "Do not modify architect-profile, agent-skills, agent-standards, agent-documents, main, tags, releases, or branch topology."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0058/report.yaml"
+  unlisted_new_files:
+    allowed: true
+    max: 1
+    within:
+      - "tests/"
+    purpose: "A focused packaging immutability test file is allowed only if extending existing candidate/package tests would materially reduce clarity."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Canonical packaging/freeze no longer writes/deletes one mutable singleton candidate pair and instead returns exact dedicated app/handoff paths for each successful freeze."
+    evidence_required: "Implementation inspection plus deterministic tests of the path/output contract."
+  - id: AC-2
+    requirement: "Existing frozen candidate bytes are mechanically protected from later packaging/freeze attempts; destination collision fails before existing bytes change."
+    evidence_required: "Fixture creates candidate A, records byte hashes, attempts candidate B/collision, and proves candidate A app/handoff hashes remain exact."
+  - id: AC-3
+    requirement: "Failed packaging cannot leave a final candidate location that passes or appears eligible for canonical validation."
+    evidence_required: "Injected failure before publication plus filesystem assertions showing no published candidate pair/partial merge at the intended final destination."
+  - id: AC-4
+    requirement: "freeze_candidate validates and reports the exact produced app/handoff pair and preserves source/tree/lock/provenance/signing contracts without mixing runs."
+    evidence_required: "Focused freeze/provenance tests including two independent candidate outputs and mismatched-pair rejection where applicable."
+  - id: AC-5
+    requirement: "No task claims restoration/preservation of the already-overwritten TASK-0056 bytes; the fix is prospective and truthful."
+    evidence_required: "Report and docs/tests explicitly state historical TASK-0056 bytes are not reconstructed."
+  - id: AC-6
+    requirement: "TASK-0057 x6 behavior and unrelated Runtime/live lifecycle surfaces remain unchanged."
+    evidence_required: "Repository-native verification plus exact changed-path review and explicit live-mutation false evidence."
+  - id: AC-7
+    requirement: "Implementation and report publish as one implementation commit followed by one report-only direct child on dev, non-force, with main unchanged."
+    evidence_required: "Fresh remote ref and exact commit-lineage proof after publication."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Run deterministic RED->GREEN candidate immutability/collision/partial-publication tests using only temp/test-owned artifacts."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Run tests/test_candidate_freeze.py and tests/test_package_provenance.py plus any directly affected existing packaging/cutover tests."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Run ./verify and git diff --check; run Swift/native tests only if changed code can materially affect them."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Fresh-prove implementation -> report-only direct-child lineage, non-force dev publication, clean designated local working copy, and unchanged main."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect review of exact report/candidate source evidence."
+    expected_signal: "Future candidates are independently addressable and no existing candidate can be overwritten by canonical packaging/freeze."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
