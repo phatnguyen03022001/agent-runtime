@@ -1,0 +1,221 @@
+protocol_version: 3
+
+task_id: TASK-0076
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_final_live_cutover_followup
+  predecessor_task: TASK-0075
+  predecessor_review: "a5c291971f5be4917f267935c0ab88a73815b7e1"
+  predecessor_review_state: ACCEPTED
+  operator_authorization: >-
+    After TASK-0075 Architect acceptance, the Architect explicitly asked the operator to authorize
+    "TASK-0076 live cutover" for the exact retained post-audit candidate, including exact-candidate
+    live cutover, live six-tool acceptance, commit-cutover and post-commit stability. Operator replied
+    "Ok". This authorizes this bounded live replacement cycle only. It does not authorize rollback,
+    rebuild, re-sign, repair, main promotion, or any second cutover/commit attempt.
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration_and_evidence
+
+classification: FINAL_EXACT_CANDIDATE_LIVE_CUTOVER_AND_ACCEPTANCE
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+execution_surface:
+  type: CHATGPT_LOCAL
+  lifecycle_tool: Remote Desktop Commander MCP
+  live_mcp_tool: Agent Runtime MCP direct
+  delegation: forbidden
+
+accepted_candidate:
+  candidate_sha256: "8ba16e69db3eecbd5db4ab0636c289ff68d71433779d9c67ded2f5335507ae01"
+  candidate_app: "/Users/tienphat/Developer/agent-runtime/build/candidates/8ba16e69db3eecbd5db4ab0636c289ff68d71433779d9c67ded2f5335507ae01/Agent Runtime.app"
+  candidate_handoff: "/Users/tienphat/Developer/agent-runtime/build/candidates/8ba16e69db3eecbd5db4ab0636c289ff68d71433779d9c67ded2f5335507ae01/Agent Runtime.candidate.json"
+  candidate_handoff_sha256: "d909bd52f1b008ba1f84d43551ecd2666cbc4a839c8508b663a699875906971d"
+  source_revision: "e6365f9a0a5b9489b5cf51fe7fe74e377e73d5e5"
+  source_tree: "594cb81f3292242bd870df258a293d99b4cb990d"
+  requirements_lock_sha256: "80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
+  session_sha256: "03cdb1f0e7c0faa753c5749330b29539256cadee58c951c56eda2a9f6f88bf49"
+  protection_sha256: "feecd9d9c80b5663c17c17760d7686a9226ac2aa2a95d96cfc7078dce17af9cc"
+  team_identifier_sha256: "497c6b1fff2701afe7cf7fedb03297efe39b0af5e1081a78fc61bbbafeb9d49c"
+
+known_predecessor:
+  installed_runtime_revision: "b5ac0ed5b461d3a259e4111e1a8f13933985f81f"
+  expected_transaction_before_cutover: ABSENT
+  expected_desired_state: RUNNING
+  expected_listener_count: 1
+  expected_healthz: 200
+  expected_readyz: 200
+
+objective: >-
+  Replace the healthy older installed generation with the exact retained TASK-0075 candidate through
+  one canonical transactional prebuilt cutover, prove the new installed generation and exact six-tool
+  direct MCP surface, perform one bounded best-effort live x6/cheap-call proof without evading platform
+  safety, revalidate signed candidate integrity, then invoke exactly one commit-cutover only after every
+  required acceptance gate passes. Prove bounded post-commit stability and stop at ARCHITECT_REVIEW.
+  Do not claim final system freeze; the Architect performs the final freeze judgment separately.
+
+scope:
+  required_checks:
+    - "Fresh-resolve GitHub dev, origin/dev and local HEAD; require all equal the exact TASK-0076 planning base and require the designated working tree clean before any live mutation."
+    - "Fresh-confirm main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+    - "Fresh-read TASK-0075 review and require state ACCEPTED, exact candidate identity 8ba16e69..., and source_freeze_ready=true."
+    - "Require the cutover transaction path is absent and is not a symlink. Any existing/pending/partial transaction blocks execution before cutover."
+    - "Freshly validate the retained candidate/handoff with canonical package provenance. Require candidate SHA 8ba16e69..., exact source revision/tree/lock, strict deep codesign PASS, non-null/equal TeamIdentifier digest 497c6b..., session.py SHA 03cdb1..., protection.py SHA feecd9..., and handoff SHA d909bd.... Do not rebuild, repackage, re-sign or mutate candidate bytes."
+    - "Freshly prove installed predecessor revision b5ac0ed5..., strict deep codesign PASS, exactly one canonical 127.0.0.1:8080 listener, /healthz=200 and /readyz=200. Observe ServiceManagement/launchd ownership read-only; do not normalize predecessor state."
+    - "Freshly record runtime.env full-file SHA-256 and mode without printing values. Require mode 0600, exactly one AGENT_RUNTIME_MAX_ACTIVE_SESSIONS entry with effective value 6, exactly one AGENT_RUNTIME_MAX_PARALLELISM entry with effective value 6, and no malformed/duplicate target entries. Preserve all unrelated secret values."
+    - "Freshly record desired-state marker presence/mode/SHA-256 and require desired state RUNNING. Preserve exact bytes."
+    - "Resolve /bin/launchctl, current UID, /opt/homebrew/bin/tunnel-client and exact candidate paths. Require the canonical prebuilt cutover path can bind these exact authorities without starting a second tunnel client."
+    - "Invoke exactly once: ./install.sh --install-prebuilt <exact candidate app> <exact candidate handoff>. No retry is authorized."
+    - "Treat any command failure, PARTIAL result, AWAITING_APPROVAL result, unexpected transaction schema/status/phase, or failure to converge to a healthy new generation as a blocker. Do not invoke rollback, resume, recover, repair, reinstall, a second cutover, manual launchctl repair, or manual tunnel startup. Preserve transaction evidence and stop at ARCHITECT_REVIEW/OPERATOR_INPUT_REQUIRED as appropriate."
+    - "After successful cutover, require schema-5 transaction status PENDING with the expected accepted candidate binding and an installed app that validates exactly against the transaction/candidate handoff. Require strict deep codesign PASS and installed runtime-manifest revision e6365f9...."
+    - "Require the new live Runtime/tunnel generation to converge without manual repair to one canonical listener on 127.0.0.1:8080 with /healthz=200 and /readyz=200. Record bounded non-secret process/generation identity."
+    - "Re-prove runtime.env mode/SHA and desired-state mode/SHA are byte-identical to pre-cutover values unless the canonical cutover contract explicitly owns a documented change. Any unexplained drift blocks commit."
+    - "Prove there are zero .pyc files and no agent_runtime/__pycache__ directory inside the installed signed Runtime package after the new generation becomes healthy. Never import the installed Runtime from a host diagnostic process."
+    - "Use Agent Runtime MCP directly for live acceptance. Do not substitute Remote Desktop Commander, local stdio Python, curl, another MCP client, or a nested agent for the direct MCP proof."
+    - "Require the direct live MCP public surface to expose exactly six tools: terminal_exec, terminal_start, terminal_poll, terminal_control, capacity_observer, fs_read_batch."
+    - "Run one benign direct capacity_observer call and require bounded schema_version=1 output with capacity_parallelism_ceiling <=6 and no process-history payload."
+    - "Run one benign direct fs_read_batch against a repository text file under the authorized workspace and require bounded successful read semantics without candidate/installed-app mutation."
+    - "Run one benign direct terminal_exec using literal argv and a non-mutating command; require exit_code=0 and truthful bounded result."
+    - "Run one bounded direct terminal_start -> terminal_poll -> terminal_control terminate lifecycle using only a task-owned harmless sleep process. Require truthful session state and cleanup."
+    - "Attempt one bounded x6 live heavy proof only through direct Agent Runtime MCP: hold up to six task-owned harmless heavy workloads simultaneously, then if all six are admitted attempt one seventh heavy call and require stable capacity failure before target workload creation. While x6 is held, issue capacity_observer and fs_read_batch and require responsiveness. Clean up every test-owned workload exactly."
+    - "If the ChatGPT/platform tool-safety layer prevents reaching x6 before Runtime receives the calls, record the platform guard as EXTERNAL_GAP with exact observed call count. Do not evade it, use alternate clients, retry repeatedly, or manufacture x6 evidence. This external guard alone does not invalidate the already accepted TASK-0057/TASK-0059 deterministic x6 envelope; all required six-tool live smoke checks above must still pass."
+    - "If the direct Agent Runtime MCP namespace is unavailable after cutover due connector/reload state, do not fake the proof and do not commit. Leave the valid PENDING transaction intact and return OPERATOR_INPUT_REQUIRED with instructions to reconnect/reload the same Agent Runtime plugin, then continue from the exact checkpoint without repeating cutover."
+    - "After all direct MCP probes, re-run strict deep codesign and canonical installed-candidate validation. Require exact candidate SHA 8ba16e69..., revision/tree/lock binding, zero PYC drift, preserved config/desired-state identity, singleton listener, healthz=200 and readyz=200."
+    - "Only if every mandatory gate passes, invoke exactly once: ./install.sh --commit-cutover. No retry is authorized."
+    - "Require COMMITTED semantics and transaction directory absence after commit. Do not invoke commit-cutover a second time for confirmation."
+    - "After commit, prove installed candidate validation and strict deep codesign still PASS; installed runtime revision remains e6365f9...; runtime.env and desired-state remain preserved; zero PYC drift remains; one canonical listener remains; healthz/readyz remain 200."
+    - "Perform three bounded post-commit stability observations separated by short waits. Require the same accepted generation identity, one listener, green health/readiness, exact candidate validation and no transaction reappearance or installed drift."
+    - "Fresh-resolve dev/main, require main unchanged, publish only .agent/tasks/TASK-0076/report.yaml non-force as the report-only direct child, and stop at ARCHITECT_REVIEW."
+
+allowed_mutation:
+  live_cutover:
+    canonical_command: "./install.sh --install-prebuilt <candidate_app> <candidate_handoff>"
+    invocation_count_max: 1
+    candidate_sha256: "8ba16e69db3eecbd5db4ab0636c289ff68d71433779d9c67ded2f5335507ae01"
+  transaction_commit:
+    canonical_command: "./install.sh --commit-cutover"
+    invocation_count_max: 1
+    prerequisite: "all mandatory installed-generation, direct-MCP, integrity and health gates PASS"
+  direct_mcp_test_workloads:
+    max_simultaneous_heavy: 6
+    seventh_probe_max: 1
+    ownership: task_owned_only
+    cleanup_required: true
+  repository_publication:
+    - ".agent/tasks/TASK-0076/report.yaml"
+
+forbidden_changes:
+  - "Do not rebuild, refreeze, re-sign, overwrite, merge, chmod, touch or otherwise mutate candidate 8ba16e69... or candidate 8017f538...."
+  - "Do not modify production source, tests, README, dependencies, lockfiles, packaging, lifecycle implementation, Swift source, runtime.env, desired-state bytes, or existing task artifacts."
+  - "Do not invoke live cutover more than once."
+  - "Do not invoke commit-cutover more than once."
+  - "Do not invoke rollback, resume, recover, reinstall, repair, bootstrap, uninstall, a second cutover, or a second commit."
+  - "Do not manually start, stop, restart, reload, signal, kickstart, bootout, register, unregister or repair Runtime/tunnel/ServiceManagement/launchd outside effects owned by the one canonical cutover invocation."
+  - "Do not use an alternate/local MCP client to bypass platform direct-tool safety or connector availability."
+  - "Do not import installed agent_runtime from a host Python diagnostic process or create bytecode in the signed bundle."
+  - "Do not expose CONTROL_PLANE_API_KEY, CONTROL_PLANE_TUNNEL_ID, runtime.env values, signing identity, TeamIdentifier literal, Keychain contents or unrelated private user data."
+  - "Do not access Photos, SSH private material or browser data."
+  - "Do not force-push dev, mutate main, create tags/releases, or delegate to another agent."
+
+invariants:
+  - "Exactly one accepted-prebuilt cutover invocation maximum."
+  - "Exactly one commit-cutover invocation maximum and only after all mandatory gates pass."
+  - "No automatic rollback authority exists in TASK-0076."
+  - "The accepted candidate/handoff remain immutable throughout."
+  - "The predecessor rollback envelope remains available while transaction is PENDING."
+  - "The direct six-tool MCP smoke proof must be performed against the installed post-audit generation, not a local stdio substitute."
+  - "x6 live proof is attempted once without safety evasion; accepted deterministic TASK-0057/TASK-0059 evidence remains the canonical fallback if platform guard prevents six simultaneous direct calls."
+  - "All test-owned heavy workloads are cleaned up exactly."
+  - "runtime.env and desired-state are preserved byte-for-byte unless a canonical cutover-owned change is explicitly proven."
+  - "Installed signed bundle remains bytecode-clean and strictly code-sign valid."
+  - "Main remains unchanged."
+  - "Executor must not claim final system freeze."
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0076/report.yaml"
+  unlisted_new_files:
+    allowed: false
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact predecessor, config, transaction absence and exact accepted candidate are proven before mutation."
+    evidence_required: "Exact refs/clean tree, absent transaction, predecessor revision/codesign/health, candidate/handoff validation and hashes, runtime.env/desired-state identities and exact cutover bindings."
+  - id: AC-2
+    requirement: "Exactly one canonical prebuilt cutover installs the exact TASK-0075 candidate and reaches a healthy PENDING generation without repair."
+    evidence_required: "Single cutover/no retry, schema-5 PENDING transaction, installed candidate identity/codesign/provenance, e6365f9 runtime revision, singleton listener and 200/200 health/readiness."
+  - id: AC-3
+    requirement: "The exact post-audit installed generation exposes and executes the six-tool MCP contract directly."
+    evidence_required: "Exact six public tools plus successful direct capacity_observer, fs_read_batch, terminal_exec and bounded terminal_start/poll/control lifecycle; no local stdio fallback."
+  - id: AC-4
+    requirement: "Live x6 behavior is freshly attempted without evading platform safety and is truthfully classified."
+    evidence_required: "If six direct heavy calls are admitted: x6 hold, seventh fail-fast, cheap-call responsiveness and exact cleanup. If platform guard intervenes earlier: external-gap evidence plus no evasion/retry loop; TASK-0057/TASK-0059 accepted x6 evidence remains cited separately."
+  - id: AC-5
+    requirement: "Precommit integrity and configuration remain exact after all live probes."
+    evidence_required: "Strict codesign, canonical installed candidate validation at 8ba16e69..., revision/tree/lock, zero PYC drift, preserved runtime.env/desired-state, singleton listener and health/readiness."
+  - id: AC-6
+    requirement: "Exactly one commit-cutover terminalizes the accepted transaction only after all mandatory acceptance gates pass."
+    evidence_required: "Single commit/no retry, COMMITTED semantics, transaction absence and no rollback/resume/recover/repair invocation."
+  - id: AC-7
+    requirement: "The committed generation remains stable and repository publication is bounded."
+    evidence_required: "Three post-commit observations retain exact generation/candidate identity, codesign, zero drift, listener/health/readiness; report-only direct child, clean tree, dev non-force and main unchanged."
+
+verification:
+  executor_checks:
+    - id: CHECK-PREFLIGHT
+      command_or_check: "Exact-base/clean-tree, absent transaction, predecessor, candidate, config, desired-state, lifecycle ownership and exact command-binding proof."
+      required: true
+    - id: CHECK-CUTOVER
+      command_or_check: "Invoke exactly one ./install.sh --install-prebuilt with the exact retained candidate/handoff; no retry."
+      required: true
+    - id: CHECK-PENDING
+      command_or_check: "Prove schema-5 PENDING transaction, exact installed candidate, strict codesign, post-audit runtime revision, autonomous healthy live generation, preserved config and zero bytecode drift."
+      required: true
+    - id: CHECK-DIRECT-MCP
+      command_or_check: "Direct Agent Runtime MCP exact-six-tool smoke plus one bounded x6/seventh/cheap-call attempt without platform-safety evasion; exact cleanup."
+      required: true
+    - id: CHECK-PRECOMMIT
+      command_or_check: "Repeat installed candidate/codesign/config/desired-state/PYC/listener/health verification after direct MCP probes."
+      required: true
+    - id: CHECK-COMMIT
+      command_or_check: "Invoke exactly one ./install.sh --commit-cutover only after all mandatory gates; prove transaction terminalized."
+      required: true
+    - id: CHECK-STABILITY
+      command_or_check: "Three bounded post-commit stability observations plus exact report-only publication and fresh refs."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect independent review of TASK-0076 report, live candidate identity, direct-MCP acceptance, transaction terminalization and post-commit stability."
+    expected_signal: "The exact post-audit candidate is the committed healthy live generation and is eligible for final Architect system-freeze judgment."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: ARCHITECT_REVIEW_OR_OPERATOR_INPUT_REQUIRED
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
