@@ -1033,60 +1033,103 @@ def _restore_transaction(
     runtime_plist = Path(str(paths["runtime_plist"]))
     desired_state = Path(str(paths["desired_state"]))
 
+    rollback_swapped_candidate = phase == "APP_SWAPPED"
     if phase == "PRE_SWAP":
-        if app_present:
+        staged = transaction_dir / "staged-candidate"
+        target_present = target_app.exists() or target_app.is_symlink()
+        current_schema = metadata.get("schema") == TRANSACTION_SCHEMA
+
+        target_is_predecessor = False
+        if app_present and target_present:
             if target_app.is_symlink() or not target_app.is_dir():
+                raise CutoverError("PRE_SWAP phase installed app is unsafe")
+            target_is_predecessor = (
+                expected_closure is not None and _rollback_app_closure(target_app) == expected_closure
+            )
+
+        if app_present and not target_present:
+            if not current_schema:
                 raise CutoverError("PRE_SWAP phase installed app is missing or unsafe")
+            if staged.is_symlink() or not staged.is_dir():
+                raise CutoverError("PRE_SWAP phase staged candidate is missing or unsafe after predecessor removal")
+            try:
+                staged_candidate = provenance.validate_candidate(
+                    staged, transaction_dir / "candidate-handoff.json"
+                )
+            except provenance.PackageProvenanceError as exc:
+                raise CutoverError("PRE_SWAP phase staged candidate identity is invalid") from exc
+            if staged_candidate != metadata.get("candidate"):
+                raise CutoverError("PRE_SWAP phase staged candidate does not match transaction metadata")
+            _copy_rollback_app(backup, target_app)
             if expected_closure is None or _rollback_app_closure(target_app) != expected_closure:
-                raise CutoverError("PRE_SWAP phase installed app does not match previous-app closure")
-        elif target_app.exists() or target_app.is_symlink():
-            raise CutoverError("PRE_SWAP phase unexpectedly has an installed app")
+                raise CutoverError("restored previous app closure does not match rollback envelope")
+            target_is_predecessor = True
+        elif target_present and not target_is_predecessor:
+            if not current_schema:
+                if app_present:
+                    raise CutoverError("PRE_SWAP phase installed app does not match previous-app closure")
+                raise CutoverError("PRE_SWAP phase unexpectedly has an installed app")
+            if target_app.is_symlink() or not target_app.is_dir():
+                raise CutoverError("PRE_SWAP phase installed app is unsafe")
+            if staged.exists() or staged.is_symlink():
+                raise CutoverError("PRE_SWAP phase candidate/staged state is ambiguous")
+            try:
+                installed_candidate = provenance.validate_candidate(
+                    target_app, transaction_dir / "candidate-handoff.json"
+                )
+            except provenance.PackageProvenanceError as exc:
+                raise CutoverError("PRE_SWAP phase installed app is neither predecessor nor transaction candidate") from exc
+            if installed_candidate != metadata.get("candidate"):
+                raise CutoverError("PRE_SWAP phase installed candidate does not match transaction metadata")
+            rollback_swapped_candidate = True
 
-        _verify_snapshot_file_unchanged(previous.get("ui_plist"), transaction_dir / "previous-ui.plist", ui_plist)
-        _verify_snapshot_file_unchanged(
-            previous.get("runtime_plist"), transaction_dir / "previous-runtime.plist", runtime_plist
-        )
-        _verify_desired_state_unchanged(desired_state, bool(previous.get("desired_state_present")))
+        if not rollback_swapped_candidate:
+            _verify_snapshot_file_unchanged(previous.get("ui_plist"), transaction_dir / "previous-ui.plist", ui_plist)
+            _verify_snapshot_file_unchanged(
+                previous.get("runtime_plist"), transaction_dir / "previous-runtime.plist", runtime_plist
+            )
+            _verify_desired_state_unchanged(desired_state, bool(previous.get("desired_state_present")))
 
-        ui_service = f"gui/{uid}/{UI_LABEL}"
-        if bool(previous.get("ui_loaded")):
-            _require_service_identity(launchctl, ui_service, _launchagent_program(ui_plist, UI_LABEL))
-        elif _service_loaded(launchctl, ui_service):
-            raise CutoverError("PRE_SWAP phase legacy UI loaded state changed")
+            ui_service = f"gui/{uid}/{UI_LABEL}"
+            if bool(previous.get("ui_loaded")):
+                _require_service_identity(launchctl, ui_service, _launchagent_program(ui_plist, UI_LABEL))
+            elif _service_loaded(launchctl, ui_service):
+                raise CutoverError("PRE_SWAP phase legacy UI loaded state changed")
 
-        if app_present:
-            _restore_preexisting_modern_state(target_app, metadata, launchctl=launchctl, uid=uid)
+            if app_present:
+                _restore_preexisting_modern_state(target_app, metadata, launchctl=launchctl, uid=uid)
 
-        before = metadata.get("modern_ownership_before")
-        if not isinstance(before, dict) or set(before) != {"main_app", "runtime"}:
-            raise CutoverError("pre-swap ServiceManagement ownership metadata is malformed")
-        runtime = _validate_runtime_ownership_record(before["runtime"])
-        transaction_runtime_label = _transaction_modern_runtime_label(metadata)
-        runtime_service = f"gui/{uid}/{transaction_runtime_label}"
-        if "launchd_present" in runtime:
-            observed_present = _modern_service_present(launchctl, runtime_service)
-            if observed_present != bool(runtime["launchd_present"]):
-                raise CutoverError("PRE_SWAP phase modern Runtime launchd presence was not restored")
-            if observed_present:
-                _runtime_bundle_identity(target_app)
-        else:
-            observed_program = _loaded_service_program(launchctl, runtime_service)
-            if metadata.get("schema") == SCHEMA4_ROLLBACK_SCHEMA and runtime["legacy_label_loaded"]:
-                expected_program = _launchagent_program(runtime_plist, LEGACY_RUNTIME_LABEL)
-            elif runtime["loaded"]:
-                expected_program = Path(str(runtime["loaded_program"]))
+            before = metadata.get("modern_ownership_before")
+            if not isinstance(before, dict) or set(before) != {"main_app", "runtime"}:
+                raise CutoverError("pre-swap ServiceManagement ownership metadata is malformed")
+            runtime = _validate_runtime_ownership_record(before["runtime"])
+            transaction_runtime_label = _transaction_modern_runtime_label(metadata)
+            runtime_service = f"gui/{uid}/{transaction_runtime_label}"
+            if "launchd_present" in runtime:
+                observed_present = _modern_service_present(launchctl, runtime_service)
+                if observed_present != bool(runtime["launchd_present"]):
+                    raise CutoverError("PRE_SWAP phase modern Runtime launchd presence was not restored")
+                if observed_present:
+                    _runtime_bundle_identity(target_app)
             else:
-                expected_program = None
-            if observed_program != expected_program:
-                raise CutoverError("PRE_SWAP phase Runtime loaded identity was not restored")
-        return
+                observed_program = _loaded_service_program(launchctl, runtime_service)
+                if metadata.get("schema") == SCHEMA4_ROLLBACK_SCHEMA and runtime["legacy_label_loaded"]:
+                    expected_program = _launchagent_program(runtime_plist, LEGACY_RUNTIME_LABEL)
+                elif runtime["loaded"]:
+                    expected_program = Path(str(runtime["loaded_program"]))
+                else:
+                    expected_program = None
+                if observed_program != expected_program:
+                    raise CutoverError("PRE_SWAP phase Runtime loaded identity was not restored")
+            return
 
-    if target_app.is_symlink() or not target_app.is_dir():
-        raise CutoverError("APP_SWAPPED phase installed app is missing or unsafe")
-    try:
-        provenance.validate_candidate(target_app, transaction_dir / "candidate-handoff.json")
-    except provenance.PackageProvenanceError as exc:
-        raise CutoverError("APP_SWAPPED phase installed app does not match candidate identity") from exc
+    if phase == "APP_SWAPPED":
+        if target_app.is_symlink() or not target_app.is_dir():
+            raise CutoverError("APP_SWAPPED phase installed app is missing or unsafe")
+        try:
+            provenance.validate_candidate(target_app, transaction_dir / "candidate-handoff.json")
+        except provenance.PackageProvenanceError as exc:
+            raise CutoverError("APP_SWAPPED phase installed app does not match candidate identity") from exc
 
     _compensate_operation_ledger(target_app, metadata.get("operations"))
     _inject(fail_stages, "rollback_restore_app")

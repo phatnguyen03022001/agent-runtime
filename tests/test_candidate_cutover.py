@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -792,6 +793,148 @@ class CandidateCutoverTests(unittest.TestCase):
             self.assertIn("APP_SWAPPED", observed)
             self.assertLess(observed.index("PRE_SWAP"), observed.index("APP_SWAPPED"))
 
+    def test_preswap_crash_after_predecessor_removal_restores_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            original_replace = os.replace
+
+            def interrupt_staged_replace(source, destination) -> None:
+                if Path(source) == fx["transaction"] / "staged-candidate" and Path(destination) == fx["target"]:
+                    raise SystemExit("simulated process death before candidate placement")
+                original_replace(source, destination)
+
+            with mock.patch.object(cutover.os, "replace", side_effect=interrupt_staged_replace):
+                with self.assertRaisesRegex(SystemExit, "before candidate placement"):
+                    self._cutover(cutover, fx)
+
+            metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
+            previous_snapshot_valid = (
+                cutover._rollback_app_closure(fx["transaction"] / "previous-app")
+                == metadata["previous"]["app_closure"]
+            )
+            self.assertEqual(metadata["phase"], "PRE_SWAP")
+            self.assertTrue(metadata["previous"]["app_present"])
+            self.assertFalse(fx["target"].exists() or fx["target"].is_symlink())
+            self.assertTrue((fx["transaction"] / "staged-candidate").is_dir())
+            self.assertTrue(previous_snapshot_valid)
+            state = (
+                f"phase={metadata['phase']} previous.app_present={metadata['previous']['app_present']} "
+                f"target_absent={not fx['target'].exists()} staged_present={(fx['transaction'] / 'staged-candidate').is_dir()} "
+                f"previous_snapshot_valid={previous_snapshot_valid}"
+            )
+            try:
+                result = cutover.rollback_transaction(
+                    fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501
+                )
+            except cutover.CutoverError as exc:
+                self.fail(f"canonical rollback failed from reproduced crash state ({state}): {exc}")
+            self.assertEqual(result["status"], "ROLLED_BACK")
+
+    def test_preswap_crash_after_candidate_replace_before_phase_persist_restores_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            original_atomic_json = cutover._atomic_json
+
+            def interrupt_app_swapped_persist(path: Path, value: dict[str, object]) -> None:
+                if path.name == "metadata.json" and value.get("phase") == "APP_SWAPPED":
+                    raise SystemExit("simulated process death before APP_SWAPPED persistence")
+                original_atomic_json(path, value)
+
+            cutover._atomic_json = interrupt_app_swapped_persist
+            with self.assertRaisesRegex(SystemExit, "before APP_SWAPPED persistence"):
+                self._cutover(cutover, fx)
+
+            metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
+            previous_snapshot_valid = (
+                cutover._rollback_app_closure(fx["transaction"] / "previous-app")
+                == metadata["previous"]["app_closure"]
+            )
+            installed_candidate = cutover.provenance.validate_candidate(
+                fx["target"], fx["transaction"] / "candidate-handoff.json"
+            )
+            self.assertEqual(metadata["phase"], "PRE_SWAP")
+            self.assertTrue(metadata["previous"]["app_present"])
+            self.assertEqual(installed_candidate, metadata["candidate"])
+            self.assertFalse((fx["transaction"] / "staged-candidate").exists())
+            self.assertTrue(previous_snapshot_valid)
+            state = (
+                f"phase={metadata['phase']} previous.app_present={metadata['previous']['app_present']} "
+                f"target_exact_candidate={installed_candidate == metadata['candidate']} staged_absent={not (fx['transaction'] / 'staged-candidate').exists()} "
+                f"previous_snapshot_valid={previous_snapshot_valid}"
+            )
+            try:
+                result = cutover.rollback_transaction(
+                    fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501
+                )
+            except cutover.CutoverError as exc:
+                self.fail(f"canonical rollback failed from reproduced crash state ({state}): {exc}")
+            self.assertEqual(result["status"], "ROLLED_BACK")
+
+    def test_handled_replace_failure_after_predecessor_removal_auto_rolls_back(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            previous_closure = cutover._rollback_app_closure(fx["target"])
+            original_replace = os.replace
+
+            def fail_staged_replace(source, destination) -> None:
+                if Path(source) == fx["transaction"] / "staged-candidate" and Path(destination) == fx["target"]:
+                    raise OSError("simulated os.replace failure")
+                original_replace(source, destination)
+
+            with mock.patch.object(cutover.os, "replace", side_effect=fail_staged_replace):
+                with self.assertRaisesRegex(cutover.CutoverError, "rollback restored"):
+                    self._cutover(cutover, fx)
+            self.assertFalse(fx["transaction"].exists())
+            self.assertEqual(cutover._rollback_app_closure(fx["target"]), previous_closure)
+
+    def test_first_install_preswap_candidate_crash_rolls_back_to_absent_app(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            shutil.rmtree(fx["target"])
+            fx["ui_plist"].unlink()
+            fx["runtime_plist"].unlink()
+            fx["desired"].unlink()
+            fx["launch_state"].write_text("[]\n")
+            original_atomic_json = cutover._atomic_json
+
+            def interrupt_app_swapped_persist(path: Path, value: dict[str, object]) -> None:
+                if path.name == "metadata.json" and value.get("phase") == "APP_SWAPPED":
+                    raise SystemExit("simulated first-install process death")
+                original_atomic_json(path, value)
+
+            cutover._atomic_json = interrupt_app_swapped_persist
+            with self.assertRaisesRegex(SystemExit, "first-install"):
+                self._cutover(cutover, fx)
+            metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
+            self.assertEqual(metadata["phase"], "PRE_SWAP")
+            self.assertFalse(metadata["previous"]["app_present"])
+            cutover.provenance.validate_candidate(fx["target"], fx["transaction"] / "candidate-handoff.json")
+            self.assertFalse((fx["transaction"] / "staged-candidate").exists())
+
+            result = cutover.rollback_transaction(
+                fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501
+            )
+            self.assertEqual(result["status"], "ROLLED_BACK")
+            self.assertFalse(fx["target"].exists() or fx["target"].is_symlink())
+            self.assertFalse(fx["transaction"].exists())
+
+    def test_preswap_symlink_target_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            self._cutover(cutover, fx)
+            metadata_path = fx["transaction"] / "metadata.json"
+            metadata = json.loads(metadata_path.read_text())
+            metadata["phase"] = "PRE_SWAP"
+            metadata_path.write_text(json.dumps(metadata, indent=2) + "\n")
+            shutil.rmtree(fx["target"])
+            fx["target"].symlink_to(fx["candidate"], target_is_directory=True)
+            with self.assertRaisesRegex(cutover.CutoverError, "unsafe"):
+                cutover.rollback_transaction(
+                    fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501
+                )
+            self.assertTrue(fx["transaction"].exists())
+            self.assertTrue(fx["target"].is_symlink())
+
     def test_schema2_current_preswap_partial_recovery_is_no_live_mutation_closeout(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             provenance, cutover, fx = self._fixture(raw)
@@ -826,16 +969,18 @@ class CandidateCutoverTests(unittest.TestCase):
                 )
             self.assertTrue(fx["transaction"].is_dir())
 
-    def test_preswap_phase_mismatch_with_candidate_installed_fails_closed(self) -> None:
+    def test_preswap_candidate_and_staged_duplicate_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             _, cutover, fx = self._fixture(raw)
             self._cutover(cutover, fx)
+            staged = fx["transaction"] / "staged-candidate"
+            shutil.copytree(fx["target"], staged, copy_function=shutil.copy2)
             metadata_path = fx["transaction"] / "metadata.json"
             metadata = json.loads(metadata_path.read_text())
             metadata["schema"] = 5
             metadata["phase"] = "PRE_SWAP"
             metadata_path.write_text(json.dumps(metadata, indent=2) + "\n")
-            with self.assertRaisesRegex(cutover.CutoverError, "phase|previous.*closure"):
+            with self.assertRaisesRegex(cutover.CutoverError, "ambiguous|staged|phase|previous.*closure"):
                 cutover.rollback_transaction(
                     fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501
                 )
