@@ -1,0 +1,174 @@
+protocol_version: 3
+
+task_id: TASK-0069
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_successor_task
+  predecessor_task: TASK-0068
+  predecessor_planning_commit: "89108528d5ff4706baa9a67a7c264f3456e146c3"
+  predecessor_outcome: EXTERNAL_PLATFORM_GAP_ACCEPTED_AS_NON_BLOCKING
+  predecessor_basis:
+    - "TASK-0057 and TASK-0059 already prove deterministic x6 admission, seventh fail-fast-before-spawn, and cheap-call responsiveness under x6 in the accepted production semantics."
+    - "The live accepted generation now exposes capacity_parallelism_ceiling=6 and all six public MCP tools have been exercised successfully in live use; x2 concurrent PTYs were created and cleaned exactly."
+    - "The remaining inability to drive x3..x6 live from ChatGPT was caused by the OpenAI tool-safety layer blocking the third benign terminal_start before the request reached Agent Runtime, so it is treated as an external harness limitation rather than Runtime failure."
+  operator_authorization: >-
+    Operator explicitly authorized proceeding with exactly one canonical commit-cutover of the current accepted
+    schema-5 PENDING / APP_SWAPPED transaction, followed by read-only post-commit verification only. The operator's
+    "làm đi" directly followed the Architect's exact commit-cutover authorization request.
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration_and_evidence
+
+classification: TRANSACTION_TERMINALIZATION
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+execution_surface:
+  type: CHATGPT_LOCAL
+  native_tool: Remote Desktop Commander MCP
+  delegation: forbidden
+
+accepted_checkpoint:
+  accepted_candidate_sha256: "8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660"
+  accepted_candidate_handoff_sha256: "d8bd8885b4cd0d78e6f419496a97bbc5bda021f37f243f796420b05b851774f3"
+  transaction:
+    schema: 5
+    status: PENDING
+    phase: APP_SWAPPED
+    metadata_sha256: "589436ead0cc3c53ea0c32a26eda98e19e2ead5564f6ae298752903566e8f661"
+  runtime_env:
+    path: "/Users/tienphat/Library/Application Support/Agent Runtime/runtime.env"
+    mode: "0600"
+    sha256: "6e6fef8e255b140f28703f8bd515726e1fd93d644e6f838b33ebf319e8133077"
+    max_parallelism: 6
+    max_active_sessions: 6
+  desired_state_sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  expected_live_state:
+    service_management_main_app: enabled
+    service_management_runtime_agent: enabled
+    listener: "127.0.0.1:8080 exactly one"
+    healthz_http: 200
+    readyz_http: 200
+    capacity_parallelism_ceiling: 6
+
+objective: >-
+  Terminalize the already accepted schema-5 PENDING / APP_SWAPPED cutover by invoking the canonical commit operation
+  exactly once, then perform read-only post-commit verification. Commit must not be used as an opportunity to restart,
+  repair, reconfigure, reinstall, or otherwise normalize Runtime/tunnel state. After success, prove transaction removal,
+  accepted candidate preservation, runtime.env preservation, healthy live ownership, clean repository state, and report-only publication.
+
+scope:
+  required_checks:
+    - "Fresh-resolve GitHub dev, local HEAD, and origin/dev; require all equal the exact TASK-0069 handoff base and require the designated working tree clean before any lifecycle/transaction mutation."
+    - "Before commit, fresh-prove transaction schema=5, status=PENDING, phase=APP_SWAPPED, metadata SHA-256=589436ead0cc3c53ea0c32a26eda98e19e2ead5564f6ae298752903566e8f661. Any drift is a blocker."
+    - "Before commit, canonical-validate installed app and repository candidate against accepted candidate SHA-256 8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660 and handoff SHA-256 d8bd8885b4cd0d78e6f419496a97bbc5bda021f37f243f796420b05b851774f3."
+    - "Before commit, require runtime.env is a regular non-symlink file, mode 0600, full SHA-256 6e6fef8e255b140f28703f8bd515726e1fd93d644e6f838b33ebf319e8133077. Do not print secrets or unrelated values."
+    - "Before commit, read-only prove desired-state SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 and current healthy live ownership/state as available: ServiceManagement main/runtime enabled, exactly one canonical 127.0.0.1:8080 listener, /healthz=200, /readyz=200."
+    - "Invoke exactly once: ./install.sh --commit-cutover from the canonical agent-runtime checkout. No retry is authorized."
+    - "Require the canonical commit operation succeeds and reports COMMITTED semantics. Do not invoke commit a second time even for confirmation."
+    - "After commit, prove the pending transaction directory/state is absent/terminalized and there is no remaining schema-5 PENDING transaction for this candidate."
+    - "After commit, canonical-validate installed app and repository candidate again and require exact accepted candidate 8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660 and exact handoff d8bd8885b4cd0d78e6f419496a97bbc5bda021f37f243f796420b05b851774f3."
+    - "After commit, require runtime.env remains mode 0600 and exact SHA-256 6e6fef8e255b140f28703f8bd515726e1fd93d644e6f838b33ebf319e8133077; desired-state remains exact accepted SHA-256."
+    - "After commit, observe Runtime/tunnel/ServiceManagement/launchd/listener/health read-only. Do not force exact PID continuity if autonomous OS behavior changed generation naturally; instead prove no Executor lifecycle command beyond the single commit-cutover occurred, ownership remains canonical, and current health is good."
+    - "Do not retry TASK-0068 x6 live saturation in this task. The OpenAI tool-safety limitation is an accepted external proof gap and is not a reason to mutate Runtime."
+    - "Publish only .agent/tasks/TASK-0069/report.yaml to dev, non-force, then stop at ARCHITECT_REVIEW."
+
+allowed_mutation:
+  canonical_command: "./install.sh --commit-cutover"
+  invocation_count: 1
+  expected_effect: "Validate the installed candidate against the pending handoff, remove the pending cutover transaction, and return COMMITTED semantics."
+  repository_publication:
+    - ".agent/tasks/TASK-0069/report.yaml"
+
+forbidden_changes:
+  - "Do not run cutover, rollback, resume, recover, reinstall, uninstall, repair, or a second commit-cutover."
+  - "Do not start, stop, restart, signal, kickstart, bootstrap, bootout, or manually execute AgentRuntimeRuntimeService or tunnel-client."
+  - "Do not edit runtime.env, desired-state, ServiceManagement registration, launchd configuration, installed app, repository candidate, candidate handoff, production source, tests, dependencies, packaging, docs, tags, releases, or main."
+  - "Do not reload/reconnect the Agent Runtime plugin as part of this task."
+  - "Do not expose CONTROL_PLANE_API_KEY, CONTROL_PLANE_TUNNEL_ID, signing identity, or unrelated runtime.env values."
+  - "Do not delegate to Codex, Claude, Antigravity, another ChatGPT, or nested executors."
+
+invariants:
+  - "Exactly one canonical commit-cutover invocation is permitted."
+  - "Accepted candidate and handoff remain byte-identical before and after commit."
+  - "runtime.env and desired-state remain byte-identical before and after commit."
+  - "No Runtime/tunnel lifecycle command occurs except any consequence intrinsically and unavoidably caused by canonical commit-cutover; current implementation is expected to only validate candidate and remove the transaction."
+  - "The pending transaction is absent after successful commit."
+  - "TASK-0068 external live-x6 harness gap is not reopened."
+  - "Executor must not claim final freeze; Architect decides freeze after review."
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0069/report.yaml"
+  unlisted_new_files:
+    allowed: false
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact accepted pre-commit bindings are freshly proven."
+    evidence_required: "Exact-base/clean-tree, transaction identity, installed/repository candidate and handoff validation, runtime.env hash/mode, desired-state identity, and healthy live ownership/health evidence."
+  - id: AC-2
+    requirement: "Exactly one canonical commit-cutover succeeds."
+    evidence_required: "Single invocation count, exit/result evidence with COMMITTED semantics, and no retry."
+  - id: AC-3
+    requirement: "Pending transaction is terminalized without candidate/config drift."
+    evidence_required: "Transaction absence after commit plus unchanged accepted candidate, handoff, runtime.env SHA/mode, and desired-state SHA."
+  - id: AC-4
+    requirement: "Live ownership remains healthy without extra lifecycle mutation."
+    evidence_required: "ServiceManagement/launchd/process/listener/health read-only post-state and explicit zero counts for restart/repair/cutover/rollback/resume/recover/reinstall operations."
+  - id: AC-5
+    requirement: "Repository publication is report-only and main remains unchanged."
+    evidence_required: "Fresh dev/main refs, compare proof, clean working tree, non-force publication."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Exact-base/clean-tree plus exact transaction/candidate/handoff/runtime.env/desired-state/live-health preflight."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Exactly one ./install.sh --commit-cutover invocation."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Post-commit transaction absence and exact candidate/handoff/config/desired-state preservation."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Read-only post-commit Runtime/tunnel/ownership/listener/health observation with no extra lifecycle action."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Report-only non-force publication, clean tree, fresh dev/main refs."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect review of TASK-0069 report and final post-commit evidence."
+    expected_signal: "Schema-5 cutover transaction is terminalized, accepted generation remains healthy and unchanged, and no unresolved Runtime-owned blocker remains before freeze judgment."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: ARCHITECT_REVIEW
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
