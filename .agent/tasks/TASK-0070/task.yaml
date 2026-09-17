@@ -1,0 +1,165 @@
+protocol_version: 3
+
+task_id: TASK-0070
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_successor_task
+  predecessor_task: TASK-0069
+  predecessor_review: "fb9994b14a71257d0b249139ae6be7fb13198df3"
+  predecessor_review_state: ACCEPTED
+  predecessor_outcome: INSTALLED_APP_SEALED_RESOURCE_DRIFT
+  operator_authorization: >-
+    Operator explicitly requested assigning one Executor to investigate the sealed-resource drift.
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration_and_evidence
+
+classification: READ_ONLY_FORENSIC_ROOT_CAUSE_INVESTIGATION
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+execution_surface:
+  type: CHATGPT_LOCAL
+  native_tool: Remote Desktop Commander MCP
+  delegation: forbidden
+
+accepted_checkpoint:
+  accepted_candidate_sha256: "8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660"
+  accepted_candidate_handoff_sha256: "d8bd8885b4cd0d78e6f419496a97bbc5bda021f37f243f796420b05b851774f3"
+  transaction:
+    schema: 5
+    status: PENDING
+    phase: APP_SWAPPED
+    metadata_sha256: "589436ead0cc3c53ea0c32a26eda98e19e2ead5564f6ae298752903566e8f661"
+  runtime_env:
+    mode: "0600"
+    sha256: "6e6fef8e255b140f28703f8bd515726e1fd93d644e6f838b33ebf319e8133077"
+  desired_state_sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  installed_drift:
+    classification: INSTALLED_APP_SEALED_RESOURCE_DRIFT
+    strict_codesign_error: "a sealed resource is missing or invalid"
+    added_resources:
+      - "Contents/Resources/runtime/agent_runtime/__pycache__/capacity.cpython-313.pyc"
+      - "Contents/Resources/runtime/agent_runtime/__pycache__/__init__.cpython-313.pyc"
+      - "Contents/Resources/runtime/agent_runtime/__pycache__/errors.cpython-313.pyc"
+
+objective: >-
+  Determine the exact evidence-backed cause, or the narrowest defensible cause class, of the three Python bytecode
+  files appearing inside the sealed installed Agent Runtime app bundle. The investigation must establish when the
+  files were created, which installed source paths they were compiled from, whether the canonical Runtime execution
+  path could have created them, and whether a prior diagnostic/probe/manual Python invocation is the supported creator
+  path. Do not repair or normalize any state in this task.
+
+scope:
+  required_checks:
+    - "Fresh-resolve GitHub dev, local HEAD, and origin/dev; require exact TASK-0070 handoff base and clean designated working tree before investigation."
+    - "Freshly re-prove the schema-5 transaction, accepted candidate/handoff, runtime.env hash/mode, desired-state hash, healthy Runtime/tunnel/listener/health state, and presence of exactly the three known pyc drift files before forensic inspection. Stop on unrelated drift."
+    - "For each of the three pyc files, record path, regular-file/symlink status, mode, owner/group, size, SHA-256, filesystem birth time, mtime, ctime, and xattr names only. Do not modify timestamps or xattrs."
+    - "Read each pyc header without importing or executing it. Record Python magic/header mode and source metadata encoded by the pyc format where available."
+    - "Using a bytecode-write-disabled standard-library-only inspection process, deserialize code metadata only as necessary to extract co_filename and recursively collect code-object source filenames. Never execute the code object and never import agent_runtime from the installed bundle."
+    - "Require any Python forensic helper process to run with PYTHONDONTWRITEBYTECODE=1 and preferably -B. It must not import installed agent_runtime modules."
+    - "Compare each pyc's source identity and metadata against the exact installed .py source and the immutable repository candidate. Prove whether the pyc was compiled from the installed bundle path or another path."
+    - "Inspect the live Runtime/tunnel/MCP process environment read-only and prove whether PYTHONDONTWRITEBYTECODE=1 is present in the current canonical Runtime generation. Do not expose credentials or unrelated secret values."
+    - "Read the accepted installed start.sh path and prove the canonical --serve path explicitly sets PYTHONDONTWRITEBYTECODE=1 before tunnel-client/MCP exec."
+    - "Correlate pyc birth/mtime evidence against known lifecycle/config/task checkpoints and process-generation times where available. Use absolute timestamps and do not infer ordering from report prose alone."
+    - "Search repository task reports/reviews and local non-secret execution evidence for prior commands/probes that directly invoked the installed Runtime Python or imported installed agent_runtime modules outside the canonical --serve environment. Pay special attention to capacity-observer diagnostics around the 4->6 parallelism investigation and any command using the installed .venv Python against Contents/Resources/runtime."
+    - "If shell/process history or logs can provide read-only attribution evidence, inspect only the minimum relevant records. Do not read browser history, Photos, Keychain, unrelated shell history, or unrelated user data."
+    - "Distinguish PROVEN_CREATOR, STRONGLY_SUPPORTED_CREATOR_CLASS, and UNPROVEN hypotheses. Do not claim a specific creator command unless timestamp/path/process evidence supports it."
+    - "Determine whether the canonical production Runtime path itself is exonerated by environment/source evidence, or whether a production-path gap remains."
+    - "Do not delete the pyc files, do not re-sign the app, and do not test a repair in place. Repair design belongs to a successor task only after Architect review."
+    - "Publish only .agent/tasks/TASK-0070/report.yaml to dev, non-force, then stop at ARCHITECT_REVIEW."
+
+forbidden_changes:
+  - "Do not delete, move, rename, truncate, chmod, chown, touch, quarantine, or rewrite any pyc, source file, installed-app file, xattr, signature, or bundle resource."
+  - "Do not import or execute any of the three pyc files."
+  - "Do not run compileall, py_compile, importlib compilation, or any command intended to create/recreate bytecode in the installed bundle."
+  - "Do not run commit-cutover, cutover, rollback, resume, recover, reinstall, uninstall, repair, or any transaction mutation."
+  - "Do not start, stop, restart, signal, reload, kickstart, bootstrap, bootout, or manually execute AgentRuntimeRuntimeService or tunnel-client."
+  - "Do not edit runtime.env, desired-state, ServiceManagement, launchd, installed app, repository candidate, production source, tests, dependencies, packaging, docs, tags, releases, or main."
+  - "Do not expose CONTROL_PLANE_API_KEY, CONTROL_PLANE_TUNNEL_ID, signing identity, unrelated runtime.env values, Keychain contents, or private user data."
+  - "Do not delegate to Codex, Claude, Antigravity, another ChatGPT, or nested executors."
+
+invariants:
+  - "Investigation is read-only with respect to Runtime lifecycle, transaction, config, installed app, candidate, and OS service ownership."
+  - "The three known pyc files remain byte-identical throughout the task."
+  - "No forensic command may itself create new bytecode inside the installed app."
+  - "Root-cause conclusion must be evidence-graded and must separate fact from inference."
+  - "No repair authorization is implied."
+  - "No commit-cutover authorization is implied."
+  - "No final freeze-readiness assertion is allowed."
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0070/report.yaml"
+  unlisted_new_files:
+    allowed: false
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact pre-investigation live/candidate/transaction bindings and exact three-file drift set are proven."
+    evidence_required: "Exact-base/clean-tree plus transaction/candidate/handoff/config/desired-state/live-health and three pyc identities."
+  - id: AC-2
+    requirement: "The pyc artifacts are forensically characterized without execution or mutation."
+    evidence_required: "Per-file hashes/stat timestamps/header/source filename metadata and unchanged post hashes."
+  - id: AC-3
+    requirement: "Canonical production bytecode-write behavior is proven."
+    evidence_required: "Accepted start.sh and current live process environment evidence for PYTHONDONTWRITEBYTECODE=1, with no secret disclosure."
+  - id: AC-4
+    requirement: "The creator path is identified to the narrowest defensible evidence class."
+    evidence_required: "Timestamp/path/process/task correlation and explicit confidence classification with competing hypotheses addressed."
+  - id: AC-5
+    requirement: "No repair/lifecycle/config/transaction mutation occurs and publication is report-only."
+    evidence_required: "Mutation counters/observations, post-state preservation, fresh dev/main refs, clean tree, report-only compare."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Exact-base/clean-tree and live binding/drift-set preflight."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Read-only stat/hash/pyc-header/code-metadata inspection with bytecode writes disabled."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Canonical start.sh + live process environment bytecode-write suppression proof."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Timeline and prior-probe attribution analysis with evidence grading."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Post hashes/state preservation and report-only non-force publication."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect review of TASK-0070 forensic evidence before any cleanup or repair task is authorized."
+    expected_signal: "A root cause or narrowest defensible creator class is established without changing the live accepted generation."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: ARCHITECT_REVIEW
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
