@@ -1,0 +1,211 @@
+protocol_version: 3
+
+task_id: TASK-0071
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_successor_task
+  predecessor_task: TASK-0070
+  predecessor_review: "2872b3510d7af91433de5880c0b8460104f3a418"
+  predecessor_review_state: ACCEPTED
+  predecessor_outcome: PROVEN_CREATOR
+  operator_authorization: >-
+    Operator explicitly authorized the bounded repair/finalization bundle by saying "làm đi" immediately after the
+    Architect proposed: remove only the three proven foreign PYC resources, remove the resulting __pycache__ directory
+    only if empty, do not re-sign, strict-validate the restored candidate, perform exactly one controlled Runtime
+    generation restart to prove the canonical bytecode-suppressed path does not recreate drift, then invoke exactly one
+    canonical commit-cutover only if every preceding gate passes. Operator also stated that temporary lifecycle impact
+    to another non-critical Executor is acceptable.
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration_and_evidence
+
+classification: BOUNDED_INSTALLED_DRIFT_REPAIR_AND_TRANSACTION_TERMINALIZATION
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+execution_surface:
+  type: CHATGPT_LOCAL
+  native_tool: Remote Desktop Commander MCP
+  delegation: forbidden
+
+accepted_checkpoint:
+  accepted_candidate_sha256: "8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660"
+  accepted_candidate_handoff_sha256: "d8bd8885b4cd0d78e6f419496a97bbc5bda021f37f243f796420b05b851774f3"
+  transaction:
+    schema: 5
+    status: PENDING
+    phase: APP_SWAPPED
+    metadata_sha256: "589436ead0cc3c53ea0c32a26eda98e19e2ead5564f6ae298752903566e8f661"
+  runtime_env:
+    mode: "0600"
+    sha256: "6e6fef8e255b140f28703f8bd515726e1fd93d644e6f838b33ebf319e8133077"
+    max_parallelism: 6
+    max_active_sessions: 6
+  desired_state_sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  proven_foreign_resources:
+    directory: "/Users/tienphat/Applications/Agent Runtime.app/Contents/Resources/runtime/agent_runtime/__pycache__"
+    files:
+      - path: "/Users/tienphat/Applications/Agent Runtime.app/Contents/Resources/runtime/agent_runtime/__pycache__/capacity.cpython-313.pyc"
+        sha256: "2fdb04f8169a0281ad1c375a37e1c8c24cb5323cd4fbb2d412da48b8b9f13bfe"
+      - path: "/Users/tienphat/Applications/Agent Runtime.app/Contents/Resources/runtime/agent_runtime/__pycache__/__init__.cpython-313.pyc"
+        sha256: "6377bb1eb76deafe21a6f24eea40faf09105804ba823c76e25506cc3e7fe0d86"
+      - path: "/Users/tienphat/Applications/Agent Runtime.app/Contents/Resources/runtime/agent_runtime/__pycache__/errors.cpython-313.pyc"
+        sha256: "16e20d970a59672319b24fb7847ce11e4437792b6990f750b2a4f0d0ebbfa0e9"
+  proven_root_cause:
+    classification: PROVEN_CREATOR
+    creator_surface: "Remote Desktop Commander MCP start_process"
+    invocation_timestamp: "2026-09-17T19:16:44+0700"
+    execution_class: "direct installed-runtime Python diagnostic outside canonical --serve environment"
+    canonical_production_runtime_exonerated: true
+    canonical_bytecode_suppression: "PYTHONDONTWRITEBYTECODE=1"
+  lifecycle:
+    modern_runtime_label: "com.picmao.agent-runtime-runtime-service"
+    desired_state_running: true
+    controlled_restart_mechanism: "exactly one launchctl kill SIGTERM against the loaded modern Runtime service; rely on launchd KeepAlive/desired-state for autonomous next generation"
+
+objective: >-
+  Restore the installed accepted app to the exact sealed candidate by deleting only the three forensically proven
+  foreign Python bytecode resources and removing their __pycache__ directory only if empty. Prove strict deep code
+  signature and canonical candidate validation return to PASS without re-signing. Then perform exactly one bounded
+  controlled Runtime generation restart and prove the canonical production path does not recreate any bytecode drift.
+  Only after all repair/restart preservation gates pass, invoke exactly one canonical ./install.sh --commit-cutover,
+  verify transaction terminalization and healthy live state, publish a report-only commit, and stop at Architect review.
+
+scope:
+  required_checks:
+    - "Fresh-resolve GitHub dev, origin/dev, local HEAD and require exact TASK-0071 handoff base with a clean designated working tree before any installed-app or lifecycle mutation."
+    - "Freshly prove transaction schema=5/PENDING/APP_SWAPPED with exact metadata SHA-256 589436ead0cc3c53ea0c32a26eda98e19e2ead5564f6ae298752903566e8f661, handoff d8bd8885..., runtime.env mode 0600/SHA 6e6fef8e..., desired-state SHA e3b0c442..., and repository candidate validation PASS."
+    - "Freshly prove current installed drift is exactly the three TASK-0070 PYC files and each exact SHA-256 still matches TASK-0070. If any listed file is missing/changed, any additional pyc exists under installed agent_runtime, or any unrelated installed-app drift is observed, STOP before repair."
+    - "Freshly prove current Runtime/tunnel ownership is canonical and healthy before repair as available: modern Runtime service loaded/running, exactly one canonical 127.0.0.1:8080 listener, /healthz=200, /readyz=200."
+    - "Delete exactly the three proven PYC paths by exact path. Do not use globbing and do not use rm -rf."
+    - "After deleting the three files, remove exactly their __pycache__ directory only with rmdir and only if it is empty. If rmdir reports non-empty, STOP and preserve remaining contents for Architect review."
+    - "Do not delete any other __pycache__, .pyc, source, venv, signature, xattr, plist, helper, app resource, config, or transaction file."
+    - "Immediately after cleanup, prove there are zero .pyc files under installed Contents/Resources/runtime/agent_runtime and the known __pycache__ directory is absent."
+    - "Without re-signing, require codesign --verify --deep --strict on the installed app PASS."
+    - "Without re-signing or copying bytes from the candidate, run the canonical package-provenance installed-candidate validation against the accepted transaction/candidate handoff and require exact accepted candidate 8017f538... PASS."
+    - "Re-prove runtime.env and desired-state are byte-identical after cleanup and transaction remains exact schema-5 PENDING/APP_SWAPPED."
+    - "Only after cleanup/signature/candidate validation all PASS, perform exactly one controlled generation restart by invoking launchctl kill SIGTERM against gui/$(id -u)/com.picmao.agent-runtime-runtime-service. Do not kickstart, bootout, start, stop, run start.sh restart, or invoke a second signal/restart action."
+    - "Observe launchd autonomously create the next Runtime/tunnel/MCP generation. Do not manually start or repair it. Require bounded convergence to canonical ownership, exactly one 127.0.0.1:8080 listener, /healthz=200, /readyz=200."
+    - "After the new canonical generation is healthy, prove tunnel/MCP process environment carries PYTHONDONTWRITEBYTECODE=1 without exposing secrets, and prove zero .pyc files and no agent_runtime/__pycache__ directory were recreated in the installed bundle."
+    - "After restart proof, re-run strict deep codesign verification and canonical installed-candidate validation; both must still PASS. Re-prove exact transaction metadata, candidate/handoff, runtime.env, desired-state and repository candidate bindings."
+    - "If any PYC reappears, signature/candidate validation fails, health fails to converge, config/candidate/transaction drifts, or any unexpected mutation is observed, STOP before commit-cutover."
+    - "Only if every preceding gate passes, invoke exactly once: ./install.sh --commit-cutover. No retry is authorized under any circumstance."
+    - "Require canonical COMMITTED semantics. Do not invoke commit-cutover a second time for confirmation."
+    - "After commit, prove the pending transaction directory/state is absent/terminalized and no schema-5 PENDING transaction remains for the accepted candidate."
+    - "After commit, prove installed and repository candidate validation still PASS at exact accepted candidate/handoff, runtime.env remains mode 0600/exact SHA, desired-state remains exact SHA, zero installed PYC drift remains, strict deep codesign PASS, and Runtime/tunnel/listener/health remain canonical and healthy."
+    - "Record lifecycle invocation counts explicitly: cleanup exact deletions=3, directory rmdir at most 1, controlled Runtime signal/restart invocation exactly 1 if repair gates passed, commit-cutover exactly 1 only if restart gates passed, and every other lifecycle/transaction operation=0."
+    - "Publish only .agent/tasks/TASK-0071/report.yaml to dev, non-force, then stop at ARCHITECT_REVIEW."
+
+allowed_mutation:
+  installed_app_cleanup:
+    delete_exact_files: 3
+    remove_empty_directory_max: 1
+    resign: false
+  runtime_lifecycle:
+    signal_command: "launchctl kill SIGTERM gui/$(id -u)/com.picmao.agent-runtime-runtime-service"
+    invocation_count_max: 1
+    expected_effect: "launchd/desired-state autonomously replaces the canonical Runtime generation"
+  transaction:
+    canonical_command: "./install.sh --commit-cutover"
+    invocation_count_max: 1
+    prerequisite: "all cleanup, validation, restart, no-regeneration and preservation gates PASS"
+  repository_publication:
+    - ".agent/tasks/TASK-0071/report.yaml"
+
+forbidden_changes:
+  - "Do not re-sign the installed app."
+  - "Do not copy/rsync/replace candidate bytes into the installed app; this task repairs only the exact proven foreign PYC additions."
+  - "Do not use rm -rf, wildcard deletion, recursive cleanup, compileall, py_compile, or import installed agent_runtime from a host diagnostic process."
+  - "Do not delete any resource beyond the three exact PYC paths and their exact parent directory if empty."
+  - "Do not edit runtime.env, desired-state, ServiceManagement registration, launchd configuration, candidate/handoff, production source, tests, dependencies, packaging, docs, tags, releases, or main."
+  - "Do not run cutover, rollback, resume, recover, reinstall, uninstall, repair, bootstrap, kickstart, bootout, manual tunnel-client execution, or a second Runtime signal/restart."
+  - "Do not invoke commit-cutover before restart/no-regeneration proof passes and never invoke it more than once."
+  - "Do not expose CONTROL_PLANE_API_KEY, CONTROL_PLANE_TUNNEL_ID, signing identity, unrelated runtime.env values, Keychain contents, or private user data."
+  - "Do not delegate to Codex, Claude, Antigravity, another ChatGPT, or nested executors."
+
+invariants:
+  - "Before cleanup, the only accepted installed drift is the exact TASK-0070 three-file PYC set."
+  - "Cleanup is path-exact and non-recursive."
+  - "No re-signing is permitted; signature validity must be restored solely by removing the proven foreign additions."
+  - "The canonical restarted Runtime must not recreate bytecode inside the installed app."
+  - "Only one Runtime generation signal/restart action is permitted."
+  - "Only one commit-cutover invocation is permitted and only after all previous gates pass."
+  - "Accepted candidate/handoff, runtime.env, desired-state and repository candidate remain byte-identical throughout."
+  - "Main remains unchanged."
+  - "Executor must not claim final freeze; Architect decides freeze after review."
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0071/report.yaml"
+  unlisted_new_files:
+    allowed: false
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "The installed app is restored exactly by removing only the three proven foreign PYC resources and optional now-empty parent directory."
+    evidence_required: "Exact pre hashes, exact deletion paths/counts, zero post PYC drift, no unexpected bundle changes."
+  - id: AC-2
+    requirement: "The restored installed app passes strict signature and canonical candidate validation without re-signing."
+    evidence_required: "codesign --verify --deep --strict PASS and canonical package-provenance validation PASS at exact accepted candidate/handoff."
+  - id: AC-3
+    requirement: "Exactly one controlled canonical Runtime generation restart proves production bytecode suppression."
+    evidence_required: "Single launchctl SIGTERM invocation, autonomous replacement generation, healthy listener/health/ready, live PYTHONDONTWRITEBYTECODE=1, zero recreated PYC/__pycache__, repeat signature/candidate validation PASS."
+  - id: AC-4
+    requirement: "Exactly one canonical commit-cutover terminalizes the accepted schema-5 transaction after all gates pass."
+    evidence_required: "Single invocation/no retry, COMMITTED semantics, transaction absence, accepted candidate/config/desired-state preservation."
+  - id: AC-5
+    requirement: "Final live state is healthy and repository publication is report-only."
+    evidence_required: "Canonical Runtime/tunnel/listener/health, zero drift, fresh dev/main refs, report-only compare, clean tree, non-force publication."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Exact-base/clean-tree plus exact drift-set hashes and preserved transaction/candidate/config/live-health preflight."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Exact three-file deletion + empty-directory rmdir + zero-PYC + strict codesign + canonical candidate validation."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Exactly one controlled Runtime SIGTERM generation replacement + health convergence + bytecode-suppression/no-regeneration proof + repeated validation."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Exactly one commit-cutover only after gates + transaction terminalization + preserved accepted bindings."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Final health/zero-drift plus report-only non-force publication and fresh refs."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect review of TASK-0071 report and final terminalized live-state evidence."
+    expected_signal: "Foreign drift is removed, canonical Runtime does not recreate it, transaction is terminalized exactly once, and the accepted live generation is eligible for final freeze judgment."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: ARCHITECT_REVIEW
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
