@@ -733,6 +733,12 @@ class CandidateCutoverTests(unittest.TestCase):
             self.assertEqual(non_status, [])
             self.assertFalse(fx["transaction"].exists())
 
+    def test_split_v1_predecessor_revision_is_recognized(self) -> None:
+        revision = "b5ac0ed5b461d3a259e4111e1a8f13933985f81f"
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw, predecessor_revision=revision)
+            self.assertEqual(cutover._predecessor_service_contract(fx["target"]), "split-v1")
+
     def test_preswap_stale_aggregate_refresh_rolls_back_without_candidate_identity_check(self) -> None:
         old_revision = "4fbf5b1b0ef3708c8fff479ca6718344f3bfd3c0"
         with tempfile.TemporaryDirectory() as raw:
