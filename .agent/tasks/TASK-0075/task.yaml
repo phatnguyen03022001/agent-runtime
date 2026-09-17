@@ -1,0 +1,198 @@
+protocol_version: 3
+
+task_id: TASK-0075
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_final_source_freeze_preparation
+  predecessor_task: TASK-0074
+  predecessor_review: "78e3fde6d370313aabc158d549716a7933bcccfa"
+  predecessor_review_state: ACCEPTED
+  audit_basis: >-
+    Three independent read-only audits identified four material pre-freeze defects. TASK-0072 closed PTY
+    control/finalization and stale idle-reap races; TASK-0073 closed eager/unbounded Protected Runtime process
+    inspection; TASK-0074 closed both reachable schema-5 PRE_SWAP crash windows. Architect review then independently
+    re-ran canonical verification and retained one unattributed transient supervised-lifecycle fixture failure as a
+    non-blocking observation. A subsequent exact-test stability probe passed 30 consecutive invocations without source
+    mutation. Fresh read-only host evidence also proves the currently installed healthy Runtime generation is older than
+    the accepted source: installed runtime-manifest runtime_revision=b5ac0ed5b461d3a259e4111e1a8f13933985f81f,
+    while canonical dev is the TASK-0074 accepted lineage. Therefore final system freeze cannot use the existing
+    installed generation; one new exact signed immutable candidate must be produced first.
+  operator_authorization: >-
+    Operator explicitly asked the Architect to continue and to perform the final freeze work thoroughly. This task
+    authorizes only deterministic repository verification and one non-installed signed candidate freeze. It does not
+    authorize live installation, cutover, Runtime/tunnel lifecycle mutation, commit-cutover, rollback, ServiceManagement
+    mutation, launchd mutation, or main promotion.
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration_and_evidence
+
+classification: FINAL_POST_AUDIT_SIGNED_CANDIDATE_FREEZE
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+  candidate_source_revision: exact_handoff_base
+
+execution_surface:
+  type: CHATGPT_LOCAL
+  native_tool: Remote Desktop Commander MCP
+  delegation: forbidden
+
+local_signing_authority:
+  source: "/Users/tienphat/Developer/agent-runtime/.env"
+  key: "AGENT_RUNTIME_CODESIGN_IDENTITY"
+  expected_value_sha256: "caba6bba7c64a3efb58eafa09c300ca030ccb71a65cb2bc1a929cfc63a17e3e7"
+  keychain_enumeration_allowed: false
+  manual_operator_copy_paste_required: false
+  rules:
+    - "Read only the AGENT_RUNTIME_CODESIGN_IDENTITY entry; never source, print, dump or expose the whole .env."
+    - "Require exactly one key occurrence, mode 0600, ignored/untracked status, and exact digest continuity before freeze."
+    - "Do not run security find-identity or enumerate Keychain identities."
+    - "Pass the accepted local value only to the canonical freeze subprocess environment; never persist the literal."
+
+objective: >-
+  Produce exactly one real signed SHA-addressed non-installed Agent Runtime candidate from the exact TASK-0075 handoff
+  base after one final deterministic source gate. Preserve the accepted six-tool architecture and every TASK-0072 through
+  TASK-0074 correction. Prove exact source/tree/lock identity, transient-lifecycle stability, canonical verification,
+  signing ownership, candidate provenance, immutable publication, candidate byte stability, and zero live-state mutation.
+  Stop at ARCHITECT_REVIEW with the candidate retained for a separately authorized live cutover task. Do not claim final
+  system freeze.
+
+scope:
+  required_checks:
+    - "Fresh-resolve GitHub dev, origin/dev and local HEAD. Require all equal the exact TASK-0075 handoff base and require a clean designated working tree before any verification or freeze action."
+    - "Compute and record the exact source Git tree and requirements.lock SHA-256. Treat the exact handoff base as the sole candidate source revision."
+    - "Fresh-confirm main remains c49d777efa09db7f6c51bd8d8616db4623499fb8 before and after execution."
+    - "Read TASK-0072, TASK-0073 and TASK-0074 accepted reviews. Require their review states remain ACCEPTED and do not reopen their implementation absent new failing evidence."
+    - "Before freeze, run the exact previously transient supervised-lifecycle test 10 consecutive times in isolated fixtures. Any failure blocks freeze and returns ARCHITECT_REVIEW; do not retry past the first failure and do not patch within this task."
+    - "Then run the complete tests.test_supervised_lifecycle suite 3 consecutive times. Any failure blocks freeze and returns ARCHITECT_REVIEW without source mutation."
+    - "Run canonical repository verification exactly once on the exact clean handoff base: PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify. It must PASS before freeze. Do not rerun merely to obtain a green result; any failure blocks freeze for Architect investigation."
+    - "Run git diff --check and re-prove the tree is clean after verification."
+    - "Confirm the repo-local .env signing key authority without printing it: mode 0600, exactly one AGENT_RUNTIME_CODESIGN_IDENTITY key, ignored/untracked, key-only digest equals the accepted digest."
+    - "Invoke the canonical macos/freeze_candidate.py path exactly once using the accepted signing identity and the exact source revision/tree/requirements.lock identity. Do not retry the real freeze merely to collect evidence."
+    - "Require publication under build/candidates/<candidate_sha256>/ with exact Agent Runtime.app and Agent Runtime.candidate.json outputs returned by the freeze contract. Existing candidate directories must not be replaced, merged or deleted."
+    - "Require the frozen runtime-manifest runtime_revision to equal the exact TASK-0075 handoff base and its git_tree/requirements lock identity to equal pre-freeze evidence."
+    - "Record SHA-256 of the frozen candidate copies of agent_runtime/session.py and agent_runtime/protection.py and prove they equal the exact handoff-base repository bytes, thereby proving the TASK-0072/TASK-0073 Runtime corrections are in the new candidate."
+    - "Run /usr/bin/codesign --verify --deep --strict on the exact frozen app."
+    - "Read bounded codesign metadata only from the main app and Runtime helper. Require non-null matching TeamIdentifier ownership; record equality/non-null plus a SHA-256 digest only, never the literal TeamIdentifier."
+    - "Run canonical candidate validation against the exact frozen app/handoff pair and require exact candidate_sha256 equality."
+    - "Hash the external handoff and identity-critical immutable files before and after post-freeze verification. At minimum include the handoff, main executable, Runtime helper executable, Runtime start.sh, runtime-manifest.json, agent_runtime/session.py, agent_runtime/protection.py, and bundled requirements.lock when present. Require exact byte stability."
+    - "Observe the currently installed app and live Runtime only read-only before and after freeze: strict codesign remains valid, exactly one 127.0.0.1:8080 listener remains, healthz/readyz remain 200 when available, and installed runtime-manifest runtime_revision remains unchanged. The task must not update the installed app."
+    - "Publish implementation artifacts only as the immutable build/candidates output produced by the canonical freeze path; do not modify production source/tests/scripts/docs/configuration."
+    - "Publish only .agent/tasks/TASK-0075/report.yaml to dev, non-force, as the report-only direct child, then stop at ARCHITECT_REVIEW."
+
+allowed_mutation:
+  generated_candidate:
+    - "build/candidates/<candidate_sha256>/Agent Runtime.app"
+    - "build/candidates/<candidate_sha256>/Agent Runtime.candidate.json"
+  repository_publication:
+    - ".agent/tasks/TASK-0075/report.yaml"
+
+forbidden_changes:
+  - "Do not modify any production source, tests, README, verification code, dependencies, lockfiles, packaging implementation, lifecycle implementation, Swift source, or existing task artifact."
+  - "Do not enumerate signing identities, run security find-identity, expose the signing identity literal, TeamIdentifier literal, API keys, tunnel id, runtime.env contents, or unrelated .env values."
+  - "Do not install, activate or copy the new candidate over the installed app."
+  - "Do not run cutover, commit-cutover, rollback, resume, recover, reinstall, repair, bootstrap or uninstall."
+  - "Do not start, stop, restart, reload, signal or otherwise lifecycle-mutate the Runtime or tunnel."
+  - "Do not mutate desired-state, runtime.env, launchd, ServiceManagement, port 8080 ownership, installed app bytes, current transaction state, existing candidates, Keychain, System Settings, TCC or BTM."
+  - "Do not access Photos, SSH private material, browser data, unrelated credentials or private user data."
+  - "Do not create a branch/worktree, force-push dev, modify main, create a tag/release, or delegate to another agent."
+
+invariants:
+  - "Exactly one real freeze_candidate.py invocation."
+  - "Exactly one canonical ./verify invocation in this Executor task and it occurs before freeze."
+  - "A verification failure blocks freeze rather than being rerun until green."
+  - "Candidate source revision/tree/lock equal exact TASK-0075 handoff identity."
+  - "New candidate includes the accepted post-audit session.py and protection.py bytes exactly."
+  - "Candidate publication remains SHA-addressed no-replace and pre-existing candidates are byte-preserved."
+  - "No live Runtime/tunnel/lifecycle/configuration/transaction/installed-app mutation."
+  - "Main remains unchanged."
+  - "Executor must not claim final freeze or live acceptance."
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0075/report.yaml"
+  generated_paths:
+    - "build/candidates/<candidate_sha256>/"
+  unlisted_new_files:
+    allowed: false
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact source baseline and final pre-freeze verification are stable."
+    evidence_required: "Exact dev/origin/dev/HEAD/tree/lock identity, clean tree, 10/10 exact transient-test repeats, three complete supervised-lifecycle suite passes, one canonical ./verify PASS, and git diff --check PASS."
+  - id: AC-2
+    requirement: "Accepted signing authority is proven without Keychain enumeration or secret exposure."
+    evidence_required: "One key, mode 0600, ignored/untracked proof, accepted key-value digest equality, zero identity-enumeration commands."
+  - id: AC-3
+    requirement: "Exactly one immutable signed candidate is frozen from the exact handoff base."
+    evidence_required: "Single freeze invocation, exact candidate app/handoff paths, candidate_sha256, runtime-manifest revision/tree/lock binding, and SHA-addressed non-replacement publication."
+  - id: AC-4
+    requirement: "The candidate contains the accepted post-audit Runtime corrections and validates strictly."
+    evidence_required: "Candidate session.py/protection.py hashes equal exact source bytes; strict deep codesign PASS; TeamIdentifier non-null/equal digest evidence; canonical candidate validation PASS."
+  - id: AC-5
+    requirement: "Frozen candidate bytes remain stable through verification."
+    evidence_required: "Before/after identity-critical hashes are identical and candidate_sha256 remains unchanged."
+  - id: AC-6
+    requirement: "The healthy installed generation remains untouched and observably unchanged."
+    evidence_required: "Installed revision unchanged, strict codesign remains PASS, singleton listener retained, health/readiness retained when available, and zero live lifecycle/configuration/install/cutover action."
+  - id: AC-7
+    requirement: "Publication lineage is bounded and main is unchanged."
+    evidence_required: "Implementation output only under canonical candidate path, report-only direct child, clean tree, dev non-force publication, main unchanged."
+
+verification:
+  executor_checks:
+    - id: CHECK-PREFLIGHT
+      command_or_check: "Exact refs/tree/lock/clean-tree/signing-authority and installed-generation read-only identity preflight."
+      required: true
+    - id: CHECK-TRANSIENT
+      command_or_check: "Run the exact prior transient supervised-lifecycle test 10 consecutive isolated times, then tests.test_supervised_lifecycle three consecutive times. Stop on first failure."
+      required: true
+    - id: CHECK-FULL
+      command_or_check: "PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify exactly once before freeze."
+      required: true
+    - id: CHECK-FREEZE
+      command_or_check: "Invoke canonical real freeze exactly once and capture exact candidate app/handoff/candidate_sha256."
+      required: true
+    - id: CHECK-SIGNING
+      command_or_check: "Strict deep codesign plus bounded non-null matching TeamIdentifier digest evidence."
+      required: true
+    - id: CHECK-PROVENANCE
+      command_or_check: "Validate exact app/handoff, revision/tree/lock binding, source-byte inclusion, and critical-file byte stability."
+      required: true
+    - id: CHECK-PRESERVATION
+      command_or_check: "Fresh read-only installed-generation/codesign/listener/health proof plus report-only lineage, clean tree and unchanged main."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect independent review of report, immutable candidate evidence, source-byte binding, signing/provenance evidence, exact one-freeze invariant, and live-state preservation."
+    expected_signal: "One exact final post-audit signed candidate is ready for a separately authorized live cutover and acceptance task."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: ARCHITECT_REVIEW
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
