@@ -1,0 +1,185 @@
+protocol_version: 3
+
+task_id: TASK-0073
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_audit_followup
+  predecessor_task: TASK-0072
+  predecessor_review: "a8dfe919409e5564f69d0592173dc55be52f86d9"
+  predecessor_review_state: ACCEPTED
+  audit_basis: >-
+    TASK-0072 Architect review closed the two PTY/session concurrency blockers and left F-03 as the next isolated freeze
+    blocker. Fresh source inspection at predecessor review shows ProtectedRuntimeGuard._classify() eagerly computes
+    canonical process state for every argv classification, while the default provider executes /bin/ps -ax -o
+    pid=,ppid=,command= with capture_output=True and no explicit byte, row, or wall-clock bound. This task addresses only
+    that eager/unbounded process-inspection path. Cutover crash consistency and performance optimization remain separate.
+  operator_authorization: >-
+    Operator replied "ok" after the Architect proposed handling only F-03 next, without bundling cutover or performance
+    work. This authorizes the bounded repository correction defined by this task; it does not authorize live Runtime,
+    tunnel, installer, transaction, or lifecycle mutation.
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration_and_evidence
+
+classification: BOUNDED_PROTECTED_RUNTIME_PROCESS_INSPECTION_CORRECTION
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+execution_surface:
+  type: CHATGPT_LOCAL
+  native_tool: Remote Desktop Commander MCP
+  delegation: forbidden
+
+problem_statement:
+  f03_eager_scan: >-
+    ProtectedRuntimeGuard._classify() calls _canonical_processes() before determining whether the command can possibly
+    require PID/process-name matching. Benign commands, direct canonical relaunch detection, unrelated launchctl reads,
+    port checks, and each recursively classified shell segment therefore pay for a host-wide process snapshot even when
+    no process identity is needed.
+  f03_unbounded_scan: >-
+    The default _read_process_rows() uses subprocess.run(... capture_output=True, text=True) over host-wide /bin/ps
+    output. The Runtime has no explicit maximum captured bytes, row count, or scan deadline before materializing and
+    parsing that output. This violates the bounded-work requirement for a guard that runs on terminal execution paths.
+  f03_failure_semantics: >-
+    The current default reader converts a nonzero ps exit into an empty process list. For destructive process-targeting
+    commands this is indistinguishable from proving that no canonical Runtime process exists. The correction must not
+    turn scan failure, timeout, overflow, or malformed bounded snapshot state into an unsafe allow decision.
+
+objective: >-
+  Close F-03 with the smallest protection.py-only production correction: process inspection must be lazy, bounded in
+  memory/work/time, and fail closed for commands whose safety decision genuinely depends on canonical PID/process-name
+  inspection. Preserve the existing six-tool public MCP surface, current deny semantics for canonical process signals,
+  pkill/killall matches, launchd/start.sh lifecycle commands, canonical relaunches, port protection, shell wrappers and
+  command unwrapping. Prove the eager and unbounded behaviors with deterministic RED tests before source mutation, make
+  the minimal implementation pass, run affected/canonical verification, publish a report-only child, and stop at
+  ARCHITECT_REVIEW. Do not claim final freeze.
+
+scope:
+  required_checks:
+    - "Fresh-resolve GitHub dev, origin/dev and local HEAD; require the exact TASK-0073 handoff base and a clean designated working tree before mutation."
+    - "Read current agent_runtime/protection.py and tests/test_protected_runtime.py before editing; inspect executor/session guard call sites read-only only as needed to confirm affected behavior."
+    - "TDD RED-1: add a deterministic laziness regression using an injected process_rows_provider that raises or records calls. Prove benign classification and non-process-sensitive protected classifications do not need a process snapshot. The unmodified base must fail because _classify() eagerly invokes the provider."
+    - "TDD RED-2: add deterministic bounded-reader coverage for the default process reader. The test must prove host process output is consumed through a hard byte bound rather than subprocess.run(capture_output=True) or any equivalent unbounded whole-output materialization. Exercise below/at/above the chosen bound without spawning a real huge host process table."
+    - "TDD RED-3: add deterministic fail-closed coverage for process-sensitive commands when process inspection cannot produce a trustworthy bounded snapshot because of nonzero exit, timeout/deadline, byte/row overflow, or equivalent bounded-reader failure. No actual signal, pkill, killall, Runtime mutation, or protected command may execute in the test."
+    - "Record exact RED test names and pre-fix failure signals in the report before production-source mutation. If the eager/unbounded defect cannot be demonstrated deterministically, STOP at ARCHITECT_REVIEW rather than changing the design speculatively."
+    - "Move process inspection behind the narrowest classification branches that require canonical PID/process-command knowledge. Ordinary commands and classifications decidable from argv/text alone must not invoke the process_rows_provider."
+    - "Preserve shell segmentation and wrapper unwrapping behavior. A shell command containing a process-sensitive segment may perform the bounded snapshot only when that segment is reached; unrelated segments must not cause eager scans."
+    - "Replace the default whole-output ps capture with a bounded binary/byte-oriented reader or equivalent design that has explicit finite byte and row bounds plus a finite scan deadline. Do not merely truncate after capture_output has already materialized the full stdout."
+    - "The bounded reader must close/reap its own ps child cleanly on success, timeout, overflow and error; no helper process leak, pipe leak, background worker, cache, or long-lived scanner is allowed."
+    - "Choose conservative fixed internal bounds sufficient for normal macOS process tables and state them in source/tests. Do not expose new operator knobs, environment variables, MCP arguments, public schemas, or configuration surface."
+    - "A trustworthy complete snapshot preserves current canonical-root/descendant derivation and pkill/killall command matching semantics. Do not weaken exact canonical tunnel argv matching."
+    - "If a process-sensitive classification cannot obtain a complete trustworthy snapshot, fail closed before the requested destructive command can spawn/write. Use one bounded internal denial/error path that does not include process-table contents, argv payloads, credentials, or secrets in audit output."
+    - "Preserve existing bounded audit behavior: at most MAX_AUDIT_EVENTS, category/tool only, no command payload."
+    - "Do not add caching of process snapshots in this task. Each process-sensitive classification may obtain one fresh bounded snapshot; measurement/performance tuning is a separate follow-up."
+    - "Run focused protection tests first, then affected terminal/MCP/admission tests, then canonical ./verify exactly once for handoff verification unless a failure requires a focused correction."
+    - "Publish implementation changes on dev non-force, then publish only .agent/tasks/TASK-0073/report.yaml as the report-only direct child. Stop at ARCHITECT_REVIEW."
+
+allowed_mutation:
+  production_source:
+    - "agent_runtime/protection.py"
+  tests:
+    - "tests/test_protected_runtime.py"
+  repository_publication:
+    - ".agent/tasks/TASK-0073/report.yaml"
+
+forbidden_changes:
+  - "Do not change the six-tool public MCP surface, tool names, schemas, annotations or result contracts."
+  - "Do not modify agent_runtime/session.py; TASK-0072 session concurrency work is accepted and frozen for this task."
+  - "Do not modify agent_runtime/executor.py, server.py, capacity.py, timing.py, fs_read_batch implementation, dependencies or packaging unless the Architect explicitly revises this task."
+  - "Do not modify macos/candidate_cutover.py, install.sh, start.sh, ServiceManagement code or transaction/lifecycle logic; cutover crash consistency is the separate remaining blocker."
+  - "Do not add process-snapshot caches, daemons, background scanners, worker pools, retries, queueing, scheduling, new capabilities, new config knobs or performance instrumentation."
+  - "Do not broaden the protection threat model to solve same-UID interpreter indirection; preserve the documented limitation."
+  - "Do not modify candidate/handoff bytes, installed app, runtime.env, desired-state, launchd or ServiceManagement state."
+  - "Do not start/stop/restart/reload/signal the live Runtime or tunnel."
+  - "Do not run cutover, commit-cutover, rollback, resume, recover, reinstall, repair or any lifecycle mutation."
+  - "Do not access Photos, Keychain, SSH private material, browser data, unrelated credentials or private user data."
+  - "Do not delegate to Codex, Claude, Antigravity, another ChatGPT or nested executors."
+  - "Do not mutate main or force-push dev."
+
+invariants:
+  - "One authorized repository writer for this task."
+  - "Public Runtime capability surface remains exactly six tools."
+  - "Process inspection is lazy: argv/text-only decisions never enumerate the host process table."
+  - "Default host process inspection has explicit finite byte, row and wall-clock bounds before full output materialization."
+  - "Incomplete/failed process inspection cannot produce an allow decision for process-sensitive destructive commands."
+  - "Canonical process matching semantics remain at least as protective as the accepted baseline for complete snapshots."
+  - "Audit records remain bounded and payload-free."
+  - "No live Runtime/tunnel/lifecycle/config mutation."
+  - "Main remains unchanged."
+  - "Executor must not claim final system freeze; cutover crash consistency remains outside this task."
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0073/report.yaml"
+  unlisted_new_files:
+    allowed: false
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Protected Runtime classification no longer performs eager host process inspection."
+    evidence_required: "Deterministic pre-fix failing provider-call regression; post-fix benign and argv/text-only protected classifications complete with zero process_rows_provider calls, while kill/pkill/killall-sensitive cases still request inspection."
+  - id: AC-2
+    requirement: "The default macOS process snapshot path is bounded before output materialization."
+    evidence_required: "Tests prove explicit finite byte, row and deadline bounds; above-bound or deadline-exceeded synthetic ps output stops/reaps the helper without reading an unbounded remainder or leaking a process/pipe."
+  - id: AC-3
+    requirement: "Process-inspection failure is fail-closed for destructive process-sensitive classification."
+    evidence_required: "Deterministic tests cover nonzero/timeout/overflow or equivalent failure classes and prove kill/pkill/killall-style requests are denied before execution when canonical process identity cannot be determined safely."
+  - id: AC-4
+    requirement: "Existing protection semantics and public Runtime behavior are preserved."
+    evidence_required: "Existing direct PID/PGID, pkill/killall, shell/wrapper, launchd/start.sh, canonical relaunch, port, audit, terminal guard, admission and MCP contract/conformance tests PASS with no public schema/config expansion."
+  - id: AC-5
+    requirement: "Canonical repository verification and publication are clean."
+    evidence_required: "Canonical ./verify PASS, git diff --check PASS, implementation paths restricted to protection.py plus the authorized test file, report-only direct child, non-force dev publication, clean tree, main unchanged."
+
+verification:
+  executor_checks:
+    - id: CHECK-RED
+      command_or_check: "Run only the newly added TASK-0073 laziness/boundedness/fail-closed tests against the unmodified exact task base and record expected failures before production-source mutation."
+      required: true
+    - id: CHECK-FOCUSED
+      command_or_check: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_protected_runtime"
+      required: true
+    - id: CHECK-AFFECTED
+      command_or_check: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_terminal_exec tests.test_terminal_session tests.test_task0057_admission tests.test_mcp_contracts tests.test_mcp_client_conformance"
+      required: true
+    - id: CHECK-FULL
+      command_or_check: "PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify"
+      required: true
+    - id: CHECK-DIFF
+      command_or_check: "git diff --check plus exact changed-path review"
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect independent review of TASK-0073 report, protection.py diff, deterministic RED evidence, bounded-reader semantics and fresh verification evidence."
+    expected_signal: "F-03 is closed without public-contract expansion, protection weakening, live lifecycle mutation, or unrelated optimization."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: ARCHITECT_REVIEW
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
