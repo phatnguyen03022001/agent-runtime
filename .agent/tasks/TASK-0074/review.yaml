@@ -1,0 +1,139 @@
+protocol_version: 3
+
+task_id: TASK-0074
+task_revision: 1
+state: ACCEPTED
+
+review:
+  reviewer: Architect
+  reviewed_report_commit: "5f13a57fd24ddd71b706d1017d8d3fae92d234a3"
+  reviewed_implementation_commit: "ca3fa0a0a5bb8cfd1db1f39ccd44fd6f147bddd8"
+  exact_task_base: "a0c72023b9a6baf48bd55c80a1c4edbd7c9f3d59"
+  executor_result: PASS
+  final_freeze_readiness_asserted: false
+
+lineage:
+  implementation_parent_is_exact_task_base: PASS
+  implementation_is_single_commit: PASS
+  implementation_changed_paths:
+    - macos/candidate_cutover.py
+    - tests/test_candidate_cutover.py
+  report_parent_is_implementation: PASS
+  report_only_changed_path:
+    - .agent/tasks/TASK-0074/report.yaml
+  remote_dev_before_review: "5f13a57fd24ddd71b706d1017d8d3fae92d234a3"
+  remote_main_observed: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+
+contract_review:
+  tdd_red_evidence: PASS
+  target_absent_preswap_recovery: PASS
+  candidate_installed_preswap_recovery: PASS
+  ambiguous_or_tampered_states_fail_closed: PASS
+  schema5_preserved: PASS
+  public_lifecycle_surface_preserved: PASS
+  operation_ledger_authority_preserved: PASS
+  candidate_provenance_preserved: PASS
+  rollback_closure_validation_preserved: PASS
+  first_install_semantics_preserved: PASS
+  no_live_lifecycle_mutation: PASS
+  scope_boundary: PASS
+
+acceptance_criteria:
+  - id: AC-1
+    status: PASS
+    evidence: >-
+      Deterministic RED evidence reproduced PRE_SWAP with a valid predecessor snapshot, absent installed target and
+      present exact staged candidate after predecessor removal. The implementation restores only the validated
+      previous-app snapshot, verifies the exact predecessor closure, and converges rollback.
+  - id: AC-2
+    status: PASS
+    evidence: >-
+      Deterministic RED evidence reproduced PRE_SWAP after staged-candidate replacement but before APP_SWAPPED metadata
+      persistence. Recovery recognizes this only when the installed target validates as the exact transaction candidate,
+      staged-candidate is absent, and transaction identity matches; it then uses bounded ledger compensation and exact
+      predecessor restoration.
+  - id: AC-3
+    status: PASS
+    evidence: >-
+      Focused regressions preserve fail-closed handling for ambiguous staged-plus-installed candidate state and unsafe
+      symlink target, while the existing focused suite covers malformed rollback evidence and candidate identity drift.
+  - id: AC-4
+    status: PASS
+    evidence: >-
+      Transaction schema remains 5; lifecycle command surface, ServiceManagement ownership semantics, operation ledger,
+      provenance and first-install behavior remain unchanged outside the bounded PRE_SWAP recovery classifier.
+  - id: AC-5
+    status: PASS
+    evidence: >-
+      Executor verification passed focused 85, affected 75 and canonical 345 tests with git diff --check clean. Architect
+      independently reran focused 85 PASS, affected 75 PASS and a fresh canonical verification that ultimately passed
+      345/345 with exit 0; final git diff --check and working-tree status were clean.
+
+architect_independent_verification:
+  baseline:
+    branch: dev
+    head_before_review: "5f13a57fd24ddd71b706d1017d8d3fae92d234a3"
+    origin_dev_before_review: "5f13a57fd24ddd71b706d1017d8d3fae92d234a3"
+    working_tree_clean: true
+  focused:
+    command: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_candidate_cutover"
+    result: PASS
+    tests_run: 85
+  affected:
+    command: >-
+      PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_task0055_cutover
+      tests.test_task0055_macos_contract tests.test_candidate_freeze tests.test_package_provenance
+      tests.test_supervised_lifecycle tests.test_service_recovery tests.test_tunnel_identity
+    result: PASS
+    tests_run: 75
+  canonical_first_run:
+    result: FAIL
+    tests_run: 345
+    failures: 1
+    failing_test: "test_supervised_lifecycle.SupervisedLifecycleTests.test_restart_allows_main_app_not_found_when_runtime_agent_is_enabled"
+    failure_signal: "START ERROR: Runtime did not become ready: port 8080 listener is not the canonical installed no-profile Runtime"
+    attribution: UNPROVEN
+    relation_to_task0074_changed_paths: "No direct changed-path relation established."
+  transient_followup:
+    exact_failing_test_rerun: "1/1 PASS"
+    supervised_lifecycle_suite_repetitions: 3
+    each_suite_result: "8/8 PASS"
+    interpretation: >-
+      The one-off failure was not reproducible in the exact test or three complete supervised-lifecycle suite reruns.
+      Root cause was not proven, so the review does not relabel it as a fixed defect or attribute it to TASK-0074.
+  canonical_second_run:
+    command: "PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify"
+    result: PASS
+    tests_run: 345
+    failures: 0
+    exit_code: 0
+  diff_check: PASS
+  working_tree_clean_after_verification: true
+
+findings:
+  - id: TASK0074-SWAP-CRASH-CONSISTENCY
+    disposition: CLOSED
+    severity_before: MEDIUM
+    evidence: >-
+      Both reachable PRE_SWAP process-death states are now classified using exact transaction evidence and converge to
+      the predecessor or absent first-install state without weakening ambiguous/tampered fail-closed behavior.
+  - id: ARCH-OBS-0074-01
+    disposition: NON_BLOCKING_OBSERVATION
+    classification: UNATTRIBUTED_TRANSIENT_TEST_FAILURE
+    evidence: >-
+      Architect first canonical run had one supervised-lifecycle fixture failure. The exact failing test then passed,
+      the full supervised-lifecycle suite passed three consecutive times, and a second complete 345-test canonical run
+      passed. No source or test mutation was made to influence these reruns. Root cause remains unproven.
+    freeze_effect: >-
+      Does not reopen TASK-0074 because it is outside the TASK-0074 changed paths and was not reproducible, but it must
+      remain visible to any separate final-freeze judgment rather than being silently discarded.
+
+judgment:
+  task_result: ACCEPTED
+  known_task0074_freeze_blocker_closed: true
+  remaining_known_runtime_code_freeze_blockers_from_three_audits: 0
+  capability_surface_change_required: false
+  final_system_freeze_claimed: false
+  next_action: >-
+    Perform a separate final freeze judgment using the accepted TASK-0072, TASK-0073 and TASK-0074 evidence plus the
+    recorded transient lifecycle-test observation. Do not reopen Runtime implementation without new evidence.
