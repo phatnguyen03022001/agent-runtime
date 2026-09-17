@@ -1,0 +1,176 @@
+protocol_version: 3
+
+task_id: TASK-0072
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_audit_followup
+  predecessor_task: TASK-0071
+  predecessor_review: "8bcaf589d00a48b797ac162fc13d8e1ce627892b"
+  predecessor_review_state: ACCEPTED
+  audit_basis: >-
+    Three independent read-only audits of exact baseline 8bcaf589d00a48b797ac162fc13d8e1ce627892b agreed that the six-tool
+    capability surface is sufficient and should remain frozen. Architect source review independently confirmed two
+    session-lifecycle concurrency defects: terminal control is not serialized against finalization/FD close and the
+    idle reaper can act on a stale last_activity decision. No public MCP/API expansion is justified.
+  operator_authorization: >-
+    Operator approved the Architect design by replying "ok" after the Architect proposed TASK-0072 as the first
+    bounded blocker-fix task: fix only PTY control/finalization synchronization and idle-reaper stale-activity ordering,
+    TDD first, with no public capability change and without touching the remaining audit blockers.
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration_and_evidence
+
+classification: BOUNDED_SESSION_CONCURRENCY_CORRECTION
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+execution_surface:
+  type: CHATGPT_LOCAL
+  native_tool: Remote Desktop Commander MCP
+  delegation: forbidden
+
+problem_statement:
+  f01_control_finalization_race: >-
+    TerminalSessionManager.control() performs running-state checks and then PTY FD operations / protected-input-buffer
+    mutation without one serialization boundary shared with _cleanup_process(). Cleanup can terminate/finalize/close the
+    PTY between the check and write/ioctl/kill operation. Concurrent write calls can also read the same
+    protected_input_buffer snapshot and classify fragments independently before either updates that buffer.
+  f02_idle_reaper_stale_activity_race: >-
+    reap_idle_once() snapshots idle candidates using last_activity, releases the manager lock, then later cleans each
+    candidate without atomically rechecking/claiming expiry against concurrent poll/control activity. A session can be
+    refreshed after candidate selection yet still be reaped from the stale decision.
+
+objective: >-
+  Close exactly the two session concurrency races with the smallest per-session synchronization change. Make control
+  operations and finalization linearizable with respect to PTY FD use and protected-input-buffer mutation, and give
+  session activity refresh versus idle-reap claim one deterministic ordering point. Preserve all six public MCP tools,
+  schemas, x6 admission semantics, output/cursor behavior and current lifecycle boundaries. Prove both defects with
+  deterministic failing regressions before source mutation, make the minimum implementation pass, run canonical
+  verification, publish a report-only child, and stop at Architect review.
+
+scope:
+  required_checks:
+    - "Fresh-resolve GitHub dev, origin/dev and local HEAD; require exact TASK-0072 handoff base and a clean designated working tree before mutation."
+    - "Read current agent_runtime/session.py, tests/test_terminal_session.py and tests/test_protected_runtime.py before editing; preserve existing public signatures and result shapes."
+    - "TDD RED-1: add a deterministic concurrent-write regression proving two terminal_control write calls cannot both classify from the same protected_input_buffer snapshot. Use synthetic/mock protection identity and harmless fake PTY writes; never execute a real protected command or signal. On the pre-fix source, the test must fail for the race itself, not due to timing flakiness."
+    - "TDD RED-2: add a deterministic control-vs-finalization regression using threading Event/Barrier coordination, not sleeps, that forces cleanup/finalization to contend with a write or resize. The required post-fix behavior is linearizable: the control operation either completes before finalization or observes the finalized/non-running state and performs no PTY FD operation after close."
+    - "TDD RED-3: add a deterministic idle-reaper regression where a session is selected as stale, then poll/control refreshes activity before the reap claim. On the pre-fix source the stale candidate is incorrectly expired; post-fix it must remain live. Also retain/prove that a genuinely idle session is still reaped."
+    - "Record the exact focused failing test names and their pre-fix failure signals in the report before implementation. If any proposed race cannot be reproduced deterministically, STOP and return ARCHITECT_REVIEW rather than changing synchronization speculatively."
+    - "Implement one minimal per-session lifecycle/operation ordering mechanism (for example a per-session re-entrant lifecycle lock or an equivalently narrow primitive) shared by control operations and cleanup/finalization. Do not introduce global serialization."
+    - "Serialize the entire terminal_control write sequence that must be atomic for correctness: protected_input_buffer snapshot -> guard classification -> running-state proof -> PTY write -> protected_input_buffer update -> activity touch. Concurrent writes must have a single visible order."
+    - "Interrupt and resize must not act on a PTY/process after finalization has won the per-session lifecycle ordering. Explicit terminate must compose with the same ordering without self-deadlock."
+    - "Make activity refresh and idle-reap claim share one ordering point. Immediately before idle cleanup, revalidate current last_activity under that ordering. A refresh that wins first prevents that reap; a reap claim that wins first may expire the session deterministically."
+    - "Do not hold the per-session lifecycle serialization primitive across terminal_poll Condition.wait(wait_ms); a long poll (up to 1000 ms) must not block terminate/control/cleanup merely because it is waiting for output. Activity may be touched before and after the wait using bounded critical sections."
+    - "Define and preserve an explicit lock ordering that cannot invert with session.changed / session.lock, manager._lock, cleanup/finalization synchronization, or reader/monitor threads. Add at least one deterministic concurrency regression that would hang on an inversion and complete under the corrected design with a bounded test timeout."
+    - "Preserve heavy-execution lease ownership/release, active-session limit, idle TTL, retained completed-session bound, cursor semantics, PTY output bounds and Runtime shutdown cleanup."
+    - "Run focused session/protected-runtime tests first, then affected admission/MCP contract tests, then canonical ./verify exactly once for handoff verification unless a failure requires a focused correction."
+    - "Publish implementation changes on dev non-force, then publish only .agent/tasks/TASK-0072/report.yaml as the report-only direct child. Stop at ARCHITECT_REVIEW."
+
+allowed_mutation:
+  production_source:
+    - "agent_runtime/session.py"
+  tests:
+    - "tests/test_terminal_session.py"
+    - "tests/test_protected_runtime.py"
+  repository_publication:
+    - ".agent/tasks/TASK-0072/report.yaml"
+
+forbidden_changes:
+  - "Do not change the six-tool public MCP surface, tool names, schemas, annotations or result contracts."
+  - "Do not modify agent_runtime/protection.py; process-inspection boundedness is a separate successor blocker."
+  - "Do not modify macos/candidate_cutover.py, install.sh, start.sh, ServiceManagement code or transaction/lifecycle logic; cutover crash consistency is a separate successor blocker."
+  - "Do not optimize timing, fs_read_batch, AnyIO/thread-pool behavior, x6 policy, process spawning, logging or transport in this task."
+  - "Do not add queueing, scheduling, retries, worker pools, fairness layers, job management, caches or new capabilities."
+  - "Do not modify dependencies, requirements locks, packaging, candidate/handoff bytes, installed app, runtime.env, desired-state, launchd or ServiceManagement state."
+  - "Do not start/stop/restart/reload/signal the live Runtime or tunnel."
+  - "Do not run cutover, commit-cutover, rollback, resume, recover, reinstall, repair or any lifecycle mutation."
+  - "Do not access Photos, Keychain, SSH private material, browser data, unrelated credentials or private user data."
+  - "Do not delegate to Codex, Claude, Antigravity, another ChatGPT or nested executors."
+  - "Do not mutate main or force-push dev."
+
+invariants:
+  - "One authorized repository writer for this task."
+  - "Public Runtime capability surface remains exactly six tools."
+  - "Synchronization is per-session; unrelated sessions must remain independently operable."
+  - "terminal_poll long-wait behavior must not become a lifecycle lock that blocks control/finalization for the wait duration."
+  - "Protected-input fragment classification remains defense-in-depth with current semantics; this task only makes concurrent writes observe one serialization order."
+  - "Idle TTL semantics remain unchanged except stale candidate decisions are forbidden."
+  - "No live Runtime/tunnel/lifecycle/config mutation."
+  - "Main remains unchanged."
+  - "Executor must not claim final system freeze. Architect reviews before successor blockers proceed."
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0072/report.yaml"
+  unlisted_new_files:
+    allowed: false
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Concurrent terminal_control writes are linearized across guard classification, PTY write, protected-input-buffer update and activity refresh."
+    evidence_required: "Deterministic pre-fix failing concurrent fragmented-write regression; post-fix PASS with one observable write order and no guard bypass caused by shared stale buffer state."
+  - id: AC-2
+    requirement: "Control operations cannot use a PTY FD/process after cleanup/finalization has won the per-session lifecycle ordering."
+    evidence_required: "Deterministic control-vs-cleanup regression covering write or resize plus explicit terminate/finalization; no EBADF/reused-FD window, no deadlock, and linearizable result."
+  - id: AC-3
+    requirement: "Idle reaping cannot expire a session from a stale last_activity snapshot."
+    evidence_required: "Deterministic candidate-selection/activity-refresh race regression proves refreshed session survives; genuinely idle session still expires under unchanged TTL semantics."
+  - id: AC-4
+    requirement: "The synchronization correction introduces no global serialization or behavioral regression."
+    evidence_required: "Existing terminal session, protected Runtime, admission, MCP contract/conformance and cleanup tests PASS; long poll does not hold lifecycle ordering across wait; unrelated sessions remain independently operable."
+  - id: AC-5
+    requirement: "Canonical repository verification and publication are clean."
+    evidence_required: "Canonical ./verify PASS, git diff --check PASS, implementation paths restricted to allowed source/tests, report-only direct child, non-force dev publication, clean tree, main unchanged."
+
+verification:
+  executor_checks:
+    - id: CHECK-RED
+      command_or_check: "Run only the newly added deterministic race tests against the unmodified TASK-0072 base and record expected failures before production-source mutation."
+      required: true
+    - id: CHECK-FOCUSED
+      command_or_check: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_terminal_session tests.test_protected_runtime"
+      required: true
+    - id: CHECK-AFFECTED
+      command_or_check: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_task0057_admission tests.test_mcp_contracts tests.test_mcp_client_conformance"
+      required: true
+    - id: CHECK-FULL
+      command_or_check: "PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify"
+      required: true
+    - id: CHECK-DIFF
+      command_or_check: "git diff --check plus exact changed-path review"
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect independent review of TASK-0072 report, implementation diff, deterministic race tests and canonical verification evidence."
+    expected_signal: "F-01 and F-02 are closed without public-contract expansion, global serialization or live lifecycle mutation."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: ARCHITECT_REVIEW
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
