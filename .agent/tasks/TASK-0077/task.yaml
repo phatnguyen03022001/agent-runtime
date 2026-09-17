@@ -1,22 +1,22 @@
 protocol_version: 3
 
 task_id: TASK-0077
-task_revision: 3
+task_revision: 4
 state: APPROVED
 
 origin:
-  type: architect_revision_after_executor_capability_block
+  type: architect_revision_for_codex_independent_live_proof
   task_id: "TASK-0076"
   gap_id: LIVE_GENERATION_ACCEPTANCE_AFTER_PREDECESSOR_CLASSIFIER_FIX
   predecessor_task: TASK-0076
   predecessor_report_commit: "74dc5a469e43f3f87b670b8d5c102523b6b442cf"
   predecessor_result: BLOCKED
   predecessor_cutover_consumed: "1/1"
-  prior_revision: 2
-  prior_revision_base: "83d5b641b41b9cadc47797de3d07acd22dae4f1e"
-  prior_revision_outcome: DIRECT_MCP_PROOF_BLOCKED
-  prior_revision_preservation: "Revision 2 successfully consumed the single authorized install-prebuilt and reached a healthy schema-5 PENDING APP_SWAPPED transaction for candidate 2e7380e9.... Direct proof then BLOCKED: terminal_control terminate was blocked by the OpenAI safety layer before Runtime, and the seventh terminal_start was admitted without evidence that all first six sessions were still simultaneously running immediately before the probe. No commit, rollback, resume, recover, repair, reinstall, retry or manual lifecycle action occurred. install-prebuilt remains consumed at 1/1; commit-cutover remains 0/1."
-  revision_reason: "Read-only Architect diagnosis found one live agent_runtime.server process, AGENT_RUNTIME_MAX_ACTIVE_SESSIONS=6, AGENT_RUNTIME_MAX_PARALLELISM=6, and source-level fail-fast admission when six sessions remain running. The rev2 packet therefore does not prove a capacity defect because simultaneous-running state at the seventh probe was not established. Revision 3 authorizes only one deterministic proof-closure attempt with explicit hold/poll semantics and a benign terminal_control resize action; it grants no additional cutover or lifecycle-recovery authority."
+  prior_revision: 3
+  prior_revision_base: "f862744936174d1a0526000856f965cde5d2509a"
+  prior_revision_outcome: DIRECT_MCP_PROOF_EXTERNAL_GAP_PRE_RUNTIME
+  prior_revision_preservation: "Revision 3 proof Executor read canonical TASK-0077 revision 3, then its first required terminal_start was blocked by the OpenAI safety layer before reaching Runtime. No revision-3 Runtime workload was created, no x6/seventh probe occurred, and no repository/lifecycle/cutover mutation occurred. install-prebuilt remains consumed at 1/1 and commit-cutover remains 0/1."
+  revision_reason: "The operator explicitly selected Codex Luna LOW with fanout 1 as an independent proof surface after repeated ChatGPT conversation-level safety blocks. Revision 4 authorizes exactly one Codex direct-Agent-Runtime proof attempt against the existing healthy PENDING generation. It grants no additional install, commit, recovery or lifecycle authority."
   chronology: "TASK-0077 does not authorize or backdate the already-existing correction, verification, or candidate; it only adopts freshly verified facts and authorizes future activation work."
 
 architect_binding:
@@ -60,18 +60,21 @@ external_skills:
   execution_recommended: []
 
 authority_sources:
-  - source: "Current operator handoff dated 2026-09-18"
-    role: "Primary authority for truthful adoption of pre-existing correction/candidate facts and one new exact-candidate live activation boundary."
+  - source: "Current operator instruction dated 2026-09-18 selecting Codex Luna LOW fanout=1 for independent live proof"
+    role: "Primary authority for TASK-0077 revision 4 proof-surface substitution only; no new cutover, commit, recovery or lifecycle authority."
     precedence: 1
+  - source: "Current operator handoff dated 2026-09-18"
+    role: "Original operator authority for truthful adoption of pre-existing correction/candidate facts and the exact-candidate live activation boundary."
+    precedence: 2
   - source: "phatnguyen03022001/agent-runtime@74dc5a469e43f3f87b670b8d5c102523b6b442cf:.agent/tasks/TASK-0076/report.yaml"
     role: "Canonical evidence that TASK-0076 ended BLOCKED after consuming its one cutover invocation, with no transaction created and predecessor preserved."
-    precedence: 2
+    precedence: 3
   - source: "phatnguyen03022001/agent-runtime@86751031b28292bddfd5072a75fd4aaa1ec78019"
     role: "Canonical source identity for the already-existing bounded predecessor-classifier correction adopted by this task."
-    precedence: 3
+    precedence: 4
   - source: "phatnguyen03022001/agent-skills@1826d33bd1e467896c133109b37db8b0656b3276:protocols/TASK_PROTOCOL.md"
     role: "Pinned reusable task authority for restrictive execution, evidence, publication and review semantics."
-    precedence: 4
+    precedence: 5
 
 structure_authority:
   status: NOT_APPLICABLE
@@ -115,14 +118,21 @@ execution_surfaces:
     live_lifecycle_writer: true
     delegation: forbidden
   proof_executor:
-    type: CHATGPT_LOCAL
+    type: CODEX_LOCAL
+    model: Luna
+    reasoning: LOW
+    fanout: 1
     native_tool: Agent Runtime MCP direct
     repository_writer: false
     live_runtime_lifecycle_writer: false
     remote_desktop_commander_allowed: false
     alternate_mcp_client_allowed: false
-    delegation: forbidden
-    revision_3_proof_closure_attempt: "0/1"
+    nested_delegation: forbidden
+    revision_4_proof_attempt: "0/1"
+    canonical_resolution:
+      preferred: "Fresh GitHub remote dev"
+      github_unavailable_fallback: "Allowed only when GitHub/DNS is unavailable and local HEAD=local origin/dev=the exact Architect-published revision-4 base supplied in the launch handoff, the tree is clean, and task_revision=4/state=APPROVED are read from that exact checkout."
+      stale_or_mismatched_local: BLOCKED
   final_reviewer:
     type: INDEPENDENT_READ_ONLY
     same_session_as_control_writer: false
@@ -139,12 +149,14 @@ scope:
     - "Invoke exactly once ./install.sh --install-prebuilt with the exact adopted candidate and handoff. No retry."
     - "Any cutover failure, PARTIAL, AWAITING_APPROVAL, unexpected transaction state, integrity drift, or health failure stops BLOCKED with no rollback, resume, recover, repair, reinstall, retry, or manual Runtime/tunnel lifecycle action."
     - "After successful cutover require schema-5 PENDING, exact candidate binding, installed canonical validation PASS, strict deep codesign PASS, installed runtime revision 86751031..., zero installed PYC/__pycache__ drift, preserved config identities, singleton listener, and 200/200 health/readiness; then stop at LIVE_PROOF_REQUIRED."
-    - "Revision 3 proof closure reuses the already-observed exact-six public surface and prior PASS results for capacity_observer, fs_read_batch and terminal_exec only if the proof Executor freshly confirms the same TASK-0077 revision-3 PENDING checkpoint before testing."
-    - "Run one fresh PTY control proof with terminal_start of a bounded long-lived /bin/sleep workload, terminal_poll status=running, exactly one benign terminal_control resize action, then terminal_poll again. Do not use terminate, interrupt or write for this control proof. Cleanup may occur only by natural bounded process exit; prove final exited state and no task-owned session remains."
-    - "Run exactly one revision-3 deterministic x6 attempt using six /bin/sleep 180 sessions. After all six terminal_start calls succeed, immediately terminal_poll every one of the six and require all six to report status=running before issuing the seventh probe. If any of the six is no longer running, classify PROOF_TIMING_NOT_ESTABLISHED and do not issue the seventh probe."
-    - "Only after six-simultaneously-running is explicitly proven, issue exactly one seventh terminal_start using /bin/sleep 1 and require fail-fast capacity rejection with no session_id/target child creation. While the six are still running, require one capacity_observer and one fs_read_batch response. Do not retry."
-    - "All six held workloads must be bounded by their own 180-second natural exit so cleanup does not depend on terminal_control. Poll final state and prove no task-owned session remains before returning."
-    - "If platform safety blocks a required rev3 tool call before it reaches Runtime, return DIRECT_MCP_PROOF_EXTERNAL_GAP with the exact blocked call and observed state. If direct Agent Runtime MCP is unavailable, return OPERATOR_INPUT_REQUIRED_CONNECTOR and preserve PENDING without lifecycle repair."
+    - "Revision 4 proof is executed only by Codex Luna LOW fanout=1 using Agent Runtime MCP directly, with no nested executor or alternate client."
+    - "Before live workloads, prefer fresh GitHub dev resolution. If GitHub/DNS is unavailable, the proof Executor may use the exact local checkout only when HEAD=origin/dev=the exact Architect-published revision-4 base from the launch handoff, tree clean, and TASK-0077 revision 4 state APPROVED are proven locally. Any mismatch stops BLOCKED."
+    - "Freshly run one benign capacity_observer, one authorized fs_read_batch and one literal-argv non-mutating terminal_exec direct through Agent Runtime."
+    - "Run one fresh PTY control proof with terminal_start of /bin/sleep 180, terminal_poll status=running, exactly one benign terminal_control resize action, then terminal_poll again. Do not use terminate, interrupt or write. Cleanup is natural bounded exit only; prove final exited state and no task-owned session remains."
+    - "Run exactly one revision-4 deterministic x6 attempt using six /bin/sleep 180 sessions. After all six starts succeed, immediately poll every one and require all 6/6 status=running before the seventh probe. If simultaneity is not established, do not issue the seventh probe and return PROOF_TIMING_NOT_ESTABLISHED."
+    - "Only after six-simultaneously-running is proven, issue exactly one seventh terminal_start using /bin/sleep 1 and require fail-fast capacity rejection before session/child creation. While x6 remains held, require one capacity_observer and one fs_read_batch response. Do not retry."
+    - "Allow all task-owned sleeps to exit naturally, poll final state, and prove no task-owned session remains."
+    - "If Codex/OpenAI safety blocks a required call before Runtime, return DIRECT_MCP_PROOF_EXTERNAL_GAP with the exact blocked call. If Agent Runtime MCP is unavailable, return OPERATOR_INPUT_REQUIRED_CONNECTOR. Preserve PENDING and perform no lifecycle repair."
     - "The same control Executor must consume the proof packet as operator-supplied evidence, freshly revalidate PENDING/candidate/codesign/provenance/PYC/config/listener/health, then invoke exactly once ./install.sh --commit-cutover only if every mandatory gate passes."
     - "After commit require transaction absence, exact installed candidate identity, strict codesign, preserved config, zero PYC drift, singleton listener and 200/200 health/readiness, then perform three bounded stability observations."
     - "Fresh-resolve remote dev/main before publication, require main unchanged, publish only .agent/tasks/TASK-0077/report.yaml non-force as the report-only direct child, and stop at ARCHITECT_REVIEW."
@@ -170,16 +182,18 @@ allowed_mutation:
       max_simultaneous_heavy: 6
       seventh_probe_max: 1
       revision_3_attempt_max: 1
+      revision_4_codex_attempt_max: 1
       ownership: task_owned_harmless_only
       cleanup_required: true
 
 invariants:
   - "TASK-0076 remains terminal BLOCKED and its consumed cutover authority is never retried."
-  - "TASK-0077 originally granted install-prebuilt 0/1 and commit-cutover 0/1; current rev3 state is install-prebuilt 1/1 consumed and commit-cutover 0/1 unused."
+  - "TASK-0077 originally granted install-prebuilt 0/1 and commit-cutover 0/1; current rev4 state is install-prebuilt 1/1 consumed and commit-cutover 0/1 unused."
   - "Revision 1 ended CURRENT_PHASE_CAPABILITY_UNAVAILABLE before mutation."
   - "Revision 2 consumed install-prebuilt exactly once, reached healthy PENDING, and then blocked in direct proof; install-prebuilt is permanently 1/1 and commit-cutover remains 0/1."
-  - "Revision 3 grants no additional install-prebuilt authority and exactly one new deterministic proof-closure attempt only."
-  - "The governing Architect control chat remains the sole TASK-0077 repository and live-lifecycle writer."
+  - "Revision 3 consumed its one proof-closure attempt at a pre-Runtime platform block and created no Runtime workload."
+  - "Revision 4 grants exactly one Codex Luna LOW fanout=1 proof attempt and no additional install-prebuilt, commit-cutover, recovery or lifecycle authority."
+  - "The governing Architect control chat remains the sole TASK-0077 repository and live-lifecycle writer; Codex is proof-only."
   - "No rollback, resume, recover, repair, reinstall or manual Runtime/tunnel lifecycle authority exists."
   - "86751031... and 2e7380e9... remain pre-existing adopted facts rather than retroactively authorized outputs."
   - "Exactly one control Executor is the repository/live-lifecycle writer; the proof Executor mutates only task-owned harmless child workloads."
@@ -226,10 +240,10 @@ acceptance_criteria:
     requirement: "Exactly one new prebuilt cutover reaches a healthy exact PENDING corrected generation without repair."
     evidence_required: "Single install/no retry, schema-5 PENDING, exact installed candidate/provenance/codesign/config/PYC/listener/health evidence."
   - id: AC-4
-    requirement: "Separate direct Agent Runtime MCP proof validates the exact six-tool live contract and bounded PTY control without relying on blocked terminate semantics."
-    evidence_required: "Direct proof packet with exact tool set, prior/fresh cheap-call evidence as permitted, terminal_exec evidence, and fresh terminal_start/poll/resize/poll/natural-exit cleanup PASS."
+    requirement: "One Codex Luna LOW fanout=1 direct Agent Runtime MCP proof validates the exact six-tool live contract and bounded PTY control without relying on terminate semantics."
+    evidence_required: "Fresh Codex direct proof packet with exact tool set, capacity_observer, fs_read_batch, terminal_exec, terminal_start/poll/resize/poll, natural-exit cleanup and exact checkpoint identity."
   - id: AC-5
-    requirement: "Revision 3 establishes six sessions simultaneously running immediately before exactly one seventh probe and classifies the result truthfully."
+    requirement: "Revision 4 Codex proof establishes six sessions simultaneously running immediately before exactly one seventh probe and classifies the result truthfully."
     evidence_required: "Six successful starts plus poll-all-six=running immediately before the seventh probe; then seventh fail-fast with no child/session creation and cheap responsiveness, or a truthful pre-Runtime platform EXTERNAL_GAP. If simultaneity is not established, no seventh probe is issued."
   - id: AC-6
     requirement: "Exactly one commit-cutover terminalizes the transaction only after fresh precommit revalidation."
@@ -250,7 +264,7 @@ verification:
       command_or_check: "Control Executor invokes exactly one canonical install-prebuilt and proves the exact corrected candidate is healthy in schema-5 PENDING state, then stops at LIVE_PROOF_REQUIRED."
       required: true
     - id: CHECK-3
-      command_or_check: "Separate proof Executor uses Agent Runtime MCP directly for the rev3 bounded PTY resize/natural-exit proof and exactly one deterministic x6 attempt with poll-all-six-running before the seventh probe, or truthful platform EXTERNAL_GAP."
+      command_or_check: "Codex Luna LOW fanout=1 proof Executor uses Agent Runtime MCP directly for the rev4 bounded PTY resize/natural-exit proof and exactly one deterministic x6 attempt with poll-all-six-running before the seventh probe, or truthful platform EXTERNAL_GAP."
       required: true
     - id: CHECK-4
       command_or_check: "Same control Executor freshly revalidates all mutable PENDING predicates, invokes exactly one commit-cutover only after proof passes, and proves transaction absence."
