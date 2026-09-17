@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
+import agent_runtime.protection as protection
 from agent_runtime.protection import (
     CURRENT_RUNTIME_LAUNCHD_LABEL,
     LEGACY_RUNTIME_LAUNCHD_LABEL,
@@ -40,6 +43,187 @@ class ProtectedRuntimeGuardTests(unittest.TestCase):
         with self.assertRaisesRegex(ProtectedRuntimeDenied, r"^PROTECTED_RUNTIME:") as caught:
             guard.check(argv, tool_name="terminal_exec")
         self.assertEqual(caught.exception.category, category)
+
+    def test_process_snapshot_is_lazy_for_argv_text_only_classification(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            calls = 0
+
+            def unexpected_rows() -> list[tuple[int, int, str]]:
+                nonlocal calls
+                calls += 1
+                raise AssertionError("process snapshot should be lazy")
+
+            guard = ProtectedRuntimeGuard(
+                runtime_root=Path("/Users/test/agent-runtime"),
+                audit_file=Path(raw) / "protected-attempts.json",
+                process_rows_provider=unexpected_rows,
+            )
+            guard.check(["echo", "ordinary"], tool_name="terminal_exec")
+            self.assert_denied(
+                guard,
+                ["python3", "-m", "agent_runtime.server"],
+                "canonical_runtime_launch",
+            )
+            self.assert_denied(
+                guard,
+                ["launchctl", "stop", MODERN_RUNTIME_LAUNCHD_LABEL],
+                "canonical_service_lifecycle",
+            )
+            self.assert_denied(guard, ["./start.sh", "stop"], "canonical_service_lifecycle")
+            self.assert_denied(
+                guard,
+                ["python3", "-m", "http.server", "8080"],
+                "protected_port_rebind",
+            )
+            self.assertEqual(calls, 0)
+
+    def test_process_sensitive_classification_requests_one_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            calls = 0
+            runtime_root = Path("/Users/test/agent-runtime")
+            command = (
+                "/opt/homebrew/bin/tunnel-client run --control-plane.poll-channel main "
+                f"--mcp.command command={runtime_root}/.venv/bin/python -m agent_runtime.server,channel=main "
+                "--health.listen-addr 127.0.0.1:8080"
+            )
+
+            def rows() -> list[tuple[int, int, str]]:
+                nonlocal calls
+                calls += 1
+                return [(410, 1, command)]
+
+            guard = ProtectedRuntimeGuard(
+                runtime_root=runtime_root,
+                audit_file=Path(raw) / "protected-attempts.json",
+                process_rows_provider=rows,
+            )
+            self.assert_denied(guard, ["kill", "-TERM", "410"], "canonical_process_signal")
+            self.assertEqual(calls, 1)
+
+    def test_default_process_reader_avoids_unbounded_subprocess_run_capture(self) -> None:
+        real_popen = subprocess.Popen
+        children: list[subprocess.Popen[bytes]] = []
+
+        def popen_factory(*_args, **_kwargs):
+            child = real_popen(
+                [sys.executable, "-c", "import sys; sys.stdout.buffer.write(b'1 0 init' + bytes([10]))"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+            )
+            children.append(child)
+            return child
+
+        with mock.patch.object(
+            protection.subprocess,
+            "run",
+            side_effect=AssertionError("whole-output capture is unbounded"),
+        ), mock.patch.object(protection.subprocess, "Popen", side_effect=popen_factory):
+            self.assertEqual(protection._read_process_rows(), [(1, 0, "init")])
+        self.assertTrue(children)
+        self.assertTrue(all(child.poll() is not None for child in children))
+
+    def test_default_process_reader_enforces_byte_bound_before_materialization(self) -> None:
+        max_bytes = protection.PROCESS_SNAPSHOT_MAX_BYTES
+        real_popen = subprocess.Popen
+
+        def run_payload(payload_size: int):
+            children: list[subprocess.Popen[bytes]] = []
+
+            def popen_factory(*_args, **_kwargs):
+                command_size = payload_size - len(b"1 0 ") - len(b"\n")
+                script = (
+                    "import sys; "
+                    f"sys.stdout.buffer.write(b'1 0 ' + b'x' * {command_size} + b'\\n')"
+                )
+                child = real_popen(
+                    [sys.executable, "-c", script],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                )
+                children.append(child)
+                return child
+
+            with mock.patch.object(protection.subprocess, "Popen", side_effect=popen_factory):
+                try:
+                    result = protection._read_process_rows()
+                finally:
+                    self.assertTrue(children)
+                    self.assertTrue(all(child.poll() is not None for child in children))
+            return result
+
+        below = max_bytes - 1
+        at = max_bytes
+        self.assertEqual(len(run_payload(below)), 1)
+        self.assertEqual(len(run_payload(at)), 1)
+        with self.assertRaises(protection._ProcessSnapshotUnavailable):
+            run_payload(max_bytes + 1)
+
+    def test_default_process_reader_enforces_row_bound_and_reaps_helper(self) -> None:
+        real_popen = subprocess.Popen
+        children: list[subprocess.Popen[bytes]] = []
+        row_count = protection.PROCESS_SNAPSHOT_MAX_ROWS + 1
+
+        def popen_factory(*_args, **_kwargs):
+            script = f"import sys; sys.stdout.buffer.write(b'1 0 init\\n' * {row_count})"
+            child = real_popen(
+                [sys.executable, "-c", script],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+            )
+            children.append(child)
+            return child
+
+        with mock.patch.object(protection.subprocess, "Popen", side_effect=popen_factory):
+            with self.assertRaises(protection._ProcessSnapshotUnavailable):
+                protection._read_process_rows()
+        self.assertTrue(children)
+        self.assertTrue(all(child.poll() is not None for child in children))
+
+    def test_default_process_reader_deadline_and_nonzero_exit_reap_helper(self) -> None:
+        real_popen = subprocess.Popen
+
+        for script in (
+            "import time; time.sleep(5)",
+            "import sys; sys.exit(7)",
+        ):
+            with self.subTest(script=script):
+                children: list[subprocess.Popen[bytes]] = []
+
+                def popen_factory(*_args, **_kwargs):
+                    child = real_popen(
+                        [sys.executable, "-c", script],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    children.append(child)
+                    return child
+
+                with mock.patch.object(
+                    protection, "PROCESS_SNAPSHOT_DEADLINE_SECONDS", 0.05
+                ), mock.patch.object(protection.subprocess, "Popen", side_effect=popen_factory):
+                    with self.assertRaises(protection._ProcessSnapshotUnavailable):
+                        protection._read_process_rows()
+                self.assertTrue(children)
+                self.assertTrue(all(child.poll() is not None for child in children))
+
+    def test_process_sensitive_classification_fails_closed_when_snapshot_unavailable(self) -> None:
+        cases = (
+            ["kill", "-TERM", "999"],
+            ["pkill", "-f", "agent_runtime.server"],
+            ["killall", "tunnel-client"],
+        )
+        with tempfile.TemporaryDirectory() as raw:
+            for argv in cases:
+                with self.subTest(argv=argv):
+                    def unavailable() -> list[tuple[int, int, str]]:
+                        raise RuntimeError("synthetic process snapshot failure")
+
+                    guard = ProtectedRuntimeGuard(
+                        runtime_root=Path("/Users/test/agent-runtime"),
+                        audit_file=Path(raw) / "protected-attempts.json",
+                        process_rows_provider=unavailable,
+                    )
+                    self.assert_denied(guard, argv, "process_inspection_unavailable")
 
     def test_direct_pid_and_process_group_signals_are_denied(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
