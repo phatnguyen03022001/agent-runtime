@@ -1,20 +1,31 @@
 protocol_version: 3
 
 task_id: TASK-0076
-task_revision: 1
+task_revision: 2
 state: APPROVED
 
 origin:
-  type: architect_final_live_cutover_followup
+  type: architect_revision_after_pre_mutation_tool_safety_block
   predecessor_task: TASK-0075
   predecessor_review: "a5c291971f5be4917f267935c0ab88a73815b7e1"
   predecessor_review_state: ACCEPTED
+  prior_revision: 1
+  prior_revision_base: "be61db7c784686e84eb30362954fd33331a4a063"
+  prior_revision_outcome: TOOL_SAFETY_BLOCKED_PRE_MUTATION
+  prior_revision_preservation: >-
+    Two fresh revision-1 Executor contexts stopped before any TASK-0076 live mutation because an
+    upstream OpenAI tool-safety layer blocked Remote Desktop Commander start_process calls before
+    they reached the Desktop Commander server. Architect-side diagnostics proved the same Desktop
+    Commander instance remained healthy and could execute harmless git/codesign/lsof/curl commands.
+    The canonical repository was aligned to revision-1 base, the installed predecessor remained
+    healthy, the cutover transaction remained absent, and all live mutation counters remained zero.
   operator_authorization: >-
-    After TASK-0075 Architect acceptance, the Architect explicitly asked the operator to authorize
-    "TASK-0076 live cutover" for the exact retained post-audit candidate, including exact-candidate
-    live cutover, live six-tool acceptance, commit-cutover and post-commit stability. Operator replied
-    "Ok". This authorizes this bounded live replacement cycle only. It does not authorize rollback,
-    rebuild, re-sign, repair, main promotion, or any second cutover/commit attempt.
+    Operator explicitly authorized "TASK-0076 rev2 split-surface". Revision 2 changes only execution
+    routing: one control Executor owns all live cutover/commit lifecycle mutation and report
+    publication through Remote Desktop Commander MCP; one separate proof Executor uses Agent Runtime
+    MCP directly for live MCP acceptance and performs no Runtime lifecycle/config/repository mutation.
+    Existing candidate, one-cutover/one-commit ceilings, no-rollback boundary and final-freeze
+    separation remain unchanged.
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -25,18 +36,46 @@ target:
     name: dev
     role: integration_and_evidence
 
-classification: FINAL_EXACT_CANDIDATE_LIVE_CUTOVER_AND_ACCEPTANCE
+classification: FINAL_EXACT_CANDIDATE_LIVE_CUTOVER_AND_ACCEPTANCE_SPLIT_SURFACE
 
 execution_base:
   mode: handoff_snapshot
-  capture: after_final_planning_commit
+  capture: after_final_revision_2_planning_commit
   require_exact_match: true
 
-execution_surface:
-  type: CHATGPT_LOCAL
-  lifecycle_tool: Remote Desktop Commander MCP
-  live_mcp_tool: Agent Runtime MCP direct
-  delegation: forbidden
+execution_surfaces:
+  control_executor:
+    type: CHATGPT_LOCAL
+    native_tool: Remote Desktop Commander MCP
+    authority:
+      - exact_preflight
+      - exactly_one_canonical_prebuilt_cutover
+      - post_cutover_integrity_observation
+      - consume_operator_supplied_direct_mcp_proof
+      - exactly_one_commit_cutover_after_all_gates
+      - post_commit_stability
+      - report_only_publication
+    repository_writer: true
+    live_lifecycle_writer: true
+    delegation: forbidden
+  proof_executor:
+    type: CHATGPT_LOCAL
+    native_tool: Agent Runtime MCP direct
+    authority:
+      - direct_live_mcp_acceptance_only
+      - task_owned_harmless_process_workloads_only
+    repository_writer: false
+    live_runtime_lifecycle_writer: false
+    remote_desktop_commander_allowed: false
+    alternate_mcp_client_allowed: false
+    delegation: forbidden
+  handoff_protocol: >-
+    Control Executor performs Phase A and stops with a valid schema-5 PENDING transaction at
+    LIVE_PROOF_REQUIRED. Operator carries the exact bounded checkpoint into one fresh proof Executor.
+    Proof Executor returns structured DIRECT_MCP_PROOF_PASS, DIRECT_MCP_PROOF_EXTERNAL_GAP, or
+    OPERATOR_INPUT_REQUIRED evidence only. Operator then carries that proof result back into the SAME
+    control Executor session. Control Executor must attribute it as OPERATOR_SUPPLIED_DIRECT_MCP_EVIDENCE,
+    revalidate all mutable live predicates itself, and may commit only if the proof satisfies this task.
 
 accepted_candidate:
   candidate_sha256: "8ba16e69db3eecbd5db4ab0636c289ff68d71433779d9c67ded2f5335507ae01"
@@ -50,98 +89,124 @@ accepted_candidate:
   protection_sha256: "feecd9d9c80b5663c17c17760d7686a9226ac2aa2a95d96cfc7078dce17af9cc"
   team_identifier_sha256: "497c6b1fff2701afe7cf7fedb03297efe39b0af5e1081a78fc61bbbafeb9d49c"
 
-known_predecessor:
+carried_checkpoint:
   installed_runtime_revision: "b5ac0ed5b461d3a259e4111e1a8f13933985f81f"
-  expected_transaction_before_cutover: ABSENT
-  expected_desired_state: RUNNING
-  expected_listener_count: 1
-  expected_healthz: 200
-  expected_readyz: 200
+  transaction_expected_before_cutover: ABSENT
+  desired_state_expected: RUNNING
+  listener_count_expected: 1
+  healthz_expected: 200
+  readyz_expected: 200
+  mutation_counts:
+    install_prebuilt: "0/1"
+    commit_cutover: "0/1"
+    rollback: 0
+    resume: 0
+    recover: 0
+    repair_or_reinstall: 0
+    manual_runtime_or_tunnel_lifecycle: 0
 
 objective: >-
-  Replace the healthy older installed generation with the exact retained TASK-0075 candidate through
-  one canonical transactional prebuilt cutover, prove the new installed generation and exact six-tool
-  direct MCP surface, perform one bounded best-effort live x6/cheap-call proof without evading platform
-  safety, revalidate signed candidate integrity, then invoke exactly one commit-cutover only after every
-  required acceptance gate passes. Prove bounded post-commit stability and stop at ARCHITECT_REVIEW.
-  Do not claim final system freeze; the Architect performs the final freeze judgment separately.
+  Use one control Executor to install the exact retained TASK-0075 candidate through one canonical
+  transactional cutover and preserve a valid PENDING rollback envelope. Use a separate direct Agent
+  Runtime proof Executor to validate the installed generation's exact six-tool MCP behavior without
+  giving that proof context lifecycle or repository mutation authority. Return the proof to the same
+  control Executor, revalidate integrity/config/health, commit exactly once only if all mandatory gates
+  pass, prove three bounded post-commit stability observations, publish one report-only commit and stop
+  at ARCHITECT_REVIEW. Do not claim final system freeze.
 
-scope:
-  required_checks:
-    - "Fresh-resolve GitHub dev, origin/dev and local HEAD; require all equal the exact TASK-0076 planning base and require the designated working tree clean before any live mutation."
-    - "Fresh-confirm main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
-    - "Fresh-read TASK-0075 review and require state ACCEPTED, exact candidate identity 8ba16e69..., and source_freeze_ready=true."
-    - "Require the cutover transaction path is absent and is not a symlink. Any existing/pending/partial transaction blocks execution before cutover."
-    - "Freshly validate the retained candidate/handoff with canonical package provenance. Require candidate SHA 8ba16e69..., exact source revision/tree/lock, strict deep codesign PASS, non-null/equal TeamIdentifier digest 497c6b..., session.py SHA 03cdb1..., protection.py SHA feecd9..., and handoff SHA d909bd.... Do not rebuild, repackage, re-sign or mutate candidate bytes."
-    - "Freshly prove installed predecessor revision b5ac0ed5..., strict deep codesign PASS, exactly one canonical 127.0.0.1:8080 listener, /healthz=200 and /readyz=200. Observe ServiceManagement/launchd ownership read-only; do not normalize predecessor state."
-    - "Freshly record runtime.env full-file SHA-256 and mode without printing values. Require mode 0600, exactly one AGENT_RUNTIME_MAX_ACTIVE_SESSIONS entry with effective value 6, exactly one AGENT_RUNTIME_MAX_PARALLELISM entry with effective value 6, and no malformed/duplicate target entries. Preserve all unrelated secret values."
-    - "Freshly record desired-state marker presence/mode/SHA-256 and require desired state RUNNING. Preserve exact bytes."
-    - "Resolve /bin/launchctl, current UID, /opt/homebrew/bin/tunnel-client and exact candidate paths. Require the canonical prebuilt cutover path can bind these exact authorities without starting a second tunnel client."
-    - "Invoke exactly once: ./install.sh --install-prebuilt <exact candidate app> <exact candidate handoff>. No retry is authorized."
-    - "Treat any command failure, PARTIAL result, AWAITING_APPROVAL result, unexpected transaction schema/status/phase, or failure to converge to a healthy new generation as a blocker. Do not invoke rollback, resume, recover, repair, reinstall, a second cutover, manual launchctl repair, or manual tunnel startup. Preserve transaction evidence and stop at ARCHITECT_REVIEW/OPERATOR_INPUT_REQUIRED as appropriate."
-    - "After successful cutover, require schema-5 transaction status PENDING with the expected accepted candidate binding and an installed app that validates exactly against the transaction/candidate handoff. Require strict deep codesign PASS and installed runtime-manifest revision e6365f9...."
-    - "Require the new live Runtime/tunnel generation to converge without manual repair to one canonical listener on 127.0.0.1:8080 with /healthz=200 and /readyz=200. Record bounded non-secret process/generation identity."
-    - "Re-prove runtime.env mode/SHA and desired-state mode/SHA are byte-identical to pre-cutover values unless the canonical cutover contract explicitly owns a documented change. Any unexplained drift blocks commit."
-    - "Prove there are zero .pyc files and no agent_runtime/__pycache__ directory inside the installed signed Runtime package after the new generation becomes healthy. Never import the installed Runtime from a host diagnostic process."
-    - "Use Agent Runtime MCP directly for live acceptance. Do not substitute Remote Desktop Commander, local stdio Python, curl, another MCP client, or a nested agent for the direct MCP proof."
-    - "Require the direct live MCP public surface to expose exactly six tools: terminal_exec, terminal_start, terminal_poll, terminal_control, capacity_observer, fs_read_batch."
-    - "Run one benign direct capacity_observer call and require bounded schema_version=1 output with capacity_parallelism_ceiling <=6 and no process-history payload."
-    - "Run one benign direct fs_read_batch against a repository text file under the authorized workspace and require bounded successful read semantics without candidate/installed-app mutation."
-    - "Run one benign direct terminal_exec using literal argv and a non-mutating command; require exit_code=0 and truthful bounded result."
-    - "Run one bounded direct terminal_start -> terminal_poll -> terminal_control terminate lifecycle using only a task-owned harmless sleep process. Require truthful session state and cleanup."
-    - "Attempt one bounded x6 live heavy proof only through direct Agent Runtime MCP: hold up to six task-owned harmless heavy workloads simultaneously, then if all six are admitted attempt one seventh heavy call and require stable capacity failure before target workload creation. While x6 is held, issue capacity_observer and fs_read_batch and require responsiveness. Clean up every test-owned workload exactly."
-    - "If the ChatGPT/platform tool-safety layer prevents reaching x6 before Runtime receives the calls, record the platform guard as EXTERNAL_GAP with exact observed call count. Do not evade it, use alternate clients, retry repeatedly, or manufacture x6 evidence. This external guard alone does not invalidate the already accepted TASK-0057/TASK-0059 deterministic x6 envelope; all required six-tool live smoke checks above must still pass."
-    - "If the direct Agent Runtime MCP namespace is unavailable after cutover due connector/reload state, do not fake the proof and do not commit. Leave the valid PENDING transaction intact and return OPERATOR_INPUT_REQUIRED with instructions to reconnect/reload the same Agent Runtime plugin, then continue from the exact checkpoint without repeating cutover."
-    - "After all direct MCP probes, re-run strict deep codesign and canonical installed-candidate validation. Require exact candidate SHA 8ba16e69..., revision/tree/lock binding, zero PYC drift, preserved config/desired-state identity, singleton listener, healthz=200 and readyz=200."
-    - "Only if every mandatory gate passes, invoke exactly once: ./install.sh --commit-cutover. No retry is authorized."
-    - "Require COMMITTED semantics and transaction directory absence after commit. Do not invoke commit-cutover a second time for confirmation."
-    - "After commit, prove installed candidate validation and strict deep codesign still PASS; installed runtime revision remains e6365f9...; runtime.env and desired-state remain preserved; zero PYC drift remains; one canonical listener remains; healthz/readyz remain 200."
-    - "Perform three bounded post-commit stability observations separated by short waits. Require the same accepted generation identity, one listener, green health/readiness, exact candidate validation and no transaction reappearance or installed drift."
-    - "Fresh-resolve dev/main, require main unchanged, publish only .agent/tasks/TASK-0076/report.yaml non-force as the report-only direct child, and stop at ARCHITECT_REVIEW."
+phases:
+  phase_a_control_cutover:
+    owner: control_executor
+    required:
+      - "Fresh-resolve GitHub dev, origin/dev and local HEAD; require all equal exact TASK-0076 revision-2 planning base and require a clean designated working tree."
+      - "Fresh-confirm main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+      - "Fresh-read TASK-0075 review and require ACCEPTED, source_freeze_ready=true and exact candidate 8ba16e69...."
+      - "Require cutover transaction path absent and not a symlink."
+      - "Fresh canonical candidate/handoff validation: exact candidate SHA, source revision/tree/lock, handoff SHA, strict deep codesign, TeamIdentifier digest, session.py SHA and protection.py SHA. Candidate bytes must remain immutable."
+      - "Fresh predecessor proof: installed revision b5ac0ed5..., strict deep codesign PASS, singleton canonical listener, healthz=200, readyz=200, bounded ServiceManagement/launchd ownership observation."
+      - "Record runtime.env mode/full-file SHA without printing values; require mode 0600, exactly one active-sessions=6 target entry and exactly one parallelism=6 target entry with no duplicates/malformed target entries."
+      - "Record desired-state marker presence/mode/SHA and require RUNNING; preserve exact bytes."
+      - "Resolve exact candidate paths, /bin/launchctl, UID and /opt/homebrew/bin/tunnel-client; do not start a second tunnel."
+      - "Invoke exactly once: ./install.sh --install-prebuilt <exact candidate app> <exact candidate handoff>. No retry."
+      - "Any failure/PARTIAL/AWAITING_APPROVAL/unexpected transaction or health convergence blocks. Do not rollback/resume/recover/repair/reinstall/retry/manual-start."
+      - "After successful cutover require schema=5, status=PENDING, expected candidate binding, installed canonical validation PASS, strict deep codesign PASS, installed runtime revision e6365f9..., singleton listener, healthz=200, readyz=200."
+      - "Re-prove runtime.env and desired-state byte identities, zero installed .pyc and no agent_runtime/__pycache__."
+      - "Stop at LIVE_PROOF_REQUIRED. Do not commit-cutover yet. Emit one bounded checkpoint bundle for the proof Executor containing only non-secret transaction/candidate/generation facts."
+  phase_b_direct_mcp_proof:
+    owner: proof_executor
+    required:
+      - "Use Agent Runtime MCP directly only. Do not use Remote Desktop Commander, shell outside Runtime, local stdio Python, curl, alternate MCP client or nested executor."
+      - "Accept the operator-supplied LIVE_PROOF_REQUIRED checkpoint and require candidate 8ba16e69..., runtime revision e6365f9..., transaction schema=5/PENDING and control mutation counts install=1/1 commit=0/1."
+      - "Require the direct public MCP surface to expose exactly terminal_exec, terminal_start, terminal_poll, terminal_control, capacity_observer and fs_read_batch."
+      - "Run one benign direct capacity_observer call and require bounded schema_version=1 output with ceiling <=6 and no process-history payload."
+      - "Run one benign direct fs_read_batch against a repository text file under the authorized workspace."
+      - "Run one benign direct terminal_exec literal-argv non-mutating command and require exit_code=0."
+      - "Run one task-owned harmless terminal_start -> terminal_poll -> terminal_control terminate lifecycle and prove exact cleanup."
+      - "Attempt one bounded x6 direct live proof: hold up to six task-owned harmless heavy workloads; if six are admitted, attempt exactly one seventh heavy call and require capacity failure before target workload creation; while x6 is held, require capacity_observer and fs_read_batch responsiveness; clean every task-owned workload exactly."
+      - "If ChatGPT/platform safety prevents reaching six before Runtime receives the calls, report DIRECT_MCP_PROOF_EXTERNAL_GAP with exact observed admitted/call count. Do not evade, retry loops, use alternate clients or manufacture evidence. Accepted TASK-0057/TASK-0059 deterministic x6 evidence remains supporting evidence."
+      - "If direct Agent Runtime MCP is unavailable due connector/reload state, return OPERATOR_INPUT_REQUIRED_CONNECTOR. Do not attempt lifecycle repair."
+      - "Return a structured proof packet only. Do not write repository files, run git mutations, cutover, commit, rollback, resume, recover, repair, reinstall, start/stop/restart/reload/signal Runtime/tunnel, or mutate config/candidate/installed bytes."
+  phase_c_control_commit:
+    owner: control_executor
+    required:
+      - "Resume the SAME control Executor session. Do not repeat cutover."
+      - "Receive the proof packet from the operator and record provenance as OPERATOR_SUPPLIED_DIRECT_MCP_EVIDENCE. Do not claim control-session direct observation of proof-plane calls."
+      - "Require exact-six-tool smoke PASS. An x6 EXTERNAL_GAP is acceptable only if caused by platform safety with no evasion and all mandatory six-tool smoke checks/cleanup passed."
+      - "Freshly re-prove transaction schema=5/PENDING and exact candidate binding before any commit action."
+      - "Freshly re-prove strict deep codesign, canonical installed-candidate validation at 8ba16e69..., revision/tree/lock, zero PYC drift, preserved runtime.env/desired-state, singleton canonical listener, healthz=200 and readyz=200."
+      - "Only if every mandatory gate passes invoke exactly once: ./install.sh --commit-cutover. No retry."
+      - "Require COMMITTED semantics and transaction directory absence. Never invoke commit-cutover a second time for confirmation."
+      - "After commit re-prove installed candidate validation, strict deep codesign, runtime revision e6365f9..., preserved runtime.env/desired-state, zero PYC drift, singleton listener and 200/200 health/readiness."
+      - "Perform three bounded post-commit stability observations separated by short waits. Each must retain exact accepted generation/candidate identity, no transaction reappearance, zero drift, singleton listener and green health/readiness."
+      - "Fresh-resolve dev/main, require main unchanged, publish only .agent/tasks/TASK-0076/report.yaml non-force as the report-only direct child, and stop at ARCHITECT_REVIEW."
 
 allowed_mutation:
-  live_cutover:
-    canonical_command: "./install.sh --install-prebuilt <candidate_app> <candidate_handoff>"
-    invocation_count_max: 1
-    candidate_sha256: "8ba16e69db3eecbd5db4ab0636c289ff68d71433779d9c67ded2f5335507ae01"
-  transaction_commit:
-    canonical_command: "./install.sh --commit-cutover"
-    invocation_count_max: 1
-    prerequisite: "all mandatory installed-generation, direct-MCP, integrity and health gates PASS"
-  direct_mcp_test_workloads:
-    max_simultaneous_heavy: 6
-    seventh_probe_max: 1
-    ownership: task_owned_only
-    cleanup_required: true
-  repository_publication:
-    - ".agent/tasks/TASK-0076/report.yaml"
+  control_executor:
+    live_cutover:
+      canonical_command: "./install.sh --install-prebuilt <candidate_app> <candidate_handoff>"
+      invocation_count_max: 1
+    transaction_commit:
+      canonical_command: "./install.sh --commit-cutover"
+      invocation_count_max: 1
+    repository_publication:
+      - ".agent/tasks/TASK-0076/report.yaml"
+  proof_executor:
+    direct_mcp_test_workloads:
+      max_simultaneous_heavy: 6
+      seventh_probe_max: 1
+      ownership: task_owned_harmless_only
+      cleanup_required: true
 
 forbidden_changes:
-  - "Do not rebuild, refreeze, re-sign, overwrite, merge, chmod, touch or otherwise mutate candidate 8ba16e69... or candidate 8017f538...."
-  - "Do not modify production source, tests, README, dependencies, lockfiles, packaging, lifecycle implementation, Swift source, runtime.env, desired-state bytes, or existing task artifacts."
-  - "Do not invoke live cutover more than once."
-  - "Do not invoke commit-cutover more than once."
-  - "Do not invoke rollback, resume, recover, reinstall, repair, bootstrap, uninstall, a second cutover, or a second commit."
-  - "Do not manually start, stop, restart, reload, signal, kickstart, bootout, register, unregister or repair Runtime/tunnel/ServiceManagement/launchd outside effects owned by the one canonical cutover invocation."
-  - "Do not use an alternate/local MCP client to bypass platform direct-tool safety or connector availability."
+  - "Do not rebuild, refreeze, re-sign, overwrite, merge, chmod, touch or otherwise mutate candidate 8ba16e69... or prior candidate 8017f538...."
+  - "Do not modify production source, tests, README, dependencies, lockfiles, packaging/lifecycle implementation, Swift source, runtime.env, desired-state bytes or existing task artifacts."
+  - "Do not invoke cutover more than once or commit-cutover more than once."
+  - "Do not invoke rollback, resume, recover, reinstall, repair, bootstrap, uninstall, a second cutover or a second commit."
+  - "Do not manually start, stop, restart, reload, signal, kickstart, bootout, register, unregister or repair Runtime/tunnel/ServiceManagement/launchd outside effects owned by the one canonical cutover."
+  - "Proof Executor must not use Remote Desktop Commander or an alternate/local MCP client."
+  - "Control Executor must not substitute Remote Desktop Commander/local stdio for direct MCP proof."
   - "Do not import installed agent_runtime from a host Python diagnostic process or create bytecode in the signed bundle."
-  - "Do not expose CONTROL_PLANE_API_KEY, CONTROL_PLANE_TUNNEL_ID, runtime.env values, signing identity, TeamIdentifier literal, Keychain contents or unrelated private user data."
+  - "Do not expose API key, tunnel id, runtime.env values, signing identity, TeamIdentifier literal, Keychain contents or unrelated private user data."
   - "Do not access Photos, SSH private material or browser data."
-  - "Do not force-push dev, mutate main, create tags/releases, or delegate to another agent."
+  - "Do not force-push dev, mutate main, create tags/releases or delegate to nested executors."
 
 invariants:
-  - "Exactly one accepted-prebuilt cutover invocation maximum."
-  - "Exactly one commit-cutover invocation maximum and only after all mandatory gates pass."
-  - "No automatic rollback authority exists in TASK-0076."
-  - "The accepted candidate/handoff remain immutable throughout."
-  - "The predecessor rollback envelope remains available while transaction is PENDING."
-  - "The direct six-tool MCP smoke proof must be performed against the installed post-audit generation, not a local stdio substitute."
-  - "x6 live proof is attempted once without safety evasion; accepted deterministic TASK-0057/TASK-0059 evidence remains the canonical fallback if platform guard prevents six simultaneous direct calls."
-  - "All test-owned heavy workloads are cleaned up exactly."
-  - "runtime.env and desired-state are preserved byte-for-byte unless a canonical cutover-owned change is explicitly proven."
+  - "Exactly one control Executor is the sole repository and live lifecycle writer for TASK-0076."
+  - "Proof Executor is read-only with respect to repository/Runtime lifecycle/config/candidate/transaction and may mutate only its own harmless child workloads through public MCP tools."
+  - "Cutover count begins revision 2 at 0/1; commit count begins at 0/1."
+  - "Exactly one accepted-prebuilt cutover maximum."
+  - "Exactly one commit-cutover maximum and only after proof handoff plus fresh control revalidation."
+  - "No rollback authority exists in TASK-0076 revision 2."
+  - "Valid PENDING transaction must be preserved while waiting for proof or connector reconnection."
+  - "Accepted candidate/handoff remain immutable."
+  - "Predecessor rollback envelope remains available while PENDING."
+  - "Exact six-tool smoke proof must come from direct Agent Runtime MCP."
+  - "x6 is attempted once without safety evasion; TASK-0057/TASK-0059 remain fallback evidence only for a platform-blocked x6 attempt."
+  - "Every proof-owned workload is cleaned up exactly."
+  - "runtime.env and desired-state are preserved byte-for-byte unless an explicit canonical cutover-owned change is proven."
   - "Installed signed bundle remains bytecode-clean and strictly code-sign valid."
   - "Main remains unchanged."
-  - "Executor must not claim final system freeze."
+  - "No Executor may claim final system freeze."
 
 structure_policy:
   expected_new_files:
@@ -153,54 +218,55 @@ structure_policy:
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "Exact predecessor, config, transaction absence and exact accepted candidate are proven before mutation."
-    evidence_required: "Exact refs/clean tree, absent transaction, predecessor revision/codesign/health, candidate/handoff validation and hashes, runtime.env/desired-state identities and exact cutover bindings."
+    requirement: "Control preflight proves exact predecessor/config/transaction absence and exact accepted candidate before mutation."
+    evidence_required: "Exact refs/clean tree, predecessor identity/codesign/health, candidate/handoff validation and hashes, runtime.env/desired-state identities and exact command bindings."
   - id: AC-2
-    requirement: "Exactly one canonical prebuilt cutover installs the exact TASK-0075 candidate and reaches a healthy PENDING generation without repair."
-    evidence_required: "Single cutover/no retry, schema-5 PENDING transaction, installed candidate identity/codesign/provenance, e6365f9 runtime revision, singleton listener and 200/200 health/readiness."
+    requirement: "Exactly one canonical prebuilt cutover installs candidate 8ba16e69... and reaches a healthy PENDING generation without repair."
+    evidence_required: "Single cutover/no retry, schema-5 PENDING transaction, installed candidate/codesign/provenance, e6365f9 revision, singleton listener, 200/200 health/readiness, preserved config and zero bytecode drift."
   - id: AC-3
-    requirement: "The exact post-audit installed generation exposes and executes the six-tool MCP contract directly."
-    evidence_required: "Exact six public tools plus successful direct capacity_observer, fs_read_batch, terminal_exec and bounded terminal_start/poll/control lifecycle; no local stdio fallback."
+    requirement: "Separate direct proof Executor validates the exact six-tool live MCP contract against the PENDING post-audit generation."
+    evidence_required: "Operator-supplied direct-MCP packet with exact six tools plus capacity_observer, fs_read_batch, terminal_exec and bounded terminal_start/poll/control PASS; proof provenance retained; no alternate client."
   - id: AC-4
-    requirement: "Live x6 behavior is freshly attempted without evading platform safety and is truthfully classified."
-    evidence_required: "If six direct heavy calls are admitted: x6 hold, seventh fail-fast, cheap-call responsiveness and exact cleanup. If platform guard intervenes earlier: external-gap evidence plus no evasion/retry loop; TASK-0057/TASK-0059 accepted x6 evidence remains cited separately."
+    requirement: "Fresh x6 live behavior is attempted exactly once without platform-safety evasion and classified truthfully."
+    evidence_required: "Either x6 hold + seventh fail-fast + cheap responsiveness + exact cleanup, or platform EXTERNAL_GAP with exact observed limit/no evasion and retained TASK-0057/TASK-0059 supporting evidence."
   - id: AC-5
-    requirement: "Precommit integrity and configuration remain exact after all live probes."
-    evidence_required: "Strict codesign, canonical installed candidate validation at 8ba16e69..., revision/tree/lock, zero PYC drift, preserved runtime.env/desired-state, singleton listener and health/readiness."
+    requirement: "Control Executor independently revalidates all mutable precommit integrity/configuration/health predicates after proof handoff."
+    evidence_required: "PENDING exact transaction, codesign, installed candidate validation, revision/tree/lock, zero PYC, runtime.env/desired-state, singleton listener and 200/200 health/readiness."
   - id: AC-6
-    requirement: "Exactly one commit-cutover terminalizes the accepted transaction only after all mandatory acceptance gates pass."
-    evidence_required: "Single commit/no retry, COMMITTED semantics, transaction absence and no rollback/resume/recover/repair invocation."
+    requirement: "Exactly one commit-cutover terminalizes the transaction only after every mandatory gate passes."
+    evidence_required: "Single commit/no retry, COMMITTED semantics, transaction absence and zero rollback/resume/recover/repair invocations."
   - id: AC-7
-    requirement: "The committed generation remains stable and repository publication is bounded."
-    evidence_required: "Three post-commit observations retain exact generation/candidate identity, codesign, zero drift, listener/health/readiness; report-only direct child, clean tree, dev non-force and main unchanged."
+    requirement: "Committed exact generation remains stable and publication is bounded."
+    evidence_required: "Three stability observations retain candidate/generation identity, codesign, zero drift, listener/health/readiness; report-only child, clean tree, dev non-force and main unchanged."
 
 verification:
-  executor_checks:
-    - id: CHECK-PREFLIGHT
-      command_or_check: "Exact-base/clean-tree, absent transaction, predecessor, candidate, config, desired-state, lifecycle ownership and exact command-binding proof."
+  control_executor_checks:
+    - id: CONTROL-PREFLIGHT
       required: true
-    - id: CHECK-CUTOVER
-      command_or_check: "Invoke exactly one ./install.sh --install-prebuilt with the exact retained candidate/handoff; no retry."
+      command_or_check: "Exact-base/clean-tree, absent transaction, predecessor, candidate, config, desired-state and exact cutover binding proof."
+    - id: CONTROL-CUTOVER
       required: true
-    - id: CHECK-PENDING
-      command_or_check: "Prove schema-5 PENDING transaction, exact installed candidate, strict codesign, post-audit runtime revision, autonomous healthy live generation, preserved config and zero bytecode drift."
+      command_or_check: "Exactly one canonical install-prebuilt; prove healthy exact PENDING generation then stop LIVE_PROOF_REQUIRED."
+    - id: CONTROL-PRECOMMIT
       required: true
-    - id: CHECK-DIRECT-MCP
-      command_or_check: "Direct Agent Runtime MCP exact-six-tool smoke plus one bounded x6/seventh/cheap-call attempt without platform-safety evasion; exact cleanup."
+      command_or_check: "After proof handoff, fresh transaction/candidate/codesign/config/PYC/listener/health verification."
+    - id: CONTROL-COMMIT
       required: true
-    - id: CHECK-PRECOMMIT
-      command_or_check: "Repeat installed candidate/codesign/config/desired-state/PYC/listener/health verification after direct MCP probes."
+      command_or_check: "Exactly one commit-cutover; prove transaction terminalized."
+    - id: CONTROL-STABILITY
       required: true
-    - id: CHECK-COMMIT
-      command_or_check: "Invoke exactly one ./install.sh --commit-cutover only after all mandatory gates; prove transaction terminalized."
+      command_or_check: "Three post-commit stability observations plus report-only publication/fresh refs."
+  proof_executor_checks:
+    - id: PROOF-SIX-TOOLS
       required: true
-    - id: CHECK-STABILITY
-      command_or_check: "Three bounded post-commit stability observations plus exact report-only publication and fresh refs."
+      command_or_check: "Direct Agent Runtime MCP exact-six-tool smoke with benign calls and one bounded PTY lifecycle."
+    - id: PROOF-X6
       required: true
+      command_or_check: "Exactly one x6/seventh/cheap-call attempt or truthful platform EXTERNAL_GAP; exact cleanup; no evasion."
   authoritative_verification:
     required: false
-    mechanism: "Architect independent review of TASK-0076 report, live candidate identity, direct-MCP acceptance, transaction terminalization and post-commit stability."
-    expected_signal: "The exact post-audit candidate is the committed healthy live generation and is eligible for final Architect system-freeze judgment."
+    mechanism: "Architect independent review of split-surface control report, direct-MCP proof provenance, transaction terminalization and post-commit live stability."
+    expected_signal: "Exact post-audit candidate is the committed healthy live generation and is eligible for final Architect system-freeze judgment."
 
 gap_policy:
   local_auto_fix: false
