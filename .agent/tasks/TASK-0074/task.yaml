@@ -1,0 +1,185 @@
+protocol_version: 3
+
+task_id: TASK-0074
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_audit_followup
+  predecessor_task: TASK-0073
+  predecessor_review: "99cba90e441314b4ff10433919211a0fe45da1b2"
+  predecessor_review_state: ACCEPTED
+  audit_basis: >-
+    Independent architecture/security red-team review identified the final known freeze blocker in schema-5 cutover:
+    transaction metadata remains PRE_SWAP while cutover removes the predecessor app, moves staged-candidate into the
+    installed target, and only then persists APP_SWAPPED. A process death between predecessor removal and candidate
+    placement leaves PRE_SWAP with target absent; a process death after os.replace succeeds but before the APP_SWAPPED
+    metadata write leaves PRE_SWAP with the exact candidate installed. Current PRE_SWAP rollback accepts only the intact
+    predecessor (or no app when none existed), so both reachable interruption states fail to converge. TASK-0072 and
+    TASK-0073 have already closed the session-race and process-inspection blockers; this task addresses only swap crash
+    consistency.
+  operator_authorization: >-
+    After TASK-0073 Architect acceptance, the Architect stated that cutover PRE_SWAP crash consistency was the one
+    remaining known freeze blocker. Operator replied "Tiếp", authorizing this next bounded repository correction only.
+    This does not authorize any live Runtime/tunnel lifecycle action or a real installed-app cutover.
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration_and_evidence
+
+classification: BOUNDED_SCHEMA5_CUTOVER_SWAP_CRASH_CONSISTENCY_CORRECTION
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+execution_surface:
+  type: CHATGPT_LOCAL
+  native_tool: Remote Desktop Commander MCP
+  delegation: forbidden
+
+problem_statement:
+  pre_replace_window: >-
+    In cutover_candidate(), metadata phase PRE_SWAP is persisted before mutation. If a predecessor app exists, the code
+    then removes target_app with shutil.rmtree(). A process death before os.replace(staged, target_app) leaves a valid
+    transaction/previous-app snapshot but no installed target. _restore_transaction() currently rejects that PRE_SWAP
+    state as "installed app is missing or unsafe" rather than restoring the validated predecessor snapshot.
+  post_replace_pre_phase_window: >-
+    If os.replace(staged, target_app) succeeds and the process dies before metadata["phase"] = "APP_SWAPPED" is
+    durably persisted, the exact sealed candidate is installed while metadata still says PRE_SWAP. Current PRE_SWAP
+    restore compares target_app only with the predecessor closure and therefore rejects this second reachable state too.
+  scope_boundary: >-
+    This is crash-consistency/state-convergence work, not a redesign of lifecycle ownership, ServiceManagement,
+    candidate provenance, transaction schema, or public CLI behavior. The correction must preserve fail-closed behavior
+    for ambiguous/tampered PRE_SWAP states while allowing only evidence-backed reachable swap interruption states to
+    rollback to the exact predecessor.
+
+objective: >-
+  Close the PRE_SWAP swap-transition crash window with the smallest schema-5-compatible correction. Deterministically
+  reproduce both interruption states on the exact base before production mutation, then make rollback converge to the
+  exact predecessor without weakening candidate/rollback closure validation or ServiceManagement compensation. Preserve
+  existing transaction schema, public lifecycle commands, candidate provenance, operation-ledger semantics and all
+  unrelated Runtime behavior. Publish a report-only child and stop at ARCHITECT_REVIEW. Do not claim final freeze.
+
+scope:
+  required_checks:
+    - "Fresh-resolve GitHub dev, origin/dev and local HEAD; require the exact TASK-0074 handoff base and a clean designated working tree before mutation."
+    - "Read current macos/candidate_cutover.py and tests/test_candidate_cutover.py before editing; inspect install.sh only read-only if needed to confirm rollback command wiring."
+    - "TDD RED-1: deterministically simulate process death after predecessor target removal but before staged-candidate placement. Use a test-only interruption that escapes the cutover Exception rollback handler (for example a BaseException/SystemExit-class injection around the exact staged->target os.replace boundary) so persisted state represents a real process interruption rather than an ordinary handled exception. Prove on the unmodified base that metadata remains PRE_SWAP, target_app is absent, the previous-app snapshot remains valid, and canonical rollback cannot converge."
+    - "TDD RED-2: deterministically simulate process death after staged-candidate has been moved into target_app but before APP_SWAPPED phase persistence. Prove on the unmodified base that metadata remains PRE_SWAP, target_app validates as the exact transaction candidate, staged-candidate is no longer present, the predecessor snapshot remains valid, and canonical rollback cannot converge."
+    - "Record exact RED test names, exact persisted phase/target/staged state, and exact pre-fix failure signals before production-source mutation. If either reachable crash state cannot be reproduced deterministically, STOP at ARCHITECT_REVIEW rather than changing recovery semantics speculatively."
+    - "Implement one narrow PRE_SWAP recovery classifier inside the existing rollback path. It must distinguish at minimum: intact predecessor; absent target after removal; exact transaction candidate installed before phase persistence; and ambiguous/unsafe target."
+    - "For app_present=true and an absent target, restore only from transaction_dir/previous-app after its closure has already been validated against the rollback envelope. Verify the restored target closure equals expected_closure before any later ownership/state convergence work."
+    - "For PRE_SWAP with a target that is not the predecessor, recognize the post-replace/pre-phase state only when the installed target validates as the exact transaction candidate against candidate-handoff.json and the staged-candidate move evidence is consistent with replacement having occurred. Do not treat arbitrary directories, symlinks, tampered candidates, or an ambiguous duplicate staged+installed state as a recoverable swap."
+    - "When the exact candidate-installed PRE_SWAP interruption is recognized, rollback must follow the same compensation/restoration safety semantics required after APP_SWAPPED: compensate only transaction-recorded operations, remove only the validated transaction candidate at target, restore the validated predecessor snapshot, restore predecessor files/desired state/loaded state as applicable, and verify final predecessor closure."
+    - "Do not create a new transaction schema or public phase unless source evidence proves the current schema cannot safely represent the two interruption states. If that unexpected gap is found, STOP at ARCHITECT_REVIEW for an Architect decision instead of expanding architecture."
+    - "Preserve first-install semantics (previous app absent). Do not invent a predecessor when previous.app_present=false. Existing unexpected-target PRE_SWAP states for first install must remain fail-closed."
+    - "Preserve PRE_SWAP fail-closed behavior for symlink targets, non-directory targets, wrong predecessor closure, wrong/tampered candidate identity, malformed rollback snapshot, changed transaction paths, and ownership/config/desired-state drift."
+    - "Update the existing PRE_SWAP candidate-mismatch regression only as narrowly necessary: an evidence-consistent exact moved candidate may now be a recoverable interrupted swap, while ambiguous or tampered candidate states must continue to fail closed."
+    - "Add a deterministic GREEN regression showing ordinary handled os.replace failure after predecessor removal auto-rolls back cleanly instead of stranding a PARTIAL transaction, if this behavior follows naturally from the same fix. Do not add unrelated recovery features."
+    - "Do not invoke a real installed-app cutover, rollback, recovery, ServiceManagement operation or Runtime lifecycle action. All crash/recovery proofs must run in isolated temporary fixtures through the existing test harness/mocks."
+    - "Run focused candidate-cutover tests first, then the existing cutover/lifecycle/provenance affected suites, then canonical ./verify exactly once for handoff verification unless a failure requires a focused correction."
+    - "Publish implementation changes on dev non-force, then publish only .agent/tasks/TASK-0074/report.yaml as the report-only direct child. Stop at ARCHITECT_REVIEW."
+
+allowed_mutation:
+  production_source:
+    - "macos/candidate_cutover.py"
+  tests:
+    - "tests/test_candidate_cutover.py"
+  repository_publication:
+    - ".agent/tasks/TASK-0074/report.yaml"
+
+forbidden_changes:
+  - "Do not change the six-tool public MCP surface, Runtime Python tool contracts, schemas or annotations."
+  - "Do not modify agent_runtime/session.py or agent_runtime/protection.py; TASK-0072 and TASK-0073 are accepted and frozen for this task."
+  - "Do not modify install.sh, start.sh, ServiceManagement Swift sources, package provenance implementation, dependency locks, signing logic or candidate-freeze logic unless the Architect explicitly revises this task."
+  - "Do not add a scheduler, queue, retry engine, background recovery daemon, new lifecycle command, new transaction owner, new config knob or new capability."
+  - "Do not perform a real cutover, rollback, resume, recover, reinstall, repair, bootstrap or commit-cutover."
+  - "Do not modify or signal the live Runtime/tunnel, installed app, runtime.env, desired-state, launchd, ServiceManagement state, accepted candidate, handoff or current host transaction state."
+  - "Do not access Photos, Keychain, SSH private material, browser data, unrelated credentials or private user data."
+  - "Do not delegate to Codex, Claude, Antigravity, another ChatGPT or nested executors."
+  - "Do not mutate main or force-push dev."
+
+invariants:
+  - "One authorized repository writer for this task."
+  - "Transaction schema remains schema 5 unless an unexpected blocking design gap is escalated instead of implemented."
+  - "Public lifecycle command surface remains unchanged."
+  - "A valid rollback snapshot remains the only source for restoring a predecessor app."
+  - "PRE_SWAP interruption recovery must converge from both target-absent and exact-candidate-installed swap-window states."
+  - "Ambiguous or tampered PRE_SWAP states remain fail-closed."
+  - "Operation-ledger compensation authority is not broadened beyond transaction-recorded operations."
+  - "Candidate provenance and rollback closure checks are not weakened."
+  - "No live Runtime/tunnel/lifecycle/config/candidate/transaction mutation."
+  - "Main remains unchanged."
+  - "Executor must not claim final system freeze."
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0074/report.yaml"
+  unlisted_new_files:
+    allowed: false
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "The target-absent PRE_SWAP interruption is deterministically proven and recoverable."
+    evidence_required: "Pre-fix RED captures PRE_SWAP + previous.app_present=true + absent target after predecessor removal and proves rollback failure. Post-fix the same persisted state restores the exact predecessor closure and removes the transaction without broadening authority."
+  - id: AC-2
+    requirement: "The post-replace/pre-phase PRE_SWAP interruption is deterministically proven and recoverable."
+    evidence_required: "Pre-fix RED captures PRE_SWAP + exact transaction candidate installed + staged candidate moved away and proves rollback failure. Post-fix rollback validates that candidate identity, compensates only recorded operations, restores the exact predecessor, and removes the transaction."
+  - id: AC-3
+    requirement: "PRE_SWAP recovery remains fail-closed for ambiguous or tampered states."
+    evidence_required: "Focused tests cover symlink/unsafe targets, wrong predecessor closure, tampered/wrong candidate, malformed rollback snapshot and an ambiguous candidate/staged state as applicable; none is silently normalized into a trusted crash state."
+  - id: AC-4
+    requirement: "Existing schema-5 cutover, rollback, resume, approval, ServiceManagement ownership and provenance semantics are preserved."
+    evidence_required: "Existing candidate-cutover and affected lifecycle/provenance suites PASS with no schema/public-command expansion and no unrelated source mutation."
+  - id: AC-5
+    requirement: "Canonical repository verification and publication are clean."
+    evidence_required: "Canonical ./verify PASS, git diff --check PASS, implementation paths restricted to candidate_cutover.py plus the authorized test file, report-only direct child, non-force dev publication, clean tree and main unchanged."
+
+verification:
+  executor_checks:
+    - id: CHECK-RED
+      command_or_check: "Run only the newly added TASK-0074 crash-window regressions against the unmodified exact task base and record the expected failures/persisted transaction states before production-source mutation."
+      required: true
+    - id: CHECK-FOCUSED
+      command_or_check: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_candidate_cutover"
+      required: true
+    - id: CHECK-AFFECTED
+      command_or_check: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_task0055_cutover tests.test_task0055_macos_contract tests.test_candidate_freeze tests.test_package_provenance tests.test_supervised_lifecycle tests.test_service_recovery tests.test_tunnel_identity"
+      required: true
+    - id: CHECK-FULL
+      command_or_check: "PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify"
+      required: true
+    - id: CHECK-DIFF
+      command_or_check: "git diff --check plus exact changed-path review"
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect independent review of TASK-0074 report, exact source diff, deterministic crash-state RED evidence and fresh verification."
+    expected_signal: "The schema-5 swap crash window is closed without weakening fail-closed transaction/provenance semantics or expanding lifecycle architecture."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: ARCHITECT_REVIEW
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
