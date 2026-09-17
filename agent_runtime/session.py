@@ -74,7 +74,7 @@ class _Session:
     finalized: bool = False
     lock: threading.RLock = field(default_factory=threading.RLock)
     changed: threading.Condition = field(init=False)
-    cleanup_lock: threading.Lock = field(default_factory=threading.Lock)
+    cleanup_lock: threading.RLock = field(default_factory=threading.RLock)
     reader_done: threading.Event = field(default_factory=threading.Event)
     timing_context: TimingContext | None = None
     process_started_wall: float = 0.0
@@ -193,16 +193,21 @@ class TerminalSessionManager:
         checked_cursor = self._validated_cursor(cursor)
         checked_wait_ms = self._validated_wait_ms(wait_ms)
 
+        self._touch(session)
+        waited = False
         with session.changed:
-            session.last_activity = self._clock()
             if (
                 checked_wait_ms
                 and session.status == "running"
                 and checked_cursor == session.base_cursor + len(session.output)
             ):
                 session.changed.wait(checked_wait_ms / 1000.0)
-                session.last_activity = self._clock()
+                waited = True
 
+        if waited:
+            self._touch(session)
+
+        with session.changed:
             retained_end = session.base_cursor + len(session.output)
             if checked_cursor > retained_end:
                 raise RuntimeValidationError("cursor is ahead of available session output")
@@ -242,36 +247,43 @@ class TerminalSessionManager:
             self._require_no_dimensions(rows, cols)
             if not isinstance(data, str):
                 raise RuntimeValidationError("write action requires UTF-8 string data")
-            buffered = session.protected_input_buffer if isinstance(session.protected_input_buffer, str) else ""
-            pending = buffered + data
-            _PROTECTED_GUARD.check(["/bin/sh", "-c", pending], tool_name="terminal_control")
-            self._require_running(session)
-            payload = data.encode("utf-8")
-            view = memoryview(payload)
-            while view:
-                written = os.write(session.master_fd, view)
-                view = view[written:]
-            session.protected_input_buffer = self._pending_input_suffix(pending)
-            self._touch(session)
-            return self._control_result(session)
+            with session.cleanup_lock:
+                buffered = (
+                    session.protected_input_buffer
+                    if isinstance(session.protected_input_buffer, str)
+                    else ""
+                )
+                pending = buffered + data
+                _PROTECTED_GUARD.check(["/bin/sh", "-c", pending], tool_name="terminal_control")
+                self._require_running(session)
+                payload = data.encode("utf-8")
+                view = memoryview(payload)
+                while view:
+                    written = os.write(session.master_fd, view)
+                    view = view[written:]
+                session.protected_input_buffer = self._pending_input_suffix(pending)
+                self._touch(session)
+                return self._control_result(session)
 
         if action == "interrupt":
             self._require_no_arguments(data, rows, cols)
-            self._require_running(session)
-            try:
-                os.killpg(session.process.pid, signal.SIGINT)
-            except ProcessLookupError:
-                pass
-            self._touch(session)
-            return self._control_result(session)
+            with session.cleanup_lock:
+                self._require_running(session)
+                try:
+                    os.killpg(session.process.pid, signal.SIGINT)
+                except ProcessLookupError:
+                    pass
+                self._touch(session)
+                return self._control_result(session)
 
         if action == "terminate":
             self._require_no_arguments(data, rows, cols)
-            self._cleanup_process(session, "explicit_terminate")
-            result = self._control_result(session)
-            with self._lock:
-                self._sessions.pop(session.session_id, None)
-            return result
+            with session.cleanup_lock:
+                self._cleanup_process(session, "explicit_terminate")
+                result = self._control_result(session)
+                with self._lock:
+                    self._sessions.pop(session.session_id, None)
+                return result
 
         if action == "resize":
             if data is not None:
@@ -287,11 +299,12 @@ class TerminalSessionManager:
                 or cols > 65535
             ):
                 raise RuntimeValidationError("resize action requires positive integer rows and cols")
-            self._require_running(session)
-            winsize = struct.pack("HHHH", rows, cols, 0, 0)
-            fcntl.ioctl(session.master_fd, termios.TIOCSWINSZ, winsize)
-            self._touch(session)
-            return self._control_result(session)
+            with session.cleanup_lock:
+                self._require_running(session)
+                winsize = struct.pack("HHHH", rows, cols, 0, 0)
+                fcntl.ioctl(session.master_fd, termios.TIOCSWINSZ, winsize)
+                self._touch(session)
+                return self._control_result(session)
 
         raise RuntimeValidationError("action must be one of: write, interrupt, terminate, resize")
 
@@ -309,7 +322,8 @@ class TerminalSessionManager:
                 session = self._sessions.get(session_id)
             if session is None:
                 continue
-            self._cleanup_process(session, "idle_reap")
+            if not self._cleanup_process(session, "idle_reap"):
+                continue
             with self._lock:
                 if self._sessions.pop(session_id, None) is not None:
                     expired.append(session_id)
@@ -367,10 +381,17 @@ class TerminalSessionManager:
         session.process.wait()
         self._cleanup_process(session, "natural_exit")
 
-    def _cleanup_process(self, session: _Session, termination_state: str = "natural_exit") -> None:
+    def _cleanup_process(self, session: _Session, termination_state: str = "natural_exit") -> bool:
+        # Lock order: per-session cleanup_lock -> session.lock -> manager._lock.
+        # Never acquire cleanup_lock while holding session.lock or manager._lock.
         with session.cleanup_lock:
             if session.finalized:
-                return
+                return False
+            if (
+                termination_state == "idle_reap"
+                and self._clock() - session.last_activity < self._idle_ttl_seconds
+            ):
+                return False
             try:
                 _terminate_process_group(session.process)
                 session.reader_done.wait(_READER_DRAIN_SECONDS)
@@ -392,6 +413,7 @@ class TerminalSessionManager:
                     started_mono=session.process_started_mono,
                     termination_state=termination_state,
                 )
+                return True
             finally:
                 if session.finalized and session.heavy_lease is not None:
                     session.heavy_lease.release()
@@ -412,7 +434,7 @@ class TerminalSessionManager:
                 self._sessions.pop(session_id, None)
 
     def _touch(self, session: _Session) -> None:
-        with session.changed:
+        with session.cleanup_lock:
             session.last_activity = self._clock()
 
     @staticmethod

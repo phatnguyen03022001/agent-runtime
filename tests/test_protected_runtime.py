@@ -185,6 +185,7 @@ class ProtectedRuntimeGuardTests(unittest.TestCase):
         manager = session.TerminalSessionManager(start_reaper=False)
         fake_session = mock.Mock()
         fake_session.master_fd = 123
+        fake_session.cleanup_lock = __import__("threading").RLock()
         with mock.patch.object(manager, "_get_session", return_value=fake_session), mock.patch.object(
             session, "_PROTECTED_GUARD"
         ) as guard, mock.patch.object(session.os, "write") as write:
@@ -222,6 +223,79 @@ class ProtectedRuntimeGuardTests(unittest.TestCase):
                     self.assertEqual(write.call_count, 1)
             finally:
                 manager._sessions.clear()
+
+    def test_concurrent_fragmented_writes_share_one_guard_serialization_order(self) -> None:
+        import agent_runtime.session as session
+        import threading
+
+        manager = session.TerminalSessionManager(start_reaper=False)
+        process = mock.Mock()
+        process.poll.return_value = None
+        fixture = session._Session(
+            session_id="concurrent-fragments",
+            process=process,
+            master_fd=123,
+            cwd=os.getcwd(),
+            argv=["/bin/zsh"],
+            last_activity=0.0,
+        )
+        manager._sessions[fixture.session_id] = fixture
+
+        first_guard_entered = threading.Event()
+        second_guard_entered = threading.Event()
+        guard_lock = threading.Lock()
+        result_lock = threading.Lock()
+        guard_calls = 0
+        writes: list[bytes] = []
+        errors: list[BaseException] = []
+
+        class SyntheticGuard:
+            def check(self, argv: list[str], *, tool_name: str) -> None:
+                nonlocal guard_calls
+                if tool_name != "terminal_control":
+                    return
+                pending = argv[-1]
+                with guard_lock:
+                    guard_calls += 1
+                    call_number = guard_calls
+                if call_number == 1:
+                    first_guard_entered.set()
+                    second_guard_entered.wait(timeout=1.0)
+                else:
+                    second_guard_entered.set()
+                if "synthetic-protected-token" in pending:
+                    raise ProtectedRuntimeDenied("synthetic_protected")
+
+        def fake_write(_fd: int, view) -> int:
+            payload = bytes(view)
+            with result_lock:
+                writes.append(payload)
+            return len(view)
+
+        def worker(data: str) -> None:
+            try:
+                manager.control(fixture.session_id, "write", data=data)
+            except BaseException as exc:
+                with result_lock:
+                    errors.append(exc)
+
+        with mock.patch.object(session, "_PROTECTED_GUARD", SyntheticGuard()), mock.patch.object(
+            session.os, "write", side_effect=fake_write
+        ):
+            first = threading.Thread(target=worker, args=("synthetic-",))
+            second = threading.Thread(target=worker, args=("protected-token\n",))
+            first.start()
+            self.assertTrue(first_guard_entered.wait(timeout=1.0))
+            second.start()
+            first.join(timeout=2.0)
+            second.join(timeout=2.0)
+
+        self.assertFalse(first.is_alive(), "first write deadlocked")
+        self.assertFalse(second.is_alive(), "second write deadlocked")
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], ProtectedRuntimeDenied)
+        self.assertEqual(len(writes), 1)
+        self.assertEqual(fixture.protected_input_buffer, "synthetic-")
 
     def test_executor_and_session_boundaries_call_guard_before_spawn(self) -> None:
         import agent_runtime.executor as executor

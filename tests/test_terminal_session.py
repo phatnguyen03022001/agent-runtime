@@ -436,6 +436,210 @@ class TerminalSessionTests(unittest.TestCase):
         self.assertEqual(expired, [session_id])
         self.assertFalse(manager.has_session(session_id))
 
+    def test_control_write_and_finalization_have_one_lifecycle_order(self) -> None:
+        import agent_runtime.session as session
+        from unittest import mock
+
+        manager = TerminalSessionManager(start_reaper=False)
+        process = mock.Mock()
+        process.poll.return_value = None
+        process.returncode = 0
+        fixture = session._Session(
+            session_id="control-finalization-race",
+            process=process,
+            master_fd=123,
+            cwd=str(self.cwd),
+            argv=["/bin/zsh"],
+            last_activity=100.0,
+        )
+        fixture.reader_done.set()
+        manager._sessions[fixture.session_id] = fixture
+
+        running_checked = threading.Event()
+        release_control = threading.Event()
+        cleanup_entered = threading.Event()
+        fd_closed = threading.Event()
+        write_after_close: list[bool] = []
+        errors: list[BaseException] = []
+        errors_lock = threading.Lock()
+        original_require_running = manager._require_running
+
+        def gated_require_running(candidate) -> None:
+            original_require_running(candidate)
+            running_checked.set()
+            if not release_control.wait(timeout=2.0):
+                raise AssertionError("control release was not signaled")
+
+        def fake_terminate(_process) -> None:
+            cleanup_entered.set()
+
+        def fake_close(_fd: int) -> None:
+            fd_closed.set()
+
+        def fake_write(_fd: int, view) -> int:
+            write_after_close.append(fd_closed.is_set())
+            return len(view)
+
+        def run_control() -> None:
+            try:
+                manager.control(fixture.session_id, "write", data="x")
+            except BaseException as exc:
+                with errors_lock:
+                    errors.append(exc)
+
+        def run_cleanup() -> None:
+            try:
+                manager._cleanup_process(fixture, "natural_exit")
+            except BaseException as exc:
+                with errors_lock:
+                    errors.append(exc)
+
+        with mock.patch.object(session._PROTECTED_GUARD, "check"), mock.patch.object(
+            manager, "_require_running", side_effect=gated_require_running
+        ), mock.patch.object(session, "_terminate_process_group", side_effect=fake_terminate), mock.patch.object(
+            session.os, "close", side_effect=fake_close
+        ), mock.patch.object(session.os, "write", side_effect=fake_write), mock.patch.object(
+            session, "emit_process_end"
+        ):
+            control_thread = threading.Thread(target=run_control)
+            cleanup_thread = threading.Thread(target=run_cleanup)
+            control_thread.start()
+            self.assertTrue(running_checked.wait(timeout=1.0))
+            cleanup_thread.start()
+
+            if cleanup_entered.wait(timeout=0.5):
+                self.assertTrue(fd_closed.wait(timeout=1.0))
+            release_control.set()
+
+            control_thread.join(timeout=2.0)
+            cleanup_thread.join(timeout=2.0)
+
+        self.assertFalse(control_thread.is_alive(), "control thread deadlocked")
+        self.assertFalse(cleanup_thread.is_alive(), "cleanup thread deadlocked")
+        self.assertEqual(errors, [])
+        self.assertEqual(write_after_close, [False])
+
+    def test_idle_reaper_revalidates_after_concurrent_poll_refresh(self) -> None:
+        import agent_runtime.session as session
+        from unittest import mock
+
+        now = [100.0]
+        manager = TerminalSessionManager(
+            clock=lambda: now[0], idle_ttl_seconds=10.0, start_reaper=False
+        )
+        process = mock.Mock()
+        process.poll.return_value = None
+        process.returncode = 0
+        fixture = session._Session(
+            session_id="idle-refresh-race",
+            process=process,
+            master_fd=123,
+            cwd=str(self.cwd),
+            argv=["/bin/zsh"],
+            last_activity=0.0,
+        )
+        fixture.reader_done.set()
+        manager._sessions[fixture.session_id] = fixture
+
+        stale_candidate_selected = threading.Event()
+        allow_reap_claim = threading.Event()
+        expired: list[str] = []
+        errors: list[BaseException] = []
+        original_cleanup = manager._cleanup_process
+
+        def coordinated_cleanup(candidate, termination_state="natural_exit"):
+            if termination_state == "idle_reap":
+                stale_candidate_selected.set()
+                if not allow_reap_claim.wait(timeout=2.0):
+                    raise AssertionError("idle reap claim release was not signaled")
+            return original_cleanup(candidate, termination_state)
+
+        def run_reaper() -> None:
+            try:
+                expired.extend(manager.reap_idle_once())
+            except BaseException as exc:
+                errors.append(exc)
+
+        with mock.patch.object(manager, "_cleanup_process", side_effect=coordinated_cleanup), mock.patch.object(
+            session, "_terminate_process_group"
+        ), mock.patch.object(session.os, "close"), mock.patch.object(session, "emit_process_end"):
+            reaper_thread = threading.Thread(target=run_reaper)
+            reaper_thread.start()
+            self.assertTrue(stale_candidate_selected.wait(timeout=1.0))
+
+            refreshed = manager.poll(fixture.session_id, cursor=0, wait_ms=0)
+            self.assertEqual(refreshed["status"], "running")
+            self.assertEqual(fixture.last_activity, now[0])
+            allow_reap_claim.set()
+            reaper_thread.join(timeout=2.0)
+
+        self.assertFalse(reaper_thread.is_alive(), "idle reaper deadlocked")
+        self.assertEqual(errors, [])
+        self.assertEqual(expired, [])
+        self.assertTrue(manager.has_session(fixture.session_id))
+
+    def test_waiting_poll_does_not_block_explicit_terminate_or_deadlock(self) -> None:
+        import agent_runtime.session as session
+        from unittest import mock
+
+        manager = TerminalSessionManager(start_reaper=False)
+        process = mock.Mock()
+        process.poll.return_value = None
+        process.returncode = 0
+        fixture = session._Session(
+            session_id="poll-terminate-order",
+            process=process,
+            master_fd=123,
+            cwd=str(self.cwd),
+            argv=["/bin/zsh"],
+            last_activity=100.0,
+        )
+        fixture.reader_done.set()
+        wait_entered = threading.Event()
+        terminate_done = threading.Event()
+        errors: list[BaseException] = []
+
+        class SignalingCondition(threading.Condition):
+            def wait(self, timeout=None):
+                wait_entered.set()
+                return super().wait(timeout)
+
+        fixture.changed = SignalingCondition(fixture.lock)
+        manager._sessions[fixture.session_id] = fixture
+
+        def run_poll() -> None:
+            try:
+                manager.poll(fixture.session_id, cursor=0, wait_ms=1000)
+            except BaseException as exc:
+                errors.append(exc)
+
+        def run_terminate() -> None:
+            try:
+                manager.control(fixture.session_id, "terminate")
+            except BaseException as exc:
+                errors.append(exc)
+            finally:
+                terminate_done.set()
+
+        with mock.patch.object(session, "_terminate_process_group"), mock.patch.object(
+            session.os, "close"
+        ), mock.patch.object(session, "emit_process_end"):
+            poll_thread = threading.Thread(target=run_poll)
+            terminate_thread = threading.Thread(target=run_terminate)
+            poll_thread.start()
+            self.assertTrue(wait_entered.wait(timeout=1.0))
+            terminate_thread.start()
+            self.assertTrue(
+                terminate_done.wait(timeout=0.75),
+                "terminate was blocked by poll wait or self-deadlocked",
+            )
+            terminate_thread.join(timeout=1.0)
+            poll_thread.join(timeout=1.0)
+
+        self.assertFalse(terminate_thread.is_alive(), "terminate thread deadlocked")
+        self.assertFalse(poll_thread.is_alive(), "poll thread did not wake after cleanup")
+        self.assertEqual(errors, [])
+
     def test_natural_exit_and_shutdown_kill_descendants_and_runtime_creates_no_session_files(self) -> None:
         from agent_runtime.session import TerminalSessionManager
 
