@@ -1,0 +1,133 @@
+protocol_version: 3
+
+task_id: TASK-0075
+task_revision: 1
+review_revision: 1
+state: ACCEPTED
+
+architect_review:
+  reviewed_report_commit: "36a451987f67a9a17103646989b05ae9da2c4954"
+  expected_report_parent: "e6365f9a0a5b9489b5cf51fe7fe74e377e73d5e5"
+  report_only_lineage_verified: true
+  report_only_path:
+    - ".agent/tasks/TASK-0075/report.yaml"
+  final_freeze_readiness_asserted: false
+
+independent_verification:
+  baseline:
+    head_before_review: "36a451987f67a9a17103646989b05ae9da2c4954"
+    origin_dev_before_review: "36a451987f67a9a17103646989b05ae9da2c4954"
+    working_tree_clean: true
+    main_unchanged: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  lifecycle_stability:
+    exact_prior_transient_test:
+      repetitions: 10
+      result: "10/10 PASS"
+    supervised_lifecycle_suite:
+      repetitions: 3
+      result: "3/3 PASS"
+  canonical_repository_verification:
+    command: "PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify"
+    tests_run: 345
+    result: PASS
+    exit_code: 0
+    git_diff_check: PASS
+    working_tree_after: CLEAN
+  candidate:
+    candidate_sha256: "8ba16e69db3eecbd5db4ab0636c289ff68d71433779d9c67ded2f5335507ae01"
+    candidate_app_present: true
+    candidate_handoff_present: true
+    canonical_validation: PASS
+    strict_deep_codesign: PASS
+    runtime_revision: "e6365f9a0a5b9489b5cf51fe7fe74e377e73d5e5"
+    source_tree: "594cb81f3292242bd870df258a293d99b4cb990d"
+    requirements_lock_sha256: "80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
+    handoff_sha256: "d909bd52f1b008ba1f84d43551ecd2666cbc4a839c8508b663a699875906971d"
+    session_source_candidate_hash_equal: true
+    session_sha256: "03cdb1f0e7c0faa753c5749330b29539256cadee58c951c56eda2a9f6f88bf49"
+    protection_source_candidate_hash_equal: true
+    protection_sha256: "feecd9d9c80b5663c17c17760d7686a9226ac2aa2a95d96cfc7078dce17af9cc"
+    team_identifier_non_null: true
+    team_identifier_equal_main_helper: true
+    team_identifier_sha256: "497c6b1fff2701afe7cf7fedb03297efe39b0af5e1081a78fc61bbbafeb9d49c"
+    critical_hashes_match_executor_report: true
+    prior_candidate_handoff_preserved: true
+  installed_generation:
+    runtime_revision: "b5ac0ed5b461d3a259e4111e1a8f13933985f81f"
+    strict_deep_codesign: PASS
+    listener_127_0_0_1_8080_count: 1
+    healthz: 200
+    readyz: 200
+    transaction_present: false
+
+acceptance_criteria:
+  AC-1:
+    status: PASS
+    rationale: >-
+      Exact candidate-source baseline was verified by the Executor and the Architect independently
+      repeated the previously transient lifecycle test 10/10, the full supervised-lifecycle suite
+      3/3, and canonical repository verification 345/345 with a clean tree.
+  AC-2:
+    status: PASS
+    rationale: >-
+      Report records the accepted repo-local signing authority as one ignored/untracked mode-0600
+      key with the accepted digest, with no Keychain enumeration or literal exposure.
+  AC-3:
+    status: PASS
+    rationale: >-
+      Exactly one SHA-addressed candidate was frozen from the exact TASK-0075 source revision/tree/
+      lock identity. The Architect independently revalidated the retained candidate and handoff.
+  AC-4:
+    status: PASS
+    rationale: >-
+      Candidate session.py and protection.py are byte-identical to the accepted source, strict deep
+      codesign passes, and main/helper TeamIdentifier values are non-null and equal by digest.
+  AC-5:
+    status: PASS
+    rationale: >-
+      Executor before/after critical hashes are identical; Architect independent hashes match the
+      recorded handoff, executables, Runtime start script, manifest and corrected Runtime sources.
+  AC-6:
+    status: PASS
+    rationale: >-
+      Installed generation remains the older accepted live revision, strict codesign passes,
+      singleton listener and health/readiness remain green, and no pending cutover transaction exists.
+  AC-7:
+    status: PASS
+    rationale: >-
+      Report is the sole tracked change in its direct-child commit, dev publication is non-force,
+      the designated tree is clean, and main is unchanged.
+
+findings:
+  - id: ARCH-OBS-0074-01
+    disposition: RETAINED_NON_BLOCKING_OBSERVATION
+    classification: UNATTRIBUTED_TRANSIENT_TEST_FAILURE
+    evidence: >-
+      The earlier Architect TASK-0074 canonical run had one supervised-lifecycle fixture failure.
+      No source change was made for it. Subsequent evidence now includes the original exact test
+      passing repeatedly, three complete suite passes in TASK-0075, one clean TASK-0075 canonical
+      verification, and an independent Architect repetition of 10/10 exact tests, 3/3 complete
+      suites and 345/345 canonical verification. The historical root cause remains unproven.
+    freeze_effect: NON_BLOCKING
+  - id: LIVE-GENERATION-POST-AUDIT-GAP
+    disposition: OPEN_EXTERNAL_ACCEPTANCE_STEP
+    severity: REQUIRED_BEFORE_FINAL_SYSTEM_FREEZE
+    evidence: >-
+      The healthy installed Runtime remains revision b5ac0ed5..., while the retained candidate is
+      sourced from e6365f9a... and contains the accepted TASK-0072/TASK-0073 corrections.
+    freeze_effect: BLOCKS_FINAL_SYSTEM_FREEZE
+
+judgment:
+  task_result: ACCEPTED
+  candidate_ready_for_separately_authorized_live_cutover: true
+  candidate_identity: "8ba16e69db3eecbd5db4ab0636c289ff68d71433779d9c67ded2f5335507ae01"
+  source_freeze_ready: true
+  live_acceptance_complete: false
+  final_system_freeze_claimed: false
+  known_source_code_freeze_blockers: 0
+  next_action: >-
+    Obtain separate explicit operator authority for one exact-candidate live cutover/acceptance task.
+    That successor must consume candidate 8ba16e69... without rebuild or re-sign, preserve the current
+    healthy predecessor until rollback authority is available, prove the exact six-tool live MCP
+    surface and bounded x6/cheap-call behavior to the extent permitted by the platform, commit the
+    cutover only after all acceptance gates pass, then perform a final Architect freeze judgment.
