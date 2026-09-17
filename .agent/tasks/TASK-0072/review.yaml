@@ -1,0 +1,78 @@
+protocol_version: 3
+
+task_id: TASK-0072
+task_revision: 1
+review_revision: 1
+state: ACCEPTED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0072/report.yaml
+  commit: "5fddd7d1fe39608d0fd73fe392f9769327415ac6"
+  report_revision: 1
+
+independence:
+  reviewer_role: ARCHITECT
+  exact_report_identity_verified: true
+  repository_lineage_verified: true
+  implementation_diff_reviewed: true
+  fresh_focused_verification:
+    result: PASS
+    tests_run: 38
+  fresh_affected_verification:
+    result: PASS
+    tests_run: 18
+  fresh_canonical_verification:
+    result: PASS
+    tests_run: 333
+    process_exit_code: 0
+  fresh_diff_check: PASS
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  scope: PASS
+  allowed_mutation: PASS
+  forbidden_changes: PASS
+  invariants: PASS
+  structure_policy: PASS
+  git_authority: PASS
+
+criterion_judgment:
+  AC-1: PASS
+  AC-2: PASS
+  AC-3: PASS
+  AC-4: PASS
+  AC-5: PASS
+
+acceptance_basis:
+  - "The report records three deterministic RED regressions on the exact unmodified task base for concurrent fragmented writes, control-versus-finalization, and stale idle-reap, with stable race-specific failure signals before source mutation."
+  - "The implementation changes only agent_runtime/session.py and the two authorized test files. The existing per-session cleanup_lock becomes an RLock and provides one lifecycle ordering for control operations, finalization, activity refresh, and idle-reap revalidation without introducing global serialization."
+  - "terminal_control write is serialized across protected-input snapshot, guard classification, running-state proof, PTY write, buffer update, and activity refresh; interrupt/resize share finalization ordering, and explicit terminate composes re-entrantly without self-deadlock."
+  - "Idle reap revalidates current last_activity while holding the same per-session lifecycle ordering; a concurrent refresh that wins first prevents stale expiry, while existing tests preserve genuine idle-TTL cleanup."
+  - "terminal_poll does not hold the lifecycle lock across Condition.wait; the bounded poll-versus-terminate regression and lock-order review found no introduced inversion or global cross-session serialization."
+  - "Architect independently reran the focused suite: 38/38 PASS; affected admission/MCP suite: 18/18 PASS; canonical verification: 333/333 PASS with exit 0; git diff --check and working-tree cleanliness also PASS."
+  - "Fresh repository lineage proves implementation commit 539c8b750f3bed0191687da788ea02414ea5812a is the direct child of task base 8c1474bb7d769bf94fc31c1e2106619efc8af3f3, and report commit 5fddd7d1fe39608d0fd73fe392f9769327415ac6 is its report-only direct child."
+  - "Remote main remains unchanged at c49d777efa09db7f6c51bd8d8616db4623499fb8. No live Runtime/tunnel, installed-app, runtime.env, desired-state, launchd, ServiceManagement, dependency, or public MCP contract mutation is part of TASK-0072."
+
+successor_boundary:
+  f01_control_finalization_race_closed: true
+  f02_idle_reaper_stale_activity_race_closed: true
+  public_mcp_surface_changed: false
+  live_runtime_lifecycle_mutated: false
+  final_freeze_readiness: false
+  remaining_freeze_blockers:
+    - id: F-03
+      description: "Protected Runtime process inspection remains eager/unbounded on terminal classification paths and requires a separate bounded/lazy correction with deterministic failure evidence."
+    - id: CUTOVER_PRE_SWAP_CRASH_CONSISTENCY
+      description: "Candidate cutover still has the independently proven PRE_SWAP predecessor-removal to candidate-placement crash-consistency gap; repair and fault-injection proof belong to a separate lifecycle task."
+
+non_blocking_followups:
+  - "Performance and latency optimization remain measurement-first Capability Lab work; TASK-0072 creates no evidence justifying such optimization."
+  - "Other audit notes such as request-id bounds, installer/status wording, tunnel doctor deadline, and security wording remain non-blocking unless separately promoted by evidence."
+
+next_action: >-
+  TASK-0072 is accepted. Do not claim final freeze yet. The next bounded source task, if authorized, should address only
+  F-03 Protected Runtime process-inspection boundedness/laziness; keep cutover crash consistency and performance work
+  separate.
