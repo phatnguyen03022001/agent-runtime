@@ -1,0 +1,155 @@
+protocol_version: 3
+
+task_id: TASK-0069
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: BLOCKED
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: dev
+  execution_surface: CHATGPT_LOCAL
+  native_execution_tool: "Remote Desktop Commander MCP"
+  exact_task_base: "8a8f8fc677821c664b7d614b91a96583a4faf6d1"
+  source_tree: "35277aa3a1fe1fc5ee2b0fdfc5a429eae9f3845b"
+  github_dev: "8a8f8fc677821c664b7d614b91a96583a4faf6d1"
+  origin_dev: "8a8f8fc677821c664b7d614b91a96583a4faf6d1"
+  local_head: "8a8f8fc677821c664b7d614b91a96583a4faf6d1"
+  origin_main: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  working_tree_clean_before_preflight: true
+  nested_executor_used: false
+
+pre_commit_binding:
+  transaction:
+    schema: 5
+    status: PENDING
+    phase: APP_SWAPPED
+    metadata_sha256: "589436ead0cc3c53ea0c32a26eda98e19e2ead5564f6ae298752903566e8f661"
+    candidate_handoff_sha256: "d8bd8885b4cd0d78e6f419496a97bbc5bda021f37f243f796420b05b851774f3"
+  accepted_candidate:
+    expected_sha256: "8017f53872635db2963d101682c09ee95aa0ed367d23523aff8f674fbfd16660"
+    repository_validation: PASS
+    repository_handoff_sha256: "d8bd8885b4cd0d78e6f419496a97bbc5bda021f37f243f796420b05b851774f3"
+    installed_validation: BLOCKED
+    installed_validation_error: "candidate failed strict deep code-signature verification"
+  runtime_env:
+    regular_non_symlink: true
+    mode: "0600"
+    sha256: "6e6fef8e255b140f28703f8bd515726e1fd93d644e6f838b33ebf319e8133077"
+  desired_state_sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  live_state:
+    service_management_main_app: enabled
+    service_management_runtime_agent: enabled
+    runtime_service_pid: 1099
+    runtime_service_parent_pid: 1
+    tunnel_client_pid: 1108
+    tunnel_client_parent_pid: 1099
+    listener_127_0_0_1_8080_count: 1
+    listener_process: tunnel-client
+    healthz_http: 200
+    readyz_http: 200
+    launchd_state: running
+    launchd_last_exit_code: 0
+
+installed_app_drift:
+  strict_codesign_result: FAIL
+  codesign_error: "a sealed resource is missing or invalid"
+  repository_pycache_file_count: 0
+  installed_pycache_file_count: 3
+  added_sealed_resources:
+    - "Contents/Resources/runtime/agent_runtime/__pycache__/capacity.cpython-313.pyc"
+    - "Contents/Resources/runtime/agent_runtime/__pycache__/__init__.cpython-313.pyc"
+    - "Contents/Resources/runtime/agent_runtime/__pycache__/errors.cpython-313.pyc"
+  classification: INSTALLED_APP_SEALED_RESOURCE_DRIFT
+  inference_about_cause: none
+
+commit_cutover:
+  authorized_invocation_limit: 1
+  invocation_count: 0
+  retry_count: 0
+  invoked: false
+  result: NOT_RUN
+  reason: >-
+    Pre-commit canonical installed-candidate validation failed. TASK-0069 requires fail-closed behavior
+    on any exact binding drift, so ./install.sh --commit-cutover was not invoked.
+
+preservation:
+  production_source_modified: false
+  commit_cutover_invocations: 0
+  cutover_invocations: 0
+  rollback_invocations: 0
+  resume_invocations: 0
+  recover_invocations: 0
+  reinstall_invocations: 0
+  restart_reload_repair_kickstart_bootstrap_invocations: 0
+  runtime_or_tunnel_manual_execution_invocations: 0
+  runtime_env_mutated: false
+  desired_state_mutated: false
+  transaction_mutated: false
+  service_management_or_launchd_mutated: false
+  installed_app_mutated_by_executor: false
+  port_8080_ownership_mutated: false
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: BLOCKED
+    evidence: >-
+      Exact base/clean tree, schema-5 PENDING/APP_SWAPPED metadata, handoff, repository candidate,
+      runtime.env, desired-state, and healthy live ownership all matched. Canonical installed-candidate
+      validation failed because strict deep codesign reported added sealed resources inside the installed app.
+  - criterion_id: AC-2
+    status: NOT_RUN
+    evidence: "Fail-closed preflight prevented the single authorized commit-cutover invocation."
+  - criterion_id: AC-3
+    status: NOT_RUN
+    evidence: "No commit-cutover occurred; the pending transaction remains intentionally untouched."
+  - criterion_id: AC-4
+    status: PROVEN
+    evidence: >-
+      Runtime Service PID 1099 owns tunnel-client PID 1108; exactly one 127.0.0.1:8080 listener exists;
+      /healthz and /readyz returned 200; no Executor lifecycle action was invoked.
+  - criterion_id: AC-5
+    status: PARTIAL
+    evidence: >-
+      This report is the only repository artifact authored by TASK-0069. Final report-only non-force dev
+      publication and fresh remote-ref proof follow after this report commit.
+
+executor_checks:
+  - check_id: CHECK-1
+    result: BLOCKED
+    evidence: "Preflight failed only at canonical installed-candidate validation; commit gate remained closed."
+  - check_id: CHECK-2
+    result: NOT_RUN
+    evidence: "./install.sh --commit-cutover invocation count is exactly zero."
+  - check_id: CHECK-3
+    result: NOT_RUN
+    evidence: "No post-commit state exists because commit-cutover was correctly not invoked."
+  - check_id: CHECK-4
+    result: PASS
+    evidence: "Read-only ownership/listener/health observation completed with zero lifecycle mutation."
+  - check_id: CHECK-5
+    result: PARTIAL
+    evidence: "Report-only non-force dev publication and final fresh ref proof remain to be completed."
+
+blocker:
+  classification: INSTALLED_APP_SEALED_RESOURCE_DRIFT
+  boundary: PRE_COMMIT_EXACT_BINDING
+  description: >-
+    Repository candidate validation reproduced accepted candidate 8017f538... and both repository and
+    transaction handoff hashes equal d8bd8885.... The installed app failed canonical provenance validation
+    before candidate identity could be accepted because strict deep codesign found three added Python
+    bytecode files under Contents/Resources/runtime/agent_runtime/__pycache__. The repository candidate
+    contains zero files at that pycache path. No claim is made about how or when those files appeared.
+
+publication:
+  report_path: .agent/tasks/TASK-0069/report.yaml
+  report_only_commit_required: true
+  report_commit: null
+  push_mode: non_force_dev
+  force_push: false
+  promote_to_main: false
+  main_baseline: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  next_step: ARCHITECT_REVIEW
+
+final_freeze_readiness_asserted: false
