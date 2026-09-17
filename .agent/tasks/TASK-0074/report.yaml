@@ -1,0 +1,211 @@
+protocol_version: 3
+
+task_id: TASK-0074
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: PASS
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: dev
+  execution_surface: CHATGPT_LOCAL
+  native_execution_tool: "Remote Desktop Commander MCP"
+  exact_task_base: "a0c72023b9a6baf48bd55c80a1c4edbd7c9f3d59"
+  origin_dev_at_mutation_start: "a0c72023b9a6baf48bd55c80a1c4edbd7c9f3d59"
+  origin_main_observed: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  working_tree_clean_before_mutation: true
+  nested_executor_used: false
+
+red_evidence:
+  production_source_unmodified: true
+  command_scope: "The two required TASK-0074 crash-window regressions only."
+  summary: "Ran 2 tests on the exact unmodified base; both FAILED as required after deterministically persisting reachable PRE_SWAP interruption states."
+  required_failures:
+    - name: "tests.test_candidate_cutover.CandidateCutoverTests.test_preswap_crash_after_predecessor_removal_restores_snapshot"
+      result_on_base: FAIL
+      persisted_state:
+        phase: PRE_SWAP
+        previous_app_present: true
+        target_absent: true
+        staged_candidate_present: true
+        previous_snapshot_valid: true
+      interruption: "SystemExit injected at the exact staged-candidate -> target os.replace boundary before replacement; this bypassed the ordinary Exception rollback handler."
+      failure_signal: "PRE_SWAP phase installed app is missing or unsafe"
+      defect_proved: "Canonical rollback could not converge after the predecessor target had been removed while the validated staged candidate and previous-app rollback snapshot remained intact."
+    - name: "tests.test_candidate_cutover.CandidateCutoverTests.test_preswap_crash_after_candidate_replace_before_phase_persist_restores_snapshot"
+      result_on_base: FAIL
+      persisted_state:
+        phase: PRE_SWAP
+        previous_app_present: true
+        target_exact_transaction_candidate: true
+        staged_candidate_absent: true
+        previous_snapshot_valid: true
+      interruption: "SystemExit injected when APP_SWAPPED metadata was about to be atomically persisted, after os.replace(staged, target_app) had already succeeded; this bypassed the ordinary Exception rollback handler."
+      failure_signal: "PRE_SWAP phase installed app does not match previous-app closure"
+      defect_proved: "Canonical rollback rejected the exact transaction candidate installed by the reachable post-replace/pre-phase crash window."
+
+implementation:
+  commit: "ca3fa0a0a5bb8cfd1db1f39ccd44fd6f147bddd8"
+  parent: "a0c72023b9a6baf48bd55c80a1c4edbd7c9f3d59"
+  changed_paths:
+    - macos/candidate_cutover.py
+    - tests/test_candidate_cutover.py
+  schema: 5
+  preswap_classifier: >-
+    PRE_SWAP rollback now distinguishes an intact predecessor, an absent target after predecessor removal,
+    an exact transaction candidate installed after the staged move, and ambiguous or unsafe target states.
+  target_absent_recovery: >-
+    For schema-5 transactions with previous.app_present=true and no target, rollback requires the staged candidate
+    to remain a regular validated copy matching candidate-handoff.json and transaction candidate metadata, restores
+    only transaction_dir/previous-app, and verifies the restored predecessor closure exactly before continuing with
+    the existing PRE_SWAP ownership and state convergence checks.
+  candidate_installed_recovery: >-
+    A PRE_SWAP target is treated as the interrupted moved candidate only when it is a regular directory that validates
+    against the exact transaction candidate handoff and transaction metadata and staged-candidate is absent. It then
+    uses the same existing operation-ledger compensation and bounded predecessor restoration path as APP_SWAPPED.
+  fail_closed_semantics: >-
+    Symlink or unsafe targets, invalid or tampered candidates, wrong predecessor closures, invalid staged candidates,
+    and duplicate staged-plus-installed candidate states remain rejected rather than normalized.
+  first_install_semantics: >-
+    previous.app_present=false remains authoritative. A validated exact candidate installed before APP_SWAPPED
+    persistence is removed by rollback without inventing a predecessor; an ordinary intact first-install PRE_SWAP
+    with no installed target remains unchanged.
+  operation_ledger_authority_expanded: false
+  candidate_provenance_weakened: false
+  rollback_closure_checks_weakened: false
+  new_lifecycle_command_added: false
+  recovery_subsystem_added: false
+
+regressions:
+  crash_windows_green:
+    - "test_preswap_crash_after_predecessor_removal_restores_snapshot"
+    - "test_preswap_crash_after_candidate_replace_before_phase_persist_restores_snapshot"
+  handled_failure:
+    name: "test_handled_replace_failure_after_predecessor_removal_auto_rolls_back"
+    result: PASS
+    evidence: "An ordinary OSError from staged-candidate replacement is caught by the existing cutover handler and now restores the exact predecessor instead of stranding a PARTIAL transaction."
+  ambiguity_guard:
+    name: "test_preswap_candidate_and_staged_duplicate_fails_closed"
+    result: PASS
+    evidence: "An exact installed candidate plus a duplicate staged-candidate is rejected as ambiguous and transaction evidence is retained."
+  first_install_guard:
+    name: "test_first_install_preswap_candidate_crash_rolls_back_to_absent_app"
+    result: PASS
+    evidence: "A first-install post-replace/pre-phase crash removes only the validated candidate and converges back to no installed app."
+  unsafe_target_guard:
+    name: "test_preswap_symlink_target_fails_closed"
+    result: PASS
+    evidence: "A PRE_SWAP symlink target is rejected without normalization."
+
+verification:
+  red:
+    command: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest -v <two TASK-0074 crash-window tests>"
+    result: EXPECTED_FAIL
+    tests_run: 2
+    failures: 2
+    runtime_seconds: 0.326
+  crash_and_guard_green:
+    result: PASS
+    evidence: "The two required crash regressions plus handled-replace and duplicate-state guards passed together; first-install and symlink guards also passed."
+  focused:
+    command: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_candidate_cutover"
+    result: PASS
+    tests_run: 85
+    runtime_seconds: 32.652
+  affected:
+    command: >-
+      PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_task0055_cutover
+      tests.test_task0055_macos_contract tests.test_candidate_freeze tests.test_package_provenance
+      tests.test_supervised_lifecycle tests.test_service_recovery tests.test_tunnel_identity
+    result: PASS
+    tests_run: 75
+    runtime_seconds: 29.705
+  canonical:
+    command: "PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify"
+    invocation_count: 1
+    result: PASS
+    tests_run: 345
+    test_runtime_seconds: 79.379
+    process_runtime_seconds: 80.19
+    process_exit_code: 0
+  diff_check:
+    command: "git diff --check plus exact changed-path review"
+    result: PASS
+    exact_implementation_paths: true
+
+preservation:
+  transaction_schema_changed: false
+  public_lifecycle_surface_changed: false
+  public_mcp_surface_changed: false
+  dependencies_changed: false
+  install_or_start_scripts_changed: false
+  service_management_swift_changed: false
+  package_provenance_implementation_changed: false
+  signing_or_candidate_freeze_changed: false
+  session_or_protection_changed: false
+  runtime_or_tunnel_lifecycle_mutations: 0
+  runtime_env_mutations: 0
+  desired_state_mutations: 0
+  launchd_or_service_management_mutations: 0
+  installed_app_mutations: 0
+  live_candidate_or_transaction_mutations: 0
+  main_mutations: 0
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: >-
+      Exact-base RED proved PRE_SWAP with previous.app_present=true, absent target, present staged candidate and valid
+      predecessor snapshot failed canonical rollback. Post-fix the same deterministic crash state restores only the
+      validated predecessor snapshot, verifies exact closure, converges rollback and removes the transaction.
+  - criterion_id: AC-2
+    status: PASS
+    evidence: >-
+      Exact-base RED proved PRE_SWAP with the exact transaction candidate installed, staged candidate absent and valid
+      predecessor snapshot failed canonical rollback. Post-fix the state is recognized only through exact handoff and
+      metadata identity plus completed-move evidence, then uses existing ledger compensation/restoration semantics.
+  - criterion_id: AC-3
+    status: PASS
+    evidence: >-
+      Duplicate staged-plus-installed candidate and symlink target regressions fail closed; existing candidate identity,
+      rollback snapshot closure and malformed rollback metadata regressions remain covered by the passing focused suite.
+  - criterion_id: AC-4
+    status: PASS
+    evidence: >-
+      Schema remains 5, operation-ledger authority and provenance checks are preserved, first-install behavior is covered,
+      and focused plus affected lifecycle/provenance suites pass without public command or ownership redesign.
+  - criterion_id: AC-5
+    status: PASS
+    evidence: >-
+      Canonical verification passed 345 tests in its single invocation; git diff --check passed; implementation changed
+      exactly candidate_cutover.py and the authorized candidate-cutover test file; implementation was pushed non-force to dev.
+
+executor_checks:
+  - check_id: CHECK-RED
+    result: PASS
+    evidence: "Both required reachable process-death states were deterministically persisted on the exact unmodified base and canonical rollback failed with the recorded signals."
+  - check_id: CHECK-FOCUSED
+    result: PASS
+    evidence: "Exact focused candidate-cutover command ran 85 tests and returned OK."
+  - check_id: CHECK-AFFECTED
+    result: PASS
+    evidence: "Exact affected cutover, macOS-contract, provenance, lifecycle, recovery and tunnel suites ran 75 tests and returned OK."
+  - check_id: CHECK-FULL
+    result: PASS
+    evidence: "Canonical ./verify ran exactly once, passed 345 tests and exited 0."
+  - check_id: CHECK-DIFF
+    result: PASS
+    evidence: "git diff --check passed and the implementation changed-path set was exactly the two authorized paths."
+
+publication:
+  implementation_commit: "ca3fa0a0a5bb8cfd1db1f39ccd44fd6f147bddd8"
+  implementation_push: PASS
+  implementation_push_mode: non_force_dev
+  report_path: .agent/tasks/TASK-0074/report.yaml
+  report_only_commit_required: true
+  force_push: false
+  promote_to_main: false
+  next_step: ARCHITECT_REVIEW
+
+final_freeze_readiness_asserted: false
