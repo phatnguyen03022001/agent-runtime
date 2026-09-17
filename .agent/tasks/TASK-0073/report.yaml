@@ -1,0 +1,190 @@
+protocol_version: 3
+
+task_id: TASK-0073
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: PASS
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: dev
+  execution_surface: CHATGPT_LOCAL
+  native_execution_tool: "Remote Desktop Commander MCP"
+  exact_task_base: "00f20b5ba000171bfe86fa8a0d796989295b2eef"
+  origin_dev_at_mutation_start: "00f20b5ba000171bfe86fa8a0d796989295b2eef"
+  origin_main_observed: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  working_tree_clean_before_mutation: true
+  nested_executor_used: false
+
+red_evidence:
+  production_source_unmodified: true
+  command_scope: "Seven newly added TASK-0073 tests only."
+  summary: "Ran 7 tests; FAILED as expected with 2 failures and 7 subtest/errors on the exact base."
+  required_failures:
+    - name: "tests.test_protected_runtime.ProtectedRuntimeGuardTests.test_process_snapshot_is_lazy_for_argv_text_only_classification"
+      result_on_base: FAIL
+      failure_signal: "AssertionError: process snapshot should be lazy"
+      defect_proved: "Even benign echo classification eagerly invoked process_rows_provider before any argv-only decision."
+    - name: "tests.test_protected_runtime.ProtectedRuntimeGuardTests.test_default_process_reader_avoids_unbounded_subprocess_run_capture"
+      result_on_base: FAIL
+      failure_signal: "AssertionError: whole-output capture is unbounded"
+      defect_proved: "The base reader directly used subprocess.run(capture_output=True) and materialized complete ps stdout before any bound."
+    - name: "tests.test_protected_runtime.ProtectedRuntimeGuardTests.test_default_process_reader_enforces_byte_bound_before_materialization"
+      result_on_base: ERROR
+      failure_signal: "AttributeError: module 'agent_runtime.protection' has no attribute 'PROCESS_SNAPSHOT_MAX_BYTES'"
+      defect_proved: "The base had no explicit finite process-snapshot byte bound."
+    - name: "tests.test_protected_runtime.ProtectedRuntimeGuardTests.test_default_process_reader_enforces_row_bound_and_reaps_helper"
+      result_on_base: ERROR
+      failure_signal: "AttributeError: module 'agent_runtime.protection' has no attribute 'PROCESS_SNAPSHOT_MAX_ROWS'"
+      defect_proved: "The base had no explicit finite process-snapshot row bound."
+    - name: "tests.test_protected_runtime.ProtectedRuntimeGuardTests.test_default_process_reader_deadline_and_nonzero_exit_reap_helper"
+      result_on_base: ERROR
+      failure_signal: "AttributeError: module 'agent_runtime.protection' has no attribute 'PROCESS_SNAPSHOT_DEADLINE_SECONDS'"
+      defect_proved: "The base had no explicit finite process-snapshot deadline; nonzero ps was also represented as an empty list."
+    - name: "tests.test_protected_runtime.ProtectedRuntimeGuardTests.test_process_sensitive_classification_fails_closed_when_snapshot_unavailable"
+      result_on_base: ERROR
+      failure_signal: "RuntimeError: synthetic process snapshot failure"
+      defect_proved: "kill, pkill and killall classification did not convert inspection failure into a protected denial path."
+  preservation_guardrail:
+    name: "tests.test_protected_runtime.ProtectedRuntimeGuardTests.test_process_sensitive_classification_requests_one_snapshot"
+    result_on_base: PASS
+    purpose: "Preserve one fresh snapshot for a process-sensitive kill decision."
+
+implementation:
+  commit: "39fbb42954775a12801ccdba8377f92fc3eaf8e9"
+  parent: "00f20b5ba000171bfe86fa8a0d796989295b2eef"
+  changed_paths:
+    - agent_runtime/protection.py
+    - tests/test_protected_runtime.py
+  fixed_internal_bounds:
+    max_bytes: 4194304
+    max_rows: 8192
+    deadline_seconds: 2.0
+    read_chunk_bytes: 65536
+  lazy_inspection: >-
+    ProtectedRuntimeGuard no longer obtains a process snapshot at classifier entry. Canonical relaunch, shell parsing,
+    wrappers, launchd/start.sh lifecycle checks, port checks and ordinary argv-only decisions do not inspect the host
+    process table. kill inspects only when it has numeric targets; pkill only when it has a pattern; killall only when
+    it has a name.
+  bounded_reader: >-
+    The default reader now launches /bin/ps with Popen and a binary stdout pipe, waits only within a finite monotonic
+    deadline, reads incrementally with os.read, rejects byte or materialized-row overflow before unbounded output can
+    accumulate, and parses only the bounded complete payload.
+  helper_cleanup: >-
+    Success, nonzero exit, timeout, overflow, parse error and other bounded-reader failures all close the stdout pipe;
+    a still-running helper is killed and every helper is waited/reaped in the reader finally path.
+  failure_semantics: >-
+    Process snapshot failures are normalized internally and process-sensitive classification returns the payload-free
+    process_inspection_unavailable denial category rather than allowing a destructive command from an empty or missing
+    snapshot.
+  snapshot_freshness: "No cache was added; each process-sensitive classification obtains at most one fresh snapshot."
+
+verification:
+  task0073_green:
+    command: "The same seven newly added TASK-0073 tests used for RED evidence."
+    result: PASS
+    tests_run: 7
+    runtime_seconds: 0.185
+  focused:
+    command: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_protected_runtime"
+    result: PASS
+    tests_run: 20
+    runtime_seconds: 1.259
+  affected:
+    command: >-
+      PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_terminal_exec
+      tests.test_terminal_session tests.test_task0057_admission tests.test_mcp_contracts
+      tests.test_mcp_client_conformance
+    result: PASS
+    tests_run: 59
+    runtime_seconds: 13.234
+  bounded_real_ps_smoke:
+    result: PASS
+    observed_rows: 479
+    mutation: false
+  canonical:
+    command: "PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify"
+    invocation_count: 1
+    result: PASS
+    tests_run: 340
+    test_runtime_seconds: 75.168
+    process_runtime_seconds: 75.81
+    process_exit_code: 0
+  diff_check:
+    command: "git diff --check plus exact changed-path review"
+    result: PASS
+    exact_changed_paths: true
+
+preservation:
+  public_mcp_surface_changed: false
+  dependencies_changed: false
+  session_py_changed: false
+  executor_py_changed: false
+  cutover_install_start_or_service_management_changed: false
+  cache_or_worker_added: false
+  new_config_knob_added: false
+  runtime_or_tunnel_lifecycle_mutations: 0
+  runtime_env_mutations: 0
+  desired_state_mutations: 0
+  launchd_or_service_management_mutations: 0
+  installed_app_mutations: 0
+  candidate_handoff_or_transaction_mutations: 0
+  main_mutations: 0
+  audit_payload_expanded: false
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: >-
+      The eager-provider regression failed on the exact base and passes after correction. Benign and argv/text-only
+      protected decisions make zero provider calls, while process-sensitive kill still requests exactly one snapshot.
+  - criterion_id: AC-2
+    status: PASS
+    evidence: >-
+      The reader has fixed byte, row and wall-clock bounds before whole-output materialization. Synthetic below/at/above
+      byte cases, row overflow, deadline timeout and nonzero exit all pass and prove helper reaping.
+  - criterion_id: AC-3
+    status: PASS
+    evidence: >-
+      Injected inspection failure for kill, pkill and killall now reaches process_inspection_unavailable and is denied
+      before any requested destructive command can execute.
+  - criterion_id: AC-4
+    status: PASS
+    evidence: >-
+      Existing PID/PGID, pkill/killall, shell/wrapper, launchd/start.sh, canonical relaunch, port, audit, terminal guard,
+      admission and MCP contract/conformance semantics remain covered by focused, affected and canonical passing suites.
+  - criterion_id: AC-5
+    status: PASS
+    evidence: >-
+      Canonical verification passed 340 tests in its single invocation; git diff --check passed; implementation paths
+      are exactly protection.py plus the authorized test file; implementation was pushed non-force to dev.
+
+executor_checks:
+  - check_id: CHECK-RED
+    result: PASS
+    evidence: "Required eager, unbounded-reader and fail-closed defects were demonstrated on the exact unmodified base before production-source mutation."
+  - check_id: CHECK-FOCUSED
+    result: PASS
+    evidence: "Exact focused protection command ran 20 tests and returned OK."
+  - check_id: CHECK-AFFECTED
+    result: PASS
+    evidence: "Exact affected terminal, admission and MCP command ran 59 tests and returned OK."
+  - check_id: CHECK-FULL
+    result: PASS
+    evidence: "Canonical ./verify ran exactly once, passed 340 tests and exited 0."
+  - check_id: CHECK-DIFF
+    result: PASS
+    evidence: "git diff --check passed and the implementation changed-path set was exactly the two authorized paths."
+
+publication:
+  implementation_commit: "39fbb42954775a12801ccdba8377f92fc3eaf8e9"
+  implementation_push: PASS
+  implementation_push_mode: non_force_dev
+  report_path: .agent/tasks/TASK-0073/report.yaml
+  report_only_commit_required: true
+  force_push: false
+  promote_to_main: false
+  next_step: ARCHITECT_REVIEW
+
+final_freeze_readiness_asserted: false
