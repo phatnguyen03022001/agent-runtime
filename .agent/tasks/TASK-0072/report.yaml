@@ -1,0 +1,171 @@
+protocol_version: 3
+
+task_id: TASK-0072
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: PASS
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: dev
+  execution_surface: CHATGPT_LOCAL
+  native_execution_tool: "Remote Desktop Commander MCP"
+  exact_task_base: "8c1474bb7d769bf94fc31c1e2106619efc8af3f3"
+  origin_dev_at_mutation_start: "8c1474bb7d769bf94fc31c1e2106619efc8af3f3"
+  origin_main_observed: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  working_tree_clean_before_mutation: true
+  nested_executor_used: false
+
+red_evidence:
+  production_source_unmodified: true
+  deterministic_repetitions: 3
+  tests:
+    - name: "tests.test_protected_runtime.ProtectedRuntimeGuardTests.test_concurrent_fragmented_writes_share_one_guard_serialization_order"
+      result_on_base: FAIL
+      failure_signal: "AssertionError: 0 != 1"
+      race_proved: "Both concurrent fragments classified from the same stale protected_input_buffer snapshot, so neither call was denied."
+    - name: "tests.test_terminal_session.TerminalSessionTests.test_control_write_and_finalization_have_one_lifecycle_order"
+      result_on_base: FAIL
+      failure_signal: "AssertionError: Lists differ: [True] != [False]"
+      race_proved: "Cleanup closed the synthetic PTY after running-state proof but before the blocked control write resumed."
+    - name: "tests.test_terminal_session.TerminalSessionTests.test_idle_reaper_revalidates_after_concurrent_poll_refresh"
+      result_on_base: FAIL
+      failure_signal: "AssertionError: Lists differ: ['idle-refresh-race'] != []"
+      race_proved: "A poll refreshed last_activity after stale candidate selection, but the base reaper still expired the session."
+  guardrail_on_base:
+    name: "tests.test_terminal_session.TerminalSessionTests.test_waiting_poll_does_not_block_explicit_terminate_or_deadlock"
+    result: PASS
+
+implementation:
+  commit: "539c8b750f3bed0191687da788ea02414ea5812a"
+  parent: "8c1474bb7d769bf94fc31c1e2106619efc8af3f3"
+  changed_paths:
+    - agent_runtime/session.py
+    - tests/test_protected_runtime.py
+    - tests/test_terminal_session.py
+  synchronization:
+    scope: per_session
+    primitive: "existing cleanup_lock changed to threading.RLock"
+    lock_order: "cleanup_lock -> session.lock/changed -> manager._lock"
+    global_serialization_added: false
+  f01_correction: >-
+    terminal_control write now holds the per-session lifecycle lock across protected-input snapshot, guard
+    classification, running-state proof, PTY write, protected-input update, activity refresh and result formation.
+    Interrupt and resize use the same lifecycle ordering against finalization, and explicit terminate composes through
+    the re-entrant lock without self-deadlock.
+  f02_correction: >-
+    Activity refresh uses the same per-session lifecycle lock as idle cleanup. Idle cleanup revalidates current
+    last_activity while holding that lock immediately before termination; a refresh that wins first cancels the stale
+    reap, while a genuinely idle session still follows the existing TTL cleanup path.
+  poll_wait_boundary: >-
+    poll touches activity before entering Condition.wait and, when it actually waited, again after leaving it. The
+    lifecycle lock is never held across the Condition.wait interval.
+
+verification:
+  focused:
+    command: >-
+      PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest
+      tests.test_terminal_session tests.test_protected_runtime
+    final_result: PASS
+    tests_run: 38
+    final_runtime_seconds: 10.908
+    attempts: 2
+    first_attempt_note: >-
+      The first focused run exposed one pre-existing synthetic Mock session fixture without cleanup_lock. The allowed
+      test fixture was given a per-session RLock and the exact focused command was rerun; no production correction was
+      made after that failure.
+  affected:
+    command: >-
+      PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_task0057_admission
+      tests.test_mcp_contracts tests.test_mcp_client_conformance
+    result: PASS
+    tests_run: 18
+    runtime_seconds: 3.683
+  canonical:
+    command: "PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify"
+    invocation_count: 1
+    result: PASS
+    tests_run: 333
+    test_runtime_seconds: 80.775
+    process_exit_code: 0
+  diff_check:
+    command: "git diff --check"
+    result: PASS
+    exact_changed_paths: true
+
+preservation:
+  public_mcp_surface_changed: false
+  dependencies_changed: false
+  protection_py_changed: false
+  cutover_or_install_source_changed: false
+  runtime_or_tunnel_lifecycle_mutations: 0
+  runtime_env_mutations: 0
+  desired_state_mutations: 0
+  service_management_or_launchd_mutations: 0
+  installed_app_mutations: 0
+  main_mutations: 0
+  x6_admission_regression: false
+  session_limit_regression: false
+  ttl_regression: false
+  cursor_or_output_retention_regression: false
+  shutdown_cleanup_regression: false
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: >-
+      The concurrent fragmented-write regression failed deterministically on the exact base because both writes used
+      stale buffer state, then passed after one per-session serialization order covered guard classification through
+      PTY write, buffer update and activity refresh.
+  - criterion_id: AC-2
+    status: PASS
+    evidence: >-
+      The control/finalization regression failed on the exact base with a write observed after synthetic FD close and
+      passed after control and cleanup shared the same per-session lifecycle RLock. Explicit terminate and the bounded
+      poll/terminate concurrency regression complete without deadlock.
+  - criterion_id: AC-3
+    status: PASS
+    evidence: >-
+      The stale-candidate regression failed on the exact base after a successful poll refresh and passed after idle
+      cleanup revalidated last_activity under the same lifecycle ordering point. The existing controlled-time and
+      background idle-TTL tests still prove genuinely idle sessions expire.
+  - criterion_id: AC-4
+    status: PASS
+    evidence: >-
+      Synchronization remains per-session. The poll wait regression proves the lifecycle primitive is not held across
+      Condition.wait, while focused, x6 admission and MCP contract/conformance suites all pass with existing semantics.
+  - criterion_id: AC-5
+    status: PASS
+    evidence: >-
+      Canonical verification ran exactly once and passed 333 tests; git diff --check passed; the implementation commit
+      contains only the one allowed production file and two allowed test files and was pushed non-force to dev.
+
+executor_checks:
+  - check_id: CHECK-RED
+    result: PASS
+    evidence: "All three required race regressions failed deterministically on the unmodified exact base in three repeated runs with stable race-specific signals."
+  - check_id: CHECK-FOCUSED
+    result: PASS
+    evidence: "Final exact focused command ran 38 tests and returned OK after one allowed synthetic fixture compatibility correction."
+  - check_id: CHECK-AFFECTED
+    result: PASS
+    evidence: "Exact admission and MCP contract/conformance command ran 18 tests and returned OK."
+  - check_id: CHECK-FULL
+    result: PASS
+    evidence: "Canonical ./verify invocation count was exactly one; 333 tests passed and the process exited 0."
+  - check_id: CHECK-DIFF
+    result: PASS
+    evidence: "git diff --check passed and the implementation changed-path set was exactly agent_runtime/session.py plus the two allowed test files."
+
+publication:
+  implementation_commit: "539c8b750f3bed0191687da788ea02414ea5812a"
+  implementation_push: PASS
+  implementation_push_mode: non_force_dev
+  report_path: .agent/tasks/TASK-0072/report.yaml
+  report_only_commit_required: true
+  force_push: false
+  promote_to_main: false
+  next_step: ARCHITECT_REVIEW
+
+final_freeze_readiness_asserted: false
