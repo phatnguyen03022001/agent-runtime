@@ -1,30 +1,31 @@
 protocol_version: 3
 
 task_id: TASK-0076
-task_revision: 2
+task_revision: 3
 state: APPROVED
 
 origin:
-  type: architect_revision_after_pre_mutation_tool_safety_block
+  type: architect_revision_after_repeated_executor_tool_safety_blocks
   predecessor_task: TASK-0075
   predecessor_review: "a5c291971f5be4917f267935c0ab88a73815b7e1"
   predecessor_review_state: ACCEPTED
-  prior_revision: 1
-  prior_revision_base: "be61db7c784686e84eb30362954fd33331a4a063"
+  prior_revision: 2
+  prior_revision_base: "1a61e7438b1126bb0b71273838486d8074baf81d"
   prior_revision_outcome: TOOL_SAFETY_BLOCKED_PRE_MUTATION
   prior_revision_preservation: >-
-    Two fresh revision-1 Executor contexts stopped before any TASK-0076 live mutation because an
-    upstream OpenAI tool-safety layer blocked Remote Desktop Commander start_process calls before
-    they reached the Desktop Commander server. Architect-side diagnostics proved the same Desktop
-    Commander instance remained healthy and could execute harmless git/codesign/lsof/curl commands.
-    The canonical repository was aligned to revision-1 base, the installed predecessor remained
-    healthy, the cutover transaction remained absent, and all live mutation counters remained zero.
+    Revision 1 and revision 2 fresh Executor contexts both stopped before any TASK-0076 live mutation
+    because an upstream OpenAI conversation-level tool-safety layer blocked Remote Desktop Commander
+    start_process before the calls reached the Desktop Commander server. The same Remote Desktop
+    Commander instance remained healthy in the governing Architect chat and executed harmless
+    git/codesign/lsof/curl commands successfully. No cutover, commit, rollback, repair, config change,
+    installed-app mutation or report publication occurred; all live mutation counters remain zero.
   operator_authorization: >-
-    Operator explicitly authorized "TASK-0076 rev2 split-surface". Revision 2 changes only execution
-    routing: one control Executor owns all live cutover/commit lifecycle mutation and report
-    publication through Remote Desktop Commander MCP; one separate proof Executor uses Agent Runtime
-    MCP directly for live MCP acceptance and performs no Runtime lifecycle/config/repository mutation.
-    Existing candidate, one-cutover/one-commit ceilings, no-rollback boundary and final-freeze
+    Operator explicitly authorized "TASK-0076 rev3 architect-control". Revision 3 changes only the
+    control-writer execution context: the governing Architect chat becomes the sole TASK-0076
+    lifecycle/repository writer through Remote Desktop Commander MCP. A separate proof Executor remains
+    direct-Agent-Runtime-MCP-only and has no lifecycle/config/repository authority. A later fresh
+    independent read-only reviewer must review the completed control report before final system freeze.
+    Candidate identity, one-cutover/one-commit ceilings, no-rollback boundary and final-freeze
     separation remain unchanged.
 
 architect_binding:
@@ -36,16 +37,17 @@ target:
     name: dev
     role: integration_and_evidence
 
-classification: FINAL_EXACT_CANDIDATE_LIVE_CUTOVER_AND_ACCEPTANCE_SPLIT_SURFACE
+classification: FINAL_EXACT_CANDIDATE_LIVE_CUTOVER_AND_ACCEPTANCE_ARCHITECT_CONTROL
 
 execution_base:
   mode: handoff_snapshot
-  capture: after_final_revision_2_planning_commit
+  capture: after_final_revision_3_planning_commit
   require_exact_match: true
 
 execution_surfaces:
   control_executor:
-    type: CHATGPT_LOCAL
+    type: ARCHITECT_CONTROL_CHAT
+    role: governing_architect_as_single_control_writer
     native_tool: Remote Desktop Commander MCP
     authority:
       - exact_preflight
@@ -70,12 +72,14 @@ execution_surfaces:
     alternate_mcp_client_allowed: false
     delegation: forbidden
   handoff_protocol: >-
-    Control Executor performs Phase A and stops with a valid schema-5 PENDING transaction at
-    LIVE_PROOF_REQUIRED. Operator carries the exact bounded checkpoint into one fresh proof Executor.
-    Proof Executor returns structured DIRECT_MCP_PROOF_PASS, DIRECT_MCP_PROOF_EXTERNAL_GAP, or
-    OPERATOR_INPUT_REQUIRED evidence only. Operator then carries that proof result back into the SAME
-    control Executor session. Control Executor must attribute it as OPERATOR_SUPPLIED_DIRECT_MCP_EVIDENCE,
-    revalidate all mutable live predicates itself, and may commit only if the proof satisfies this task.
+    The governing Architect control chat performs Phase A and stops with a valid schema-5 PENDING
+    transaction at LIVE_PROOF_REQUIRED. Operator carries the exact bounded checkpoint into one fresh
+    proof Executor. Proof Executor returns structured DIRECT_MCP_PROOF_PASS,
+    DIRECT_MCP_PROOF_EXTERNAL_GAP, or OPERATOR_INPUT_REQUIRED evidence only. Operator then carries that
+    proof result back into the SAME governing Architect control chat. The control chat must attribute
+    it as OPERATOR_SUPPLIED_DIRECT_MCP_EVIDENCE, revalidate all mutable live predicates itself, and may
+    commit only if the proof satisfies this task. After report publication, final acceptance/freeze
+    review must occur in a fresh independent read-only reviewer context, not in the control writer chat.
 
 accepted_candidate:
   candidate_sha256: "8ba16e69db3eecbd5db4ab0636c289ff68d71433779d9c67ded2f5335507ae01"
@@ -106,13 +110,14 @@ carried_checkpoint:
     manual_runtime_or_tunnel_lifecycle: 0
 
 objective: >-
-  Use one control Executor to install the exact retained TASK-0075 candidate through one canonical
-  transactional cutover and preserve a valid PENDING rollback envelope. Use a separate direct Agent
-  Runtime proof Executor to validate the installed generation's exact six-tool MCP behavior without
-  giving that proof context lifecycle or repository mutation authority. Return the proof to the same
-  control Executor, revalidate integrity/config/health, commit exactly once only if all mandatory gates
-  pass, prove three bounded post-commit stability observations, publish one report-only commit and stop
-  at ARCHITECT_REVIEW. Do not claim final system freeze.
+  Use the governing Architect control chat as the single lifecycle/repository writer to install the
+  exact retained TASK-0075 candidate through one canonical transactional cutover and preserve a valid
+  PENDING rollback envelope. Use a separate direct Agent Runtime proof Executor to validate the
+  installed generation's exact six-tool MCP behavior without giving that proof context lifecycle or
+  repository mutation authority. Return the proof to the same Architect control chat, revalidate
+  integrity/config/health, commit exactly once only if all mandatory gates pass, prove three bounded
+  post-commit stability observations, publish one report-only commit and stop at ARCHITECT_REVIEW.
+  Final acceptance/freeze judgment belongs to a fresh independent read-only reviewer.
 
 phases:
   phase_a_control_cutover:
@@ -191,7 +196,7 @@ forbidden_changes:
   - "Do not force-push dev, mutate main, create tags/releases or delegate to nested executors."
 
 invariants:
-  - "Exactly one control Executor is the sole repository and live lifecycle writer for TASK-0076."
+  - "Exactly one governing Architect control chat is the sole repository and live lifecycle writer for TASK-0076 revision 3."
   - "Proof Executor is read-only with respect to repository/Runtime lifecycle/config/candidate/transaction and may mutate only its own harmless child workloads through public MCP tools."
   - "Cutover count begins revision 2 at 0/1; commit count begins at 0/1."
   - "Exactly one accepted-prebuilt cutover maximum."
@@ -206,7 +211,7 @@ invariants:
   - "runtime.env and desired-state are preserved byte-for-byte unless an explicit canonical cutover-owned change is proven."
   - "Installed signed bundle remains bytecode-clean and strictly code-sign valid."
   - "Main remains unchanged."
-  - "No Executor may claim final system freeze."
+  - "Neither the Architect control writer nor the proof Executor may claim final system freeze; a fresh independent read-only reviewer decides final acceptance/freeze."
 
 structure_policy:
   expected_new_files:
@@ -265,7 +270,7 @@ verification:
       command_or_check: "Exactly one x6/seventh/cheap-call attempt or truthful platform EXTERNAL_GAP; exact cleanup; no evasion."
   authoritative_verification:
     required: false
-    mechanism: "Architect independent review of split-surface control report, direct-MCP proof provenance, transaction terminalization and post-commit live stability."
+    mechanism: "Fresh independent read-only reviewer, separate from the Architect control writer chat, reviews TASK-0076 report, direct-MCP proof provenance, transaction terminalization and post-commit live stability."
     expected_signal: "Exact post-audit candidate is the committed healthy live generation and is eligible for final Architect system-freeze judgment."
 
 gap_policy:
