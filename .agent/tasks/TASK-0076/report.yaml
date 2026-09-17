@@ -1,0 +1,147 @@
+protocol_version: 3
+
+task_id: TASK-0076
+task_revision: 3
+report_revision: 1
+state: REPORTED
+result: BLOCKED
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: dev
+  execution_surface: ARCHITECT_CONTROL_CHAT
+  native_execution_tool: "Remote Desktop Commander MCP"
+  exact_task_base: "a9a956e511046ebf2d2f30f4b1d5c6299ba60490"
+  working_tree_clean_before: true
+  production_source_or_tests_modified: false
+  proof_executor_invoked: false
+  live_mcp_acceptance_started: false
+
+preflight:
+  result: PASS
+  git:
+    head: "a9a956e511046ebf2d2f30f4b1d5c6299ba60490"
+    origin_dev: "a9a956e511046ebf2d2f30f4b1d5c6299ba60490"
+    remote_dev: "a9a956e511046ebf2d2f30f4b1d5c6299ba60490"
+    remote_main: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+    working_tree: CLEAN
+  task_0075_review_state: ACCEPTED
+  source_freeze_ready: true
+  transaction_before: ABSENT
+  candidate:
+    sha256: "8ba16e69db3eecbd5db4ab0636c289ff68d71433779d9c67ded2f5335507ae01"
+    handoff_sha256: "d909bd52f1b008ba1f84d43551ecd2666cbc4a839c8508b663a699875906971d"
+    validation: PASS
+    strict_deep_codesign: PASS
+    runtime_revision: "e6365f9a0a5b9489b5cf51fe7fe74e377e73d5e5"
+    source_tree: "594cb81f3292242bd870df258a293d99b4cb990d"
+    requirements_lock_sha256: "80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
+    session_sha256: "03cdb1f0e7c0faa753c5749330b29539256cadee58c951c56eda2a9f6f88bf49"
+    protection_sha256: "feecd9d9c80b5663c17c17760d7686a9226ac2aa2a95d96cfc7078dce17af9cc"
+    team_identifier_sha256: "497c6b1fff2701afe7cf7fedb03297efe39b0af5e1081a78fc61bbbafeb9d49c"
+  predecessor:
+    runtime_revision: "b5ac0ed5b461d3a259e4111e1a8f13933985f81f"
+    strict_deep_codesign: PASS
+    listener_count: 1
+    listener_pid: 41893
+    healthz: 200
+    readyz: 200
+    runtime_service_loaded: true
+  runtime_env:
+    mode: "0600"
+    sha256: "6e6fef8e255b140f28703f8bd515726e1fd93d644e6f838b33ebf319e8133077"
+    max_active_sessions_count: 1
+    max_active_sessions_value: 6
+    max_parallelism_count: 1
+    max_parallelism_value: 6
+  desired_state:
+    present: true
+    mode: "0600"
+    sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  uid: 501
+  launchctl: "/bin/launchctl"
+  tunnel_client: "/opt/homebrew/bin/tunnel-client"
+
+cutover:
+  canonical_command_invocation_count: 1
+  invocation_ceiling: 1
+  retry_performed: false
+  result: BLOCKED_BEFORE_TRANSACTION_CREATION
+  exact_error: "CUTOVER ERROR: predecessor ServiceManagement contract is unsupported for Runtime refresh"
+  transaction_after: ABSENT
+  commit_cutover_invocations: 0
+  rollback_invocations: 0
+  resume_invocations: 0
+  recover_invocations: 0
+  repair_or_reinstall_invocations: 0
+  manual_runtime_or_tunnel_lifecycle_invocations: 0
+
+post_failure_preservation:
+  installed_runtime_revision: "b5ac0ed5b461d3a259e4111e1a8f13933985f81f"
+  installed_strict_deep_codesign: PASS
+  listener_count: 1
+  listener_pid: 41893
+  healthz: 200
+  readyz: 200
+  transaction: ABSENT
+  runtime_env_sha256: "6e6fef8e255b140f28703f8bd515726e1fd93d644e6f838b33ebf319e8133077"
+  desired_state_sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  working_tree: CLEAN
+
+root_cause_evidence:
+  classification: PREDECESSOR_SERVICE_CONTRACT_CLASSIFIER_GAP
+  current_classifier_result_for_installed_predecessor: unknown
+  installed_predecessor_revision: "b5ac0ed5b461d3a259e4111e1a8f13933985f81f"
+  split_allowlist_contains_installed_revision: false
+  fail_closed_location: "macos/candidate_cutover.py runtime_refresh predecessor contract gate"
+  service_management_contract_evidence:
+    installed_status_main_app: enabled
+    installed_status_runtime_agent: enabled
+    b5ac_supports_register_runtime: true
+    b5ac_supports_unregister_runtime: true
+    b5ac_supports_register_main: true
+    b5ac_supports_unregister_main: true
+    b5ac_runtime_service_bundle_program: "Contents/MacOS/AgentRuntimeRuntimeService"
+  exact_blob_identity_b5ac_vs_task_base:
+    service_management_controller_same_blob: true
+    runtime_service_plist_same_blob: true
+    native_runtime_backend_same_blob: true
+  interpretation: >-
+    The canonical cutover correctly fail-closed because b5ac0ed5 is not recognized by the explicit
+    predecessor ServiceManagement contract classifier. Read-only source/blob evidence shows the
+    installed b5ac predecessor carries the same current split ServiceManagement implementation and
+    split runtime service metadata, but TASK-0076 does not authorize changing classifier/source or
+    retrying the already-consumed single cutover invocation.
+
+acceptance_criteria:
+  AC-1: PASS
+  AC-2: BLOCKED
+  AC-3: NOT_RUN
+  AC-4: NOT_RUN
+  AC-5: NOT_RUN
+  AC-6: NOT_RUN
+  AC-7: NOT_RUN
+
+blocking_gap:
+  id: PREDECESSOR_SERVICE_CONTRACT_B5AC_CLASSIFICATION
+  owner: REPOSITORY_SOURCE
+  requires_new_source_authority: true
+  current_task_retry_authorized: false
+  recommended_scope: >-
+    Separate bounded TDD correction to make the canonical predecessor contract classifier recognize
+    the exact installed b5ac ServiceManagement contract only with evidence-backed semantics, preserve
+    fail-closed behavior for unknown/tampered revisions, run affected/canonical verification, freeze a
+    new candidate if source identity changes, then authorize a fresh live cutover task with a new
+    one-cutover ceiling.
+
+publication:
+  report_path: ".agent/tasks/TASK-0076/report.yaml"
+  report_only_direct_child_required: true
+  expected_parent: "a9a956e511046ebf2d2f30f4b1d5c6299ba60490"
+  push_mode: non_force_dev
+  promote_to_main: false
+
+claims:
+  live_acceptance_claimed: false
+  final_system_freeze_claimed: false
+  cutover_retry_claimed_or_permitted: false
