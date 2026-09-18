@@ -1,0 +1,118 @@
+protocol_version: 3
+task_id: TASK-0081
+task_revision: 1
+report_revision: 1
+state: REPORTED
+task_source:
+  path: "user-issued:TASK-0081"
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration_and_evidence
+  authorized_base_head: "bb751f94f09ad0cb0b42d4e6dfaa7e92759b6e63"
+  pre_execution_head: "bb751f94f09ad0cb0b42d4e6dfaa7e92759b6e63"
+  final_execution_head: "bb751f94f09ad0cb0b42d4e6dfaa7e92759b6e63"
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+  observed_revision: "6930b8da48c9466389653fc55eb16f49eebbb28f"
+pushed: false
+promoted_to_main: false
+authoritative_verification:
+  required: false
+  performed: false
+  result: BLOCKED_BEFORE_ARCHITECT_JUDGMENT
+  evidence: "Canonical verification returned exit 1; bounded repair was reverted and not published."
+acceptance_evidence:
+  - criterion_id: AC-ROOT
+    status: PASS
+    evidence: "Actual CPython 3.13.5 copied interpreter requires @executable_path/../lib/libpython3.13.dylib; fresh venv --copies omitted it and copied Python failed."
+  - criterion_id: AC-RED
+    status: PASS
+    evidence: "Fresh corrected RED reproduced missing dylib and absent materialization/call ordering before production mutation."
+  - criterion_id: AC-FOCUSED
+    status: PASS
+    evidence: "Direct packaging tests passed 10/10; affected suite passed 34/34; shell syntax passed."
+  - criterion_id: AC-CANONICAL
+    status: FAIL
+    evidence: "First physical execution of the one logical canonical verify returned exit 1 after 159417 ms. Exact failing unittest output was lost when synchronous transport timed out. No rerun was performed."
+  - criterion_id: AC-PRESERVATION
+    status: PASS
+    evidence: "Forensic candidates retained identical before/after file counts and closure digests; live TASK-0077 remained schema 5 PENDING APP_SWAPPED, listener 1, healthz 200 and readyz 200."
+  - criterion_id: AC-PUBLICATION
+    status: BLOCKED
+    evidence: "Source/test repair was reverted to exact base because canonical verify did not pass; only this blocked report is published."
+executor_checks:
+  - check_id: CHECK-PREFLIGHT
+    result: PASS
+    evidence: "HEAD=origin/dev=exact base on dev with clean tree."
+  - check_id: CHECK-RED
+    result: PASS
+    evidence: "Corrected RED captured before production mutation."
+  - check_id: CHECK-FOCUSED
+    result: PASS
+    evidence: "10/10 direct and 34/34 affected tests PASS; shell syntax PASS."
+  - check_id: CHECK-FULL
+    result: FAIL
+    evidence: "Authoritative canonical verify exit 1. Tool transport replayed identical script; replay was detected by identical script SHA-256 and terminated with -15. No Executor rerun occurred."
+  - check_id: CHECK-DIFF
+    result: PASS
+    evidence: "git diff --check passed on attempted bounded repair before revert."
+  - check_id: CHECK-PRESERVATION
+    result: PASS
+    evidence: "No freeze, candidate publication, install, cutover, Runtime/tunnel lifecycle or main mutation occurred."
+execution_summary:
+  source_tree: "44e1ba321d9138d3d38f4de82f16b4a0801cfcca"
+  requirements_lock_sha256: "80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
+  focused_tests: "34/34 PASS"
+  canonical_verify_logical_submissions: 1
+  canonical_verify_authoritative_returncode: 1
+  canonical_verify_authoritative_duration_ms: 159417
+  transport_duplicate_script_sha256: "c64b7193566f694b22c6cee30de48538096439cbb580022dee0f7e5c01626374"
+  transport_duplicate_returncode: -15
+  implementation_published: false
+  freeze_candidate_invoked: false
+  candidate_created: false
+attempted_implementation:
+  status: REVERTED_NOT_PUBLISHED
+  evidence: "Bounded local repair inspected otool linkage, copied required relative dylib bytes from validated sys.base_prefix/lib as regular non-symlink byte-equal files, failed closed on missing/unsafe source, no-op'd for compatible layouts, and smoke-executed package-owned Python before unchanged hash-locked pip."
+forensic_candidates:
+  failed_task0079:
+    candidate_sha256: "e6fc2fe8a72abf41ff00d77e516d73c58de985d883660c154adee524db4c6440"
+    file_count_before: 1040
+    file_count_after: 1040
+    closure_digest_before: "7bdb78279508a83434ef3e7e7c9c6aa9a081e14f82bac0981a152c902be9fd29"
+    closure_digest_after: "7bdb78279508a83434ef3e7e7c9c6aa9a081e14f82bac0981a152c902be9fd29"
+    mutated: false
+  diagnostic_contaminated:
+    candidate_sha256: "2e7380e9d05e2476b9823d49b0c8fb6f51e6350018785f80ff23cd411a00a57a"
+    file_count_before: 1353
+    file_count_after: 1353
+    closure_digest_before: "45783a70182877985ebf58fd78aea23d511415aec4a0ceb8a1bcbb89fc127b47"
+    closure_digest_after: "45783a70182877985ebf58fd78aea23d511415aec4a0ceb8a1bcbb89fc127b47"
+    mutated: false
+live_state_preservation:
+  schema: 5
+  status: PENDING
+  phase: APP_SWAPPED
+  candidate_sha256: "2e7380e9d05e2476b9823d49b0c8fb6f51e6350018785f80ff23cd411a00a57a"
+  source_revision: "86751031b28292bddfd5072a75fd4aaa1ec78019"
+  runtime_env_sha256: "6e6fef8e255b140f28703f8bd515726e1fd93d644e6f838b33ebf319e8133077"
+  desired_state_sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  listener_count: 1
+  healthz: 200
+  readyz: 200
+  mutated: false
+deviations_from_task:
+  - "TASK-0081 is user-issued and has no task.yaml at exact base; none was fabricated."
+  - "Initial RED harness exposed non-interactive PATH behavior; harness was corrected before production mutation, then fresh RED was captured."
+  - "Executor submitted canonical verify once, but tool transport physically replayed the byte-identical script. Replay was terminated; literal physical exactly-once was not satisfied by transport."
+blockers:
+  - "CANONICAL_VERIFY_FAILED: authoritative verify returned exit 1 and task forbids rerun-by-retry; exact failing test detail was unavailable after synchronous transport timeout."
+successor_boundary:
+  implementation_published: false
+  freeze_candidate_invoked: false
+  candidate_created: false
+  next_phase: ARCHITECT_REVIEW
+result: BLOCKED
