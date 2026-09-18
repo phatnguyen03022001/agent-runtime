@@ -1,0 +1,202 @@
+protocol_version: 3
+
+task_id: TASK-0086
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  task_id: TASK-0085
+  gap_id: "canonical_verification_consumed_after_known_repaired_failure"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration_and_evidence
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "6930b8da48c9466389653fc55eb16f49eebbb28f"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - verification
+  - simplicity
+
+execution_skills:
+  required:
+    - executor
+    - verification
+    - reliability
+  recommended:
+    - debugging
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "phatnguyen03022001/agent-skills@6930b8da48c9466389653fc55eb16f49eebbb28f:protocols/TASK_PROTOCOL.md"
+    role: "Terminal binding and successor-task semantics."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0085/task.yaml"
+    role: "Original repo_observer implementation authority and acceptance contract."
+    precedence: 2
+  - source: "local dirty checkpoint hashes embedded in TASK-0086"
+    role: "Exact repaired implementation checkpoint authorized for re-verification and publication."
+    precedence: 3
+
+structure_authority:
+  status: RESOLVED
+  source: "phatnguyen03022001/agent-skills@6930b8da48c9466389653fc55eb16f49eebbb28f:templates/task.yaml"
+  rationale: "TASK-0085 terminally consumed its one canonical verification authority after a known isolated-fixture import failure. TASK-0086 authorizes re-verification and publication of the exact repaired dirty checkpoint only."
+
+objective: "Re-verify the exact repaired TASK-0085 repo_observer dirty checkpoint with exactly one fresh canonical verification. If and only if it passes, publish the implementation and a truthful TASK-0086 report. Do not change production/test implementation before canonical verification."
+
+checkpoint:
+  source_task: TASK-0085
+  source_execution_base: "8c7a54e082e437245130e969c233a849cb8c39cb"
+  predecessor_result: BLOCKED_AFTER_CANONICAL_VERIFICATION
+  predecessor_verify_count: "1/1 CONSUMED"
+  predecessor_verify_exit: 1
+  predecessor_verify_pid: 1610
+  predecessor_verify_started: "2026-09-18T11:33:15Z"
+  predecessor_verify_finished: "2026-09-18T11:35:44Z"
+  predecessor_failure_root_cause: "module-level import of mcp.types CallToolResult/TextContent broke isolated fake-MCP fixtures"
+  post_failure_repair: "Move CallToolResult/TextContent import into repo_observer expected-error branch only."
+  post_repair_regression: "60/60 PASS"
+  dirty_paths_sha256:
+    - path: "agent_runtime/contracts.py"
+      sha256: "0416b9f78260bac75f26a7615a07dc0e78e5533ceeefc797a6138eb140515552"
+    - path: "agent_runtime/server.py"
+      sha256: "0b9ebaa28a3c5eb6dd6f4935ea97c70a6015036fd647dd470dc91604b344fcd5"
+    - path: "agent_runtime/timing.py"
+      sha256: "7eaaf364a99323f6232a26244fa76ee0b17013015c31a2a065ec20122c94340e"
+    - path: "agent_runtime/repo_observer.py"
+      sha256: "ade86ead7e1757dbc5430d5da1cb1792c60c7ca08d1ede96d858cbeca927a7f9"
+    - path: "tests/test_fs_read_batch.py"
+      sha256: "f1e228856cc716fa30baf8eb2474d6c68fa36d881128662427684162bbc1e352"
+    - path: "tests/test_fs_read_batch_mcp.py"
+      sha256: "fa9d8e0bf1009519244c5c524ab06a86b665f37812b3846d7cfcc035c7ad94a6"
+    - path: "tests/test_mcp_client_conformance.py"
+      sha256: "e098472bcab0efbe47c1156a3d5c58d2b6396949f214994f4e6314c856617b60"
+    - path: "tests/test_mcp_contracts.py"
+      sha256: "fa30b2697f79a30a33e8eaecc84ac0b238a5594d689f7f17881bf9dd332669a6"
+    - path: "tests/test_surface_and_scripts.py"
+      sha256: "84daae4aff7abe47377cf93af81f6a1854f1b9d5cad8db4150e576ca1557efe8"
+    - path: "tests/test_task0041_boundedness.py"
+      sha256: "ef70d8303dfe72f2d79063ef3d711da0c64a0db3cb58bdc2f774118cbc6c6c4f"
+    - path: "tests/test_timing.py"
+      sha256: "27d70835928a9c9523d62b20c1f068b6a6dfd6871cc76edfd2991d038fb0f7b6"
+    - path: "tests/test_repo_observer.py"
+      sha256: "dc6c0d09cd501fc174c01caddb4bc6066b59015d29ea7f879799a57704fe6fca"
+    - path: "tests/test_repo_observer_mcp.py"
+      sha256: "ba33cd3485105de7d33c12eec14e31cac1eb8e6cb3ca48ac8d37588b20c38d49"
+  predecessor_evidence_sha256:
+    verify_stderr: "f7697ff3973dee9fe4fa727cc2f2286edf9b313d8a118daec41b9d41ac3c2315"
+    verify_stdout: "c101c4e1c8abfa259d5105fbc51c67c851e29251609e835417b99f6e5ac4f789"
+    verify_command: "51cc69b8a186dd2d39baf2a860d123752e7b245f60ba397062dd1f6bd3f27302"
+    verify_exit: "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    post_repair_log: "5fae9f5f3ccbcddbf61ef3924e29d4f65293cbaa2e49fffb37e909a6ca1eb3d8"
+
+scope:
+  required_changes:
+    - "Before any authoritative action, prove every dirty implementation/test path exactly matches the embedded TASK-0086 SHA-256 checkpoint and no additional dirty/staged path exists."
+    - "Run canonical verification exactly once from that exact repaired checkpoint."
+    - "If canonical verification PASSes, publish the exact implementation checkpoint in one implementation commit on dev."
+    - "Then create, validate and publish one TASK-0086 report-only successor commit."
+  allowed_existing_files_or_components:
+    - "The exact thirteen dirty implementation/test files embedded above."
+    - "build/.task-0085-* predecessor evidence read-only."
+    - "build/.task-0086-* for new ignored verification evidence."
+    - ".agent/tasks/TASK-0086/report.yaml after implementation publication succeeds."
+
+invariants:
+  - "No implementation/test/source byte may change before the TASK-0086 canonical verification launch."
+  - "No staged path may exist before TASK-0086 publication staging begins."
+  - "All thirteen dirty checkpoint file hashes MUST exactly match this task before canonical verification."
+  - "No additional dirty path beyond the thirteen checkpoint paths is allowed, except this task artifact is already committed in the execution base and ignored build evidence."
+  - "TASK-0086 canonical verification authority is exactly 0/1 -> 1/1."
+  - "TASK-0085 canonical verification remains historically consumed and MUST NOT be reused or relabeled."
+  - "Canonical verification command is exactly PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify."
+  - "Persist TASK-0086 launch identity, command, stdout/stderr and exit under ignored build/.task-0086-*."
+  - "Do not replay canonical verification after ambiguous transport delivery; inspect durable evidence/process identity instead."
+  - "If TASK-0086 canonical verification fails, STOP immediately with BLOCKED_AFTER_CANONICAL_VERIFICATION. Do not repair, rerun, commit or publish."
+  - "If canonical verification passes, implementation publication MUST contain only the thirteen checkpoint implementation/test paths and preserve their pre-verify hashes exactly."
+  - "After implementation commit, report publication is a separate report-only commit."
+  - "Public accepted target remains the TASK-0085 eight-tool repo_observer contract. TASK-0086 does not change architecture, API or acceptance."
+  - "TASK-0084 remains dormant and untouched; no Runtime/candidate/cutover/install/freeze/lifecycle authority exists here."
+  - "Exactly one worktree at /Users/tienphat/Developer/agent-runtime on dev; origin/main unchanged."
+
+forbidden_changes:
+  - "No source/test implementation edits before or after verification."
+  - "No dependency, README, packaging, lifecycle, candidate, cutover, install, freeze or TASK-0084 changes."
+  - "No second canonical verification invocation."
+  - "No branch creation/switch, stash, reset, checkout restoration, alternate worktree or clone."
+  - "No Runtime restart/reload/install/activation."
+  - "No main/tag/release mutation."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact TASK-0085 repaired dirty checkpoint identity is preserved."
+    evidence_required: "All thirteen file SHA-256 values match; no extra dirty/staged paths; HEAD=origin/dev exact TASK-0086 execution base; one worktree/dev."
+  - id: AC-2
+    requirement: "Exactly one fresh TASK-0086 canonical verification passes."
+    evidence_required: "Durable build/.task-0086-* command/PID-or-launch identity/start/finish/stdout/stderr/exit evidence and verifier PASS."
+  - id: AC-3
+    requirement: "The exact verified implementation is published without post-verification mutation."
+    evidence_required: "Implementation commit changes only the thirteen authorized checkpoint paths and their published bytes equal the pre-verification hashes."
+  - id: AC-4
+    requirement: "TASK-0086 evidence is canonically reported."
+    evidence_required: "Pinned agent-skills report validator PASS; report-only successor commit; fresh remote publication proof."
+  - id: AC-5
+    requirement: "Repository/lifecycle boundaries remain intact."
+    evidence_required: "HEAD=origin/dev, clean tree, one worktree, origin/main unchanged, TASK-0084/live Runtime untouched."
+
+verification:
+  executor_checks:
+    - id: CHECK-CHECKPOINT
+      command_or_check: "Fresh-resolve origin/dev and prove exact execution base, exact thirteen dirty paths/hashes, zero staged paths, one worktree/dev and predecessor evidence hashes."
+      required: true
+    - id: CHECK-CANONICAL
+      command_or_check: "Launch PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify exactly once and persist durable TASK-0086 evidence. No pre-verification source/test edits are permitted."
+      required: true
+    - id: CHECK-PUBLISH
+      command_or_check: "Only on canonical PASS: rehash all thirteen paths and require exact checkpoint equality, git diff --check, stage only those thirteen paths, commit/push implementation, then create/validate/publish report-only successor."
+      required: true
+    - id: CHECK-FINAL
+      command_or_check: "Fresh-fetch dev/main; prove HEAD=origin/dev, clean tree, one worktree, main unchanged and no lifecycle mutation."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Independent Architect review after READY_FOR_ARCHITECT_REVIEW."
+    expected_signal: "Architect ACCEPT of exact verified repo_observer implementation."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
