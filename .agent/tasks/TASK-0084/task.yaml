@@ -1,0 +1,194 @@
+protocol_version: 3
+
+task_id: TASK-0084
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  task_id: TASK-0083
+  gap_id: ""
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration_and_evidence
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "6930b8da48c9466389653fc55eb16f49eebbb28f"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - verification
+  - simplicity
+
+execution_skills:
+  required:
+    - executor
+    - verification
+    - reliability
+  recommended:
+    - debugging
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "phatnguyen03022001/agent-skills@6930b8da48c9466389653fc55eb16f49eebbb28f:protocols/TASK_PROTOCOL.md"
+    role: "Task lifecycle, authority, evidence, continuation, and mutation semantics."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0083/review.yaml"
+    role: "Canonical Architect acceptance of the exact immutable candidate and explicit separation of activation authority."
+    precedence: 2
+  - source: ".agent/tasks/TASK-0083/report.yaml"
+    role: "Accepted candidate freeze, provenance, seven-tool contract, and preservation evidence."
+    precedence: 3
+  - source: ".agent/tasks/TASK-0077/task.yaml"
+    role: "Historical live-generation transaction authority; successor task may terminalize the still-PENDING generation but MUST NOT reuse TASK-0077 counters."
+    precedence: 4
+
+structure_authority:
+  status: RESOLVED
+  source: "phatnguyen03022001/agent-skills@6930b8da48c9466389653fc55eb16f49eebbb28f:templates/task.yaml"
+  rationale: "Canonical protocol-v3 task. This task only terminalizes the currently healthy predecessor transaction and installs the already accepted immutable successor candidate into a new PENDING transaction."
+
+objective: "Safely terminalize the existing healthy TASK-0077 PENDING transaction by one explicit commit-cutover, then install the exact TASK-0083 accepted immutable candidate exactly once as a prebuilt candidate, leaving the new generation PENDING for separate direct live MCP acceptance. Do not commit the new transaction, perform direct MCP acceptance, or exercise rollback/resume/recovery authority in this task."
+
+scope:
+  required_changes:
+    - "Commit the exact existing TASK-0077 PENDING / APP_SWAPPED transaction exactly once after fresh read-only validation."
+    - "Install the accepted candidate 2c66b199c3eb440d35b14ad2d97941a04fd0f0962380285d27400a5245aa6286 exactly once through ./install.sh --install-prebuilt."
+    - "Prove the resulting installed candidate and new PENDING transaction identities, singleton health/readiness, predecessor rollback snapshot validity, candidate-original immutability, and repository/live boundary preservation."
+    - "Publish only the TASK-0084 Executor report on dev."
+  allowed_existing_files_or_components:
+    - "./install.sh --commit-cutover"
+    - "./install.sh --install-prebuilt"
+    - "macos/candidate_cutover.py as executed only through install.sh"
+    - "macos/package_provenance.py for read-only static validation"
+    - "build/candidates/2c66b199c3eb440d35b14ad2d97941a04fd0f0962380285d27400a5245aa6286/Agent Runtime.app as immutable source"
+    - "build/candidates/2c66b199c3eb440d35b14ad2d97941a04fd0f0962380285d27400a5245aa6286/Agent Runtime.candidate.json as immutable handoff"
+    - "build/.task-0084-* for ignored task-owned logs/snapshots only"
+    - "~/Applications/Agent Runtime.app as lifecycle mutation target"
+    - "~/Library/Application Support/Agent Runtime/cutover-transaction as the predecessor transaction to commit and successor transaction to create"
+    - "~/Library/Application Support/Agent Runtime/runtime.env and desired-state marker as read-only configuration inputs"
+
+invariants:
+  - "Accepted candidate SHA-256 is exactly 2c66b199c3eb440d35b14ad2d97941a04fd0f0962380285d27400a5245aa6286."
+  - "Accepted candidate handoff SHA-256 is exactly 34cc16932271865ed2c76bb78a17324eaaaa76551f8e40ce6826b5fabb088cb3."
+  - "TASK-0083 Architect review commit 159a9f4a733f8b7c59f5cf777832ff40f76754d1 MUST be an ancestor of the execution base."
+  - "Predecessor TASK-0077 transaction before mutation MUST be schema 5 / PENDING / APP_SWAPPED."
+  - "Predecessor transaction metadata SHA-256 MUST equal 563ab48a7f24f2c3b225df05689a8d8230915f1ccc2ee19c91bcc8490af86e10."
+  - "Predecessor transaction handoff SHA-256 MUST equal 1ba9714b8f7cc5e7edac488ee0ab6b3aeb63c1f9b2e01f6787cd9b59d7cd088d."
+  - "Predecessor installed Runtime revision is 86751031b28292bddfd5072a75fd4aaa1ec78019 and predecessor candidate identity remains the exact transaction-bound installed candidate before commit."
+  - "runtime.env SHA-256 MUST remain 6e6fef8e255b140f28703f8bd515726e1fd93d644e6f838b33ebf319e8133077 throughout."
+  - "desired-state SHA-256 MUST remain e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 throughout."
+  - "Predecessor commit-cutover authority in THIS task is exactly 0/1 -> 1/1. TASK-0077 counters are not reused."
+  - "Successor install-prebuilt authority in THIS task is exactly 0/1 -> 1/1."
+  - "Ordering is strict: predecessor validation -> predecessor commit-cutover -> prove old transaction absent and installed predecessor unchanged -> successor install-prebuilt."
+  - "If predecessor commit-cutover fails, STOP; do not install."
+  - "If successor install-prebuilt fails or returns a non-PENDING/operator-input state, STOP; do not retry, resume, recover, repair, manually rollback, or commit."
+  - "Automatic rollback performed internally by the canonical cutover helper on a material installation failure is permitted as implementation behavior; no separate manual rollback authority is granted."
+  - "The accepted candidate original under build/candidates/** MUST remain byte-stable and MUST NOT be executed, modified, re-signed, cleaned, or used as a runtime working directory."
+  - "Exactly one agent-runtime worktree may exist, at /Users/tienphat/Developer/agent-runtime, branch dev."
+  - "No clone, alternate worktree, branch, detached checkout, stash workspace, sibling-repository mutation, or task-owned /tmp or /private/tmp artifact is permitted."
+  - "Task-owned logs/evidence MUST stay under ignored build/.task-0084-*."
+  - "No direct Agent Runtime MCP acceptance is performed in TASK-0084; that belongs to a separate successor task."
+  - "The new transaction MUST remain PENDING / APP_SWAPPED at task end; commit-cutover for the new generation is forbidden."
+  - "No main promotion, tag, release, package rebuild, freeze, source/test/doc implementation change, dependency change, Runtime self-restart command, or tunnel manual restart is authorized."
+
+forbidden_changes:
+  - "Do not invoke macos/freeze_candidate.py or package_app.sh."
+  - "Do not rebuild or re-sign the accepted candidate."
+  - "Do not modify production source, tests, README, requirements, lockfiles, packaging scripts, lifecycle scripts, Swift source, Runtime MCP source, or agent-skills."
+  - "Do not invoke predecessor commit-cutover more than once."
+  - "Do not invoke successor install-prebuilt more than once."
+  - "Do not invoke --commit-cutover after the successor install."
+  - "Do not invoke --rollback-cutover, --resume-cutover, or --recover-partial-cutover."
+  - "Do not install any candidate other than the exact accepted 2c66b199... candidate."
+  - "Do not execute Python, scripts, or binaries from the immutable source candidate directory."
+  - "Do not mutate runtime.env or desired-state."
+  - "Do not perform direct MCP tool acceptance or use Agent Runtime MCP as the lifecycle writer."
+  - "Do not mutate any prior build/candidates/** artifact."
+  - "Do not modify main, tags, releases, branch topology, sibling repositories, or paths outside the target/live Runtime boundaries explicitly authorized above."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Fresh preflight proves exact execution base/dev, one worktree, clean repo, no concurrent writer/Git lock, exact accepted candidate identity/handoff, predecessor transaction identity, candidate-original immutability, runtime.env/desired-state identities, singleton listener and healthy predecessor."
+    evidence_required: "Exact refs, paths, hashes, static candidate validation, predecessor installed validation against current transaction handoff, transaction fields/hashes, listener=1, healthz=200, readyz=200."
+  - id: AC-2
+    requirement: "The predecessor TASK-0077 transaction is committed exactly once and only after validation."
+    evidence_required: "One ./install.sh --commit-cutover invocation returning COMMITTED; predecessor transaction directory absent afterward; predecessor installed app closure unchanged across commit; runtime.env/desired-state unchanged; no lifecycle restart attributable to commit."
+  - id: AC-3
+    requirement: "The exact accepted successor candidate is installed exactly once through the canonical prebuilt path with no rebuild/re-sign."
+    evidence_required: "One ./install.sh --install-prebuilt exact-app exact-handoff invocation; return status PENDING; no second install; immutable source candidate pre/post closure identical."
+  - id: AC-4
+    requirement: "The newly installed generation is bound exactly to the accepted candidate and a valid new schema-5 PENDING / APP_SWAPPED transaction."
+    evidence_required: "Installed validate-candidate PASS against successor transaction handoff; candidate SHA/source revision/source tree/requirements lock equal TASK-0083 accepted identities; new transaction status/phase exact; rollback previous-app evidence present and valid."
+  - id: AC-5
+    requirement: "Post-install control-plane health is minimally healthy without claiming direct MCP acceptance."
+    evidence_required: "Exactly one port-8080 listener, healthz=200, readyz=200, installed Runtime process/service ownership consistent with the installed app; no direct MCP semantic acceptance claim."
+  - id: AC-6
+    requirement: "No unauthorized lifecycle/repository/filesystem mutation occurs."
+    evidence_required: "runtime.env/desired-state unchanged; old forensic candidates and accepted source candidate unchanged; exactly one target worktree/dev branch; no sibling repo/out-of-repo task artifacts; main unchanged."
+  - id: AC-7
+    requirement: "The task stops with the successor transaction still PENDING for independent direct MCP acceptance."
+    evidence_required: "New transaction directory exists at final checkpoint, schema 5 / PENDING / APP_SWAPPED; successor commit-cutover count=0; rollback/resume/recover counts=0; report-only tracked delta."
+
+verification:
+  executor_checks:
+    - id: CHECK-BASE
+      command_or_check: "Fresh-resolve GitHub refs and local identity; prove one canonical worktree/dev, clean tracked/index state, no Git lock/concurrent writer, and exact TASK-0083 review ancestry."
+      required: true
+    - id: CHECK-CANDIDATE
+      command_or_check: "Using checkout tooling only, statically validate exact source candidate and handoff; capture immutable source candidate closure before mutation; do not execute candidate bytes."
+      required: true
+    - id: CHECK-PREDECESSOR
+      command_or_check: "Read-only validate predecessor PENDING/APP_SWAPPED transaction, installed candidate against current transaction handoff, exact transaction/runtime.env/desired-state hashes, singleton listener and health/readiness."
+      required: true
+    - id: CHECK-COMMIT-OLD
+      command_or_check: "Invoke ./install.sh --commit-cutover exactly once. Require COMMITTED, transaction absence, installed predecessor closure stability and unchanged config/health boundary before continuing."
+      required: true
+    - id: CHECK-INSTALL-NEW
+      command_or_check: "Invoke ./install.sh --install-prebuilt exactly once with build/candidates/2c66.../Agent Runtime.app and its exact handoff. Require successful PENDING result; any other result is terminal BLOCKED."
+      required: true
+    - id: CHECK-NEW-PENDING
+      command_or_check: "Statically validate installed app against new transaction handoff; require schema5/PENDING/APP_SWAPPED, exact accepted candidate identity, valid predecessor rollback evidence, listener=1, healthz=200, readyz=200."
+      required: true
+    - id: CHECK-PRESERVATION
+      command_or_check: "Rehash runtime.env/desired-state and immutable source/prior candidates; prove one worktree/dev, no sibling/out-of-repo task mutation, no forbidden lifecycle calls, and origin/main unchanged."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect independent review before any direct MCP live-proof authority."
+    expected_signal: "Architect ACCEPT of TASK-0084 PENDING generation checkpoint."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
