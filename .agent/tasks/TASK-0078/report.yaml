@@ -2,185 +2,235 @@ protocol_version: 3
 
 task_id: TASK-0078
 task_revision: 1
-report_revision: 1
+report_revision: 2
 state: REPORTED
-result: NEEDS_REVIEW
+
+task_source:
+  path: .agent/tasks/TASK-0078/task.yaml
 
 execution:
   repository: phatnguyen03022001/agent-runtime
-  branch: dev
-  execution_surface: CHATGPT_LOCAL
-  native_tool: Remote Desktop Commander MCP
-  exact_task_base: "bd125575d47a0c7175d0c92f643cb4c71cdedee7"
+  branch:
+    name: dev
+    role: integration_and_evidence
+  authorized_base_head: "bd125575d47a0c7175d0c92f643cb4c71cdedee7"
+  pre_execution_head: "bd125575d47a0c7175d0c92f643cb4c71cdedee7"
+  final_execution_head: "699f7992d66d7eec78dc2c0e38e48a7e1b1af54f"
   implementation_commit: "699f7992d66d7eec78dc2c0e38e48a7e1b1af54f"
-  report_only_commit: PENDING
-  force_push: false
-  main_mutated: false
-  nested_executor_used: false
+  execution_surface: CHATGPT_LOCAL
+  native_tool: "Remote Desktop Commander MCP"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+
+execution_skills_used:
+  required:
+    - executor
+    - verification
+    - reliability
+    - github-workflow
+  recommended: []
+  external: []
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: PENDING_ARCHITECT_REVIEW
+  evidence: "Canonical TASK-0078 assigns final independent judgment to Architect review; Executor authoritative verification was not required."
+
+pushed: true
+promoted_to_main: false
 
 reconciliation:
   discarded_pre_authority_commit: "978d27fd291ed67939ecf1a5e929aa2e9d88d6cb"
   architect_revert: "d36d9380fed4a7f170ead0afc4b8a51a882ebfc1"
   reconciled_source_tree: "c0ff1218e662bd89b1ab41cc0e93b4d5493def3f"
   discarded_evidence_reused: false
-precheck:
-  remote_dev: "bd125575d47a0c7175d0c92f643cb4c71cdedee7"
-  remote_main: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
-  local_head: "bd125575d47a0c7175d0c92f643cb4c71cdedee7"
-  local_origin_dev: "bd125575d47a0c7175d0c92f643cb4c71cdedee7"
-  branch: dev
-  working_tree: CLEAN
-  task_state: APPROVED
-  execution_ready: true
-  source_reconciliation: "Planning base adds only TASK-0078 task authority over the reconciled source state."
+  authorized_patch_distinct_from_discarded_patch: true
 
 red_evidence:
   cwd_schema_portability:
     result: RED
-    evidence: "Fresh generated schemas for terminal_exec, terminal_start, and fs_read_batch still exposed pattern ^/."
+    evidence: "Fresh generated schemas for terminal_exec, terminal_start, and fs_read_batch exposed pattern ^/ on the authorized base."
   runtime_relative_cwd_ownership:
     result: RED
-    evidence: "Fresh relative cwd calls were rejected by Pydantic pattern validation before Runtime could emit cwd must be an absolute path."
+    evidence: "Fresh relative cwd calls were rejected by public schema validation before Runtime-side absolute-path validation."
   outside_workspace:
     result: BASELINE_PASS
-    evidence: "Fresh calls with cwd=/ were already rejected by Runtime workspace containment."
+    evidence: "Fresh outside-workspace cwd probes were already rejected by Runtime containment on the authorized base."
   safe_resize_contract:
     result: RED
-    evidence: "terminal_resize was absent from the generated MCP surface."
+    evidence: "terminal_resize was absent from the generated MCP surface on the authorized base."
   destructive_control_contract:
     result: RED
-    evidence: "terminal_control still exposed resize alongside write, interrupt, and terminate."
+    evidence: "terminal_control exposed resize together with write, interrupt, and terminate on the authorized base."
   resize_functionality:
     result: RED
-    evidence: "Calling terminal_resize failed as Unknown tool."
+    evidence: "Calling terminal_resize on the authorized base failed as an unknown tool."
+
 capacity_preimplementation_evidence:
   result: BASELINE_ALREADY_CORRECT
-  finding: "Accepted capacity semantics did not require production admission changes; truthful tests could not manufacture RED for behavior already correct."
-  pure_pty_x6: "Six barrier-held PTY roots were explicitly observed running with active admission count 6; a seventh PTY failed before openpty via the configured six-session guard; cleanup returned active count to 0."
-  mixed_x6: "Three held terminal_exec roots plus three live PTY roots shared one HeavyExecutionAdmission at active=6; seventh exec and PTY admissions failed before Popen/openpty."
-  shared_mcp_x6: "Six held terminal_exec roots reached active=6 and peak=6; capacity_observer and fs_read_batch completed before release; seventh exec failed before spawn; final active count returned to 0."
-  synchronization: "File ready/release barriers and explicit active/running observations were primary correctness gates; wall clock was only a bounded hang guard."
+  evidence: "Fresh deterministic regressions confirmed the accepted admission behavior rather than manufacturing a false RED condition."
+  pure_pty_x6: "Six explicitly held PTY roots were observed running with active admission count 6 before a seventh PTY request was rejected before PTY allocation; cleanup returned active count to 0."
+  mixed_x6: "Three held terminal_exec roots plus three live terminal_start PTY roots shared one HeavyExecutionAdmission at active 6; seventh exec and PTY admissions failed before child or PTY creation."
+  shared_mcp_x6: "Six held terminal_exec roots reached active and peak 6; capacity_observer and fs_read_batch remained responsive; seventh exec failed before spawn; cleanup returned active count to 0."
 
 implementation:
-  schema_portability: "Removed connector-fragile cwd regex from exposed Pydantic JSON Schema while retaining minLength."
-  absolute_workspace_enforcement: "Runtime validation remains in agent_runtime.executor._validated_cwd_with_identity and _validated_cwd; terminal_start and fs_read_batch reuse those validators."
-  safe_pty_contract: "Added terminal_resize(session_id, rows, cols), non-destructive, closed-world, idempotent, with rows/cols 1..65535."
-  destructive_pty_contract: "terminal_control now exposes only write, interrupt, terminate and remains destructive/open-world."
-  resulting_public_tool_count: 7
-  capacity_behavior: "No capacity.py, session.py, executor.py, or fs_read.py production change; hard ceiling remains 6 with no queue or scheduler."
-public_surface:
-  - terminal_exec
-  - terminal_start
-  - terminal_poll
-  - terminal_control
-  - terminal_resize
-  - capacity_observer
-  - fs_read_batch
+  schema_portability: "Removed connector-fragile public cwd regex while retaining non-empty schema constraint."
+  runtime_path_validation: "Existing Runtime validators retain absolute path, strict resolution, workspace containment, and fail-closed enforcement."
+  safe_pty_contract: "Added terminal_resize with bounded rows and cols, non-destructive, closed-world, idempotent tool annotations."
+  destructive_pty_contract: "terminal_control now exposes only write, interrupt, and terminate and remains destructive and open-world."
+  public_tool_count: 7
+  capacity_behavior: "No capacity, session, executor, or fs_read production implementation changed; hard heavy ceiling remains exactly 6 and Runtime queue remains absent."
 
 changed_files:
-  - README.md
-  - agent_runtime/contracts.py
-  - agent_runtime/server.py
-  - agent_runtime/timing.py
-  - tests/test_fs_read_batch.py
-  - tests/test_fs_read_batch_mcp.py
-  - tests/test_mcp_client_conformance.py
-  - tests/test_mcp_contracts.py
-  - tests/test_surface_and_scripts.py
-  - tests/test_task0041_boundedness.py
-  - tests/test_task0057_admission.py
-  - tests/test_timing.py
+  - path: README.md
+    summary: "Document seven-tool public surface and separate safe resize from destructive terminal control."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: agent_runtime/contracts.py
+    summary: "Remove connector-fragile cwd regex and restrict destructive control action type."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: agent_runtime/server.py
+    summary: "Expose terminal_resize separately with truthful safe annotations while preserving destructive terminal_control."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: agent_runtime/timing.py
+    summary: "Add terminal_resize to the authorized public timing surface."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: tests/test_fs_read_batch.py
+    summary: "Preserve Runtime-side cwd and bounded fs_read behavior coverage."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: tests/test_fs_read_batch_mcp.py
+    summary: "Update MCP fs_read schema portability expectations."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: tests/test_mcp_client_conformance.py
+    summary: "Update client conformance for portable cwd schema and seven-tool surface."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: tests/test_mcp_contracts.py
+    summary: "Add fresh TASK-0078 RED and GREEN contract regressions for cwd and PTY safety semantics."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: tests/test_surface_and_scripts.py
+    summary: "Update exact public surface expectations."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: tests/test_task0041_boundedness.py
+    summary: "Preserve bounded public-tool contract coverage after resize separation."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: tests/test_task0057_admission.py
+    summary: "Strengthen deterministic x6 simultaneous PTY and mixed admission proof with explicit running observations and cleanup."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: tests/test_timing.py
+    summary: "Update timing allowlist coverage for terminal_resize."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: .agent/tasks/TASK-0078/report.yaml
+    summary: "Publish protocol-v3 Executor evidence report and report-schema rework."
+    new_file: true
+    in_scope: true
+    structure_authorized: true
 
-capability_preservation:
-  terminal_exec: PRESERVED
-  terminal_start: PRESERVED
-  terminal_poll: PRESERVED
-  resize: PRESERVED_AS_terminal_resize
-  write: PRESERVED_IN_terminal_control
-  interrupt: PRESERVED_IN_terminal_control
-  terminate: PRESERVED_IN_terminal_control
-  capacity_observer: PRESERVED
-  fs_read_batch: PRESERVED
-security_preservation:
-  absolute_cwd: "Runtime still rejects non-absolute cwd."
-  workspace_containment: "Strict realpath containment under AGENT_RUNTIME_WORKSPACE_ROOT remains fail-closed."
-  symlink_policy: "fs_read_batch descriptor-relative no-symlink traversal is unchanged."
-  protected_runtime: "Protected Runtime guard implementation is unchanged."
-  heavy_ceiling: 6
-  runtime_queue: NONE
-  output_read_bounds: PRESERVED
-  destructive_annotations: "write/interrupt/terminate remain under destructive/open-world terminal_control."
-  safe_resize_annotations: "terminal_resize is non-destructive and closed-world; no destructive action is reachable through it."
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "Generated public cwd schemas no longer expose pattern ^/; relative and outside-workspace cwd remain rejected by Runtime-side validation before execution, PTY allocation, or batch read."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "terminal_resize is separately non-destructive, closed-world, and idempotent; terminal_control retains write, interrupt, and terminate under destructive and open-world annotations; all four PTY operations remain available."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "Deterministic barriers and explicit running and active observations prove six simultaneously held heavy roots, shared exec plus PTY admission, and seventh rejection before spawn or PTY allocation."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "capacity_observer and fs_read_batch complete while six heavy roots remain held, and cleanup returns heavy admission active count to zero."
+  - criterion_id: AC-5
+    status: PASS
+    evidence: "Affected contract, client, fs_read, terminal session, protected Runtime, boundedness, timing, transport, pressure, and canonical verification suites passed with no security-boundary implementation downgrade."
+  - criterion_id: AC-6
+    status: PASS
+    evidence: "Read-only pre and post identities preserve TASK-0077 transaction schema 5, PENDING, APP_SWAPPED, exact candidate and source revision, unchanged runtime.env and desired-state digests, health 200, readiness 200, and singleton listener."
+  - criterion_id: AC-7
+    status: PASS
+    evidence: "Implementation commit 699f7992d66d7eec78dc2c0e38e48a7e1b1af54f was published non-force on dev; canonical verify and diff checks passed; main remained c49d777efa09db7f6c51bd8d8616db4623499fb8."
 
-verification:
-  core_green:
-    command: "Focused TASK-0078 contract plus x6 regression selection"
-    result: "9/9 PASS"
-  contract:
-    command: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_mcp_contracts tests.test_mcp_client_conformance tests.test_fs_read_batch_mcp tests.test_surface_and_scripts tests.test_task0041_boundedness tests.test_timing"
-    result: "58/58 PASS"
-  capacity:
-    command: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_terminal_session tests.test_task0057_admission tests.test_task0059_transport tests.test_pressure_concurrency"
-    result: "34/34 PASS"
-  fs_read:
-    command: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_fs_read_batch"
-    result: "8/8 PASS"
-  security_affected:
-    command: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_protected_runtime tests.test_fs_read_batch_adversarial"
-    result: "27/27 PASS"
-  canonical_verify:
-    command: "PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify"
-    result: "353/353 PASS in 77.755s"
-    invocation_count: 1
-  diff_check:
-    command: "git diff --check"
+executor_checks:
+  - check_id: CHECK-RED
     result: PASS
-  changed_path_review:
+    evidence: "Fresh TASK-0078 regressions were run on the exact authorized unmodified execution base before production-source mutation; real contract defects were RED and already-correct capacity behavior was recorded truthfully as baseline-correct."
+  - check_id: CHECK-CONTRACT
     result: PASS
-    evidence: "Only the twelve authorized implementation/test/doc paths changed; lifecycle/package files and capacity/session/executor/fs_read production owners were untouched."
+    evidence: "Required contract and schema affected unittest command passed 58 of 58 tests."
+  - check_id: CHECK-CAPACITY
+    result: PASS
+    evidence: "Required capacity and session affected unittest command passed 34 of 34 tests."
+  - check_id: CHECK-FS
+    result: PASS
+    evidence: "Required fs_read unittest command passed 8 of 8 tests."
+  - check_id: CHECK-FULL
+    result: PASS
+    evidence: "Canonical PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify passed 353 of 353 tests in 77.755 seconds; invoked once for final implementation handoff."
+  - check_id: CHECK-DIFF
+    result: PASS
+    evidence: "git diff --check passed and exact implementation changed-path review contained only the twelve authorized source, test, and documentation paths."
+  - check_id: CHECK-LIVE-PRESERVATION
+    result: PASS
+    evidence: "Read-only before and after identity checks preserved TASK-0077 schema 5 PENDING APP_SWAPPED state, candidate, installed source revision, runtime.env digest, desired-state digest, health, readiness, and singleton listener without lifecycle action."
+
+verification_summary:
+  focused_task0078: "9 of 9 PASS"
+  contract_schema: "58 of 58 PASS"
+  capacity_session: "34 of 34 PASS"
+  fs_read: "8 of 8 PASS"
+  protected_runtime_and_adversarial_fs: "27 of 27 PASS"
+  canonical_verify: "353 of 353 PASS in 77.755 seconds"
+  canonical_verify_invocations: 1
+  diff_check: PASS
 
 live_state_preservation:
-  before:
-    schema: 5
-    status: PENDING
-    phase: APP_SWAPPED
-    candidate_sha256: "2e7380e9d05e2476b9823d49b0c8fb6f51e6350018785f80ff23cd411a00a57a"
-    source_revision: "86751031b28292bddfd5072a75fd4aaa1ec78019"
-    runtime_env_sha256: "6e6fef8e255b140f28703f8bd515726e1fd93d644e6f838b33ebf319e8133077"
-    desired_state_sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    healthz: 200
-    readyz: 200
-    listener_count: 1
-  after_implementation_publication:
-    schema: 5
-    status: PENDING
-    phase: APP_SWAPPED
-    candidate_sha256: "2e7380e9d05e2476b9823d49b0c8fb6f51e6350018785f80ff23cd411a00a57a"
-    source_revision: "86751031b28292bddfd5072a75fd4aaa1ec78019"
-    runtime_env_sha256: "6e6fef8e255b140f28703f8bd515726e1fd93d644e6f838b33ebf319e8133077"
-    desired_state_sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    healthz: 200
-    readyz: 200
-    listener_count: 1
+  schema: 5
+  status: PENDING
+  phase: APP_SWAPPED
+  candidate_sha256: "2e7380e9d05e2476b9823d49b0c8fb6f51e6350018785f80ff23cd411a00a57a"
+  source_revision: "86751031b28292bddfd5072a75fd4aaa1ec78019"
+  runtime_env_sha256: "6e6fef8e255b140f28703f8bd515726e1fd93d644e6f838b33ebf319e8133077"
+  desired_state_sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  healthz: 200
+  readyz: 200
+  listener_count: 1
   mutated: false
 
-unauthorized_mutations: NONE
+working_tree_after:
+  clean: true
+  summary: "Implementation publication ended clean; this report rework changes only the authorized report artifact before its successor publication."
 
-publication:
-  implementation_commit: "699f7992d66d7eec78dc2c0e38e48a7e1b1af54f"
-  implementation_pushed_non_force: true
-  report_path: ".agent/tasks/TASK-0078/report.yaml"
-  report_only_commit_required: true
-  report_only_commit: PENDING
-  main_expected_unchanged: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+deviations_from_task: []
+blockers: []
 
 successor_boundary:
-  new_candidate_freeze_required: true
-  live_lifecycle_task_required: true
-  screen_capture_only_after_runtime_freeze: true
-  ui_control_only_after_screen_capture_end_to_end_vision_proof: true
   candidate_built_or_installed_in_task0078: false
+  live_activation_claimed: false
+  final_system_freeze_claimed: false
+  next_phase: ARCHITECT_REVIEW
 
-executor_recommendation:
-  authority: ADVISORY_ONLY
-  recommendation: "TASK-0078 source/test contract hardening is ready for Architect review; live activation and final freeze remain separate successor work."
+result: NEEDS_REVIEW
