@@ -1,0 +1,194 @@
+protocol_version: 3
+
+task_id: TASK-0088
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  task_id: TASK-0087
+  gap_id: "canonical_verify_exactly_once_reverification"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: verification_and_evidence
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "6930b8da48c9466389653fc55eb16f49eebbb28f"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - verification
+  - simplicity
+
+execution_skills:
+  required:
+    - executor
+    - verification
+    - reliability
+  recommended:
+    - debugging
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "phatnguyen03022001/agent-skills@6930b8da48c9466389653fc55eb16f49eebbb28f:protocols/TASK_PROTOCOL.md"
+    role: "Terminal binding, successor-task and evidence semantics."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0087/task.yaml"
+    role: "Original image transport wire-proof contract."
+    precedence: 2
+  - source: ".agent/tasks/TASK-0087/report.yaml"
+    role: "Truthful blocked predecessor report and exact replay anomaly evidence."
+    precedence: 3
+  - source: "TASK-0087 proof implementation commit 41e6f0e41ad9620148cdd6cae757f0569241d46a"
+    role: "Exact published proof candidate to reverify without modification."
+    precedence: 4
+
+structure_authority:
+  status: RESOLVED
+  source: "phatnguyen03022001/agent-skills@6930b8da48c9466389653fc55eb16f49eebbb28f:templates/task.yaml"
+  rationale: "TASK-0087 proof semantics passed but exact physical canonical verification was invalidated by transport replay. TASK-0088 authorizes one replay-safe reverification of the unchanged published proof candidate and report publication only."
+
+objective: "Reverify the unchanged TASK-0087 image-transport proof candidate with exactly one physical canonical ./verify execution protected by an atomic once-guard and detached worker. If and only if verification passes, publish a truthful TASK-0088 report for Architect review. Do not modify proof implementation, production Runtime source, dependencies, public surface or live lifecycle state."
+
+checkpoint:
+  predecessor_task: TASK-0087
+  predecessor_result: BLOCKED
+  predecessor_blocker: CANONICAL_VERIFY_EXACTLY_ONCE_VIOLATION
+  predecessor_task_base: "4c03fcb40aef7fd07a4432af6310ce9ee5420275"
+  proof_implementation_commit: "41e6f0e41ad9620148cdd6cae757f0569241d46a"
+  blocked_report_commit: "4cb3bc2f953852494097365656e3083a531ae09a"
+  proof_files_sha256:
+    - path: "tests/fixtures/task0087-tiny.png"
+      sha256: "6ba85beb6523f3feec495bb851e6f6bec9f71a7d6f972b98dcf46cadd4a0b597"
+    - path: "tests/fixtures/task0087-medium.png"
+      sha256: "bbcebd48a375080fe0d54ce904b869ade64b46b727cd701bd36c3253365791c2"
+    - path: "tests/fixtures/task0087-visual.png"
+      sha256: "cfbaea6c03d0b9bb88227074d6511c8ec6160c5fcf49a77104699f61805422f8"
+    - path: "tests/image_transport_probe.py"
+      sha256: "75195d77430136e11967611b96e2ad1754f3703ce8c10d873067ae5e705ec9f0"
+    - path: "tests/test_image_transport.py"
+      sha256: "04908c320494816936dd754a320f428100e78c5152a652fc292672af91a12466"
+  predecessor_evidence_sha256:
+    ambiguity: "e6ecf8d6d2970fd4ef6b9fbd2eed040dc2f7076c71241c3bb96629e2d58d2200"
+    payload: "040ec4bf23eedc0bc00b090cf15911a79331602615533e5ebc40ed9615a93de2"
+    handoff: "66264bbdc6fc21244ec635359759c222495c4ebbc9b13fc8a477e2ac0f0d7299"
+
+scope:
+  required_changes:
+    - "No source/proof/test mutation. Re-resolve and rehash the exact five TASK-0087 proof files and predecessor evidence."
+    - "Create only ignored TASK-0088 verification launcher/evidence under build/.task-0088-* before verification."
+    - "Launch canonical verification through one atomic replay-safe once-guard and detached worker."
+    - "On PASS, create, validate and publish .agent/tasks/TASK-0088/report.yaml only."
+  allowed_existing_files_or_components:
+    - "The five immutable TASK-0087 proof files above, read-only."
+    - ".agent/tasks/TASK-0087/task.yaml and report.yaml, read-only."
+    - "build/.task-0087-* predecessor evidence, read-only."
+    - "build/.task-0088-* ignored launcher, guard and verification evidence."
+    - ".agent/tasks/TASK-0088/report.yaml only after successful verification."
+
+invariants:
+  - "TASK-0087 remains terminal BLOCKED. Its ambiguous canonical verification history is never relabeled or accepted as exactly-once."
+  - "TASK-0088 grants fresh canonical verify authority exactly 0/1 -> 1/1."
+  - "The five proof candidate files MUST remain byte-identical to the embedded SHA-256 values before and after verification."
+  - "No tracked source, proof, test, dependency, README, production Runtime or task-0087 artifact may change."
+  - "Production public tool surface remains exactly eight tools. No image transport probe becomes a production tool."
+  - "TASK-0088 does not claim ChatGPT/model-vision delivery and does not implement screen_capture."
+  - "Canonical command is exactly PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify."
+  - "Canonical verification MUST NOT be launched directly through one long synchronous tool call."
+  - "Before launching verify, create an ignored replay-safe launcher whose first operation is an atomic filesystem once-guard under build/.task-0088-* using mkdir or O_CREAT|O_EXCL semantics."
+  - "Only the invocation that successfully creates the once-guard may start ./verify. Any duplicate/replayed launcher invocation MUST observe the existing guard, emit a bounded ALREADY_LAUNCHED/no-op result, and MUST NOT execute ./verify."
+  - "The successful launcher starts the verifier as a detached/background worker so the control call returns promptly; verification completion is observed later by reading durable evidence, never by resubmitting the launcher."
+  - "Durable evidence records launcher identity, worker/verifier PID or equivalent unique launch identity, exact command, start time, finish time, stdout, stderr and exit status."
+  - "If the launcher outcome is ambiguous before the once-guard state can be proven, inspect the guard/evidence/process state. Never issue an unguarded fallback."
+  - "If canonical verification fails, STOP with BLOCKED_AFTER_CANONICAL_VERIFICATION. No repair, retry, second verify or report claiming success."
+  - "TASK-0084/live Runtime/tunnel/candidate/cutover state remains untouched."
+  - "Exactly one worktree at /Users/tienphat/Developer/agent-runtime on dev; origin/main unchanged."
+
+forbidden_changes:
+  - "No modification of tests/fixtures/task0087-*.png, tests/image_transport_probe.py or tests/test_image_transport.py."
+  - "No production source/test edits and no dependency changes."
+  - "No second physical ./verify run."
+  - "No unguarded canonical verify launch."
+  - "No image transport redesign, screen_capture, Swift/TCC, repo_diff_read, Accessibility or UI control work."
+  - "No package, freeze, candidate, install, activation, restart/reload, cutover, rollback/resume/recover or TASK-0084 action."
+  - "No main/tag/release mutation, branch switch, clone, stash, reset or alternate worktree."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact TASK-0087 proof candidate identity is preserved."
+    evidence_required: "All five proof-file SHA-256 values match before and after canonical verification; predecessor report/evidence identities re-resolve exactly."
+  - id: AC-2
+    requirement: "Exactly one physical TASK-0088 canonical verification executes despite possible control-plane replay."
+    evidence_required: "Atomic once-guard provenance plus durable launch/worker identity shows only one verifier execution; any repeated launcher observation is documented as guard-protected no-op."
+  - id: AC-3
+    requirement: "Canonical source verification passes."
+    evidence_required: "The single physical canonical command exits 0 and reports the full canonical suite PASS."
+  - id: AC-4
+    requirement: "TASK-0087 wire proof remains valid and unchanged."
+    evidence_required: "Immutable prior focused proof/payload evidence is re-resolved by exact hashes; production surface remains exactly eight and no proof tool is registered in production."
+  - id: AC-5
+    requirement: "TASK-0088 evidence is canonically published without implementation mutation."
+    evidence_required: "Pinned report validator PASS; report-only successor publication; fresh remote closure proves HEAD=origin/dev, clean tree, one worktree and origin/main unchanged."
+  - id: AC-6
+    requirement: "Live lifecycle boundary remains intact."
+    evidence_required: "TASK-0084/live Runtime/tunnel state unchanged; no lifecycle command invoked."
+
+verification:
+  executor_checks:
+    - id: CHECK-CHECKPOINT
+      command_or_check: "Fresh-resolve exact TASK-0088 execution base, branch/worktree/clean state, proof candidate commit lineage, five proof hashes, predecessor report and predecessor evidence hashes."
+      required: true
+    - id: CHECK-SURFACE
+      command_or_check: "Read-only prove production PUBLIC_TOOL_NAMES remains the exact accepted eight-tool tuple and image_transport_probe is absent."
+      required: true
+    - id: CHECK-GUARD
+      command_or_check: "Materialize ignored replay-safe launcher/evidence path. Prove the atomic once-guard is absent before authority consumption and that launcher logic cannot execute ./verify unless it wins the guard."
+      required: true
+    - id: CHECK-CANONICAL
+      command_or_check: "Invoke the guarded detached launcher once as the authorized logical action; then poll/read durable evidence only. The guarded worker executes PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify exactly once."
+      required: true
+    - id: CHECK-POST
+      command_or_check: "On PASS, rehash five proof files, run git diff --check, require no tracked implementation diff, and prove the only eventual tracked mutation is TASK-0088 report.yaml."
+      required: true
+    - id: CHECK-FINAL
+      command_or_check: "Validate/publish TASK-0088 report-only successor, fresh-fetch dev/main, prove HEAD=origin/dev, clean tree, one worktree, main unchanged and live lifecycle untouched."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Independent Architect review after READY_FOR_ARCHITECT_REVIEW."
+    expected_signal: "Architect ACCEPT of unchanged TASK-0087 wire proof after replay-safe canonical reverification."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
