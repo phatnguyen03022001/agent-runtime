@@ -22,6 +22,7 @@ EXPECTED_TOOLS = (
     "terminal_resize",
     "capacity_observer",
     "fs_read_batch",
+    "repo_observer",
 )
 EXPECTED_ANNOTATIONS = {
     "terminal_exec": (False, True, False, True),
@@ -31,6 +32,7 @@ EXPECTED_ANNOTATIONS = {
     "terminal_resize": (False, False, True, False),
     "capacity_observer": (True, False, True, False),
     "fs_read_batch": (True, False, True, False),
+    "repo_observer": (True, False, True, False),
 }
 EXPECTED_OUTPUT_FIELDS = {
     "terminal_exec": {
@@ -58,6 +60,21 @@ EXPECTED_OUTPUT_FIELDS = {
     "fs_read_batch": {
         "items", "status", "path", "start_line", "end_line",
         "text", "error_code", "message",
+    },
+    "repo_observer": {
+        "schema_version", "repository", "branch", "tracking", "changes",
+        "diff_summary", "operation_state", "worktrees", "observation", "truncation",
+        "root", "cwd", "bare", "shallow", "inside_workspace_root",
+        "cwd_inside_repo", "cwd_is_repo_root", "head_sha", "name", "detached",
+        "upstream", "tracking_sha", "tracking_known", "ahead", "behind",
+        "path", "original_path", "index_status", "worktree_status", "tracked",
+        "staged", "conflicted", "staged_files", "unstaged_files",
+        "untracked_files", "conflicted_files", "additions", "deletions", "exact",
+        "merge", "rebase", "cherry_pick", "bisect", "entries",
+        "outside_workspace_count", "total_count", "total_exact", "locked",
+        "prunable", "fetched", "network_used", "deadline_seconds",
+        "changes_truncated", "worktrees_truncated", "diff_truncated",
+        "total_changes", "total_changes_exact",
     },
 }
 
@@ -177,6 +194,12 @@ class MCPClientConformanceTests(unittest.IsolatedAsyncioTestCase):
             fs_props = tools["fs_read_batch"].input_schema["properties"]
             self.assertNotIn("pattern", fs_props["cwd"])
 
+            repo_props = tools["repo_observer"].input_schema["properties"]
+            self.assertEqual(set(repo_props), {"cwd", "max_paths"})
+            self.assertEqual(repo_props["max_paths"]["minimum"], 1)
+            self.assertEqual(repo_props["max_paths"]["maximum"], 1000)
+            self.assertEqual(repo_props["max_paths"]["default"], 200)
+
             for name, tool in tools.items():
                 self.assertIsNotNone(tool.output_schema, name)
                 objects = [
@@ -219,6 +242,17 @@ class MCPClientConformanceTests(unittest.IsolatedAsyncioTestCase):
             Draft202012Validator(tools["capacity_observer"].output_schema).validate(
                 capacity_result.structured_content
             )
+
+            repo_result = await client.call_tool(
+                "repo_observer",
+                {"cwd": str(ROOT), "max_paths": 200},
+            )
+            self.assertFalse(repo_result.is_error)
+            Draft202012Validator(tools["repo_observer"].output_schema).validate(
+                repo_result.structured_content
+            )
+            self.assertFalse(repo_result.structured_content["observation"]["fetched"])
+            self.assertFalse(repo_result.structured_content["observation"]["network_used"])
 
             session_id: str | None = None
             terminated = False

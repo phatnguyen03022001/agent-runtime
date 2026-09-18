@@ -155,6 +155,7 @@ class TimingToolTests(unittest.TestCase):
             "terminal_resize",
             "capacity_observer",
             "fs_read_batch",
+            "repo_observer",
         ))
         self.assertIn(timing_middleware, server.mcp.middleware)
         self.assertEqual(
@@ -168,6 +169,10 @@ class TimingToolTests(unittest.TestCase):
         self.assertEqual(
             [parameter.name for parameter in inspect.signature(server.terminal_resize).parameters.values()],
             ["session_id", "rows", "cols"],
+        )
+        self.assertEqual(
+            [parameter.name for parameter in inspect.signature(server.repo_observer).parameters.values()],
+            ["cwd", "max_paths"],
         )
 
     def test_tool_execution_event_has_no_arguments_or_result_payload(self) -> None:

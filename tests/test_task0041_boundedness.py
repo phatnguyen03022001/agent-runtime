@@ -229,6 +229,11 @@ class MCPInputBoundednessTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(_integer_branch(item["properties"]["start_line"])["maximum"], MAX_LINE)
         self.assertEqual(_integer_branch(item["properties"]["end_line"])["maximum"], MAX_LINE)
 
+        repo_props = tools["repo_observer"].input_schema["properties"]
+        self.assertEqual(set(repo_props), {"cwd", "max_paths"})
+        self.assertEqual(repo_props["max_paths"]["minimum"], 1)
+        self.assertEqual(repo_props["max_paths"]["maximum"], 1000)
+
     async def test_unknown_top_level_arguments_are_rejected_before_each_delegate(self) -> None:
         session_result = {
             "session_id": "fake-session",
@@ -255,6 +260,7 @@ class MCPInputBoundednessTests(unittest.IsolatedAsyncioTestCase):
             ("terminal_resize", "_control_terminal", {"session_id": "session", "rows": 24, "cols": 80}, {"session_id": "session", "status": "running"}),
             ("capacity_observer", "observe_capacity", {}, {"schema_version": 1, "capacity_parallelism_ceiling": 1, "reason_codes": ["unavailable"], "signals": {"probe_status": "unavailable", "sampled_window_ms": 0}}),
             ("fs_read_batch", "read_files_batch", {"cwd": str(ROOT), "items": [{"path": "README.md"}]}, {"items": []}),
+            ("repo_observer", "observe_repository", {"cwd": str(ROOT), "max_paths": 20}, None),
         )
         async with Client(server.mcp) as client:
             for tool_name, delegate_name, arguments, delegate_result in cases:

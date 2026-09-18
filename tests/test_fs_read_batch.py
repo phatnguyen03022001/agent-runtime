@@ -29,9 +29,10 @@ class FsReadBatchContractTests(unittest.IsolatedAsyncioTestCase):
                 "terminal_resize",
                 "capacity_observer",
                 "fs_read_batch",
+                "repo_observer",
             ),
         )
-        tool = tools[-1]
+        tool = next(tool for tool in tools if tool.name == "fs_read_batch")
         annotations = tool.annotations.model_dump(by_alias=True)
         self.assertEqual(
             (

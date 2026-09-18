@@ -203,3 +203,121 @@ FsReadItemResult = Annotated[FsReadOkResult | FsReadErrorResult, Field(discrimin
 
 class FsReadBatchResult(_ClosedResult):
     items: list[FsReadItemResult]
+
+
+RepoObserverMaxPaths = Annotated[int, Field(strict=True, ge=1, le=1000)]
+TypedToolErrorCode = Literal[
+    "INVALID_ARGUMENT",
+    "OUTSIDE_WORKSPACE",
+    "NOT_GIT_REPOSITORY",
+    "OUTPUT_LIMIT",
+    "DEADLINE_EXCEEDED",
+    "TRANSIENT_FAILURE",
+    "INTERNAL_ERROR",
+]
+RepoChangeStatus = Literal["M", "T", "A", "D", "R", "C", "U", "?", "!"]
+
+
+class TypedToolErrorPayload(_ClosedResult):
+    code: TypedToolErrorCode
+    message: Annotated[StrictStr, Field(max_length=256)]
+    retryable: bool
+
+
+class TypedToolErrorEnvelope(_ClosedResult):
+    error: TypedToolErrorPayload
+
+
+class RepoRepository(_ClosedResult):
+    root: str
+    cwd: str
+    bare: bool
+    shallow: bool
+    inside_workspace_root: Literal[True]
+    cwd_inside_repo: Literal[True]
+    cwd_is_repo_root: bool
+
+
+class RepoBranch(_ClosedResult):
+    head_sha: str | None
+    name: str | None
+    detached: bool
+
+
+class RepoTracking(_ClosedResult):
+    upstream: str | None
+    tracking_sha: str | None
+    tracking_known: bool
+    ahead: int | None
+    behind: int | None
+
+
+class RepoChange(_ClosedResult):
+    path: str
+    original_path: str | None
+    index_status: RepoChangeStatus | None
+    worktree_status: RepoChangeStatus | None
+    tracked: bool
+    staged: bool
+    conflicted: bool
+
+
+class RepoDiffSummary(_ClosedResult):
+    staged_files: int | None
+    unstaged_files: int | None
+    untracked_files: int | None
+    conflicted_files: int | None
+    additions: int | None
+    deletions: int | None
+    exact: bool
+
+
+class RepoOperationState(_ClosedResult):
+    merge: bool
+    rebase: bool
+    cherry_pick: bool
+    bisect: bool
+
+
+class RepoWorktree(_ClosedResult):
+    path: str
+    head_sha: str | None
+    branch: str | None
+    detached: bool
+    bare: bool
+    locked: bool
+    prunable: bool
+
+
+class RepoWorktrees(_ClosedResult):
+    entries: list[RepoWorktree]
+    outside_workspace_count: int
+    total_count: int | None
+    total_exact: bool
+
+
+class RepoObservation(_ClosedResult):
+    fetched: Literal[False]
+    network_used: Literal[False]
+    deadline_seconds: float
+
+
+class RepoTruncation(_ClosedResult):
+    changes_truncated: bool
+    worktrees_truncated: bool
+    diff_truncated: bool
+    total_changes: int | None
+    total_changes_exact: bool
+
+
+class RepoObserverResult(_ClosedResult):
+    schema_version: Literal[1]
+    repository: RepoRepository
+    branch: RepoBranch
+    tracking: RepoTracking
+    changes: list[RepoChange]
+    diff_summary: RepoDiffSummary
+    operation_state: RepoOperationState
+    worktrees: RepoWorktrees
+    observation: RepoObservation
+    truncation: RepoTruncation

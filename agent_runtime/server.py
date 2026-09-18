@@ -27,6 +27,8 @@ from .contracts import (
     Cursor,
     FsReadBatchResult,
     FsReadItems,
+    RepoObserverMaxPaths,
+    RepoObserverResult,
     SessionId,
     TerminalControlResult,
     TerminalData,
@@ -34,12 +36,15 @@ from .contracts import (
     TerminalExecResult,
     TerminalSessionResult,
     TimeoutSeconds,
+    TypedToolErrorEnvelope,
+    TypedToolErrorPayload,
     WaitMilliseconds,
 )
 from .errors import RuntimeStateError, RuntimeValidationError
 from .executor import execute_terminal, shutdown_terminal_executions
 from .fs_read import read_files_batch
 from .protection import ProtectedRuntimeDenied
+from .repo_observer import RepoObserverFailure, observe_repository
 from .session import (
     control_terminal as _control_terminal,
     poll_terminal as _poll_terminal,
@@ -48,7 +53,7 @@ from .session import (
 )
 from .timing import timed_tool_wrapper, timing_middleware
 
-PUBLIC_TOOL_NAMES = ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch")
+PUBLIC_TOOL_NAMES = ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch", "repo_observer")
 SERVER_DESCRIPTION = "Bounded local command execution and advisory capacity MCP server; terminal tools may modify the host."
 SERVER_INSTRUCTIONS = (
     "Execute literal argv with shell=False and no implicit shell. "
@@ -61,7 +66,10 @@ SERVER_INSTRUCTIONS = (
     "syscall filter, or complete prevention of arbitrary same-UID effects. Tools expose bounded output. "
     "capacity_observer provides read-only advisory capacity information. "
     "fs_read_batch performs read-only ordered cwd-relative UTF-8 file reads for at most 20 items "
-    "with fixed output and scan-work ceilings and per-item filesystem failures."
+    "with fixed output and scan-work ceilings and per-item filesystem failures. "
+    "repo_observer performs bounded local-only Git repository observation with no fetch, network use, "
+    "or repository mutation; it reports local tracking refs, typed changes, diff summary, operation state, "
+    "and policy-safe worktree topology."
 )
 mcp = MCPServer(
     name="Agent Runtime",
@@ -272,6 +280,33 @@ def fs_read_batch(cwd: AbsoluteCwd, items: FsReadItems) -> FsReadBatchResult:
     """Read bounded ordered UTF-8 file ranges below one validated cwd."""
 
     return cast(FsReadBatchResult, _call_runtime_tool(read_files_batch, cwd, items))
+
+
+@_tool(read_only=True, destructive=False, idempotent=True, open_world=False)
+def repo_observer(
+    cwd: AbsoluteCwd,
+    max_paths: RepoObserverMaxPaths = 200,
+) -> RepoObserverResult:
+    """Observe one local Git working tree without network access or mutation."""
+
+    try:
+        return observe_repository(cwd, max_paths)
+    except RepoObserverFailure as exc:
+        from mcp.types import CallToolResult, TextContent
+
+        envelope = TypedToolErrorEnvelope(
+            error=TypedToolErrorPayload(
+                code=exc.code,
+                message=exc.message,
+                retryable=exc.retryable,
+            )
+        )
+        error_result = CallToolResult(
+            content=[TextContent(type="text", text=exc.message)],
+            structuredContent=envelope.model_dump(),
+            isError=True,
+        )
+        return cast(RepoObserverResult, error_result)
 
 
 def _install_timing_middleware() -> None:
