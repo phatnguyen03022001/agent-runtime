@@ -104,7 +104,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
                 ],
             )
 
-    def test_public_mcp_surface_adds_capacity_observer_to_four_terminal_tools(self) -> None:
+    def test_public_mcp_surface_includes_truthful_split_pty_contract(self) -> None:
         source = (ROOT / "agent_runtime/server.py").read_text()
         tree = ast.parse(source)
         assigned = {}
@@ -119,7 +119,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
 
         self.assertEqual(
             assigned.get("PUBLIC_TOOL_NAMES"),
-            ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "capacity_observer", "fs_read_batch"),
+            ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch"),
         )
         for name in assigned["PUBLIC_TOOL_NAMES"]:
             self.assertIn(name, functions)
@@ -186,13 +186,14 @@ class SurfaceAndScriptsTests(unittest.TestCase):
             module = importlib.import_module("agent_runtime.server")
             self.assertEqual(
                 tuple(module.mcp.tools),
-                ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "capacity_observer", "fs_read_batch"),
+                ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch"),
             )
             expected = {
                 "terminal_exec": (False, True, False, True),
                 "terminal_start": (False, True, False, True),
                 "terminal_poll": (False, False, False, False),
                 "terminal_control": (False, True, False, True),
+                "terminal_resize": (False, False, True, False),
                 "capacity_observer": (True, False, True, False),
                 "fs_read_batch": (True, False, True, False),
             }
@@ -239,7 +240,11 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         )
         self.assertEqual(
             [arg.arg for arg in functions["terminal_control"].args.args],
-            ["session_id", "action", "data", "rows", "cols"],
+            ["session_id", "action", "data"],
+        )
+        self.assertEqual(
+            [arg.arg for arg in functions["terminal_resize"].args.args],
+            ["session_id", "rows", "cols"],
         )
         for function in functions.values():
             self.assertNotIn("env", [arg.arg for arg in function.args.args])
@@ -347,7 +352,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertIn("protected singleton", docs)
         self.assertIn("root/sudo", docs)
         self.assertIn("malicious local administrator", docs)
-        self.assertIn("six public tools", docs)
+        self.assertIn("seven public tools", docs)
         self.assertIn("AGENT_RUNTIME_MAX_PARALLELISM", docs)
         self.assertIn("capacity_observer", docs)
 

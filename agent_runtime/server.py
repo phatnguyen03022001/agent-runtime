@@ -48,13 +48,14 @@ from .session import (
 )
 from .timing import timed_tool_wrapper, timing_middleware
 
-PUBLIC_TOOL_NAMES = ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "capacity_observer", "fs_read_batch")
+PUBLIC_TOOL_NAMES = ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch")
 SERVER_DESCRIPTION = "Bounded local command execution and advisory capacity MCP server; terminal tools may modify the host."
 SERVER_INSTRUCTIONS = (
     "Execute literal argv with shell=False and no implicit shell. "
     "Use an absolute cwd under the configured workspace root. "
     "terminal_exec is one-shot; terminal_start begins a PTY lifecycle managed with "
-    "terminal_poll and terminal_control. Terminal execution uses the operator account's normal permissions "
+    "terminal_poll, destructive terminal_control, and bounded non-destructive terminal_resize. "
+    "Terminal execution uses the operator account's normal permissions "
     "and may modify the host. Protected Runtime filtering is defense-in-depth for recognized argv, shell, "
     "and wrapper lifecycle intent; it is not a sandbox, filesystem confinement, privilege isolation, "
     "syscall filter, or complete prevention of arbitrary same-UID effects. Tools expose bounded output. "
@@ -236,14 +237,26 @@ def terminal_control(
     session_id: SessionId,
     action: ControlAction,
     data: TerminalData = None,
-    rows: TerminalDimension | None = None,
-    cols: TerminalDimension | None = None,
 ) -> TerminalControlResult:
-    """Write, interrupt, terminate, or resize one persistent PTY session whose process may modify the host."""
+    """Write, interrupt, or terminate one persistent PTY session whose process may modify the host."""
 
     return cast(
         TerminalControlResult,
-        _call_runtime_tool(_control_terminal, session_id, action, data, rows, cols),
+        _call_runtime_tool(_control_terminal, session_id, action, data, None, None),
+    )
+
+
+@_tool(read_only=False, destructive=False, idempotent=True, open_world=False)
+def terminal_resize(
+    session_id: SessionId,
+    rows: TerminalDimension,
+    cols: TerminalDimension,
+) -> TerminalControlResult:
+    """Resize one persistent PTY session using bounded terminal dimensions."""
+
+    return cast(
+        TerminalControlResult,
+        _call_runtime_tool(_control_terminal, session_id, "resize", None, rows, cols),
     )
 
 
