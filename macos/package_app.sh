@@ -69,6 +69,9 @@ cp "$SOURCE_ROOT/start.sh" "$RUNTIME/start.sh"
 find "$SOURCE_ROOT/agent_runtime" -maxdepth 1 -type f -name '*.py' -exec cp '{}' "$RUNTIME/agent_runtime/" \;
 PACKAGE_VENV="$TEMP_ROOT/runtime-venv"
 "$PYTHON_BIN" -m venv --copies --without-pip "$PACKAGE_VENV"
+materialize_packaging_python_runtime "$PYTHON_BIN" "$PACKAGE_VENV" "$REPO_ROOT" "PACKAGE ERROR"
+"$PACKAGE_VENV/bin/python" -c 'pass' >/dev/null 2>&1 \
+  || { echo "PACKAGE ERROR: copied packaging interpreter smoke execution failed" >&2; exit 2; }
 "$PYTHON_BIN" -m pip --disable-pip-version-check --python "$PACKAGE_VENV/bin/python" \
   install --require-hashes -r "$SOURCE_ROOT/requirements.lock" >/dev/null
 find "$PACKAGE_VENV" -type d -name '__pycache__' -prune -exec rm -rf '{}' +
