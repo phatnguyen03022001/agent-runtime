@@ -1,0 +1,196 @@
+protocol_version: 3
+
+task_id: TASK-0085
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: user_request
+  task_id: ""
+  gap_id: ""
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "6930b8da48c9466389653fc55eb16f49eebbb28f"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - verification
+  - simplicity
+
+execution_skills:
+  required:
+    - executor
+    - verification
+    - reliability
+  recommended:
+    - debugging
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "phatnguyen03022001/agent-skills@6930b8da48c9466389653fc55eb16f49eebbb28f:protocols/TASK_PROTOCOL.md"
+    role: "Task lifecycle, bounded execution, evidence and review semantics."
+    precedence: 1
+  - source: "agent_runtime/server.py"
+    role: "Current seven-tool public MCP surface and tool annotation/registration mechanism."
+    precedence: 2
+  - source: "agent_runtime/timing.py"
+    role: "Current public-tool timing telemetry allowlist."
+    precedence: 3
+  - source: "agent_runtime/contracts.py"
+    role: "Current closed Pydantic input/output contract style."
+    precedence: 4
+  - source: "tests/test_mcp_contracts.py"
+    role: "Exact public MCP contract and annotation assertions."
+    precedence: 5
+  - source: "tests/test_mcp_client_conformance.py"
+    role: "Client-facing schema/result conformance authority."
+    precedence: 6
+
+structure_authority:
+  status: RESOLVED
+  source: "phatnguyen03022001/agent-skills@6930b8da48c9466389653fc55eb16f49eebbb28f:templates/task.yaml"
+  rationale: "Canonical protocol-v3 task. Add one bounded local read-only repository observation capability without changing lifecycle architecture."
+
+objective: "Add repo_observer as public tool 8: one bounded, typed, local-only Git repository snapshot under the configured workspace root. Preserve terminal_exec as the open-world fallback, perform no hidden network or repository mutation, expose deterministic typed expected errors, and leave all Runtime lifecycle/candidate/cutover state untouched."
+
+scope:
+  required_changes:
+    - "Add one new public repo_observer tool and its internal implementation."
+    - "Add closed input/output contracts and a shared typed error payload usable by future typed tools without retrofitting existing tools in this task."
+    - "Update exact public surface, timing allowlist, server instructions, MCP/client conformance and boundedness tests from seven tools to exactly eight."
+    - "Prove local Git observation is bounded, no-network, no-mutation, workspace-contained and deadline-bounded."
+    - "Publish implementation and TASK-0085 report only after focused and canonical verification pass."
+  allowed_existing_files_or_components:
+    - "agent_runtime/repo_observer.py as a new implementation module"
+    - "agent_runtime/contracts.py"
+    - "agent_runtime/server.py"
+    - "agent_runtime/timing.py"
+    - "tests/test_repo_observer.py as a new focused implementation test module"
+    - "tests/test_repo_observer_mcp.py as a new focused MCP contract test module"
+    - "tests/test_mcp_contracts.py"
+    - "tests/test_mcp_client_conformance.py"
+    - "tests/test_surface_and_scripts.py"
+    - "tests/test_timing.py"
+    - "tests/test_task0041_boundedness.py"
+    - "tests/test_task0059_transport.py"
+    - "README.md only if the accepted public-tool list or user-visible tool semantics are documented there"
+    - "build/.task-0085-* for ignored durable verification/log evidence"
+
+invariants:
+  - "Public surface after this task is exactly: terminal_exec, terminal_start, terminal_poll, terminal_control, terminal_resize, capacity_observer, fs_read_batch, repo_observer."
+  - "repo_observer annotations are readOnly=true, destructive=false, idempotent=true, openWorld=false."
+  - "repo_observer accepts no argv, command, shell string, Git revision expression, remote URL, fetch flag or caller-controlled Git arguments."
+  - "repo_observer performs local observation only. It MUST NOT fetch, pull, push, contact a remote, mutate refs, write repository files, refresh the Git index, invoke hooks/fsmonitor/external diff/textconv/pager helpers, or recurse into submodule working trees by default."
+  - "Internal Git execution uses the fixed /usr/bin/git executable with shell=False and server-built argv only. Do not add pygit2, dulwich, PyObjC or any new dependency."
+  - "Every Git subprocess receives deterministic noninteractive/no-lock/no-pager controls including GIT_OPTIONAL_LOCKS=0, GIT_TERMINAL_PROMPT=0, no pager, core.fsmonitor=false; diff probes additionally disable external diff and textconv."
+  - "All internal operations share one monotonic five-second call deadline. Each operation receives only remaining_time; there is no per-probe five-second reset."
+  - "Potentially path-heavy Git output is incrementally read/parsed under explicit byte/path ceilings; do not capture unbounded complete stdout before truncation."
+  - "Canonical changed-file source of truth is one typed changes[] list preserving path, optional original_path, index_status, worktree_status, tracked, staged and conflicted. Convenience cleanliness/count fields are derived."
+  - "max_paths bounds retained path records. If enumeration cannot complete within max_paths/work/deadline, total_changes may be null and total_changes_exact=false; never claim an exact total without complete enumeration."
+  - "Worktree topology MUST NOT read or expose absolute paths for worktrees outside AGENT_RUNTIME_WORKSPACE_ROOT. Such entries are represented only through redacted/outside-workspace counts or equivalent non-path metadata."
+  - "Remote/tracking state uses only existing local refs. Result explicitly states fetched=false/network_used=false."
+  - "Expected typed repo_observer failures use one structured error envelope with fields code, message, retryable and MCP isError=true. Do not encode the classification only inside a ToolError text string."
+  - "The public function retains a fixed success output schema. With pinned mcp==2.2.0, expected failures MAY return CallToolResult at runtime while the function remains annotated with RepoObserverResult; tests MUST prove the success output schema remains closed and error results preserve structuredContent plus isError=true."
+  - "Use one canonical shared error-code taxonomy for new typed tools. TASK-0085 must at minimum support INVALID_ARGUMENT, OUTSIDE_WORKSPACE, NOT_GIT_REPOSITORY, OUTPUT_LIMIT, DEADLINE_EXCEEDED, TRANSIENT_FAILURE and INTERNAL_ERROR without creating repo-specific synonyms."
+  - "TASK-0084 remains dormant at PRE-MUTATION with all lifecycle counters unconsumed. TASK-0085 has zero authority to inspect for mutation, commit, install, resume, rollback, recover, freeze, restart, reload or otherwise alter the live Runtime/cutover transaction."
+  - "Exactly one agent-runtime worktree remains authorized at /Users/tienphat/Developer/agent-runtime on dev; no clone, secondary worktree, branch switch, detached checkout or stash workspace."
+
+forbidden_changes:
+  - "Do not modify requirements.txt, requirements.lock, dependency versions or introduce a Git library."
+  - "Do not add repo_diff_read, repo_remote_observer, screen_capture, image transport probe, UI-control tools or any generic git_tool."
+  - "Do not add hidden network behavior or implicit fetch."
+  - "Do not add a scheduler, queue, async orchestration framework, background daemon or persistent repo watcher."
+  - "Do not change terminal tool semantics, heavy-execution admission ceiling, session lifecycle or protection architecture except exact surface-list/conformance updates required for repo_observer."
+  - "Do not modify macOS packaging/candidate/cutover/install/freeze source."
+  - "Do not invoke install.sh lifecycle modes, freeze_candidate.py, package_app.sh, Runtime/tunnel restart/reload, candidate install or cutover transaction mutation."
+  - "Do not modify main, tags, releases, sibling repositories or SentinelX configuration."
+  - "Do not retain task-owned scratch/log artifacts outside ignored build/.task-0085-*."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Public MCP surface becomes exactly eight tools with repo_observer registered using truthful read-only/non-destructive/idempotent/closed-world annotations and timing telemetry inclusion."
+    evidence_required: "Generated MCP schemas, PUBLIC_TOOL_NAMES, ALLOWED_TOOL_NAMES and exact-surface/client-conformance tests all agree on the eight-tool set."
+  - id: AC-2
+    requirement: "repo_observer exposes a closed bounded input schema and a fixed closed success result schema covering repo/root safety, branch/head, local tracking state, canonical changes, diff summary, repository/operation state, worktree topology, observation flags and truncation."
+    evidence_required: "Draft202012 schema validation plus successful MCP call structuredContent validated against generated output schema."
+  - id: AC-3
+    requirement: "Repository observation is local-only and mutation-free even under hostile Git/user configuration."
+    evidence_required: "Tests prove no fetch/network command, index/ref/worktree content stability, GIT_OPTIONAL_LOCKS=0, fsmonitor disabled, pager suppressed, external diff/textconv disabled and sentinel helper scripts are never executed."
+  - id: AC-4
+    requirement: "Observation remains bounded for large/dirty repositories."
+    evidence_required: "One five-second monotonic call deadline, remaining-time propagation, incremental output parsing, max_paths enforcement, bounded subprocess bytes, explicit truncation and non-exact-total semantics when enumeration is incomplete."
+  - id: AC-5
+    requirement: "Git semantics are not flattened incorrectly."
+    evidence_required: "Focused fixtures cover clean, staged, unstaged, index+worktree simultaneous modification, untracked, deleted, rename/original path, conflict, detached HEAD, no upstream, ahead/behind local refs, shallow/bare rejection or representation, merge/rebase/cherry-pick/bisect state and subdirectory cwd."
+  - id: AC-6
+    requirement: "Workspace and worktree topology are policy-safe."
+    evidence_required: "cwd outside workspace fails with typed OUTSIDE_WORKSPACE; cwd inside repo resolves correctly; repo root/safety fields are accurate; extra worktree outside workspace is counted/redacted without exposing or reading its absolute path."
+  - id: AC-7
+    requirement: "Expected failures are machine-classified at the MCP wire result."
+    evidence_required: "MCP tests prove isError=true and structuredContent.error={code,message,retryable} while successful repo_observer retains its fixed generated output schema."
+  - id: AC-8
+    requirement: "No unrelated Runtime, lifecycle, candidate or repository authority is consumed."
+    evidence_required: "Diff boundary contains only authorized source/tests/docs/report paths; TASK-0084/live transaction untouched; one worktree/dev preserved; origin/main unchanged."
+
+verification:
+  executor_checks:
+    - id: CHECK-RED
+      command_or_check: "On the exact clean execution base, add focused tests first and record genuine RED proving repo_observer/public-tool-8/error/deadline contracts are absent or failing before production implementation."
+      required: true
+    - id: CHECK-FOCUSED
+      command_or_check: "Run only new repo_observer implementation/MCP tests plus directly affected MCP contract, client-conformance, timing, surface and boundedness tests until GREEN."
+      required: true
+    - id: CHECK-ADVERSARIAL
+      command_or_check: "Run hostile-config/boundedness fixtures proving no fsmonitor/pager/external-diff/textconv execution, no network/ref/index mutation, redacted external worktrees, deadline behavior and truncated large-status behavior."
+      required: true
+    - id: CHECK-DIFF
+      command_or_check: "Run git diff --check and inspect final tracked diff for exact authorized scope and no dependency/lifecycle/packaging changes."
+      required: true
+    - id: CHECK-CANONICAL
+      command_or_check: "After focused GREEN and stable diff, invoke canonical PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify exactly once as the final broad source verification. Capture durable stdout/stderr, PID/launch identity and exit status under ignored build/.task-0085-*; do not replay merely because a client/tool transport times out after physical launch."
+      required: true
+    - id: CHECK-FINAL
+      command_or_check: "Validate report with pinned agent-skills validator; publish implementation then report-only successor on dev; prove HEAD=origin/dev, clean tree, one worktree and unchanged origin/main."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Independent Architect review of implementation diff, generated schemas, focused/canonical verification evidence and boundary preservation."
+    expected_signal: "Architect ACCEPT before any packaging/freeze/install authority is created for the new eight-tool source."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
