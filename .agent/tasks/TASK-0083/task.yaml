@@ -1,0 +1,189 @@
+protocol_version: 3
+
+task_id: TASK-0083
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  task_id: TASK-0082
+  gap_id: ""
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration_and_evidence
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "6930b8da48c9466389653fc55eb16f49eebbb28f"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - verification
+  - simplicity
+
+execution_skills:
+  required:
+    - executor
+    - verification
+    - reliability
+  recommended:
+    - debugging
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "phatnguyen03022001/agent-skills@6930b8da48c9466389653fc55eb16f49eebbb28f:protocols/TASK_PROTOCOL.md"
+    role: "Task lifecycle, authority, evidence, and continuation semantics."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0082/report.yaml"
+    role: "Accepted packaging-linkage repair evidence and canonical verification result."
+    precedence: 2
+  - source: ".agent/tasks/TASK-0079/report.yaml"
+    role: "Post-freeze signed-bundle drift evidence proving in-place dynamic import is forbidden."
+    precedence: 3
+  - source: ".agent/tasks/TASK-0080/report.yaml"
+    role: "Single-freeze packaging failure evidence superseded by TASK-0082 repair."
+    precedence: 4
+
+structure_authority:
+  status: RESOLVED
+  source: "phatnguyen03022001/agent-skills@6930b8da48c9466389653fc55eb16f49eebbb28f:templates/task.yaml"
+  rationale: "Use the canonical protocol-v3 task shape; this task creates new freeze authority only and does not revise Runtime architecture."
+
+objective: "Produce exactly one fresh signed immutable non-installed Agent Runtime candidate from the exact TASK-0083 handoff base after proving the accepted TASK-0082 packaging repair on the current canonical interpreter. Preserve failed/contaminated prior candidates and the live TASK-0077 PENDING generation. Never execute Python or other write-capable code from the immutable candidate original after freeze; use static validation on the original and a disposable same-repo copy for any dynamic seven-tool proof."
+
+scope:
+  required_changes:
+    - "Create exactly one new SHA-addressed candidate through exactly one real macos/freeze_candidate.py invocation."
+    - "Publish the TASK-0083 Executor report after successful candidate proof, or a truthful blocked report after any genuine blocker."
+  allowed_existing_files_or_components:
+    - "macos/freeze_candidate.py"
+    - "macos/package_app.sh"
+    - "macos/packaging_python.sh"
+    - "macos/package_provenance.py"
+    - "requirements.lock"
+    - ".env signing authority metadata only; never expose the signing literal"
+    - "build/candidates/** as read-only prior evidence plus exactly one newly published candidate"
+    - "build/.task-0083-* for task-owned ignored rehearsal/log/disposable artifacts only"
+    - "read-only installed Agent Runtime/TASK-0077 live-state evidence"
+
+invariants:
+  - "TASK-0079 and TASK-0080 are terminal; their freeze counters are consumed and MUST NOT be reused."
+  - "TASK-0083 grants a fresh independent real-freeze counter of exactly 0/1 -> 1/1."
+  - "Exactly one repository worktree may exist for agent-runtime during execution, at /Users/tienphat/Developer/agent-runtime, on branch dev."
+  - "Executor MUST NOT create another worktree, clone, branch, detached checkout, stash-based workspace, or alternate source tree."
+  - "Executor MUST NOT mutate any sibling repository or any path under /Users/tienphat/Developer outside the target repo."
+  - "Task-owned scratch, logs, rehearsal output, and disposable candidate copies MUST remain under ignored build/.task-0083-* inside the target repo; do not create task artifacts in /tmp or /private/tmp."
+  - "Read-only access outside the target repo is permitted only where required to observe the installed Agent Runtime/TASK-0077 live state or host toolchain identity."
+  - "Accepted TASK-0082 implementation commit 54e2284dcb2c9d1307fea8d8c8c25959011b3e87 MUST be an ancestor of the execution base."
+  - "The TASK-0082 report-only successor must be the only product-neutral delta after the accepted implementation before TASK-0083 planning authority."
+  - "Canonical packaging interpreter remains CPython 3.13.x/cp313 on macOS arm64; changing interpreter distribution is not a workaround."
+  - "Prior candidate e6fc2fe8a72abf41ff00d77e516d73c58de985d883660c154adee524db4c6440 is failed forensic evidence and MUST remain byte-stable."
+  - "Prior local candidate 2e7380e9d05e2476b9823d49b0c8fb6f51e6350018785f80ff23cd411a00a57a is diagnostically contaminated and MUST remain byte-stable and non-authoritative."
+  - "The installed TASK-0077 generation remains schema 5 / PENDING / APP_SWAPPED and read-only."
+  - "The immutable newly frozen candidate original MUST NOT execute its Python interpreter, dependencies, start scripts, tests, py_compile, imports, or other write-capable code after publication."
+  - "Post-freeze original-candidate validation is static/read-only only."
+  - "Any dynamic MCP generated-surface proof MUST run only on a complete disposable copy under build/.task-0083-* with PYTHONDONTWRITEBYTECODE=1 and Python -B."
+  - "Candidate-original recursive byte identity before and after all post-freeze proof MUST be identical."
+  - "No install, activate, cutover, commit-cutover, rollback, recover, repair, reinstall, Runtime/tunnel restart or reload is authorized."
+
+forbidden_changes:
+  - "Do not modify production source, tests, requirements, lockfiles, README, packaging scripts, lifecycle scripts, Runtime MCP implementation, or Swift source."
+  - "Do not invoke macos/freeze_candidate.py more than once."
+  - "Do not retry a failed real freeze under TASK-0083."
+  - "Do not clean, repair, restore, overwrite, delete, re-sign, or reuse any existing candidate directory."
+  - "Do not run canonical ./verify on the immutable candidate original."
+  - "Do not execute the immutable candidate original's bundled Python for inspection."
+  - "Do not mutate TASK-0077 transaction, runtime.env, desired-state, installed Agent Runtime.app, or listener lifecycle."
+  - "Do not modify main, tags, releases, branch topology, agent-skills, architect-profile, agent-standards, or agent-documents."
+  - "Do not create task-owned files outside the target repository."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact handoff base, branch, single-worktree boundary, clean tracked/index state, quiescence, requirements.lock identity, canonical packaging-Python identity, accepted TASK-0082 ancestry, and signing preflight are proven before freeze."
+    evidence_required: "Fresh refs/worktree/process/lock/toolchain/signing evidence with no source mutation and no secret literal disclosure."
+  - id: AC-2
+    requirement: "The accepted TASK-0082 packaging repair is re-proven on the exact execution base without rerunning broad root-cause research."
+    evidence_required: "Focused packaging/linkage regression PASS plus a fresh task-owned rehearsal venv under build/.task-0083-* proving venv --copies, runtime-library materialization, copied-Python smoke execution, and exact hash-locked dependency installation."
+  - id: AC-3
+    requirement: "Exactly one real freeze succeeds and publishes one new SHA-addressed candidate; no retry occurs."
+    evidence_required: "freeze_candidate.py invocation_count=1, exit=0, new candidate SHA/path, candidate set delta exactly +1, and all pre-existing candidate closures unchanged."
+  - id: AC-4
+    requirement: "The immutable candidate original is validated without executing code from it."
+    evidence_required: "Strict deep codesign PASS, canonical package provenance/candidate validation PASS using checkout tooling, exact source revision/tree/requirements-lock binding, expected signing ownership, and original closure digest captured before dynamic proof."
+  - id: AC-5
+    requirement: "Candidate contains the accepted seven-tool TASK-0078 public MCP contract."
+    evidence_required: "Static source-byte equality for contracts.py/server.py/timing.py plus disposable-copy dynamic proof showing exactly terminal_exec, terminal_start, terminal_poll, terminal_control, terminal_resize, capacity_observer, fs_read_batch."
+  - id: AC-6
+    requirement: "Post-freeze proof does not change one byte of the immutable candidate original."
+    evidence_required: "Recursive original-candidate file count/closure digest before and after all proof are identical; zero new __pycache__ or *.pyc in the original."
+  - id: AC-7
+    requirement: "TASK-0077 live state and prior forensic candidates remain unchanged."
+    evidence_required: "Read-only before/after transaction/install/runtime.env/desired-state/listener/health/readiness evidence and exact prior-candidate closure equality."
+  - id: AC-8
+    requirement: "Only the candidate artifact and TASK-0083 report are newly published; repository source remains unchanged and main remains untouched."
+    evidence_required: "Git diff/path proof, validated report-only successor, HEAD=origin/dev, clean final tree, and unchanged origin/main."
+
+verification:
+  executor_checks:
+    - id: CHECK-BASE
+      command_or_check: "Fresh-resolve remote refs; require exact TASK-0083 handoff base, branch dev, exactly one worktree, clean tracked/index state, no Git lock, and no concurrent repository writer."
+      required: true
+    - id: CHECK-PACKAGING
+      command_or_check: "Run focused TASK-0082 packaging/linkage regressions and a fresh task-owned package-runtime rehearsal under build/.task-0083-*; prove copied Python and exact lock installation work before consuming freeze authority."
+      required: true
+    - id: CHECK-ACCEPTED-VERIFY
+      command_or_check: "Bind to accepted TASK-0082 canonical verification evidence: implementation 54e2284... passed 360/360 with exit 0 and TASK-0082 report-only successor introduced no product source/test change. Do not rerun the full suite merely because the planning/report commits changed metadata."
+      required: true
+    - id: CHECK-FREEZE
+      command_or_check: "Invoke canonical macos/freeze_candidate.py exactly once with exact handoff source revision/tree/requirements-lock and accepted signing authority."
+      required: true
+    - id: CHECK-STATIC
+      command_or_check: "On the immutable original only: recursive closure capture, strict deep codesign, canonical static provenance/candidate validation, source-byte comparisons, and signing ownership proof."
+      required: true
+    - id: CHECK-DYNAMIC-COPY
+      command_or_check: "Copy the complete new candidate into build/.task-0083-disposable-*; run dynamic seven-tool inspection only there with -B and PYTHONDONTWRITEBYTECODE=1; never use original-candidate interpreter/dependencies."
+      required: true
+    - id: CHECK-STABILITY
+      command_or_check: "Recompute immutable-original closure and require exact pre/post equality and zero original pycache/pyc additions."
+      required: true
+    - id: CHECK-PRESERVATION
+      command_or_check: "Re-prove prior candidate closures and TASK-0077 live state unchanged; prove no branch/worktree/sibling-repo/out-of-repo task mutation."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect independent review of candidate, report, Git lineage, preservation evidence, and post-freeze immutability."
+    expected_signal: "Architect ACCEPT before any activation authority is created."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
