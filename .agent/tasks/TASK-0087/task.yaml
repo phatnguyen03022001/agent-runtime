@@ -1,0 +1,183 @@
+protocol_version: 3
+
+task_id: TASK-0087
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: user_request
+  task_id: ""
+  gap_id: "image_transport_wire_proof"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "6930b8da48c9466389653fc55eb16f49eebbb28f"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - verification
+  - simplicity
+
+execution_skills:
+  required:
+    - executor
+    - verification
+    - reliability
+  recommended:
+    - debugging
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "phatnguyen03022001/agent-skills@6930b8da48c9466389653fc55eb16f49eebbb28f:protocols/TASK_PROTOCOL.md"
+    role: "Task lifecycle and bounded proof semantics."
+    precedence: 1
+  - source: "requirements.lock"
+    role: "Pinned MCP SDK authority; mcp==2.2.0 and mcp-types==2.2.0."
+    precedence: 2
+  - source: "tests/test_task0059_transport.py"
+    role: "Existing isolated stdio MCP transport proof pattern."
+    precedence: 3
+  - source: "agent_runtime/server.py"
+    role: "Accepted production public surface, currently exactly eight tools."
+    precedence: 4
+  - source: "tests/test_mcp_client_conformance.py"
+    role: "Existing client-facing MCP result/conformance pattern."
+    precedence: 5
+
+structure_authority:
+  status: RESOLVED
+  source: "phatnguyen03022001/agent-skills@6930b8da48c9466389653fc55eb16f49eebbb28f:templates/task.yaml"
+  rationale: "Proof-only successor after accepted repo_observer. Establish image-result wire semantics without changing the accepted production public tool surface."
+
+objective: "Prove with the pinned MCP 2.2.0 stack that Agent Runtime can carry actual PNG image bytes as MCP ImageContent together with structuredContent, preserving exact image bytes/MIME at the client boundary. Produce a bounded deterministic proof harness and payload-budget evidence while keeping the accepted production public surface exactly eight tools. Do not implement screen capture or UI control."
+
+scope:
+  required_changes:
+    - "Add focused proof tests/harness for MCP ImageContent plus structuredContent over the repo-native isolated stdio client/server path."
+    - "Use deterministic PNG fixtures generated or stored entirely inside authorized test/evidence scope."
+    - "Prove exact wire byte/hash equality after base64 encode/decode at the MCP client boundary."
+    - "Prove mixed image content plus structured metadata survives one tool result."
+    - "Establish a conservative proven payload budget for the next screen_capture task without brute-force probing platform maxima."
+    - "Produce a deterministic visual-token fixture and an E2E handoff artifact for the later ChatGPT vision proof stage."
+    - "Publish proof tests/harness and TASK-0087 report only after focused and canonical verification pass."
+  allowed_existing_files_or_components:
+    - "tests/test_image_transport.py as the primary focused proof test"
+    - "tests/image_transport_probe.py or tests/fixtures/image_transport_probe.py only if a reusable test-only MCP probe module materially reduces duplication"
+    - "tests/fixtures/** only for small deterministic non-sensitive proof fixtures"
+    - "tests/test_mcp_client_conformance.py only if one minimal reusable assertion belongs in the existing conformance suite"
+    - "tests/test_task0059_transport.py only if one minimal transport regression belongs with the existing stdio transport owner"
+    - "build/.task-0087-* for ignored durable proof/verification evidence"
+    - ".agent/tasks/TASK-0087/report.yaml after implementation/proof publication succeeds"
+
+invariants:
+  - "Accepted production PUBLIC_TOOL_NAMES remains exactly eight: terminal_exec, terminal_start, terminal_poll, terminal_control, terminal_resize, capacity_observer, fs_read_batch, repo_observer."
+  - "TASK-0087 MUST NOT register image_transport_probe or any other ninth production tool in agent_runtime/server.py."
+  - "A temporary proof tool MAY exist only inside a test-only/isolated proof server and MUST NOT be reachable through the accepted production MCP server."
+  - "Wire proof uses mcp.types.ImageContent and CallToolResult semantics from the pinned mcp/mcp-types 2.2.0 environment; do not invent a path-only, JSON-base64-only, text-only or resource-URL substitute."
+  - "Image source bytes are deterministic, non-sensitive PNG fixtures owned by this task. No screenshots, Photos content, clipboard content or user files are read."
+  - "Wire proof MUST verify the client receives an ImageContent block with image/png MIME and that decoding its data yields byte-for-byte equality and exact SHA-256 equality with the source fixture."
+  - "Mixed-result proof MUST verify ImageContent and structuredContent coexist in the same CallToolResult without embedding the visual token inside text or structured metadata."
+  - "The visual-token fixture used for later ChatGPT vision proof MUST encode a token only in pixels. The token string MUST NOT appear in TextContent, structuredContent, filenames, tool description, fixture metadata or report prose used as E2E input."
+  - "TASK-0087 does not claim that pixels reached ChatGPT/model vision. It proves the wire/client boundary and produces a bounded E2E handoff for a separate isolated ChatGPT vision proof successor."
+  - "Payload-budget work seeks a conservative proven supported size, not the maximum possible limit. Use a small bounded set of representative fixtures; do not binary-search or repeatedly send oversized payloads."
+  - "Do not add Pillow, image libraries or any dependency solely for proof. Prefer deterministic fixture bytes or Python standard-library PNG generation."
+  - "No hidden network, remote fetch, browser automation, plugin installation, tunnel mutation or Runtime lifecycle action is required or authorized."
+  - "TASK-0084/live transaction remains untouched and TASK-0086 acceptance/review remains immutable."
+  - "Exactly one worktree at /Users/tienphat/Developer/agent-runtime on dev; no clone, alternate worktree, branch switch, stash or detached checkout."
+
+forbidden_changes:
+  - "Do not modify agent_runtime/server.py, agent_runtime/timing.py, PUBLIC_TOOL_NAMES or production tool registration unless a genuine proof-blocking SDK defect is discovered; such a need is a revised-contract blocker, not local discretion."
+  - "Do not implement screen_capture, ScreenCaptureKit, Swift capture code, TCC handling, coordinate mapping, repo_diff_read, Accessibility, click, scroll or typing."
+  - "Do not add production image APIs or make the temporary image probe part of the accepted Runtime surface."
+  - "Do not change requirements.txt, requirements.lock or dependency versions."
+  - "Do not install, package, freeze, create candidate, activate, restart/reload, cut over, rollback/resume/recover, or mutate TASK-0084/live Runtime."
+  - "Do not mutate main, tags, releases, sibling repositories or SentinelX configuration."
+  - "Do not brute-force ChatGPT/MCP payload limits or intentionally generate huge responses beyond bounded representative proof sizes."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Pinned MCP wire transport preserves real image content."
+    evidence_required: "Isolated repo-native MCP client calls a test-only tool returning CallToolResult with ImageContent(type=image, mimeType=image/png); client-side decode equals exact fixture bytes and SHA-256."
+  - id: AC-2
+    requirement: "ImageContent and structuredContent coexist correctly."
+    evidence_required: "One result contains at least one real ImageContent block and bounded structured metadata; both survive the client boundary and validate independently."
+  - id: AC-3
+    requirement: "Proof is visually non-leaky and suitable for later model-vision E2E."
+    evidence_required: "A deterministic PNG visual-token fixture is produced whose token exists only in pixels; automated checks prove token absence from tool description, TextContent, structuredContent, filenames and non-image transport metadata."
+  - id: AC-4
+    requirement: "A conservative transport payload budget is established without abusive probing."
+    evidence_required: "Small and medium representative PNG payloads pass; task records exact encoded/raw sizes and the largest positively proven representative size. If the stack exposes a documented/configured ceiling, record it; otherwise explicitly avoid claiming a maximum."
+  - id: AC-5
+    requirement: "Accepted production surface remains exactly eight tools."
+    evidence_required: "PUBLIC_TOOL_NAMES and production client listing remain exact eight-tool set; no image probe is registered on production server; production source is unchanged unless revised authority was obtained."
+  - id: AC-6
+    requirement: "The next ChatGPT E2E proof can be executed without rediscovering wire mechanics."
+    evidence_required: "Task produces a bounded handoff describing the fixture identity/hash, exact expected visual token kept outside the model-facing request channel, probe invocation contract and proven payload metadata, without activating any live Runtime."
+  - id: AC-7
+    requirement: "No unrelated repository or lifecycle authority is consumed."
+    evidence_required: "Diff limited to authorized proof tests/fixtures/report; one worktree/dev; origin/main unchanged; TASK-0084/live transaction and installed Runtime untouched."
+
+verification:
+  executor_checks:
+    - id: CHECK-RED
+      command_or_check: "Add focused proof tests first and record genuine RED showing current repository lacks image transport proof coverage; do not mutate production runtime surface to manufacture RED."
+      required: true
+    - id: CHECK-FOCUSED
+      command_or_check: "Run only TASK-0087 image transport tests and directly affected existing MCP transport/client-conformance tests until GREEN."
+      required: true
+    - id: CHECK-SURFACE
+      command_or_check: "Prove the actual production server still lists exactly the accepted eight tools and no image_transport_probe."
+      required: true
+    - id: CHECK-PAYLOAD
+      command_or_check: "Run a bounded representative payload matrix and persist fixture/raw/base64/result size evidence under ignored build/.task-0087-*; do not search for the absolute maximum."
+      required: true
+    - id: CHECK-DIFF
+      command_or_check: "Run git diff --check and inspect exact tracked scope. No production tool/lifecycle/dependency changes are allowed."
+      required: true
+    - id: CHECK-CANONICAL
+      command_or_check: "After focused GREEN and stable diff, invoke canonical PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify exactly once. Persist durable command, launch identity/PID, timestamps, stdout/stderr and exit under build/.task-0087-*; never replay after ambiguous transport delivery."
+      required: true
+    - id: CHECK-FINAL
+      command_or_check: "Only on canonical PASS: publish proof implementation/tests, create and validate TASK-0087 report with pinned agent-skills, publish one report-only successor, then prove HEAD=origin/dev, clean tree, one worktree and origin/main unchanged."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Independent Architect review plus a separate successor task for real ChatGPT model-vision E2E."
+    expected_signal: "Architect ACCEPT of wire/image-result transport proof; no claim of model-vision delivery yet."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
