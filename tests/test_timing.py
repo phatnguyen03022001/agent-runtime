@@ -152,6 +152,7 @@ class TimingToolTests(unittest.TestCase):
             "terminal_start",
             "terminal_poll",
             "terminal_control",
+            "terminal_resize",
             "capacity_observer",
             "fs_read_batch",
         ))
@@ -162,7 +163,11 @@ class TimingToolTests(unittest.TestCase):
         )
         self.assertEqual(
             [parameter.name for parameter in inspect.signature(server.terminal_control).parameters.values()],
-            ["session_id", "action", "data", "rows", "cols"],
+            ["session_id", "action", "data"],
+        )
+        self.assertEqual(
+            [parameter.name for parameter in inspect.signature(server.terminal_resize).parameters.values()],
+            ["session_id", "rows", "cols"],
         )
 
     def test_tool_execution_event_has_no_arguments_or_result_payload(self) -> None:

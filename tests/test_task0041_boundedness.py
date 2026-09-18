@@ -218,6 +218,13 @@ class MCPInputBoundednessTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(control_props["session_id"]["maxLength"], 128)
         self.assertEqual(_string_branch(control_props["data"])["maxLength"], TERMINAL_DATA_LIMIT)
 
+        resize_props = tools["terminal_resize"].input_schema["properties"]
+        self.assertEqual(resize_props["session_id"]["maxLength"], 128)
+        for field in ("rows", "cols"):
+            integer = _integer_branch(resize_props[field])
+            self.assertEqual(integer["minimum"], 1)
+            self.assertEqual(integer["maximum"], 65535)
+
         item = tools["fs_read_batch"].input_schema["$defs"]["FsReadItem"]
         self.assertEqual(_integer_branch(item["properties"]["start_line"])["maximum"], MAX_LINE)
         self.assertEqual(_integer_branch(item["properties"]["end_line"])["maximum"], MAX_LINE)
@@ -245,6 +252,7 @@ class MCPInputBoundednessTests(unittest.IsolatedAsyncioTestCase):
             ("terminal_start", "_start_terminal", {"argv": ["/usr/bin/true"], "cwd": str(ROOT)}, session_result),
             ("terminal_poll", "_poll_terminal", {"session_id": "session", "cursor": 0, "wait_ms": 0}, session_result),
             ("terminal_control", "_control_terminal", {"session_id": "session", "action": "terminate"}, {"session_id": "session", "status": "exited", "exit_code": 0}),
+            ("terminal_resize", "_control_terminal", {"session_id": "session", "rows": 24, "cols": 80}, {"session_id": "session", "status": "running"}),
             ("capacity_observer", "observe_capacity", {}, {"schema_version": 1, "capacity_parallelism_ceiling": 1, "reason_codes": ["unavailable"], "signals": {"probe_status": "unavailable", "sampled_window_ms": 0}}),
             ("fs_read_batch", "read_files_batch", {"cwd": str(ROOT), "items": [{"path": "README.md"}]}, {"items": []}),
         )

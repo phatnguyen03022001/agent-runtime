@@ -26,6 +26,7 @@ class FsReadBatchContractTests(unittest.IsolatedAsyncioTestCase):
                 "terminal_start",
                 "terminal_poll",
                 "terminal_control",
+                "terminal_resize",
                 "capacity_observer",
                 "fs_read_batch",
             ),

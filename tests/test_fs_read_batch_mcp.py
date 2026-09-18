@@ -60,7 +60,7 @@ class FsReadBatchMCPTests(unittest.IsolatedAsyncioTestCase):
         tool = tools["fs_read_batch"]
         props = tool.input_schema["properties"]
         self.assertEqual(set(props), {"cwd", "items"})
-        self.assertEqual(props["cwd"]["pattern"], "^/")
+        self.assertNotIn("pattern", props["cwd"])
         self.assertEqual(props["items"]["minItems"], 1)
         self.assertEqual(props["items"]["maxItems"], 20)
 
@@ -143,12 +143,12 @@ class FsReadBatchMCPTests(unittest.IsolatedAsyncioTestCase):
                         self.assertTrue(result.is_error)
         delegate.assert_not_called()
 
-    def test_timing_allowlist_and_server_instructions_cover_sixth_tool(self) -> None:
+    def test_timing_allowlist_and_server_instructions_cover_public_surface(self) -> None:
         self.assertEqual(
             ALLOWED_TOOL_NAMES,
             frozenset({
                 "terminal_exec", "terminal_start", "terminal_poll",
-                "terminal_control", "capacity_observer", "fs_read_batch",
+                "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch",
             }),
         )
         self.assertIn("fs_read_batch", server.SERVER_INSTRUCTIONS)

@@ -16,6 +16,7 @@ EXPECTED_TOOLS = (
     "terminal_start",
     "terminal_poll",
     "terminal_control",
+    "terminal_resize",
     "capacity_observer",
     "fs_read_batch",
 )
@@ -24,6 +25,7 @@ EXPECTED_ANNOTATIONS = {
     "terminal_start": (False, True, False, True),
     "terminal_poll": (False, False, False, False),
     "terminal_control": (False, True, False, True),
+    "terminal_resize": (False, False, True, False),
     "capacity_observer": (True, False, True, False),
     "fs_read_batch": (True, False, True, False),
 }
@@ -91,7 +93,7 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
         for node in objects:
             self.assertIs(node.get("additionalProperties"), False, node)
 
-    async def test_exact_six_tool_surface_and_annotations_are_preserved(self) -> None:
+    async def test_exact_public_tool_surface_and_annotations_are_preserved(self) -> None:
         tools = await server.mcp.list_tools()
         self.assertEqual(tuple(tool.name for tool in tools), EXPECTED_TOOLS)
         for tool in tools:
@@ -104,7 +106,7 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(exec_props["argv"]["minItems"], 1)
         self.assertEqual(exec_props["argv"]["items"]["type"], "string")
         self.assertEqual(exec_props["cwd"]["minLength"], 1)
-        self.assertEqual(exec_props["cwd"]["pattern"], "^/")
+        self.assertNotIn("pattern", exec_props["cwd"])
         self.assertEqual(exec_props["timeout_seconds"]["exclusiveMinimum"], 0)
         self.assertEqual(exec_props["timeout_seconds"]["maximum"], 3600)
         self.assertEqual(exec_props["timeout_seconds"]["default"], 300)
@@ -112,7 +114,7 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
         start_props = tools["terminal_start"].input_schema["properties"]
         self.assertEqual(start_props["argv"]["minItems"], 1)
         self.assertEqual(start_props["cwd"]["minLength"], 1)
-        self.assertEqual(start_props["cwd"]["pattern"], "^/")
+        self.assertNotIn("pattern", start_props["cwd"])
 
         poll_props = tools["terminal_poll"].input_schema["properties"]
         self.assertEqual(poll_props["session_id"]["minLength"], 1)
@@ -124,12 +126,100 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(control_props["session_id"]["minLength"], 1)
         self.assertEqual(
             control_props["action"]["enum"],
-            ["write", "interrupt", "terminate", "resize"],
+            ["write", "interrupt", "terminate"],
         )
+        self.assertNotIn("rows", control_props)
+        self.assertNotIn("cols", control_props)
+
+        resize_props = tools["terminal_resize"].input_schema["properties"]
+        self.assertEqual(resize_props["session_id"]["minLength"], 1)
         for field in ("rows", "cols"):
-            integer = _integer_branch(control_props[field])
+            integer = _integer_branch(resize_props[field])
             self.assertEqual(integer["minimum"], 1)
             self.assertEqual(integer["maximum"], 65535)
+
+        fs_props = tools["fs_read_batch"].input_schema["properties"]
+        self.assertNotIn("pattern", fs_props["cwd"])
+
+    async def test_task0078_cwd_schemas_are_connector_portable(self) -> None:
+        tools = await self._tools()
+        for name in ("terminal_exec", "terminal_start", "fs_read_batch"):
+            with self.subTest(tool=name):
+                cwd_schema = tools[name].input_schema["properties"]["cwd"]
+                self.assertEqual(cwd_schema["minLength"], 1)
+                self.assertNotIn("pattern", cwd_schema)
+
+    async def test_task0078_relative_cwd_reaches_runtime_fail_closed_validation(self) -> None:
+        cases = (
+            ("terminal_exec", {"argv": ["/usr/bin/true"], "cwd": "relative"}),
+            ("terminal_start", {"argv": ["/usr/bin/true"], "cwd": "relative"}),
+            ("fs_read_batch", {"cwd": "relative", "items": [{"path": "README.md"}]}),
+        )
+        for name, arguments in cases:
+            with self.subTest(tool=name):
+                with self.assertRaisesRegex(Exception, "cwd must be an absolute path"):
+                    await server.mcp.call_tool(name, arguments)
+
+    async def test_task0078_outside_workspace_cwd_remains_rejected(self) -> None:
+        cases = (
+            ("terminal_exec", {"argv": ["/usr/bin/true"], "cwd": "/"}),
+            ("terminal_start", {"argv": ["/usr/bin/true"], "cwd": "/"}),
+            ("fs_read_batch", {"cwd": "/", "items": [{"path": "README.md"}]}),
+        )
+        for name, arguments in cases:
+            with self.subTest(tool=name):
+                with self.assertRaisesRegex(Exception, "outside AGENT_RUNTIME_WORKSPACE_ROOT"):
+                    await server.mcp.call_tool(name, arguments)
+
+    async def test_task0078_resize_contract_is_truthfully_safe_and_bounded(self) -> None:
+        tools = await self._tools()
+        resize = tools["terminal_resize"]
+        self.assertEqual(_annotation_tuple(resize), (False, False, True, False))
+        resize_props = resize.input_schema["properties"]
+        self.assertEqual(set(resize_props), {"session_id", "rows", "cols"})
+        for field in ("rows", "cols"):
+            integer = _integer_branch(resize_props[field])
+            self.assertEqual(integer["minimum"], 1)
+            self.assertEqual(integer["maximum"], 65535)
+
+    async def test_task0078_destructive_control_keeps_write_interrupt_terminate_only(self) -> None:
+        tools = await self._tools()
+        control = tools["terminal_control"]
+        self.assertEqual(_annotation_tuple(control), (False, True, False, True))
+        control_props = control.input_schema["properties"]
+        self.assertEqual(control_props["action"]["enum"], ["write", "interrupt", "terminate"])
+        self.assertNotIn("rows", control_props)
+        self.assertNotIn("cols", control_props)
+
+    async def test_task0078_resize_capability_remains_functional(self) -> None:
+        start = await server.mcp.call_tool(
+            "terminal_start", {"argv": ["/bin/cat"], "cwd": str(ROOT)}
+        )
+        self.assertFalse(start.is_error)
+        session_id = start.structured_content["session_id"]
+        terminated = False
+        try:
+            resized = await server.mcp.call_tool(
+                "terminal_resize",
+                {"session_id": session_id, "rows": 31, "cols": 101},
+            )
+            self.assertFalse(resized.is_error)
+            self.assertEqual(resized.structured_content["status"], "running")
+            ended = await server.mcp.call_tool(
+                "terminal_control",
+                {"session_id": session_id, "action": "terminate"},
+            )
+            self.assertFalse(ended.is_error)
+            terminated = True
+        finally:
+            if not terminated:
+                try:
+                    await server.mcp.call_tool(
+                        "terminal_control",
+                        {"session_id": session_id, "action": "terminate"},
+                    )
+                except Exception:
+                    pass
 
     async def test_all_output_schemas_are_closed_and_enumerate_supported_fields(self) -> None:
         tools = await self._tools()
@@ -163,6 +253,7 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
                 "exit_code",
             },
             "terminal_control": {"session_id", "status", "exit_code"},
+            "terminal_resize": {"session_id", "status", "exit_code"},
             "capacity_observer": {
                 "schema_version",
                 "capacity_parallelism_ceiling",
@@ -218,6 +309,7 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
             "terminal_start",
             "terminal_poll",
             "terminal_control",
+            "terminal_resize",
             "bounded output",
             "capacity_observer",
             "read-only advisory",
@@ -266,6 +358,15 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(poll_result.structured_content["status"], "running")
             self.assertNotIn("exit_code", poll_result.structured_content)
 
+            resize_result = await server.mcp.call_tool(
+                "terminal_resize",
+                {"session_id": session_id, "rows": 30, "cols": 100},
+            )
+            self.assertFalse(resize_result.is_error)
+            Draft202012Validator(tools["terminal_resize"].output_schema).validate(
+                resize_result.structured_content
+            )
+
             control_result = await server.mcp.call_tool(
                 "terminal_control",
                 {"session_id": session_id, "action": "terminate"},
@@ -301,10 +402,10 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
             ("terminal_poll", "_poll_terminal", {"session_id": "session", "cursor": 0, "wait_ms": -1}),
             ("terminal_poll", "_poll_terminal", {"session_id": "session", "cursor": 0, "wait_ms": 1001}),
             ("terminal_control", "_control_terminal", {"session_id": "session", "action": "invalid"}),
-            ("terminal_control", "_control_terminal", {"session_id": "session", "action": "resize", "rows": 0, "cols": 24}),
-            ("terminal_control", "_control_terminal", {"session_id": "session", "action": "resize", "rows": 65536, "cols": 24}),
-            ("terminal_control", "_control_terminal", {"session_id": "session", "action": "resize", "rows": 24, "cols": 0}),
-            ("terminal_control", "_control_terminal", {"session_id": "session", "action": "resize", "rows": 24, "cols": 65536}),
+            ("terminal_resize", "_control_terminal", {"session_id": "session", "rows": 0, "cols": 24}),
+            ("terminal_resize", "_control_terminal", {"session_id": "session", "rows": 65536, "cols": 24}),
+            ("terminal_resize", "_control_terminal", {"session_id": "session", "rows": 24, "cols": 0}),
+            ("terminal_resize", "_control_terminal", {"session_id": "session", "rows": 24, "cols": 65536}),
         )
         for tool_name, delegate_name, arguments in cases:
             with self.subTest(tool=tool_name, arguments=arguments):

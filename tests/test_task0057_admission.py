@@ -13,7 +13,7 @@ from unittest import mock
 
 from agent_runtime import capacity, executor, fs_read, session
 from agent_runtime.contracts import FsReadItem
-from agent_runtime.errors import RuntimeCapacityError
+from agent_runtime.errors import RuntimeCapacityError, RuntimeStateError
 
 
 class HeavyExecutionAdmissionTests(unittest.TestCase):
@@ -99,7 +99,8 @@ class HeavyExecutionAdmissionTests(unittest.TestCase):
                 "available\n",
             )
             session_id = str(sessions[0]["session_id"])
-            self.assertEqual(manager.poll(session_id)["status"], "running")
+            for started in sessions:
+                self.assertEqual(manager.poll(str(started["session_id"]))["status"], "running")
             self.assertEqual(manager.control(session_id, "resize", rows=30, cols=100)["status"], "running")
             self.assertEqual(self.admission.active, 6)
 
@@ -118,6 +119,59 @@ class HeavyExecutionAdmissionTests(unittest.TestCase):
             release.write_text("release", encoding="utf-8")
             for future in futures:
                 self.assertEqual(future.result(timeout=5)["exit_code"], 0)
+        manager.shutdown()
+        self.assertEqual(self.admission.active, 0)
+
+    def test_task0078_six_pty_roots_are_running_before_seventh_and_cleanup_is_exact(self) -> None:
+        release = self.cwd / "pty-release"
+        ready = [self.cwd / f"pty-ready-{index}" for index in range(6)]
+        code = (
+            "import pathlib, sys, time\n"
+            "ready, release = map(pathlib.Path, sys.argv[1:])\n"
+            "ready.write_text('ready')\n"
+            "while not release.exists(): time.sleep(.005)\n"
+        )
+        manager = session.TerminalSessionManager(
+            max_active_sessions=6, admission=self.admission, start_reaper=False
+        )
+        self.addCleanup(manager.shutdown)
+        sessions = [
+            manager.start(
+                [sys.executable, "-u", "-c", code, str(path), str(release)],
+                str(self.cwd),
+            )
+            for path in ready
+        ]
+        self._wait_for(ready)
+        self.assertEqual(self.admission.active, 6)
+        for started in sessions:
+            self.assertEqual(manager.poll(str(started["session_id"]))["status"], "running")
+
+        (self.cwd / "readable-task0078.txt").write_text("available\n", encoding="utf-8")
+        healthy = capacity.CapacitySignals(
+            active_processors=8, load1=1.0, cpu_busy_fraction=0.2, thermal_state="nominal",
+            swap_total_bytes=1, swap_used_bytes=0, swapin_delta_pages=0, swapout_delta_pages=0,
+            vm_free_bytes=2 * 1024**3, vm_inactive_bytes=0, vm_purgeable_bytes=0,
+            vm_compressor_bytes=0, disk_available_bytes=10 * 1024**3, sampled_window_ms=50,
+        )
+        with mock.patch.object(capacity, "_collect_signals", return_value=healthy):
+            self.assertGreaterEqual(capacity.observe_capacity()["capacity_parallelism_ceiling"], 1)
+        self.assertEqual(
+            fs_read.read_files_batch(
+                str(self.cwd), [FsReadItem(path="readable-task0078.txt")]
+            )["items"][0]["text"],
+            "available\n",
+        )
+
+        with mock.patch.object(session._PROTECTED_GUARD, "check"), mock.patch.object(
+            session.pty, "openpty", side_effect=AssertionError("seventh PTY must not be allocated")
+        ):
+            with self.assertRaisesRegex(RuntimeStateError, "configured maximum 6 active terminal sessions"):
+                manager.start([sys.executable, "-c", "pass"], str(self.cwd))
+
+        release.write_text("release", encoding="utf-8")
+        for started in sessions:
+            self._wait_for_exit(manager, str(started["session_id"]))
         manager.shutdown()
         self.assertEqual(self.admission.active, 0)
 
