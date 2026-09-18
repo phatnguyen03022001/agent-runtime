@@ -137,7 +137,7 @@ kernel compromise, and out-of-band tools.
 
 ## Tool surface
 
-The MCP server exposes exactly seven public tools:
+The MCP server exposes exactly six public tools:
 
 - `terminal_exec(argv, cwd, timeout_seconds=300)` executes one literal argv
   with `shell=False`, disconnected stdin, bounded output, and bounded cleanup.
@@ -149,12 +149,9 @@ The MCP server exposes exactly seven public tools:
 - `terminal_poll(session_id, cursor=0, wait_ms=0)` returns bounded incremental
   PTY output and current status. `session_id` is limited to 128 characters and
   `wait_ms` is bounded to 1000 ms.
-- `terminal_control(session_id, action, data=None)` supports exactly `write`,
-  `interrupt`, and `terminate`. It remains truthfully destructive/open-world;
-  `session_id` is limited to 128 characters and write data to 64 KiB UTF-8 bytes.
-- `terminal_resize(session_id, rows, cols)` performs only bounded PTY resize with
-  dimensions from 1 through 65535. It is non-destructive, closed-world, and
-  idempotent at the public tool-contract level.
+- `terminal_control(session_id, action, data=None, rows=None, cols=None)`
+  supports exactly `write`, `interrupt`, `terminate`, and `resize`; `session_id`
+  is limited to 128 characters and write data to 64 KiB UTF-8 bytes.
 
 - `capacity_observer()` returns one read-only, on-demand, stateless capacity
   snapshot with a bounded signal summary, reason codes, and advisory
@@ -204,13 +201,9 @@ This is best-effort cleanup ownership, not a job registry or recovery system;
 same-UID malicious or pathological children can still escape ordinary process
 management or exhaust host resources.
 
-`AGENT_RUNTIME_WORKSPACE_ROOT` selects the allowed working-directory tree. Public
-MCP schemas keep `cwd` connector-portable and do not rely on an absolute-path
-regex; Runtime itself still requires a non-empty absolute cwd, resolves it
-strictly, and rejects directories outside the configured workspace before
-execution, PTY allocation, or batch reads. It is not mechanical filesystem
-confinement: executable arguments retain the operator account's normal host
-permissions.
+`AGENT_RUNTIME_WORKSPACE_ROOT` selects the allowed working-directory tree. It
+is not mechanical filesystem confinement: executable arguments retain the
+operator account's normal host permissions.
 `fs_read_batch` additionally anchors each item below its validated cwd with
 descriptor-relative no-symlink traversal. That bounded read rule does not turn
 the workspace root into general host filesystem confinement.

@@ -14,7 +14,7 @@ from typing import Any, TypeVar
 
 
 ALLOWED_TOOL_NAMES = frozenset(
-    {"terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch"}
+    {"terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "capacity_observer", "fs_read_batch"}
 )
 
 _CURRENT_CALL: contextvars.ContextVar[TimingContext | None] = contextvars.ContextVar(

@@ -19,7 +19,6 @@ EXPECTED_TOOLS = (
     "terminal_start",
     "terminal_poll",
     "terminal_control",
-    "terminal_resize",
     "capacity_observer",
     "fs_read_batch",
 )
@@ -28,7 +27,6 @@ EXPECTED_ANNOTATIONS = {
     "terminal_start": (False, True, False, True),
     "terminal_poll": (False, False, False, False),
     "terminal_control": (False, True, False, True),
-    "terminal_resize": (False, False, True, False),
     "capacity_observer": (True, False, True, False),
     "fs_read_batch": (True, False, True, False),
 }
@@ -46,7 +44,6 @@ EXPECTED_OUTPUT_FIELDS = {
         "dropped_output_bytes", "exit_code",
     },
     "terminal_control": {"session_id", "status", "exit_code"},
-    "terminal_resize": {"session_id", "status", "exit_code"},
     "capacity_observer": {
         "schema_version", "capacity_parallelism_ceiling", "reason_codes", "signals",
         "active_processors", "load1", "cpu_busy_pct", "sampled_window_ms",
@@ -142,7 +139,7 @@ class MCPClientConformanceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(exec_props["argv"]["minItems"], 1)
             self.assertEqual(exec_props["argv"]["items"]["type"], "string")
             self.assertEqual(exec_props["cwd"]["minLength"], 1)
-            self.assertNotIn("pattern", exec_props["cwd"])
+            self.assertEqual(exec_props["cwd"]["pattern"], "^/")
             self.assertEqual(exec_props["timeout_seconds"]["exclusiveMinimum"], 0)
             self.assertEqual(exec_props["timeout_seconds"]["maximum"], 3600)
             self.assertEqual(exec_props["timeout_seconds"]["default"], 300)
@@ -150,7 +147,7 @@ class MCPClientConformanceTests(unittest.IsolatedAsyncioTestCase):
             start_props = tools["terminal_start"].input_schema["properties"]
             self.assertEqual(start_props["argv"]["minItems"], 1)
             self.assertEqual(start_props["cwd"]["minLength"], 1)
-            self.assertNotIn("pattern", start_props["cwd"])
+            self.assertEqual(start_props["cwd"]["pattern"], "^/")
 
             poll_props = tools["terminal_poll"].input_schema["properties"]
             self.assertEqual(poll_props["session_id"]["minLength"], 1)
@@ -162,20 +159,12 @@ class MCPClientConformanceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(control_props["session_id"]["minLength"], 1)
             self.assertEqual(
                 control_props["action"]["enum"],
-                ["write", "interrupt", "terminate"],
+                ["write", "interrupt", "terminate", "resize"],
             )
-            self.assertNotIn("rows", control_props)
-            self.assertNotIn("cols", control_props)
-
-            resize_props = tools["terminal_resize"].input_schema["properties"]
-            self.assertEqual(resize_props["session_id"]["minLength"], 1)
             for field in ("rows", "cols"):
-                integer = _integer_branch(resize_props[field])
+                integer = _integer_branch(control_props[field])
                 self.assertEqual(integer["minimum"], 1)
                 self.assertEqual(integer["maximum"], 65535)
-
-            fs_props = tools["fs_read_batch"].input_schema["properties"]
-            self.assertNotIn("pattern", fs_props["cwd"])
 
             for name, tool in tools.items():
                 self.assertIsNotNone(tool.output_schema, name)
@@ -240,15 +229,6 @@ class MCPClientConformanceTests(unittest.IsolatedAsyncioTestCase):
                 self.assertFalse(poll_result.is_error)
                 Draft202012Validator(tools["terminal_poll"].output_schema).validate(
                     poll_result.structured_content
-                )
-
-                resize_result = await client.call_tool(
-                    "terminal_resize",
-                    {"session_id": session_id, "rows": 30, "cols": 100},
-                )
-                self.assertFalse(resize_result.is_error)
-                Draft202012Validator(tools["terminal_resize"].output_schema).validate(
-                    resize_result.structured_content
                 )
 
                 control_result = await client.call_tool(

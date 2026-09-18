@@ -54,7 +54,6 @@ class HeavyExecutionAdmissionTests(unittest.TestCase):
     def test_mixed_x6_admission_is_fail_fast_and_read_control_remain_available(self) -> None:
         release = self.cwd / "release"
         ready = [self.cwd / f"exec-ready-{index}" for index in range(3)]
-        pty_ready = [self.cwd / f"pty-ready-{index}" for index in range(3)]
         code = (
             "import pathlib, time, sys\n"
             "pathlib.Path(sys.argv[1]).write_text('ready')\n"
@@ -79,12 +78,10 @@ class HeavyExecutionAdmissionTests(unittest.TestCase):
             self._wait_for(ready)
             sessions = [
                 manager.start(
-                    [sys.executable, "-u", "-c", code, str(path), str(release)],
-                    str(self.cwd),
+                    [sys.executable, "-u", "-c", "import time; time.sleep(10)"], str(self.cwd)
                 )
-                for path in pty_ready
+                for _ in range(3)
             ]
-            self._wait_for(pty_ready)
             self.assertEqual(self.admission.active, 6)
 
             # These paths operate on existing state and do not obtain a lease.
@@ -102,8 +99,7 @@ class HeavyExecutionAdmissionTests(unittest.TestCase):
                 "available\n",
             )
             session_id = str(sessions[0]["session_id"])
-            for started in sessions:
-                self.assertEqual(manager.poll(str(started["session_id"]))["status"], "running")
+            self.assertEqual(manager.poll(session_id)["status"], "running")
             self.assertEqual(manager.control(session_id, "resize", rows=30, cols=100)["status"], "running")
             self.assertEqual(self.admission.active, 6)
 

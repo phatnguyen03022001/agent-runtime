@@ -57,7 +57,7 @@ Argv = Annotated[
 ]
 AbsoluteCwd = Annotated[
     StrictStr,
-    Field(min_length=1),
+    Field(min_length=1, pattern=r"^/"),
 ]
 TimeoutSeconds = Annotated[float, Field(strict=True, gt=0, le=3600)]
 SessionId = Annotated[
@@ -66,7 +66,7 @@ SessionId = Annotated[
 ]
 Cursor = Annotated[int, Field(strict=True, ge=0)]
 WaitMilliseconds = Annotated[int, Field(strict=True, ge=0, le=1000)]
-ControlAction = Literal["write", "interrupt", "terminate"]
+ControlAction = Literal["write", "interrupt", "terminate", "resize"]
 TerminalWriteData = Annotated[
     StrictStr,
     Field(max_length=TERMINAL_DATA_MAX_BYTES),
