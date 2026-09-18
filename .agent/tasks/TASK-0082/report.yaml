@@ -1,0 +1,201 @@
+protocol_version: 3
+task_id: TASK-0082
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: "user-issued:TASK-0082"
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration_and_evidence
+  authorized_base_head: "e03d46baf458fd9532a5e343db91706c41120281"
+  pre_execution_head: "e03d46baf458fd9532a5e343db91706c41120281"
+  final_execution_head: "54e2284dcb2c9d1307fea8d8c8c25959011b3e87"
+  implementation_commit: "54e2284dcb2c9d1307fea8d8c8c25959011b3e87"
+  execution_surface: CHATGPT_LOCAL
+  native_tool: "SentinelX"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "1826d33bd1e467896c133109b37db8b0656b3276"
+  observed_revision: "6930b8da48c9466389653fc55eb16f49eebbb28f"
+
+pushed: true
+promoted_to_main: false
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: PENDING_ARCHITECT_REVIEW
+  evidence: "Executor gates passed; final independent judgment remains Architect review."
+
+root_cause_binding:
+  result: PASS
+  evidence: "Canonical CPython 3.13.5/cp313/macOS arm64 copied interpreter links @executable_path/../lib/libpython3.13.dylib; venv --copies omits that relative dylib, so package-owned Python fails before dependency installation unless the required library is materialized."
+  packaging_python_identity: "cpython 3.13.5; cache_tag cpython-313; SOABI cpython-313-darwin; platform darwin; architecture arm64"
+
+red_proof:
+  result: PASS
+  evidence: "Fresh TASK-0082 RED at exact base ran seven linkage/package-contract tests and all seven failed before production repair, covering linked layout materialization, missing source, compatible no-op, unsupported relative linkage, unsafe relative path, checkout .venv exclusion, and smoke-before-pip ordering."
+
+implementation:
+  result: PASS
+  evidence: "macos/packaging_python.sh now inspects copied interpreter Mach-O dependencies with otool, resolves only supported @executable_path/../lib/<basename> dependencies from the validated packaging interpreter sys.base_prefix/lib, enforces basename and containment checks, excludes checkout .venv, copies regular package-owned bytes and verifies byte equality; macos/package_app.sh materializes then smoke-executes package Python before unchanged hash-locked pip."
+  requirements_lock_changed: false
+  pip_contract: "install --require-hashes -r $SOURCE_ROOT/requirements.lock"
+  checkout_venv_packaged: false
+
+linkage_handling:
+  supported_relative_layout: "@executable_path/../lib/<safe-basename>"
+  canonical_source: "validated packaging interpreter sys.base_prefix/lib"
+  target: "PACKAGE_VENV/lib"
+  target_regular_file_required: true
+  target_symlink_forbidden: true
+  byte_equality_required: true
+  compatible_non_relative_layout_noop: true
+
+fail_closed_behavior:
+  missing_required_source: PASS
+  unsupported_relative_linkage: PASS
+  unsafe_relative_library_name: PASS
+  source_outside_canonical_lib: PASS
+  checkout_venv_source: PASS
+  copied_python_smoke_before_pip: PASS
+
+changed_files:
+  - path: macos/package_app.sh
+    summary: "Materialize required package Python relative runtime library and smoke-execute copied Python before pip."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: macos/packaging_python.sh
+    summary: "Add bounded Mach-O linkage inspection and package-owned runtime-library materialization helper."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: tests/test_packaging_interpreter.py
+    summary: "Add TASK-0082 RED/GREEN coverage for linked, missing, compatible, unsafe, checkout-exclusion, byte ownership, and ordering contracts."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: .agent/tasks/TASK-0082/report.yaml
+    summary: "Publish TASK-0082 protocol-v3 Executor evidence report."
+    new_file: true
+    in_scope: true
+    structure_authorized: true
+
+acceptance_evidence:
+  - criterion_id: AC-ROOT
+    status: PASS
+    evidence: "Real CPython 3.13.5 copied interpreter retained @executable_path/../lib/libpython3.13.dylib, PACKAGE_VENV/lib was empty before repair, and copied Python aborted with dyld missing-library error."
+  - criterion_id: AC-RED
+    status: PASS
+    evidence: "Fresh pre-implementation TASK-0082 suite produced 7 failures out of 7 targeted linkage/package-contract tests."
+  - criterion_id: AC-IMPLEMENTATION
+    status: PASS
+    evidence: "Bounded repair preserves venv --copies, --without-pip, exact requirements.lock, pip --require-hashes, no checkout .venv copy, and no host symlink dependency."
+  - criterion_id: AC-FOCUSED
+    status: PASS
+    evidence: "Direct new linkage suite passed 7/7; affected packaging suite passed 42/42; shell syntax passed. Real current-interpreter proof copied libpython3.13.dylib as a non-symlink regular file with source and target SHA-256 8cf57398affa2069532ecf589e603936921e3cf7a983e92cd25e07e37c502112 and smoke Python 3.13.5 succeeded."
+  - criterion_id: AC-CANONICAL
+    status: PASS
+    evidence: "Exactly one physical canonical verify process was launched after two pre-launch transport/policy attempts were proven not to execute verify. Physical PID 88083 completed exit 0. Durable log /tmp/agent-runtime-TASK-0082-canonical-verify.log retained 704 lines / 127541 bytes and shows Ran 360 tests in 152.306s followed by OK."
+  - criterion_id: AC-DIFF
+    status: PASS
+    evidence: "git diff --check passed before implementation publication; implementation changed only the three authorized production/test paths."
+  - criterion_id: AC-PRESERVATION
+    status: PASS
+    evidence: "TASK-0077 remained schema 5 PENDING APP_SWAPPED with candidate 2e7380e9..., installed revision 86751031..., unchanged runtime.env and desired-state digests, one listener, healthz 200 and readyz 200. Both forensic candidate file counts and TASK-0082 closure digests remained unchanged."
+  - criterion_id: AC-PUBLICATION
+    status: PASS
+    evidence: "Implementation commit 54e2284dcb2c9d1307fea8d8c8c25959011b3e87 is a direct child of the authorized base and was non-force pushed to dev; main remained c49d777efa09db7f6c51bd8d8616db4623499fb8. This report is validated before its report-only successor publication."
+
+executor_checks:
+  - check_id: CHECK-PREFLIGHT
+    result: PASS
+    evidence: "Fresh GitHub resolution proved branch dev and HEAD=origin/dev=exact base e03d46b..., clean tracked/index state, no Git lock, no concurrent repository writer, and required CPython 3.13.5/cp313/Darwin/arm64 identity."
+  - check_id: CHECK-RED
+    result: PASS
+    evidence: "Seven freshly added task-specific tests all failed against the exact base before implementation."
+  - check_id: CHECK-FOCUSED
+    result: PASS
+    evidence: "7/7 direct linkage tests PASS, 42/42 affected packaging tests PASS, shell syntax PASS, and real linked-layout copy/smoke proof PASS."
+  - check_id: CHECK-FULL
+    result: PASS
+    evidence: "Canonical PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify ran once physically as PID 88083 and passed 360/360 tests in 152.306 seconds with exact exit code 0."
+  - check_id: CHECK-DURABLE-VERIFY
+    result: PASS
+    evidence: "Verify log=/tmp/agent-runtime-TASK-0082-canonical-verify.log; log SHA-256=74b0fb4fcb2ed4f33a8c2215e447f2b2e68ae59b47a7af0d6ed535669f58660a; pid file records 88083; rc file records 0; meta records started/completed timestamps and exact canonical command."
+  - check_id: CHECK-DIFF
+    result: PASS
+    evidence: "git diff --check passed immediately before implementation publication."
+  - check_id: CHECK-PRESERVATION
+    result: PASS
+    evidence: "No freeze_candidate.py invocation, no candidate publication, no build/candidates mutation, no Runtime/tunnel lifecycle action, no TASK-0077 mutation, and no main promotion occurred."
+
+execution_summary:
+  authorized_base_tree: "232f9d28067155ba1e1461e028c06644cb9719cb"
+  implementation_tree: "6856290f81cfae59b1720302e0dcedf21077f270"
+  requirements_lock_sha256: "80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
+  focused_new_tests: "7/7 PASS"
+  focused_affected_tests: "42/42 PASS"
+  canonical_verify_physical_processes: 1
+  canonical_verify_pid: 88083
+  canonical_verify_returncode: 0
+  canonical_verify_tests: "360/360 PASS"
+  canonical_verify_duration_seconds: 152.306
+  canonical_verify_log: "/tmp/agent-runtime-TASK-0082-canonical-verify.log"
+  canonical_verify_log_sha256: "74b0fb4fcb2ed4f33a8c2215e447f2b2e68ae59b47a7af0d6ed535669f58660a"
+  diff_check: PASS
+  freeze_candidate_invoked: false
+  candidate_created: false
+
+forensic_candidates:
+  failed_task0079:
+    candidate_sha256: "e6fc2fe8a72abf41ff00d77e516d73c58de985d883660c154adee524db4c6440"
+    file_count_before: 1040
+    file_count_after: 1040
+    task0082_digest_before: "8e239c062f7cd1eefaa7c245231ae9157cf82a16079587a172c2a853f22475bc"
+    task0082_digest_after: "8e239c062f7cd1eefaa7c245231ae9157cf82a16079587a172c2a853f22475bc"
+    mutated: false
+  diagnostic_contaminated:
+    candidate_sha256: "2e7380e9d05e2476b9823d49b0c8fb6f51e6350018785f80ff23cd411a00a57a"
+    file_count_before: 1353
+    file_count_after: 1353
+    task0082_digest_before: "64f382a1863d2ef927aa400a6dc2ca6822994fc5f2f82ca3d36745d33e907b23"
+    task0082_digest_after: "64f382a1863d2ef927aa400a6dc2ca6822994fc5f2f82ca3d36745d33e907b23"
+    mutated: false
+
+live_state_preservation:
+  schema: 5
+  status: PENDING
+  phase: APP_SWAPPED
+  candidate_sha256: "2e7380e9d05e2476b9823d49b0c8fb6f51e6350018785f80ff23cd411a00a57a"
+  source_revision: "86751031b28292bddfd5072a75fd4aaa1ec78019"
+  installed_runtime_revision: "86751031b28292bddfd5072a75fd4aaa1ec78019"
+  runtime_env_sha256: "6e6fef8e255b140f28703f8bd515726e1fd93d644e6f838b33ebf319e8133077"
+  desired_state_sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  listener_count: 1
+  healthz: 200
+  readyz: 200
+  mutated: false
+
+deviations_from_task:
+  - "TASK-0082 is user-issued and has no task.yaml at the authorized base; no task artifact was fabricated."
+  - "SentinelX repository file_ops did not expose agent-runtime, so execution used SentinelX command/script surface without changing SentinelX configuration."
+  - "One sentinel_exec background request was rejected by allowlist parsing before host execution, and one earlier background script_run request was reported failed-to-start by the hub; durable evidence confirmed neither launched ./verify. The accepted canonical verify was then launched exactly once physically and was never replayed."
+
+blockers: []
+
+successor_boundary:
+  freeze_authority_used: false
+  candidate_created: false
+  live_activation_claimed: false
+  final_system_freeze_claimed: false
+  next_phase: ARCHITECT_REVIEW
+
+result: NEEDS_REVIEW
