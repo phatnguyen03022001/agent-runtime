@@ -1,0 +1,169 @@
+protocol_version: 3
+
+task_id: TASK-0089
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  task_id: TASK-0088
+  gap_id: "report_publication_provenance_closure"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: evidence_closure
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "6930b8da48c9466389653fc55eb16f49eebbb28f"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - verification
+  - simplicity
+
+execution_skills:
+  required:
+    - executor
+    - verification
+    - reliability
+  recommended:
+    - debugging
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "phatnguyen03022001/agent-skills@6930b8da48c9466389653fc55eb16f49eebbb28f:protocols/TASK_PROTOCOL.md"
+    role: "Durable report/review lifecycle and one-writer semantics."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0088/task.yaml"
+    role: "Original replay-safe reverification authority."
+    precedence: 2
+  - source: ".agent/tasks/TASK-0088/report.yaml@a97986c2f2227778698ff9b2776c7de29ae4d9de"
+    role: "Exact report revision 1 requiring provenance correction."
+    precedence: 3
+  - source: ".agent/tasks/TASK-0088/review.yaml@81ce8e3b9bc709ae138ccfd8d9ce94f8af59a3db"
+    role: "Architect REVISION_REQUIRED judgment defining the closure gap."
+    precedence: 4
+
+structure_authority:
+  status: RESOLVED
+  source: "phatnguyen03022001/agent-skills@6930b8da48c9466389653fc55eb16f49eebbb28f:templates/task.yaml"
+  rationale: "Evidence-only successor. Preserve the accepted technical proof and correct only the durable report provenance contradiction."
+
+objective: "Close TASK-0088 publication provenance truthfully without rerunning verification or changing proof/source bytes. Perform bounded read-only provenance forensics, classify the report mutation provenance as PROVEN or UNRESOLVED, publish TASK-0088 report revision 2 that explicitly records the concurrent-writer anomaly, then publish a truthful TASK-0089 closure report for Architect review."
+
+scope:
+  required_changes:
+    - "Read-only resolve TASK-0088 report commit a97986c2f2227778698ff9b2776c7de29ae4d9de, its parent/tree/diff/commit metadata and bounded repository-local provenance evidence."
+    - "Determine whether exact mutation provenance can be positively proven from authoritative/repository-local evidence. If not, classify it UNRESOLVED; do not infer."
+    - "Revise .agent/tasks/TASK-0088/report.yaml to report_revision 2 while preserving all valid technical verification evidence and explicitly recording the publication provenance anomaly/deviation."
+    - "Validate and publish the corrected TASK-0088 report revision 2 in one commit whose tracked delta is only that report file."
+    - "Create, validate and publish .agent/tasks/TASK-0089/report.yaml as a report-only successor documenting the closure operation."
+  allowed_existing_files_or_components:
+    - ".agent/tasks/TASK-0088/report.yaml"
+    - ".agent/tasks/TASK-0089/report.yaml after corrected TASK-0088 report publication"
+    - ".agent/tasks/TASK-0088/task.yaml and review.yaml read-only"
+    - "Repository Git object metadata/log/reflog needed for bounded provenance forensics, read-only"
+    - "TASK-0088 task-owned ignored evidence under build/.task-0088-* read-only"
+    - "build/.task-0089-* for ignored bounded forensic notes/evidence if needed"
+
+invariants:
+  - "Do not rerun canonical ./verify. TASK-0088 canonical verification remains 1/1 consumed and its technical result remains 385 tests PASS."
+  - "Do not modify TASK-0087 proof files, production source, tests, dependencies, public tool surface or Runtime lifecycle state."
+  - "Do not rewrite, amend, reset, force-push or delete report commit a97986c2f2227778698ff9b2776c7de29ae4d9de or Architect review commit 81ce8e3b9bc709ae138ccfd8d9ce94f8af59a3db."
+  - "Before persistent mutation, prove no concurrent repository writer/Git lock is active and preserve exactly one authorized writer for the active mutation boundary."
+  - "Forensics are bounded to repository/task provenance. Do not inspect unrelated browser history, private messages, credentials, password stores, Photos, Keychain, SSH secrets or unrelated chat content."
+  - "Git author/committer identity alone does not prove which agent/session issued the commit."
+  - "If exact writer/session provenance cannot be positively established, use the explicit classification UNRESOLVED. Absence of evidence is not proof of provenance."
+  - "TASK-0088 report revision 2 MUST preserve the fact that the original Executor session stated the report commit appeared from another writer/concurrent process and was not emitted by that session's commit command."
+  - "TASK-0088 report revision 2 MUST NOT retain deviations_from_task: [] unless the provenance anomaly is represented elsewhere as an explicit deviation with equivalent semantics."
+  - "A historical one-writer deviation may be truthfully recorded without rerunning the already-valid technical proof. This task does not erase or relabel the historical anomaly."
+  - "TASK-0084/live Runtime/tunnel/candidate/cutover state remains untouched."
+  - "Exactly one worktree at /Users/tienphat/Developer/agent-runtime on dev; origin/main unchanged."
+
+forbidden_changes:
+  - "No ./verify invocation, focused test rerun or image transport rerun."
+  - "No proof/source/test/dependency changes."
+  - "No screen_capture, ChatGPT vision E2E, image optimization implementation, Swift/TCC, repo_diff_read or UI-control work."
+  - "No package, freeze, candidate, install, activation, restart/reload, cutover, rollback/resume/recover or TASK-0084 action."
+  - "No main/tag/release mutation."
+  - "No branch creation/switch, clone, stash, reset, amend, rebase, force-push or alternate worktree."
+  - "No fabricated writer attribution."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact TASK-0088 technical/report/review lineage is resolved without mutation."
+    evidence_required: "TASK-0088 task, report commit a97986c..., review commit 81ce8e3..., parent/tree/diff and canonical dev lineage resolve exactly."
+  - id: AC-2
+    requirement: "Publication provenance is truthfully classified."
+    evidence_required: "Bounded repository-local forensic evidence supports PROVEN attribution, or the report explicitly records UNRESOLVED. No inference from Git author identity alone."
+  - id: AC-3
+    requirement: "TASK-0088 report revision 2 closes the contradiction without changing technical proof."
+    evidence_required: "Revision 2 preserves 385-test PASS, exactly-one physical verifier evidence and all valid proof claims, while explicitly recording the concurrent-writer publication anomaly in deviations/evidence."
+  - id: AC-4
+    requirement: "Corrected TASK-0088 report publication preserves one-writer discipline."
+    evidence_required: "No concurrent writer/lock before mutation; corrected-report commit changes only .agent/tasks/TASK-0088/report.yaml; non-force push succeeds."
+  - id: AC-5
+    requirement: "TASK-0089 closure is durably reported."
+    evidence_required: "Pinned report validator PASS; TASK-0089 report-only successor commit; fresh remote closure HEAD=origin/dev, clean tree, one worktree, main unchanged."
+  - id: AC-6
+    requirement: "No technical or lifecycle authority is consumed."
+    evidence_required: "No verifier/test/proof/source/dependency/live-Runtime mutation and TASK-0084 remains untouched."
+
+verification:
+  executor_checks:
+    - id: CHECK-PREFLIGHT
+      command_or_check: "Fresh-resolve exact TASK-0089 base/dev, clean tree, one worktree, no staged paths, no concurrent repository writer/Git lock, origin/main unchanged."
+      required: true
+    - id: CHECK-LINEAGE
+      command_or_check: "Read-only resolve TASK-0088 task/report/review identities, report parent/tree/diff, exact report bytes and review REVISION_REQUIRED judgment."
+      required: true
+    - id: CHECK-PROVENANCE
+      command_or_check: "Inspect only bounded repository/task-local provenance evidence sufficient to classify exact writer/session provenance PROVEN or UNRESOLVED. Stop once classification is justified."
+      required: true
+    - id: CHECK-REVISION
+      command_or_check: "Create TASK-0088 report revision 2; pinned validator PASS; git diff --check; tracked diff exactly one report file; publish non-force."
+      required: true
+    - id: CHECK-REPORT
+      command_or_check: "Create and validate TASK-0089 report recording the exact corrected TASK-0088 report commit and provenance classification; publish report-only successor."
+      required: true
+    - id: CHECK-FINAL
+      command_or_check: "Fresh-fetch dev/main; prove HEAD=origin/dev, clean tree, one worktree, main unchanged, no proof/source/lifecycle mutation."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Independent Architect review. Architect may then publish TASK-0088 review revision 2 and TASK-0089 review as appropriate."
+    expected_signal: "Durable truthful provenance closure without technical rerun."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
