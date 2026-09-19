@@ -137,7 +137,7 @@ kernel compromise, and out-of-band tools.
 
 ## Tool surface
 
-The MCP server exposes exactly seven public tools:
+The MCP server exposes exactly nine public tools:
 
 - `terminal_exec(argv, cwd, timeout_seconds=300)` executes one literal argv
   with `shell=False`, disconnected stdin, bounded output, and bounded cleanup.
@@ -168,6 +168,13 @@ The MCP server exposes exactly seven public tools:
   failures return no partial text; after batch scan exhaustion, remaining items
   fail without file I/O. Line indexes are limited to 2147483647. It is read-only
   and exposes no caller limit knobs.
+- `repo_observer(cwd, max_paths=200)` provides typed local-only read-only Git observation
+  with no fetch, network use, or repository mutation.
+- `repo_fast_forward(cwd, branch, expected_local_head, expected_remote_head)` provides
+  expected-state-guarded fixed-origin synchronization. It fresh-fetches only the
+  bound branch from literal `origin` and permits only an exact fast-forward of the
+  current clean branch. Runtime executes this consequence; repository/task authority
+  remains outside Runtime.
 
 Capacity Observer v2 reports an advisory healthy-host ceiling up to x6. The
 effective healthy ceiling is `min(AGENT_RUNTIME_MAX_PARALLELISM, 6)`: the

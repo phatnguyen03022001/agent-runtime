@@ -206,13 +206,30 @@ class FsReadBatchResult(_ClosedResult):
 
 
 RepoObserverMaxPaths = Annotated[int, Field(strict=True, ge=1, le=1000)]
+RepoFastForwardBranch = Annotated[StrictStr, Field(min_length=1, max_length=255)]
+RepoFastForwardSha = Annotated[
+    StrictStr,
+    Field(min_length=40, max_length=40, pattern=r"^[0-9a-f]{40}$"),
+]
 TypedToolErrorCode = Literal[
     "INVALID_ARGUMENT",
     "OUTSIDE_WORKSPACE",
     "NOT_GIT_REPOSITORY",
+    "NOT_REPOSITORY_ROOT",
+    "DIRTY_WORKTREE",
+    "OPERATION_IN_PROGRESS",
+    "DETACHED_HEAD",
+    "BRANCH_MISMATCH",
+    "UPSTREAM_MISMATCH",
+    "LOCAL_HEAD_MISMATCH",
+    "REMOTE_HEAD_MISMATCH",
+    "NON_FAST_FORWARD",
+    "LOCAL_STATE_CHANGED",
+    "FETCH_FAILED",
     "OUTPUT_LIMIT",
     "DEADLINE_EXCEEDED",
     "TRANSIENT_FAILURE",
+    "FAST_FORWARD_FAILED",
     "INTERNAL_ERROR",
 ]
 RepoChangeStatus = Literal["M", "T", "A", "D", "R", "C", "U", "?", "!"]
@@ -321,3 +338,21 @@ class RepoObserverResult(_ClosedResult):
     worktrees: RepoWorktrees
     observation: RepoObservation
     truncation: RepoTruncation
+
+
+class RepoFastForwardResult(_ClosedResult):
+    schema_version: Literal[1]
+    status: Literal["fast_forwarded", "already_at_target"]
+    repository_root: str
+    branch: str
+    remote: Literal["origin"]
+    upstream: str
+    expected_local_head: str
+    expected_remote_head: str
+    head_before: str
+    head_after: str
+    tracking_head: str
+    fetched: Literal[True]
+    network_used: Literal[True]
+    fast_forwarded: bool
+    deadline_seconds: float

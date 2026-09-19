@@ -156,6 +156,7 @@ class TimingToolTests(unittest.TestCase):
             "capacity_observer",
             "fs_read_batch",
             "repo_observer",
+            "repo_fast_forward",
         ))
         self.assertIn(timing_middleware, server.mcp.middleware)
         self.assertEqual(

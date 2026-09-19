@@ -23,6 +23,7 @@ EXPECTED_TOOLS = (
     "capacity_observer",
     "fs_read_batch",
     "repo_observer",
+    "repo_fast_forward",
 )
 EXPECTED_ANNOTATIONS = {
     "terminal_exec": (False, True, False, True),
@@ -33,6 +34,7 @@ EXPECTED_ANNOTATIONS = {
     "capacity_observer": (True, False, True, False),
     "fs_read_batch": (True, False, True, False),
     "repo_observer": (True, False, True, False),
+    "repo_fast_forward": (False, True, True, True),
 }
 EXPECTED_OUTPUT_FIELDS = {
     "terminal_exec": {
@@ -75,6 +77,11 @@ EXPECTED_OUTPUT_FIELDS = {
         "prunable", "fetched", "network_used", "deadline_seconds",
         "changes_truncated", "worktrees_truncated", "diff_truncated",
         "total_changes", "total_changes_exact",
+    },
+    "repo_fast_forward": {
+        "schema_version", "status", "repository_root", "branch", "remote", "upstream",
+        "expected_local_head", "expected_remote_head", "head_before", "head_after",
+        "tracking_head", "fetched", "network_used", "fast_forwarded", "deadline_seconds",
     },
 }
 
@@ -199,6 +206,26 @@ class MCPClientConformanceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(repo_props["max_paths"]["minimum"], 1)
             self.assertEqual(repo_props["max_paths"]["maximum"], 1000)
             self.assertEqual(repo_props["max_paths"]["default"], 200)
+
+            fast_forward_schema = tools["repo_fast_forward"].input_schema
+            self.assertIs(fast_forward_schema["additionalProperties"], False)
+            self.assertEqual(
+                set(fast_forward_schema["properties"]),
+                {"cwd", "branch", "expected_local_head", "expected_remote_head"},
+            )
+            self.assertEqual(
+                set(fast_forward_schema["required"]),
+                {"cwd", "branch", "expected_local_head", "expected_remote_head"},
+            )
+            fast_forward_props = fast_forward_schema["properties"]
+            self.assertNotIn("pattern", fast_forward_props["cwd"])
+            self.assertEqual(fast_forward_props["branch"]["minLength"], 1)
+            self.assertLessEqual(fast_forward_props["branch"]["maxLength"], 255)
+            for field in ("expected_local_head", "expected_remote_head"):
+                sha = fast_forward_props[field]
+                self.assertEqual(sha["minLength"], 40)
+                self.assertEqual(sha["maxLength"], 40)
+                self.assertEqual(sha["pattern"], "^[0-9a-f]{40}$")
 
             for name, tool in tools.items():
                 self.assertIsNotNone(tool.output_schema, name)

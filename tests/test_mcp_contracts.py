@@ -20,6 +20,7 @@ EXPECTED_TOOLS = (
     "capacity_observer",
     "fs_read_batch",
     "repo_observer",
+    "repo_fast_forward",
 )
 EXPECTED_ANNOTATIONS = {
     "terminal_exec": (False, True, False, True),
@@ -30,6 +31,7 @@ EXPECTED_ANNOTATIONS = {
     "capacity_observer": (True, False, True, False),
     "fs_read_batch": (True, False, True, False),
     "repo_observer": (True, False, True, False),
+    "repo_fast_forward": (False, True, True, True),
 }
 
 
@@ -149,9 +151,22 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repo_props["max_paths"]["maximum"], 1000)
         self.assertEqual(repo_props["max_paths"]["default"], 200)
 
+        fast_forward_props = tools["repo_fast_forward"].input_schema["properties"]
+        self.assertEqual(
+            set(fast_forward_props),
+            {"cwd", "branch", "expected_local_head", "expected_remote_head"},
+        )
+        self.assertNotIn("pattern", fast_forward_props["cwd"])
+        self.assertEqual(fast_forward_props["branch"]["minLength"], 1)
+        self.assertLessEqual(fast_forward_props["branch"]["maxLength"], 255)
+        for name in ("expected_local_head", "expected_remote_head"):
+            self.assertEqual(fast_forward_props[name]["minLength"], 40)
+            self.assertEqual(fast_forward_props[name]["maxLength"], 40)
+            self.assertEqual(fast_forward_props[name]["pattern"], "^[0-9a-f]{40}$")
+
     async def test_task0078_cwd_schemas_are_connector_portable(self) -> None:
         tools = await self._tools()
-        for name in ("terminal_exec", "terminal_start", "fs_read_batch"):
+        for name in ("terminal_exec", "terminal_start", "fs_read_batch", "repo_fast_forward"):
             with self.subTest(tool=name):
                 cwd_schema = tools[name].input_schema["properties"]["cwd"]
                 self.assertEqual(cwd_schema["minLength"], 1)
@@ -302,6 +317,12 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
                 "changes_truncated", "worktrees_truncated", "diff_truncated",
                 "total_changes", "total_changes_exact",
             },
+            "repo_fast_forward": {
+                "schema_version", "status", "repository_root", "branch", "remote",
+                "upstream", "expected_local_head", "expected_remote_head", "head_before",
+                "head_after", "tracking_head", "fetched", "network_used",
+                "fast_forwarded", "deadline_seconds",
+            },
         }
         for name, expected in expected_fields.items():
             schema = tools[name].output_schema
@@ -338,6 +359,8 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
             "read-only advisory",
             "repo_observer",
             "local-only Git",
+            "repo_fast_forward",
+            "fixed-origin",
         ):
             self.assertIn(phrase, instructions)
 

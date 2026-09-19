@@ -27,6 +27,9 @@ from .contracts import (
     Cursor,
     FsReadBatchResult,
     FsReadItems,
+    RepoFastForwardBranch,
+    RepoFastForwardResult,
+    RepoFastForwardSha,
     RepoObserverMaxPaths,
     RepoObserverResult,
     SessionId,
@@ -44,6 +47,7 @@ from .errors import RuntimeStateError, RuntimeValidationError
 from .executor import execute_terminal, shutdown_terminal_executions
 from .fs_read import read_files_batch
 from .protection import ProtectedRuntimeDenied
+from .repo_fast_forward import RepoFastForwardFailure, fast_forward_repository
 from .repo_observer import RepoObserverFailure, observe_repository
 from .session import (
     control_terminal as _control_terminal,
@@ -53,7 +57,17 @@ from .session import (
 )
 from .timing import timed_tool_wrapper, timing_middleware
 
-PUBLIC_TOOL_NAMES = ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch", "repo_observer")
+PUBLIC_TOOL_NAMES = (
+    "terminal_exec",
+    "terminal_start",
+    "terminal_poll",
+    "terminal_control",
+    "terminal_resize",
+    "capacity_observer",
+    "fs_read_batch",
+    "repo_observer",
+    "repo_fast_forward",
+)
 SERVER_DESCRIPTION = "Bounded local command execution and advisory capacity MCP server; terminal tools may modify the host."
 SERVER_INSTRUCTIONS = (
     "Execute literal argv with shell=False and no implicit shell. "
@@ -69,7 +83,9 @@ SERVER_INSTRUCTIONS = (
     "with fixed output and scan-work ceilings and per-item filesystem failures. "
     "repo_observer performs bounded local-only Git repository observation with no fetch, network use, "
     "or repository mutation; it reports local tracking refs, typed changes, diff summary, operation state, "
-    "and policy-safe worktree topology."
+    "and policy-safe worktree topology. "
+    "repo_fast_forward performs expected-state-guarded fixed-origin synchronization from fixed origin only; it fresh-fetches "
+    "one bound branch and permits only an exact fast-forward of the current clean branch."
 )
 mcp = MCPServer(
     name="Agent Runtime",
@@ -287,7 +303,7 @@ def repo_observer(
     cwd: AbsoluteCwd,
     max_paths: RepoObserverMaxPaths = 200,
 ) -> RepoObserverResult:
-    """Observe one local Git working tree without network access or mutation."""
+    """Observe one local-only Git working tree without network access or mutation."""
 
     try:
         return observe_repository(cwd, max_paths)
@@ -307,6 +323,40 @@ def repo_observer(
             isError=True,
         )
         return cast(RepoObserverResult, error_result)
+
+
+@_tool(read_only=False, destructive=True, idempotent=True, open_world=True)
+def repo_fast_forward(
+    cwd: AbsoluteCwd,
+    branch: RepoFastForwardBranch,
+    expected_local_head: RepoFastForwardSha,
+    expected_remote_head: RepoFastForwardSha,
+) -> RepoFastForwardResult:
+    """Fast-forward one clean bound branch after a fresh fixed-origin verification."""
+
+    try:
+        return fast_forward_repository(
+            cwd,
+            branch,
+            expected_local_head,
+            expected_remote_head,
+        )
+    except RepoFastForwardFailure as exc:
+        from mcp.types import CallToolResult, TextContent
+
+        envelope = TypedToolErrorEnvelope(
+            error=TypedToolErrorPayload(
+                code=exc.code,
+                message=exc.message,
+                retryable=exc.retryable,
+            )
+        )
+        error_result = CallToolResult(
+            content=[TextContent(type="text", text=exc.message)],
+            structuredContent=envelope.model_dump(),
+            isError=True,
+        )
+        return cast(RepoFastForwardResult, error_result)
 
 
 def _install_timing_middleware() -> None:
