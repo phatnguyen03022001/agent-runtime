@@ -1,0 +1,306 @@
+protocol_version: 3
+
+task_id: TASK-0094
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  task_id: TASK-0093
+  gap_id: "typed_repo_publish"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - verification
+  - simplicity
+  - github-workflow
+
+execution_skills:
+  required:
+    - executor
+    - verification
+    - reliability
+    - github-workflow
+  recommended:
+    - debugging
+    - simplicity
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0093/review.yaml@7ec0c1d2ec070579f5166563de7ba1c1f1e0d1ab"
+    role: "Accepted source-level nine-tool baseline with repo_fast_forward public tool 9."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0090/task.yaml"
+    role: "Typed Git capability design boundary: bounded expected-state consequence, not generic Git authority."
+    precedence: 2
+  - source: "phatnguyen03022001/agent-skills@4f4ef2b45e1a025bc499702919431c0d0d61419c:.agent/tasks/TASK-0054/review.yaml"
+    role: "Accepted platform-compliant execution, exact publication identity and one-writer semantics."
+    precedence: 3
+  - source: ".agent/tasks/TASK-0088/review.yaml"
+    role: "Accepted replay-safe canonical verifier pattern using atomic once-guard, detached worker and durable evidence."
+    precedence: 4
+  - source: "Architect read-only suite audit on 2026-09-19"
+    role: "All exact nine-tool/global surface assertions requiring tool-10 updates were enumerated before planning."
+    precedence: 5
+
+structure_authority:
+  status: RESOLVED
+  source: "Accepted agent-runtime feature-based layout and TASK-0093 public MCP surface."
+  rationale: "Add one bounded source module and two focused test modules. Update only directly affected contract/server/timing/docs and pre-audited exact-surface regressions."
+
+objective: "Add public source tool 10 repo_publish: a replay-safe expected-state-guarded fixed-origin publication capability that may publish exactly the current clean branch HEAD when that commit is the sole direct child of the caller-bound existing remote branch head. It must perform no force update, branch creation/deletion, tag publication, arbitrary refspec or generic Git command execution. Verify with focused tests and exactly one replay-safe canonical verifier run, publish exact verified content, and stop for independent Architect review."
+
+public_contract:
+  name: repo_publish
+  position: 10
+  input:
+    signature: "repo_publish(cwd, branch, expected_remote_head, commit)"
+    exact_fields:
+      - cwd
+      - branch
+      - expected_remote_head
+      - commit
+    forbidden_caller_controls:
+      - remote
+      - url
+      - refspec
+      - argv
+      - command
+      - timeout
+      - timeout_seconds
+      - force
+      - force_with_lease
+      - atomic
+      - tags
+      - push_options
+      - recurse_submodules
+      - receive_pack
+      - upload_pack
+      - config
+      - environment
+  annotations:
+    readOnlyHint: false
+    destructiveHint: true
+    idempotentHint: true
+    openWorldHint: true
+  result:
+    exact_fields:
+      - schema_version
+      - status
+      - repository_root
+      - branch
+      - remote
+      - upstream
+      - expected_remote_head
+      - commit
+      - head
+      - remote_head_before
+      - remote_head_after
+      - network_used
+      - push_attempted
+      - published
+      - deadline_seconds
+    status_values:
+      - published
+      - already_published
+
+scope:
+  required_changes:
+    - "Add agent_runtime/repo_publish.py implementing only the repo_publish contract."
+    - "Add closed Pydantic input aliases/result contract and bounded publish-specific typed error codes in agent_runtime/contracts.py."
+    - "Register repo_publish as exact public tool 10 after repo_fast_forward in agent_runtime/server.py; annotations are exactly readOnly=false, destructive=true, idempotent=true, openWorld=true."
+    - "Add repo_publish to timing allowlist and SERVER_INSTRUCTIONS without changing tools 1-9 semantics."
+    - "Update README from exactly nine to exactly ten public tools and document repo_publish as expected-state-guarded fixed-origin exact direct-child publication; Runtime executes the consequence but repository/task authority remains external."
+    - "Use fixed /usr/bin/git, shell=False, disconnected stdin, bounded output where output is read, fixed call deadline, GIT_TERMINAL_PROMPT=0, no pager/color, no caller environment or Git-argument injection."
+    - "Require cwd to resolve to the repository root inside AGENT_RUNTIME_WORKSPACE_ROOT; reject bare and shallow repositories."
+    - "Require legal bounded branch, current non-detached branch exactly equals branch, upstream exactly origin/<branch>, zero tracked/staged/untracked/conflicted changes and no merge/rebase/cherry-pick/bisect state."
+    - "Require expected_remote_head and commit to be exact lowercase 40-hex commit SHAs, local HEAD exactly equals commit, and commit exists locally."
+    - "Require commit to have exactly one parent and that sole parent equals expected_remote_head. Reject merge commits, root commits, two-or-more-commit publication ranges and any other lineage as PUBLICATION_LINEAGE_MISMATCH before push."
+    - "Observe the remote branch using fixed literal origin and exact refs/heads/<branch>. The remote branch must already exist; branch creation is forbidden."
+    - "Fresh remote state may equal only expected_remote_head or commit. If it equals commit after all local/lineage guards, return already_published without push. Any third remote value or missing branch fails REMOTE_HEAD_MISMATCH."
+    - "Immediately before push, re-check local branch/HEAD/clean/operation state. Any change from the bound initial state fails LOCAL_STATE_CHANGED."
+    - "When remote equals expected_remote_head, execute exactly one non-force push of commit to refs/heads/<branch> using fixed origin and an explicit single refspec. Disable local hooks and submodule recursion. Do not publish tags or any other ref."
+    - "The push command MUST contain no --force, -f, --force-with-lease, deletion refspec, wildcard refspec, --mirror, --all, --tags, --follow-tags or caller-supplied push option."
+    - "After the push attempt, freshly observe the remote branch. If remote equals commit, publication is proven and may return published even when the transport process result was ambiguous. If remote remains expected_remote_head after a definite push failure, return PUSH_FAILED. If remote is any third value, fail REMOTE_HEAD_MISMATCH. If post-push remote state cannot be established, fail PUBLICATION_AMBIGUOUS and require re-observation before another consequence."
+    - "Same-input replay after success must freshly verify local binding/lineage and remote state and return already_published with push_attempted=false; it must not perform a second push."
+    - "Never return or embed remote URLs, credentials, credential-helper output, arbitrary Git config, stdout/stderr, environment values or secret-bearing transport diagnostics."
+    - "Errors remain closed TypedToolErrorEnvelope with bounded message and retryable flag. Add only publication errors actually needed by the implementation."
+    - "Add regression-first tests and capture genuine RED before implementation: production surface must initially expose nine tools and lack repo_publish."
+    - "Use local temporary repositories and local bare origins only for repo_publish behavioral tests. No test may publish to canonical GitHub or another real remote."
+    - "Focused coverage must include success, exact replay/no second push, stale remote before push, missing remote branch, remote race, rejected remote push, transport ambiguity recovered by remote==commit, ambiguous post-push observation, dirty/staged/untracked/conflicted/in-progress state, cwd subdirectory, detached HEAD, branch/upstream mismatch, local HEAD mismatch, root/merge/two-commit lineage rejection, fixed-origin/single-refspec/no-force command safety, bounded deadline/child cleanup, closed schemas/errors and tools 1-9 non-regression."
+    - "Update every pre-audited exact-surface regression from nine to ten tools without weakening existing assertions: tests/test_mcp_contracts.py, tests/test_timing.py, tests/test_mcp_client_conformance.py, tests/test_surface_and_scripts.py, tests/test_repo_observer_mcp.py, tests/test_fs_read_batch_mcp.py, tests/test_fs_read_batch.py and tests/test_repo_fast_forward_mcp.py."
+    - "Run targeted/focused tests during iteration. Before canonical verification require focused GREEN, git diff --check PASS and exact authorized implementation path scope."
+    - "Canonical verification authority is exactly 0/1 -> 1/1. The command is exactly PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify."
+    - "Canonical verification MUST use ignored build/.task-0094-* atomic once-guard plus detached/background worker and durable command/PID/start/finish/stdout/stderr/exit evidence. Duplicate/replayed launcher invocation must be ALREADY_LAUNCHED/no-op and cannot execute a second physical verifier."
+    - "If canonical verification fails, stop BLOCKED_AFTER_CANONICAL_VERIFICATION. No repair and no second TASK-0094 canonical run."
+    - "On canonical PASS, rehash all implementation paths and freeze those exact bytes as publication input."
+    - "TASK-0094 implementation publication identity is CONTENT_IDENTITY. Do not require a local implementation commit and do not use generic terminal git push."
+    - "Fresh-resolve canonical remote dev immediately before publication and require it still equals TASK-0094 planning commit."
+    - "Using typed GitHub Git Data primitives, publish one implementation commit whose sole parent is TASK-0094 planning commit and whose tree differs at exactly the authorized implementation paths with bytes exactly equal to the verified local files. Update dev non-force."
+    - "After exact implementation publication, create and validate only .agent/tasks/TASK-0094/report.yaml as the report-only direct child, fresh-resolve dev/main/lineage and stop NEEDS_REVIEW."
+  allowed_existing_files_or_components:
+    - "agent_runtime/contracts.py"
+    - "agent_runtime/server.py"
+    - "agent_runtime/timing.py"
+    - "README.md"
+    - "tests/test_mcp_contracts.py"
+    - "tests/test_timing.py"
+    - "tests/test_mcp_client_conformance.py"
+    - "tests/test_surface_and_scripts.py"
+    - "tests/test_repo_observer_mcp.py"
+    - "tests/test_fs_read_batch_mcp.py"
+    - "tests/test_fs_read_batch.py"
+    - "tests/test_repo_fast_forward_mcp.py"
+  allowed_new_files_or_components:
+    - "agent_runtime/repo_publish.py"
+    - "tests/test_repo_publish.py"
+    - "tests/test_repo_publish_mcp.py"
+    - ".agent/tasks/TASK-0094/report.yaml"
+  expected_files_are_restrictive: true
+
+invariants:
+  - "repo_publish is publication consequence, not repository/task authority and not a generic Git wrapper."
+  - "Public source surface after implementation is exactly ten tools; tools 1-9 retain their accepted contracts."
+  - "repo_publish can update only existing origin/<branch> and only from expected_remote_head to its exact sole direct child commit."
+  - "No force semantics, branch creation/deletion, tag operation, multi-ref publication or arbitrary refspec exists."
+  - "Same-input replay performs fresh observation and no second push."
+  - "A stale/third remote head is never followed automatically."
+  - "No local working-tree mutation is performed by repo_publish itself."
+  - "No live Runtime package/install/activation/restart/reload/service/tunnel/port-8080 action is authorized."
+  - "main, tags, releases and sibling repositories remain unchanged."
+  - "Exactly one physical TASK-0094 canonical verifier may execute."
+  - "Platform safety blocks are capability evidence only; no obfuscation, command splitting, permission widening, protection disabling or provider-hopping for a different safety judgment."
+
+forbidden_changes:
+  - "Do not implement arbitrary git push, remote selection, URL selection, generic refspecs, force/lease-force, branch creation/deletion, tag publication or multi-ref publication."
+  - "Do not implement repo_remote_observer, screen_capture, model-vision Stage B, Accessibility, UI control, repo_diff_read or other roadmap capabilities."
+  - "Do not change requirements, requirements.lock, MCP SDK pin, workspace policy, lifecycle code, installer, packaging, tunnel configuration or port ownership."
+  - "Do not weaken or delete existing tests to accommodate tool 10."
+  - "Do not run canonical ./verify more than once."
+  - "Do not package/install/restart/reload/cut over/rollback/recover the live Runtime."
+  - "Do not mutate main, tags, releases or sibling repositories."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: allowed_only_for_exact_repo_publish_tool_10
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - "agent_runtime/repo_publish.py"
+    - "tests/test_repo_publish.py"
+    - "tests/test_repo_publish_mcp.py"
+    - ".agent/tasks/TASK-0094/report.yaml"
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "Ignored build/.task-0094-* verifier evidence is untracked; no other new tracked file is authorized."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "repo_publish is exact public tool 10 with a closed four-field input and truthful annotations."
+    evidence_required: "Real MCP listing/order, exact annotations, closed input/output schemas and absence of generic Git/push knobs."
+  - id: AC-2
+    requirement: "A clean bound direct-child commit publishes exactly once to the existing fixed origin branch."
+    evidence_required: "Local bare-origin integration proves expected remote head -> exact commit non-force publication, one ref only, correct post-remote proof and closed result."
+  - id: AC-3
+    requirement: "Replay and stale-state semantics fail closed."
+    evidence_required: "Same-input replay returns already_published without a second push; missing/third remote head, local mismatch, local race and non-direct-child/merge/root/two-commit lineage are rejected."
+  - id: AC-4
+    requirement: "Publication execution is bounded and cannot become a generic Git/remote surface."
+    evidence_required: "Source/tests prove fixed /usr/bin/git, shell=False, fixed origin, exact branch ref, hooks disabled, submodule recursion disabled, no force/tags/multi-ref/arbitrary config or caller transport controls, bounded deadline and sanitized errors."
+  - id: AC-5
+    requirement: "All pre-existing public-tool contracts and global exact-surface regressions remain correct with exactly ten tools."
+    evidence_required: "Focused MCP/conformance/timing/docs suites PASS and tools 1-9 retain exact prior order/annotations/schemas."
+  - id: AC-6
+    requirement: "The final exact candidate passes canonical verification exactly once."
+    evidence_required: "Atomic guard/detached durable evidence proves one physical canonical command, exit 0 and full suite PASS."
+  - id: AC-7
+    requirement: "Exact verified source content and report are published with truthful lineage."
+    evidence_required: "One content-identity implementation commit direct child of TASK-0094 planning commit changes exactly authorized implementation paths; report-only direct child validates; fresh dev/main/lineage closure PASS."
+  - id: AC-8
+    requirement: "No live lifecycle or unrelated roadmap consequence occurs."
+    evidence_required: "No package/install/restart/reload/tunnel/port/main/tag/release/sibling mutation and no Vision/screen capability work."
+
+verification:
+  executor_checks:
+    - id: CHECK-BIND
+      command_or_check: "Fresh-bind exact TASK-0094 planning dev/main and require a clean local dev checkout at the exact planning HEAD before implementation mutation."
+      required: true
+    - id: CHECK-RED
+      command_or_check: "Add focused contract test first and capture genuine RED showing source surface has nine tools and repo_publish is absent."
+      required: true
+    - id: CHECK-FOCUSED
+      command_or_check: "Iterate targeted repo_publish behavior/MCP and all directly affected exact-surface regression suites to GREEN."
+      required: true
+    - id: CHECK-SAFETY
+      command_or_check: "Inspect fixed Git argv/environment/deadline/error behavior and prove no force/tags/multi-ref/arbitrary remote/refspec/config surface."
+      required: true
+    - id: CHECK-DIFF
+      command_or_check: "git diff --check PASS and exact restrictive path audit before canonical verification."
+      required: true
+    - id: CHECK-CANONICAL
+      command_or_check: "Use atomic once-guard plus detached worker to execute PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify exactly once and retain durable evidence."
+      required: true
+    - id: CHECK-PUBLISH
+      command_or_check: "On PASS, publish exact verified implementation bytes as one typed GitHub content-identity commit direct child of planning commit, non-force, then prove exact remote path/blob identity."
+      required: true
+    - id: CHECK-FINAL
+      command_or_check: "Create/validate/publish TASK-0094 report-only direct child, fresh-resolve dev/main/lineage and stop NEEDS_REVIEW."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Independent Architect review of TASK-0094 exact implementation tree, local verifier evidence, report validator result and remote lineage."
+    expected_signal: "Architect ACCEPT of source-level repo_publish tool 10 only; live activation remains separately gated."
+
+capability_requirements:
+  EXECUTION:
+    - repository_content_read
+    - repository_content_write
+    - native_repository_execution
+    - git_history_read
+    - remote_ref_read
+  REVIEW:
+    - repository_content_read
+    - repository_content_write
+    - git_history_read
+    - remote_ref_read
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
