@@ -1,0 +1,186 @@
+protocol_version: 3
+
+task_id: TASK-0105
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  predecessor_task: TASK-0104
+  gap_id: "finalize_accepted_pending_cutover"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: accepted_successor_cutover_commit
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - verification
+  recommended:
+    - simplicity
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0104/review.yaml@e2a2dff00df213b50a582b950c781581d5bfb197"
+    role: "Architect-accepted CHATGPT_LOCAL_ACTIVATION_PROVEN evidence for the exact installed successor generation."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0100/review.yaml@ef31de7bf124c2085ab037a34cb66f27470a3555"
+    role: "Architect-accepted exact install-prebuilt success leaving schema-5 PENDING / APP_SWAPPED."
+    precedence: 2
+  - source: ".agent/tasks/TASK-0098/review.yaml@66281456699d005f90b64f58d6ab2f2464bee676"
+    role: "Architect-accepted immutable signed successor candidate."
+    precedence: 3
+  - source: "./install.sh --commit-cutover and macos/candidate_cutover.py at TASK-0105 planning source"
+    role: "Canonical transaction finalization path. commit validates the installed candidate against the transaction handoff, then removes the pending transaction."
+    precedence: 4
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing canonical --commit-cutover path."
+  rationale: "No implementation or lifecycle mechanism change is needed. This task finalizes an already accepted PENDING transaction only."
+
+objective: "Finalize the exact already-accepted successor cutover exactly once through canonical ./install.sh --commit-cutover after binding the local checkout to this task planning HEAD. Then prove the pending transaction is absent and CHATGPT_LOCAL remains usable without restarting or mutating Runtime/tunnel state."
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  location: LOCAL
+  transport: AGENT_RUNTIME
+
+accepted_successor:
+  candidate_sha256: "496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c"
+  pre_commit_transaction:
+    schema: 5
+    status: PENDING
+    phase: APP_SWAPPED
+
+authority_counters:
+  repo_fast_forward: "0/1"
+  precommit_terminal_exec: "0/1"
+  commit_cutover_terminal_exec: "0/1"
+  postcommit_terminal_exec: "0/1"
+  commit_cutover: "0/1"
+  install_prebuilt: "NONE"
+  rollback: "NONE"
+  resume: "NONE"
+  recover: "NONE"
+  restart_or_stop: "NONE"
+
+scope:
+  required_changes:
+    - "Resolve TASK-0105 from GitHub at the exact planning HEAD before any Agent Runtime MCP consequence."
+    - "Through CHATGPT_LOCAL Agent Runtime, invoke repo_fast_forward exactly once against cwd=/Users/tienphat/Developer/agent-runtime, branch=dev, expected_local_head=e2a2dff00df213b50a582b950c781581d5bfb197, expected_remote_head=<TASK-0105 planning HEAD>. Require exact successful fast-forward and clean branch."
+    - "After synchronization, invoke repo_observer read-only as needed to confirm local HEAD equals exact TASK-0105 planning HEAD and branch dev is clean/non-divergent. repo_observer is not consequence authority."
+    - "Invoke one precommit terminal_exec through Agent Runtime. It may only read the cutover metadata and safe local health/service facts. Require schema=5, status=PENDING, phase=APP_SWAPPED, candidate SHA-256 exactly 496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c, main_app=enabled, runtime_agent=enabled, healthz=200 and readyz=200. Do not print secrets."
+    - "If any precommit predicate fails, stop CUTOVER_COMMIT_PRECONDITION_UNPROVEN without invoking commit-cutover."
+    - "If precommit passes, invoke exactly one commit consequence through Agent Runtime terminal_exec with cwd=/Users/tienphat/Developer/agent-runtime and literal argv ['./install.sh','--commit-cutover']. No shell wrapper and no retry."
+    - "Require the canonical command to return success/COMMITTED. commit-cutover authority changes exactly 0/1 -> 1/1."
+    - "After successful commit, invoke exactly one read-only postcommit terminal_exec through the same CHATGPT_LOCAL transport. Prove ~/Library/Application Support/Agent Runtime/cutover-transaction is absent, main_app=enabled, runtime_agent=enabled, healthz=200 and readyz=200. Do not perform any repair."
+    - "Because the postcommit terminal_exec itself executes through the same Agent Runtime MCP transport after transaction removal, a successful typed response also proves CHATGPT_LOCAL survived commit-cutover."
+    - "If commit succeeds but the postcommit proof fails, stop CUTOVER_COMMITTED_POSTCHECK_UNPROVEN. Do not recreate a transaction, rollback, reinstall, restart or retry commit."
+    - "If commit succeeds and postcommit proof passes, terminal is exactly CUTOVER_COMMITTED."
+    - "Publish TASK-0105 report on dev and stop. Stage B is a separate task."
+
+  allowed_existing_files_or_components:
+    - ".agent/tasks/TASK-0105/report.yaml"
+    - "/Users/tienphat/Developer/agent-runtime through Agent Runtime MCP"
+    - "~/Library/Application Support/Agent Runtime/cutover-transaction through canonical commit/read-only checks"
+    - "~/Applications/Agent Runtime.app read-only"
+  expected_files_are_restrictive: true
+
+invariants:
+  - "Execution surface remains CHATGPT_LOCAL."
+  - "The exact TASK-0098 successor remains installed."
+  - "commit-cutover is exactly 0/1 -> at most 1/1."
+  - "Canonical commit-cutover is the only lifecycle/product-state mutation."
+  - "No install-prebuilt, rollback, resume, recover, restart, stop, signal or ServiceManagement mutation occurs."
+  - "No launchd, runtime.env, desired-state, tunnel or plugin mutation occurs."
+  - "No Stage B, screen_capture, TCC, click, type or scroll occurs."
+  - "main, tags, releases and sibling repositories remain unchanged."
+
+forbidden_changes:
+  - "Do not invoke commit-cutover more than once."
+  - "Do not invoke install-prebuilt, rollback-cutover, resume-cutover or recover-partial-cutover."
+  - "Do not Start/Stop/Restart Agent Runtime.app or use start.sh lifecycle commands."
+  - "Do not mutate ServiceManagement or launchd."
+  - "Do not alter runtime.env, tunnel identity or plugin state."
+  - "Do not switch to CODEX_LOCAL or another surface after a failed consequence."
+  - "Do not perform Stage B, screen_capture, TCC or visual control."
+  - "Do not modify implementation/tests/docs."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Local canonical checkout is exact TASK-0105 planning HEAD before commit consequence."
+    evidence_required: "repo_fast_forward 1/1 plus exact clean dev binding."
+  - id: AC-2
+    requirement: "Exact accepted PENDING transaction and live accepted Runtime state are proven before commit."
+    evidence_required: "schema/status/phase/candidate, enabled/enabled and 200/200."
+  - id: AC-3
+    requirement: "Canonical commit-cutover executes exactly once and succeeds."
+    evidence_required: "One literal ['./install.sh','--commit-cutover'] terminal_exec with COMMITTED/success result and no retry."
+  - id: AC-4
+    requirement: "Transaction is absent after commit while Runtime and CHATGPT_LOCAL remain healthy."
+    evidence_required: "One postcommit CHATGPT_LOCAL terminal_exec proving transaction absent, enabled/enabled and 200/200."
+  - id: AC-5
+    requirement: "Successful task stops CUTOVER_COMMITTED."
+    evidence_required: "Forbidden consequence counts zero except commit-cutover=1."
+
+verification:
+  executor_checks:
+    - id: CHECK-AUTHORITY
+      command_or_check: "Resolve exact TASK-0105 planning HEAD and accepted TASK-0104 review."
+      required: true
+    - id: CHECK-SYNC
+      command_or_check: "One exact repo_fast_forward to planning HEAD."
+      required: true
+    - id: CHECK-PRECOMMIT
+      command_or_check: "One bounded read-only precommit terminal_exec."
+      required: true
+    - id: CHECK-COMMIT
+      command_or_check: "One literal canonical commit-cutover terminal_exec."
+      required: true
+    - id: CHECK-POSTCOMMIT
+      command_or_check: "One bounded read-only postcommit terminal_exec through CHATGPT_LOCAL."
+      required: true
+    - id: CHECK-FINAL
+      command_or_check: "Publish truthful TASK-0105 report and stop."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect review before Stage B."
+    expected_signal: "CUTOVER_COMMITTED"
+
+capability_requirements:
+  EXECUTION:
+    - repository_content_read
+    - agent_runtime_mcp_read
+    - agent_runtime_mcp_write
+    - remote_ref_read
+  REVIEW:
+    - repository_content_read
+    - repository_content_write
+    - remote_ref_read
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
