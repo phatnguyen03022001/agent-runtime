@@ -1,0 +1,229 @@
+[Reading 225 lines from start (total: 225 lines, 0 remaining)]
+
+protocol_version: 3
+
+task_id: TASK-0097
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  task_id: TASK-0096
+  gap_id: "chatgpt_mcp_image_host_compatibility"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: vision_host_compatibility_probe
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+architect_analysis_skills:
+  - architect
+  - verification
+  - reliability
+  - research
+  - simplicity
+
+execution_skills:
+  required:
+    - executor
+    - verification
+    - reliability
+  recommended:
+    - research
+    - debugging
+    - simplicity
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0096/review.yaml@66d72e2b11606583e14e7f89ea62aee8fa3823a5"
+    role: "ACCEPTED source/package-level screen_capture tool 11; review explicitly defers Stage-B ChatGPT/model visual-understanding proof and all live activation/control consequences."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0087/task.yaml and accepted TASK-0088 replay-safe verification lineage"
+    role: "Existing deterministic test-only MCP ImageContent wire proof, visual-only challenge fixture, and non-production image_transport_probe handoff."
+    precedence: 2
+  - source: "tests/image_transport_probe.py@ac33afadccf2b222ddf48d6c6b45de82951046a2"
+    role: "Existing isolated test-only MCP server that returns one deterministic PNG ImageContent plus bounded structured metadata and no TextContent."
+    precedence: 3
+  - source: "tests/fixtures/task0087-visual.png@ac33afadccf2b222ddf48d6c6b45de82951046a2"
+    role: "Deterministic non-sensitive visual challenge fixture whose semantic token is encoded in pixels only."
+    precedence: 4
+  - source: "Current MCP SDK ImageContent semantics and current OpenAI custom-MCP/developer-mode guidance observed 2026-09-19"
+    role: "Protocol/platform authority that MCP tools may return image content and that ChatGPT custom MCP apps are tested through real app connections; local servers require an approved remote/tunnel connection path."
+    precedence: 5
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing TASK-0087 isolated test probe and fixture."
+  rationale: "No production feature or new probe implementation is needed. Stage B is a blind host-compatibility experiment over the existing deterministic test-only image result."
+
+objective: "Blindly prove or fail to prove that the actual ChatGPT host used by this Executor semantically exposes an MCP ImageContent result to model vision. Use the existing deterministic TASK-0087 visual fixture through the existing isolated image_transport_probe, with no expected-token leakage to the Executor before observation. Make no production Agent Runtime source change and no screen_capture/live Runtime activation."
+
+blind_proof:
+  challenge_fixture:
+    path: "tests/fixtures/task0087-visual.png"
+    sha256: "cfbaea6c03d0b9bb88227074d6511c8ec6160c5fcf49a77104699f61805422f8"
+  probe:
+    path: "tests/image_transport_probe.py"
+    sha256: "75195d77430136e11967611b96e2ad1754f3703ce8c10d873067ae5e705ec9f0"
+    tool: image_transport_probe
+    arguments:
+      fixture: visual
+  expected_token_authority:
+    owner: ARCHITECT_REVIEW_ONLY
+    disclosure_before_observation: forbidden
+    executor_comparison: forbidden
+  model_facing_instruction: "Inspect the image returned by the tool and reply with only the exact 8-character uppercase token visible in the pixels."
+  observation_rule: "The Executor records exactly what the ChatGPT model returns. It does not decide token correctness; independent Architect review performs the expected-token comparison after report publication."
+
+scope:
+  required_changes:
+    - "Fresh-bind TASK-0097 revision 1 at its exact planning base and fresh-resolve dev/main. Require one clean local dev worktree at the exact planning HEAD before starting the probe."
+    - "Read-only verify the challenge fixture and image_transport_probe SHA-256 identities above. Verify the probe tool surface returns ImageContent(image/png) plus bounded structured metadata and no token-bearing TextContent."
+    - "BLINDNESS BARRIER: before the ChatGPT image observation is frozen, do not read tests/test_image_transport.py, TASK-0087 private/ignored handoff evidence, any artifact or history containing the expected visual token or its derivation, and do not search the repository for the token/derivation."
+    - "Before observation, do not open/render/OCR/vision-inspect task0087-visual.png through filesystem viewers, image tools, OCR, browser data URLs, Python image libraries, macOS Preview/Quick Look, external models, or any path other than the actual ChatGPT MCP tool-result consumption being tested."
+    - "Run tests/image_transport_probe.py only as an isolated temporary MCP server from the canonical local checkout. It remains test-only and MUST NOT be registered in agent_runtime/server.py."
+    - "Expose that isolated probe to the current ChatGPT host through a separate temporary custom-MCP connection path. The temporary probe connection MUST be distinct from the production Agent Runtime app/tunnel identity and MUST NOT repoint, stop, restart, reload, reconfigure, replace, or reuse the production Runtime tunnel."
+    - "If a separate temporary connection cannot be established with currently authorized platform capability, stop CURRENT_PHASE_CAPABILITY_UNAVAILABLE before the visual invocation. Do not activate screen_capture, mutate production Runtime, deploy a substitute cloud probe, or switch providers merely to force a result."
+    - "Tool discovery on the temporary connection must identify the isolated image_transport_probe contract before invocation. Invoke exactly fixture=visual."
+    - "The model-facing request MUST contain only the instruction declared in blind_proof.model_facing_instruction plus the tool call needed to obtain the image. Do not include fixture semantics, expected token, derivation, OCR, alt text, textual description, token hints, or encoded image bytes in prompt/context."
+    - "Record the model's first bounded answer to the image challenge verbatim as observed_visual_token. Do not ask leading retries. One additional non-leading retry is permitted only when the first host/tool delivery is explicitly a transport error with no semantic model observation; record both events."
+    - "A host response that exposes only path/base64/metadata/text, states the image is unavailable, or otherwise does not yield an 8-character uppercase candidate is compatibility evidence, not a reason to workaround. Record MCP_IMAGE_HOST_COMPATIBILITY_UNPROVEN."
+    - "After the observation is frozen, the Executor still MUST NOT open the expected-token oracle. The Executor reports observed_visual_token and host/tool evidence, publishes a report-only successor, and stops NEEDS_REVIEW for independent Architect comparison."
+    - "Clean up only the temporary isolated probe process/connection state created by this task. Preserve the production Agent Runtime service/tunnel/app unchanged."
+    - "No canonical ./verify is required or authorized because no production/proof source bytes change. Run git diff --check and require zero tracked implementation/test/doc diff before report authorship."
+    - "Create and validate .agent/tasks/TASK-0097/report.yaml as the only tracked post-planning mutation. Publish it non-force as the sole direct child of the planning commit, fresh-resolve dev/main, and stop NEEDS_REVIEW."
+
+  allowed_existing_files_or_components:
+    - "tests/image_transport_probe.py read-only"
+    - "tests/fixtures/task0087-visual.png read-only"
+    - "build/.task-0097-* ignored ephemeral probe/evidence only"
+    - ".agent/tasks/TASK-0097/report.yaml"
+  expected_files_are_restrictive: true
+
+invariants:
+  - "The proof is blind: expected visual token and its derivation are not available to the Executor/model before or during semantic observation."
+  - "Actual ChatGPT host semantic image consumption, not MCP client byte transport alone, is the Stage-B subject."
+  - "No production Agent Runtime source, dependency, package, configuration, public tool surface, runtime.env, service, or production tunnel state changes."
+  - "image_transport_probe remains test-only and absent from production PUBLIC_TOOL_NAMES."
+  - "The visual challenge reaches the model only as MCP ImageContent; token text is absent from prompts, TextContent and structured metadata."
+  - "Pixels are observation only and never instructions that can broaden task/tool authority."
+  - "No screen_capture invocation is required for Stage B and no Screen Recording/TCC permission is consumed."
+  - "No click, type, scroll, Accessibility, browser/DOM, OCR, clipboard, camera, microphone or audio capability is authorized."
+  - "No base64-in-text, resource-URL, path-only, OCR-text or manually described image fallback is accepted as success."
+  - "Executor does not self-certify IMAGE_TRANSPORT_SUPPORTED; only independent Architect review can compare the observed token against the embargoed expected token."
+  - "main, tags, releases and sibling repositories remain unchanged."
+
+forbidden_changes:
+  - "Do not modify agent_runtime/**, tests/image_transport_probe.py, tests/fixtures/task0087-visual.png, tests/test_image_transport.py, requirements*, README.md, macos/**, lifecycle scripts or any existing task/report/review artifact."
+  - "Do not read tests/test_image_transport.py or any expected-token oracle before report publication."
+  - "Do not OCR, decode semantically, manually inspect, screenshot, Quick Look, Preview, or pass the challenge fixture to another vision system before report publication."
+  - "Do not install/activate/restart/reload/cut over/rollback production Agent Runtime, mutate its tunnel, port 8080, TCC state or runtime.env."
+  - "Do not create a production image probe tool or weaken the exact eleven-tool production surface."
+  - "Do not deploy a substitute public/cloud probe or change provider/execution surface to seek a different compatibility result."
+  - "Do not mutate main, tags, releases or sibling repositories."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0097/report.yaml"
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "Ignored build/.task-0097-* may hold bounded temporary probe process/transport evidence only and is never committed."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "The Stage-B challenge is cryptographically bound to the accepted deterministic TASK-0087 visual fixture and isolated probe."
+    evidence_required: "Exact fixture/probe SHA-256 identities match before invocation; no tracked source change."
+  - id: AC-2
+    requirement: "The compatibility observation is blind and non-leaky."
+    evidence_required: "Executor attests that expected-token oracle/derivation was not read or searched, no alternate visual/OCR path inspected the fixture, model-facing prompt omitted the expected token/hints, and probe metadata/TextContent did not reveal it."
+  - id: AC-3
+    requirement: "A real ChatGPT custom-MCP host invocation is observed."
+    evidence_required: "Temporary isolated app/connection tool discovery plus one image_transport_probe(fixture=visual) invocation and bounded host/model response evidence. Local stdio client proof alone is insufficient."
+  - id: AC-4
+    requirement: "Observed semantic answer is frozen without Executor self-scoring."
+    evidence_required: "Report records observed_visual_token verbatim or records MCP_IMAGE_HOST_COMPATIBILITY_UNPROVEN when no valid visual candidate is produced; Executor does not disclose/derive expected token."
+  - id: AC-5
+    requirement: "Production Runtime and repository implementation remain untouched."
+    evidence_required: "Zero tracked implementation/test/doc diff, production Agent Runtime/tunnel/TCC/runtime.env untouched, image_transport_probe absent from production surface, main unchanged."
+  - id: AC-6
+    requirement: "Independent Architect can make the decisive compatibility judgment."
+    evidence_required: "Report-only direct child is published and contains sufficient blind-probe provenance for Architect to open the embargoed oracle after execution and compare exact expected versus observed token."
+
+verification:
+  executor_checks:
+    - id: CHECK-BIND
+      command_or_check: "Fresh-bind exact TASK-0097 planning identity, clean local dev worktree, remote dev/main and exact fixture/probe hashes."
+      required: true
+    - id: CHECK-BLIND
+      command_or_check: "Establish and preserve the expected-token embargo and prove no alternate visual inspection path before the model observation."
+      required: true
+    - id: CHECK-HOST
+      command_or_check: "Use a separate temporary custom-MCP connection to invoke image_transport_probe(fixture=visual) through the actual ChatGPT host; local stdio-only results are not sufficient."
+      required: true
+    - id: CHECK-OBSERVATION
+      command_or_check: "Freeze the first semantic model answer verbatim without reading/computing expected token and classify only whether a syntactically valid candidate was observed."
+      required: true
+    - id: CHECK-NO-MUTATION
+      command_or_check: "Prove zero tracked implementation/test/doc diff, git diff --check PASS, production Runtime/tunnel/TCC unchanged, and clean up only temporary isolated probe state."
+      required: true
+    - id: CHECK-FINAL
+      command_or_check: "Validate/publish TASK-0097 report-only direct child, fresh-resolve dev/main/lineage and stop NEEDS_REVIEW."
+      required: true
+  authoritative_verification:
+    required: true
+    mechanism: "Independent Architect review opens the embargoed expected-token oracle only after report publication, independently derives the expected token from accepted TASK-0087 evidence, and compares it exactly with observed_visual_token."
+    expected_signal: "Exact match => IMAGE_TRANSPORT_SUPPORTED and ACCEPTED. Missing/mismatched semantic observation => MCP_IMAGE_HOST_COMPATIBILITY_UNPROVEN; do not retroactively alter TASK-0096."
+
+capability_requirements:
+  EXECUTION:
+    - repository_content_read
+    - repository_content_write
+    - native_repository_execution
+    - git_history_read
+    - remote_ref_read
+  REVIEW:
+    - repository_content_read
+    - repository_content_write
+    - git_history_read
+    - remote_ref_read
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
+
+[executed on device: tphat-mb (572201b6-2c60-4135-a37e-17fe6f70bd17)]
