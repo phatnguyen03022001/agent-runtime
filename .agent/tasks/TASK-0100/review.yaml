@@ -1,0 +1,53 @@
+protocol_version: 3
+
+task_id: TASK-0100
+task_revision: 1
+review_revision: 1
+state: ACCEPTED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0100/report.yaml
+  commit: "16f99620fecc6f37de074e2b40b1a050215dfaf8"
+  report_revision: 1
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  scope: PASS
+  structure_policy: PASS
+  git_authority: PASS
+  implementation_change: PASS
+  lifecycle_install_authority: PASS
+  acceptance_criteria: BLOCKED_AT_LOCAL_ACTIVATION
+  verifier_evidence: PASS_WITH_NONBLOCKING_PARTIAL_SURFACE_IMPORT
+
+gap_disposition:
+  - gap_id: "tunnel_activation_predicate_not_reconstructible"
+    disposition: "BOUNDED_READ_ONLY_RECONCILIATION_REQUIRED"
+    evidence: "TASK-0100 installed the accepted successor successfully and proved Runtime ownership enabled, listener=1, healthz=200 and readyz=200, but its report only records canonical_singleton_tunnel_identity=false without preserving a reconstructible subpredicate explaining whether the failure was tunnel fingerprint, process identity, argv/config, process topology or verifier interpretation. Fresh Architect read-only evidence after the report observes one tunnel-client, one direct agent_runtime.server child, accepted tunnel fingerprint 6aa2b81d6dd8, strict deep codesign PASS, and canonical installed-runtime command shape."
+    owner: ARCHITECT
+
+follow_up_tasks: []
+
+promotion_readiness:
+  eligible_for_candidate_capture: false
+  reason: "The accepted successor is installed in a live schema-5 PENDING / APP_SWAPPED transaction. ChatGPT plugin refresh and end-to-end MCP acceptance have not occurred; commit-cutover remains unauthorized."
+
+notes:
+  - "Implementation commit 8fc58fa0851e659a6f992a5cc6bb47eeb402a2a3 is the sole child of TASK-0100 planning commit d754bb95a220aa83571484e2f0b57d594bc306d6 and changes exactly install.sh, macos/candidate_cutover.py, tests/test_candidate_cutover.py and tests/test_surface_and_scripts.py."
+  - "The implementation correction is minimal: prebuilt cutover no longer requires or forwards an unused tunnel-client argument; normal non-prebuilt Runtime tunnel requirements remain untouched."
+  - "Report commit 16f99620fecc6f37de074e2b40b1a050215dfaf8 is the sole child of the implementation commit and changes exactly .agent/tasks/TASK-0100/report.yaml."
+  - "Exactly one install-prebuilt invocation succeeded and consumed authority 1/1. The resulting transaction is schema 5 / PENDING / APP_SWAPPED for candidate 496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c. No commit-cutover, rollback, resume, recover, manual ServiceManagement mutation, direct launchctl mutation, Runtime/tunnel restart, plugin refresh, Stage-B or control action occurred."
+  - "Fresh Architect live inspection independently confirms the PENDING transaction remains present, main_app=enabled, runtime_agent=enabled, exactly one listener on 127.0.0.1:8080, healthz=200, readyz=200 and current installed app strict deep codesign PASS."
+  - "Fresh safe tunnel evidence independently derives the canonical runtime.env tunnel fingerprint as 6aa2b81d6dd8 without disclosing the tunnel ID or API key. One tunnel-client process is present and owns one direct agent_runtime.server child under the installed runtime payload."
+  - "Current tunnel argv targets ~/Applications/Agent Runtime.app/Contents/Resources/runtime/.venv/bin/python and uses poll-channel main, MCP channel main and health listen address 127.0.0.1:8080. Repository Runtime ownership code deliberately accepts the canonical presentation used by the installed process."
+  - "Therefore TASK-0100 is accepted as truthful BLOCKED_AFTER_SUCCESSOR_INSTALL_BASELINE evidence, not as proof that the actual tunnel identity is wrong. A fresh read-only reconciliation task must define exact subpredicates before plugin refresh."
+  - "The separate post-install provenance read that transiently reported strict code-sign verification failure is non-blocking for this review because canonical install returned PENDING only after installed validation and fresh Architect strict deep codesign now passes. It is not treated as causal evidence."
+  - "This review grants no lifecycle mutation, plugin refresh, MCP semantic acceptance or commit-cutover authority."
