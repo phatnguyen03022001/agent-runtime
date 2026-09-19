@@ -2,7 +2,7 @@ protocol_version: 3
 
 task_id: TASK-0099
 task_revision: 2
-review_revision: 2
+review_revision: 3
 state: ACCEPTED
 
 reviewed_report:
@@ -28,26 +28,25 @@ contract_compliance:
   verifier_evidence: NOT_REQUIRED
 
 gap_disposition:
-  - gap_id: "restored_parent_app_registration_lost_after_app_swap"
-    disposition: "FOLLOW_UP_REQUIRED"
-    evidence: "Revision-2 partial recovery restored exact predecessor bytes and removed the transaction, but ServiceManagement status is main_app=not-registered / runtime_agent=enabled. Unified launchd logs show repeated EX_CONFIG because BundleProgram Contents/MacOS/AgentRuntimeRuntimeService cannot be resolved, while the helper file and code signature are valid."
+  - gap_id: "missing_pre_transaction_main_app_registration"
+    disposition: "BOUNDED_HYPOTHESIS_TEST_REQUIRED"
+    evidence: "Revision-2 recovery restored exact predecessor bytes, but post-recovery ServiceManagement state is main_app=not-registered / runtime_agent=enabled while pre-transaction state recorded main_app=enabled / runtime_agent=enabled. launchd independently reports repeated EX_CONFIG resolving BundleProgram Contents/MacOS/AgentRuntimeRuntimeService. Public ServiceManagement contract treats mainApp and agent(plistName:) as distinct registration surfaces, so the missing main-app registration is an observed state divergence and a plausible bounded recovery hypothesis, not a proven causal dependency for agent BundleProgram resolution."
     owner: ARCHITECT
 
 follow_up_tasks: []
 
 promotion_readiness:
   eligible_for_candidate_capture: false
-  reason: "TASK-0099 revision 2 is accepted only as truthful BLOCKED_AFTER_PARTIAL_RECOVERY_BASELINE evidence. The restored predecessor is exact but its parent main-app ServiceManagement registration is absent, so control-plane health is down and successor installation remains unauthorized."
+  reason: "TASK-0099 revision 2 is accepted only as truthful BLOCKED_AFTER_PARTIAL_RECOVERY_BASELINE evidence. Exact predecessor bytes are restored, but control-plane health is down. Causal responsibility of the missing main-app registration is not established; only a bounded sufficiency test may be authorized next."
 
 notes:
-  - "Fresh review-boundary GitHub resolution proved canonical dev at report commit ed27a5d7fcd9edbfab907818a65c61fa6ff22cb1 and main unchanged at c49d777efa09db7f6c51bd8d8616db4623499fb8."
-  - "Report commit ed27a5d7fcd9edbfab907818a65c61fa6ff22cb1 has sole parent revision-2 planning commit 200617fd0aab36544e38ee341fc8fbb038506410 and changes exactly .agent/tasks/TASK-0099/report.yaml."
-  - "Revision-2 partial-recovery authority was consumed exactly once and returned RECOVERED. The old transaction is absent. The installed predecessor exactly matches rollback closure 1224 / 56a94498ce74b8337394e4bfaf4c8d69bdefaaf26429352ea3f8218a47621bf2 and runtime revision/tree b5ac0ed5b461d3a259e4111e1a8f13933985f81f / 5d9b40221e42d96aa78cc25bca7e94092e8426a9."
-  - "runtime.env and desired-state hashes remained unchanged; legacy Runtime ownership is absent; the accepted successor candidate 496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c remained immutable and was not installed."
-  - "The Executor correctly stopped after bounded baseline polling remained tunnel-client=0, listener=0, healthz=000 and readyz=000. No manual restart, launchctl kickstart, tunnel repair, successor install or commit-cutover occurred."
-  - "Independent live diagnosis proves the restored app bundle and AgentRuntimeRuntimeService helper exist and pass strict code-sign verification. The installed bundle is com.picmao.agent-runtime version 6 and the helper SHA-256 remains 69cf1f00d423315e9e281cd4558665ef675b75278c88f8014ced943145e3f1df."
-  - "ServiceManagement status from the installed app is main_app=not-registered and runtime_agent=enabled. The embedded agent plist uses BundleProgram=Contents/MacOS/AgentRuntimeRuntimeService."
-  - "launchctl repeatedly records last exit 78 EX_CONFIG and Unified Log states: Could not find and/or execute program specified by service: 3: No such process: Contents/MacOS/AgentRuntimeRuntimeService. This failure occurs before AgentRuntimeRuntimeService starts, so runtime.env/tunnel child configuration is not the current failure boundary."
-  - "The pre-transaction ownership recorded by revision 1 had main_app=enabled and runtime enabled/healthy-registered. candidate_cutover rollback restoration only re-registers main_app when operations.main_unregistered=true; the recorded operation ledger had main_unregistered=false. App-swap restoration therefore left the previously enabled parent app registration absent even though Runtime agent registration remained enabled."
-  - "Current legacy --recover-runtime-service is not applicable: it intentionally refuses current-generation ServiceManagement installations that contain the embedded Runtime helper/plist."
-  - "Further recovery requires new Architect authority. This review grants no direct launchctl mutation, runtime-agent unregister/register cycle, manual helper execution, successor installation, main promotion, tag or release authority."
+  - "This review revision 3 corrects the causal wording of review revision 2 without changing the acceptance of revision-2 execution evidence."
+  - "Fresh review-boundary GitHub resolution proved canonical dev still at unexecuted TASK-0099 revision-3 planning commit ee788b7c72f4d2c51a5880936a9d2648ed651632 and main unchanged at c49d777efa09db7f6c51bd8d8616db4623499fb8 before this correction."
+  - "Revision-2 partial recovery remains independently accepted: exactly one recovery invocation returned RECOVERED, the old transaction is absent, installed predecessor closure is exactly 1224 / 56a94498ce74b8337394e4bfaf4c8d69bdefaaf26429352ea3f8218a47621bf2, and runtime revision/tree are b5ac0ed5b461d3a259e4111e1a8f13933985f81f / 5d9b40221e42d96aa78cc25bca7e94092e8426a9."
+  - "runtime.env and desired-state remain unchanged; successor 496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c remains uninstalled and immutable."
+  - "Independent live evidence remains: installed app/helper exist and pass strict code-sign verification; ServiceManagement reports main_app=not-registered / runtime_agent=enabled; launchd reports last exit 78 EX_CONFIG and repeatedly cannot resolve BundleProgram Contents/MacOS/AgentRuntimeRuntimeService; no Runtime helper, tunnel-client or port-8080 listener is running."
+  - "The pre-transaction state recorded main_app=enabled / runtime_agent=enabled. Losing main_app registration is therefore a real restoration gap relative to the predecessor state."
+  - "Apple ServiceManagement public contract distinguishes SMAppService.mainApp, which corresponds to the main application as a login item, from SMAppService.agent(plistName:), which registers a LaunchAgent from Contents/Library/LaunchAgents. No public contract establishes that an enabled agent requires mainApp registration for BundleProgram resolution."
+  - "Accordingly, restoring main_app registration may be tested as a minimal state-restoration experiment, but success would demonstrate sufficiency in this incident and failure would falsify that bounded hypothesis. It is not treated as a pre-proven root-cause repair."
+  - "Current legacy --recover-runtime-service remains inapplicable because it explicitly refuses current-generation ServiceManagement installations."
+  - "No lifecycle mutation authority is granted by this review."
