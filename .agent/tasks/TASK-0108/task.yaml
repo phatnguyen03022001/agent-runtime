@@ -1,14 +1,14 @@
 protocol_version: 3
 
 task_id: TASK-0108
-task_revision: 3
+task_revision: 4
 state: APPROVED
 
 origin:
   type: architect_recovery
   task_id: TASK-0108
-  predecessor_revision: 2
-  gap_id: "screen_capture_failure_helper_import_omission"
+  predecessor_revision: 3
+  gap_id: "durable_canonical_verify_receipt"
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -31,57 +31,57 @@ skill_library:
 execution_skills:
   required:
     - executor
-    - debugging
     - verification
     - reliability
   recommended:
     - simplicity
 
 authority_sources:
-  - source: ".agent/tasks/TASK-0108/review.yaml@4729cd5481e4e14a7448ba5d958d98f32ca8e0d4"
-    role: "Architect BLOCKED review of revision 1; media-first production implementation reusable but verification incomplete."
+  - source: ".agent/tasks/TASK-0108/task.yaml@ae7d9851786c6c594a7071b67cb6cd4727eccf32"
+    role: "Revision-3 task authority. Executor applied the authorized import-only fix and reached focused GREEN, then consumed canonical verification once but execution transport lost the final exit code."
     precedence: 1
-  - source: ".agent/tasks/TASK-0108/task.yaml@9e2616c64875206f510ae0a1fd065acf81522148"
-    role: "Revision-2 recovery task. Executor stopped before canonical verification with a validated two-test partial checkpoint."
-    precedence: 2
   - source: "09eebd0c6bb7fbd905dd55a2015697224e8ee886"
-    role: "Reusable media-first production implementation commit."
+    role: "Reusable media-first implementation commit whose production contract remains authoritative."
+    precedence: 2
+  - source: ".agent/tasks/TASK-0108/review.yaml@4729cd5481e4e14a7448ba5d958d98f32ca8e0d4"
+    role: "Architect BLOCKED review establishing required two test-contract corrections."
     precedence: 3
-  - source: "Architect read-only canonical source audit"
-    role: "agent_runtime/server.py at implementation commit calls capture_failure_result() but imports only ScreenCaptureFailure and capture_screen, causing focused screen_capture failure-path NameError."
-    precedence: 4
 
 supersession:
-  revision2:
-    planning_head: "9e2616c64875206f510ae0a1fd065acf81522148"
-    terminal: "EXECUTION_INCOMPLETE_PRE_CANONICAL_VERIFICATION"
+  revision3:
+    planning_head: "ae7d9851786c6c594a7071b67cb6cd4727eccf32"
+    terminal: "EXECUTION_INCOMPLETE_CANONICAL_RESULT_UNAVAILABLE"
     report_published: false
     implementation_commit_published: false
-    canonical_verify_authority_consumed: "0/1"
-    focused_result: FAIL
-    reason: "Focused verification exposed a production import omission outside revision-2 scope before canonical verification."
+    canonical_verify_authority_consumed: "1/1"
+    canonical_verify_result: UNCONFIRMED
+    canonical_verify_rerun_authorized: false
+    reason: "The one canonical ./verify invocation completed but the execution transport did not retain its final exit code. Revision 4 changes only the result-capture transport and grants a fresh independent verification authority."
 
 inherited_checkpoint:
   repository_path: "/Users/tienphat/Developer/agent-runtime"
   required_head: "9e2616c64875206f510ae0a1fd065acf81522148"
   required_branch: dev
-  required_diff_sha256: "a7eac58888d82dbe7daf42bbfd256d747224dfb5ecb5a311b6b1df81e990af11"
+  required_diff_sha256: "8acbf5212e381cf1c0cc0791c0f29aa8954dd4c6e85a67749f72c0eabc649edd"
   required_dirty_paths:
+    - agent_runtime/server.py
     - tests/test_mcp_client_conformance.py
     - tests/test_task0055_cutover.py
   required_file_sha256:
+    agent_runtime/server.py: "a0f10a1b8bf3a3aa0cf80e0fb38ec34ed126d6fb0a491367967d6bafe04b6e5f"
     tests/test_mcp_client_conformance.py: "18310f77cf202054c5cc0af0a91616f05481464b221cbdbe4d01ec4632b87779"
     tests/test_task0055_cutover.py: "3eb02ff4951141a2712f7498596fc193cf441cf6b6aef31f7edb392bd5cae7a1"
   required_diff_check: PASS
+  required_server_semantic_diff: "Exactly one import-only addition of capture_failure_result from .screen_capture."
   instruction: "Do not reset, clean, restore, stash, checkout, sync, merge, rebase or recreate this checkpoint before validating all identities above."
 
-production_fix:
-  path: agent_runtime/server.py
-  canonical_blob_before_fix: "b268c2cdea3745115ef4e43235fcfb1a06f1c40f"
-  exact_intent: "Extend the existing .screen_capture import so server.py imports capture_failure_result alongside ScreenCaptureFailure and capture_screen."
-  expected_semantic_change: "One import-only production correction. No function body, tool schema, error envelope, capture semantics or other production behavior changes."
+foreign_checkpoint:
+  path: "/Users/tienphat/Developer/.task-0108-r1-foreign-checkpoint.patch"
+  sha256: "0f217f0974fee6d2b51f5210203d884ef4db1c3f0613b646f472193d1c39dbd9"
+  authority: NONE
+  instruction: "Do not apply, inspect for implementation guidance, mutate or delete."
 
-objective: "Continue from the exact revision-2 partial checkpoint, add the single missing capture_failure_result import in agent_runtime/server.py, then re-run focused affected verification. If focused verification is green, run fresh revision-3 canonical ./verify exactly once in foreground with retained exit code. Only after canonical PASS may packaging/signing/freeze be attempted. Do not install or activate anything."
+objective: "Continue from the exact three-path revision-3 checkpoint. Reconfirm focused GREEN, then execute canonical ./verify exactly once under fresh revision-4 authority using one durable detached receipt wrapper so the exit code survives controller/tool timeout. Poll only the receipt/process state; never invoke ./verify a second time. If canonical PASS, publish the exact three-path implementation successor, then attempt signed immutable packaging only if explicit signing authority is already configured. Do not install or activate anything."
 
 execution_surface:
   id: CODEX_LOCAL
@@ -89,113 +89,134 @@ execution_surface:
   location: LOCAL
   transport: NATIVE
 
+canonical_verification:
+  authority: "0/1"
+  invocation: "./verify"
+  wrapper_launch_authority: "0/1"
+  receipt_root: "/Users/tienphat/Developer"
+  state_file: "/Users/tienphat/Developer/.task-0108-r4-verify.state"
+  log_file: "/Users/tienphat/Developer/.task-0108-r4-verify.log"
+  receipt_file: "/Users/tienphat/Developer/.task-0108-r4-verify.receipt"
+  temp_receipt_file: "/Users/tienphat/Developer/.task-0108-r4-verify.receipt.tmp"
+  result_capture_contract:
+    - "Before launch, require all four revision-4 verify receipt/log paths are absent. If any exist, stop VERIFY_RECEIPT_PRECONDITION_FAILED; do not delete or overwrite them."
+    - "Launch exactly one durable child wrapper via nohup/background so it may outlive the controller wait timeout."
+    - "The child must cd to /Users/tienphat/Developer/agent-runtime, atomically write state=STARTED before invoking ./verify, invoke literal ./verify exactly once, redirect full stdout/stderr to the fixed log_file, capture shell exit code immediately after ./verify, compute SHA-256 and byte size of the completed log, atomically write the fixed receipt_file with state=FINISHED, exit_code, log_sha256 and log_bytes, then exit with the same code."
+    - "The launch command itself must return the durable child PID promptly and must not wait for ./verify completion."
+    - "After one successful launch, wrapper launch authority is consumed 1/1 regardless of later receipt outcome."
+    - "Poll only process liveness plus state/receipt files. Polling must never invoke ./verify or launch another wrapper."
+    - "If FINISHED receipt appears, validate exact fields, recompute log SHA-256/bytes and require equality."
+    - "If exit_code=0, canonical verification is PASS. If exit_code is non-zero, canonical verification is FAIL."
+    - "If the child is no longer alive and no valid FINISHED receipt exists, stop CANONICAL_VERIFICATION_RESULT_UNAVAILABLE. Do not rerun."
+    - "If the child remains alive beyond the execution session's bounded observation window, stop CANONICAL_VERIFICATION_STILL_RUNNING and preserve files/process; do not launch another verifier."
+
 scope:
   required_changes:
-    - "Resolve TASK-0108 revision 3 from GitHub at exact planning HEAD."
-    - "Before any mutation, validate the inherited checkpoint exactly: local HEAD 9e2616c64875206f510ae0a1fd065acf81522148, branch dev, exact two dirty paths, exact diff SHA-256 a7eac58888d82dbe7daf42bbfd256d747224dfb5ecb5a311b6b1df81e990af11, exact two file SHA-256 values, and git diff --check PASS."
-    - "Do not synchronize the local checkout to revision-3 planning HEAD. Task authority is remote; execution checkpoint remains intentionally on revision-2 planning HEAD."
-    - "Before editing server.py, require its Git blob at local HEAD equals b268c2cdea3745115ef4e43235fcfb1a06f1c40f."
-    - "Modify exactly one production line/import statement in agent_runtime/server.py so capture_failure_result is imported from .screen_capture together with ScreenCaptureFailure and capture_screen."
-    - "Do not alter any server.py function body, tool registration, annotations, input schema, output contract, timing middleware or public tool count."
-    - "After the import fix, require dirty paths are exactly agent_runtime/server.py plus the two inherited test files."
+    - "Resolve TASK-0108 revision 4 from GitHub at exact planning HEAD."
+    - "Validate the inherited checkpoint exactly before any mutation: local HEAD, branch, exact three dirty paths, diff SHA-256, exact three file SHA-256 values, git diff --check PASS and import-only server.py semantic diff."
+    - "Do not synchronize local checkout to revision-4 planning HEAD. Remote task is authority; local checkpoint intentionally remains based on revision-2 planning HEAD."
     - "Run focused verification including tests.test_mcp_client_conformance, tests.test_task0055_cutover, tests.test_screen_capture, tests.test_screen_capture_mcp and tests.test_mcp_contracts. Require PASS."
-    - "Run py_compile for agent_runtime/server.py and affected test files."
-    - "Before canonical verification, prove revision-1 media-first production paths remain unchanged except the authorized server.py import-only fix. agent_runtime/screen_capture.py, README.md, tests/test_mcp_contracts.py, tests/test_screen_capture.py and tests/test_screen_capture_mcp.py must remain byte-identical to implementation commit 09eebd0c6bb7fbd905dd55a2015697224e8ee886."
-    - "Run canonical ./verify exactly once under fresh revision-3 authority 0/1 -> 1/1, in a foreground execution result that retains final exit code."
-    - "If ./verify returns non-zero, stop CANONICAL_VERIFICATION_FAILED. Do not rerun or widen scope."
-    - "If ./verify exits 0, create one revision-3 implementation successor containing exactly agent_runtime/server.py, tests/test_mcp_client_conformance.py and tests/test_task0055_cutover.py."
-    - "Only after canonical PASS, attempt canonical package/sign/freeze using existing package_app.sh with an already-configured explicit non-ad-hoc AGENT_RUNTIME_CODESIGN_IDENTITY."
+    - "Run py_compile for agent_runtime/server.py and affected test files. Require PASS."
+    - "Re-prove README.md, agent_runtime/screen_capture.py, tests/test_mcp_contracts.py, tests/test_screen_capture.py and tests/test_screen_capture_mcp.py are byte-identical to implementation commit 09eebd0c6bb7fbd905dd55a2015697224e8ee886."
+    - "Perform canonical verification only through the fixed durable receipt contract. ./verify authority 0/1 -> 1/1 and wrapper launch authority 0/1 -> 1/1."
+    - "Do not infer success from log tail, process disappearance or focused verification. Only validated receipt exit_code=0 is canonical PASS."
+    - "If receipt proves non-zero exit, stop CANONICAL_VERIFICATION_FAILED with no rerun."
+    - "If receipt proves exit 0, create one implementation successor commit containing exactly agent_runtime/server.py, tests/test_mcp_client_conformance.py and tests/test_task0055_cutover.py."
+    - "Only after canonical PASS, attempt canonical package/sign/freeze using existing package_app.sh and only an already-configured explicit non-ad-hoc AGENT_RUNTIME_CODESIGN_IDENTITY."
     - "Do not discover/select or print a signing identity. Do not use ad-hoc signing."
-    - "If valid explicit signing authority is unavailable, stop VERIFICATION_PASSED_PACKAGING_UNAVAILABLE after publishing the implementation successor and report."
-    - "If packaging succeeds, require canonical CPython 3.13.x/cp313/macOS arm64, locked dependencies, package provenance, strict codesign and immutable candidate freeze PASS; record candidate SHA/path/handoff hash."
+    - "If valid explicit signing authority is unavailable, terminal is VERIFICATION_PASSED_PACKAGING_UNAVAILABLE after publishing implementation/report."
+    - "If packaging succeeds, require canonical CPython 3.13.x/cp313/macOS arm64, locked dependencies, package provenance, strict codesign and immutable candidate freeze PASS; record candidate SHA/path/handoff path/handoff SHA."
     - "Do not install, cut over, restart, refresh plugin, invoke live screen_capture or mutate TCC."
-    - "Publish TASK-0108 revision-3 report on remote dev after the implementation successor."
+    - "Publish TASK-0108 revision-4 report on dev after any terminal that has sufficient durable evidence. Report publication is repository-only and must not mutate local Runtime state."
 
   allowed_existing_files_or_components:
     - "agent_runtime/server.py"
     - "tests/test_mcp_client_conformance.py"
     - "tests/test_task0055_cutover.py"
     - ".agent/tasks/TASK-0108/report.yaml"
+    - "/Users/tienphat/Developer/.task-0108-r4-verify.state"
+    - "/Users/tienphat/Developer/.task-0108-r4-verify.log"
+    - "/Users/tienphat/Developer/.task-0108-r4-verify.receipt"
+    - "/Users/tienphat/Developer/.task-0108-r4-verify.receipt.tmp"
     - "build/candidates/** ignored immutable package artifacts only after canonical PASS"
     - "ordinary ignored test/build artifacts"
   expected_files_are_restrictive: true
 
 invariants:
-  - "Revision-1 media-first screen_capture contract remains unchanged."
+  - "Media-first screen_capture contract remains unchanged."
   - "Exactly eleven public MCP tools remain."
-  - "server.py production change is import-only."
+  - "server.py production delta remains import-only."
   - "No dependency, native helper, README, tunnel, plugin, TCC or lifecycle change."
-  - "Revision-2 canonical verify authority remains unconsumed; revision 3 has fresh independent 0/1 authority."
-  - "Canonical ./verify executes at most once and final exit code must be retained."
+  - "Revision-3 verify is never replayed; revision 4 has fresh 0/1 authority."
+  - "Revision-4 ./verify is invoked exactly once by exactly one durable wrapper."
+  - "No second wrapper launch or direct ./verify fallback is permitted."
   - "No candidate is installed."
   - "main, tags, releases and sibling repositories remain unchanged."
 
 forbidden_changes:
-  - "Do not reset, discard, stash, clean or recreate the inherited revision-2 checkpoint."
-  - "Do not modify agent_runtime/screen_capture.py."
-  - "Do not modify README.md, requirements.txt or requirements.lock."
-  - "Do not modify tests/test_mcp_contracts.py, tests/test_screen_capture.py or tests/test_screen_capture_mcp.py."
-  - "Do not alter server.py beyond the exact import-only fix."
-  - "Do not rerun canonical ./verify after any result."
-  - "Do not discover/select/print a signing identity."
-  - "Do not use ad-hoc signing."
+  - "Do not reset/discard/stash/clean/recreate the inherited checkpoint."
+  - "Do not modify any tracked file beyond the existing three authorized dirty paths before commit/report."
+  - "Do not alter server.py beyond the already-present import-only fix."
+  - "Do not invoke ./verify directly outside the single durable wrapper."
+  - "Do not launch the durable wrapper more than once."
+  - "Do not delete/overwrite pre-existing revision-4 receipt/log/state paths if the precondition fails."
+  - "Do not use log content alone as a PASS oracle."
+  - "Do not discover/select/print a signing identity or use ad-hoc signing."
   - "Do not install/cutover/restart Runtime."
-  - "Do not refresh the ChatGPT plugin or invoke live screen_capture."
+  - "Do not refresh ChatGPT plugin or invoke live screen_capture."
   - "Do not mutate main/tags/releases."
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "Exact revision-2 partial checkpoint is inherited without recreation or loss."
-    evidence_required: "Exact HEAD, path set, diff SHA, file SHA values and diff-check PASS before mutation."
+    requirement: "Exact three-path inherited checkpoint is preserved and validated."
+    evidence_required: "Exact HEAD/path/diff/file-hash/diff-check/import-only closure."
   - id: AC-2
-    requirement: "Production NameError is corrected by one import-only server.py change."
-    evidence_required: "Exact import diff and no server.py function-body changes."
+    requirement: "Focused affected verification remains green."
+    evidence_required: "Named focused tests PASS and py_compile PASS."
   - id: AC-3
-    requirement: "Focused affected verification is green."
-    evidence_required: "Named focused tests PASS plus py_compile PASS."
+    requirement: "Media-first implementation remains otherwise byte-identical."
+    evidence_required: "Five preservation paths byte-identical to 09eebd0c6bb7fbd905dd55a2015697224e8ee886."
   - id: AC-4
-    requirement: "Media-first production implementation remains otherwise byte-identical."
-    evidence_required: "Five untouched revision-1 production/test/doc paths byte-identical; screen_capture contract unchanged."
+    requirement: "Canonical verification executes exactly once with durable validated result."
+    evidence_required: "One wrapper PID, STARTED marker, one ./verify invocation, FINISHED receipt, matching log SHA/bytes, exit_code 0, no rerun."
   - id: AC-5
-    requirement: "Canonical verification passes exactly once with retained final exit code."
-    evidence_required: "./verify authority 1/1, exit code 0, no rerun."
+    requirement: "Implementation successor contains exactly the three authorized paths."
+    evidence_required: "Exact commit diff closure after canonical PASS."
   - id: AC-6
-    requirement: "Revision-3 implementation successor contains exactly three authorized paths."
-    evidence_required: "Exact commit diff closure."
-  - id: AC-7
     requirement: "Signed immutable candidate is frozen only if explicit signing authority is available."
-    evidence_required: "Candidate/provenance/codesign evidence after AC-5 PASS, or truthful VERIFICATION_PASSED_PACKAGING_UNAVAILABLE terminal."
-  - id: AC-8
+    evidence_required: "Candidate/provenance/codesign evidence after AC-4 PASS, or truthful VERIFICATION_PASSED_PACKAGING_UNAVAILABLE terminal."
+  - id: AC-7
     requirement: "No live/product consequence occurs."
     evidence_required: "Install/cutover/restart/plugin/TCC/live-capture counters zero."
 
 verification:
   executor_checks:
     - id: CHECK-CHECKPOINT
-      command_or_check: "Validate exact inherited revision-2 dirty checkpoint before mutation."
-      required: true
-    - id: CHECK-IMPORT
-      command_or_check: "One import-only capture_failure_result correction in server.py."
+      command_or_check: "Validate exact inherited three-path checkpoint."
       required: true
     - id: CHECK-FOCUSED
-      command_or_check: "Focused affected tests and py_compile PASS."
+      command_or_check: "Focused tests and py_compile PASS."
       required: true
     - id: CHECK-PRESERVE
-      command_or_check: "Media-first contract paths remain otherwise byte-identical."
+      command_or_check: "Media-first preservation paths remain byte-identical."
+      required: true
+    - id: CHECK-RECEIPT-PRECONDITION
+      command_or_check: "Fixed r4 verify state/log/receipt/temp paths are absent."
       required: true
     - id: CHECK-CANONICAL
-      command_or_check: "./verify exactly once in foreground; capture final exit code."
+      command_or_check: "Launch one durable wrapper; poll receipt; validate exit code/log closure; never rerun."
       required: true
     - id: CHECK-PACKAGE
-      command_or_check: "Only after canonical PASS, package/sign/freeze if explicit signing identity is already configured."
+      command_or_check: "Only after canonical PASS, package/sign/freeze if explicit signing identity already exists."
       required: true
     - id: CHECK-FINAL
-      command_or_check: "Publish exact three-path implementation successor and truthful report."
+      command_or_check: "Publish exact implementation/report evidence without live activation."
       required: true
-  authoritative_verification:
-    required: true
-    mechanism: "Independent Architect review before any install."
-    expected_signal: "Canonical PASS with media-first contract preserved; candidate may proceed only if packaging also succeeds."
+
+authoritative_verification:
+  required: true
+  mechanism: "Independent Architect review before any install."
+  expected_signal: "Valid canonical PASS receipt with exact three-path implementation successor; candidate may proceed only if packaging also succeeds."
 
 capability_requirements:
   EXECUTION:
