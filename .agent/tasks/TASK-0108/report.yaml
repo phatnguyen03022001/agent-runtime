@@ -1,0 +1,97 @@
+protocol_version: 3
+task_id: TASK-0108
+task_revision: 1
+report_revision: 1
+state: REPORTED
+terminal: IMPLEMENTATION_VERIFIED_PACKAGING_UNAVAILABLE
+
+task_source:
+  path: .agent/tasks/TASK-0108/task.yaml
+  planning_head: a220a2e943da2d9140ad07c35ce8609ce3870e4a
+  planning_head_verified_exact: true
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: dev
+  execution_surface: CODEX_LOCAL
+  implementation_commit: 09eebd0c6bb7fbd905dd55a2015697224e8ee886
+  public_tool_count: 11
+
+contract:
+  screen_capture_output_schema: null
+  screen_capture_structured_content: null
+  success_content_order:
+    - ImageContent: image/png byte-exact PNG
+    - TextContent: bounded deterministic validated metadata JSON
+  failure_content:
+    is_error: true
+    structured_content: null
+    blocks: 1
+    fields: [code, message, retryable]
+
+verification:
+  red:
+    command: "PYTHONPATH=$PWD .venv/bin/python -m unittest tests.test_screen_capture tests.test_screen_capture_mcp tests.test_mcp_contracts"
+    result: FAIL
+    evidence:
+      - "old screen_capture output schema was non-null"
+      - "old success had one ImageContent and no metadata TextContent"
+      - "old failures returned structuredContent"
+  focused:
+    command: "PYTHONPATH=$PWD .venv/bin/python -m unittest tests.test_screen_capture tests.test_screen_capture_mcp tests.test_mcp_contracts && .venv/bin/python -m py_compile agent_runtime/server.py agent_runtime/screen_capture.py tests/test_screen_capture.py tests/test_screen_capture_mcp.py tests/test_mcp_contracts.py"
+    result: PASS
+    tests_run: 31
+  canonical:
+    command: ./verify
+    authority_consumed: "1/1"
+    reruns: 0
+    result: UNCONFIRMED
+    note: "The single command was launched and completed, but its detached execution transport did not retain the final exit status; it was not rerun."
+
+packaging:
+  result: UNAVAILABLE
+  reason: "AGENT_RUNTIME_CODESIGN_IDENTITY was unavailable or ad-hoc; no identity was discovered, selected, printed, or weakened."
+  package_invocations: 0
+  candidate_produced: false
+  install_invocations: 0
+
+preservation:
+  requirements_lock_changed: false
+  native_screen_capture_helper_changed: false
+  input_schema_changed: false
+  annotations_changed: false
+  live_screen_capture_invocations: 0
+  tcc_mutations: 0
+  runtime_restarts: 0
+  plugin_refreshes: 0
+  install_prebuilt_invocations: 0
+  commit_cutover_invocations: 0
+  rollback_resume_recover_invocations: 0
+
+scope:
+  committed_files:
+    - README.md
+    - agent_runtime/server.py
+    - agent_runtime/screen_capture.py
+    - tests/test_mcp_contracts.py
+    - tests/test_screen_capture.py
+    - tests/test_screen_capture_mcp.py
+  preserved_uncommitted_out_of_scope_files:
+    - tests/test_mcp_client_conformance.py
+    - tests/test_task0055_cutover.py
+
+acceptance:
+  AC-1: PASS
+  AC-2: PASS
+  AC-3: PASS
+  AC-4: PASS
+  AC-5: PASS
+  AC-6: UNCONFIRMED
+  AC-7: IMPLEMENTATION_VERIFIED_PACKAGING_UNAVAILABLE
+  AC-8: PASS
+
+result: NEEDS_REVIEW
+notes:
+  - "The metadata serializer fails closed with CAPTURE_PROTOCOL_ERROR if its UTF-8 text would exceed MAX_HEADER_BYTES."
+  - "No semantic image material is placed in metadata or error TextContent."
+  - "The canonical verifier was deliberately not rerun after its final exit status became unavailable."
