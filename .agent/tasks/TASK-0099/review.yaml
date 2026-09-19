@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0099
-task_revision: 1
-review_revision: 1
+task_revision: 2
+review_revision: 2
 state: ACCEPTED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0099/report.yaml
-  commit: "486458fb249c20d0c87facd0a4dec48c0b0ca267"
-  report_revision: 1
+  commit: "ed27a5d7fcd9edbfab907818a65c61fa6ff22cb1"
+  report_revision: 2
 
 independence:
   reviewer_role: ARCHITECT
@@ -27,20 +27,27 @@ contract_compliance:
   acceptance_criteria: BLOCKED_AS_SPECIFIED
   verifier_evidence: NOT_REQUIRED
 
-gap_disposition: []
+gap_disposition:
+  - gap_id: "restored_parent_app_registration_lost_after_app_swap"
+    disposition: "FOLLOW_UP_REQUIRED"
+    evidence: "Revision-2 partial recovery restored exact predecessor bytes and removed the transaction, but ServiceManagement status is main_app=not-registered / runtime_agent=enabled. Unified launchd logs show repeated EX_CONFIG because BundleProgram Contents/MacOS/AgentRuntimeRuntimeService cannot be resolved, while the helper file and code signature are valid."
+    owner: ARCHITECT
+
 follow_up_tasks: []
 
 promotion_readiness:
   eligible_for_candidate_capture: false
-  reason: "TASK-0099 revision 1 is accepted only as truthful BLOCKED_AFTER_ROLLBACK evidence. The live cutover objective is incomplete, the schema-5 transaction remains PARTIAL / APP_SWAPPED, listener/health/readiness remain down, and no successor install or lifecycle promotion is accepted."
+  reason: "TASK-0099 revision 2 is accepted only as truthful BLOCKED_AFTER_PARTIAL_RECOVERY_BASELINE evidence. The restored predecessor is exact but its parent main-app ServiceManagement registration is absent, so control-plane health is down and successor installation remains unauthorized."
 
 notes:
-  - "Fresh review-boundary GitHub resolution proved canonical dev at report commit 486458fb249c20d0c87facd0a4dec48c0b0ca267 and main unchanged at c49d777efa09db7f6c51bd8d8616db4623499fb8."
-  - "Report commit 486458fb249c20d0c87facd0a4dec48c0b0ca267 has sole parent planning commit 4f71a7ca0832e075066af5516a8b4433048a16de and changes exactly .agent/tasks/TASK-0099/report.yaml."
-  - "The Executor correctly consumed rollback authority exactly once and stopped after ./install.sh --rollback-cutover returned rc=2 with APP_SWAPPED phase installed app does not match candidate identity. It did not retry rollback, install the successor, commit cutover, manually repair lifecycle state, mutate implementation, or consume unrelated authority."
-  - "Fresh live readback independently matches the reported terminal checkpoint: transaction metadata SHA-256 8929acb4524b2d3b93fe95b995f470e09734989cbacd46a443ce9ecc0408fe97, candidate-handoff SHA-256 1ba9714b8f7cc5e7edac488ee0ab6b3aeb63c1f9b2e01f6787cd9b59d7cd088d, schema 5 / PARTIAL / APP_SWAPPED, runtime.env SHA-256 6e6fef8e255b140f28703f8bd515726e1fd93d644e6f838b33ebf319e8133077, desired-state SHA-256 e3b0c44298fc1c149afbf4d8996fb92427ae41e4649b934ca495991b7852b855, listener count 0, healthz 000 and readyz 000."
-  - "Installed app rollback closure remains 1224 / 4ad648d16c16ab95c04fb44ff53d15575872a3092a5e17fd939bc4e7dad46fd4; the transaction previous-app snapshot remains 1224 / 56a94498ce74b8337394e4bfaf4c8d69bdefaaf26429352ea3f8218a47621bf2."
-  - "Independent diagnosis proves the installed APP_SWAPPED generation is not corrupted relative to its transaction-era candidate contract. Exact package_provenance.py from source revision 86751031b28292bddfd5072a75fd4aaa1ec78019 validates the installed app against the transaction handoff and returns exact candidate 2e7380e9d05e2476b9823d49b0c8fb6f51e6350018785f80ff23cd411a00a57a."
-  - "candidate_cutover.py is byte-identical between transaction source revision 86751031b28292bddfd5072a75fd4aaa1ec78019 and TASK-0099 planning source: Git blob 5b17708876e5d24b4a9ff83b6e6d94db9f03f15c. package_provenance.py changed from transaction-era blob dc268500552fa8ab678330c9948f00790114ac64 to current blob 25fa7b07c78c14eed21f41146df71128f9db50aa."
-  - "The current provenance validator rejects the old installed candidate specifically because AgentRuntimeScreenCapture is absent; that executable became a required package identity only after the screen_capture implementation. The rollback failure is therefore a forward provenance-compatibility mismatch, not evidence that the transaction-bound installed app bytes drifted."
-  - "Further lifecycle mutation requires new Architect authority for the exact PARTIAL transaction. This review grants no rollback retry, partial recovery, successor install, commit-cutover, manual repair, restart, tunnel mutation, main promotion, tag or release authority."
+  - "Fresh review-boundary GitHub resolution proved canonical dev at report commit ed27a5d7fcd9edbfab907818a65c61fa6ff22cb1 and main unchanged at c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "Report commit ed27a5d7fcd9edbfab907818a65c61fa6ff22cb1 has sole parent revision-2 planning commit 200617fd0aab36544e38ee341fc8fbb038506410 and changes exactly .agent/tasks/TASK-0099/report.yaml."
+  - "Revision-2 partial-recovery authority was consumed exactly once and returned RECOVERED. The old transaction is absent. The installed predecessor exactly matches rollback closure 1224 / 56a94498ce74b8337394e4bfaf4c8d69bdefaaf26429352ea3f8218a47621bf2 and runtime revision/tree b5ac0ed5b461d3a259e4111e1a8f13933985f81f / 5d9b40221e42d96aa78cc25bca7e94092e8426a9."
+  - "runtime.env and desired-state hashes remained unchanged; legacy Runtime ownership is absent; the accepted successor candidate 496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c remained immutable and was not installed."
+  - "The Executor correctly stopped after bounded baseline polling remained tunnel-client=0, listener=0, healthz=000 and readyz=000. No manual restart, launchctl kickstart, tunnel repair, successor install or commit-cutover occurred."
+  - "Independent live diagnosis proves the restored app bundle and AgentRuntimeRuntimeService helper exist and pass strict code-sign verification. The installed bundle is com.picmao.agent-runtime version 6 and the helper SHA-256 remains 69cf1f00d423315e9e281cd4558665ef675b75278c88f8014ced943145e3f1df."
+  - "ServiceManagement status from the installed app is main_app=not-registered and runtime_agent=enabled. The embedded agent plist uses BundleProgram=Contents/MacOS/AgentRuntimeRuntimeService."
+  - "launchctl repeatedly records last exit 78 EX_CONFIG and Unified Log states: Could not find and/or execute program specified by service: 3: No such process: Contents/MacOS/AgentRuntimeRuntimeService. This failure occurs before AgentRuntimeRuntimeService starts, so runtime.env/tunnel child configuration is not the current failure boundary."
+  - "The pre-transaction ownership recorded by revision 1 had main_app=enabled and runtime enabled/healthy-registered. candidate_cutover rollback restoration only re-registers main_app when operations.main_unregistered=true; the recorded operation ledger had main_unregistered=false. App-swap restoration therefore left the previously enabled parent app registration absent even though Runtime agent registration remained enabled."
+  - "Current legacy --recover-runtime-service is not applicable: it intentionally refuses current-generation ServiceManagement installations that contain the embedded Runtime helper/plist."
+  - "Further recovery requires new Architect authority. This review grants no direct launchctl mutation, runtime-agent unregister/register cycle, manual helper execution, successor installation, main promotion, tag or release authority."
