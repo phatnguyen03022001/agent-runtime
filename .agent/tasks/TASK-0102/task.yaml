@@ -1,0 +1,199 @@
+protocol_version: 3
+
+task_id: TASK-0102
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  predecessor_task: TASK-0101
+  gap_id: "separate_activation_convergence_from_stability"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: installed_successor_activation_proof
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - verification
+  - simplicity
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - verification
+  recommended:
+    - simplicity
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0101/review.yaml@d7115787b1867cae38f96228623355e6e8c00b46"
+    role: "Architect-accepted evidence that TASK-0101 failed on a transient startup observation because convergence and stability were incorrectly combined."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0100/review.yaml@ef31de7bf124c2085ab037a34cb66f27470a3555"
+    role: "Accepted installation evidence for exact TASK-0098 successor in schema-5 PENDING / APP_SWAPPED state."
+    precedence: 2
+  - source: "Fresh Architect process timing after TASK-0101"
+    role: "AgentRuntimeRuntimeService and tunnel-client began at 23:41:56; direct installed-Python agent_runtime.server child began at 23:41:57. Current topology is service -> tunnel-client -> direct agent_runtime.server; tunnel and child share process group; one listener exists; healthz=200; readyz=200."
+    precedence: 3
+
+structure_authority:
+  status: NOT_APPLICABLE
+  rationale: "Read-only activation proof only. No implementation, configuration, lifecycle or product structure change is authorized."
+
+objective: "Read-only prove the already-installed successor's local Runtime+tunnel activation using separate bounded convergence and stability phases. If all immutable predicates pass, all volatile predicates converge within the exact convergence window, and then remain true throughout the exact stability window, stop CHATGPT_PLUGIN_REFRESH_REQUIRED. Otherwise stop with the exact typed failing phase and subpredicate. Do not mutate Runtime, tunnel, plugin or the PENDING transaction."
+
+installed_successor:
+  candidate_sha256: "496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c"
+  transaction_required:
+    schema: 5
+    status: PENDING
+    phase: APP_SWAPPED
+  accepted_tunnel_fingerprint: "6aa2b81d6dd8"
+  expected_runtime_root: "~/Applications/Agent Runtime.app/Contents/Resources/runtime"
+  expected_listener: "127.0.0.1:8080"
+
+scope:
+  required_changes:
+    - "Fresh-bind exact TASK-0102 planning HEAD, remote dev/main, clean single canonical worktree and accepted TASK-0101 review."
+    - "Perform read-only validation only. No implementation/test/config/lifecycle mutation is authorized."
+    - "Before observation windows, require transaction schema=5/status=PENDING/phase=APP_SWAPPED and exact candidate SHA-256."
+    - "Require installed Agent Runtime strict deep codesign PASS."
+    - "Require canonical runtime.env regular non-symlink mode 0600, SHA-256 equal to transaction runtime_config identity, and CONTROL_PLANE_TUNNEL_ID fingerprint exactly 6aa2b81d6dd8 without disclosing secret values."
+    - "Define the volatile activation predicate as the conjunction of: main_app=enabled; runtime_agent=enabled; exactly one canonical tunnel-client root; accepted canonical tunnel argv targeting the installed Runtime root with poll-channel main, MCP channel main and health listen address 127.0.0.1:8080; exactly one direct agent_runtime.server child using installed package-owned Python; child shares tunnel process group; exactly one attributable listener on 127.0.0.1:8080; healthz=200; readyz=200."
+    - "CONVERGENCE PHASE: at most 40 observations, exactly 250 ms sleep before each observation, no observation 41. A false volatile predicate during observations 1..39 is not terminal; record it and continue. Convergence succeeds at the first observation where the complete volatile predicate is simultaneously true. If no complete PASS occurs by observation 40, stop TUNNEL_ACTIVATION_UNPROVEN and report the exact subpredicates still false at observation 40."
+    - "STABILITY PHASE starts only after convergence. Run exactly 20 additional observations, exactly 250 ms sleep before each observation, no stability observation 21. Every volatile subpredicate must remain true at every stability observation."
+    - "If any stability observation fails, stop TUNNEL_STABILITY_UNPROVEN and report the exact first failing stability observation and subpredicate."
+    - "If convergence succeeds and all 20 stability observations pass, terminal is exactly CHATGPT_PLUGIN_REFRESH_REQUIRED."
+    - "After either terminal, prove transaction metadata and runtime.env SHA-256 remain unchanged and no lifecycle/plugin mutation occurred."
+    - "Publish TASK-0102 report on dev. No other tracked mutation is authorized."
+
+  allowed_existing_files_or_components:
+    - ".agent/tasks/TASK-0102/report.yaml"
+    - "~/Applications/Agent Runtime.app read-only"
+    - "~/Library/Application Support/Agent Runtime/cutover-transaction read-only"
+    - "~/Library/Application Support/Agent Runtime/runtime.env read-only without secret disclosure"
+    - "ServiceManagement/launchd/process/listener read-only diagnostics"
+    - "repository Runtime ownership/protection source read-only"
+    - "build/.task-0102-* ignored evidence if needed"
+  expected_files_are_restrictive: true
+
+invariants:
+  - "TASK-0100 install-prebuilt remains consumed 1/1; TASK-0102 grants no install authority."
+  - "PENDING transaction remains preserved."
+  - "No commit-cutover, rollback, resume, recover, reinstall, Runtime/tunnel restart or ServiceManagement mutation occurs."
+  - "No direct launchctl mutation occurs."
+  - "No runtime.env, desired-state, candidate, installed app or configuration mutation occurs."
+  - "No ChatGPT.com plugin refresh occurs."
+  - "No MCP semantic acceptance, Stage B, screen_capture, TCC, click, type or scroll occurs."
+  - "No secret or full tunnel ID is disclosed."
+  - "main, tags, releases and sibling repositories remain unchanged."
+
+forbidden_changes:
+  - "Do not invoke install-prebuilt, commit-cutover, rollback, resume or recover."
+  - "Do not invoke ServiceManagement or launchctl mutation."
+  - "Do not launch, restart, stop, kill or signal Runtime/tunnel processes."
+  - "Do not run start.sh lifecycle commands or tunnel-client commands."
+  - "Do not modify runtime.env or desired-state."
+  - "Do not refresh/reconnect ChatGPT.com plugin/connector."
+  - "Do not perform end-to-end MCP semantic acceptance, Stage B, screen_capture, TCC or visual control."
+  - "Do not edit implementation/tests/docs or sibling repositories."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files: []
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "Only TASK-0102 report.yaml may become a tracked task artifact."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Immutable installed-successor/tunnel configuration predicates pass without mutation."
+    evidence_required: "Exact transaction/candidate/codesign/runtime.env/fingerprint evidence."
+  - id: AC-2
+    requirement: "Complete volatile Runtime+tunnel predicate converges within the exact max 40x250ms phase."
+    evidence_required: "First all-PASS convergence observation or exact observation-40 false subpredicates; no observation 41."
+  - id: AC-3
+    requirement: "After convergence, complete volatile predicate remains true for exactly 20x250ms stability observations."
+    evidence_required: "20/20 stability PASS or exact first failing stability observation/subpredicate; no stability observation 21."
+  - id: AC-4
+    requirement: "Successful task stops CHATGPT_PLUGIN_REFRESH_REQUIRED with PENDING preserved and zero lifecycle/plugin mutation."
+    evidence_required: "Preservation hashes/state and forbidden-action counts 0."
+
+verification:
+  executor_checks:
+    - id: CHECK-BASE
+      command_or_check: "Fresh exact task/dev/main/review binding."
+      required: true
+    - id: CHECK-IMMUTABLE
+      command_or_check: "Read-only transaction/candidate/codesign/runtime.env/fingerprint proof."
+      required: true
+    - id: CHECK-CONVERGENCE
+      command_or_check: "Exact max 40-by-250ms convergence phase; transient early false predicates do not fail the task."
+      required: true
+    - id: CHECK-STABILITY
+      command_or_check: "Exactly 20-by-250ms stability observations after convergence."
+      required: true
+    - id: CHECK-PRESERVATION
+      command_or_check: "Prove no lifecycle/config/plugin mutation."
+      required: true
+    - id: CHECK-FINAL
+      command_or_check: "Publish truthful TASK-0102 report and stop at exact terminal."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect review before ChatGPT.com plugin refresh."
+    expected_signal: "CHATGPT_PLUGIN_REFRESH_REQUIRED only after convergence and full stability PASS."
+
+capability_requirements:
+  EXECUTION:
+    - repository_content_read
+    - native_repository_execution
+    - git_history_read
+    - remote_ref_read
+  REVIEW:
+    - repository_content_read
+    - repository_content_write
+    - git_history_read
+    - remote_ref_read
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
