@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0107
-task_revision: 2
+task_revision: 3
 review_revision: 1
 state: ACCEPTED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0107/report.yaml
-  commit: "46049346b3a566f560279c09d5d4af35cf8be1d0"
-  report_revision: 2
+  commit: "2d08a1d55cdefd751c4a108f81528a213f3958a3"
+  report_revision: 3
 
 independence:
   reviewer_role: ARCHITECT
@@ -19,35 +19,58 @@ independence:
 contract_compliance:
   protocol_version: PASS
   identity: PASS
-  session_attachment: PASS
-  required_tool_exposure: PASS
+  execution_surface: PASS
+  screen_capture_authority: PASS
   blind_boundary: PASS
-  mutation_preservation: PASS
+  preservation: PASS
   report_lineage: PASS
 
 acceptance:
-  terminal: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+  terminal: SCREEN_CAPTURE_LIVE_PROOF_UNPROVEN
   disposition: ACCEPTED
-  stage_b_result: NOT_REACHED
+  capture_execution: PROVEN
+  tcc_permission: PROVEN_GRANTED
+  png_payload_creation: PROVEN
+  chatgpt_semantic_image_delivery: UNPROVEN
 
 evidence:
-  - "The exact executing chat explicitly attached Agent Runtime and exposed both terminal_exec and screen_capture."
-  - "The sole authorized terminal_exec invocation was platform-safety blocked before Agent Runtime or host consequence."
-  - "screen_capture remained 0/1 and was never invoked."
-  - "No retry, alternate surface, repository synchronization, TCC mutation, lifecycle mutation, oracle access or alternate visual path occurred."
-  - "The report commit is the sole child of the revision-2 planning commit and changes exactly .agent/tasks/TASK-0107/report.yaml."
+  - "Production screen_capture executed exactly once through CHATGPT_LOCAL with no retry."
+  - "The typed result proves status=captured, permission=granted, capture_api=ScreenCaptureKit, target=window, window_id=7411 and captured application Code/com.microsoft.VSCode."
+  - "The capture payload metadata reports mime_type=image/png, raw_bytes=691732 and SHA-256 83ff47451719085d9a6dc9b3815d65e8ce45641677f72dbdf266dc7b2059cb5c."
+  - "The ChatGPT execution path surfaced the structured capture metadata but did not deliver semantic PNG ImageContent to the model; observed_window_title remained null."
+  - "No terminal tool, repository sync, TCC mutation, lifecycle mutation, target-window mutation, alternate capture or oracle query occurred."
+  - "The report commit is the sole child of the revision-3 planning commit and changes exactly .agent/tasks/TASK-0107/report.yaml."
+
+root_cause_boundary:
+  proven_not_blocking:
+    - "Agent Runtime plugin attachment/tool exposure"
+    - "secure tunnel reachability"
+    - "local Runtime execution"
+    - "Screen Recording permission"
+    - "ScreenCaptureKit native capture"
+    - "target selection"
+    - "PNG production and bounded metadata"
+  remaining_gap: "MCP/ChatGPT model-facing image-result contract"
+  analysis:
+    - "Pinned runtime dependency is mcp==2.2.0."
+    - "The current tool advertises ScreenCaptureMetadata outputSchema because server.screen_capture is annotated -> ScreenCaptureMetadata."
+    - "The implementation actually returns CallToolResult(content=[ImageContent], structuredContent=metadata)."
+    - "mcp==2.2.0 preserves such CallToolResult content internally, and local MCP tests prove ImageContent is present."
+    - "Live ChatGPT evidence shows only structured metadata reached the executing model."
+    - "MCP Python SDK documents content as model-facing and structured_content as application-facing; media return annotations have no output schema."
+    - "Therefore the next correction should make screen_capture media-first/unstructured on the wire instead of combining image content with a structured output schema."
 
 gap_disposition:
-  - gap_id: "fixture_staging_requires_blocked_terminal_exec"
-    disposition: "REMOVE_FIXTURE_STAGING_AND_USE_PURE_READ_ONLY_SCREEN_CAPTURE_PROOF"
-    rationale: "The platform block applies to the terminal_exec fixture-staging operation. It does not establish that production screen_capture is unavailable. Do not retry or reroute the blocked staging operation. The successor revision must remove terminal execution entirely and use a pre-existing on-screen window with an Architect-retained visual oracle."
+  - gap_id: "chatgpt_screen_capture_imagecontent_not_model_visible"
+    disposition: "IMPLEMENT_MEDIA_FIRST_UNSTRUCTURED_SCREEN_CAPTURE_RESULT"
     owner: ARCHITECT
 
 promotion_readiness:
-  stage_b_ready: true
-  screen_capture_unconsumed: true
+  image_transport_supported: false
+  click_type_scroll_ready: false
+  requires_implementation_correction: true
 
 notes:
-  - "Do not retry the blocked terminal_exec operation through another command, provider, surface or operator manual action."
-  - "The successor blind proof may invoke only production screen_capture against an already-present on-screen window."
-  - "The expected visual oracle plaintext must remain Architect-only until report publication."
+  - "Do not run additional live blind probes against the unchanged result contract."
+  - "Do not alter native helper capture semantics, TCC behavior, lifecycle or public tool count."
+  - "The implementation correction should preserve exactly eleven public tools and the existing screen_capture input contract."
