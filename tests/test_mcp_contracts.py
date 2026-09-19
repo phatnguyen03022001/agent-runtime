@@ -22,6 +22,7 @@ EXPECTED_TOOLS = (
     "repo_observer",
     "repo_fast_forward",
     "repo_publish",
+    "screen_capture",
 )
 EXPECTED_ANNOTATIONS = {
     "terminal_exec": (False, True, False, True),
@@ -34,6 +35,7 @@ EXPECTED_ANNOTATIONS = {
     "repo_observer": (True, False, True, False),
     "repo_fast_forward": (False, True, True, True),
     "repo_publish": (False, True, True, True),
+    "screen_capture": (True, False, True, False),
 }
 
 
@@ -344,6 +346,13 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
                 "remote_head_before", "remote_head_after", "network_used",
                 "push_attempted", "published", "deadline_seconds",
             },
+            "screen_capture": {
+                "schema_version", "status", "target", "mime_type", "raw_bytes", "sha256",
+                "coordinate_space", "bounds", "x", "y", "width", "height",
+                "pixel_width", "pixel_height", "scale_factor", "display_id", "window_id",
+                "active_application", "captured_application", "pid", "bundle_identifier", "name",
+                "permission", "capture_api", "deadline_seconds",
+            },
         }
         for name, expected in expected_fields.items():
             schema = tools[name].output_schema
@@ -382,6 +391,8 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
             "local-only Git",
             "repo_fast_forward",
             "repo_publish",
+            "screen_capture",
+            "ScreenCaptureKit",
             "fixed-origin",
             "publication",
         ):

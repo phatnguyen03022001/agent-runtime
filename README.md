@@ -89,7 +89,9 @@ architecture prerequisite.
 There are no blanket TCC permissions for Runtime. Accessibility, Automation/
 Apple Events, Screen & System Audio Recording, Full Disk Access, Files &
 Folders, Developer Tools, Input Monitoring, and Local Network are not baseline
-Runtime permissions. Background Activity is the separate operator-controlled
+Runtime permissions. The read-only `screen_capture` tool requires Screen Recording
+permission to have already been granted; Runtime never requests it, opens System
+Settings, or mutates TCC state. Background Activity is the separate operator-controlled
 ServiceManagement approval described above; denial or revocation is reported and
 fails closed rather than widening permissions.
 
@@ -137,7 +139,7 @@ kernel compromise, and out-of-band tools.
 
 ## Tool surface
 
-The MCP server exposes exactly ten public tools:
+The MCP server exposes exactly eleven public tools:
 
 - `terminal_exec(argv, cwd, timeout_seconds=300)` executes one literal argv
   with `shell=False`, disconnected stdin, bounded output, and bounded cleanup.
@@ -180,6 +182,11 @@ The MCP server exposes exactly ten public tools:
   HEAD when `commit` is the sole direct child of the bound existing `origin/<branch>`
   head. Same-input replay freshly verifies remote state and does not push twice. Runtime
   executes the publication consequence; repository/task authority remains outside Runtime.
+- `screen_capture(target="frontmost_window", ...)` captures exactly one selected window,
+  application window, display, or contained display region through package-owned
+  ScreenCaptureKit. Success returns one PNG `ImageContent` plus closed metadata in
+  `cg_global_points`; no cursor, audio, OCR, Accessibility, clipboard, DOM, URL, or
+  keystroke surface is exposed. Screen Recording permission must already be granted.
 
 Capacity Observer v2 reports an advisory healthy-host ceiling up to x6. The
 effective healthy ceiling is `min(AGENT_RUNTIME_MAX_PARALLELISM, 6)`: the
@@ -252,7 +259,8 @@ AGENT_RUNTIME_CODESIGN_IDENTITY="<explicit non-ad-hoc identity>" ./macos/package
 Canonical packaging requires `AGENT_RUNTIME_CODESIGN_IDENTITY` to name an
 explicit non-ad-hoc signing identity. It never discovers or selects identities
 from Keychain. Candidate provenance requires a non-null matching TeamIdentifier
-for the main app and `AgentRuntimeRuntimeService`.
+for the main app, `AgentRuntimeRuntimeService`, and the package-owned
+`AgentRuntimeScreenCapture` helper.
 
 Release packaging fails closed on a dirty Git checkout, exports exact `HEAD`
 into a temporary immutable source staging tree, and builds the app only from

@@ -50,6 +50,9 @@ class CandidateClosureTests(unittest.TestCase):
         runtime_service = macos / "AgentRuntimeRuntimeService"
         runtime_service.write_text("#!/bin/sh\nexit 0\n")
         runtime_service.chmod(0o755)
+        screen_capture = macos / "AgentRuntimeScreenCapture"
+        screen_capture.write_text("#!/bin/sh\nexit 0\n")
+        screen_capture.chmod(0o755)
         (services / f"{runtime_label}.plist").write_bytes(plistlib.dumps({
             "Label": runtime_label,
             "BundleProgram": "Contents/MacOS/AgentRuntimeRuntimeService",

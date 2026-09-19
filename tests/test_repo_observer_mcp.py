@@ -54,6 +54,7 @@ class RepoObserverMCPTests(unittest.IsolatedAsyncioTestCase):
                 "repo_observer",
                 "repo_fast_forward",
                 "repo_publish",
+                "screen_capture",
             ),
         )
         tool = tools["repo_observer"]

@@ -119,7 +119,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
 
         self.assertEqual(
             assigned.get("PUBLIC_TOOL_NAMES"),
-            ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch", "repo_observer", "repo_fast_forward", "repo_publish"),
+            ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch", "repo_observer", "repo_fast_forward", "repo_publish", "screen_capture"),
         )
         for name in assigned["PUBLIC_TOOL_NAMES"]:
             self.assertIn(name, functions)
@@ -188,7 +188,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
             module = importlib.import_module("agent_runtime.server")
             self.assertEqual(
                 tuple(module.mcp.tools),
-                ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch", "repo_observer", "repo_fast_forward", "repo_publish"),
+                ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch", "repo_observer", "repo_fast_forward", "repo_publish", "screen_capture"),
             )
             expected = {
                 "terminal_exec": (False, True, False, True),
@@ -201,6 +201,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
                 "repo_observer": (True, False, True, False),
                 "repo_fast_forward": (False, True, True, True),
                 "repo_publish": (False, True, True, True),
+                "screen_capture": (True, False, True, False),
             }
             for name, values in expected.items():
                 _, annotations = module.mcp.tools[name]
@@ -357,7 +358,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertIn("protected singleton", docs)
         self.assertIn("root/sudo", docs)
         self.assertIn("malicious local administrator", docs)
-        self.assertIn("exactly ten public tools", docs)
+        self.assertIn("exactly eleven public tools", docs)
         self.assertIn("AGENT_RUNTIME_MAX_PARALLELISM", docs)
         self.assertIn("capacity_observer", docs)
 

@@ -7,6 +7,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    FiniteFloat,
     SerializerFunctionWrapHandler,
     StrictStr,
     model_serializer,
@@ -213,6 +214,14 @@ RepoFastForwardSha = Annotated[
 ]
 RepoPublishBranch = RepoFastForwardBranch
 RepoPublishSha = RepoFastForwardSha
+ScreenCaptureTarget = Literal[
+    "frontmost_window", "window", "application_window", "display", "region"
+]
+ScreenCaptureWindowId = Annotated[int, Field(strict=True, ge=1, le=4_294_967_295)]
+ScreenCaptureDisplayId = Annotated[int, Field(strict=True, ge=1, le=4_294_967_295)]
+ScreenCaptureBundleId = Annotated[StrictStr, Field(min_length=1, max_length=512)]
+ScreenCaptureCoordinate = FiniteFloat
+ScreenCaptureExtent = Annotated[FiniteFloat, Field(gt=0)]
 TypedToolErrorCode = Literal[
     "INVALID_ARGUMENT",
     "OUTSIDE_WORKSPACE",
@@ -235,6 +244,12 @@ TypedToolErrorCode = Literal[
     "PUBLICATION_LINEAGE_MISMATCH",
     "PUSH_FAILED",
     "PUBLICATION_AMBIGUOUS",
+    "SCREEN_CAPTURE_PERMISSION_REQUIRED",
+    "CAPTURE_TARGET_NOT_FOUND",
+    "CAPTURE_TARGET_AMBIGUOUS",
+    "CAPTURE_PAYLOAD_TOO_LARGE",
+    "CAPTURE_PROTOCOL_ERROR",
+    "CAPTURE_HELPER_UNAVAILABLE",
     "INTERNAL_ERROR",
 ]
 RepoChangeStatus = Literal["M", "T", "A", "D", "R", "C", "U", "?", "!"]
@@ -378,4 +393,38 @@ class RepoPublishResult(_ClosedResult):
     network_used: Literal[True]
     push_attempted: bool
     published: bool
+    deadline_seconds: float
+
+
+class ScreenCaptureBounds(_ClosedResult):
+    x: float
+    y: float
+    width: float
+    height: float
+
+
+class ScreenCaptureApplication(_ClosedResult):
+    pid: int
+    bundle_identifier: str | None
+    name: str
+
+
+class ScreenCaptureMetadata(_ClosedResult):
+    schema_version: Literal[1]
+    status: Literal["captured"]
+    target: ScreenCaptureTarget
+    mime_type: Literal["image/png"]
+    raw_bytes: int
+    sha256: str
+    coordinate_space: Literal["cg_global_points"]
+    bounds: ScreenCaptureBounds
+    pixel_width: int
+    pixel_height: int
+    scale_factor: float
+    display_id: int
+    window_id: int | None
+    active_application: ScreenCaptureApplication
+    captured_application: ScreenCaptureApplication | None
+    permission: Literal["granted"]
+    capture_api: Literal["ScreenCaptureKit"]
     deadline_seconds: float

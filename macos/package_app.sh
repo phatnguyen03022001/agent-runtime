@@ -53,17 +53,20 @@ SWIFT_SCRATCH="$TEMP_ROOT/swift-build"
 BIN_DIR="$(/usr/bin/xcrun swift build --package-path "$SOURCE_PACKAGE_ROOT" --scratch-path "$SWIFT_SCRATCH" -c release --show-bin-path)"
 BINARY="$BIN_DIR/AgentRuntimeMenuBar"
 RUNTIME_SERVICE_BINARY="$BIN_DIR/AgentRuntimeRuntimeService"
+SCREEN_CAPTURE_BINARY="$BIN_DIR/AgentRuntimeScreenCapture"
 [[ -x "$BINARY" ]] || { echo "PACKAGE ERROR: missing AgentRuntimeMenuBar binary" >&2; exit 2; }
 [[ -x "$RUNTIME_SERVICE_BINARY" ]] || { echo "PACKAGE ERROR: missing AgentRuntimeRuntimeService binary" >&2; exit 2; }
+[[ -x "$SCREEN_CAPTURE_BINARY" ]] || { echo "PACKAGE ERROR: missing AgentRuntimeScreenCapture binary" >&2; exit 2; }
 
 mkdir -p "$MACOS" "$RESOURCES" "$RUNTIME/agent_runtime" "$CONTENTS/Library/LaunchAgents"
 cp "$SOURCE_PACKAGE_ROOT/AppBundle/Info.plist" "$CONTENTS/Info.plist"
 cp "$BINARY" "$MACOS/AgentRuntimeMenuBar"
 cp "$RUNTIME_SERVICE_BINARY" "$MACOS/AgentRuntimeRuntimeService"
+cp "$SCREEN_CAPTURE_BINARY" "$MACOS/AgentRuntimeScreenCapture"
 cp "$SERVICE_PLIST" "$CONTENTS/Library/LaunchAgents/com.picmao.agent-runtime-runtime-service.plist"
 cp "$APP_ICON" "$RESOURCES/AppIcon.png"
 cp "$NOTIFICATION_SOUND" "$RESOURCES/notification.mp3"
-/usr/bin/strip -S "$MACOS/AgentRuntimeMenuBar" "$MACOS/AgentRuntimeRuntimeService"
+/usr/bin/strip -S "$MACOS/AgentRuntimeMenuBar" "$MACOS/AgentRuntimeRuntimeService" "$MACOS/AgentRuntimeScreenCapture"
 
 cp "$SOURCE_ROOT/start.sh" "$RUNTIME/start.sh"
 find "$SOURCE_ROOT/agent_runtime" -maxdepth 1 -type f -name '*.py' -exec cp '{}' "$RUNTIME/agent_runtime/" \;

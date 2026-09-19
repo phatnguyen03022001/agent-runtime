@@ -312,7 +312,8 @@ case "${2-}" in
 esac
 EOF
 printf '#!/usr/bin/env bash\nexit 0\n' > "$APP/Contents/MacOS/AgentRuntimeRuntimeService"
-chmod +x "$APP/Contents/MacOS/AgentRuntimeMenuBar" "$APP/Contents/MacOS/AgentRuntimeRuntimeService"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$APP/Contents/MacOS/AgentRuntimeScreenCapture"
+chmod +x "$APP/Contents/MacOS/AgentRuntimeMenuBar" "$APP/Contents/MacOS/AgentRuntimeRuntimeService" "$APP/Contents/MacOS/AgentRuntimeScreenCapture"
 cat > "$SERVICE_DIR/com.picmao.agent-runtime-runtime-service.plist" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

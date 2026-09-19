@@ -158,6 +158,7 @@ class TimingToolTests(unittest.TestCase):
             "repo_observer",
             "repo_fast_forward",
             "repo_publish",
+            "screen_capture",
         ))
         self.assertIn(timing_middleware, server.mcp.middleware)
         self.assertEqual(
@@ -179,6 +180,10 @@ class TimingToolTests(unittest.TestCase):
         self.assertEqual(
             [parameter.name for parameter in inspect.signature(server.repo_publish).parameters.values()],
             ["cwd", "branch", "expected_remote_head", "commit"],
+        )
+        self.assertEqual(
+            [parameter.name for parameter in inspect.signature(server.screen_capture).parameters.values()],
+            ["target", "window_id", "application_bundle_id", "display_id", "x", "y", "width", "height"],
         )
 
     def test_tool_execution_event_has_no_arguments_or_result_payload(self) -> None:

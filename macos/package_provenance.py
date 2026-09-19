@@ -317,6 +317,7 @@ def _verify_codesign(app: Path) -> None:
 
 MAIN_EXECUTABLE_RELATIVE = "Contents/MacOS/AgentRuntimeMenuBar"
 RUNTIME_SERVICE_EXECUTABLE_RELATIVE = "Contents/MacOS/AgentRuntimeRuntimeService"
+SCREEN_CAPTURE_EXECUTABLE_RELATIVE = "Contents/MacOS/AgentRuntimeScreenCapture"
 
 
 def _codesign_team_identifier(path: Path) -> str:
@@ -351,18 +352,22 @@ def responsible_code_identity(app: Path, team_identifier_reader=None) -> dict[st
         raise PackageProvenanceError("candidate main app identity is not owned by agent-runtime")
     main = app / MAIN_EXECUTABLE_RELATIVE
     runtime_service = app / RUNTIME_SERVICE_EXECUTABLE_RELATIVE
-    for target in (main, runtime_service):
-        if target.is_symlink() or not target.is_file():
-            raise PackageProvenanceError(f"responsible executable is missing or unsafe: {target.name}")
+    screen_capture = app / SCREEN_CAPTURE_EXECUTABLE_RELATIVE
+    for target in (main, runtime_service, screen_capture):
+        if target.is_symlink() or not target.is_file() or not os.access(target, os.X_OK):
+            raise PackageProvenanceError(f"package executable is missing or unsafe: {target.name}")
     reader = team_identifier_reader or _codesign_team_identifier
     main_team = reader(main)
     runtime_team = reader(runtime_service)
+    screen_capture_team = reader(screen_capture)
     if not isinstance(main_team, str) or not main_team.strip():
         raise PackageProvenanceError("main app TeamIdentifier is missing")
     if not isinstance(runtime_team, str) or not runtime_team.strip():
         raise PackageProvenanceError("Runtime responsible executable TeamIdentifier is missing")
-    if main_team != runtime_team:
-        raise PackageProvenanceError("responsible executable TeamIdentifier does not match main app TeamIdentifier")
+    if not isinstance(screen_capture_team, str) or not screen_capture_team.strip():
+        raise PackageProvenanceError("screen capture helper TeamIdentifier is missing")
+    if main_team != runtime_team or main_team != screen_capture_team:
+        raise PackageProvenanceError("package executable TeamIdentifier does not match main app TeamIdentifier")
     return {
         "team_identifier": main_team,
         "main_executable": MAIN_EXECUTABLE_RELATIVE,

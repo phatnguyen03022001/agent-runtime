@@ -39,6 +39,17 @@ class Task0055MacOSContractTests(unittest.TestCase):
         self.assertNotIn("security find-identity", package)
         self.assertNotIn("security find-certificate", package)
 
+    def test_screen_capture_helper_is_packaged_with_usage_description(self) -> None:
+        info = plistlib.loads((ROOT / "macos" / "AppBundle" / "Info.plist").read_bytes())
+        reason = info.get("NSScreenCaptureUsageDescription")
+        self.assertIsInstance(reason, str)
+        self.assertTrue(reason.strip())
+
+        package = (ROOT / "macos" / "package_app.sh").read_text()
+        self.assertIn('SCREEN_CAPTURE_BINARY="$BIN_DIR/AgentRuntimeScreenCapture"', package)
+        self.assertIn('cp "$SCREEN_CAPTURE_BINARY" "$MACOS/AgentRuntimeScreenCapture"', package)
+        self.assertIn('"$MACOS/AgentRuntimeScreenCapture"', package)
+
     def test_responsible_code_identity_requires_non_null_matching_team_identifier(self) -> None:
         provenance = load_provenance()
         with tempfile.TemporaryDirectory() as raw:
@@ -51,14 +62,25 @@ class Task0055MacOSContractTests(unittest.TestCase):
             }))
             main = macos / "AgentRuntimeMenuBar"
             runtime = macos / "AgentRuntimeRuntimeService"
+            capture = macos / "AgentRuntimeScreenCapture"
             main.write_bytes(b"main")
             runtime.write_bytes(b"runtime")
+            capture.write_bytes(b"capture")
+            for executable in (main, runtime, capture):
+                executable.chmod(0o755)
             result = provenance.responsible_code_identity(
                 app, team_identifier_reader=lambda path: "TEAM123"
             )
             self.assertEqual(result["team_identifier"], "TEAM123")
             self.assertEqual(result["main_executable"], "Contents/MacOS/AgentRuntimeMenuBar")
             self.assertEqual(result["runtime_service_executable"], "Contents/MacOS/AgentRuntimeRuntimeService")
+
+            capture.chmod(0o644)
+            with self.assertRaisesRegex(provenance.PackageProvenanceError, "missing or unsafe"):
+                provenance.responsible_code_identity(
+                    app, team_identifier_reader=lambda path: "TEAM123"
+                )
+            capture.chmod(0o755)
 
             with self.assertRaisesRegex(provenance.PackageProvenanceError, "TeamIdentifier"):
                 provenance.responsible_code_identity(
@@ -69,6 +91,11 @@ class Task0055MacOSContractTests(unittest.TestCase):
                 provenance.responsible_code_identity(
                     app,
                     team_identifier_reader=lambda path: "TEAM999" if path.name == "AgentRuntimeRuntimeService" else "TEAM123",
+                )
+            with self.assertRaisesRegex(provenance.PackageProvenanceError, "TeamIdentifier"):
+                provenance.responsible_code_identity(
+                    app,
+                    team_identifier_reader=lambda path: "TEAM999" if path.name == "AgentRuntimeScreenCapture" else "TEAM123",
                 )
 
     def test_install_surface_exposes_owner_safe_uninstall_and_retains_runtime_env(self) -> None:

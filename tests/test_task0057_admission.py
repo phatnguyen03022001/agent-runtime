@@ -296,10 +296,15 @@ class FakeMCPServer:
 mcp_package = types.ModuleType('mcp'); mcp_package.__path__ = []
 mcp_server = types.ModuleType('mcp.server'); mcp_server.__path__ = []; mcp_server.MCPServer = FakeMCPServer
 mcp_mcpserver = types.ModuleType('mcp.server.mcpserver'); mcp_mcpserver.__path__ = []
+mcp_types = types.ModuleType('mcp.types')
+class FakeCallToolResult: pass
+class FakeImageContent: pass
+mcp_types.CallToolResult = FakeCallToolResult
+mcp_types.ImageContent = FakeImageContent
 mcp_exceptions = types.ModuleType('mcp.server.mcpserver.exceptions')
 class FakeToolError(Exception): pass
 mcp_exceptions.ToolError = FakeToolError
-sys.modules.update({{'mcp': mcp_package, 'mcp.server': mcp_server, 'mcp.server.mcpserver': mcp_mcpserver, 'mcp.server.mcpserver.exceptions': mcp_exceptions}})
+sys.modules.update({{'mcp': mcp_package, 'mcp.server': mcp_server, 'mcp.server.mcpserver': mcp_mcpserver, 'mcp.server.mcpserver.exceptions': mcp_exceptions, 'mcp.types': mcp_types}})
 
 from agent_runtime import server
 from agent_runtime.executor import execute_terminal

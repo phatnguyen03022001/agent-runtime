@@ -8,6 +8,7 @@ let package = Package(
         .library(name: "AgentRuntimeCore", targets: ["AgentRuntimeCore"]),
         .executable(name: "AgentRuntimeMenuBar", targets: ["AgentRuntimeMenuBar"]),
         .executable(name: "AgentRuntimeRuntimeService", targets: ["AgentRuntimeRuntimeService"]),
+        .executable(name: "AgentRuntimeScreenCapture", targets: ["AgentRuntimeScreenCapture"]),
     ],
     targets: [
         .target(name: "AgentRuntimeCore"),
@@ -16,6 +17,10 @@ let package = Package(
             dependencies: ["AgentRuntimeCore"]
         ),
         .executableTarget(name: "AgentRuntimeRuntimeService"),
+        .executableTarget(
+            name: "AgentRuntimeScreenCapture",
+            dependencies: ["AgentRuntimeCore"]
+        ),
         .testTarget(
             name: "AgentRuntimeCoreTests",
             dependencies: ["AgentRuntimeCore"]

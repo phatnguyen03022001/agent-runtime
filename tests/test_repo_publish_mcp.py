@@ -23,6 +23,7 @@ EXPECTED_TOOLS = (
     "repo_observer",
     "repo_fast_forward",
     "repo_publish",
+    "screen_capture",
 )
 EXPECTED_ANNOTATIONS = {
     "terminal_exec": (False, True, False, True),
@@ -35,6 +36,7 @@ EXPECTED_ANNOTATIONS = {
     "repo_observer": (True, False, True, False),
     "repo_fast_forward": (False, True, True, True),
     "repo_publish": (False, True, True, True),
+    "screen_capture": (True, False, True, False),
 }
 SUCCESS_FIELDS = {
     "schema_version",
@@ -180,9 +182,9 @@ class RepoPublishMCPTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.structured_content["error"]["code"], "OUTSIDE_WORKSPACE")
         self.assertLessEqual(len(result.structured_content["error"]["message"]), 256)
 
-    def test_readme_documents_exact_ten_tool_surface_and_publication_boundary(self) -> None:
+    def test_readme_documents_exact_eleven_tool_surface_and_publication_boundary(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("exactly ten public tools", readme)
+        self.assertIn("exactly eleven public tools", readme)
         self.assertIn("repo_publish", readme)
         self.assertIn("expected-state-guarded fixed-origin publication", readme)
         self.assertIn("repository/task authority remains outside Runtime", readme)

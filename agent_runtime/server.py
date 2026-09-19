@@ -33,6 +33,13 @@ from .contracts import (
     RepoPublishBranch,
     RepoPublishResult,
     RepoPublishSha,
+    ScreenCaptureBundleId,
+    ScreenCaptureCoordinate,
+    ScreenCaptureDisplayId,
+    ScreenCaptureExtent,
+    ScreenCaptureMetadata,
+    ScreenCaptureTarget,
+    ScreenCaptureWindowId,
     RepoObserverMaxPaths,
     RepoObserverResult,
     SessionId,
@@ -53,6 +60,7 @@ from .protection import ProtectedRuntimeDenied
 from .repo_fast_forward import RepoFastForwardFailure, fast_forward_repository
 from .repo_observer import RepoObserverFailure, observe_repository
 from .repo_publish import RepoPublishFailure, publish_repository
+from .screen_capture import ScreenCaptureFailure, capture_screen
 from .session import (
     control_terminal as _control_terminal,
     poll_terminal as _poll_terminal,
@@ -72,6 +80,7 @@ PUBLIC_TOOL_NAMES = (
     "repo_observer",
     "repo_fast_forward",
     "repo_publish",
+    "screen_capture",
 )
 SERVER_DESCRIPTION = "Bounded local command execution and advisory capacity MCP server; terminal tools may modify the host."
 SERVER_INSTRUCTIONS = (
@@ -92,7 +101,9 @@ SERVER_INSTRUCTIONS = (
     "repo_fast_forward performs expected-state-guarded fixed-origin synchronization from fixed origin only; it fresh-fetches "
     "one bound branch and permits only an exact fast-forward of the current clean branch. "
     "repo_publish performs expected-state-guarded fixed-origin publication of exactly the current clean branch HEAD "
-    "when it is the sole direct child of the bound existing origin branch head; repository and task authority remain external."
+    "when it is the sole direct child of the bound existing origin branch head; repository and task authority remain external. "
+    "screen_capture performs read-only package-owned ScreenCaptureKit capture and returns one PNG image plus closed "
+    "cg_global_points metadata; Screen Recording permission must already be granted and is never requested automatically."
 )
 mcp = MCPServer(
     name="Agent Runtime",
@@ -393,6 +404,42 @@ def repo_publish(
             isError=True,
         )
         return cast(RepoPublishResult, error_result)
+
+
+@_tool(read_only=True, destructive=False, idempotent=True, open_world=False)
+def screen_capture(
+    target: ScreenCaptureTarget = "frontmost_window",
+    window_id: ScreenCaptureWindowId | None = None,
+    application_bundle_id: ScreenCaptureBundleId | None = None,
+    display_id: ScreenCaptureDisplayId | None = None,
+    x: ScreenCaptureCoordinate | None = None,
+    y: ScreenCaptureCoordinate | None = None,
+    width: ScreenCaptureExtent | None = None,
+    height: ScreenCaptureExtent | None = None,
+) -> ScreenCaptureMetadata:
+    """Capture one bounded macOS screen target through the package-owned native helper."""
+
+    try:
+        return cast(
+            ScreenCaptureMetadata,
+            capture_screen(target, window_id, application_bundle_id, display_id, x, y, width, height),
+        )
+    except ScreenCaptureFailure as exc:
+        from mcp.types import CallToolResult, TextContent
+
+        envelope = TypedToolErrorEnvelope(
+            error=TypedToolErrorPayload(
+                code=exc.code,
+                message=exc.message,
+                retryable=exc.retryable,
+            )
+        )
+        error_result = CallToolResult(
+            content=[TextContent(type="text", text=exc.message)],
+            structuredContent=envelope.model_dump(),
+            isError=True,
+        )
+        return cast(ScreenCaptureMetadata, error_result)
 
 
 def _install_timing_middleware() -> None:

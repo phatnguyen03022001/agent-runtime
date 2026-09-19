@@ -32,6 +32,7 @@ class FsReadBatchContractTests(unittest.IsolatedAsyncioTestCase):
                 "repo_observer",
                 "repo_fast_forward",
                 "repo_publish",
+                "screen_capture",
             ),
         )
         tool = next(tool for tool in tools if tool.name == "fs_read_batch")

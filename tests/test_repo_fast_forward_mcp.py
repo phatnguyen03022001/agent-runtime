@@ -23,6 +23,7 @@ EXPECTED_TOOLS = (
     "repo_observer",
     "repo_fast_forward",
     "repo_publish",
+    "screen_capture",
 )
 SUCCESS_FIELDS = {
     "schema_version",
@@ -182,9 +183,9 @@ class RepoFastForwardMCPTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.structured_content["error"]["code"], "OUTSIDE_WORKSPACE")
         self.assertLessEqual(len(result.structured_content["error"]["message"]), 256)
 
-    def test_readme_documents_exact_ten_tool_surface_and_typed_git_roles(self) -> None:
+    def test_readme_documents_exact_eleven_tool_surface_and_typed_git_roles(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("exactly ten public tools", readme)
+        self.assertIn("exactly eleven public tools", readme)
         self.assertIn("repo_observer", readme)
         self.assertIn("typed local-only read-only Git observation", readme)
         self.assertIn("repo_fast_forward", readme)
