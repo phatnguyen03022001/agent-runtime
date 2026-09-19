@@ -1,0 +1,133 @@
+protocol_version: 3
+
+task_id: TASK-0110
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect
+  predecessor_task: TASK-0109
+  predecessor_review: "4bf7d4396b886781b19a7e664eded577663c232f"
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: accepted_candidate_installation_activation
+
+execution_surface:
+  id: CODEX_LOCAL
+  controller: CODEX
+  location: LOCAL
+  transport: NATIVE
+
+objective: "Install the exact Architect-accepted immutable candidate once through the canonical prebuilt cutover path, leave the cutover transaction pending, and prove deterministic local Runtime/tunnel activation without using CHATGPT_LOCAL to mutate its own transport. Do not commit cutover and do not perform live screen_capture."
+
+accepted_candidate:
+  sha256: "adac7f6ade53014008a133c319c348f4e089b0d0d4894cdc373021ff09a2b45d"
+  handoff_sha256: "3ddeb33927e14bf68c8fa9181f268d3d65811554f73188ae88896cf43635fa94"
+  source_revision: "8f9cd73377a86f04bbc1d53c49694b34a55e568c"
+  source_tree: "74f44ab5bf2f7796c6a5b7b8cf59c6985c0c0ab8"
+  requirements_lock_sha256: "80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
+  app_path: "/Users/tienphat/Developer/agent-runtime/build/candidates/adac7f6ade53014008a133c319c348f4e089b0d0d4894cdc373021ff09a2b45d/Agent Runtime.app"
+  handoff_path: "/Users/tienphat/Developer/agent-runtime/build/candidates/adac7f6ade53014008a133c319c348f4e089b0d0d4894cdc373021ff09a2b45d/Agent Runtime.candidate.json"
+
+preconditions:
+  - "Resolve canonical task at exact planning HEAD from GitHub."
+  - "Fresh-resolve remote dev/main; require dev equals exact planning HEAD and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "Synchronize clean canonical local dev checkout by ordinary fast-forward only."
+  - "Require working tree clean."
+  - "Require no pending cutover transaction exists before install."
+  - "Require accepted candidate app and handoff paths exist and are non-symlink artifacts."
+  - "Require candidate handoff SHA-256 equals 3ddeb33927e14bf68c8fa9181f268d3d65811554f73188ae88896cf43635fa94."
+  - "Run read-only package_provenance.py validate-candidate before install and require PASS."
+  - "Require strict codesign verification PASS before install."
+  - "Do not rebuild, re-sign, mutate or recreate the candidate."
+
+installation:
+  install_prebuilt_authority: "0/1"
+  command: "./install.sh --install-prebuilt <accepted-app> <accepted-handoff>"
+  requirements:
+    - "Invoke the canonical install-prebuilt action exactly once."
+    - "No retry."
+    - "Do not run normal source packaging."
+    - "Do not alter runtime.env, tunnel identity or credentials."
+    - "Do not manually mutate launchd or ServiceManagement outside the canonical installer."
+    - "If host lifecycle mutation is blocked before execution, stop CURRENT_PHASE_CAPABILITY_UNAVAILABLE without rerouting merely to seek a different safety judgment."
+
+post_install:
+  required:
+    - "Require cutover transaction exists and remains schema 5 / PENDING / APP_SWAPPED."
+    - "Require installed ~/Applications/Agent Runtime.app validates against the exact accepted external handoff."
+    - "Require installed candidate identity equals adac7f6ade53014008a133c319c348f4e089b0d0d4894cdc373021ff09a2b45d."
+    - "Require strict codesign verification PASS on installed app."
+    - "Require Runtime service reaches canonical local health and ready predicates through bounded polling."
+    - "Require canonical tunnel identity remains configured and Runtime reports tunnel/local readiness without changing tunnel state."
+    - "Require no predecessor rollback/recovery path was invoked."
+    - "Require working repository remains clean."
+
+health_polling:
+  observations_max: 40
+  sleep_before_each_observation_ms: 250
+  no_observation_41: true
+  success: "canonical health and ready predicates both true for installed successor"
+  failure_terminal: "LOCAL_ACTIVATION_UNPROVEN"
+
+scope:
+  allowed_repository_mutation:
+    - ".agent/tasks/TASK-0110/report.yaml"
+  allowed_product_mutation:
+    - "Exactly one canonical install-prebuilt candidate cutover transaction."
+  expected_files_are_restrictive: true
+
+forbidden_changes:
+  - "Do not package or sign another candidate."
+  - "Do not invoke install-prebuilt more than once."
+  - "Do not commit-cutover."
+  - "Do not rollback, resume or recover unless the canonical installer itself fails atomically before terminal reporting; no follow-up recovery authority is granted."
+  - "Do not manually restart/stop/signal Runtime after the canonical installer."
+  - "Do not mutate ServiceManagement or launchd directly."
+  - "Do not edit runtime.env or tunnel configuration."
+  - "Do not refresh/reconnect ChatGPT plugin."
+  - "Do not invoke live screen_capture."
+  - "Do not mutate TCC."
+  - "Do not mutate source/tests/docs/requirements."
+  - "Do not mutate main/tags/releases/sibling repositories."
+  - "Do not force-push."
+
+terminal_states:
+  success: NEEDS_REVIEW
+  capability_block: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+  install_failure: INSTALL_PREBUILT_FAILED
+  activation_failure: LOCAL_ACTIVATION_UNPROVEN
+  candidate_validation_failure: CANDIDATE_VALIDATION_FAILED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact accepted candidate is validated pre-install."
+  - id: AC-2
+    requirement: "Canonical install-prebuilt executes exactly once."
+  - id: AC-3
+    requirement: "Transaction ends schema 5 / PENDING / APP_SWAPPED."
+  - id: AC-4
+    requirement: "Installed app identity/provenance/signature equals accepted candidate."
+  - id: AC-5
+    requirement: "Local Runtime health/ready and tunnel configuration predicates pass without manual lifecycle repair."
+  - id: AC-6
+    requirement: "Cutover remains uncommitted for downstream CHATGPT_LOCAL proof."
+  - id: AC-7
+    requirement: "Repository only receives truthful report artifact."
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "Architect review followed by CHATGPT_LOCAL live Stage B proof in prompt 3/4."
+    expected_signal: "Exact installed successor pending transaction and local activation accepted."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+execution_ready: true
