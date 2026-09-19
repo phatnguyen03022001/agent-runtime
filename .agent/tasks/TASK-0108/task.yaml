@@ -1,0 +1,226 @@
+protocol_version: 3
+
+task_id: TASK-0108
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  predecessor_task: TASK-0107
+  gap_id: "chatgpt_screen_capture_imagecontent_not_model_visible"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: media_first_screen_capture_transport_correction
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+execution_skills:
+  required:
+    - executor
+    - debugging
+    - verification
+    - reliability
+  recommended:
+    - simplicity
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0107/review.yaml@0f8ffee8795ce104d581a06f16e7ee00f2892232"
+    role: "Architect-accepted live evidence: ScreenCaptureKit/TCC/capture bytes succeed but semantic PNG ImageContent is not model-visible in ChatGPT while structured metadata is surfaced."
+    precedence: 1
+  - source: "requirements.txt and requirements.lock at planning source"
+    role: "Pinned runtime SDK is mcp==2.2.0."
+    precedence: 2
+  - source: "Pinned mcp==2.2.0 FuncMetadata/Tool behavior verified read-only by Architect"
+    role: "A CallToolResult return is preserved by FastMCP; a function annotated -> CallToolResult naturally advertises no outputSchema. Content blocks are model-facing; structured output is separately application-facing."
+    precedence: 3
+  - source: ".agent/tasks/TASK-0096/review.yaml@66d72e2b11606583e14e7f89ea62aee8fa3823a5"
+    role: "Accepted native screen_capture implementation/capture invariants that must remain unchanged except the MCP result contract."
+    precedence: 4
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing screen_capture tool and pinned MCP SDK."
+  rationale: "No new public tool, UI, helper, dependency or transport service is needed. Correct the existing tool from mixed structured+media output to an unstructured media-first result."
+
+objective: "Correct the production screen_capture MCP result contract so ChatGPT receives model-facing image content without a competing structured output schema. Preserve the existing capture helper, input surface, native/TCC behavior, eleven-tool public surface and bounded metadata semantics. Verify the source correction and freeze one immutable signed successor candidate. Do not install or activate it."
+
+execution_surface:
+  id: CODEX_LOCAL
+  controller: CODEX
+  location: LOCAL
+  transport: NATIVE
+
+contract_change:
+  tool: screen_capture
+  public_tool_count: 11
+  input_contract_change: false
+  annotations_change: false
+  native_capture_change: false
+  success_output:
+    output_schema: null
+    structured_content: null
+    content_order:
+      - "exactly one ImageContent containing byte-exact PNG image/png payload"
+      - "exactly one TextContent containing deterministic minified JSON of the validated ScreenCaptureMetadata"
+  error_output:
+    output_schema: null
+    structured_content: null
+    is_error: true
+    content:
+      - "exactly one bounded TextContent containing deterministic minified JSON error envelope with code/message/retryable"
+  metadata_text:
+    deterministic: true
+    sorted_keys: true
+    utf8_bound: "must remain within the existing MAX_HEADER_BYTES ceiling"
+  rationale: "The live ChatGPT app path surfaced structured metadata while semantic ImageContent was absent. Removing outputSchema/structuredContent makes screen_capture media-first and model-facing while preserving metadata as bounded text content."
+
+scope:
+  required_changes:
+    - "Fresh-resolve canonical TASK-0108 planning HEAD and remote dev/main. Synchronize the canonical local dev checkout to the exact planning HEAD using ordinary CODEX_LOCAL native Git only if clean and exact fast-forward; fail closed on ambiguity."
+    - "Capture a genuine RED focused test state before production changes: current tests must fail after expressing the new media-first contract and before implementation is corrected."
+    - "In agent_runtime/server.py, make screen_capture truthfully return CallToolResult rather than ScreenCaptureMetadata, without altering its input parameters or read-only/closed-world annotations."
+    - "In agent_runtime/screen_capture.py, preserve helper invocation/parsing/native metadata validation and PNG integrity exactly. Change only MCP result construction: success must carry ImageContent first plus deterministic bounded metadata TextContent and no structuredContent."
+    - "For screen_capture typed failures, preserve stable error code/message/retryable semantics but emit them as deterministic bounded JSON TextContent with isError=true and no structuredContent."
+    - "Do not put PNG base64, file paths, OCR text, or image descriptions in TextContent. The image bytes must exist only in ImageContent."
+    - "Keep the metadata text within MAX_HEADER_BYTES UTF-8 bytes. If deterministic metadata serialization would exceed that bound, fail closed with CAPTURE_PROTOCOL_ERROR rather than truncating."
+    - "Update tests/test_screen_capture.py for content-only capture_screen behavior and exact metadata/error bounds."
+    - "Update tests/test_screen_capture_mcp.py to require screen_capture output_schema is None, structured_content is None on success/error, exactly one byte-exact ImageContent plus exactly one deterministic metadata TextContent on success, and one deterministic bounded error TextContent on failure."
+    - "Update tests/test_mcp_contracts.py so generic output-schema assertions explicitly exempt only screen_capture as the intentional media-first unstructured tool while every other structured tool remains closed/schema-validated."
+    - "Update README.md screen_capture documentation to state success is unstructured media-first: PNG ImageContent plus bounded JSON metadata TextContent, with no outputSchema/structuredContent. Do not change the eleven-tool count."
+    - "No dependency version change. Keep mcp==2.2.0 and requirements.lock byte-identical."
+    - "Run focused affected Python tests during iteration; do not repeatedly run canonical full verification."
+    - "Before handoff, run canonical ./verify exactly once. It must PASS. Canonical verification authority is 0/1 -> 1/1."
+    - "After verification PASS, perform canonical package/sign/freeze using the existing package_app.sh path with an already-configured explicit non-ad-hoc AGENT_RUNTIME_CODESIGN_IDENTITY. Do not discover/select a signing identity or print the signing literal."
+    - "Packaging must use canonical CPython 3.13.x / cp313 / macOS arm64 and locked dependencies. Require package provenance, strict codesign verification and immutable candidate freeze PASS."
+    - "If the explicit signing identity is unavailable, do not weaken signing or use ad-hoc signing. Publish the verified implementation/report with terminal IMPLEMENTATION_VERIFIED_PACKAGING_UNAVAILABLE."
+    - "If packaging succeeds, record candidate SHA-256, candidate path, handoff path/hash and package provenance in the report. Do not install it."
+    - "Publish implementation commit and TASK-0108 report on dev. Report must bind the exact implementation commit and candidate identity if produced."
+
+  allowed_existing_files_or_components:
+    - "agent_runtime/server.py"
+    - "agent_runtime/screen_capture.py"
+    - "tests/test_screen_capture.py"
+    - "tests/test_screen_capture_mcp.py"
+    - "tests/test_mcp_contracts.py"
+    - "README.md"
+    - ".agent/tasks/TASK-0108/report.yaml"
+    - "build/candidates/** ignored immutable package artifacts"
+    - "ordinary ignored build/test artifacts"
+  expected_files_are_restrictive: true
+
+invariants:
+  - "Exactly eleven public MCP tools remain."
+  - "screen_capture input schema and tool annotations remain unchanged."
+  - "Native AgentRuntimeScreenCapture helper bytes/source and ScreenCaptureKit selection semantics are unchanged."
+  - "No OCR, Accessibility, clipboard, cursor, audio, DOM, URL or keystroke capability is introduced."
+  - "No dependency change."
+  - "No runtime.env, tunnel, ServiceManagement, launchd, TCC or installed product mutation."
+  - "No install-prebuilt, cutover, restart, plugin refresh or live screen_capture invocation."
+  - "Canonical ./verify runs at most once."
+  - "main, tags, releases and sibling repositories remain unchanged."
+
+forbidden_changes:
+  - "Do not add a twelfth public tool or a separate image tool."
+  - "Do not add Apps SDK UI/widget infrastructure in this task."
+  - "Do not embed PNG base64 into TextContent or structured metadata."
+  - "Do not return structuredContent from screen_capture success or failure."
+  - "Do not modify the Swift capture helper or TCC behavior unless a focused test proves the media-only Python correction impossible; if so stop BLOCKED instead of widening scope."
+  - "Do not change mcp or other dependency versions."
+  - "Do not install/reinstall/cut over/restart Runtime."
+  - "Do not refresh/reconnect the ChatGPT plugin."
+  - "Do not mutate main/tags/releases."
+
+gap_policy:
+  local_auto_fix: true
+  local_auto_fix_boundary: "Only within the six listed implementation/test/doc files and exact media-first result contract."
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  dependency_change: forbidden
+  public_tool_count_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Focused RED proves the previous mixed structured+media contract violates the new expected contract."
+    evidence_required: "Exact focused failing tests before implementation correction."
+  - id: AC-2
+    requirement: "screen_capture is advertised as unstructured media-first with unchanged input and annotations."
+    evidence_required: "output_schema is None; public tool count/input schema/annotations unchanged."
+  - id: AC-3
+    requirement: "Success preserves the exact PNG and exposes metadata only as bounded deterministic TextContent."
+    evidence_required: "One ImageContent, one metadata TextContent, structured_content=None, byte/hash equality and metadata JSON equality/bound."
+  - id: AC-4
+    requirement: "Failures remain typed/bounded to the model without structuredContent."
+    evidence_required: "is_error=true, one deterministic error TextContent, structured_content=None, stable code/message/retryable."
+  - id: AC-5
+    requirement: "No unrelated contract/dependency/native-capture regression."
+    evidence_required: "Focused affected tests plus requirements lock/source invariants."
+  - id: AC-6
+    requirement: "Canonical verification passes exactly once."
+    evidence_required: "./verify 1/1 PASS."
+  - id: AC-7
+    requirement: "A signed immutable successor candidate is frozen when packaging authority is available."
+    evidence_required: "Explicit non-ad-hoc signing preflight, package provenance, strict codesign, immutable candidate SHA/path/handoff evidence; otherwise exact packaging-unavailable terminal."
+  - id: AC-8
+    requirement: "No live activation consequence occurs."
+    evidence_required: "Install/cutover/restart/plugin-refresh/live-capture counters all zero."
+
+verification:
+  executor_checks:
+    - id: CHECK-BIND
+      command_or_check: "Fresh exact planning/dev/main/local-worktree binding."
+      required: true
+    - id: CHECK-RED
+      command_or_check: "Focused contract tests genuinely fail before production correction."
+      required: true
+    - id: CHECK-FOCUSED
+      command_or_check: "Affected screen_capture/MCP contract regressions PASS during iteration."
+      required: true
+    - id: CHECK-CANONICAL
+      command_or_check: "./verify exactly once before handoff."
+      required: true
+    - id: CHECK-PACKAGE
+      command_or_check: "Canonical signed package/freeze after verify PASS; no install."
+      required: true
+    - id: CHECK-FINAL
+      command_or_check: "Publish implementation + truthful TASK-0108 report and stop NEEDS_REVIEW."
+      required: true
+  authoritative_verification:
+    required: true
+    mechanism: "Independent Architect review of implementation/report/candidate before any install."
+    expected_signal: "Media-first contract accepted and immutable signed successor candidate approved for bounded live cutover."
+
+capability_requirements:
+  EXECUTION:
+    - repository_content_read
+    - repository_content_write
+    - native_repository_execution
+    - git_history_read
+    - remote_ref_read
+  REVIEW:
+    - repository_content_read
+    - repository_content_write
+    - git_history_read
+    - remote_ref_read
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
