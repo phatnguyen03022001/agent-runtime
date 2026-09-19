@@ -1,18 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0109
-task_revision: 2
+task_revision: 3
 state: APPROVED
 
 origin:
   type: architect_recovery
   task_id: TASK-0109
-  predecessor_revision: 1
-  predecessor_review: "bfe606c25511debf6ee0bb6fb16b305e348e6190"
-  gap_id: "explicit_signing_identity_not_bound"
-
-architect_binding:
-  target_repository: phatnguyen03022001/agent-runtime
+  predecessor_revision: 2
+  predecessor_review: "0869fa5be3f9789354fb916c4b2a8c39c2a2aa2f"
+  gap_id: "signing_fingerprint_extraction_binding_gap"
 
 target:
   repository: phatnguyen03022001/agent-runtime
@@ -20,141 +17,110 @@ target:
     name: dev
     role: signed_immutable_candidate_packaging
 
-execution_base:
-  mode: exact_planning_head
-  capture: after_final_planning_commit
-  require_exact_match: true
-
 execution_surface:
-  id: CODEX_LOCAL
-  controller: CODEX
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
   location: LOCAL
-  transport: NATIVE
+  transport: AGENT_RUNTIME
 
-objective: "Select the single valid host codesigning identity in a bounded non-disclosing way, bind it to AGENT_RUNTIME_CODESIGN_IDENTITY by SHA-1 fingerprint for one packaging invocation, then build/sign/validate/freeze exactly one immutable candidate. Do not install or activate it."
+objective: "Using the already-proven single valid host codesigning identity, extract its SHA-1 fingerprint robustly and non-disclosingly from exactly one authorized security find-identity invocation, bind it only in-process, then package/sign/validate/freeze exactly one immutable candidate. Do not install or activate the candidate."
 
 accepted_source:
   task_0108_review: "a67a5784d631ac55f2e94baf34ebf0f26ccb00f5"
   task_0108_implementation: "9128cb102f858572e4b54010f46f587d76b6f915"
-  task_0109_r1_review: "bfe606c25511debf6ee0bb6fb16b305e348e6190"
+  task_0109_r2_review: "0869fa5be3f9789354fb916c4b2a8c39c2a2aa2f"
 
 preconditions:
-  - "Fresh-resolve remote dev/main and require dev equals exact TASK-0109 revision-2 planning HEAD and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
-  - "Synchronize the clean canonical local dev checkout to exact planning HEAD by ordinary fast-forward only."
+  - "Fresh-resolve canonical task from GitHub at exact revision-3 planning HEAD."
+  - "Fresh-resolve remote dev/main; require dev equals exact planning HEAD and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "Synchronize the clean canonical local dev checkout to the exact planning HEAD using authorized CHATGPT_LOCAL repository synchronization."
   - "Require working tree clean."
-  - "Require accepted TASK-0108 implementation 9128cb102f858572e4b54010f46f587d76b6f915 is in ancestry."
-  - "Require requirements.lock SHA-256 80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e."
-  - "Require canonical packaging interpreter resolves to CPython 3.13.x, cpython-313, macOS arm64."
+  - "Require accepted TASK-0108 implementation in ancestry."
+  - "Require requirements.lock SHA-256 remains 80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e."
+  - "Require canonical packaging interpreter resolves to CPython 3.13.x/cpython-313/macOS arm64."
 
 signing_authority:
   discovery_authority: "0/1"
-  selection_rule:
+  extraction_contract:
     - "Invoke /usr/bin/security find-identity -v -p codesigning exactly once."
-    - "Do not echo, print, log, persist or report any human-readable identity literal from command output."
-    - "Parse only valid identity count and the 40-hex SHA-1 fingerprint field."
-    - "Require exactly one valid identity. If zero, stop PACKAGING_AUTHORITY_UNAVAILABLE. If more than one, stop SIGNING_IDENTITY_AMBIGUOUS."
-    - "Require selected fingerprint matches ^[0-9A-Fa-f]{40}$."
-    - "Normalize the fingerprint only for process use; do not persist it to repository artifacts."
-    - "Bind AGENT_RUNTIME_CODESIGN_IDENTITY to that fingerprint only within the single package_app.sh invocation environment."
-    - "Do not mutate shell profile, .env, runtime.env, Keychain, or any persistent configuration."
-  disclosure_policy:
-    human_readable_identity_literal: FORBIDDEN
-    fingerprint_in_operator_output: FORBIDDEN
-    fingerprint_in_report: FORBIDDEN
-    allowed_report_fact: "exactly_one_valid_identity_selected=true"
+    - "Capture stdout only in process memory; do not echo or persist raw output."
+    - "Parse valid identity lines by regex searching for standalone 40-hex SHA-1 tokens, independent of surrounding index/quotes/spacing."
+    - "Ignore the final '<N> valid identities found' summary when extracting fingerprints."
+    - "Require the command summary count is exactly 1 and the set of distinct 40-hex fingerprint tokens from valid identity lines has cardinality exactly 1."
+    - "If either condition fails, stop PACKAGING_AUTHORITY_UNAVAILABLE or SIGNING_IDENTITY_AMBIGUOUS as appropriate."
+    - "Do not print or persist the fingerprint or human-readable identity literal."
+    - "Bind AGENT_RUNTIME_CODESIGN_IDENTITY to the sole fingerprint only within the one package_app.sh child process environment."
+  disclosure:
+    raw_security_output: FORBIDDEN
+    human_readable_identity: FORBIDDEN
+    fingerprint: FORBIDDEN
+    report_allowed: "valid_identity_count=1 and exactly_one_fingerprint_bound=true"
 
 packaging:
   package_invocation_authority: "0/1"
   command: "./macos/package_app.sh"
   requirements:
-    - "Invoke package_app.sh exactly once after signing-authority preflight passes."
-    - "Do not alter AGENT_RUNTIME_PACKAGING_PYTHON."
-    - "Pass AGENT_RUNTIME_CODESIGN_IDENTITY only as the selected in-process SHA-1 fingerprint."
-    - "Require locked dependency install, Swift release build, strict codesign, runtime manifest validation, seal and immutable candidate publication all succeed."
-    - "Capture candidate_app, candidate_handoff and candidate_sha256 from package output."
-    - "Do not retry after any non-zero package result."
+    - "Invoke package_app.sh exactly once after signing extraction passes."
+    - "No retry."
+    - "Do not mutate AGENT_RUNTIME_PACKAGING_PYTHON."
+    - "Require package output yields candidate_app, candidate_handoff and candidate_sha256."
 
 post_package_verification:
   required:
-    - "Candidate app and handoff must be siblings under build/candidates/<candidate_sha256>/."
-    - "Run /usr/bin/codesign --verify --deep --strict on frozen candidate."
-    - "Run package_provenance.py validate-candidate against frozen candidate and handoff."
-    - "Require candidate source revision equals exact TASK-0109 revision-2 planning HEAD."
-    - "Require source tree, requirements lock SHA, runtime manifest and external handoff closure are internally consistent."
-    - "Require main app, AgentRuntimeRuntimeService and AgentRuntimeScreenCapture carry one matching non-null TeamIdentifier."
-    - "Do not print human-readable signing identity or selected SHA-1 fingerprint."
-    - "Require immutable/frozen candidate directory contract passes."
-    - "Record candidate SHA-256, app path, handoff path, handoff SHA-256, source revision, source tree, lock SHA-256 and TeamIdentifier closure PASS without exposing signing literal/fingerprint."
+    - "Candidate app and handoff are siblings under build/candidates/<candidate_sha256>/."
+    - "Run strict codesign --verify --deep --strict on frozen candidate."
+    - "Run package_provenance.py validate-candidate."
+    - "Require candidate source_revision equals exact revision-3 planning HEAD."
+    - "Require source tree, requirements lock hash, runtime manifest, external handoff and immutable candidate closure all pass."
+    - "Require main app, AgentRuntimeRuntimeService and AgentRuntimeScreenCapture have one matching non-null TeamIdentifier."
+    - "Record candidate SHA-256, app path, handoff path, handoff SHA-256, source revision/tree and lock SHA without disclosing signing identity/fingerprint."
 
 scope:
   allowed_repository_mutation:
     - ".agent/tasks/TASK-0109/report.yaml"
   allowed_ignored_artifacts:
     - "build/candidates/**"
-    - "ordinary package staging artifacts cleaned by package_app.sh"
   expected_files_are_restrictive: true
 
 publication:
-  - "On success publish report-only commit on dev as sole direct child of revision-2 planning HEAD."
-  - "On preflight/package/provenance failure publish truthful report-only terminal when repository publication remains available."
-  - "No source/test/doc implementation commit is authorized."
+  - "Publish report-only commit on dev as sole direct child of planning HEAD."
+  - "No source/test/doc implementation commit."
 
 forbidden_changes:
-  - "Do not modify production source, tests, README, requirements.txt or requirements.lock."
-  - "Do not print or persist signing identity literal or fingerprint."
+  - "Do not modify source, tests, README, requirements.txt or requirements.lock."
+  - "Do not print or persist raw security output, signing identity literal or fingerprint."
   - "Do not use ad-hoc signing."
   - "Do not invoke security find-identity more than once."
   - "Do not invoke package_app.sh more than once."
-  - "Do not install-prebuilt."
-  - "Do not install or replace ~/Applications/Agent Runtime.app."
-  - "Do not create or mutate cutover transaction state."
+  - "Do not install-prebuilt or install/replace Agent Runtime.app."
+  - "Do not create/mutate cutover transaction state."
   - "Do not commit-cutover, rollback, resume or recover."
-  - "Do not restart, stop or signal Runtime."
-  - "Do not refresh/reconnect ChatGPT plugin."
-  - "Do not invoke live screen_capture."
-  - "Do not mutate Screen Recording/TCC."
-  - "Do not mutate main, tags, releases or sibling repositories."
+  - "Do not restart/stop/signal Runtime."
+  - "Do not refresh ChatGPT plugin."
+  - "Do not invoke live screen_capture or mutate TCC."
+  - "Do not mutate main/tags/releases/sibling repositories."
   - "Do not force-push."
 
 terminal_states:
   success: NEEDS_REVIEW
-  no_signing_identity: PACKAGING_AUTHORITY_UNAVAILABLE
+  no_signing_authority: PACKAGING_AUTHORITY_UNAVAILABLE
   ambiguous_signing_identity: SIGNING_IDENTITY_AMBIGUOUS
   package_failure: PACKAGING_FAILED
-  provenance_failure: CANDIDATE_VALIDATION_FAILED
-  publication_failure: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+  candidate_validation_failure: CANDIDATE_VALIDATION_FAILED
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "Exact revision-2 planning HEAD is packaged with no source mutation."
-    evidence_required: "Remote/local exact binding and clean checkout."
+    requirement: "Exact planning HEAD and clean source closure."
   - id: AC-2
-    requirement: "Canonical interpreter and lock identity pass."
-    evidence_required: "CPython 3.13.x/cp313/macOS arm64 plus exact lock SHA."
+    requirement: "Single valid signing fingerprint bound non-disclosingly."
   - id: AC-3
-    requirement: "Exactly one valid codesigning identity is selected without disclosure."
-    evidence_required: "Discovery 1/1, valid_identity_count=1, selected fingerprint used only in-process, no literal/fingerprint persisted."
+    requirement: "package_app.sh invoked exactly once and succeeds."
   - id: AC-4
-    requirement: "package_app.sh executes exactly once and succeeds."
-    evidence_required: "package invocation 1/1 exit 0."
+    requirement: "Frozen candidate signature/provenance/immutability closure passes."
   - id: AC-5
-    requirement: "Frozen candidate provenance/signature closure passes."
-    evidence_required: "Strict codesign, validate-candidate, matching non-null TeamIdentifier, immutable candidate closure."
+    requirement: "Candidate identity is durably reported without signing disclosure."
   - id: AC-6
-    requirement: "Candidate identity is durably reported."
-    evidence_required: "Candidate SHA/path, handoff path/SHA, source revision/tree and lock SHA."
-  - id: AC-7
-    requirement: "No live/product consequence occurs."
-    evidence_required: "Install/cutover/restart/plugin/live-capture/TCC counters zero."
-  - id: AC-8
-    requirement: "Only report and ignored candidate artifacts are produced."
-    evidence_required: "Tracked path closure and clean repository after report publication."
-
-verification:
-  authoritative_verification:
-    required: true
-    mechanism: "Independent Architect review before candidate install."
-    expected_signal: "Signed immutable candidate accepted with exact provenance/signature closure."
+    requirement: "No install/lifecycle/live consequence occurs."
 
 git_authority:
   create_branch: false
@@ -162,5 +128,4 @@ git_authority:
   push: true
   promote_to_main: false
 
-blocking_decisions: []
 execution_ready: true
