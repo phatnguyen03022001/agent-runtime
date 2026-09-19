@@ -1,19 +1,16 @@
 protocol_version: 3
 
 task_id: TASK-0108
-task_revision: 1
+task_revision: 4
 review_revision: 1
-state: BLOCKED
+state: ACCEPTED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0108/report.yaml
-  commit: "bad3dd35d0219b19aa7848f4cb2371a70ec43e28"
-  report_revision: 1
-
-reviewed_implementation:
-  commit: "09eebd0c6bb7fbd905dd55a2015697224e8ee886"
-  parent_planning_head: "a220a2e943da2d9140ad07c35ce8609ce3870e4a"
+  commit: "fd309286ef0b86b54d2ae08f0e97397818ef377a"
+  report_revision: 4
+  blob: "06a99b24348f57c1b34a774f52ffca17c732ebaf"
 
 independence:
   reviewer_role: ARCHITECT
@@ -22,91 +19,47 @@ independence:
   remote_lineage_verified: true
   canonical_verify_rerun_performed: false
 
-remote_lineage:
-  implementation_direct_child_of_planning_head: true
-  implementation_files_exact:
-    - README.md
-    - agent_runtime/server.py
-    - agent_runtime/screen_capture.py
-    - tests/test_mcp_contracts.py
-    - tests/test_screen_capture.py
-    - tests/test_screen_capture_mcp.py
-  report_direct_child_of_implementation: true
-  report_only_change: true
-  main_unchanged: true
-
 contract_compliance:
-  media_first_production_contract: PASS
-  public_tool_count_11: PASS
-  input_contract_preserved: PASS
-  annotations_preserved: PASS
-  native_capture_preserved: PASS
-  focused_red_green_evidence: PASS
-  focused_31_tests: PASS
-  canonical_verification: FAIL_STATIC_CONTRADICTION
-  packaging: NOT_REACHED_AS_ACCEPTABLE_SUCCESSOR
-  live_activation_absent: PASS
+  checkpoint_binding: PASS
+  focused_verification: PASS
+  py_compile: PASS
+  media_first_preservation: PASS
+  canonical_wrapper_single_launch: PASS
+  canonical_verify_rerun_absent: PASS
+  result_truthfulness: PASS
+  publication_recovery: PASS
 
-criterion_judgment:
-  AC-1: PASS
-  AC-2: PASS
-  AC-3: PASS
-  AC-4: PASS
-  AC-5: BLOCKED
-  AC-6: FAIL
-  AC-7: NOT_REACHED
-  AC-8: PASS
+acceptance:
+  terminal: CANONICAL_VERIFICATION_RESULT_UNAVAILABLE
+  disposition: ACCEPTED
+  canonical_verification: UNPROVEN
+  implementation_publication: NOT_AUTHORIZED_YET
+  packaging: NOT_REACHED
 
-blocking_findings:
-  - id: "BF-0108-1"
-    classification: "MISSING_MCP_CLIENT_CONFORMANCE_UPDATE"
-    description: "Published tests/test_mcp_client_conformance.py still requires every tool, including screen_capture, to have a non-null output_schema. Published TASK-0108 intentionally changes screen_capture.output_schema to None. The test is discovered by ./verify, so canonical verification cannot pass until this test contract is updated."
-    required_fix: "Update only the screen_capture branch of MCP client conformance to require output_schema is None while retaining the existing closed-schema assertions for every other structured tool."
-  - id: "BF-0108-2"
-    classification: "INHERITED_CANONICAL_BASELINE_TEST_DRIFT"
-    description: "Published tests/test_task0055_cutover.py still calls cutover_candidate(..., tunnel_client=...), while current macos/candidate_cutover.py no longer accepts tunnel_client. This drift predates TASK-0108 and is also discovered by ./verify."
-    required_fix: "Remove the obsolete tunnel_client keyword from that test only; do not alter candidate_cutover production behavior."
-  - id: "BF-0108-3"
-    classification: "CANONICAL_VERIFY_NOT_ACCEPTABLE"
-    description: "The report truthfully records ./verify authority consumed 1/1 with final status UNCONFIRMED. Independent static review now proves at least the two deterministic failures above, so the published implementation cannot be accepted as canonically verified."
-    required_fix: "A new task revision must grant fresh canonical verification authority after the two test-contract corrections. Do not rerun revision-1 verification."
+evidence:
+  - "The inherited three-path checkpoint matched the authorized revision-4 identity and diff closure."
+  - "Focused verification passed 42/42 and py_compile passed."
+  - "The five preservation paths remained byte-identical to media-first implementation commit 09eebd0c6bb7fbd905dd55a2015697224e8ee886."
+  - "Exactly one revision-4 durable wrapper launch was attempted under PID 67499."
+  - "At first observation the wrapper PID was no longer alive and no state, log, temporary receipt or FINISHED receipt existed."
+  - "No canonical verification retry occurred, so no PASS or FAIL may be inferred."
+  - "No implementation successor, package, candidate, install, restart, plugin refresh, live screen capture or TCC mutation occurred."
+  - "The Executor-created report bytes were recovered remote-only without changing content; the remote report is the sole child of the revision-4 planning commit and changes exactly .agent/tasks/TASK-0108/report.yaml."
 
-implementation_assessment:
-  production_contract_requires_rework: false
-  notes:
-    - "server.screen_capture truthfully returns CallToolResult, naturally removing outputSchema under pinned mcp==2.2.0."
-    - "Success is media-first: one ImageContent followed by deterministic bounded metadata TextContent with no structuredContent."
-    - "Failure remains bounded model-facing JSON TextContent with isError=true and no structuredContent."
-    - "No evidence currently requires another production implementation change."
-
-local_checkpoint_observation:
-  canonical_remote_head: "bad3dd35d0219b19aa7848f4cb2371a70ec43e28"
-  local_head_at_review: "bad3dd35d0219b19aa7848f4cb2371a70ec43e28"
-  dirty_paths_observed:
-    - agent_runtime/server.py
-    - tests/test_mcp_client_conformance.py
-    - tests/test_screen_capture.py
-    - tests/test_task0055_cutover.py
-  dirty_diff_sha256: "0f217f0974fee6d2b51f5210203d884ef4db1c3f0613b646f472193d1c39dbd9"
-  disposition: "FOREIGN_CONCURRENT_CHECKPOINT_NOT_REVIEW_EVIDENCE"
-  note: "These uncommitted bytes are not part of TASK-0108 revision-1 remote evidence and must not be silently mixed into the canonical implementation. Preserve or normalize them explicitly before revision-2 execution."
+gap_disposition:
+  - gap_id: "canonical_verify_wrapper_pre_body_result_loss"
+    disposition: "VERIFICATION_TRANSPORT_RECOVERY_REQUIRED"
+    rationale: "The verification body cannot be judged because the detached wrapper disappeared before leaving any state/log/receipt evidence. A successor must strengthen the launch handshake itself, not rerun revision-4 authority or infer test status."
+    owner: ARCHITECT
 
 next_state:
-  revision_required: true
-  implementation_commit_reusable: true
+  media_first_production_checkpoint_reusable: true
   canonical_verify_fresh_authority_required: true
-  signing_candidate_required_only_after_verify_pass: true
+  package_after_verification_only: true
+  live_activation_authorized: false
   main_promotion_authorized: false
 
-recommended_resolution: >-
-  TASK-0108 revision 2 should preserve the accepted media-first production implementation,
-  correct only the missing MCP client conformance assertion and inherited stale cutover test,
-  run focused verification, then run canonical ./verify exactly once with fresh revision-2
-  authority. Packaging/signing may be attempted only after canonical PASS; if explicit
-  non-ad-hoc signing authority is still unavailable, report that boundary truthfully without
-  weakening signing or installing anything.
-
 notes:
-  - "Do not rerun TASK-0108 revision-1 ./verify."
-  - "Do not package or install the revision-1 implementation as an accepted successor."
-  - "Do not treat the local foreign dirty checkpoint as published evidence."
+  - "Do not rerun revision-4 ./verify."
+  - "Do not treat process disappearance or focused GREEN as canonical PASS."
+  - "The successor should separate verification/publication from packaging so signing availability cannot obscure the canonical verifier result."
