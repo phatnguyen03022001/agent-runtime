@@ -1,14 +1,14 @@
 protocol_version: 3
 
 task_id: TASK-0108
-task_revision: 2
+task_revision: 3
 state: APPROVED
 
 origin:
   type: architect_recovery
   task_id: TASK-0108
-  predecessor_revision: 1
-  gap_id: "canonical_verification_recovery_after_missing_test_contract_updates"
+  predecessor_revision: 2
+  gap_id: "screen_capture_failure_helper_import_omission"
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -20,9 +20,9 @@ target:
     role: media_first_screen_capture_verification_recovery
 
 execution_base:
-  mode: handoff_snapshot
-  capture: after_final_planning_commit
-  require_exact_match: true
+  mode: inherited_partial_checkpoint
+  canonical_planning_parent: "9e2616c64875206f510ae0a1fd065acf81522148"
+  require_checkpoint_validation_before_mutation: true
 
 skill_library:
   repository: phatnguyen03022001/agent-skills
@@ -39,39 +39,49 @@ execution_skills:
 
 authority_sources:
   - source: ".agent/tasks/TASK-0108/review.yaml@4729cd5481e4e14a7448ba5d958d98f32ca8e0d4"
-    role: "Architect BLOCKED review of revision 1. Production media-first implementation is reusable; canonical verification cannot pass because two test contracts are stale/missing."
+    role: "Architect BLOCKED review of revision 1; media-first production implementation reusable but verification incomplete."
     precedence: 1
-  - source: "09eebd0c6bb7fbd905dd55a2015697224e8ee886"
-    role: "Revision-1 production implementation commit. Its six committed implementation/test/doc paths are retained except for the two additional test corrections explicitly authorized by revision 2."
+  - source: ".agent/tasks/TASK-0108/task.yaml@9e2616c64875206f510ae0a1fd065acf81522148"
+    role: "Revision-2 recovery task. Executor stopped before canonical verification with a validated two-test partial checkpoint."
     precedence: 2
-  - source: "bad3dd35d0219b19aa7848f4cb2371a70ec43e28"
-    role: "Truthful revision-1 report; canonical ./verify authority was consumed 1/1 with UNCONFIRMED status and must not be replayed as revision 1."
+  - source: "09eebd0c6bb7fbd905dd55a2015697224e8ee886"
+    role: "Reusable media-first production implementation commit."
     precedence: 3
+  - source: "Architect read-only canonical source audit"
+    role: "agent_runtime/server.py at implementation commit calls capture_failure_result() but imports only ScreenCaptureFailure and capture_screen, causing focused screen_capture failure-path NameError."
+    precedence: 4
 
 supersession:
-  revision1:
-    planning_head: "a220a2e943da2d9140ad07c35ce8609ce3870e4a"
-    implementation_commit: "09eebd0c6bb7fbd905dd55a2015697224e8ee886"
-    report_commit: "bad3dd35d0219b19aa7848f4cb2371a70ec43e28"
-    review_commit: "4729cd5481e4e14a7448ba5d958d98f32ca8e0d4"
-    review_state: BLOCKED
-    canonical_verify_authority_consumed: "1/1"
-    canonical_verify_result: "PROVEN_NON_PASSABLE_BY_STATIC_CONTRADICTION"
-    packaging_candidate_accepted: false
+  revision2:
+    planning_head: "9e2616c64875206f510ae0a1fd065acf81522148"
+    terminal: "EXECUTION_INCOMPLETE_PRE_CANONICAL_VERIFICATION"
+    report_published: false
+    implementation_commit_published: false
+    canonical_verify_authority_consumed: "0/1"
+    focused_result: FAIL
+    reason: "Focused verification exposed a production import omission outside revision-2 scope before canonical verification."
 
-foreign_checkpoint:
-  preserved_outside_repository:
-    path: "/Users/tienphat/Developer/.task-0108-r1-foreign-checkpoint.patch"
-    sha256: "0f217f0974fee6d2b51f5210203d884ef4db1c3f0613b646f472193d1c39dbd9"
-  authority: NONE
-  instruction: "Do not apply, inspect for implementation guidance, delete, or mutate this preserved foreign checkpoint during revision 2. It exists only to avoid losing unrelated concurrent work."
+inherited_checkpoint:
+  repository_path: "/Users/tienphat/Developer/agent-runtime"
+  required_head: "9e2616c64875206f510ae0a1fd065acf81522148"
+  required_branch: dev
+  required_diff_sha256: "a7eac58888d82dbe7daf42bbfd256d747224dfb5ecb5a311b6b1df81e990af11"
+  required_dirty_paths:
+    - tests/test_mcp_client_conformance.py
+    - tests/test_task0055_cutover.py
+  required_file_sha256:
+    tests/test_mcp_client_conformance.py: "18310f77cf202054c5cc0af0a91616f05481464b221cbdbe4d01ec4632b87779"
+    tests/test_task0055_cutover.py: "3eb02ff4951141a2712f7498596fc193cf441cf6b6aef31f7edb392bd5cae7a1"
+  required_diff_check: PASS
+  instruction: "Do not reset, clean, restore, stash, checkout, sync, merge, rebase or recreate this checkpoint before validating all identities above."
 
-structure_authority:
-  status: RESOLVED
-  source: "Revision-1 BLOCKED review."
-  rationale: "Production contract needs no further change. Revision 2 is bounded to two deterministic test-contract corrections plus fresh canonical verification and optional packaging."
+production_fix:
+  path: agent_runtime/server.py
+  canonical_blob_before_fix: "b268c2cdea3745115ef4e43235fcfb1a06f1c40f"
+  exact_intent: "Extend the existing .screen_capture import so server.py imports capture_failure_result alongside ScreenCaptureFailure and capture_screen."
+  expected_semantic_change: "One import-only production correction. No function body, tool schema, error envelope, capture semantics or other production behavior changes."
 
-objective: "Preserve the revision-1 media-first screen_capture production implementation byte-for-byte, correct exactly two stale test contracts that make canonical verification impossible, then run fresh revision-2 canonical ./verify exactly once. Only after PASS may packaging/signing/freeze be attempted. Do not install or activate anything."
+objective: "Continue from the exact revision-2 partial checkpoint, add the single missing capture_failure_result import in agent_runtime/server.py, then re-run focused affected verification. If focused verification is green, run fresh revision-3 canonical ./verify exactly once in foreground with retained exit code. Only after canonical PASS may packaging/signing/freeze be attempted. Do not install or activate anything."
 
 execution_surface:
   id: CODEX_LOCAL
@@ -79,46 +89,30 @@ execution_surface:
   location: LOCAL
   transport: NATIVE
 
-required_test_corrections:
-  - path: tests/test_mcp_client_conformance.py
-    reason: "Published test still requires non-null output_schema for screen_capture, contradicting the accepted media-first output_schema=None contract."
-    exact_intent: "Remove screen_capture from EXPECTED_OUTPUT_FIELDS and exempt only screen_capture from generic non-null/closed output-schema checks by explicitly requiring tool.output_schema is None. Preserve all existing assertions for every other tool."
-  - path: tests/test_task0055_cutover.py
-    reason: "Inherited stale test still passes tunnel_client= to cutover_candidate although production signature no longer accepts that argument."
-    exact_intent: "Remove only the obsolete tunnel_client=Path('/usr/bin/true') keyword from the helper invocation. Do not change candidate_cutover production code or test semantics otherwise."
-
-production_preservation:
-  implementation_commit: "09eebd0c6bb7fbd905dd55a2015697224e8ee886"
-  paths_byte_identical_required:
-    - README.md
-    - agent_runtime/server.py
-    - agent_runtime/screen_capture.py
-    - tests/test_mcp_contracts.py
-    - tests/test_screen_capture.py
-    - tests/test_screen_capture_mcp.py
-  rationale: "Architect review found no production contract rework required. Revision 2 must not silently alter the media-first implementation while recovering verification."
-
 scope:
   required_changes:
-    - "Fresh-resolve TASK-0108 revision 2 at exact planning HEAD and fresh-resolve remote dev/main."
-    - "Require one clean canonical local dev worktree at exact planning HEAD before mutation. Do not use or apply the preserved foreign checkpoint."
-    - "Before editing, prove the six production-preservation paths are byte-identical to implementation commit 09eebd0c6bb7fbd905dd55a2015697224e8ee886."
-    - "Capture focused RED before corrections using only tests.test_mcp_client_conformance and tests.test_task0055_cutover. Expected failures must correspond to the two Architect findings: screen_capture non-null output-schema expectation and obsolete tunnel_client keyword."
-    - "Modify exactly tests/test_mcp_client_conformance.py and tests/test_task0055_cutover.py with the exact intents above."
-    - "After edits, require git diff contains exactly those two test paths and no production/doc changes."
+    - "Resolve TASK-0108 revision 3 from GitHub at exact planning HEAD."
+    - "Before any mutation, validate the inherited checkpoint exactly: local HEAD 9e2616c64875206f510ae0a1fd065acf81522148, branch dev, exact two dirty paths, exact diff SHA-256 a7eac58888d82dbe7daf42bbfd256d747224dfb5ecb5a311b6b1df81e990af11, exact two file SHA-256 values, and git diff --check PASS."
+    - "Do not synchronize the local checkout to revision-3 planning HEAD. Task authority is remote; execution checkpoint remains intentionally on revision-2 planning HEAD."
+    - "Before editing server.py, require its Git blob at local HEAD equals b268c2cdea3745115ef4e43235fcfb1a06f1c40f."
+    - "Modify exactly one production line/import statement in agent_runtime/server.py so capture_failure_result is imported from .screen_capture together with ScreenCaptureFailure and capture_screen."
+    - "Do not alter any server.py function body, tool registration, annotations, input schema, output contract, timing middleware or public tool count."
+    - "After the import fix, require dirty paths are exactly agent_runtime/server.py plus the two inherited test files."
     - "Run focused verification including tests.test_mcp_client_conformance, tests.test_task0055_cutover, tests.test_screen_capture, tests.test_screen_capture_mcp and tests.test_mcp_contracts. Require PASS."
-    - "Run py_compile for the affected Python test files as appropriate."
-    - "Before canonical verification, re-prove the six production-preservation paths remain byte-identical to implementation commit 09eebd0c6bb7fbd905dd55a2015697224e8ee886."
-    - "Run canonical ./verify exactly once under fresh revision-2 authority 0/1 -> 1/1. Capture and persist the actual exit code in the same foreground execution result. Do not detach it in a way that can lose final status."
-    - "If ./verify returns non-zero, stop CANONICAL_VERIFICATION_FAILED. Do not rerun and do not widen scope automatically."
-    - "If ./verify PASS, create one revision-2 implementation successor commit containing exactly the two authorized test corrections."
-    - "Only after canonical PASS, attempt canonical package/sign/freeze using existing package_app.sh with an already-configured explicit non-ad-hoc AGENT_RUNTIME_CODESIGN_IDENTITY. Do not discover/select an identity and do not print the identity literal."
-    - "If valid explicit signing authority is unavailable, stop VERIFICATION_PASSED_PACKAGING_UNAVAILABLE after publishing the two-test implementation successor and report. Do not weaken signing."
-    - "If packaging succeeds, require canonical CPython 3.13.x/cp313/macOS arm64, locked dependency install, package provenance, strict codesign verification and immutable candidate freeze PASS. Record candidate SHA/path/handoff hash."
+    - "Run py_compile for agent_runtime/server.py and affected test files."
+    - "Before canonical verification, prove revision-1 media-first production paths remain unchanged except the authorized server.py import-only fix. agent_runtime/screen_capture.py, README.md, tests/test_mcp_contracts.py, tests/test_screen_capture.py and tests/test_screen_capture_mcp.py must remain byte-identical to implementation commit 09eebd0c6bb7fbd905dd55a2015697224e8ee886."
+    - "Run canonical ./verify exactly once under fresh revision-3 authority 0/1 -> 1/1, in a foreground execution result that retains final exit code."
+    - "If ./verify returns non-zero, stop CANONICAL_VERIFICATION_FAILED. Do not rerun or widen scope."
+    - "If ./verify exits 0, create one revision-3 implementation successor containing exactly agent_runtime/server.py, tests/test_mcp_client_conformance.py and tests/test_task0055_cutover.py."
+    - "Only after canonical PASS, attempt canonical package/sign/freeze using existing package_app.sh with an already-configured explicit non-ad-hoc AGENT_RUNTIME_CODESIGN_IDENTITY."
+    - "Do not discover/select or print a signing identity. Do not use ad-hoc signing."
+    - "If valid explicit signing authority is unavailable, stop VERIFICATION_PASSED_PACKAGING_UNAVAILABLE after publishing the implementation successor and report."
+    - "If packaging succeeds, require canonical CPython 3.13.x/cp313/macOS arm64, locked dependencies, package provenance, strict codesign and immutable candidate freeze PASS; record candidate SHA/path/handoff hash."
     - "Do not install, cut over, restart, refresh plugin, invoke live screen_capture or mutate TCC."
-    - "Publish TASK-0108 revision-2 report on dev as sole report successor after the implementation successor."
+    - "Publish TASK-0108 revision-3 report on remote dev after the implementation successor."
 
   allowed_existing_files_or_components:
+    - "agent_runtime/server.py"
     - "tests/test_mcp_client_conformance.py"
     - "tests/test_task0055_cutover.py"
     - ".agent/tasks/TASK-0108/report.yaml"
@@ -127,20 +121,21 @@ scope:
   expected_files_are_restrictive: true
 
 invariants:
-  - "Revision-1 media-first production implementation remains byte-identical."
+  - "Revision-1 media-first screen_capture contract remains unchanged."
   - "Exactly eleven public MCP tools remain."
-  - "No dependency, native helper, README, Runtime, tunnel, plugin, TCC or lifecycle change."
-  - "Only the two named test files may change before report publication."
-  - "Revision-1 ./verify is never replayed; revision-2 has fresh independent 0/1 authority."
-  - "Canonical ./verify executes exactly once and must retain its final exit code."
+  - "server.py production change is import-only."
+  - "No dependency, native helper, README, tunnel, plugin, TCC or lifecycle change."
+  - "Revision-2 canonical verify authority remains unconsumed; revision 3 has fresh independent 0/1 authority."
+  - "Canonical ./verify executes at most once and final exit code must be retained."
   - "No candidate is installed."
   - "main, tags, releases and sibling repositories remain unchanged."
 
 forbidden_changes:
-  - "Do not modify agent_runtime/server.py or agent_runtime/screen_capture.py."
+  - "Do not reset, discard, stash, clean or recreate the inherited revision-2 checkpoint."
+  - "Do not modify agent_runtime/screen_capture.py."
   - "Do not modify README.md, requirements.txt or requirements.lock."
-  - "Do not modify tests/test_screen_capture.py, tests/test_screen_capture_mcp.py or tests/test_mcp_contracts.py."
-  - "Do not apply or consume /Users/tienphat/Developer/.task-0108-r1-foreign-checkpoint.patch."
+  - "Do not modify tests/test_mcp_contracts.py, tests/test_screen_capture.py or tests/test_screen_capture_mcp.py."
+  - "Do not alter server.py beyond the exact import-only fix."
   - "Do not rerun canonical ./verify after any result."
   - "Do not discover/select/print a signing identity."
   - "Do not use ad-hoc signing."
@@ -150,25 +145,25 @@ forbidden_changes:
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "Revision-1 production media-first implementation is preserved exactly."
-    evidence_required: "Six listed paths byte-identical to implementation commit 09eebd0c6bb7fbd905dd55a2015697224e8ee886 before and after revision-2 edits."
+    requirement: "Exact revision-2 partial checkpoint is inherited without recreation or loss."
+    evidence_required: "Exact HEAD, path set, diff SHA, file SHA values and diff-check PASS before mutation."
   - id: AC-2
-    requirement: "MCP client conformance truthfully models screen_capture as the sole intentional no-output-schema tool."
-    evidence_required: "Focused RED then PASS; all other tool schema assertions preserved."
+    requirement: "Production NameError is corrected by one import-only server.py change."
+    evidence_required: "Exact import diff and no server.py function-body changes."
   - id: AC-3
-    requirement: "Inherited obsolete tunnel_client test call is removed without production cutover change."
-    evidence_required: "Focused RED then PASS and one-line semantic correction."
+    requirement: "Focused affected verification is green."
+    evidence_required: "Named focused tests PASS plus py_compile PASS."
   - id: AC-4
-    requirement: "Focused affected verification passes."
-    evidence_required: "Named focused tests PASS."
+    requirement: "Media-first production implementation remains otherwise byte-identical."
+    evidence_required: "Five untouched revision-1 production/test/doc paths byte-identical; screen_capture contract unchanged."
   - id: AC-5
-    requirement: "Canonical verification passes exactly once with retained exit code."
+    requirement: "Canonical verification passes exactly once with retained final exit code."
     evidence_required: "./verify authority 1/1, exit code 0, no rerun."
   - id: AC-6
-    requirement: "Only two authorized test files differ in revision-2 implementation successor."
-    evidence_required: "Exact diff/path closure."
+    requirement: "Revision-3 implementation successor contains exactly three authorized paths."
+    evidence_required: "Exact commit diff closure."
   - id: AC-7
-    requirement: "Signed immutable candidate is frozen only when explicit signing authority is available."
+    requirement: "Signed immutable candidate is frozen only if explicit signing authority is available."
     evidence_required: "Candidate/provenance/codesign evidence after AC-5 PASS, or truthful VERIFICATION_PASSED_PACKAGING_UNAVAILABLE terminal."
   - id: AC-8
     requirement: "No live/product consequence occurs."
@@ -176,17 +171,17 @@ acceptance_criteria:
 
 verification:
   executor_checks:
-    - id: CHECK-BIND
-      command_or_check: "Exact planning/dev/main/clean-worktree binding and production-preservation byte identity."
+    - id: CHECK-CHECKPOINT
+      command_or_check: "Validate exact inherited revision-2 dirty checkpoint before mutation."
       required: true
-    - id: CHECK-RED
-      command_or_check: "Focused RED for the two known stale test contracts."
+    - id: CHECK-IMPORT
+      command_or_check: "One import-only capture_failure_result correction in server.py."
       required: true
     - id: CHECK-FOCUSED
-      command_or_check: "Focused affected Python tests PASS."
+      command_or_check: "Focused affected tests and py_compile PASS."
       required: true
     - id: CHECK-PRESERVE
-      command_or_check: "Six revision-1 production paths remain byte-identical."
+      command_or_check: "Media-first contract paths remain otherwise byte-identical."
       required: true
     - id: CHECK-CANONICAL
       command_or_check: "./verify exactly once in foreground; capture final exit code."
@@ -195,12 +190,12 @@ verification:
       command_or_check: "Only after canonical PASS, package/sign/freeze if explicit signing identity is already configured."
       required: true
     - id: CHECK-FINAL
-      command_or_check: "Publish exact two-test implementation successor and truthful report."
+      command_or_check: "Publish exact three-path implementation successor and truthful report."
       required: true
   authoritative_verification:
     required: true
     mechanism: "Independent Architect review before any install."
-    expected_signal: "Canonical PASS with preserved production bytes; candidate may proceed to bounded install only if packaging also succeeds."
+    expected_signal: "Canonical PASS with media-first contract preserved; candidate may proceed only if packaging also succeeds."
 
 capability_requirements:
   EXECUTION:
