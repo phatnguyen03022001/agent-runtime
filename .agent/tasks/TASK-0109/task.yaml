@@ -1,0 +1,152 @@
+protocol_version: 3
+
+task_id: TASK-0109
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect
+  predecessor_task: TASK-0108
+  predecessor_review: "a67a5784d631ac55f2e94baf34ebf0f26ccb00f5"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: signed_immutable_candidate_packaging
+
+execution_base:
+  mode: exact_planning_head
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+execution_surface:
+  id: CODEX_LOCAL
+  controller: CODEX
+  location: LOCAL
+  transport: NATIVE
+
+objective: "Build, sign, validate and freeze exactly one immutable Agent Runtime candidate from the exact TASK-0109 planning HEAD. Do not install, activate, cut over, restart Runtime, refresh the ChatGPT plugin, invoke live screen_capture, mutate TCC, or commit the cutover transaction."
+
+accepted_source:
+  task_0108_review: "a67a5784d631ac55f2e94baf34ebf0f26ccb00f5"
+  task_0108_implementation: "9128cb102f858572e4b54010f46f587d76b6f915"
+  canonical_verification:
+    tests: 444
+    failures: 0
+    exit_code: 0
+    log_sha256: "835858478f6ae25e2a6bfd11cdebbe3eb4ea15b235a783d16290bd46fb0dd6dd"
+
+preconditions:
+  - "Fresh-resolve remote dev/main and require dev equals exact TASK-0109 planning HEAD and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "Synchronize the clean canonical local dev checkout to the exact planning HEAD by ordinary fast-forward only."
+  - "Require working tree clean before packaging."
+  - "Require package source contains accepted TASK-0108 implementation 9128cb102f858572e4b54010f46f587d76b6f915 in its ancestry."
+  - "Require canonical packaging interpreter resolves to CPython 3.13.x, cpython-313, macOS arm64."
+  - "Require AGENT_RUNTIME_CODESIGN_IDENTITY is already set to a non-empty, non-ad-hoc explicit identity before package invocation."
+  - "Do not discover, select, enumerate, print or persist the signing identity literal."
+  - "If explicit signing authority is unavailable, stop PACKAGING_AUTHORITY_UNAVAILABLE before invoking package_app.sh."
+
+packaging:
+  package_invocation_authority: "0/1"
+  command: "./macos/package_app.sh"
+  requirements:
+    - "Invoke package_app.sh exactly once."
+    - "Do not alter AGENT_RUNTIME_PACKAGING_PYTHON or AGENT_RUNTIME_CODESIGN_IDENTITY during execution."
+    - "Use exact planning HEAD source; no source/test/doc mutation is authorized."
+    - "Require requirements.lock SHA-256 remains 80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e."
+    - "Require package script's locked dependency install, Swift release build, strict codesign verification, runtime manifest validation, seal and immutable candidate publication all succeed."
+    - "Capture candidate_app, candidate_handoff and candidate_sha256 from package output."
+    - "Do not retry package_app.sh after any non-zero result."
+
+post_package_verification:
+  required:
+    - "Candidate app path and handoff path must both be under build/candidates/<candidate_sha256>/ and be non-symlink product-owned artifacts."
+    - "Run strict read-only /usr/bin/codesign --verify --deep --strict on the frozen candidate."
+    - "Run package_provenance.py validate-candidate against the frozen app and external handoff."
+    - "Require candidate provenance source revision equals exact TASK-0109 planning HEAD."
+    - "Require source tree, requirements lock hash, runtime manifest, package identity and handoff closure are internally consistent."
+    - "Require main app, AgentRuntimeRuntimeService and AgentRuntimeScreenCapture are signed under the same non-null TeamIdentifier."
+    - "Do not print the signing identity literal."
+    - "Require candidate directory is immutable/frozen according to the existing package/freeze contract."
+    - "Record candidate SHA-256, candidate app path, handoff path, handoff SHA-256, source revision, source tree and requirements lock SHA-256."
+
+scope:
+  allowed_repository_mutation:
+    - ".agent/tasks/TASK-0109/report.yaml"
+  allowed_ignored_artifacts:
+    - "build/candidates/**"
+    - "ordinary package staging artifacts that package_app.sh cleans automatically"
+  expected_files_are_restrictive: true
+
+publication:
+  - "On successful package/freeze verification, publish a report-only commit on dev as sole direct child of the planning HEAD."
+  - "On PACKAGING_AUTHORITY_UNAVAILABLE or package failure, publish a truthful report-only terminal if repository publication remains available."
+  - "No implementation/source/test/doc commit is authorized."
+
+forbidden_changes:
+  - "Do not modify production source, tests, README, requirements.txt or requirements.lock."
+  - "Do not discover/select/enumerate or print signing identity literals."
+  - "Do not use ad-hoc signing."
+  - "Do not invoke package_app.sh more than once."
+  - "Do not install-prebuilt."
+  - "Do not install or replace ~/Applications/Agent Runtime.app."
+  - "Do not create or mutate cutover transaction state."
+  - "Do not commit-cutover, rollback, resume or recover."
+  - "Do not restart, stop or signal Runtime."
+  - "Do not refresh/reconnect the ChatGPT plugin."
+  - "Do not invoke live screen_capture."
+  - "Do not mutate Screen Recording/TCC."
+  - "Do not mutate main, tags, releases or sibling repositories."
+  - "Do not force-push."
+
+terminal_states:
+  success: NEEDS_REVIEW
+  no_signing_authority: PACKAGING_AUTHORITY_UNAVAILABLE
+  package_failure: PACKAGING_FAILED
+  provenance_failure: CANDIDATE_VALIDATION_FAILED
+  publication_failure: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact TASK-0109 planning HEAD is packaged without source mutation."
+    evidence_required: "Exact remote/local binding and clean source checkout."
+  - id: AC-2
+    requirement: "Canonical packaging interpreter and lock identity are valid."
+    evidence_required: "CPython 3.13.x/cp313/macOS arm64 plus exact lock SHA."
+  - id: AC-3
+    requirement: "Explicit non-ad-hoc signing authority exists before package invocation."
+    evidence_required: "Presence/validity PASS without identity literal disclosure."
+  - id: AC-4
+    requirement: "package_app.sh executes exactly once and succeeds."
+    evidence_required: "package invocation 1/1 exit 0."
+  - id: AC-5
+    requirement: "Frozen candidate provenance and signature closure pass."
+    evidence_required: "Strict codesign + validate-candidate + TeamIdentifier closure + immutable candidate paths."
+  - id: AC-6
+    requirement: "Candidate identity is durably reported."
+    evidence_required: "Candidate SHA/path, handoff path/SHA, source revision/tree and lock SHA."
+  - id: AC-7
+    requirement: "No live/product consequence occurs."
+    evidence_required: "Install/cutover/restart/plugin/live-capture/TCC counters all zero."
+  - id: AC-8
+    requirement: "Only report and ignored candidate artifacts are produced."
+    evidence_required: "Tracked path closure and clean repository after report publication."
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "Independent Architect review before any candidate install."
+    expected_signal: "Signed immutable candidate accepted with exact provenance closure."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
