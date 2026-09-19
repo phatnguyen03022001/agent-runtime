@@ -1,0 +1,390 @@
+protocol_version: 3
+
+task_id: TASK-0096
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  task_id: TASK-0095
+  gap_id: "native_screen_capture_and_coordinate_metadata"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: vision_source_integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - verification
+  - simplicity
+  - macos
+
+execution_skills:
+  required:
+    - executor
+    - verification
+    - reliability
+    - macos
+  recommended:
+    - debugging
+    - simplicity
+    - github-workflow
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0095/review.yaml@be16507fff44ab8b8d984c5e34ce679774a0ce45"
+    role: "Accepted ten-tool source baseline; repo_publish is public tool 10."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0087/task.yaml and accepted Stage-A image transport evidence"
+    role: "Existing real MCP ImageContent(image/png) wire proof with exact PNG bytes plus structuredContent in one call."
+    precedence: 2
+  - source: ".agent/tasks/TASK-0088/review.yaml"
+    role: "Accepted replay-safe canonical verification pattern."
+    precedence: 3
+  - source: "Apple ScreenCaptureKit official documentation, observed 2026-09-19"
+    role: "Native authority for screen/window/display capture, shareable content and Screen Recording permission usage description."
+    precedence: 4
+  - source: "Apple CoreGraphics CGEvent global display coordinate documentation, observed 2026-09-19"
+    role: "Coordinate-system authority for future pointer-control compatibility."
+    precedence: 5
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing Python MCP feature layout plus SwiftPM macOS package."
+  rationale: "Screen capture is one public MCP feature backed by a dedicated native Swift helper and AgentRuntimeCore capture logic. Keep ScreenCaptureKit out of server.py and keep the helper fixed/package-owned."
+
+objective: "Add public read-only tool 11 screen_capture. Capture one macOS frontmost window, explicit window, application window, display, or bounded region through ScreenCaptureKit; return exactly one image/png ImageContent plus closed coordinate/application metadata. Package a fixed signed native helper with Agent Runtime. Do not perform Stage-B model-vision proof, click/type/scroll, permission-setting automation, live installation, or lifecycle activation in this task."
+
+public_contract:
+  name: screen_capture
+  position: 11
+  input:
+    signature: "screen_capture(target='frontmost_window', window_id=None, application_bundle_id=None, display_id=None, x=None, y=None, width=None, height=None)"
+    exact_fields:
+      - target
+      - window_id
+      - application_bundle_id
+      - display_id
+      - x
+      - y
+      - width
+      - height
+    target_values:
+      - frontmost_window
+      - window
+      - application_window
+      - display
+      - region
+    cross_field_rules:
+      frontmost_window: "No selector or geometry field may be supplied."
+      window: "Exactly window_id is required; all other selector/geometry fields are absent."
+      application_window: "Exactly application_bundle_id is required; select the deterministic frontmost normal on-screen window for the unique matching application."
+      display: "Exactly display_id is required."
+      region: "display_id plus x, y, width, height are required; region must be finite, positive-area and fully contained within that display."
+  annotations:
+    readOnlyHint: true
+    destructiveHint: false
+    idempotentHint: true
+    openWorldHint: false
+  success_content:
+    image_blocks: 1
+    image_type: ImageContent
+    mime_type: image/png
+    text_blocks: 0
+    structured_content: ScreenCaptureMetadata
+  structured_metadata:
+    exact_fields:
+      - schema_version
+      - status
+      - target
+      - mime_type
+      - raw_bytes
+      - sha256
+      - coordinate_space
+      - bounds
+      - pixel_width
+      - pixel_height
+      - scale_factor
+      - display_id
+      - window_id
+      - active_application
+      - captured_application
+      - permission
+      - capture_api
+      - deadline_seconds
+    constants:
+      schema_version: 1
+      status: captured
+      mime_type: image/png
+      coordinate_space: cg_global_points
+      permission: granted
+      capture_api: ScreenCaptureKit
+    bounds_fields:
+      - x
+      - y
+      - width
+      - height
+    application_fields:
+      - pid
+      - bundle_identifier
+      - name
+  payload_limits:
+    max_png_bytes: 16777216
+    max_pixels: 16777216
+    silent_downscale: false
+    rationale: "Preserve exact point-to-pixel mapping. Oversized captures fail closed instead of silently changing coordinates."
+
+coordinate_contract:
+  name: cg_global_points
+  semantics:
+    - "Bounds and region inputs use Core Graphics global display coordinates compatible with CGEvent location/set-location semantics, not AppKit unflipped coordinates and not image pixels."
+    - "Multiple displays may produce negative global point coordinates."
+    - "scale_factor is the actual uniform image-pixels-per-global-point ratio for the returned target."
+    - "For any image pixel coordinate (u,v), global point mapping is x=bounds.x+u/scale_factor and y=bounds.y+v/scale_factor, subject only to integer pixel rounding at the final edge."
+    - "No hidden letterboxing, shadow padding, silent crop, rotation transform or rescale may make the declared mapping false."
+    - "A window spanning displays resolves to the display with greatest intersection area; an exact tie fails CAPTURE_TARGET_AMBIGUOUS."
+
+native_contract:
+  framework: ScreenCaptureKit
+  permission:
+    - "Use Screen Recording permission only."
+    - "The public tool MUST preflight and fail with SCREEN_CAPTURE_PERMISSION_REQUIRED when permission is unavailable."
+    - "The public tool MUST NOT automatically open System Settings, call a permission-request loop, mutate TCC, or claim permission was granted."
+    - "macos/AppBundle/Info.plist MUST contain NSScreenCaptureUsageDescription with a concise user-facing reason."
+  helper:
+    product: AgentRuntimeScreenCapture
+    package_location: "Contents/MacOS/AgentRuntimeScreenCapture"
+    execution:
+      - "Python invokes only the fixed package-owned helper path derived from the installed Runtime/app layout. No caller field may choose executable path, argv, framework, file destination, output format or timeout."
+      - "Use shell=False, disconnected stdin, bounded stdout, suppressed/bounded stderr, fixed deadline, and child termination on timeout."
+      - "The helper returns one single-line bounded JSON header followed by exactly raw_bytes PNG bytes on stdout. Success has no other stdout framing. Error responses contain a bounded JSON header and no image payload."
+      - "No temporary screenshot file is created."
+      - "Python validates header length, exact PNG byte count, PNG signature, SHA-256, metadata types, pixel limits and coordinate invariants before constructing MCP ImageContent."
+  capture:
+    - "Prefer SCScreenshotManager single-frame capture where available; preserve macOS 13 package compatibility with a bounded SCStream one-frame fallback when required."
+    - "Capture video/image only; no system audio or microphone."
+    - "Do not include mouse cursor."
+    - "PNG encoding uses native Apple image APIs; no third-party image dependency."
+  target_resolution:
+    - "frontmost_window: resolve NSWorkspace frontmost application, then choose its topmost visible normal-layer window by Core Graphics z-order cross-matched to SCWindow."
+    - "window: resolve exactly the requested SCWindow windowID; fail if unavailable or not capturable."
+    - "application_window: application_bundle_id must resolve to one running application; choose its topmost visible normal-layer window deterministically; duplicate matching applications fail CAPTURE_TARGET_AMBIGUOUS."
+    - "display: resolve exactly SCDisplay.displayID."
+    - "region: resolve exactly display_id and require the global-point rectangle to be fully contained by that display."
+    - "Browser capture has no special browser/DOM semantics; browsers are captured through frontmost_window, window, or application_window."
+  metadata_privacy:
+    - "Return active and captured application pid/bundle_identifier/name, target bounds, IDs and scale only."
+    - "Do not return window title, OCR text, accessibility tree, clipboard contents, URL, DOM, keystrokes or unrelated window inventories."
+
+scope:
+  required_changes:
+    - "Add agent_runtime/screen_capture.py as the Python feature boundary for fixed-helper execution, framing validation, typed errors, image-result construction and metadata validation."
+    - "Add closed Pydantic screen-capture input aliases/models, structured metadata models and only the typed error codes required by this feature in agent_runtime/contracts.py."
+    - "Register screen_capture as exact public tool 11 after repo_publish in agent_runtime/server.py with annotations readOnly=true, destructive=false, idempotent=true, openWorld=false."
+    - "Keep a closed output/structured metadata schema for screen_capture. Do NOT weaken the current all-public-tools output-schema/conformance invariant merely because the result also contains ImageContent. If current MCP SDK cannot expose both one ImageContent and closed structuredContent under the existing dependency pin, stop with BLOCKED_SPEC_GAP rather than changing the dependency or dropping the schema invariant."
+    - "Add screen_capture to timing allowlist and SERVER_INSTRUCTIONS without changing tools 1-10 contracts."
+    - "Update README from exactly ten to exactly eleven public tools and document screen_capture, Screen Recording permission boundary, image+metadata result, and cg_global_points coordinate mapping."
+    - "Add macos/Sources/AgentRuntimeCore/ScreenCapture.swift with native capture/target-selection/geometry/PNG/framing logic separated from CLI concerns."
+    - "Add macos/Sources/AgentRuntimeScreenCapture/main.swift as a thin fixed CLI protocol adapter over AgentRuntimeCore."
+    - "Update macos/Package.swift with the AgentRuntimeScreenCapture executable product/target and focused native tests."
+    - "Update macos/package_app.sh to require, copy and strip AgentRuntimeScreenCapture into Contents/MacOS alongside existing binaries. Do not change runtime-service ownership or LaunchAgent BundleProgram."
+    - "Update macos/package_provenance.py and only directly affected package/candidate assertions so the capture helper is required, regular, executable, package-owned and signed with the same accepted team identity; do not make it a lifecycle/service owner."
+    - "Add NSScreenCaptureUsageDescription to macos/AppBundle/Info.plist. Do not add camera, microphone, Accessibility or Automation permissions."
+    - "Add macos/Tests/AgentRuntimeCoreTests/ScreenCaptureTests.swift covering target-selection determinism, region containment, display-intersection choice, scale/coordinate mapping, payload limits, framing and permission-failure mapping with test doubles/pure geometry where possible."
+    - "Add tests/test_screen_capture.py for fixed-helper path, framing parser, payload/PNG/SHA validation, timeout/child cleanup, typed errors, coordinate metadata and no-temp-file behavior using deterministic fake helper output."
+    - "Add tests/test_screen_capture_mcp.py proving exact tool-11 order/annotations/input schema/closed structured schema, exactly one ImageContent + zero TextContent on success, byte-exact PNG transport using existing TASK-0087 fixtures, typed bounded error envelope, and tools 1-10 non-regression."
+    - "Capture genuine RED before production registration by adding the focused MCP contract first and proving the accepted source exposes exactly ten tools and lacks screen_capture."
+    - "Update every pre-audited exact-surface regression from ten to eleven tools without weakening existing assertions: tests/test_mcp_contracts.py, tests/test_timing.py, tests/test_mcp_client_conformance.py, tests/test_surface_and_scripts.py, tests/test_repo_observer_mcp.py, tests/test_fs_read_batch_mcp.py, tests/test_fs_read_batch.py, tests/test_repo_fast_forward_mcp.py, and tests/test_repo_publish_mcp.py."
+    - "Update only directly affected packaging/provenance tests if their exact expected app-binary closure changes. Existing menu-bar owner and runtime-service owner invariants must remain unchanged."
+    - "Run focused Python tests plus /usr/bin/xcrun swift test --package-path macos and /usr/bin/xcrun swift build --package-path macos -c release before canonical verification."
+    - "A native smoke probe MAY run the built helper without persisting image bytes. If Screen Recording permission is already granted, record only metadata/hash/size proof; if not granted, require the exact typed permission-required outcome. Do not request/grant permission automatically and do not make pre-existing permission a source-level acceptance prerequisite."
+    - "Before canonical verification require git diff --check PASS, Swift build/test PASS, focused Python GREEN and exact restrictive path scope."
+    - "Canonical verification authority is exactly 0/1 -> 1/1. Execute exactly PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify once through ignored build/.task-0096-* atomic once-guard plus detached worker with durable evidence. A duplicate launcher is ALREADY_LAUNCHED/no-op."
+    - "If canonical verification fails, stop BLOCKED_AFTER_CANONICAL_VERIFICATION. No repair and no second TASK-0096 canonical run."
+    - "On PASS, rehash every changed implementation/test/package/doc path and freeze exact bytes."
+    - "Publish one CONTENT_IDENTITY implementation commit through typed GitHub Git Data primitives, sole parent TASK-0096 planning commit, exact verified path delta, non-force dev update. Do not use screen_capture/repo_publish to publish its own source."
+    - "After exact implementation publication, create/validate .agent/tasks/TASK-0096/report.yaml as the sole report-only direct child, fresh-resolve dev/main/lineage and stop NEEDS_REVIEW."
+  allowed_existing_files_or_components:
+    - "agent_runtime/contracts.py"
+    - "agent_runtime/server.py"
+    - "agent_runtime/timing.py"
+    - "README.md"
+    - "macos/Package.swift"
+    - "macos/package_app.sh"
+    - "macos/package_provenance.py"
+    - "macos/AppBundle/Info.plist"
+    - "tests/test_mcp_contracts.py"
+    - "tests/test_timing.py"
+    - "tests/test_mcp_client_conformance.py"
+    - "tests/test_surface_and_scripts.py"
+    - "tests/test_repo_observer_mcp.py"
+    - "tests/test_fs_read_batch_mcp.py"
+    - "tests/test_fs_read_batch.py"
+    - "tests/test_repo_fast_forward_mcp.py"
+    - "tests/test_repo_publish_mcp.py"
+    - "tests/test_package_provenance.py"
+    - "tests/test_task0055_macos_contract.py"
+    - "tests/test_candidate_cutover.py"
+    - "tests/test_candidate_freeze.py"
+  allowed_new_files_or_components:
+    - "agent_runtime/screen_capture.py"
+    - "tests/test_screen_capture.py"
+    - "tests/test_screen_capture_mcp.py"
+    - "macos/Sources/AgentRuntimeCore/ScreenCapture.swift"
+    - "macos/Sources/AgentRuntimeScreenCapture/main.swift"
+    - "macos/Tests/AgentRuntimeCoreTests/ScreenCaptureTests.swift"
+    - ".agent/tasks/TASK-0096/report.yaml"
+  expected_files_are_restrictive: true
+
+invariants:
+  - "The public surface target is exactly eleven tools; screen_capture is tool 11 and tools 1-10 remain contract-identical."
+  - "screen_capture is one read-only local capture capability, not browser automation, OCR, accessibility inspection, filesystem export or host-control authority."
+  - "Success returns exactly one image/png ImageContent and closed structured metadata in the same tool call."
+  - "No screenshot bytes or base64 image data appear in TextContent, logs, report, metadata fields or persistent temporary files."
+  - "Coordinate metadata is sufficient for future pixel-to-CGEvent global-point mapping without an undocumented transform."
+  - "No silent image downscale or hidden coordinate-changing crop is permitted."
+  - "No automatic Screen Recording permission grant/request loop, System Settings navigation, TCC mutation, Accessibility permission, camera permission or microphone permission is authorized."
+  - "Native helper is fixed/package-owned and cannot be selected by caller input."
+  - "No live Runtime install/activation/restart/reload/service/tunnel/port-8080 consequence is authorized."
+  - "Stage-B ChatGPT/model visual-understanding proof is explicitly deferred to a successor task."
+  - "Click/type/scroll and any other input-control capability are explicitly deferred."
+  - "main, tags, releases and sibling repositories remain unchanged."
+  - "Exactly one physical TASK-0096 canonical verifier may execute."
+
+forbidden_changes:
+  - "Do not implement click, type, scroll, mouse movement, key events, Accessibility actions or focus mutation."
+  - "Do not implement OCR, DOM/browser protocol, URL extraction, accessibility tree enumeration, clipboard capture, camera, microphone or audio capture."
+  - "Do not expose arbitrary executable/helper path, output path, shell command, argv, timeout, image codec, scaling factor or ScreenCaptureKit configuration to callers."
+  - "Do not change MCP dependency pins or add third-party image/native bridge dependencies."
+  - "Do not weaken tools 1-10 regression assertions or global closed-schema guarantees."
+  - "Do not persist screenshot fixtures generated from the operator's live screen."
+  - "Do not install/package-cutover/restart/reload/recover live Runtime or mutate tunnel/8080 state."
+  - "Do not perform Stage-B claim that ChatGPT/model can see or understand the returned screenshot."
+  - "Do not mutate main, tags, releases or sibling repositories."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: allowed_only_for_exact_screen_capture_tool_11
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - "agent_runtime/screen_capture.py"
+    - "tests/test_screen_capture.py"
+    - "tests/test_screen_capture_mcp.py"
+    - "macos/Sources/AgentRuntimeCore/ScreenCapture.swift"
+    - "macos/Sources/AgentRuntimeScreenCapture/main.swift"
+    - "macos/Tests/AgentRuntimeCoreTests/ScreenCaptureTests.swift"
+    - ".agent/tasks/TASK-0096/report.yaml"
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "Ignored build/.task-0096-* evidence and Swift scratch output are untracked only."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "screen_capture is exact public tool 11 with the closed target/selector/region contract and truthful read-only annotations."
+    evidence_required: "Real MCP listing/order, exact annotations, input cross-field validation, closed structured metadata schema, tools 1-10 unchanged."
+  - id: AC-2
+    requirement: "The native helper is a package-owned ScreenCaptureKit implementation with a fixed protocol and permission boundary."
+    evidence_required: "Swift build/test PASS; package/product/Info.plist/provenance assertions prove fixed helper inclusion, NSScreenCaptureUsageDescription, same-team ownership and no lifecycle ownership change."
+  - id: AC-3
+    requirement: "Capture targeting and metadata are deterministic and coordinate-correct."
+    evidence_required: "Native/Python tests cover frontmost_window, window, application_window, display, region, target-not-found/ambiguous cases, display intersection, region containment, negative display coordinates and pixel-to-cg_global_points mapping."
+  - id: AC-4
+    requirement: "Image transport is exact and bounded."
+    evidence_required: "Focused real-MCP test returns exactly one ImageContent(image/png), zero TextContent, byte-exact deterministic fixture through helper framing, matching SHA/raw_bytes, payload caps, timeout cleanup and no persisted screenshot file."
+  - id: AC-5
+    requirement: "Permission and privacy behavior fail closed."
+    evidence_required: "Missing Screen Recording permission maps to SCREEN_CAPTURE_PERMISSION_REQUIRED without automatic permission mutation; success metadata excludes title/OCR/URL/DOM/accessibility/clipboard data."
+  - id: AC-6
+    requirement: "All pre-existing exact-surface/docs/package regressions remain coherent with exactly eleven tools."
+    evidence_required: "Focused global contract/timing/client/docs/package tests PASS without weakening tools 1-10."
+  - id: AC-7
+    requirement: "The final exact candidate passes canonical verification exactly once."
+    evidence_required: "Atomic once-guard/detached durable evidence proves one physical canonical command, exit 0 and full suite PASS; Swift build/test evidence is also retained."
+  - id: AC-8
+    requirement: "Verified source is published with truthful lineage and no live consequence."
+    evidence_required: "One content-identity implementation commit direct child of TASK-0096 planning commit; report-only child validates; dev/main lineage closes; no live install/restart/tunnel/8080/main/tag/release/model-vision/control consequence."
+
+verification:
+  executor_checks:
+    - id: CHECK-BIND
+      command_or_check: "Fresh-bind TASK-0096 planning dev/main and require one clean local dev worktree at exact planning HEAD before mutation."
+      required: true
+    - id: CHECK-RED
+      command_or_check: "Add focused MCP contract first and capture genuine RED showing accepted source has ten tools and no screen_capture."
+      required: true
+    - id: CHECK-NATIVE
+      command_or_check: "Run /usr/bin/xcrun swift test --package-path macos and /usr/bin/xcrun swift build --package-path macos -c release after native implementation."
+      required: true
+    - id: CHECK-FOCUSED
+      command_or_check: "Run screen_capture Python/MCP tests plus all directly affected exact-surface/docs/package/provenance suites to GREEN."
+      required: true
+    - id: CHECK-PRIVACY
+      command_or_check: "Inspect final source/test surface for no title/OCR/URL/DOM/accessibility/clipboard/audio/control output and no live-screen artifact persistence."
+      required: true
+    - id: CHECK-DIFF
+      command_or_check: "git diff --check PASS and exact restrictive path audit before canonical verification."
+      required: true
+    - id: CHECK-CANONICAL
+      command_or_check: "Execute guarded detached PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify exactly once and retain durable evidence."
+      required: true
+    - id: CHECK-PUBLISH
+      command_or_check: "On PASS publish exact verified bytes as one typed GitHub content-identity implementation commit direct child of planning commit, non-force."
+      required: true
+    - id: CHECK-FINAL
+      command_or_check: "Create/validate/publish TASK-0096 report-only direct child, fresh-resolve dev/main/lineage and stop NEEDS_REVIEW."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Independent Architect review of native helper/package contract, image transport evidence, coordinate metadata, canonical verifier evidence and remote lineage."
+    expected_signal: "Architect ACCEPT of source/package-level screen_capture tool 11 only. Stage-B model vision remains separately gated."
+
+capability_requirements:
+  EXECUTION:
+    - repository_content_read
+    - repository_content_write
+    - native_repository_execution
+    - git_history_read
+    - remote_ref_read
+  REVIEW:
+    - repository_content_read
+    - repository_content_write
+    - git_history_read
+    - remote_ref_read
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
