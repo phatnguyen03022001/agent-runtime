@@ -1,7 +1,7 @@
 protocol_version: 3
 
 task_id: TASK-0091
-task_revision: 1
+task_revision: 2
 state: APPROVED
 
 origin:
@@ -56,15 +56,18 @@ authority_sources:
   - source: "Operator/Executor terminal result: TASK-0090 CURRENT_PHASE_CAPABILITY_UNAVAILABLE after partial repository mutation, canonical verify 0/1, no commit/push/report/live lifecycle consequence."
     role: "Authoritative predecessor terminal checkpoint declaration."
     precedence: 2
+  - source: "TASK-0091 revision-1 Executor terminal result: BLOCKED — SCOPE_CONTRACT_CONFLICT after source-level completion and focused GREEN, because tests/test_repo_observer_mcp.py and tests/test_timing.py still hard-coded the superseded eight-tool surface but were not authorized mutation paths."
+    role: "Authoritative revision trigger. Revision 2 expands only directly affected regression-test scope; production semantics remain unchanged and canonical verify remains 0/1."
+    precedence: 3
   - source: "Architect read-only checkpoint audit on 2026-09-19"
     role: "Exact local dirty checkpoint path set, SHA-256 fingerprints, AST parse status, clean index, unchanged remote refs and no scope leak."
-    precedence: 3
+    precedence: 4
   - source: "phatnguyen03022001/agent-skills@4f4ef2b45e1a025bc499702919431c0d0d61419c:.agent/tasks/TASK-0054/review.yaml"
     role: "Accepted platform-compliant execution/recovery semantics; no safety bypass and no proof downgrade."
-    precedence: 4
+    precedence: 5
   - source: "phatnguyen03022001/architect-profile@4cbac8f89a26206f342e8cacf7401a466eb5df05:.agent/tasks/TASK-0046/review.yaml"
     role: "Accepted current Architect dev authority snapshot."
-    precedence: 5
+    precedence: 6
 
 structure_authority:
   status: RESOLVED
@@ -76,6 +79,7 @@ objective: "Own the exact interrupted TASK-0090 dirty checkpoint, complete the s
 checkpoint:
   predecessor_task: TASK-0090
   predecessor_terminal: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+  revision_1_terminal: "BLOCKED — SCOPE_CONTRACT_CONFLICT"
   predecessor_base: "8250e637071fecc8c2551e8e5e4fd08b2e08e7da"
   predecessor_remote_dev: "8250e637071fecc8c2551e8e5e4fd08b2e08e7da"
   predecessor_remote_main: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
@@ -83,37 +87,48 @@ checkpoint:
   canonical_verify_count: "0/1"
   staged_paths: []
   exact_dirty_paths:
+    - path: "README.md"
+      state: modified
+      sha256: "2191316280bda572c37e5040eac8afde7c1dd6dbc41eb6ba3be69f05ce6b6ed7"
     - path: "agent_runtime/contracts.py"
       state: modified
       sha256: "f4a8e245cd1ba37a1da3a273f45b3d3d1472bb6f9fa1ee482495bf40c4378a2b"
+    - path: "agent_runtime/server.py"
+      state: modified
+      sha256: "9774f5559f2ec0b0bc5e43440d0e847cb46909fccea79c46d524d98a96b4e30b"
+    - path: "agent_runtime/timing.py"
+      state: modified
+      sha256: "3dc542dd250cb03142e1f70643c1bfd1a7f7b858967824b1c1a95a3e41f7459e"
     - path: "tests/test_mcp_contracts.py"
       state: modified
       sha256: "55ba8907c37104e1de944ab73cb31cb1f429154603fc84f76b7b797c0710b640"
     - path: "agent_runtime/repo_fast_forward.py"
       state: untracked
-      sha256: "54f79e684534da0dcb58317e82f46f82c28433d62ca02c0cab64c5eab8ad30ab"
+      sha256: "876d531f29c6b7ba549ddec173b17360f41cf71a83add25d2b21caf70ab5da93"
     - path: "tests/test_repo_fast_forward.py"
       state: untracked
       sha256: "8db1667bf6a783d7a9f29f196f5418536c74eeae7849d725d4e063f45ce474a0"
     - path: "tests/test_repo_fast_forward_mcp.py"
       state: untracked
       sha256: "04f67c8c3fdb846696dfbd82b3b600e754848f04259b755ba4bd271e08466254"
-  tracked_patch_sha256: "c07dfb7cb81c8a6d145ec9ae207eead8cb2bf3492d6c2de4395d7d35be79629a"
-  ast_parse_status: "PASS for all five checkpoint Python files"
-  known_incomplete_fact: "agent_runtime/repo_fast_forward.py is exactly 400 lines at checkpoint and ends after _require_clean; server.py, timing.py and README.md have not yet been TASK-0090-mutated."
-  predecessor_red: "Genuine pre-implementation focused RED was captured before mutation because production MCP surface had eight tools and repo_fast_forward was absent. TASK-0091 carries this historical RED forward; it MUST NOT pretend to recreate the pre-mutation state."
-
+  tracked_patch_sha256: "3f87c34713ca207595be027228c91e2d877bb39972191d7a63440c31f840e681"
+  diff_check_status: "PASS"
+  known_completed_fact: "repo_fast_forward source-level implementation reached 677 lines with fixed Git/expected-state behavior; server.py, timing.py and README.md are integrated for public tool 9."
+  focused_green: "28/28 PASS for tests.test_repo_fast_forward, tests.test_repo_fast_forward_mcp and tests.test_mcp_contracts."
+  directly_affected_remaining_failures: "23/25 PASS; exactly two failures are stale exact-surface assertions in tests/test_repo_observer_mcp.py and tests/test_timing.py that still expect eight tools."
+  revision_2_scope_correction: "Authorize only tests/test_repo_observer_mcp.py and tests/test_timing.py to update exact public-surface expectations from 8 to 9 and any directly necessary wording/assertions. No production semantic expansion."
+  predecessor_red: "Genuine pre-implementation RED remains inherited from TASK-0090. Revision 2 does not recreate RED."
 scope:
   required_changes:
     - "Resolve TASK-0091 authority from canonical GitHub. Do NOT fast-forward, reset, checkout, stash, clean or otherwise synchronize the dirty local checkout to the TASK-0091 planning commit. The canonical task commit is authority evidence; the owned mutation checkpoint remains local HEAD 8250e637071fecc8c2551e8e5e4fd08b2e08e7da plus the exact dirty bytes above."
-    - "Before any mutation, fresh-resolve canonical GitHub dev/main and require dev equals the TASK-0091 planning commit and main equals c49d777efa09db7f6c51bd8d8616db4623499fb8. Independently require local branch dev, local HEAD exactly 8250e637071fecc8c2551e8e5e4fd08b2e08e7da, zero staged paths, exact five dirty paths only, and every checkpoint file SHA-256 exactly matches the embedded value. Any mismatch is CHECKPOINT_MISMATCH and blocks."
+    - "Before any mutation, fresh-resolve canonical GitHub dev/main and require dev equals the TASK-0091 revision-2 planning commit and main equals c49d777efa09db7f6c51bd8d8616db4623499fb8. Independently require local branch dev, local HEAD exactly 8250e637071fecc8c2551e8e5e4fd08b2e08e7da, zero staged paths, exact eight dirty paths only, and every checkpoint file SHA-256 exactly matches the embedded value. Any mismatch is CHECKPOINT_MISMATCH and blocks."
     - "Treat TASK-0090 as terminal. Do not resume its session or reinterpret its capability block. TASK-0091 is the sole successor writer for this exact checkpoint."
-    - "Preserve all valid partial TASK-0090 work. Do not recreate the five files from scratch merely for cleanliness. Complete agent_runtime/repo_fast_forward.py from the existing 400-line checkpoint and finish only the missing TASK-0090 integration surfaces."
+    - "Preserve all valid TASK-0090/TASK-0091-r1 work. Do not recreate the eight checkpoint files from scratch merely for cleanliness. Source-level repo_fast_forward and its production integration are already materially complete at this checkpoint; revision 2 exists to close directly affected stale test expectations and then verify the exact candidate."
     - "Complete the original TASK-0090 contract exactly: repo_fast_forward(cwd, branch, expected_local_head, expected_remote_head), fixed origin, expected-state guards, clean current root branch only, fresh exact fetch, ancestry proof, race recheck, one ff-only movement, exact replay already_at_target, stale remote/divergence/local-race fail closed, bounded closed result/error schemas, no arbitrary Git/network knobs."
-    - "Finish missing integration in agent_runtime/server.py, agent_runtime/timing.py and README.md. Final public source surface must be exactly nine tools in TASK-0090 order and tool 9 annotations must be readOnly=false, destructive=true, idempotent=true, openWorld=true."
+    - "Preserve the completed integration in agent_runtime/server.py, agent_runtime/timing.py and README.md. Final public source surface must remain exactly nine tools in TASK-0090 order and tool 9 annotations must remain readOnly=false, destructive=true, idempotent=true, openWorld=true."
     - "Retain repo_observer as local-only/read-only and do not broaden it."
-    - "Use only the TASK-0090 authorized implementation/test/documentation paths plus TASK-0091 report. No other tracked source path is authorized."
-    - "Do not attempt to recreate predecessor RED. The successor may run focused tests immediately against the owned checkpoint, complete implementation, and iterate targeted tests to GREEN. Report the predecessor RED as inherited historical evidence and separately report successor focused GREEN."
+    - "Use only the original TASK-0090 implementation/test/documentation paths, plus tests/test_repo_observer_mcp.py and tests/test_timing.py for the exact stale surface-8 regression closure, plus TASK-0091 report. No other tracked source/test path is authorized."
+    - "Do not attempt to recreate predecessor RED. First update only the two newly authorized stale exact-surface tests from the old eight-tool contract to the accepted nine-tool contract, without weakening their repo_observer/timing semantics. Then run the focused/directly affected suites to GREEN. Report predecessor RED as inherited historical evidence and revision-2 GREEN separately."
     - "Run static/safety inspection required by TASK-0090: fixed /usr/bin/git, shell=False, fixed origin, noninteractive bounded env/I/O/deadline, hooks disabled on ff invocation, no caller generic Git controls, no push/reset/rebase/checkout/switch/stash/clean/cherry-pick/commit path."
     - "After focused GREEN and stable diff, run canonical PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify exactly once for the combined TASK-0090/TASK-0091 feature candidate. Authority remains 0/1 before the physical run and 1/1 afterward. Persist exact command, launch identity, start/finish, exit and bounded summary. No second physical run on ambiguity."
     - "Only on canonical PASS, commit the exact completed implementation candidate. The candidate parent MUST be local HEAD 8250e637071fecc8c2551e8e5e4fd08b2e08e7da; TASK-0091 planning commit exists remotely as authority-only metadata and MUST NOT be merged/cherry-picked into the dirty local candidate."
@@ -125,6 +140,8 @@ scope:
     - "agent_runtime/server.py"
     - "agent_runtime/timing.py"
     - "tests/test_mcp_contracts.py"
+    - "tests/test_repo_observer_mcp.py"
+    - "tests/test_timing.py"
     - "README.md"
   allowed_new_files_or_components:
     - "agent_runtime/repo_fast_forward.py"
@@ -135,7 +152,7 @@ scope:
 
 invariants:
   - "TASK-0090 remains terminal CURRENT_PHASE_CAPABILITY_UNAVAILABLE and is never relabeled as completed."
-  - "TASK-0091 owns exactly the five-file partial dirty checkpoint fingerprinted above; checkpoint mismatch fails closed."
+  - "TASK-0091 revision 2 owns exactly the eight-file dirty checkpoint fingerprinted above before the two newly authorized stale regression tests are edited; checkpoint mismatch fails closed."
   - "No reset/stash/checkout/clean/recreate-from-scratch recovery is permitted."
   - "Canonical full verify remains exactly 0/1 at successor start and may execute physically at most once."
   - "Final feature semantics remain exactly TASK-0090; recovery grants no architecture/spec/dependency expansion."
@@ -187,8 +204,8 @@ acceptance_criteria:
     requirement: "Implementation remains a fixed bounded Git consequence with no hidden generic command or publication surface."
     evidence_required: "Source and tests prove fixed Git executable/origin/argv families, shell=False, bounded noninteractive execution, no forbidden verbs/knobs, and repo_publish absent."
   - id: AC-4
-    requirement: "Documentation and timing/server metadata match the exact nine-tool source contract."
-    evidence_required: "README, SERVER_INSTRUCTIONS, timing allowlist and public listing tests PASS."
+    requirement: "Documentation, timing/server metadata and all directly affected exact-surface regressions match the exact nine-tool source contract without weakening tool-8 semantics."
+    evidence_required: "README, SERVER_INSTRUCTIONS, timing allowlist, tests/test_repo_observer_mcp.py, tests/test_timing.py and public listing tests PASS; repo_observer remains tool 8 with unchanged read-only/local-only contract."
   - id: AC-5
     requirement: "The exact completed feature candidate passes canonical verification exactly once."
     evidence_required: "One physical canonical command exits 0 with durable exact launch/result evidence; no second run."
@@ -205,7 +222,7 @@ verification:
       command_or_check: "Fresh-resolve TASK-0091 remote authority and verify exact local dirty checkpoint bytes/path set/head/index plus remote dev/main before mutation."
       required: true
     - id: CHECK-FOCUSED
-      command_or_check: "Continue targeted TASK-0090 tests from the owned checkpoint to GREEN; do not recreate predecessor RED."
+      command_or_check: "Update only the two newly authorized stale exact-surface regressions, then run TASK-0090 focused plus directly affected repo_observer/timing suites to GREEN; do not recreate predecessor RED."
       required: true
     - id: CHECK-SAFETY
       command_or_check: "Inspect exact Git subprocess/config/schema/error behavior and forbidden surface absence."
