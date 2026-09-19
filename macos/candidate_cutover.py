@@ -1213,7 +1213,6 @@ def cutover_candidate(
     transaction_dir: Path,
     home: Path,
     launchctl: Path,
-    tunnel_client: Path,
     uid: int,
     fail_stages: set[str] | None = None,
 ) -> dict[str, object]:
@@ -1913,7 +1912,6 @@ def main() -> int:
     cutover.add_argument("handoff", type=Path)
     cutover.add_argument("--home", type=Path, default=Path.home())
     cutover.add_argument("--launchctl", type=Path, required=True)
-    cutover.add_argument("--tunnel-client", type=Path, required=True)
     cutover.add_argument("--uid", type=int, default=os.getuid())
     commit = sub.add_parser("commit")
     commit.add_argument("--home", type=Path, default=Path.home())
@@ -1943,7 +1941,6 @@ def main() -> int:
                 transaction_dir=transaction_dir,
                 home=args.home,
                 launchctl=args.launchctl,
-                tunnel_client=args.tunnel_client,
                 uid=args.uid,
             )
         elif args.command == "commit":

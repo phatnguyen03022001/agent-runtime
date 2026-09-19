@@ -435,7 +435,7 @@ class CandidateCutoverTests(unittest.TestCase):
             fx["candidate"], fx["handoff"], target_app=fx["target"],
             ui_plist=fx["ui_plist"], runtime_plist=fx["runtime_plist"],
             state_dir=fx["state_dir"], transaction_dir=fx["transaction"],
-            home=fx["home"], launchctl=fx["launchctl"], tunnel_client=Path("/usr/bin/true"),
+            home=fx["home"], launchctl=fx["launchctl"],
             uid=501, fail_stages=set(fail_stages),
         )
 
@@ -1948,6 +1948,7 @@ class CandidateCutoverTests(unittest.TestCase):
         self.assertNotIn("package_app.sh", branch)
         self.assertNotIn("codesign", branch)
         self.assertNotIn("AGENT_RUNTIME_CODESIGN_IDENTITY", branch)
+        self.assertNotIn("tunnel-client", branch)
 
     def test_package_script_seals_external_candidate_only_after_final_integrity_checks(self) -> None:
         text = (ROOT / "macos" / "package_app.sh").read_text()

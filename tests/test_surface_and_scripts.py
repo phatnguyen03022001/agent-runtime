@@ -327,7 +327,8 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertIn("CONTROL_PLANE_TUNNEL_ID", installer)
         self.assertIn("--control-plane.poll-channel", installer)
         self.assertIn('"EnvironmentVariables"', cutover)
-        self.assertIn("--tunnel-client", installer)
+        self.assertNotIn("--tunnel-client", installer)
+        self.assertIn("tunnel-client is required; install the official OpenAI tunnel-client first.", installer)
         self.assertIn('runtime_python + " -m agent_runtime.server,channel=main"', installer)
         for retired in (
             ".config/agent-runtime",

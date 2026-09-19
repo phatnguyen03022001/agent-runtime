@@ -19,9 +19,8 @@ case "${1-}" in
     [[ "$#" == "3" ]] || fail "usage: ./install.sh --install-prebuilt <Agent Runtime.app> <candidate.json>"
     [[ "$(uname -s)" == "Darwin" ]] || fail "prebuilt candidate installation supports macOS only."
     command -v launchctl >/dev/null 2>&1 || fail "launchctl is required for candidate cutover."
-    command -v tunnel-client >/dev/null 2>&1 || fail "tunnel-client is required for candidate cutover."
     run_cutover_helper cutover "$2" "$3" --home "$HOME" \
-      --launchctl "$(command -v launchctl)" --tunnel-client "$(command -v tunnel-client)"
+      --launchctl "$(command -v launchctl)"
     ;;
   --resume-cutover)
     [[ "$#" == "1" ]] || fail "usage: ./install.sh --resume-cutover"
