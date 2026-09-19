@@ -1,0 +1,256 @@
+[Reading 252 lines from start (total: 252 lines, 0 remaining)]
+
+protocol_version: 3
+
+task_id: TASK-0099
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  task_id: TASK-0098
+  gap_id: "replace_unhealthy_pending_generation_with_accepted_screen_capture_candidate"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: live_candidate_cutover
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - verification
+  - simplicity
+
+execution_skills:
+  required:
+    - executor
+    - verification
+    - reliability
+  recommended:
+    - debugging
+    - simplicity
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0098/review.yaml@66281456699d005f90b64f58d6ab2f2464bee676"
+    role: "ACCEPTED immutable signed non-installed candidate 496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0084/task.yaml"
+    role: "Canonical live cutover transaction pattern separating predecessor terminalization, install-prebuilt, PENDING handoff and direct MCP acceptance."
+    precedence: 2
+  - source: "Current live transaction observed immediately before planning"
+    role: "Existing installed generation is schema 5 / PENDING / APP_SWAPPED for candidate 2e7380e9d05e2476b9823d49b0c8fb6f51e6350018785f80ff23cd411a00a57a, currently unhealthy with no port-8080 listener and launchd EX_CONFIG retry state; therefore commit-cutover is not admissible."
+    precedence: 3
+  - source: "README.md and install.sh/candidate_cutover.py at TASK-0099 planning source"
+    role: "Installed product transaction, rollback, prebuilt install, ownership and lifecycle semantics."
+    precedence: 4
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing install.sh --rollback-cutover and --install-prebuilt transaction machinery."
+  rationale: "Use canonical owner-safe transaction recovery. Do not manually replace app bytes, service state, tunnel state or transaction metadata."
+
+objective: "Safely terminalize the currently unhealthy legacy PENDING / APP_SWAPPED transaction by exactly one canonical rollback, prove the restored predecessor is healthy and unambiguous, then install exactly the accepted TASK-0098 candidate through the canonical prebuilt path exactly once. Leave the new generation schema-5 PENDING / APP_SWAPPED for separate live MCP and Stage-B acceptance. Do not commit the new cutover."
+
+checkpoint:
+  observed_before_planning:
+    transaction_schema: 5
+    transaction_status: PENDING
+    transaction_phase: APP_SWAPPED
+    transaction_metadata_sha256: "563ab48a7f24f2c3b225df05689a8d8230915f1ccc2ee19c91bcc8490af86e10"
+    transaction_handoff_sha256: "1ba9714b8f7cc5e7edac488ee0ab6b3aeb63c1f9b2e01f6787cd9b59d7cd088d"
+    installed_candidate_sha256: "2e7380e9d05e2476b9823d49b0c8fb6f51e6350018785f80ff23cd411a00a57a"
+    installed_runtime_revision: "86751031b28292bddfd5072a75fd4aaa1ec78019"
+    installed_runtime_tree: "daad3a9538c2966c44a9ee2c3337b0484315e608"
+    runtime_env_sha256: "6e6fef8e255b140f28703f8bd515726e1fd93d644e6f838b33ebf319e8133077"
+    desired_state_path: "~/Library/Application Support/Agent Runtime/protected-runtime-running"
+    desired_state_sha256: "e3b0c44298fc1c149afbf4d8996fb92427ae41e4649b934ca495991b7852b855"
+    listener_8080: ABSENT
+    healthz: "000"
+    readyz: "000"
+    launchd_state: "spawn scheduled / spawn failed"
+    launchd_last_exit: "78 EX_CONFIG"
+    rollback_previous_app_revision: "b5ac0ed5b461d3a259e4111e1a8f13933985f81f"
+    rollback_previous_app_tree: "5d9b40221e42d96aa78cc25bca7e94092e8426a9"
+    rollback_previous_app_closure_record_count: 1224
+    rollback_previous_app_closure_sha256: "56a94498ce74b8337394e4bfaf4c8d69bdefaaf26429352ea3f8218a47621bf2"
+
+accepted_successor:
+  candidate_sha256: "496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c"
+  app: "build/candidates/496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c/Agent Runtime.app"
+  handoff: "build/candidates/496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c/Agent Runtime.candidate.json"
+  source_revision: "b0dec3e556ff914fb9ca041c6b52f53c04ee3fd2"
+  source_tree: "087af89591d0959c07124b0154cfb8f77b27c3d4"
+  requirements_lock_sha256: "80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
+
+scope:
+  required_changes:
+    - "Fresh-bind TASK-0099 revision 1 at the exact planning HEAD. Require one clean canonical dev worktree, exact remote dev/main, no Git lock and no concurrent repository writer before any lifecycle mutation."
+    - "Re-resolve TASK-0098 ACCEPTED review and statically validate exact successor candidate 496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c using checkout tooling. Rehash its immutable original before lifecycle mutation."
+    - "Read-only revalidate the current cutover transaction against the checkpoint block above. Require schema5/PENDING/APP_SWAPPED, exact metadata and handoff SHA-256, exact current installed candidate/source identity, exact runtime.env identity, exact desired-state marker identity, and exact rollback previous-app closure. Any mismatch before lifecycle mutation is CHECKPOINT_MISMATCH."
+    - "Confirm the current generation remains unhealthy for the same bounded class: no healthy listener/healthz/readyz and no evidence that it became a healthy accepted generation. Because the current transaction is not healthy, commit-cutover is explicitly forbidden."
+    - "TASK-0099 rollback authority is exactly 0/1 -> 1/1. Invoke ./install.sh --rollback-cutover exactly once. If rollback fails, returns an ambiguous state, or leaves a transaction present, STOP BLOCKED_AFTER_ROLLBACK; do not retry rollback and do not install the successor."
+    - "After rollback, prove the transaction directory is absent, installed app exactly matches the recorded previous-app closure/revision/tree, runtime.env remains exact, desired-state marker is restored exactly, ownership is non-ambiguous, and no dual modern/legacy ownership exists."
+    - "Because the restored predecessor desired-state is RUNNING, require bounded healthy baseline before successor install: exactly one canonical tunnel-client, exactly one listener on 127.0.0.1:8080, healthz=200 and readyz=200. If the predecessor cannot reach this healthy baseline through rollback-owned behavior alone, STOP BLOCKED_AFTER_ROLLBACK_BASELINE. Do not manually restart, repair, edit configuration, repoint tunnel, or install successor."
+    - "Only after the rollback baseline is proven healthy, TASK-0099 successor install-prebuilt authority is exactly 0/1 -> 1/1. Invoke ./install.sh --install-prebuilt with the exact accepted successor app and handoff exactly once. No rebuild, re-sign or candidate mutation is allowed."
+    - "If successor install-prebuilt fails, returns a non-PENDING result, requires operator input, or produces ambiguous ownership, STOP BLOCKED_AFTER_SUCCESSOR_INSTALL. Do not retry, resume, recover, repair, manually rollback or commit."
+    - "On successful successor install, statically validate the installed app against the new transaction handoff and require exact accepted candidate/source/tree/requirements-lock identities plus package-owned AgentRuntimeScreenCapture provenance."
+    - "Require the new transaction to be exactly schema5/PENDING/APP_SWAPPED. New-generation commit-cutover authority is 0/1 and MUST remain unconsumed."
+    - "Require bounded post-install control-plane health: exactly one canonical tunnel-client, exactly one listener on 127.0.0.1:8080, healthz=200 and readyz=200. This proves lifecycle readiness only; do not claim direct MCP semantic acceptance or Stage-B model vision."
+    - "Rehash immutable source candidate and require exact pre/post closure stability. Rehash runtime.env and desired-state. Prove main unchanged, one clean dev worktree, and no unlisted repository or sibling-repository mutation."
+    - "Create and validate .agent/tasks/TASK-0099/report.yaml as the only tracked mutation after planning. Publish it non-force as the sole report-only child, fresh-resolve dev/main and stop NEEDS_REVIEW."
+
+  allowed_existing_files_or_components:
+    - "./install.sh --rollback-cutover"
+    - "./install.sh --install-prebuilt"
+    - "macos/candidate_cutover.py only through install.sh"
+    - "macos/package_provenance.py for static read-only validation"
+    - "build/candidates/496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c/** read-only"
+    - "build/.task-0099-* ignored evidence/logs only"
+    - "~/Applications/Agent Runtime.app"
+    - "~/Library/Application Support/Agent Runtime/cutover-transaction"
+    - "~/Library/Application Support/Agent Runtime/runtime.env read-only"
+    - "~/Library/Application Support/Agent Runtime/protected-runtime-running"
+    - ".agent/tasks/TASK-0099/report.yaml"
+  expected_files_are_restrictive: true
+
+invariants:
+  - "Current unhealthy PENDING transaction is never committed."
+  - "Rollback-cutover is invoked at most once in TASK-0099."
+  - "Successor install-prebuilt is invoked at most once in TASK-0099 and only after successful rollback plus healthy predecessor baseline."
+  - "The accepted successor candidate original remains byte-stable and is never rebuilt, re-signed or used as a mutable runtime working directory."
+  - "New successor transaction remains PENDING / APP_SWAPPED at task end; no commit-cutover of the new generation."
+  - "No manual transaction editing, app replacement, launchctl surgery, tunnel repoint, runtime.env edit or TCC mutation is allowed."
+  - "No direct MCP tool acceptance and no Stage-B model-vision proof occur in TASK-0099."
+  - "No screen_capture call is required in TASK-0099."
+  - "No click/type/scroll, Accessibility, OCR, clipboard, DOM, audio, camera or microphone work is authorized."
+  - "Exactly one agent-runtime worktree exists at /Users/tienphat/Developer/agent-runtime on dev."
+  - "No clone, alternate worktree, branch switch, detached checkout, stash, sibling-repository mutation or task-owned /tmp artifact."
+  - "main, tags and releases remain unchanged."
+
+forbidden_changes:
+  - "Do not invoke ./install.sh --commit-cutover for either the current unhealthy generation or the new successor generation."
+  - "Do not invoke rollback-cutover more than once."
+  - "Do not invoke install-prebuilt more than once."
+  - "Do not invoke --resume-cutover or --recover-partial-cutover."
+  - "Do not manually stop/start/restart/reload Runtime or tunnel as a workaround. Lifecycle effects internal to canonical rollback/install transaction machinery are allowed."
+  - "Do not modify production source, tests, README, requirements, lockfiles, packaging/lifecycle scripts, Swift source or existing task/report/review artifacts."
+  - "Do not mutate the accepted candidate original or any pre-existing candidate directory."
+  - "Do not request or mutate Screen Recording/TCC permissions and do not perform Stage-B."
+  - "Do not mutate main, tags, releases, branch topology or sibling repositories."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0099/report.yaml"
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "Ignored build/.task-0099-* may contain bounded execution evidence only."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact repository, accepted successor and inherited live checkpoint are bound before lifecycle mutation."
+    evidence_required: "Fresh refs/worktree proof; exact TASK-0098 review/candidate validation; exact transaction metadata/handoff/config/desired-state/rollback closure identities."
+  - id: AC-2
+    requirement: "The unhealthy inherited PENDING transaction is terminalized only by one canonical rollback."
+    evidence_required: "Exactly one rollback-cutover invocation; success result; old transaction absent; installed predecessor equals recorded rollback snapshot; no commit-cutover."
+  - id: AC-3
+    requirement: "The restored predecessor establishes a clean healthy lifecycle baseline before successor installation."
+    evidence_required: "Exact restored app/config/desired-state ownership plus canonical tunnel count=1, listener count=1, healthz=200 and readyz=200 without manual repair/restart/reconfiguration."
+  - id: AC-4
+    requirement: "The exact accepted successor candidate is installed exactly once through canonical prebuilt cutover."
+    evidence_required: "Exactly one install-prebuilt invocation with exact candidate/handoff, successful PENDING result, no retry, no rebuild/re-sign."
+  - id: AC-5
+    requirement: "Installed successor and transaction bind exactly to the accepted candidate."
+    evidence_required: "Installed static candidate validation against transaction handoff; exact candidate SHA/source revision/source tree/lock; AgentRuntimeScreenCapture provenance; schema5/PENDING/APP_SWAPPED."
+  - id: AC-6
+    requirement: "The new PENDING generation has minimal lifecycle health without claiming MCP or Stage-B acceptance."
+    evidence_required: "Canonical tunnel count=1, listener count=1, healthz=200, readyz=200; no direct MCP semantic/tool invocation claim."
+  - id: AC-7
+    requirement: "Candidate/config/repository preservation remains exact and the new transaction is left uncommitted."
+    evidence_required: "Accepted source candidate closure unchanged; runtime.env/desired-state preserved; new commit-cutover count=0; one clean dev worktree; main unchanged; report-only tracked delta."
+
+verification:
+  executor_checks:
+    - id: CHECK-BASE
+      command_or_check: "Fresh-bind exact TASK-0099 planning identity/dev/main/worktree and exact accepted TASK-0098 candidate plus current transaction checkpoint."
+      required: true
+    - id: CHECK-ROLLBACK
+      command_or_check: "Invoke canonical rollback-cutover exactly once; prove old transaction absent and exact predecessor restored."
+      required: true
+    - id: CHECK-ROLLBACK-HEALTH
+      command_or_check: "Require restored predecessor healthy with one tunnel, one listener, healthz=200 and readyz=200 using rollback-owned lifecycle only."
+      required: true
+    - id: CHECK-INSTALL
+      command_or_check: "Invoke exact successor install-prebuilt exactly once; require PENDING result and no retry."
+      required: true
+    - id: CHECK-SUCCESSOR
+      command_or_check: "Validate installed successor against new transaction handoff; require schema5/PENDING/APP_SWAPPED, exact accepted identities and screen-capture helper provenance."
+      required: true
+    - id: CHECK-HEALTH
+      command_or_check: "Require one tunnel, one listener, healthz=200 and readyz=200; do not perform direct MCP or Stage-B acceptance."
+      required: true
+    - id: CHECK-PRESERVATION
+      command_or_check: "Rehash accepted candidate/config/desired-state and prove no forbidden repo/live/sibling mutation, new commit-cutover unconsumed and main unchanged."
+      required: true
+    - id: CHECK-FINAL
+      command_or_check: "Validate/publish TASK-0099 report-only successor, fresh-resolve dev/main/lineage and stop NEEDS_REVIEW."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Independent Architect review of rollback attribution, predecessor healthy baseline, exact successor installation, new PENDING transaction, health and preservation evidence."
+    expected_signal: "Architect ACCEPT before any direct MCP/Stage-B acceptance or new-generation commit-cutover."
+
+capability_requirements:
+  EXECUTION:
+    - repository_content_read
+    - repository_content_write
+    - native_repository_execution
+    - git_history_read
+    - remote_ref_read
+  REVIEW:
+    - repository_content_read
+    - repository_content_write
+    - git_history_read
+    - remote_ref_read
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
+
+[executed on device: tphat-mb (572201b6-2c60-4135-a37e-17fe6f70bd17)]
