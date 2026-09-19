@@ -1,14 +1,14 @@
 protocol_version: 3
 
 task_id: TASK-0099
-task_revision: 4
+task_revision: 5
 state: APPROVED
 
 origin:
   type: architect_recovery
   task_id: TASK-0099
-  predecessor_revision: 3
-  gap_id: "supersede_unexecuted_r3_with_bounded_registration_sufficiency_test"
+  predecessor_revision: 4
+  gap_id: "bounded_runtime_agent_registration_refresh_sufficiency_test"
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -17,7 +17,7 @@ target:
   repository: phatnguyen03022001/agent-runtime
   branch:
     name: dev
-    role: restored_predecessor_registration_recovery
+    role: runtime_agent_registration_refresh_recovery
 
 execution_base:
   mode: handoff_snapshot
@@ -49,47 +49,42 @@ external_skills:
   execution_recommended: []
 
 authority_sources:
-  - source: ".agent/tasks/TASK-0099/review.yaml@0154f66c0e998f6c0ebede0916198dc2b2ab9b85"
-    role: "Architect ACCEPT of revision-2 BLOCKED_AFTER_PARTIAL_RECOVERY_BASELINE evidence, corrected to treat missing main-app registration as an observed pre/post state divergence and bounded recovery hypothesis rather than a proven cause of Runtime-agent BundleProgram resolution failure."
+  - source: ".agent/tasks/TASK-0099/review.yaml@49f37e24805620ea6b85a24fd9a006f37d1dee3a"
+    role: "Architect ACCEPT of revision-4 BLOCKED_AFTER_PARENT_REGISTRATION_BASELINE evidence and authorization basis for considering a bounded Runtime-agent registration refresh hypothesis."
     precedence: 1
-  - source: ".agent/tasks/TASK-0099/report.yaml@ed27a5d7fcd9edbfab907818a65c61fa6ff22cb1"
-    role: "Exact recovered predecessor bytes, unchanged configuration, zero successor-install consequence, and failed baseline evidence."
+  - source: ".agent/tasks/TASK-0099/report.yaml@af410b440b891ad50afc951d3144c49265e7cb3c"
+    role: "Exact revision-4 one-shot register-main result, deterministic 40x250ms negative sufficiency test, immutable predecessor/config/successor evidence."
     precedence: 2
-  - source: "Fresh Architect live diagnosis after revision-2 terminal"
-    role: "Installed predecessor is exact and strictly code-signed; ServiceManagement reports main_app=not-registered and runtime_agent=enabled; launchd repeatedly fails EX_CONFIG before process start because BundleProgram Contents/MacOS/AgentRuntimeRuntimeService cannot be resolved. Pre-transaction ownership recorded main_app=enabled."
+  - source: "Fresh Architect live diagnosis after revision-4 terminal"
+    role: "ServiceManagement remains main_app=enabled/runtime_agent=enabled, BTM app/agent generation 1, but launchd Runtime job remains ServiceManagement-managed, spawn-failed with last exit 78 EX_CONFIG and no Runtime/tunnel/MCP process. Runtime-agent refresh is therefore the next minimal owner-surface experiment, not a proven root-cause repair."
     precedence: 3
-  - source: "macos/Sources/AgentRuntimeMenuBar/ServiceManagementController.swift at current planning source"
-    role: "Installed AgentRuntimeMenuBar supports bounded --service-management register-main, which uses SMAppService.mainApp registration and preserves runtime-agent state."
+  - source: "macos/Sources/AgentRuntimeMenuBar/ServiceManagementController.swift at revision-5 planning source"
+    role: "Installed owner app exposes explicit unregister-runtime and register-runtime commands backed by SMAppService.agent(plistName:). They are independent of main-app registration and return typed status snapshots / approval-required outcome."
     precedence: 4
-  - source: "Apple ServiceManagement public documentation reviewed 2026-09-19"
-    role: "SMAppService.mainApp is the main application login-item service, while SMAppService.agent(plistName:) is the distinct LaunchAgent registration surface for a plist in Contents/Library/LaunchAgents. The public contract does not establish that agent BundleProgram resolution requires mainApp registration."
-    precedence: 5
   - source: ".agent/tasks/TASK-0098/review.yaml@66281456699d005f90b64f58d6ab2f2464bee676"
-    role: "Accepted immutable successor remains future installation input only; revision 4 grants no successor install authority."
-    precedence: 6
+    role: "Accepted immutable successor remains future input only; revision 5 grants no successor installation authority."
+    precedence: 5
 
 structure_authority:
   status: RESOLVED
   source: "Installed predecessor ServiceManagement command surface."
-  rationale: "Revision 3 was never executed and is superseded because its terminal polling predicate was underspecified and its objective wording overstated causality. Revision 4 performs the same minimal one-shot state restoration as a bounded sufficiency experiment with an exact polling schedule. Do not manipulate launchd directly, refresh the Runtime agent, execute the helper manually, alter app bytes, or install the successor."
+  rationale: "Refresh only the already-enabled Runtime agent registration through the installed owner app. Do not manipulate launchd directly, execute the Runtime helper manually, alter app bytes/configuration, or install the successor. The experiment is bounded and causal-neutral."
 
-objective: "Test whether restoring the exact recovered predecessor's missing pre-transaction main-app ServiceManagement registration exactly once through its installed AgentRuntimeMenuBar command surface is sufficient for the already-enabled Runtime agent to resolve and recover a healthy control-plane baseline. Treat the registration as a bounded hypothesis, not a proven root-cause repair; preserve all bytes/configuration and stop for Architect review before any successor installation."
+objective: "Test whether one owner-surface Runtime-agent registration refresh is sufficient to recover the exact restored predecessor control-plane baseline. Perform exactly one unregister-runtime followed, only after deterministic absence convergence, by exactly one register-runtime; then apply an exact bounded health window. Treat success as incident-specific sufficiency and failure as a bounded negative result, not as proof of a general root cause."
 
 checkpoint:
-  predecessor_revision: 3
-  predecessor_terminal: SUPERSEDED_BEFORE_EXECUTION
-  superseded_revision:
-    task_revision: 3
-    planning_head: "ee788b7c72f4d2c51a5880936a9d2648ed651632"
-    execution_started: false
-    report_created: false
-    mutation_authority_consumed: false
-  accepted_execution_predecessor:
-    task_revision: 2
-    terminal: BLOCKED_AFTER_PARTIAL_RECOVERY_BASELINE
-  revision2_partial_recovery:
+  predecessor_revision: 4
+  predecessor_terminal: BLOCKED_AFTER_PARENT_REGISTRATION_BASELINE
+  revision4_register_main:
     authority_consumed: "1/1"
-    result: RECOVERED
+    returncode: 0
+    post_state:
+      main_app: enabled
+      runtime_agent: enabled
+    bounded_health_result: NOT_SUFFICIENT_IN_THIS_INCIDENT_WINDOW
+    poll_observations: 40
+    sleep_before_each_observation_ms: 250
+    observation_41: false
   live_state:
     cutover_transaction_present: false
     installed_app_closure_record_count: 1224
@@ -102,18 +97,18 @@ checkpoint:
     runtime_env_sha256: "6e6fef8e255b140f28703f8bd515726e1fd93d644e6f838b33ebf319e8133077"
     desired_state_present: true
     desired_state_sha256: "e3b0c44298fc1c149afbf4d8996fb92427ae41e4649b934ca495991b7852b855"
-    service_management_main_app: "not-registered"
-    service_management_runtime_agent: "enabled"
+    service_management_main_app: enabled
+    service_management_runtime_agent: enabled
+    btm_app_generation: 1
+    btm_runtime_agent_generation: 1
     runtime_launchd_present: true
     runtime_launchd_last_exit: "78 EX_CONFIG"
-    runtime_launchd_failure: "Could not find and/or execute program specified by service: 3: No such process: Contents/MacOS/AgentRuntimeRuntimeService"
+    runtime_launchd_job_state: "spawn failed"
+    runtime_launchd_program_identifier: "Contents/MacOS/AgentRuntimeRuntimeService"
     tunnel_client_count: 0
     listener_8080_count: 0
     healthz: "000"
     readyz: "000"
-  pre_transaction_expected_ownership:
-    main_app: "enabled"
-    runtime_agent: "enabled"
   accepted_successor:
     candidate_sha256: "496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c"
     app_closure_record_count: 1229
@@ -123,52 +118,62 @@ checkpoint:
 authority_counters:
   revision1_rollback: "CONSUMED_1_OF_1"
   revision2_partial_recovery: "CONSUMED_1_OF_1"
-  revision4_register_main: "0/1"
-  revision4_runtime_agent_refresh: "NONE"
-  revision4_successor_install_prebuilt: "NONE"
-  revision4_commit_cutover: "NONE"
+  revision4_register_main: "CONSUMED_1_OF_1"
+  revision5_unregister_runtime: "0/1"
+  revision5_register_runtime: "0/1"
+  revision5_launchctl_mutation: "NONE"
+  revision5_successor_install_prebuilt: "NONE"
+  revision5_commit_cutover: "NONE"
 
 scope:
   required_changes:
-    - "Fresh-bind TASK-0099 revision 4 at exact planning HEAD. Require local dev and remote dev at that HEAD, remote main c49d777efa09db7f6c51bd8d8616db4623499fb8, one clean canonical worktree, no Git lock and no concurrent repository writer."
-    - "Re-resolve revision-2 ACCEPTED review/report and read-only require checkpoint.live_state exactly: no cutover transaction, exact predecessor closure/revision/tree/helper identity, strict codesign PASS, exact runtime.env/desired-state, ServiceManagement main_app=not-registered/runtime_agent=enabled, modern Runtime launchd present with the same BundleProgram EX_CONFIG failure class, and zero tunnel/listener/health/readiness."
-    - "Read-only rehash the accepted successor original and handoff and require exact checkpoint.accepted_successor identities. Do not execute or mutate it."
-    - "Revision-4 parent-registration authority is exactly 0/1 -> 1/1. Invoke only the installed predecessor executable ~/Applications/Agent Runtime.app/Contents/MacOS/AgentRuntimeMenuBar with arguments --service-management register-main exactly once."
-    - "Require exit 0 and exact JSON-equivalent post-state main_app=enabled and runtime_agent=enabled. If the command exits 3/approval-required, exits nonzero, returns malformed/ambiguous state, changes runtime-agent registration unexpectedly, or does not establish main_app=enabled, STOP BLOCKED_AFTER_PARENT_REGISTRATION. Do not retry or use System Settings/UI/manual registration."
-    - "After successful registration, run the exact bounded sufficiency-test polling schedule only: at most 40 observations; before each observation sleep exactly 250 milliseconds; after the sleep observe ServiceManagement state, canonical tunnel-client count, listener count on 127.0.0.1:8080, healthz and readyz. Stop early on the first observation where main_app=enabled, runtime_agent=enabled, tunnel-client count=1, listener count=1, healthz=200 and readyz=200. The maximum scheduled polling delay is exactly 10.0 seconds. No observation 41 is authorized."
-    - "If observation 40 is not healthy under the exact predicate above, STOP BLOCKED_AFTER_PARENT_REGISTRATION_BASELINE immediately. This outcome falsifies only the bounded sufficiency hypothesis that restoring main_app registration alone is enough in this incident; it does not establish another root cause. Do not unregister/re-register Runtime agent, kickstart launchd, execute AgentRuntimeRuntimeService directly, restart tunnel-client, edit configuration, or install the successor."
-    - "On healthy baseline, require ServiceManagement remains main_app=enabled/runtime_agent=enabled, launchd no longer reports unresolved BundleProgram for the observation window, installed predecessor closure/helper/config/desired-state remain exact, and no cutover transaction exists."
-    - "Preserve accepted successor original byte-identically. No install-prebuilt, commit-cutover, direct MCP semantic acceptance, screen_capture, TCC or Stage-B model vision occurs."
-    - "Publish only TASK-0099 report revision 4 on dev and stop NEEDS_REVIEW."
+    - "Fresh-bind TASK-0099 revision 5 at exact planning HEAD. Require local dev and remote dev at that HEAD, remote main c49d777efa09db7f6c51bd8d8616db4623499fb8, one clean canonical worktree, no Git lock and no concurrent repository writer."
+    - "Re-resolve revision-4 ACCEPTED review/report and require checkpoint.live_state exactly before mutation: no transaction, exact predecessor closure/revision/tree/helper/codesign/config/desired-state identities, main_app=enabled/runtime_agent=enabled, modern Runtime job present with the same spawn-failed/78-EX_CONFIG class, zero tunnel/listener/health/readiness, and exact accepted successor identities."
+    - "Read-only record the Runtime service launchd identity and BTM app/agent identities before mutation. Do not use those tools for mutation."
+    - "Revision-5 unregister-runtime authority is exactly 0/1 -> 1/1. Invoke only the installed predecessor executable ~/Applications/Agent Runtime.app/Contents/MacOS/AgentRuntimeMenuBar with arguments --service-management unregister-runtime exactly once."
+    - "Require exit 0 and JSON-equivalent ServiceManagement snapshot main_app=enabled and runtime_agent in {not-registered, not-found}. If exit is nonzero, output is malformed, main_app changes from enabled, runtime_agent remains enabled/requires-approval, or any unexpected ownership appears, STOP BLOCKED_AFTER_RUNTIME_AGENT_UNREGISTER. Do not retry and do not invoke register-runtime."
+    - "After successful unregister-runtime, run the exact deterministic absence window: at most 40 observations; before each observation sleep exactly 100 milliseconds; observe owner-app ServiceManagement status and read-only launchctl presence for com.picmao.agent-runtime-runtime-service. Stop early only when main_app=enabled, runtime_agent in {not-registered, not-found}, and the modern Runtime launchd job is absent. Maximum scheduled delay is exactly 4.0 seconds. No observation 41 is authorized."
+    - "If observation 40 still has the Runtime launchd job present or ServiceManagement state is not the exact absent-agent predicate, STOP BLOCKED_AFTER_RUNTIME_AGENT_UNREGISTER_CONVERGENCE. Do not invoke register-runtime, launchctl mutation, direct helper execution, or any compensation outside a future Architect revision."
+    - "Only after exact absence convergence, revision-5 register-runtime authority is exactly 0/1 -> 1/1. Invoke only the installed predecessor AgentRuntimeMenuBar with arguments --service-management register-runtime exactly once."
+    - "If register-runtime exits 3 with the command's typed approval-required outcome, STOP OPERATOR_INPUT_REQUIRED_RUNTIME_AGENT_APPROVAL. Do not use System Settings, GUI automation, retry registration, or infer approval."
+    - "If register-runtime exits nonzero other than the typed approval-required result, returns malformed output, changes main_app away from enabled, or does not produce runtime_agent=enabled, STOP BLOCKED_AFTER_RUNTIME_AGENT_REGISTER. Do not retry or use direct launchctl/helper/tunnel repair."
+    - "After successful register-runtime, run the exact deterministic health window: at most 40 observations; before each observation sleep exactly 250 milliseconds; observe ServiceManagement status, canonical tunnel-client count, listener count on 127.0.0.1:8080, healthz and readyz. Stop early only when main_app=enabled, runtime_agent=enabled, tunnel-client count=1, listener count=1, healthz=200 and readyz=200. Maximum scheduled delay is exactly 10.0 seconds. No observation 41 is authorized."
+    - "If observation 40 is not healthy under the exact predicate, STOP BLOCKED_AFTER_RUNTIME_AGENT_REFRESH_BASELINE. This falsifies only the bounded hypothesis that one Runtime-agent registration refresh is sufficient in this incident window; it does not identify another root cause."
+    - "On healthy baseline, require installed predecessor closure/helper/runtime.env/desired-state unchanged, no cutover transaction, main_app=enabled/runtime_agent=enabled, exact singleton control-plane health and accepted successor original/handoff unchanged."
+    - "Do not install the successor in revision 5. Do not perform direct MCP semantic acceptance, screen_capture, TCC or Stage-B model vision."
+    - "Publish only TASK-0099 report revision 5 on dev and stop NEEDS_REVIEW on healthy success or the exact blocked/operator terminal reached."
+
   allowed_existing_files_or_components:
-    - "~/Applications/Agent Runtime.app/Contents/MacOS/AgentRuntimeMenuBar --service-management register-main"
+    - "~/Applications/Agent Runtime.app/Contents/MacOS/AgentRuntimeMenuBar --service-management unregister-runtime"
+    - "~/Applications/Agent Runtime.app/Contents/MacOS/AgentRuntimeMenuBar --service-management register-runtime"
     - "~/Applications/Agent Runtime.app read-only identity checks"
     - "~/Library/Application Support/Agent Runtime/runtime.env read-only"
     - "~/Library/Application Support/Agent Runtime/protected-runtime-running read-only"
     - "build/candidates/496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c read-only"
-    - "build/.task-0099-r4-* ignored logs/evidence only"
-    - ".agent/tasks/TASK-0099/report.yaml report revision 4"
+    - "build/.task-0099-r5-* ignored logs/evidence only"
+    - ".agent/tasks/TASK-0099/report.yaml report revision 5"
   expected_files_are_restrictive: true
 
 invariants:
-  - "Revision 3 is SUPERSEDED_BEFORE_EXECUTION: it has no report and consumed no execution or lifecycle mutation authority."
-  - "Revision 1 rollback and revision 2 partial-recovery authorities remain consumed and are never retried."
-  - "No cutover transaction exists at revision-4 start and none may be created."
-  - "Installed predecessor bytes are immutable."
-  - "The only lifecycle mutation authorized is one installed-app register-main ServiceManagement invocation, treated as a bounded state-restoration experiment rather than a pre-proven causal repair."
-  - "Runtime-agent registration remains enabled throughout; revision 4 grants no unregister-runtime/register-runtime authority."
-  - "No direct launchctl mutation, kickstart, helper execution, tunnel restart/repoint, config edit or app-byte repair is authorized."
-  - "Successor installation authority is NONE in revision 4."
+  - "Revision 1 rollback, revision 2 partial recovery and revision 4 register-main authorities remain consumed and are never retried."
+  - "No cutover transaction exists at revision-5 start and none may be created."
+  - "Installed predecessor bytes/configuration/desired-state are immutable."
+  - "The only lifecycle mutations authorized are one unregister-runtime and, only after exact absence convergence, one register-runtime through the installed owner app."
+  - "No direct launchctl mutation, kickstart, helper execution, tunnel restart/repoint, configuration edit or app-byte repair is authorized."
+  - "Main-app ServiceManagement registration must remain enabled throughout revision 5."
+  - "Successor installation authority is NONE in revision 5."
+  - "A negative bounded health result does not establish a new root cause."
   - "main, tags, releases, sibling repositories and branch topology remain unchanged."
 
 forbidden_changes:
   - "Do not invoke rollback-cutover, recover-partial-cutover, resume-cutover, commit-cutover or install-prebuilt."
-  - "Do not invoke --service-management unregister-main, register-runtime, unregister-runtime, register, or unregister."
-  - "Do not invoke register-main more than once."
+  - "Do not invoke --service-management unregister-main, register-main, register, or unregister."
+  - "Do not invoke unregister-runtime or register-runtime more than their exact 1/1 authorities."
+  - "Do not invoke register-runtime before exact unregister convergence."
   - "Do not use launchctl bootout/bootstrap/kickstart/enable/disable for Agent Runtime."
   - "Do not execute AgentRuntimeRuntimeService, start.sh or tunnel-client directly."
-  - "Do not modify app bundle, runtime.env, desired-state, ServiceManagement plist, source, tests, docs, dependencies or lifecycle scripts."
-  - "Do not use System Settings or GUI automation to approve/repair registration."
+  - "Do not modify app bundle, runtime.env, desired-state, embedded plist, source, tests, docs, dependencies or lifecycle scripts."
+  - "Do not use System Settings or GUI automation for approval or repair."
   - "Do not mutate accepted successor candidate or handoff."
   - "Do not perform direct MCP/screen_capture/Stage-B/TCC/control work."
   - "Do not create branch/worktree/clone/stash or mutate main/tags/releases/sibling repositories."
@@ -188,51 +193,57 @@ structure_policy:
     allowed: false
     max: 0
     within: []
-    purpose: "Only existing TASK-0099 report.yaml may be updated; ignored build/.task-0099-r4-* evidence is not tracked structure."
+    purpose: "Only existing TASK-0099 report.yaml may be updated; ignored build/.task-0099-r5-* evidence is not tracked structure."
   allow_new_top_level_directories: false
   allow_new_shared_modules: false
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "Revision 4 starts from exact recovered predecessor and diagnosed baseline."
-    evidence_required: "Exact refs/worktree, no transaction, predecessor closure/revision/tree/helper/codesign/config identities, ServiceManagement not-registered/enabled state, EX_CONFIG BundleProgram failure and zero control-plane health."
+    requirement: "Revision 5 starts from the exact revision-4 terminal and exact current live checkpoint."
+    evidence_required: "Exact refs/worktree, no transaction, predecessor/config/desired-state/successor identities, enabled/enabled ServiceManagement state, launchd spawn-failed/EX_CONFIG class and zero baseline health."
   - id: AC-2
-    requirement: "Missing pre-existing main-app registration is restored exactly once through the installed owner app."
-    evidence_required: "Exactly one AgentRuntimeMenuBar --service-management register-main invocation; exit 0; post-state main_app=enabled/runtime_agent=enabled; no other ServiceManagement mutation."
+    requirement: "Runtime-agent unregister is performed exactly once and converges deterministically to absent ownership while main-app registration remains enabled."
+    evidence_required: "One unregister-runtime invocation; exit 0; main_app=enabled/runtime_agent absent state; exact max 40x100ms absence window; launchd Runtime job absent before any register-runtime."
   - id: AC-3
-    requirement: "The bounded hypothesis test deterministically establishes whether main-app registration restoration alone is sufficient for healthy baseline recovery."
-    evidence_required: "Exact polling schedule: 250 ms sleep before each of at most 40 observations, no observation 41; PASS only on main_app=enabled/runtime_agent=enabled plus exactly one canonical tunnel-client, one 127.0.0.1:8080 listener, healthz=200 and readyz=200. Otherwise exact terminal BLOCKED_AFTER_PARENT_REGISTRATION_BASELINE after observation 40."
+    requirement: "Runtime-agent register is performed exactly once only after clean absence convergence."
+    evidence_required: "One register-runtime invocation; either typed approval-required terminal or exit 0 with main_app=enabled/runtime_agent=enabled; no retry."
   - id: AC-4
-    requirement: "Recovered predecessor and all immutable inputs remain exact."
-    evidence_required: "Installed closure/helper, runtime.env/desired-state, accepted successor app/handoff unchanged; no transaction; main unchanged."
+    requirement: "The bounded refresh hypothesis is evaluated with one deterministic health predicate."
+    evidence_required: "Exact max 40x250ms health window, no observation 41; PASS only with enabled/enabled plus exactly one canonical tunnel-client/listener and healthz=200/readyz=200; otherwise exact BLOCKED_AFTER_RUNTIME_AGENT_REFRESH_BASELINE."
   - id: AC-5
-    requirement: "No successor or semantic acceptance authority is consumed."
-    evidence_required: "install-prebuilt=0, commit-cutover=0, runtime-agent refresh=0, no direct MCP/screen_capture/TCC/Stage-B consequence."
+    requirement: "All immutable inputs and authority boundaries remain intact."
+    evidence_required: "Predecessor closure/helper/config/desired-state and successor app/handoff unchanged; no transaction; no launchctl mutation; no successor install; main unchanged."
 
 verification:
   executor_checks:
     - id: CHECK-BASE
-      command_or_check: "Fresh-resolve revision-4 planning/dev/main/local identity and revision-2 accepted report."
+      command_or_check: "Fresh-resolve revision-5 planning/dev/main/local identity and revision-4 accepted report."
       required: true
     - id: CHECK-LIVE
-      command_or_check: "Read-only prove exact no-transaction predecessor/config/ServiceManagement/launchd/health checkpoint and immutable successor."
+      command_or_check: "Read-only prove exact predecessor/config/ServiceManagement/launchd/health checkpoint and immutable successor."
       required: true
-    - id: CHECK-REGISTER-MAIN
-      command_or_check: "Consume exactly one installed-app register-main invocation and require enabled/enabled post-state."
+    - id: CHECK-UNREGISTER
+      command_or_check: "Consume exactly one owner-app unregister-runtime and require enabled/absent ServiceManagement state."
       required: true
-    - id: CHECK-BASELINE
-      command_or_check: "Execute exact 40-by-250ms maximum polling schedule with the canonical health predicate; stop early only on PASS, otherwise terminal after observation 40; no additional mutation."
+    - id: CHECK-ABSENCE
+      command_or_check: "Run exact max 40-by-100ms absence schedule; require Runtime launchd job absent before registration."
+      required: true
+    - id: CHECK-REGISTER
+      command_or_check: "Consume exactly one owner-app register-runtime after absence; handle only exact success or typed approval-required terminal."
+      required: true
+    - id: CHECK-HEALTH
+      command_or_check: "Run exact max 40-by-250ms health schedule with canonical enabled/enabled plus singleton tunnel/listener and 200/200 predicate."
       required: true
     - id: CHECK-PRESERVATION
-      command_or_check: "Rehash predecessor/config/successor, prove no transaction/unapproved lifecycle mutation and main unchanged."
+      command_or_check: "Rehash predecessor/config/successor, prove no transaction/unapproved mutation and main unchanged."
       required: true
     - id: CHECK-FINAL
-      command_or_check: "Validate and publish TASK-0099 report revision 4 only; fresh remote proof; stop NEEDS_REVIEW or exact blocked terminal."
+      command_or_check: "Validate and publish TASK-0099 report revision 5 only; fresh remote proof; stop at exact terminal."
       required: true
   authoritative_verification:
     required: false
-    mechanism: "Independent Architect review of the one-shot main-app registration sufficiency test and exact deterministic polling evidence before any successor-install or Runtime-agent-refresh authority."
-    expected_signal: "Architect ACCEPT of either a healthy recovered predecessor checkpoint or a correctly bounded negative sufficiency-test result; neither outcome by itself proves a general ServiceManagement causal dependency."
+    mechanism: "Independent Architect review of the one-shot Runtime-agent refresh experiment and deterministic absence/health evidence before any successor-install authority."
+    expected_signal: "Architect ACCEPT of either healthy recovered predecessor state, typed approval-required state, or correctly bounded negative refresh result; none alone is generalized into an undocumented ServiceManagement causal rule."
 
 capability_requirements:
   EXECUTION:
