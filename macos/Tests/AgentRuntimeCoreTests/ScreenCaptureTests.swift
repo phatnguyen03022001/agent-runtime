@@ -130,6 +130,47 @@ final class ScreenCaptureTests: XCTestCase {
         XCTAssertEqual(Data(payload), png)
     }
 
+    func testWireFramingEncodesNullableDisplayMetadataAsExplicitJSONNulls() throws {
+        let png = Data([0x89, 0x50, 0x4E, 0x47, 0x03, 0x04])
+        let app = ScreenCaptureApplicationMetadata(
+            pid: 7,
+            bundleIdentifier: "com.example.app",
+            name: "Example"
+        )
+        let metadata = ScreenCaptureMetadata(
+            schemaVersion: 1,
+            status: "captured",
+            target: .display,
+            mimeType: "image/png",
+            rawBytes: png.count,
+            sha256: String(repeating: "b", count: 64),
+            coordinateSpace: "cg_global_points",
+            bounds: ScreenCaptureRect(x: -10, y: 20, width: 1, height: 1),
+            pixelWidth: 2,
+            pixelHeight: 2,
+            scaleFactor: 2,
+            displayID: 1,
+            windowID: nil,
+            activeApplication: app,
+            capturedApplication: nil,
+            permission: "granted",
+            captureAPI: "ScreenCaptureKit",
+            deadlineSeconds: 5
+        )
+
+        let frame = try ScreenCaptureWire.success(metadata: metadata, png: png)
+        let newline = try XCTUnwrap(frame.firstIndex(of: 0x0A))
+        let header = frame[..<newline]
+        let payload = frame[frame.index(after: newline)...]
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(header)) as? [String: Any]
+        )
+
+        XCTAssertTrue(object["window_id"] is NSNull)
+        XCTAssertTrue(object["captured_application"] is NSNull)
+        XCTAssertEqual(Data(payload), png)
+    }
+
     func testErrorFramingHasNoBinaryPayloadAndBoundedMessage() throws {
         let frame = ScreenCaptureWire.failure(
             code: "SCREEN_CAPTURE_PERMISSION_REQUIRED",

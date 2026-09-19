@@ -86,6 +86,22 @@ class ScreenCaptureTests(unittest.TestCase):
         self.assertEqual(metadata.pixel_width, 2)
         self.assertEqual(metadata.coordinate_space, "cg_global_points")
 
+    def test_parser_accepts_explicit_nullable_display_and_region_metadata(self) -> None:
+        for target in ("display", "region"):
+            value = _metadata(
+                target=target,
+                window_id=None,
+                captured_application=None,
+            )
+            with self.subTest(target=target):
+                self.assertIsNone(value["window_id"])
+                self.assertIsNone(value["captured_application"])
+                metadata, payload = screen_capture._parse_helper_output(0, _framed(value))
+                self.assertEqual(metadata.target, target)
+                self.assertIsNone(metadata.window_id)
+                self.assertIsNone(metadata.captured_application)
+                self.assertEqual(payload, PNG)
+
     def test_parser_rejects_bad_png_hash_and_extra_metadata(self) -> None:
         for mutation in (
             {"sha256": "0" * 64},

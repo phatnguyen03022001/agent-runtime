@@ -155,6 +155,49 @@ public struct ScreenCaptureMetadata: Codable, Equatable, Sendable {
     public let permission: String
     public let captureAPI: String
     public let deadlineSeconds: Double
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case status
+        case target
+        case mimeType
+        case rawBytes
+        case sha256
+        case coordinateSpace
+        case bounds
+        case pixelWidth
+        case pixelHeight
+        case scaleFactor
+        case displayID
+        case windowID
+        case activeApplication
+        case capturedApplication
+        case permission
+        case captureAPI
+        case deadlineSeconds
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(schemaVersion, forKey: .schemaVersion)
+        try container.encode(status, forKey: .status)
+        try container.encode(target, forKey: .target)
+        try container.encode(mimeType, forKey: .mimeType)
+        try container.encode(rawBytes, forKey: .rawBytes)
+        try container.encode(sha256, forKey: .sha256)
+        try container.encode(coordinateSpace, forKey: .coordinateSpace)
+        try container.encode(bounds, forKey: .bounds)
+        try container.encode(pixelWidth, forKey: .pixelWidth)
+        try container.encode(pixelHeight, forKey: .pixelHeight)
+        try container.encode(scaleFactor, forKey: .scaleFactor)
+        try container.encode(displayID, forKey: .displayID)
+        try container.encode(windowID, forKey: .windowID)
+        try container.encode(activeApplication, forKey: .activeApplication)
+        try container.encode(capturedApplication, forKey: .capturedApplication)
+        try container.encode(permission, forKey: .permission)
+        try container.encode(captureAPI, forKey: .captureAPI)
+        try container.encode(deadlineSeconds, forKey: .deadlineSeconds)
+    }
 }
 
 public struct ScreenCaptureResult: Sendable {
