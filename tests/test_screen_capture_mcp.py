@@ -7,7 +7,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from jsonschema import Draft202012Validator
 from mcp.types import ImageContent, TextContent
 
 from agent_runtime import screen_capture as screen_capture_feature
@@ -33,12 +32,6 @@ EXPECTED_ANNOTATIONS = {
     "repo_fast_forward": (False, True, True, True),
     "repo_publish": (False, True, True, True),
     "screen_capture": (True, False, True, False),
-}
-SUCCESS_FIELDS = {
-    "schema_version", "status", "target", "mime_type", "raw_bytes", "sha256",
-    "coordinate_space", "bounds", "pixel_width", "pixel_height", "scale_factor",
-    "display_id", "window_id", "active_application", "captured_application",
-    "permission", "capture_api", "deadline_seconds",
 }
 INPUT_FIELDS = {
     "target", "window_id", "application_bundle_id", "display_id",
@@ -107,34 +100,25 @@ class ScreenCaptureMCPTests(unittest.IsolatedAsyncioTestCase):
         ):
             self.assertNotIn(forbidden, schema["properties"])
 
-    async def test_output_schema_is_closed_and_exact(self) -> None:
+    async def test_output_schema_is_none_for_media_first_result(self) -> None:
         schema = (await self._tools())["screen_capture"].output_schema
-        self.assertIsNotNone(schema)
-        self.assertFalse(schema["additionalProperties"])
-        self.assertEqual(set(schema["properties"]), SUCCESS_FIELDS)
-        self.assertEqual(schema["properties"]["schema_version"]["const"], 1)
-        self.assertEqual(schema["properties"]["status"]["const"], "captured")
-        self.assertEqual(schema["properties"]["mime_type"]["const"], "image/png")
-        self.assertEqual(
-            schema["properties"]["coordinate_space"]["const"],
-            "cg_global_points",
-        )
-        self.assertEqual(schema["properties"]["permission"]["const"], "granted")
-        self.assertEqual(schema["properties"]["capture_api"]["const"], "ScreenCaptureKit")
-        self.assertFalse(schema["$defs"]["ScreenCaptureBounds"]["additionalProperties"])
-        self.assertFalse(schema["$defs"]["ScreenCaptureApplication"]["additionalProperties"])
-        Draft202012Validator.check_schema(schema)
+        self.assertIsNone(schema)
 
     async def test_cross_field_failure_is_typed_bounded_error(self) -> None:
         result = await server.mcp.call_tool("screen_capture", {"target": "window"})
         self.assertTrue(result.is_error)
-        self.assertEqual(set(result.structured_content), {"error"})
-        error = result.structured_content["error"]
+        self.assertIsNone(result.structured_content)
+        self.assertEqual(len(result.content), 1)
+        self.assertIsInstance(result.content[0], TextContent)
+        text = result.content[0].text
+        error = json.loads(text)
+        self.assertEqual(text, json.dumps(error, ensure_ascii=False, separators=(",", ":"), sort_keys=True))
         self.assertEqual(set(error), {"code", "message", "retryable"})
         self.assertEqual(error["code"], "INVALID_ARGUMENT")
         self.assertLessEqual(len(error["message"]), 256)
+        self.assertLessEqual(len(text.encode("utf-8")), screen_capture_feature.MAX_HEADER_BYTES)
 
-    async def test_success_is_one_byte_exact_png_and_zero_text(self) -> None:
+    async def test_success_is_one_byte_exact_png_then_one_metadata_text(self) -> None:
         expected = _metadata()
         with patch.object(
             screen_capture_feature,
@@ -146,12 +130,19 @@ class ScreenCaptureMCPTests(unittest.IsolatedAsyncioTestCase):
         images = [block for block in result.content if isinstance(block, ImageContent)]
         texts = [block for block in result.content if isinstance(block, TextContent)]
         self.assertEqual(len(images), 1)
-        self.assertEqual(texts, [])
+        self.assertEqual(len(texts), 1)
+        self.assertIs(result.content[0], images[0])
+        self.assertIs(result.content[1], texts[0])
         self.assertEqual(images[0].mime_type, "image/png")
         decoded = base64.b64decode(images[0].data, validate=True)
         self.assertEqual(decoded, PNG)
         self.assertEqual(hashlib.sha256(decoded).hexdigest(), expected["sha256"])
-        self.assertEqual(result.structured_content, expected)
+        self.assertEqual(result.structured_content, None)
+        self.assertEqual(
+            texts[0].text,
+            json.dumps(expected, ensure_ascii=False, separators=(",", ":"), sort_keys=True),
+        )
+        self.assertLessEqual(len(texts[0].text.encode("utf-8")), screen_capture_feature.MAX_HEADER_BYTES)
 
     async def test_timing_and_instructions_expose_only_read_capture_boundary(self) -> None:
         self.assertIn("screen_capture", ALLOWED_TOOL_NAMES)

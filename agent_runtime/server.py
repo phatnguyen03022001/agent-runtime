@@ -18,6 +18,8 @@ try:
 except ImportError:
     _ToolAnnotations = None
 
+from mcp.types import CallToolResult
+
 from .capacity import observe_capacity
 from .contracts import (
     AbsoluteCwd,
@@ -37,7 +39,6 @@ from .contracts import (
     ScreenCaptureCoordinate,
     ScreenCaptureDisplayId,
     ScreenCaptureExtent,
-    ScreenCaptureMetadata,
     ScreenCaptureTarget,
     ScreenCaptureWindowId,
     RepoObserverMaxPaths,
@@ -416,30 +417,13 @@ def screen_capture(
     y: ScreenCaptureCoordinate | None = None,
     width: ScreenCaptureExtent | None = None,
     height: ScreenCaptureExtent | None = None,
-) -> ScreenCaptureMetadata:
+) -> CallToolResult:
     """Capture one bounded macOS screen target through the package-owned native helper."""
 
     try:
-        return cast(
-            ScreenCaptureMetadata,
-            capture_screen(target, window_id, application_bundle_id, display_id, x, y, width, height),
-        )
+        return capture_screen(target, window_id, application_bundle_id, display_id, x, y, width, height)
     except ScreenCaptureFailure as exc:
-        from mcp.types import CallToolResult, TextContent
-
-        envelope = TypedToolErrorEnvelope(
-            error=TypedToolErrorPayload(
-                code=exc.code,
-                message=exc.message,
-                retryable=exc.retryable,
-            )
-        )
-        error_result = CallToolResult(
-            content=[TextContent(type="text", text=exc.message)],
-            structuredContent=envelope.model_dump(),
-            isError=True,
-        )
-        return cast(ScreenCaptureMetadata, error_result)
+        return capture_failure_result(exc)
 
 
 def _install_timing_middleware() -> None:

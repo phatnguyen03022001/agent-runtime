@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from mcp.types import CallToolResult, ImageContent
+from mcp.types import CallToolResult, ImageContent, TextContent
 from pydantic import ValidationError
 
 from .contracts import ScreenCaptureMetadata, ScreenCaptureTarget
@@ -43,6 +43,42 @@ class ScreenCaptureFailure(RuntimeError):
         self.code = code if code in _SCREEN_ERROR_CODES else "INTERNAL_ERROR"
         self.message = clean
         self.retryable = bool(retryable)
+
+
+def _bounded_json_text(value: dict[str, Any], *, overflow_message: str) -> str:
+    try:
+        text = json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True, allow_nan=False)
+    except (TypeError, ValueError) as exc:
+        raise ScreenCaptureFailure("CAPTURE_PROTOCOL_ERROR", "screen capture metadata is not serializable") from exc
+    if len(text.encode("utf-8")) > MAX_HEADER_BYTES:
+        raise ScreenCaptureFailure("CAPTURE_PROTOCOL_ERROR", overflow_message)
+    return text
+
+
+def _metadata_text(metadata: ScreenCaptureMetadata) -> str:
+    return _bounded_json_text(
+        metadata.model_dump(mode="json"),
+        overflow_message="screen capture metadata exceeded bounds",
+    )
+
+
+def capture_failure_result(failure: ScreenCaptureFailure) -> CallToolResult:
+    return CallToolResult(
+        content=[
+            TextContent(
+                type="text",
+                text=_bounded_json_text(
+                    {
+                        "code": failure.code,
+                        "message": failure.message,
+                        "retryable": failure.retryable,
+                    },
+                    overflow_message="screen capture error exceeded bounds",
+                ),
+            )
+        ],
+        isError=True,
+    )
 
 def _fixed_helper_path() -> Path:
     source = Path(__file__).resolve()
@@ -328,7 +364,7 @@ def capture_screen(
                 type="image",
                 data=base64.b64encode(png).decode("ascii"),
                 mimeType="image/png",
-            )
+            ),
+            TextContent(type="text", text=_metadata_text(metadata)),
         ],
-        structuredContent=metadata.model_dump(),
     )

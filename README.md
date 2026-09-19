@@ -184,9 +184,13 @@ The MCP server exposes exactly eleven public tools:
   executes the publication consequence; repository/task authority remains outside Runtime.
 - `screen_capture(target="frontmost_window", ...)` captures exactly one selected window,
   application window, display, or contained display region through package-owned
-  ScreenCaptureKit. Success returns one PNG `ImageContent` plus closed metadata in
-  `cg_global_points`; no cursor, audio, OCR, Accessibility, clipboard, DOM, URL, or
-  keystroke surface is exposed. Screen Recording permission must already be granted.
+  ScreenCaptureKit. Success is an unstructured media-first result: one PNG
+  `ImageContent`, followed by one bounded deterministic JSON `TextContent` of validated
+  `cg_global_points` metadata; it has no output schema or structured content. Failures are
+  one bounded deterministic JSON error `TextContent` with `code`, `message`, and
+  `retryable`, also without structured content. No cursor, audio, OCR, Accessibility,
+  clipboard, DOM, URL, or keystroke surface is exposed. Screen Recording permission must
+  already be granted.
 
 Capacity Observer v2 reports an advisory healthy-host ceiling up to x6. The
 effective healthy ceiling is `min(AGENT_RUNTIME_MAX_PARALLELISM, 6)`: the

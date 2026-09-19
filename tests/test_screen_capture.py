@@ -11,6 +11,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from agent_runtime import screen_capture
+from mcp.types import ImageContent, TextContent
 
 ROOT = Path(__file__).resolve().parents[1]
 PNG = (ROOT / "tests" / "fixtures" / "task0087-tiny.png").read_bytes()
@@ -164,7 +165,7 @@ class ScreenCaptureTests(unittest.TestCase):
                 encoding="utf-8",
             )
             helper.chmod(0o755)
-            with patch.object(screen_capture, "DEADLINE_SECONDS", 0.1):
+            with patch.object(screen_capture, "DEADLINE_SECONDS", 0.5):
                 with self.assertRaises(screen_capture.ScreenCaptureFailure) as caught:
                     screen_capture._invoke_helper([str(helper), str(pid_file)])
             self.assertEqual(caught.exception.code, "DEADLINE_EXCEEDED")
@@ -172,37 +173,30 @@ class ScreenCaptureTests(unittest.TestCase):
             with self.assertRaises(ProcessLookupError):
                 os.kill(pid, 0)
 
-    def test_success_result_contains_one_image_and_closed_metadata(self) -> None:
+    def test_success_result_is_media_first_with_bounded_deterministic_metadata(self) -> None:
+        expected = _metadata()
         with patch.object(screen_capture, "_fixed_helper_path", return_value=Path("/fixed/helper")):
-            with patch.object(screen_capture, "_invoke_helper", return_value=(0, _framed(_metadata()))):
+            with patch.object(screen_capture, "_invoke_helper", return_value=(0, _framed(expected))):
                 result = screen_capture.capture_screen(
                     "frontmost_window", None, None, None, None, None, None, None
                 )
-        self.assertEqual(len(result.content), 1)
+        self.assertEqual(len(result.content), 2)
+        self.assertIsInstance(result.content[0], ImageContent)
+        self.assertIsInstance(result.content[1], TextContent)
         self.assertEqual(result.content[0].mime_type, "image/png")
+        self.assertEqual(result.structured_content, None)
+        self.assertLessEqual(len(result.content[1].text.encode("utf-8")), screen_capture.MAX_HEADER_BYTES)
         self.assertEqual(
-            set(result.structured_content),
-            {
-                "schema_version",
-                "status",
-                "target",
-                "mime_type",
-                "raw_bytes",
-                "sha256",
-                "coordinate_space",
-                "bounds",
-                "pixel_width",
-                "pixel_height",
-                "scale_factor",
-                "display_id",
-                "window_id",
-                "active_application",
-                "captured_application",
-                "permission",
-                "capture_api",
-                "deadline_seconds",
-            },
+            result.content[1].text,
+            json.dumps(expected, ensure_ascii=False, separators=(",", ":"), sort_keys=True),
         )
+
+    def test_metadata_text_exceeding_header_bound_fails_closed(self) -> None:
+        metadata, _ = screen_capture._parse_helper_output(0, _framed(_metadata()))
+        with patch.object(screen_capture, "MAX_HEADER_BYTES", 1):
+            with self.assertRaises(screen_capture.ScreenCaptureFailure) as caught:
+                screen_capture._metadata_text(metadata)
+        self.assertEqual(caught.exception.code, "CAPTURE_PROTOCOL_ERROR")
 
 
 if __name__ == "__main__":

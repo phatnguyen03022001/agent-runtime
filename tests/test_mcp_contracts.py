@@ -346,14 +346,8 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
                 "remote_head_before", "remote_head_after", "network_used",
                 "push_attempted", "published", "deadline_seconds",
             },
-            "screen_capture": {
-                "schema_version", "status", "target", "mime_type", "raw_bytes", "sha256",
-                "coordinate_space", "bounds", "x", "y", "width", "height",
-                "pixel_width", "pixel_height", "scale_factor", "display_id", "window_id",
-                "active_application", "captured_application", "pid", "bundle_identifier", "name",
-                "permission", "capture_api", "deadline_seconds",
-            },
         }
+        self.assertIsNone(tools["screen_capture"].output_schema)
         for name, expected in expected_fields.items():
             schema = tools[name].output_schema
             self.assertIsNotNone(schema, name)
