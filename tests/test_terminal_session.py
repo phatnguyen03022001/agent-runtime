@@ -734,8 +734,11 @@ class FakeCallToolResult:
     pass
 class FakeImageContent:
     pass
+class FakeTextContent:
+    pass
 mcp_types.CallToolResult = FakeCallToolResult
 mcp_types.ImageContent = FakeImageContent
+mcp_types.TextContent = FakeTextContent
 mcp_exceptions = types.ModuleType('mcp.server.mcpserver.exceptions')
 class FakeToolError(Exception):
     pass

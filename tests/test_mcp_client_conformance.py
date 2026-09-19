@@ -92,13 +92,6 @@ EXPECTED_OUTPUT_FIELDS = {
         "expected_remote_head", "commit", "head", "remote_head_before", "remote_head_after",
         "network_used", "push_attempted", "published", "deadline_seconds",
     },
-    "screen_capture": {
-        "schema_version", "status", "target", "mime_type", "raw_bytes", "sha256",
-        "coordinate_space", "bounds", "x", "y", "width", "height", "pixel_width",
-        "pixel_height", "scale_factor", "display_id", "window_id", "active_application",
-        "captured_application", "pid", "bundle_identifier", "name", "permission",
-        "capture_api", "deadline_seconds",
-    },
 }
 
 
@@ -264,6 +257,9 @@ class MCPClientConformanceTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(sha["pattern"], "^[0-9a-f]{40}$")
 
             for name, tool in tools.items():
+                if name == "screen_capture":
+                    self.assertIsNone(tool.output_schema, name)
+                    continue
                 self.assertIsNotNone(tool.output_schema, name)
                 objects = [
                     node

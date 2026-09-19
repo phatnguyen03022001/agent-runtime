@@ -156,7 +156,7 @@ class ModernCutoverTests(unittest.TestCase):
                 fx["candidate"], fx["handoff"], target_app=fx["target"],
                 ui_plist=fx["ui"], runtime_plist=fx["runtime"], state_dir=fx["state_dir"],
                 transaction_dir=fx["transaction"], home=fx["home"], launchctl=fx["launchctl"],
-                tunnel_client=Path("/usr/bin/true"), uid=501, fail_stages=set(fail_stages),
+                uid=501, fail_stages=set(fail_stages),
             )
 
     def test_legacy_to_modern_migration_removes_dual_ownership_and_preserves_pending_rollback(self) -> None:

@@ -61,7 +61,7 @@ from .protection import ProtectedRuntimeDenied
 from .repo_fast_forward import RepoFastForwardFailure, fast_forward_repository
 from .repo_observer import RepoObserverFailure, observe_repository
 from .repo_publish import RepoPublishFailure, publish_repository
-from .screen_capture import ScreenCaptureFailure, capture_screen
+from .screen_capture import ScreenCaptureFailure, capture_failure_result, capture_screen
 from .session import (
     control_terminal as _control_terminal,
     poll_terminal as _poll_terminal,
