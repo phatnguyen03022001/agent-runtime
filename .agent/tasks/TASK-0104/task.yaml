@@ -1,0 +1,162 @@
+protocol_version: 3
+
+task_id: TASK-0104
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  predecessor_task: TASK-0103
+  gap_id: "chatgpt_plugin_refresh_end_to_end_mcp_acceptance"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: chatgpt_local_end_to_end_acceptance
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - verification
+  recommended:
+    - simplicity
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0103/review.yaml@63e3a150400c2705dd358c774535c31a65f23345"
+    role: "Architect-accepted local bootstrap evidence. Exact successor remains schema-5 PENDING / APP_SWAPPED; local Runtime+tunnel bootstrap is sufficiently proven for ChatGPT.com plugin refresh plus end-to-end MCP acceptance."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0100/review.yaml@ef31de7bf124c2085ab037a34cb66f27470a3555"
+    role: "Accepted exact successor installation evidence."
+    precedence: 2
+  - source: ".agent/tasks/TASK-0098/review.yaml@66281456699d005f90b64f58d6ab2f2464bee676"
+    role: "Accepted immutable signed successor candidate."
+    precedence: 3
+
+structure_authority:
+  status: NOT_APPLICABLE
+  rationale: "Read-only ChatGPT.com plugin/MCP transport acceptance only. No implementation, lifecycle, configuration or product structure mutation is authorized."
+
+objective: "After the operator refreshes/reconnects the Agent Runtime plugin/connector in ChatGPT.com, prove the complete CHATGPT_LOCAL path by executing bounded read-only MCP tools through the refreshed plugin against the canonical local agent-runtime checkout. If the exact end-to-end probes succeed and bind the expected planning task identity, stop CHATGPT_LOCAL_ACTIVATION_PROVEN. Otherwise fail closed without lifecycle or plugin workaround."
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  location: LOCAL
+  transport: AGENT_RUNTIME
+
+preconditions:
+  - "The operator has refreshed/reconnected the Agent Runtime plugin/connector in ChatGPT.com before this task begins."
+  - "The chat executing this task exposes the refreshed Agent Runtime MCP tools."
+  - "The exact successor remains installed in schema-5 PENDING / APP_SWAPPED state; this task does not mutate or commit that transaction."
+
+scope:
+  required_changes:
+    - "Fresh-resolve TASK-0104 at the exact planning HEAD from GitHub before using Agent Runtime."
+    - "Do not perform local lifecycle diagnostics through Codex, Desktop Commander or another out-of-band surface in this task. The point of this task is to prove CHATGPT_LOCAL itself."
+    - "Require the Agent Runtime plugin/tool namespace to be available in the current ChatGPT chat. If it is unavailable after the operator refresh, stop CURRENT_PHASE_CAPABILITY_UNAVAILABLE; do not switch surfaces."
+    - "Through the Agent Runtime MCP transport, invoke repo_observer exactly once against cwd=/Users/tienphat/Developer/agent-runtime with max_paths=20."
+    - "Require repo_observer to return the canonical repository identity, branch dev, local HEAD equal to the exact TASK-0104 planning HEAD, and no contradictory dirty/divergent state that would make the binding ambiguous."
+    - "Through the same Agent Runtime MCP transport, invoke fs_read_batch exactly once against cwd=/Users/tienphat/Developer/agent-runtime to read the bounded opening lines of .agent/tasks/TASK-0104/task.yaml sufficient to prove task_id=TASK-0104, task_revision=1, state=APPROVED and the exact objective/surface binding."
+    - "Do not use terminal_exec, terminal_start, terminal_control, repo_fast_forward, screen_capture or any destructive/open-world MCP tool."
+    - "If both MCP calls return valid typed responses and bind the exact local checkout/task identity, terminal is exactly CHATGPT_LOCAL_ACTIVATION_PROVEN."
+    - "If the Agent Runtime plugin exists but either MCP call fails, returns transport/session/authentication error, reaches the wrong repository/task identity, or cannot produce the required typed result, terminal is END_TO_END_MCP_UNPROVEN."
+    - "Do not retry a failed MCP call more than once. Each required probe has authority 0/1."
+    - "After probing, persist TASK-0104 report on dev using ordinary authorized GitHub publication; report publication does not imply commit-cutover."
+    - "Stop after the report. Commit-cutover is a separate Architect-authorized consequence."
+
+probe_authority:
+  repo_observer: "0/1"
+  fs_read_batch: "0/1"
+  lifecycle_mutation: "NONE"
+  plugin_mutation: "NONE"
+  commit_cutover: "NONE"
+
+invariants:
+  - "Target repository is agent-runtime only."
+  - "Execution surface is CHATGPT_LOCAL."
+  - "Agent Runtime plugin refresh/reconnect occurs before task execution as a user/session boundary; the task itself does not automate or repeat the refresh."
+  - "Successful local MCP probes prove ChatGPT.com -> plugin/connector -> OpenAI secure tunnel -> local Agent Runtime -> MCP execution."
+  - "PENDING transaction remains preserved."
+  - "No install/reinstall/restart/stop/signal/rollback/resume/recover/commit-cutover occurs."
+  - "No ServiceManagement, launchd, runtime.env, desired-state, installed app or tunnel mutation occurs."
+  - "No Stage B, screen_capture, TCC, click, type or scroll occurs."
+  - "No Codex or alternate execution surface is used as fallback."
+  - "main, tags, releases and sibling repositories remain unchanged."
+
+forbidden_changes:
+  - "Do not invoke lifecycle commands."
+  - "Do not mutate or refresh the plugin from inside this task."
+  - "Do not switch to CODEX_LOCAL, CHATGPT_GITHUB, Remote Desktop Commander or operator Terminal to simulate the MCP proof."
+  - "Do not use repo_fast_forward or terminal tools."
+  - "Do not invoke screen_capture."
+  - "Do not perform Stage B or visual control."
+  - "Do not commit-cutover."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Refreshed Agent Runtime plugin/MCP tools are available to CHATGPT_LOCAL."
+    evidence_required: "Current ChatGPT session can invoke the required Agent Runtime MCP tools without fallback."
+  - id: AC-2
+    requirement: "repo_observer executes end-to-end through Agent Runtime and binds exact canonical local task checkout."
+    evidence_required: "One typed repo_observer result with dev and exact TASK-0104 planning HEAD."
+  - id: AC-3
+    requirement: "fs_read_batch executes end-to-end through the same Agent Runtime transport and reads exact TASK-0104 identity."
+    evidence_required: "One typed fs_read_batch result showing bounded task.yaml lines with task_id/revision/state and matching execution surface/objective."
+  - id: AC-4
+    requirement: "Successful task stops CHATGPT_LOCAL_ACTIVATION_PROVEN with zero lifecycle/plugin/product mutation."
+    evidence_required: "Probe counters 1/1 each, forbidden lifecycle/plugin mutation counts 0, PENDING preserved by authority."
+
+verification:
+  executor_checks:
+    - id: CHECK-AUTHORITY
+      command_or_check: "Resolve exact TASK-0104 planning HEAD from GitHub."
+      required: true
+    - id: CHECK-PLUGIN
+      command_or_check: "Prove Agent Runtime MCP tool availability in current ChatGPT session."
+      required: true
+    - id: CHECK-REPO-PROBE
+      command_or_check: "One repo_observer MCP call against canonical local checkout."
+      required: true
+    - id: CHECK-FILE-PROBE
+      command_or_check: "One fs_read_batch MCP call reading bounded TASK-0104 task identity."
+      required: true
+    - id: CHECK-FINAL
+      command_or_check: "Publish truthful TASK-0104 report and stop."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect review before commit-cutover."
+    expected_signal: "CHATGPT_LOCAL_ACTIVATION_PROVEN"
+
+capability_requirements:
+  EXECUTION:
+    - repository_content_read
+    - agent_runtime_mcp_read
+    - remote_ref_read
+  REVIEW:
+    - repository_content_read
+    - repository_content_write
+    - remote_ref_read
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
