@@ -1,0 +1,252 @@
+protocol_version: 3
+
+task_id: TASK-0100
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  predecessor_task: TASK-0099
+  gap_id: "runtime_independent_bootstrap_and_plugin_refresh_handoff"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: runtime_bootstrap_recovery
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - verification
+  - simplicity
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - verification
+    - debugging
+  recommended:
+    - simplicity
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0098/review.yaml@66281456699d005f90b64f58d6ab2f2464bee676"
+    role: "Architect-accepted immutable signed non-installed successor candidate."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0099/review.yaml@fc2abcb4217f34a54ccb8c7f51a3b93ef24261d5"
+    role: "Accepted capability-terminal evidence proving CHATGPT_LOCAL cannot bootstrap Agent Runtime while its own transport is unhealthy; TASK-0099 lifecycle authority remained unconsumed."
+    precedence: 2
+  - source: "Current install.sh and macos/candidate_cutover.py at TASK-0100 planning source"
+    role: "Canonical prebuilt cutover implementation. Read-only Architect inspection proved install.sh requires tunnel-client for --install-prebuilt while candidate_cutover.py only accepts/plumbs tunnel_client and never consumes it."
+    precedence: 3
+  - source: "Apple SMAppService update contract as independently researched"
+    role: "Changed embedded LaunchAgent executable/plist requires re-registration; executable changes should unregister to completion before registering the current owner generation. Existing candidate_cutover lifecycle ordering remains canonical."
+    precedence: 4
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing install.sh + macos/candidate_cutover.py + focused tests"
+  rationale: "This task removes one proven dead bootstrap dependency from the existing canonical installer and then uses that same installer. No new bootstrap framework, daemon, execution surface, lifecycle controller or package format is introduced."
+
+objective: "Make canonical prebuilt installation independent of an unnecessary tunnel-client executable precondition, verify that correction narrowly, then install the exact TASK-0098 accepted successor once from a Runtime-independent CODEX_LOCAL execution surface. Prove local Runtime plus tunnel health and stop at CHATGPT_PLUGIN_REFRESH_REQUIRED so ChatGPT.com can refresh/reconnect the Agent Runtime plugin before any end-to-end MCP acceptance or commit-cutover."
+
+accepted_successor:
+  candidate_sha256: "496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c"
+  source_revision: "b0dec3e556ff914fb9ca041c6b52f53c04ee3fd2"
+  source_tree: "087af89591d0959c07124b0154cfb8f77b27c3d4"
+  requirements_lock_sha256: "80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
+  app_closure_record_count: 1229
+  app_closure_sha256: "bebb19c204f1f4238351b869b8fd99d708543a808f9cfd505d977fa3bb7f5e2f"
+  handoff_sha256: "68c5266a2eee23708405c243b9178f548f3024cc3f6375cb4b498712c6d87c41"
+  app_path: "build/candidates/496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c/Agent Runtime.app"
+  handoff_path: "build/candidates/496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c/Agent Runtime.candidate.json"
+
+bootstrap_route:
+  execution_surface: CODEX_LOCAL
+  selection_reason: "Predeclared Runtime-independent local native execution for this task. This is initial task routing, not a retry of a blocked TASK-0099 CHATGPT_LOCAL consequence."
+  chatgpt_local_eligible_before_task: false
+  activation_requires_plugin_refresh_and_end_to_end_mcp_after_this_task: true
+
+authority_counters:
+  implementation_mutation: "0/1"
+  install_prebuilt: "0/1"
+  commit_cutover: "NONE"
+  rollback: "NONE"
+  resume: "NONE"
+  recover: "NONE"
+  manual_service_management_mutation: "NONE"
+  direct_launchctl_mutation: "NONE"
+
+scope:
+  required_changes:
+    - "Fresh-bind exact TASK-0100 planning HEAD, dev/main refs, one canonical clean worktree, no Git lock and exact TASK-0098 accepted successor."
+    - "Prove the dead dependency before mutation: install.sh --install-prebuilt currently requires command -v tunnel-client and passes --tunnel-client to candidate_cutover.py; candidate_cutover.py accepts/plumbs tunnel_client but contains no semantic use of that value."
+    - "Perform exactly one bounded implementation correction: remove the tunnel-client existence requirement and dead --tunnel-client plumbing from the --install-prebuilt cutover path. Do not alter Runtime tunnel configuration, normal non-prebuilt install requirements, lifecycle ordering, candidate validation, ServiceManagement logic, transaction semantics or health semantics."
+    - "Update only focused tests necessary to prove prebuilt cutover no longer requires tunnel-client and all existing cutover semantics remain intact."
+    - "Run focused affected tests first. Run broader affected candidate-cutover/surface-script tests only as needed for handoff confidence; do not rerun unrelated full-suite verification unless a focused failure or canonical contract explicitly requires it."
+    - "Before lifecycle mutation, require exact accepted candidate/handoff canonical identities using repository-native validation. Candidate original remains immutable and is never rebuilt or re-signed."
+    - "Commit the bounded implementation/test correction on dev before live installation so the exact installer source used for lifecycle consequence is durable and reconstructible. Fresh-resolve remote dev before push; non-force only."
+    - "After implementation publication, fresh-bind the exact published implementation commit and invoke exactly once: ./install.sh --install-prebuilt 'build/candidates/496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c/Agent Runtime.app' 'build/candidates/496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c/Agent Runtime.candidate.json'. No retry."
+    - "The canonical installer owns live consequence-boundary validation, transactional predecessor refresh, app replacement and current-owner ServiceManagement registration."
+    - "If install-prebuilt is rejected before mutation or returns failure, preserve its exact resulting state and stop BLOCKED_AFTER_SUCCESSOR_INSTALL. Do not manually repair, rollback, resume or recover."
+    - "If installation succeeds, require schema 5 / PENDING / APP_SWAPPED, installed successor bound exactly to TASK-0098 identity, valid rollback predecessor evidence, immutable source candidate unchanged, and runtime.env/desired-state preserved."
+    - "After successful validated PENDING install, run an exact local activation window of at most 60 observations with exactly 250 ms sleep before each observation and no observation 61. Observe ServiceManagement owner status when available, exactly one 127.0.0.1:8080 listener, healthz, readyz, and tunnel-client process/connection identity using existing repository/system diagnostics without mutating tunnel state."
+    - "Local activation PASS requires: Runtime ownership has no error state; listener count=1; healthz=200; readyz=200; exactly one canonical tunnel-client generation is active and bound to the expected Agent Runtime tunnel identity/config. Do not claim ChatGPT plugin/MCP acceptance from local health."
+    - "If local activation does not converge by observation 60, stop BLOCKED_AFTER_SUCCESSOR_INSTALL_BASELINE with PENDING preserved. No reinstall, restart, launchctl repair, ServiceManagement manual refresh, rollback, resume, recover or commit-cutover."
+    - "If local Runtime+tunnel activation passes, stop exactly CHATGPT_PLUGIN_REFRESH_REQUIRED. Preserve PENDING. This terminal means local product bootstrap succeeded but ChatGPT.com plugin/connector refresh and end-to-end MCP proof are still required before CHATGPT_LOCAL is usable."
+    - "Publish TASK-0100 report on dev. Do not commit-cutover in this task."
+
+  allowed_existing_files_or_components:
+    - "install.sh"
+    - "macos/candidate_cutover.py"
+    - "tests/test_candidate_cutover.py"
+    - "tests/test_surface_and_scripts.py"
+    - "existing package/provenance validation tooling"
+    - "build/candidates/496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c/** immutable"
+    - "build/.task-0100-* ignored evidence"
+    - "~/Applications/Agent Runtime.app only through canonical install-prebuilt"
+    - "~/Library/Application Support/Agent Runtime/cutover-transaction only through canonical installer; read-only afterward"
+    - "~/Library/Application Support/Agent Runtime/runtime.env read-only"
+    - "~/Library/Application Support/Agent Runtime/protected-runtime-running read-only"
+    - ".agent/tasks/TASK-0100/report.yaml"
+  expected_files_are_restrictive: true
+
+invariants:
+  - "Target repository is agent-runtime only."
+  - "CODEX_LOCAL is selected before any TASK-0100 local lifecycle consequence."
+  - "The exact TASK-0098 successor remains immutable."
+  - "The only implementation semantic change is removal of the proven unused tunnel-client precondition/plumbing from prebuilt cutover."
+  - "Normal Runtime tunnel operation and normal non-prebuilt installation still require tunnel-client where semantically needed."
+  - "install-prebuilt is exactly 0/1 -> 1/1."
+  - "Successful install remains schema5/PENDING/APP_SWAPPED."
+  - "commit-cutover, rollback, resume, recover, manual SMAppService mutation and direct launchctl mutation are forbidden."
+  - "Local Runtime/tunnel health is necessary but insufficient for CHATGPT_LOCAL activation."
+  - "CHATGPT_PLUGIN_REFRESH_REQUIRED is the successful TASK-0100 lifecycle terminal."
+  - "No Stage-B image-host proof, screen_capture invocation, TCC mutation, click, type or scroll occurs in this task."
+  - "main, tags, releases, sibling repositories and architect-profile remain unchanged."
+
+forbidden_changes:
+  - "Do not modify architect-profile, agent-skills, agent-standards, agent-documents, PortBar or any sibling repository."
+  - "Do not add a bootstrap daemon, new execution surface, lifecycle controller or alternate installer."
+  - "Do not rebuild, mutate or re-sign accepted candidate."
+  - "Do not invoke install-prebuilt more than once."
+  - "Do not invoke commit-cutover, rollback-cutover, resume-cutover or recover-partial-cutover."
+  - "Do not manually invoke --service-management register/unregister operations outside canonical installer behavior."
+  - "Do not use launchctl bootout/bootstrap/kickstart/enable/disable as repair."
+  - "Do not run Runtime helper, start.sh or tunnel-client manually to force health."
+  - "Do not refresh ChatGPT.com plugin/connector from CODEX_LOCAL or claim end-to-end MCP acceptance."
+  - "Do not perform Stage B, screen_capture, TCC, click/type/scroll."
+  - "Do not switch execution surface during this task merely because a platform operation is blocked."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files: []
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "Only existing implementation/tests plus TASK-0100 report may change; ignored build evidence is untracked."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact task/Git/candidate binding and dead tunnel-client prebuilt dependency are proven."
+    evidence_required: "Exact refs, candidate identity, and source evidence showing tunnel_client is accepted/plumbed but unused."
+  - id: AC-2
+    requirement: "Prebuilt cutover no longer requires or plumbs unused tunnel-client while all other lifecycle semantics remain unchanged."
+    evidence_required: "Minimal diff plus focused regression PASS."
+  - id: AC-3
+    requirement: "The implementation correction is durably published before live lifecycle execution."
+    evidence_required: "Exact implementation commit, non-force dev publication and fresh remote identity."
+  - id: AC-4
+    requirement: "Exact accepted successor is installed at most once through canonical install-prebuilt."
+    evidence_required: "One literal invocation or exact pre-host capability block; no retry."
+  - id: AC-5
+    requirement: "Successful install creates exact successor schema5/PENDING/APP_SWAPPED and preserves rollback/config/candidate invariants."
+    evidence_required: "Canonical transaction + installed candidate validation and preservation hashes."
+  - id: AC-6
+    requirement: "Local Runtime and OpenAI tunnel reach healthy canonical state in exact max 60x250ms activation window."
+    evidence_required: "No observation 61; ownership non-error, listener=1, 200/200 and exact singleton tunnel identity."
+  - id: AC-7
+    requirement: "Successful task stops at CHATGPT_PLUGIN_REFRESH_REQUIRED without commit-cutover or end-to-end MCP claim."
+    evidence_required: "PENDING preserved; forbidden lifecycle counts 0; report terminal exact."
+
+verification:
+  executor_checks:
+    - id: CHECK-BASE
+      command_or_check: "Fresh exact Git/task/candidate binding and clean canonical worktree."
+      required: true
+    - id: CHECK-DEAD-DEPENDENCY
+      command_or_check: "Prove tunnel_client is dead plumbing in prebuilt cutover before editing."
+      required: true
+    - id: CHECK-IMPLEMENTATION
+      command_or_check: "Apply minimal removal and run focused affected tests."
+      required: true
+    - id: CHECK-PUBLISH-IMPLEMENTATION
+      command_or_check: "Commit/push exact bounded implementation correction and fresh-resolve dev."
+      required: true
+    - id: CHECK-INSTALL
+      command_or_check: "Invoke exact canonical install-prebuilt once only."
+      required: true
+    - id: CHECK-PENDING
+      command_or_check: "Validate exact installed successor and PENDING transaction."
+      required: true
+    - id: CHECK-LOCAL-ACTIVATION
+      command_or_check: "Exact maximum 60-by-250ms Runtime+tunnel health proof."
+      required: true
+    - id: CHECK-FINAL
+      command_or_check: "Publish truthful TASK-0100 report and stop at exact terminal."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect review followed by ChatGPT.com plugin refresh and separate end-to-end MCP acceptance task."
+    expected_signal: "CHATGPT_PLUGIN_REFRESH_REQUIRED if local Runtime+tunnel bootstrap succeeds."
+
+capability_requirements:
+  EXECUTION:
+    - repository_content_read
+    - repository_content_write
+    - native_repository_execution
+    - git_history_read
+    - remote_ref_read
+  REVIEW:
+    - repository_content_read
+    - repository_content_write
+    - git_history_read
+    - remote_ref_read
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
