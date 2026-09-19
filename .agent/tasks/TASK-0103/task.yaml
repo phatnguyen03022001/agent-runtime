@@ -1,0 +1,160 @@
+protocol_version: 3
+
+task_id: TASK-0103
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  predecessor_task: TASK-0102
+  gap_id: "prove_activation_without_environment_sensitive_codesign_trust_gate"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: installed_successor_activation_proof
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - verification
+  recommended:
+    - simplicity
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0102/review.yaml@935aad60cd2ae4bd2dfe090fd7711b1d0268fff0"
+    role: "Architect-accepted evidence that CODEX_LOCAL strict codesign trust evaluation can false-block this exact development-signed installed candidate; fresh Architect strict verification passed three consecutive times on the same bytes."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0098/review.yaml@66281456699d005f90b64f58d6ab2f2464bee676"
+    role: "Accepted immutable signed successor candidate."
+    precedence: 2
+  - source: ".agent/tasks/TASK-0100/review.yaml@ef31de7bf124c2085ab037a34cb66f27470a3555"
+    role: "Accepted exact install-prebuilt success and preserved schema-5 PENDING / APP_SWAPPED transaction."
+    precedence: 3
+  - source: ".agent/tasks/TASK-0101/review.yaml@d7115787b1867cae38f96228623355e6e8c00b46"
+    role: "Accepted evidence that convergence and stability must be separate because the MCP child may appear after the tunnel root during startup."
+    precedence: 4
+
+structure_authority:
+  status: NOT_APPLICABLE
+  rationale: "Read-only activation proof only."
+
+objective: "Read-only prove that the exact already-installed accepted successor has a correct and stable local Runtime+tunnel activation state. Do not repeat environment-sensitive certificate trust evaluation inside CODEX_LOCAL. If exact installed candidate closure/config identity passes, the complete volatile predicate converges, and then remains stable, stop CHATGPT_PLUGIN_REFRESH_REQUIRED."
+
+installed_successor:
+  candidate_sha256: "496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c"
+  transaction:
+    schema: 5
+    status: PENDING
+    phase: APP_SWAPPED
+  accepted_tunnel_fingerprint: "6aa2b81d6dd8"
+  expected_runtime_root: "~/Applications/Agent Runtime.app/Contents/Resources/runtime"
+
+scope:
+  required_changes:
+    - "Fresh-bind exact TASK-0103 planning HEAD, current dev/main, accepted TASK-0102 review and clean single canonical worktree."
+    - "Read-only only. No lifecycle, product, configuration or implementation mutation is authorized."
+    - "Require cutover transaction schema=5/status=PENDING/phase=APP_SWAPPED and exact accepted candidate SHA-256."
+    - "Prove installed app external byte/permission closure equals the exact accepted TASK-0098 source candidate using the repository's trust-independent closure/digest semantics. Do not invoke a check whose result depends on certificate trust-chain evaluation."
+    - "Do not run codesign --verify, spctl, security trust evaluation, notarization assessment or any equivalent trust-chain gate in this task. TASK-0102 Architect review owns that evidence boundary."
+    - "Require runtime.env regular non-symlink mode 0600, SHA-256 equal to transaction runtime_config identity, and CONTROL_PLANE_TUNNEL_ID fingerprint exactly 6aa2b81d6dd8 without printing secrets."
+    - "Define volatile predicate as: main_app=enabled; runtime_agent=enabled; exactly one canonical tunnel-client root; accepted repository-recognized tunnel argv targeting installed package-owned Runtime with poll-channel main, MCP channel main and health address 127.0.0.1:8080; exactly one direct installed-Python agent_runtime.server child; child shares tunnel process group; exactly one attributable listener on 127.0.0.1:8080; healthz=200; readyz=200."
+    - "CONVERGENCE: at most 40 observations, exactly 250 ms sleep before each observation, no observation 41. Early false volatile predicates are not terminal. Succeed at first observation where all volatile predicates are simultaneously true. If no full PASS by observation 40, stop TUNNEL_ACTIVATION_UNPROVEN and record all false subpredicates at observation 40."
+    - "STABILITY: only after convergence. Run exactly 20 additional observations, exactly 250 ms sleep before each observation, no stability observation 21. Every volatile subpredicate must remain true."
+    - "If stability fails, stop TUNNEL_STABILITY_UNPROVEN and record exact first failing stability observation/subpredicate."
+    - "If convergence and all 20 stability observations pass, stop exactly CHATGPT_PLUGIN_REFRESH_REQUIRED."
+    - "After terminal, prove transaction metadata and runtime.env SHA-256 unchanged and no lifecycle/plugin mutation occurred."
+    - "Publish TASK-0103 report on dev as the only tracked mutation."
+
+invariants:
+  - "TASK-0100 install authority remains consumed 1/1."
+  - "PENDING transaction remains preserved."
+  - "No install/reinstall/restart/stop/signal/rollback/resume/recover/commit-cutover occurs."
+  - "No ServiceManagement or launchd mutation occurs."
+  - "No runtime.env, desired-state, candidate or installed app mutation occurs."
+  - "No ChatGPT.com plugin refresh occurs."
+  - "No MCP semantic acceptance, Stage B, screen_capture, TCC, click, type or scroll occurs."
+  - "No full tunnel ID or API key is disclosed."
+  - "No codesign/spctl/security trust-chain assessment is performed by Executor."
+  - "main, tags, releases and sibling repositories remain unchanged."
+
+forbidden_changes:
+  - "Do not invoke install-prebuilt, commit-cutover, rollback, resume or recover."
+  - "Do not mutate ServiceManagement or launchd."
+  - "Do not launch, restart, stop, kill or signal Runtime/tunnel processes."
+  - "Do not run start.sh lifecycle or tunnel-client commands."
+  - "Do not modify runtime.env or desired-state."
+  - "Do not run codesign --verify, spctl or equivalent certificate trust assessment."
+  - "Do not refresh/reconnect ChatGPT.com plugin."
+  - "Do not perform end-to-end MCP acceptance, Stage B, screen_capture, TCC or visual control."
+  - "Do not edit implementation/tests/docs or sibling repositories."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact installed candidate/config identity passes using trust-independent closure evidence."
+    evidence_required: "Transaction/candidate closure/runtime.env/fingerprint evidence."
+  - id: AC-2
+    requirement: "Complete volatile predicate converges within max 40x250ms."
+    evidence_required: "First all-PASS observation or exact false predicates at observation 40."
+  - id: AC-3
+    requirement: "After convergence, complete volatile predicate remains true for exactly 20x250ms."
+    evidence_required: "20/20 PASS or exact first failing stability observation."
+  - id: AC-4
+    requirement: "Successful task stops CHATGPT_PLUGIN_REFRESH_REQUIRED with zero lifecycle/plugin mutation."
+    evidence_required: "PENDING/config preservation and forbidden-action counts 0."
+
+verification:
+  executor_checks:
+    - id: CHECK-BASE
+      command_or_check: "Fresh exact task/dev/main/review binding."
+      required: true
+    - id: CHECK-IMMUTABLE
+      command_or_check: "Trust-independent exact installed candidate closure plus runtime.env/fingerprint proof."
+      required: true
+    - id: CHECK-CONVERGENCE
+      command_or_check: "Exact max 40-by-250ms convergence phase."
+      required: true
+    - id: CHECK-STABILITY
+      command_or_check: "Exactly 20-by-250ms stability observations after convergence."
+      required: true
+    - id: CHECK-PRESERVATION
+      command_or_check: "Prove PENDING/config/lifecycle/plugin state preserved."
+      required: true
+    - id: CHECK-FINAL
+      command_or_check: "Publish truthful TASK-0103 report and stop."
+      required: true
+
+capability_requirements:
+  EXECUTION:
+    - repository_content_read
+    - native_repository_execution
+    - git_history_read
+    - remote_ref_read
+  REVIEW:
+    - repository_content_read
+    - repository_content_write
+    - git_history_read
+    - remote_ref_read
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
