@@ -1,0 +1,146 @@
+protocol_version: 3
+
+task_id: TASK-0100
+task_revision: 1
+report_revision: 1
+state: REPORTED
+terminal: BLOCKED_AFTER_SUCCESSOR_INSTALL_BASELINE
+
+task_source:
+  path: .agent/tasks/TASK-0100/task.yaml
+  planning_head: d754bb95a220aa83571484e2f0b57d594bc306d6
+  source: "GitHub origin object d754bb95a220aa83571484e2f0b57d594bc306d6"
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: dev
+  execution_surface: CODEX_LOCAL
+  authorized_base_head: d754bb95a220aa83571484e2f0b57d594bc306d6
+  implementation_commit: 8fc58fa0851e659a6f992a5cc6bb47eeb402a2a3
+  remote_dev_before_implementation: d754bb95a220aa83571484e2f0b57d594bc306d6
+  remote_dev_after_implementation: 8fc58fa0851e659a6f992a5cc6bb47eeb402a2a3
+  remote_main: c49d777efa09db7f6c51bd8d8616db4623499fb8
+  clean_worktree_and_no_git_lock_before_install: true
+
+accepted_successor:
+  candidate_sha256: 496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c
+  source_revision: b0dec3e556ff914fb9ca041c6b52f53c04ee3fd2
+  source_tree: 087af89591d0959c07124b0154cfb8f77b27c3d4
+  requirements_lock_sha256: 80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e
+  handoff_sha256: 68c5266a2eee23708405c243b9178f548f3024cc3f6375cb4b498712c6d87c41
+  repository_native_validation_before_install: PASS
+  repository_native_record_count: 1034
+  immutable_source_handoff_sha256_after_install: 68c5266a2eee23708405c243b9178f548f3024cc3f6375cb4b498712c6d87c41
+
+dead_dependency_proof:
+  before_mutation:
+    install_prebuilt: "install.sh required command -v tunnel-client and forwarded --tunnel-client."
+    candidate_cutover: "cutover_candidate accepted tunnel_client; argparse accepted --tunnel-client; main only forwarded it; no semantic use existed."
+  bounded_correction:
+    - "Removed the --install-prebuilt tunnel-client existence check and argument forwarding."
+    - "Removed the unused cutover function parameter, CLI option, and invocation plumbing."
+    - "Kept normal non-prebuilt tunnel-client requirement intact."
+  changed_files:
+    - install.sh
+    - macos/candidate_cutover.py
+    - tests/test_candidate_cutover.py
+    - tests/test_surface_and_scripts.py
+
+implementation_verification:
+  candidate_cutover_suite:
+    command: "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. python3 -m unittest discover -s tests -p 'test_candidate_cutover.py' -v"
+    result: "PASS; 86 tests"
+  focused_surface_regression:
+    command: "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=tests:. .venv/bin/python -m unittest -v test_surface_and_scripts.SurfaceAndScriptsTests.test_start_uses_launchd_singleton_and_canonical_env_backed_serve_mode"
+    result: "PASS; 1 test"
+  syntax_and_compile:
+    command: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m py_compile macos/candidate_cutover.py tests/test_candidate_cutover.py tests/test_surface_and_scripts.py && bash -n install.sh && git diff --check"
+    result: PASS
+  broader_surface_suite:
+    result: "PARTIAL; 18 tests passed and one pre-existing environment dependency mismatch prevented import of agent_runtime.server (mcp.types lacks ImageContent). No dependency change was made."
+
+publication:
+  implementation_commit: 8fc58fa0851e659a6f992a5cc6bb47eeb402a2a3
+  implementation_push: "PASS; non-force origin dev:dev"
+  exact_published_binding_before_install: PASS
+
+lifecycle:
+  install_prebuilt_authority: "1/1"
+  install_prebuilt_invocations: 1
+  install_prebuilt_command: "./install.sh --install-prebuilt 'build/candidates/496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c/Agent Runtime.app' 'build/candidates/496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c/Agent Runtime.candidate.json'"
+  install_prebuilt_result: "PASS; canonical installer returned status PENDING."
+  transaction:
+    schema: 5
+    status: PENDING
+    phase: APP_SWAPPED
+    installed_candidate_sha256: 496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c
+    rollback_predecessor:
+      app_present: true
+      closure_record_count: 1224
+      closure_sha256: 56a94498ce74b8337394e4bfaf4c8d69bdefaaf26429352ea3f8218a47621bf2
+    runtime_env:
+      mode: "0600"
+      sha256: 6e6fef8e255b140f28703f8bd515726e1fd93d644e6f838b33ebf319e8133077
+      matches_transaction_identity: true
+    desired_state:
+      present: true
+      sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+      matches_transaction_presence: true
+    transaction_handoff_sha256: 68c5266a2eee23708405c243b9178f548f3024cc3f6375cb4b498712c6d87c41
+  post_install_standalone_provenance_read:
+    result: "INCONCLUSIVE; one read-only validate-candidate attempt returned strict deep code-signature verification failure after the installer had already returned PENDING. It was not retried."
+    canonical_installer_validation: "The successful PENDING result was emitted only after the canonical installer's after-swap installed-candidate validation."
+
+local_activation:
+  schedule: "At most 60 observations; sleep 250 ms before every observation."
+  observations: 60
+  observation_61: false
+  ownership_state: "enabled throughout"
+  listener_127_0_0_1_8080_count: 1
+  healthz: 200
+  readyz: 200
+  canonical_singleton_tunnel_identity: false
+  result: "FAIL; the tunnel identity/config predicate remained false for all 60 observations."
+  action_after_failure: "No diagnostic retry, Runtime/tunnel restart, launchd mutation, ServiceManagement mutation, rollback, resume, recover, reinstall, or commit-cutover was performed."
+
+forbidden_lifecycle_actions:
+  commit_cutover: 0
+  rollback: 0
+  resume: 0
+  recover: 0
+  manual_service_management_mutation: 0
+  direct_launchctl_mutation: 0
+  manual_runtime_helper_start_or_tunnel_client: 0
+  chatgpt_plugin_refresh: 0
+  mcp_semantic_acceptance: 0
+  screen_capture: 0
+  tcc_mutation: 0
+  stage_b: 0
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    result: PASS
+    evidence: "Exact GitHub task/ref binding, accepted candidate identity, and pre-mutation dead-plumbing proof were recorded."
+  - criterion_id: AC-2
+    result: PASS
+    evidence: "The minimal four-file correction removes only prebuilt tunnel-client dependency/plumbing; cutover suite and focused regression pass."
+  - criterion_id: AC-3
+    result: PASS
+    evidence: "Implementation commit 8fc58fa0851e659a6f992a5cc6bb47eeb402a2a3 was pushed non-force and fresh-bound on origin/dev before installation."
+  - criterion_id: AC-4
+    result: PASS
+    evidence: "The literal canonical install-prebuilt command reached the host once and returned PENDING; no retry occurred."
+  - criterion_id: AC-5
+    result: PARTIAL
+    evidence: "Canonical installer result and metadata prove schema 5/PENDING/APP_SWAPPED, successor identity, rollback envelope, and config/desired-state preservation. The one separate post-install strict provenance read was inconclusive and was not retried."
+  - criterion_id: AC-6
+    result: FAIL
+    evidence: "All 60 scheduled observations had enabled ownership, one listener, and 200/200 health/readiness, but none met the exact canonical singleton tunnel identity/config predicate."
+  - criterion_id: AC-7
+    result: BLOCKED
+    evidence: "PENDING is preserved, but local activation did not pass; CHATGPT_PLUGIN_REFRESH_REQUIRED is therefore not reached."
+
+final:
+  terminal: BLOCKED_AFTER_SUCCESSOR_INSTALL_BASELINE
+  pending_transaction_preserved: true
+  next_authority: "Architect review; no local lifecycle retry is authorized by this task."
