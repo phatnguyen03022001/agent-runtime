@@ -1,13 +1,14 @@
 protocol_version: 3
 
 task_id: TASK-0107
-task_revision: 1
+task_revision: 2
 state: APPROVED
 
 origin:
-  type: architect_followup
-  predecessor_task: TASK-0106
-  gap_id: "blind_live_production_screen_capture_host_compatibility"
+  type: architect_recovery
+  task_id: TASK-0107
+  predecessor_revision: 1
+  gap_id: "explicit_agent_runtime_app_attachment_before_blind_live_screen_capture"
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -36,31 +37,52 @@ execution_skills:
     - simplicity
 
 authority_sources:
-  - source: ".agent/tasks/TASK-0106/review.yaml@5ab6c18bcb7eff57203a667bf24337d0c5b5e6de"
-    role: "Architect-accepted postcommit CHATGPT_LOCAL continuity; successor cutover lifecycle complete and Stage B ready."
+  - source: ".agent/tasks/TASK-0107/review.yaml@3231ccec5c3b64b34cca30f927d61a59bdc310e0"
+    role: "Architect-accepted revision-1 capability terminal. No host/tool consequence was consumed; Agent Runtime app permissions are Allow all actions; failure was session tool-surface non-exposure."
     precedence: 1
+  - source: ".agent/tasks/TASK-0106/review.yaml@5ab6c18bcb7eff57203a667bf24337d0c5b5e6de"
+    role: "Architect-accepted postcommit CHATGPT_LOCAL continuity."
+    precedence: 2
   - source: ".agent/tasks/TASK-0096/review.yaml@66d72e2b11606583e14e7f89ea62aee8fa3823a5"
     role: "Architect-accepted production screen_capture source/package implementation."
-    precedence: 2
-  - source: ".agent/tasks/TASK-0097/task.yaml@7d970af9e924a317e5ccfa6c260d926033475967"
-    role: "Original blind Stage-B proof contract and expected-token embargo. Its temporary custom-MCP route is superseded because production CHATGPT_LOCAL is now activated and screen_capture is available."
     precedence: 3
-  - source: "tests/fixtures/task0087-visual.png"
-    role: "Accepted deterministic visual-only blind challenge fixture."
+  - source: ".agent/tasks/TASK-0097/task.yaml@7d970af9e924a317e5ccfa6c260d926033475967"
+    role: "Original blind-proof boundary and expected-token embargo."
     precedence: 4
+
+supersession:
+  revision1:
+    planning_head: "b11751b8c9848dabd807717134c844852d1c88f1"
+    terminal: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    report_commit: "949b8b003e8912b6f101db6d0d3c840a7aee1049"
+    fixture_open_terminal_exec: "0/1"
+    screen_capture: "0/1"
+    host_consequence_reached: false
+    reason: "The executing ChatGPT session did not expose Agent Runtime terminal_exec or screen_capture. Revision 2 adds an explicit same-chat Agent Runtime app attachment precondition; it does not retry a blocked host operation because no host operation occurred in revision 1."
 
 structure_authority:
   status: RESOLVED
-  source: "Existing production screen_capture tool plus existing TASK-0087 deterministic fixture."
-  rationale: "No temporary MCP app or production implementation change is required. The live production path is a stronger integration proof than the previously blocked isolated-host route."
+  source: "Existing production screen_capture tool plus deterministic TASK-0087 fixture."
+  rationale: "No implementation change is required."
 
-objective: "Blindly prove or fail the actual production path ChatGPT.com -> Agent Runtime plugin -> secure tunnel -> local Agent Runtime -> production screen_capture -> MCP ImageContent -> model vision, using the existing deterministic visual-only TASK-0087 fixture. Preserve expected-token blindness until independent Architect review."
+objective: "With the Agent Runtime app explicitly attached to the exact executing ChatGPT chat before task start, blindly prove or fail the production image path ChatGPT.com -> attached Agent Runtime app -> secure tunnel -> local Agent Runtime -> production screen_capture -> MCP PNG ImageContent -> model vision."
 
 execution_surface:
   id: CHATGPT_LOCAL
   controller: CHATGPT
   location: LOCAL
   transport: AGENT_RUNTIME
+
+session_precondition:
+  operator_action_before_task: "Explicitly attach/select the Agent Runtime app in the exact new ChatGPT conversation that will execute TASK-0107 revision 2."
+  app_name: "Agent Runtime"
+  app_permission_observed_by_architect: "Allow all actions"
+  required_exposed_tools_before_execution:
+    - terminal_exec
+    - screen_capture
+  if_missing: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+  no_plugin_permission_change_authorized: true
+  no_runtime_or_tunnel_change_authorized: true
 
 blind_proof:
   challenge_fixture:
@@ -71,7 +93,7 @@ blind_proof:
     disclosure_before_observation: forbidden
     executor_comparison: forbidden
   model_facing_instruction: "Inspect the image returned by screen_capture and produce only the exact 8-character uppercase token visible in the pixels."
-  observation_rule: "Freeze the model's first semantic token candidate verbatim. Executor must not determine correctness or inspect the oracle. Independent Architect review performs the comparison only after report publication."
+  observation_rule: "Freeze the model's first semantic token candidate verbatim. Executor must not determine correctness or inspect the oracle."
 
 authority_counters:
   fixture_open_terminal_exec: "0/1"
@@ -83,90 +105,101 @@ authority_counters:
 
 scope:
   required_changes:
-    - "Resolve TASK-0107 revision 1 from GitHub at exact planning HEAD. Do not synchronize the local checkout."
-    - "Before any visual observation, preserve the expected-token embargo exactly. Do not read tests/test_image_transport.py, historical private/ignored handoff evidence, or any artifact/history containing the expected token or derivation. Do not search the repository for the token."
-    - "Before the screen_capture result, do not open/render/OCR/vision-inspect/decode the fixture through filesystem viewers, image tools, Python image libraries, browser data URLs, external models, screenshots, Quick Look or any route other than the authorized Preview -> production screen_capture path below."
-    - "The known fixture SHA-256 is authority metadata and may be verified without opening or decoding image pixels."
-    - "Invoke exactly one Agent Runtime terminal_exec to open the exact fixture in macOS Preview and allow a bounded one-second settle. The command may only perform /usr/bin/open -a Preview on the exact fixture path followed by /bin/sleep 1. It must not inspect, transform, OCR or read pixel content."
-    - "If the fixture-open terminal_exec is platform-blocked before Agent Runtime/host, stop CURRENT_PHASE_CAPABILITY_UNAVAILABLE. Do not use operator/manual or alternate-surface fallback."
-    - "After Preview settle, invoke production screen_capture exactly once with target=application_window and application_bundle_id=com.apple.Preview. Do not invoke frontmost/display/region fallback and do not retry."
-    - "If screen_capture returns typed SCREEN_CAPTURE_PERMISSION_REQUIRED, stop SCREEN_RECORDING_PERMISSION_REQUIRED. Do not mutate TCC, open System Settings automatically, retry, restart Runtime or use another capture path."
-    - "If screen_capture is platform-blocked before Agent Runtime/host, stop CURRENT_PHASE_CAPABILITY_UNAVAILABLE with no retry."
-    - "If screen_capture reaches Agent Runtime but returns another typed capture error or no semantic image result, record SCREEN_CAPTURE_LIVE_PROOF_UNPROVEN with exact non-sensitive typed evidence."
-    - "For a successful screen_capture result, require one PNG ImageContent semantic observation plus closed metadata indicating status=captured, permission=granted, capture_api=ScreenCaptureKit and target=application_window. Do not use metadata text as a token oracle."
-    - "The Executor/model must inspect only the image delivered by that production screen_capture result and freeze its first answer to the model_facing_instruction as observed_visual_token. Do not ask a leading retry or use OCR."
-    - "A syntactically valid candidate is exactly 8 uppercase ASCII characters. Syntax validity is not correctness. Executor must not self-score."
-    - "After the observation is frozen, still do not open/read/derive the expected-token oracle. Publish report with observed_visual_token verbatim and stop NEEDS_REVIEW."
-    - "Do not close, manipulate or automate Preview after observation; avoid adding a second GUI-control consequence. The operator may close the non-sensitive fixture window later."
+    - "Resolve TASK-0107 revision 2 from GitHub at exact planning HEAD."
+    - "Before any repository/local action, verify that the current ChatGPT conversation has the Agent Runtime app explicitly attached and that both terminal_exec and screen_capture are exposed by that attached app."
+    - "If either required tool is absent, stop CURRENT_PHASE_CAPABILITY_UNAVAILABLE immediately. Do not refresh permissions, reconnect Runtime, switch surface, use another app, or continue with partial capability."
+    - "Do not synchronize the local checkout."
+    - "Preserve expected-token blindness. Do not read tests/test_image_transport.py, expected-token derivation/history/private evidence, or search for the token."
+    - "Before production screen_capture observation, do not semantically inspect the fixture with OCR, image libraries, Quick Look, manual Preview inspection, browser rendering, another model or another capture path."
+    - "Known fixture SHA-256 may be verified without decoding pixels."
+    - "Invoke exactly one Agent Runtime terminal_exec whose only consequence is /usr/bin/open -a Preview on the exact fixture path followed by /bin/sleep 1. No semantic inspection, transform or OCR."
+    - "If fixture-open terminal_exec is platform-blocked before Agent Runtime/host, stop CURRENT_PHASE_CAPABILITY_UNAVAILABLE. No retry or fallback."
+    - "After Preview settle, invoke production screen_capture exactly once with target=application_window and application_bundle_id=com.apple.Preview."
+    - "No frontmost/display/region fallback and no retry."
+    - "If screen_capture returns SCREEN_CAPTURE_PERMISSION_REQUIRED, stop SCREEN_RECORDING_PERMISSION_REQUIRED. Do not mutate TCC or open System Settings automatically."
+    - "If screen_capture is platform-blocked before Agent Runtime/host, stop CURRENT_PHASE_CAPABILITY_UNAVAILABLE."
+    - "If screen_capture reaches Agent Runtime but returns another typed error or no semantic image result, stop SCREEN_CAPTURE_LIVE_PROOF_UNPROVEN."
+    - "For successful capture, require PNG ImageContent plus closed metadata status=captured, permission=granted, capture_api=ScreenCaptureKit and target=application_window."
+    - "Inspect only the image returned by production screen_capture and freeze the first answer to the model-facing instruction as observed_visual_token."
+    - "A syntactically valid candidate is exactly 8 uppercase ASCII characters. Syntax validity is not correctness."
+    - "Do not self-score or read the expected-token oracle after observation. Publish observed_visual_token verbatim and stop NEEDS_REVIEW."
     - "Publish TASK-0107 report on remote dev as the only tracked repository mutation."
 
 invariants:
-  - "Expected visual token and derivation remain unavailable to Executor/model before and during observation."
-  - "The fixture reaches model vision only through the production screen_capture MCP ImageContent result."
-  - "Production Agent Runtime lifecycle, plugin, tunnel, runtime.env, ServiceManagement and launchd state remain unchanged."
-  - "No repository synchronization or implementation change occurs."
+  - "The same Agent Runtime app is explicitly attached to the executing ChatGPT conversation."
+  - "Expected token remains hidden from Executor/model until independent Architect review."
+  - "The fixture reaches model vision only through production screen_capture MCP ImageContent."
+  - "No repository synchronization or implementation change."
   - "No screen_capture retry."
-  - "No TCC mutation."
-  - "No click, type, scroll, Accessibility, clipboard, OCR, camera, microphone or audio capability is authorized."
-  - "No base64-in-text, file-path-only, metadata-only, OCR-text or manually described fallback is accepted as visual success."
-  - "Executor does not self-certify IMAGE_TRANSPORT_SUPPORTED or token correctness."
+  - "No TCC, Runtime, tunnel, plugin-permission, ServiceManagement or launchd mutation."
+  - "No click, type, scroll, Accessibility, clipboard, OCR, camera, microphone or audio capability."
+  - "No alternate execution surface or alternate visual path."
+  - "Executor does not self-certify token correctness."
   - "main, tags, releases and sibling repositories remain unchanged."
 
 forbidden_changes:
-  - "Do not read tests/test_image_transport.py or any expected-token oracle before report publication."
-  - "Do not use Python/PIL/OpenCV/OCR/Quick Look/browser/file viewers to inspect the fixture."
+  - "Do not execute revision 2 in a chat where Agent Runtime is not explicitly attached."
+  - "Do not change Agent Runtime plugin permissions."
+  - "Do not read tests/test_image_transport.py or another token oracle."
+  - "Do not use OCR/PIL/OpenCV/Quick Look/browser/file viewer/another model for fixture semantics."
   - "Do not invoke screen_capture more than once."
-  - "Do not mutate Screen Recording/TCC permissions."
+  - "Do not mutate Screen Recording/TCC."
   - "Do not restart/reload/stop Agent Runtime or tunnel."
-  - "Do not invoke repo_fast_forward or synchronize the local repository."
-  - "Do not use CODEX_LOCAL, Desktop Commander, operator Terminal or another model as a substitute visual path."
+  - "Do not invoke repo_fast_forward or sync the local checkout."
+  - "Do not use CODEX_LOCAL, Desktop Commander or operator Terminal as visual fallback."
   - "Do not click, type or scroll."
   - "Do not edit implementation/tests/docs."
 
 acceptance_criteria:
+  - id: AC-0
+    requirement: "The executing ChatGPT session explicitly attaches Agent Runtime and exposes terminal_exec plus screen_capture before task execution."
+    evidence_required: "Session/app attachment and exact required-tool availability attestation."
   - id: AC-1
     requirement: "Blindness and fixture identity are preserved."
-    evidence_required: "Known fixture SHA-256 binding and explicit attestation that no token oracle/alternate visual path was accessed."
+    evidence_required: "Fixture SHA-256 binding plus no oracle/alternate visual inspection."
   - id: AC-2
-    requirement: "The existing fixture is displayed without semantic inspection outside production screen_capture."
-    evidence_required: "Exactly one bounded fixture-open terminal_exec through CHATGPT_LOCAL."
+    requirement: "Fixture display consequence executes once through attached Agent Runtime."
+    evidence_required: "One bounded terminal_exec."
   - id: AC-3
-    requirement: "Production screen_capture executes exactly once through CHATGPT_LOCAL."
-    evidence_required: "One typed screen_capture result or exact typed/platform failure; no retry."
+    requirement: "Production screen_capture executes once through attached Agent Runtime."
+    evidence_required: "One typed result or exact typed/platform failure."
   - id: AC-4
-    requirement: "For successful capture, the ChatGPT model receives semantic PNG ImageContent and freezes a first 8-character uppercase candidate without self-scoring."
-    evidence_required: "Capture metadata plus observed_visual_token verbatim."
+    requirement: "Successful capture yields semantic PNG ImageContent and frozen first 8-character uppercase candidate without self-scoring."
+    evidence_required: "Capture metadata and observed_visual_token."
   - id: AC-5
-    requirement: "Production/runtime/repository state remains untouched except report publication and opening the non-sensitive fixture window."
-    evidence_required: "All mutation counters zero except fixture-open consequence and report publication."
+    requirement: "Runtime/repository state remains unchanged except opening the fixture and report publication."
+    evidence_required: "Mutation counters zero for all forbidden surfaces."
   - id: AC-6
-    requirement: "Independent Architect can make the decisive visual judgment after report publication."
-    evidence_required: "NEEDS_REVIEW report contains blind provenance and observed token or exact typed failure."
+    requirement: "Independent Architect can compare expected versus observed only after report publication."
+    evidence_required: "NEEDS_REVIEW report with blind provenance."
 
 verification:
   executor_checks:
+    - id: CHECK-SESSION
+      command_or_check: "Verify Agent Runtime is explicitly attached to this exact chat and terminal_exec plus screen_capture are exposed before execution."
+      required: true
     - id: CHECK-AUTHORITY
-      command_or_check: "Resolve exact TASK-0107 planning HEAD and accepted TASK-0106 review."
+      command_or_check: "Resolve exact TASK-0107 revision-2 planning HEAD and accepted revision-1 review."
       required: true
     - id: CHECK-BLIND
-      command_or_check: "Preserve expected-token embargo and prohibit alternate visual inspection."
+      command_or_check: "Preserve token embargo and prohibit alternate visual inspection."
       required: true
     - id: CHECK-DISPLAY
-      command_or_check: "One bounded Agent Runtime terminal_exec opens exact fixture in Preview and waits one second."
+      command_or_check: "One bounded fixture-open terminal_exec."
       required: true
     - id: CHECK-CAPTURE
-      command_or_check: "One production screen_capture(application_window, com.apple.Preview) through CHATGPT_LOCAL."
+      command_or_check: "One production screen_capture(application_window, com.apple.Preview)."
       required: true
     - id: CHECK-OBSERVATION
-      command_or_check: "Freeze first semantic model token candidate verbatim without expected-token comparison."
+      command_or_check: "Freeze first semantic model token candidate verbatim without comparison."
       required: true
     - id: CHECK-FINAL
-      command_or_check: "Publish truthful TASK-0107 report on remote dev and stop NEEDS_REVIEW."
+      command_or_check: "Publish truthful TASK-0107 report and stop NEEDS_REVIEW or exact typed terminal."
       required: true
   authoritative_verification:
     required: true
     mechanism: "Independent Architect opens the embargoed expected-token oracle only after report publication and compares exact expected token with observed_visual_token."
-    expected_signal: "Exact match plus valid production capture evidence => IMAGE_TRANSPORT_SUPPORTED and live screen_capture semantic path ACCEPTED. Permission error => explicit TCC user boundary. Missing/mismatched semantic observation => SCREEN_CAPTURE_LIVE_PROOF_UNPROVEN."
+    expected_signal: "Exact match plus valid production capture => IMAGE_TRANSPORT_SUPPORTED and live screen_capture semantic path ACCEPTED."
 
 capability_requirements:
   EXECUTION:
