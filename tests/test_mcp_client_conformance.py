@@ -24,6 +24,7 @@ EXPECTED_TOOLS = (
     "fs_read_batch",
     "repo_observer",
     "repo_fast_forward",
+    "repo_publish",
 )
 EXPECTED_ANNOTATIONS = {
     "terminal_exec": (False, True, False, True),
@@ -35,6 +36,7 @@ EXPECTED_ANNOTATIONS = {
     "fs_read_batch": (True, False, True, False),
     "repo_observer": (True, False, True, False),
     "repo_fast_forward": (False, True, True, True),
+    "repo_publish": (False, True, True, True),
 }
 EXPECTED_OUTPUT_FIELDS = {
     "terminal_exec": {
@@ -82,6 +84,11 @@ EXPECTED_OUTPUT_FIELDS = {
         "schema_version", "status", "repository_root", "branch", "remote", "upstream",
         "expected_local_head", "expected_remote_head", "head_before", "head_after",
         "tracking_head", "fetched", "network_used", "fast_forwarded", "deadline_seconds",
+    },
+    "repo_publish": {
+        "schema_version", "status", "repository_root", "branch", "remote", "upstream",
+        "expected_remote_head", "commit", "head", "remote_head_before", "remote_head_after",
+        "network_used", "push_attempted", "published", "deadline_seconds",
     },
 }
 
@@ -223,6 +230,26 @@ class MCPClientConformanceTests(unittest.IsolatedAsyncioTestCase):
             self.assertLessEqual(fast_forward_props["branch"]["maxLength"], 255)
             for field in ("expected_local_head", "expected_remote_head"):
                 sha = fast_forward_props[field]
+                self.assertEqual(sha["minLength"], 40)
+                self.assertEqual(sha["maxLength"], 40)
+                self.assertEqual(sha["pattern"], "^[0-9a-f]{40}$")
+
+            publish_schema = tools["repo_publish"].input_schema
+            self.assertIs(publish_schema["additionalProperties"], False)
+            self.assertEqual(
+                set(publish_schema["properties"]),
+                {"cwd", "branch", "expected_remote_head", "commit"},
+            )
+            self.assertEqual(
+                set(publish_schema["required"]),
+                {"cwd", "branch", "expected_remote_head", "commit"},
+            )
+            publish_props = publish_schema["properties"]
+            self.assertNotIn("pattern", publish_props["cwd"])
+            self.assertEqual(publish_props["branch"]["minLength"], 1)
+            self.assertLessEqual(publish_props["branch"]["maxLength"], 255)
+            for field in ("expected_remote_head", "commit"):
+                sha = publish_props[field]
                 self.assertEqual(sha["minLength"], 40)
                 self.assertEqual(sha["maxLength"], 40)
                 self.assertEqual(sha["pattern"], "^[0-9a-f]{40}$")

@@ -157,6 +157,7 @@ class TimingToolTests(unittest.TestCase):
             "fs_read_batch",
             "repo_observer",
             "repo_fast_forward",
+            "repo_publish",
         ))
         self.assertIn(timing_middleware, server.mcp.middleware)
         self.assertEqual(
@@ -174,6 +175,10 @@ class TimingToolTests(unittest.TestCase):
         self.assertEqual(
             [parameter.name for parameter in inspect.signature(server.repo_observer).parameters.values()],
             ["cwd", "max_paths"],
+        )
+        self.assertEqual(
+            [parameter.name for parameter in inspect.signature(server.repo_publish).parameters.values()],
+            ["cwd", "branch", "expected_remote_head", "commit"],
         )
 
     def test_tool_execution_event_has_no_arguments_or_result_payload(self) -> None:

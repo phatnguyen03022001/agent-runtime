@@ -211,6 +211,8 @@ RepoFastForwardSha = Annotated[
     StrictStr,
     Field(min_length=40, max_length=40, pattern=r"^[0-9a-f]{40}$"),
 ]
+RepoPublishBranch = RepoFastForwardBranch
+RepoPublishSha = RepoFastForwardSha
 TypedToolErrorCode = Literal[
     "INVALID_ARGUMENT",
     "OUTSIDE_WORKSPACE",
@@ -230,6 +232,9 @@ TypedToolErrorCode = Literal[
     "DEADLINE_EXCEEDED",
     "TRANSIENT_FAILURE",
     "FAST_FORWARD_FAILED",
+    "PUBLICATION_LINEAGE_MISMATCH",
+    "PUSH_FAILED",
+    "PUBLICATION_AMBIGUOUS",
     "INTERNAL_ERROR",
 ]
 RepoChangeStatus = Literal["M", "T", "A", "D", "R", "C", "U", "?", "!"]
@@ -355,4 +360,22 @@ class RepoFastForwardResult(_ClosedResult):
     fetched: Literal[True]
     network_used: Literal[True]
     fast_forwarded: bool
+    deadline_seconds: float
+
+
+class RepoPublishResult(_ClosedResult):
+    schema_version: Literal[1]
+    status: Literal["published", "already_published"]
+    repository_root: str
+    branch: str
+    remote: Literal["origin"]
+    upstream: str
+    expected_remote_head: str
+    commit: str
+    head: str
+    remote_head_before: str
+    remote_head_after: str
+    network_used: Literal[True]
+    push_attempted: bool
+    published: bool
     deadline_seconds: float

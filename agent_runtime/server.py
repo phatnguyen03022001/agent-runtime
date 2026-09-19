@@ -30,6 +30,9 @@ from .contracts import (
     RepoFastForwardBranch,
     RepoFastForwardResult,
     RepoFastForwardSha,
+    RepoPublishBranch,
+    RepoPublishResult,
+    RepoPublishSha,
     RepoObserverMaxPaths,
     RepoObserverResult,
     SessionId,
@@ -49,6 +52,7 @@ from .fs_read import read_files_batch
 from .protection import ProtectedRuntimeDenied
 from .repo_fast_forward import RepoFastForwardFailure, fast_forward_repository
 from .repo_observer import RepoObserverFailure, observe_repository
+from .repo_publish import RepoPublishFailure, publish_repository
 from .session import (
     control_terminal as _control_terminal,
     poll_terminal as _poll_terminal,
@@ -67,6 +71,7 @@ PUBLIC_TOOL_NAMES = (
     "fs_read_batch",
     "repo_observer",
     "repo_fast_forward",
+    "repo_publish",
 )
 SERVER_DESCRIPTION = "Bounded local command execution and advisory capacity MCP server; terminal tools may modify the host."
 SERVER_INSTRUCTIONS = (
@@ -85,7 +90,9 @@ SERVER_INSTRUCTIONS = (
     "or repository mutation; it reports local tracking refs, typed changes, diff summary, operation state, "
     "and policy-safe worktree topology. "
     "repo_fast_forward performs expected-state-guarded fixed-origin synchronization from fixed origin only; it fresh-fetches "
-    "one bound branch and permits only an exact fast-forward of the current clean branch."
+    "one bound branch and permits only an exact fast-forward of the current clean branch. "
+    "repo_publish performs expected-state-guarded fixed-origin publication of exactly the current clean branch HEAD "
+    "when it is the sole direct child of the bound existing origin branch head; repository and task authority remain external."
 )
 mcp = MCPServer(
     name="Agent Runtime",
@@ -357,6 +364,35 @@ def repo_fast_forward(
             isError=True,
         )
         return cast(RepoFastForwardResult, error_result)
+
+
+@_tool(read_only=False, destructive=True, idempotent=True, open_world=True)
+def repo_publish(
+    cwd: AbsoluteCwd,
+    branch: RepoPublishBranch,
+    expected_remote_head: RepoPublishSha,
+    commit: RepoPublishSha,
+) -> RepoPublishResult:
+    """Publish one clean direct-child commit to its existing fixed origin branch."""
+
+    try:
+        return publish_repository(cwd, branch, expected_remote_head, commit)
+    except RepoPublishFailure as exc:
+        from mcp.types import CallToolResult, TextContent
+
+        envelope = TypedToolErrorEnvelope(
+            error=TypedToolErrorPayload(
+                code=exc.code,
+                message=exc.message,
+                retryable=exc.retryable,
+            )
+        )
+        error_result = CallToolResult(
+            content=[TextContent(type="text", text=exc.message)],
+            structuredContent=envelope.model_dump(),
+            isError=True,
+        )
+        return cast(RepoPublishResult, error_result)
 
 
 def _install_timing_middleware() -> None:

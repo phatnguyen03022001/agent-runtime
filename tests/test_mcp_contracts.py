@@ -21,6 +21,7 @@ EXPECTED_TOOLS = (
     "fs_read_batch",
     "repo_observer",
     "repo_fast_forward",
+    "repo_publish",
 )
 EXPECTED_ANNOTATIONS = {
     "terminal_exec": (False, True, False, True),
@@ -32,6 +33,7 @@ EXPECTED_ANNOTATIONS = {
     "fs_read_batch": (True, False, True, False),
     "repo_observer": (True, False, True, False),
     "repo_fast_forward": (False, True, True, True),
+    "repo_publish": (False, True, True, True),
 }
 
 
@@ -164,9 +166,22 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(fast_forward_props[name]["maxLength"], 40)
             self.assertEqual(fast_forward_props[name]["pattern"], "^[0-9a-f]{40}$")
 
+        publish_props = tools["repo_publish"].input_schema["properties"]
+        self.assertEqual(
+            set(publish_props),
+            {"cwd", "branch", "expected_remote_head", "commit"},
+        )
+        self.assertNotIn("pattern", publish_props["cwd"])
+        self.assertEqual(publish_props["branch"]["minLength"], 1)
+        self.assertLessEqual(publish_props["branch"]["maxLength"], 255)
+        for name in ("expected_remote_head", "commit"):
+            self.assertEqual(publish_props[name]["minLength"], 40)
+            self.assertEqual(publish_props[name]["maxLength"], 40)
+            self.assertEqual(publish_props[name]["pattern"], "^[0-9a-f]{40}$")
+
     async def test_task0078_cwd_schemas_are_connector_portable(self) -> None:
         tools = await self._tools()
-        for name in ("terminal_exec", "terminal_start", "fs_read_batch", "repo_fast_forward"):
+        for name in ("terminal_exec", "terminal_start", "fs_read_batch", "repo_fast_forward", "repo_publish"):
             with self.subTest(tool=name):
                 cwd_schema = tools[name].input_schema["properties"]["cwd"]
                 self.assertEqual(cwd_schema["minLength"], 1)
@@ -323,6 +338,12 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
                 "head_after", "tracking_head", "fetched", "network_used",
                 "fast_forwarded", "deadline_seconds",
             },
+            "repo_publish": {
+                "schema_version", "status", "repository_root", "branch", "remote",
+                "upstream", "expected_remote_head", "commit", "head",
+                "remote_head_before", "remote_head_after", "network_used",
+                "push_attempted", "published", "deadline_seconds",
+            },
         }
         for name, expected in expected_fields.items():
             schema = tools[name].output_schema
@@ -360,7 +381,9 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
             "repo_observer",
             "local-only Git",
             "repo_fast_forward",
+            "repo_publish",
             "fixed-origin",
+            "publication",
         ):
             self.assertIn(phrase, instructions)
 

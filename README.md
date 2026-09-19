@@ -137,7 +137,7 @@ kernel compromise, and out-of-band tools.
 
 ## Tool surface
 
-The MCP server exposes exactly nine public tools:
+The MCP server exposes exactly ten public tools:
 
 - `terminal_exec(argv, cwd, timeout_seconds=300)` executes one literal argv
   with `shell=False`, disconnected stdin, bounded output, and bounded cleanup.
@@ -175,6 +175,11 @@ The MCP server exposes exactly nine public tools:
   bound branch from literal `origin` and permits only an exact fast-forward of the
   current clean branch. Runtime executes this consequence; repository/task authority
   remains outside Runtime.
+- `repo_publish(cwd, branch, expected_remote_head, commit)` provides
+  expected-state-guarded fixed-origin publication of exactly the current clean branch
+  HEAD when `commit` is the sole direct child of the bound existing `origin/<branch>`
+  head. Same-input replay freshly verifies remote state and does not push twice. Runtime
+  executes the publication consequence; repository/task authority remains outside Runtime.
 
 Capacity Observer v2 reports an advisory healthy-host ceiling up to x6. The
 effective healthy ceiling is `min(AGENT_RUNTIME_MAX_PARALLELISM, 6)`: the
