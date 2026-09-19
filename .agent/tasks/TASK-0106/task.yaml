@@ -1,0 +1,152 @@
+protocol_version: 3
+
+task_id: TASK-0106
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  predecessor_task: TASK-0105
+  gap_id: "postcommit_chatgpt_local_continuity"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: postcommit_chatgpt_local_continuity
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+execution_skills:
+  required:
+    - executor
+    - verification
+    - reliability
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0105/review.yaml@08c05d4a0ac676170ed9471991763e37bfa1695c"
+    role: "Architect-accepted proof that commit-cutover succeeded exactly once, transaction is absent, local Runtime remains healthy, and only explicit postcommit CHATGPT_LOCAL continuity remains unproven."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0104/review.yaml@e2a2dff00df213b50a582b950c781581d5bfb197"
+    role: "Architect-accepted pre-cutover CHATGPT_LOCAL_ACTIVATION_PROVEN evidence."
+    precedence: 2
+
+structure_authority:
+  status: NOT_APPLICABLE
+  rationale: "Read-only postcommit transport continuity proof only."
+
+objective: "Prove that CHATGPT_LOCAL still reaches the same local Agent Runtime through the refreshed plugin/tunnel after cutover transaction finalization. Use exactly one read-only repo_observer MCP call. No lifecycle, repository synchronization, terminal execution, plugin mutation or Stage B work is authorized."
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  location: LOCAL
+  transport: AGENT_RUNTIME
+
+postcommit_state:
+  cutover_committed: true
+  transaction_absent: true
+  host_state_architect_proven:
+    main_app: enabled
+    runtime_agent: enabled
+    healthz: 200
+    readyz: 200
+  local_checkout:
+    path: "/Users/tienphat/Developer/agent-runtime"
+    expected_branch: dev
+    expected_head: "e2a2dff00df213b50a582b950c781581d5bfb197"
+    expected_changes: 0
+
+authority_counters:
+  repo_observer: "0/1"
+  terminal_exec: "NONE"
+  repo_fast_forward: "NONE"
+  lifecycle_mutation: "NONE"
+  plugin_mutation: "NONE"
+
+scope:
+  required_changes:
+    - "Resolve TASK-0106 revision 1 from GitHub at exact planning HEAD."
+    - "Require Agent Runtime MCP tools to be exposed in the current ChatGPT session. If absent, stop CURRENT_PHASE_CAPABILITY_UNAVAILABLE; do not switch surfaces."
+    - "Invoke Agent Runtime repo_observer exactly once with cwd=/Users/tienphat/Developer/agent-runtime and max_paths=20."
+    - "Require a valid typed response binding branch=dev, head_sha=e2a2dff00df213b50a582b950c781581d5bfb197 and changes=0, with no ambiguous repository identity."
+    - "Do not require local checkout synchronization to the remote TASK-0106 planning HEAD. The local checkout is merely the read-only continuity probe target."
+    - "If the one repo_observer call succeeds with exact expected identity, terminal is exactly POSTCOMMIT_CHATGPT_LOCAL_CONTINUITY_PROVEN."
+    - "If the call is platform-blocked before Agent Runtime/host, stop CURRENT_PHASE_CAPABILITY_UNAVAILABLE with no retry."
+    - "If the call reaches Agent Runtime but returns transport/session/authentication failure, invalid typed response, or wrong/ambiguous local identity, stop POSTCOMMIT_CHATGPT_LOCAL_CONTINUITY_UNPROVEN."
+    - "Publish TASK-0106 report on remote dev using authorized GitHub repository-content write capability. Report publication is not an alternate local execution surface."
+    - "Stop after report. Stage B is separate."
+
+invariants:
+  - "No commit-cutover retry. TASK-0105 commit authority is consumed 1/1 and transaction is absent."
+  - "No repository synchronization."
+  - "No terminal_exec or terminal lifecycle tool."
+  - "No install/reinstall/restart/stop/signal/rollback/resume/recover."
+  - "No ServiceManagement, launchd, runtime.env, tunnel or plugin mutation."
+  - "No Stage B, screen_capture, TCC, click, type or scroll."
+  - "No fallback to CODEX_LOCAL, Desktop Commander or operator Terminal."
+  - "main, tags, releases and sibling repositories remain unchanged."
+
+forbidden_changes:
+  - "Do not invoke repo_fast_forward."
+  - "Do not invoke terminal_exec, terminal_start, terminal_control or any terminal tool."
+  - "Do not invoke commit-cutover again."
+  - "Do not mutate lifecycle, plugin, tunnel, ServiceManagement or repository checkout."
+  - "Do not perform Stage B or screen_capture."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "CHATGPT_LOCAL Agent Runtime MCP capability remains available after cutover commit."
+    evidence_required: "Current ChatGPT session can invoke repo_observer through Agent Runtime."
+  - id: AC-2
+    requirement: "Exactly one repo_observer call returns the exact expected local checkout identity."
+    evidence_required: "branch=dev, head=e2a2dff00df213b50a582b950c781581d5bfb197, changes=0, identity unambiguous."
+  - id: AC-3
+    requirement: "Successful task stops POSTCOMMIT_CHATGPT_LOCAL_CONTINUITY_PROVEN with zero mutations."
+    evidence_required: "repo_observer 1/1, all mutation counters zero."
+
+verification:
+  executor_checks:
+    - id: CHECK-AUTHORITY
+      command_or_check: "Resolve exact remote TASK-0106 planning HEAD and TASK-0105 accepted review."
+      required: true
+    - id: CHECK-CONTINUITY
+      command_or_check: "One Agent Runtime repo_observer against the canonical local checkout."
+      required: true
+    - id: CHECK-FINAL
+      command_or_check: "Publish truthful TASK-0106 report on remote dev and stop."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect review before Stage B."
+    expected_signal: "POSTCOMMIT_CHATGPT_LOCAL_CONTINUITY_PROVEN"
+
+capability_requirements:
+  EXECUTION:
+    - repository_content_read
+    - repository_content_write
+    - agent_runtime_mcp_read
+    - remote_ref_read
+  REVIEW:
+    - repository_content_read
+    - repository_content_write
+    - remote_ref_read
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
