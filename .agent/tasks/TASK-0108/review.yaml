@@ -1,16 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0108
-task_revision: 4
+task_revision: 5
 review_revision: 1
 state: ACCEPTED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0108/report.yaml
-  commit: "fd309286ef0b86b54d2ae08f0e97397818ef377a"
-  report_revision: 4
-  blob: "06a99b24348f57c1b34a774f52ffca17c732ebaf"
+  commit: "5c9c0f128bd39394a64e4ab440e4ab9c44bc2b09"
+  report_revision: 5
 
 independence:
   reviewer_role: ARCHITECT
@@ -24,42 +23,62 @@ contract_compliance:
   focused_verification: PASS
   py_compile: PASS
   media_first_preservation: PASS
-  canonical_wrapper_single_launch: PASS
-  canonical_verify_rerun_absent: PASS
+  canonical_verify_single_invocation: PASS
+  durable_launch_receipt: PASS
+  durable_log_closure: PASS
   result_truthfulness: PASS
-  publication_recovery: PASS
+  publication_scope: PASS
 
 acceptance:
-  terminal: CANONICAL_VERIFICATION_RESULT_UNAVAILABLE
+  terminal: CANONICAL_VERIFICATION_FAILED
   disposition: ACCEPTED
-  canonical_verification: UNPROVEN
-  implementation_publication: NOT_AUTHORIZED_YET
+  canonical_exit_code: 1
+  implementation_publication: NOT_AUTHORIZED
   packaging: NOT_REACHED
 
 evidence:
-  - "The inherited three-path checkpoint matched the authorized revision-4 identity and diff closure."
+  - "The inherited three-path checkpoint matched the exact revision-5 identity and preservation contract."
   - "Focused verification passed 42/42 and py_compile passed."
-  - "The five preservation paths remained byte-identical to media-first implementation commit 09eebd0c6bb7fbd905dd55a2015697224e8ee886."
-  - "Exactly one revision-4 durable wrapper launch was attempted under PID 67499."
-  - "At first observation the wrapper PID was no longer alive and no state, log, temporary receipt or FINISHED receipt existed."
-  - "No canonical verification retry occurred, so no PASS or FAIL may be inferred."
-  - "No implementation successor, package, candidate, install, restart, plugin refresh, live screen capture or TCC mutation occurred."
-  - "The Executor-created report bytes were recovered remote-only without changing content; the remote report is the sole child of the revision-4 planning commit and changes exactly .agent/tasks/TASK-0108/report.yaml."
+  - "Canonical ./verify was invoked exactly once through helper PID 71651."
+  - "The FINISHED receipt binds helper SHA-256 e993aeed594b7db1a468d574a51fe5527b9c5bbb2018226e25ee13242d65db93, verify_invoked=true, exit_code=1, log SHA-256 ee8a5ac18aae8db79431591b3244761d13f2d2d6a16a05d29b71f74e9e8d26f3 and log_bytes=149589."
+  - "Architect recomputation confirmed the receipt log hash and byte count."
+  - "Canonical log ran 444 tests and reported exactly three failures."
+  - "All three failures are explained by fake mcp.types fixtures that define CallToolResult and ImageContent but omit TextContent after the media-first contract added a real TextContent dependency."
+  - "tests/test_task0057_admission.py contains one such fake mcp.types fixture."
+  - "tests/test_terminal_session.py contains the other such fake mcp.types fixture; its SIGTERM and SIGINT subtests both fail on ImportError: cannot import name TextContent from mcp.types."
+  - "Repository-wide search found no other fake mcp.types fixtures of this form."
+  - "No retry, implementation successor, packaging, install, restart, plugin refresh, live screen capture or TCC mutation occurred."
+
+root_cause:
+  classification: "TEST_HARNESS_MCP_TYPES_DRIFT"
+  production_defect_indicated: false
+  description: >-
+    The production media-first contract legitimately imports TextContent from the pinned
+    MCP SDK. Two isolated-runtime tests replace mcp.types with minimal fake modules that
+    were not updated for the new contract. The fake modules therefore crash during
+    agent_runtime.screen_capture import before the tests reach their intended signal/
+    process-cleanup behavior.
+  affected_test_files:
+    - tests/test_task0057_admission.py
+    - tests/test_terminal_session.py
+  exact_required_semantic_fix: >-
+    Extend each fake mcp.types fixture with a minimal FakeTextContent symbol and bind it
+    as mcp_types.TextContent, preserving all existing test intent and production code.
 
 gap_disposition:
-  - gap_id: "canonical_verify_wrapper_pre_body_result_loss"
-    disposition: "VERIFICATION_TRANSPORT_RECOVERY_REQUIRED"
-    rationale: "The verification body cannot be judged because the detached wrapper disappeared before leaving any state/log/receipt evidence. A successor must strengthen the launch handshake itself, not rerun revision-4 authority or infer test status."
+  - gap_id: "fake_mcp_types_missing_textcontent"
+    disposition: "TEST_HARNESS_ONLY_SUCCESSOR_REQUIRED"
     owner: ARCHITECT
 
 next_state:
-  media_first_production_checkpoint_reusable: true
+  three_path_implementation_checkpoint_reusable: true
+  additional_test_harness_files_required: 2
   canonical_verify_fresh_authority_required: true
-  package_after_verification_only: true
+  packaging_separate: true
   live_activation_authorized: false
   main_promotion_authorized: false
 
 notes:
-  - "Do not rerun revision-4 ./verify."
-  - "Do not treat process disappearance or focused GREEN as canonical PASS."
-  - "The successor should separate verification/publication from packaging so signing availability cannot obscure the canonical verifier result."
+  - "Do not change production imports to accommodate intentionally incomplete fake test modules."
+  - "Do not rerun revision-5 canonical verification."
+  - "Revision 6 should retain the proven durable verification transport and use fresh artifact paths."
