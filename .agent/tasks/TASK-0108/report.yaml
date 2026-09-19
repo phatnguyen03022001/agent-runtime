@@ -1,84 +1,110 @@
 protocol_version: 3
 task_id: TASK-0108
-task_revision: 5
-report_revision: 5
+task_revision: 6
+report_revision: 6
 state: REPORTED
-terminal: CANONICAL_VERIFICATION_FAILED
+terminal: CANONICAL_VERIFY_PASS
 
 task_source:
   path: .agent/tasks/TASK-0108/task.yaml
-  planning_head: 7ea40f582a1ad70bb064f34ae9b09a335a6d3534
+  planning_head: f2e9496f4d3b9600a2e715104ef708ea71714dd4
   planning_head_verified_exact: true
   source: GitHub
-
-execution:
   repository: phatnguyen03022001/agent-runtime
   branch: dev
+
+execution:
   execution_surface: CODEX_LOCAL
-  implementation_successor_commit: null
-  report_only_commit: pending
+  implementation_successor_commit: 9128cb102f858572e4b54010f46f587d76b6f915
+  implementation_parent: f2e9496f4d3b9600a2e715104ef708ea71714dd4
+  report_parent: 9128cb102f858572e4b54010f46f587d76b6f915
+  publication: fast_forward_only
 
 checkpoint:
   result: PASS
-  dirty_paths:
+  inherited_dirty_paths:
     - agent_runtime/server.py
     - tests/test_mcp_client_conformance.py
     - tests/test_task0055_cutover.py
-  diff_sha256: 8acbf5212e381cf1c0cc0791c0f29aa8954dd4c6e85a67749f72c0eabc649edd
-  diff_check: PASS
-  required_file_sha256:
+  inherited_diff_sha256: 8acbf5212e381cf1c0cc0791c0f29aa8954dd4c6e85a67749f72c0eabc649edd
+  inherited_diff_check: PASS
+  inherited_required_file_sha256:
     agent_runtime/server.py: a0f10a1b8bf3a3aa0cf80e0fb38ec34ed126d6fb0a491367967d6bafe04b6e5f
     tests/test_mcp_client_conformance.py: 18310f77cf202054c5cc0af0a91616f05481464b221cbdbe4d01ec4632b87779
     tests/test_task0055_cutover.py: 3eb02ff4951141a2712f7498596fc193cf441cf6b6aef31f7edb392bd5cae7a1
-  server_semantic_delta: "Import-only addition of capture_failure_result from .screen_capture."
+  server_semantic_delta: import-only addition of capture_failure_result from .screen_capture
+
+implementation:
+  committed_paths:
+    - agent_runtime/server.py
+    - tests/test_mcp_client_conformance.py
+    - tests/test_task0055_cutover.py
+    - tests/test_task0057_admission.py
+    - tests/test_terminal_session.py
+  path_closure: PASS
+  diff_sha256_from_planning_head: da7557740fffe337a0fb811ad8977ef067230c8e8b2f623f8635db073a149c38
+  file_sha256:
+    agent_runtime/server.py: a0f10a1b8bf3a3aa0cf80e0fb38ec34ed126d6fb0a491367967d6bafe04b6e5f
+    tests/test_mcp_client_conformance.py: 18310f77cf202054c5cc0af0a91616f05481464b221cbdbe4d01ec4632b87779
+    tests/test_task0055_cutover.py: 3eb02ff4951141a2712f7498596fc193cf441cf6b6aef31f7edb392bd5cae7a1
+    tests/test_task0057_admission.py: d25c87ecf9fcad6987507a74db3a9117851be70ed264d23c85bc627ce2f30a70
+    tests/test_terminal_session.py: 7abc5acf859e499d54dbe14fc271493bbf01b08c26283c63f7b0790bf3ce4456
+  git_diff_check: PASS
 
 verification:
+  pre_edit_red:
+    command: .venv/bin/python -m unittest tests.test_task0057_admission tests.test_terminal_session
+    result: EXPECTED_RED
+    tests_run: 31
+    failures: 3
+    exit_code: 1
+    root_cause: stale fake mcp.types fixtures omitted TextContent
   focused:
-    command: ".venv/bin/python -m unittest tests.test_mcp_client_conformance tests.test_task0055_cutover tests.test_screen_capture tests.test_screen_capture_mcp tests.test_mcp_contracts"
+    command: .venv/bin/python -m unittest tests.test_task0057_admission tests.test_terminal_session tests.test_mcp_client_conformance tests.test_task0055_cutover tests.test_screen_capture tests.test_screen_capture_mcp tests.test_mcp_contracts
     result: PASS
-    tests_run: 42
+    tests_run: 73
+    failures: 0
   py_compile:
-    command: ".venv/bin/python -m py_compile agent_runtime/server.py tests/test_mcp_client_conformance.py tests/test_task0055_cutover.py"
+    command: .venv/bin/python -m py_compile agent_runtime/server.py tests/test_mcp_client_conformance.py tests/test_task0055_cutover.py tests/test_task0057_admission.py tests/test_terminal_session.py
     result: PASS
-  preservation:
-    against: 09eebd0c6bb7fbd905dd55a2015697224e8ee886
+  fixture_search:
     result: PASS
-    sha256:
-      README.md: 7aa8f7e156ee5aacdb6d3af1ee3459cb566374682e9365c249ab28fbb9ab5aea
-      agent_runtime/screen_capture.py: 8bcf0db9a31c5c839cbb6d4fe485f6006adbf6837d3c4d28625ec205704aac5a
-      tests/test_mcp_contracts.py: 6f2337a9f87a53577ae9b337e21237ca8ccec619d0c4e5e8a5890b6a1b9309cc
-      tests/test_screen_capture.py: f81bddd46921ccf06a175a9f7b00c96a9010e9a6832a6673c358490ade18e965
-      tests/test_screen_capture_mcp.py: 08d8e13202087e8b81479ecd1e92285095049cecf3ff73ec80c199553d437d76
-  canonical:
-    command: ./verify
-    authority_consumed: "1/1"
-    launcher_authority_consumed: "1/1"
-    helper_script: /Users/tienphat/Developer/.task-0108-r5-verify.sh
-    helper_sha256: e993aeed594b7db1a468d574a51fe5527b9c5bbb2018226e25ee13242d65db93
-    helper_validation: PASS
-    launch_file: /Users/tienphat/Developer/.task-0108-r5-verify.launch
-    launch_child_pid: 71651
-    launch_evidence: "LAUNCHED was atomically written after Popen; its raw file contains literal escaped newline separators."
-    state_file: /Users/tienphat/Developer/.task-0108-r5-verify.state
-    log_file: /Users/tienphat/Developer/.task-0108-r5-verify.log
-    receipt_file: /Users/tienphat/Developer/.task-0108-r5-verify.receipt
-    temp_receipt_file: /Users/tienphat/Developer/.task-0108-r5-verify.receipt.tmp
-    observation_count: 50
-    receipt:
-      state: FINISHED
-      child_pid: 71651
-      helper_sha256_binding: PASS
-      verify_invoked: true
-      exit_code: 1
-      log_sha256: ee8a5ac18aae8db79431591b3244761d13f2d2d6a16a05d29b71f74e9e8d26f3
-      log_bytes: 149589
-      log_metadata_recomputed: PASS
-    result: FAILED
-    reruns: 0
+    synthetic_mcp_types_fixtures_found: 3
+    fixtures_with_TextContent: 3
+    production_importing_isolated_fixtures_closed: 2
+    corrected_paths:
+      - tests/test_task0057_admission.py
+      - tests/test_terminal_session.py
+    production_code_changed_for_fixture_drift: false
+
+canonical:
+  authority_consumed: 1/1
+  launcher_authority_consumed: 1/1
+  helper_script: /Users/tienphat/Developer/.task-0108-r6-verify.sh
+  helper_sha256: 865ce8955aa96442d1827507df0df2f1f8d912444a834844a6f5209e1b9c2a03
+  launch_file: /Users/tienphat/Developer/.task-0108-r6-verify.launch
+  state_file: /Users/tienphat/Developer/.task-0108-r6-verify.state
+  log_file: /Users/tienphat/Developer/.task-0108-r6-verify.log
+  receipt_file: /Users/tienphat/Developer/.task-0108-r6-verify.receipt
+  temp_receipt_file: /Users/tienphat/Developer/.task-0108-r6-verify.receipt.tmp
+  launch_child_pid: 88228
+  observation_count: 76
+  verify_invoked: true
+  exit_code: 0
+  log_sha256: 835858478f6ae25e2a6bfd11cdebbe3eb4ea15b235a783d16290bd46fb0dd6dd
+  log_bytes: 145133
+  canonical_test_count: 444
+  canonical_failures: 0
+  receipt_log_closure: PASS
+  receipt_helper_binding: PASS
+  reruns: 0
+  result: PASS
 
 publication:
-  implementation_commit_created: false
-  report_only_commit_created: pending
+  implementation_commit: 9128cb102f858572e4b54010f46f587d76b6f915
+  implementation_commit_paths_exact: true
+  implementation_pushed_to_origin_dev: true
+  report_is_sole_direct_child: true
   packaging_attempted: false
   candidate_produced: false
   install_invocations: 0
@@ -90,10 +116,15 @@ publication:
 acceptance:
   AC-1: PASS
   AC-2: PASS
-  AC-3: PARTIAL
-  AC-4: CANONICAL_VERIFICATION_FAILED
-  AC-5: NOT_ATTEMPTED
-  AC-6: REPORT_ONLY
+  AC-3: PASS
+  AC-4: PASS
+  AC-5: PASS
+  AC-6: PASS
   AC-7: PASS
 
-result: NEEDS_REVIEW
+scope_closure:
+  no_production_fixture_workaround: true
+  no_packaging_signing_freeze_install: true
+  no_runtime_restart_or_plugin_refresh: true
+  no_live_screen_capture_or_tcc_mutation: true
+  no_canonical_verify_rerun: true
