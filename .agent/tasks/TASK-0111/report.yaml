@@ -1,0 +1,115 @@
+protocol_version: 3
+task_id: TASK-0111
+task_revision: 1
+report_revision: 1
+state: REPORTED
+terminal: CANONICAL_VERIFICATION_FAILED
+
+task_source:
+  path: .agent/tasks/TASK-0111/task.yaml
+  planning_head: a2b18ebc2498d98d27ef2bd5688b067f25adacb8
+  planning_head_verified_exact: true
+  source: GitHub
+  repository: phatnguyen03022001/agent-runtime
+  branch: dev
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: dev
+  execution_surface: CODEX_LOCAL
+  transport: NATIVE
+  authorized_base_head: a2b18ebc2498d98d27ef2bd5688b067f25adacb8
+  pre_execution_head: a2b18ebc2498d98d27ef2bd5688b067f25adacb8
+  implementation_successor: 9640122ede05137f12839ed0147236733554367b
+  implementation_parent: a2b18ebc2498d98d27ef2bd5688b067f25adacb8
+  report_parent: 9640122ede05137f12839ed0147236733554367b
+  remote_dev_after_implementation: 9640122ede05137f12839ed0147236733554367b
+  working_tree_clean_before_report: true
+
+implementation:
+  objective_result: PASS
+  committed_paths:
+    - macos/Sources/AgentRuntimeCore/ScreenCapture.swift
+    - macos/Tests/AgentRuntimeCoreTests/ScreenCaptureTests.swift
+    - tests/test_screen_capture.py
+  path_closure: PASS
+  python_metadata_schema_changed: false
+  wire_contract_preserved: true
+  implementation_commit: 9640122ede05137f12839ed0147236733554367b
+  implementation_commit_parent: a2b18ebc2498d98d27ef2bd5688b067f25adacb8
+  implementation_pushed_non_force: true
+
+verification:
+  focused:
+    swift_screen_capture_tests:
+      command: "xcrun swift test --package-path macos --filter ScreenCaptureTests"
+      result: PASS
+      tests_run: 9
+      failures: 0
+      note: "Native Xcode module caches were redirected to a temporary directory outside the restricted user cache path."
+    python_screen_capture_and_mcp_contracts:
+      command: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest -v tests.test_screen_capture tests.test_screen_capture_mcp tests.test_mcp_contracts"
+      result: PASS
+      tests_run: 32
+      failures: 0
+    diff_check:
+      command: "git diff --check"
+      result: PASS
+  canonical:
+    command: "./verify"
+    authority_consumed: 1/1
+    retries: 0
+    exit_code: 1
+    tests_run: 445
+    failures: 0
+    errors: 2
+    result: FAIL
+    errors:
+      - test: "test_fs_read_batch.FsReadBatchBehaviorTests.test_fifo_and_unix_socket_are_rejected_as_non_regular"
+        error: "PermissionError: [Errno 1] Operation not permitted while binding the Unix socket fixture."
+      - test: "test_fs_read_batch_adversarial.FsReadBatchAdversarialTests.test_fifo_socket_and_device_modes_are_rejected_before_content_read"
+        error: "PermissionError: [Errno 1] Operation not permitted while binding the Unix socket fixture."
+    classification: "environment capability failure during unrelated Unix-socket fixtures; no screen-capture assertion failed"
+
+packaging:
+  package_invocations: 0
+  freeze_invocations: 0
+  signing_identity_discovery_invocations: 0
+  candidate_produced: false
+  result: NOT_REACHED
+  reason: "Canonical verification failed; task forbids packaging, signing or freezing after this terminal."
+
+forbidden_effects:
+  install_invocations: 0
+  runtime_lifecycle_mutations: 0
+  cutover_mutations: 0
+  live_screen_capture_invocations: 0
+  tcc_mutations: 0
+  plugin_refreshes: 0
+  main_tag_release_mutations: 0
+  sibling_repository_mutations: 0
+
+acceptance:
+  task_binding: PASS
+  nullable_wire_encoding: PASS
+  display_and_region_parser_regression: PASS
+  focused_screen_capture_and_mcp_tests: PASS
+  canonical_verification: FAIL
+  packaging_and_candidate_freeze: NOT_REACHED
+
+publication:
+  implementation_commit: 9640122ede05137f12839ed0147236733554367b
+  implementation_pushed_to_origin_dev: true
+  report_only: true
+  report_is_sole_direct_child: true
+  report_parent: 9640122ede05137f12839ed0147236733554367b
+  report_pushed_to_origin_dev: true
+
+scope_closure:
+  no_python_schema_weakening: true
+  no_unrelated_source_changes: true
+  no_package_or_signing_attempt: true
+  no_candidate_install_or_activation: true
+  no_canonical_verification_retry: true
+
+result: CANONICAL_VERIFICATION_FAILED
