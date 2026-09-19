@@ -1,0 +1,228 @@
+protocol_version: 3
+
+task_id: TASK-0101
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  predecessor_task: TASK-0100
+  gap_id: "reconcile_installed_tunnel_activation_predicate"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: installed_successor_activation_reconciliation
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - verification
+  - simplicity
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - verification
+    - debugging
+  recommended:
+    - simplicity
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0100/review.yaml@ef31de7bf124c2085ab037a34cb66f27470a3555"
+    role: "Architect-accepted BLOCKED_AFTER_SUCCESSOR_INSTALL_BASELINE evidence. Exact successor is already installed in schema-5 PENDING / APP_SWAPPED state; install-prebuilt authority is consumed 1/1 and no further lifecycle mutation is authorized."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0098/review.yaml@66281456699d005f90b64f58d6ab2f2464bee676"
+    role: "Accepted immutable successor identity."
+    precedence: 2
+  - source: "Current Runtime ownership and tunnel identity implementation at TASK-0101 planning source"
+    role: "Repository source defines canonical Runtime command shape, installed runtime root semantics, accepted tunnel fingerprint handling and protected Runtime process classification."
+    precedence: 3
+  - source: "Fresh Architect post-TASK-0100 read-only observations"
+    role: "PENDING transaction remains; main_app/runtime_agent enabled; listener=1; healthz=200; readyz=200; strict deep codesign PASS; runtime.env tunnel fingerprint derives to accepted 6aa2b81d6dd8; one tunnel-client and one direct agent_runtime.server child are present."
+    precedence: 4
+
+structure_authority:
+  status: NOT_APPLICABLE
+  rationale: "Read-only evidence reconciliation only. No repository implementation, test, configuration, lifecycle or product structure change is authorized."
+
+objective: "Read-only determine whether the already-installed TASK-0098 successor currently satisfies an exact reconstructible local Runtime+tunnel activation predicate. If every required subpredicate passes throughout one bounded observation window, stop CHATGPT_PLUGIN_REFRESH_REQUIRED. Otherwise stop TUNNEL_ACTIVATION_UNPROVEN and name the exact failing subpredicate. Do not mutate lifecycle, repository implementation, tunnel state, plugin state or the PENDING transaction."
+
+installed_successor:
+  candidate_sha256: "496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c"
+  transaction_required:
+    schema: 5
+    status: PENDING
+    phase: APP_SWAPPED
+  accepted_tunnel_fingerprint: "6aa2b81d6dd8"
+  expected_runtime_root: "~/Applications/Agent Runtime.app/Contents/Resources/runtime"
+  expected_listener: "127.0.0.1:8080"
+
+scope:
+  required_changes:
+    - "Fresh-bind exact TASK-0101 planning HEAD, remote dev/main, one clean canonical worktree and accepted TASK-0100 review."
+    - "Perform read-only validation only. No tracked implementation/test/config mutation is authorized."
+    - "Require the existing cutover transaction to remain schema 5 / PENDING / APP_SWAPPED and candidate SHA-256 exactly 496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c."
+    - "Require installed Agent Runtime strict deep codesign PASS."
+    - "Require ServiceManagement main_app=enabled and runtime_agent=enabled with no requires-approval/not-registered/not-found state."
+    - "Read canonical runtime.env without disclosing secret values. Require regular non-symlink mode 0600; require its SHA-256 to match the transaction runtime_config identity; derive CONTROL_PLANE_TUNNEL_ID fingerprint as first 12 lowercase hex characters of SHA-256 and require exactly 6aa2b81d6dd8. Never print the complete tunnel ID or API key."
+    - "Resolve the canonical host tunnel-client executable with the same executable identity semantics used by repository Runtime ownership checks. Require exactly one tunnel-client root process attributable to Agent Runtime."
+    - "Require its normalized command line to target the installed runtime root exactly: run; poll-channel main; MCP command using ~/Applications/Agent Runtime.app/Contents/Resources/runtime/.venv/bin/python -m agent_runtime.server with channel main; health listen address 127.0.0.1:8080. Accept only the command presentation forms already recognized by repository ownership/protection code; do not invent a third form."
+    - "Require exactly one direct agent_runtime.server child of that tunnel root, using the installed package-owned Python, and require the child to share the tunnel process group."
+    - "Require exactly one listener on 127.0.0.1:8080 attributable to the canonical tunnel/runtime process group; foreign or ambiguous ownership fails."
+    - "Require healthz=200 and readyz=200."
+    - "Run exactly one bounded stability window of at most 20 observations with exactly 250 ms sleep before each observation; no observation 21. Stop early only if a required subpredicate becomes false, in which case record its typed failure. If all 20 observations satisfy all volatile runtime/tunnel/listener/health subpredicates, local activation is proven."
+    - "If every immutable and volatile subpredicate passes, terminal is exactly CHATGPT_PLUGIN_REFRESH_REQUIRED."
+    - "If any required predicate cannot be observed because the selected read-only capability is unavailable, terminal is CURRENT_PHASE_CAPABILITY_UNAVAILABLE; do not change surface merely to force a result."
+    - "If any observed predicate fails, terminal is TUNNEL_ACTIVATION_UNPROVEN with the exact first failing subpredicate and evidence."
+    - "Publish TASK-0101 report on dev. No other tracked mutation is authorized."
+
+  allowed_existing_files_or_components:
+    - ".agent/tasks/TASK-0101/report.yaml"
+    - "~/Applications/Agent Runtime.app read-only"
+    - "~/Library/Application Support/Agent Runtime/cutover-transaction read-only"
+    - "~/Library/Application Support/Agent Runtime/runtime.env read-only without secret disclosure"
+    - "ServiceManagement/launchd/process/listener read-only diagnostics"
+    - "repository Runtime ownership/protection source read-only"
+    - "build/.task-0101-* ignored read-only evidence if needed"
+  expected_files_are_restrictive: true
+
+invariants:
+  - "TASK-0100 install-prebuilt remains consumed 1/1; TASK-0101 grants no install authority."
+  - "PENDING transaction must remain byte/state stable except naturally volatile process observations."
+  - "No commit-cutover, rollback, resume, recover, reinstall, Runtime/tunnel restart or ServiceManagement mutation occurs."
+  - "No direct launchctl mutation occurs."
+  - "No runtime.env, desired-state, candidate, installed app or configuration mutation occurs."
+  - "No ChatGPT.com plugin refresh occurs in this task."
+  - "No MCP semantic acceptance, Stage B, screen_capture, TCC, click, type or scroll occurs."
+  - "Tunnel identity proof uses fingerprint only; no secret or full tunnel ID is disclosed."
+  - "main, tags, releases and sibling repositories remain unchanged."
+
+forbidden_changes:
+  - "Do not invoke install-prebuilt, commit-cutover, rollback, resume or recover."
+  - "Do not invoke any ServiceManagement mutation."
+  - "Do not launch, restart, stop, kill or signal Runtime/tunnel processes."
+  - "Do not run start.sh lifecycle commands or tunnel-client commands."
+  - "Do not modify runtime.env or desired-state."
+  - "Do not refresh/reconnect the ChatGPT.com plugin/connector."
+  - "Do not perform end-to-end MCP semantic acceptance, Stage B, screen_capture, TCC or visual control."
+  - "Do not edit implementation/tests/docs or sibling repositories."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files: []
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "Only TASK-0101 report.yaml may become a tracked task artifact."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+activation_predicate:
+  immutable:
+    - "transaction schema=5/status=PENDING/phase=APP_SWAPPED"
+    - "transaction candidate SHA-256 exact TASK-0098 candidate"
+    - "installed strict deep codesign PASS"
+    - "runtime.env regular non-symlink mode 0600"
+    - "runtime.env SHA-256 equals transaction runtime_config identity"
+    - "CONTROL_PLANE_TUNNEL_ID fingerprint=6aa2b81d6dd8"
+  volatile_each_observation:
+    - "main_app=enabled"
+    - "runtime_agent=enabled"
+    - "exactly one canonical tunnel-client root"
+    - "canonical tunnel argv targets installed runtime root and main/main/127.0.0.1:8080 contract"
+    - "exactly one direct installed-python agent_runtime.server child in same process group"
+    - "exactly one attributable listener on 127.0.0.1:8080"
+    - "healthz=200"
+    - "readyz=200"
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact Git/task/review/PENDING successor binding is proven without mutation."
+    evidence_required: "Exact refs plus transaction/candidate identity."
+  - id: AC-2
+    requirement: "Canonical tunnel configuration identity is proven without secret disclosure."
+    evidence_required: "runtime.env type/mode/hash binding and fingerprint 6aa2b81d6dd8."
+  - id: AC-3
+    requirement: "Canonical tunnel/runtime process topology and argv identity are reconstructibly proven."
+    evidence_required: "Singleton root, exact accepted argv form, one direct installed-python child, same process group and attributable listener."
+  - id: AC-4
+    requirement: "Runtime/tunnel activation remains stable through the exact bounded observation window."
+    evidence_required: "20/20 observations PASS or exact first typed failure; no observation 21."
+  - id: AC-5
+    requirement: "Successful task stops at CHATGPT_PLUGIN_REFRESH_REQUIRED with zero lifecycle/plugin mutation."
+    evidence_required: "PENDING preserved; forbidden action counts 0; report terminal exact."
+
+verification:
+  executor_checks:
+    - id: CHECK-BASE
+      command_or_check: "Fresh exact task/dev/main/review binding."
+      required: true
+    - id: CHECK-IMMUTABLE
+      command_or_check: "Read-only transaction/candidate/codesign/runtime.env/fingerprint proof."
+      required: true
+    - id: CHECK-PROCESS-IDENTITY
+      command_or_check: "Read-only exact tunnel/runtime topology and accepted argv-form proof."
+      required: true
+    - id: CHECK-STABILITY
+      command_or_check: "Exact max 20-by-250ms observation window; no observation 21."
+      required: true
+    - id: CHECK-PRESERVATION
+      command_or_check: "Prove no lifecycle/config/plugin/repository mutation beyond report publication."
+      required: true
+    - id: CHECK-FINAL
+      command_or_check: "Publish truthful TASK-0101 report and stop at exact terminal."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Architect review before ChatGPT.com plugin refresh."
+    expected_signal: "CHATGPT_PLUGIN_REFRESH_REQUIRED only when exact local activation predicate passes."
+
+capability_requirements:
+  EXECUTION:
+    - repository_content_read
+    - native_repository_execution
+    - git_history_read
+    - remote_ref_read
+  REVIEW:
+    - repository_content_read
+    - repository_content_write
+    - git_history_read
+    - remote_ref_read
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
