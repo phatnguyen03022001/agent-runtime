@@ -1,0 +1,113 @@
+protocol_version: 3
+
+task_id: TASK-0111
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect
+  predecessor_task: TASK-0110
+  predecessor_review: "8c29525c98a2aeb72ae54500220197ec1033c546"
+  gap_id: "screen_capture_display_region_nil_wire_contract"
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: screen_capture_display_region_wire_contract_repair
+
+execution_surface:
+  id: CODEX_LOCAL
+  controller: CODEX
+  location: LOCAL
+  transport: NATIVE
+
+objective: "Repair the exact Swift↔Python screen_capture wire-contract bug for display/region targets by emitting explicit null keys for nullable-required metadata fields, add regression coverage, run canonical verification once, and package/sign/freeze one new immutable candidate. Do not install or activate it."
+
+root_cause:
+  classification: "OPTIONAL_NIL_JSON_KEY_OMISSION"
+  evidence:
+    - "Swift resolveDisplay() sets windowID=nil and capturedApplication=nil for display and region targets."
+    - "Synthesized Codable omits Optional nil keys from JSON."
+    - "Python ScreenCaptureMetadata declares window_id: int | None and captured_application: ScreenCaptureApplication | None without defaults, therefore nullable but required."
+    - "ScreenCaptureMetadata.model_validate(header) rejects missing keys and returns CAPTURE_PROTOCOL_ERROR invalid screen capture metadata."
+    - "Window-based targets serialize both keys because values are non-nil."
+    - "Existing Swift wire test covers only non-nil window metadata and therefore misses this contract."
+  platform_block_indicated: false
+  production_png_path_indicated: true
+
+required_fix:
+  - "Preserve the Python ScreenCaptureMetadata contract exactly; do not weaken required nullable fields by adding defaults."
+  - "Implement explicit Swift encoding for ScreenCaptureMetadata so window_id and captured_application are always present in the JSON object, using JSON null when nil."
+  - "Preserve existing snake_case wire names, all other fields, ordering irrelevance, framing, PNG bytes and bounded header behavior."
+  - "Do not change public MCP tool name, input schema, output_schema=None, media-first ImageContent+TextContent result shape or target semantics."
+
+required_tests:
+  - "Add Swift wire regression proving display-style metadata with windowID=nil and capturedApplication=nil serializes both keys explicitly as JSON null."
+  - "Add or extend Python/native integration regression so display and region framed metadata with explicit null keys validates successfully."
+  - "Preserve existing window/frontmost/application capture tests."
+  - "Require no regression in media-first ImageContent first, TextContent metadata second contract."
+
+verification:
+  focused:
+    - "Run Swift ScreenCaptureTests."
+    - "Run Python screen_capture, screen_capture_mcp and MCP contract tests."
+    - "Run any newly added targeted display/region regression tests."
+  canonical:
+    authority: "0/1"
+    command: "./verify"
+    requirements:
+      - "Run exactly once after focused tests PASS."
+      - "No retry."
+      - "Require exit_code=0."
+  package:
+    authority: "0/1"
+    requirements:
+      - "Only after canonical verification PASS."
+      - "Use canonical packaging interpreter and exactly one valid non-ad-hoc codesigning identity."
+      - "Package/sign/freeze exactly one new candidate."
+      - "Do not disclose or persist signing identity literal/fingerprint."
+      - "No retry."
+      - "Require strict codesign, validate-candidate, provenance, immutable closure and TeamIdentifier closure PASS."
+
+scope:
+  allowed_tracked_mutation:
+    - "macos/Sources/AgentRuntimeCore/ScreenCapture.swift"
+    - "macos/Tests/AgentRuntimeCoreTests/ScreenCaptureTests.swift"
+    - "tests/test_screen_capture.py"
+    - "tests/test_screen_capture_mcp.py"
+    - ".agent/tasks/TASK-0111/report.yaml"
+  expected_files_are_restrictive: true
+
+forbidden_changes:
+  - "Do not weaken Python metadata schema to make missing nullable-required keys acceptable."
+  - "Do not modify unrelated Runtime, tunnel, lifecycle, terminal_exec, repo tools or dependency contracts."
+  - "Do not install-prebuilt."
+  - "Do not install/replace Agent Runtime.app."
+  - "Do not create or mutate cutover transaction state."
+  - "Do not restart/stop/signal Runtime."
+  - "Do not refresh ChatGPT plugin."
+  - "Do not invoke live screen_capture as execution proof."
+  - "Do not mutate TCC."
+  - "Do not mutate main/tags/releases/sibling repositories."
+  - "Do not force-push."
+
+publication:
+  - "On PASS publish one implementation successor containing only authorized tracked implementation/test paths."
+  - "Publish TASK-0111 report as sole direct child of implementation successor."
+  - "If canonical verify or packaging fails, publish truthful report-only terminal and do not widen scope."
+
+terminal_states:
+  success: NEEDS_REVIEW
+  verification_failure: CANONICAL_VERIFICATION_FAILED
+  packaging_failure: PACKAGING_FAILED
+  candidate_validation_failure: CANDIDATE_VALIDATION_FAILED
+  capability_failure: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+execution_ready: true
