@@ -1,0 +1,237 @@
+protocol_version: 3
+
+task_id: TASK-0090
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: user_request
+  task_id: ""
+  gap_id: "typed_repo_fast_forward"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: integration
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - verification
+  - simplicity
+  - github-workflow
+
+execution_skills:
+  required:
+    - executor
+    - verification
+    - reliability
+    - simplicity
+    - github-workflow
+  recommended:
+    - debugging
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "Current operator instruction and Architect read-only audit after accepted architect-profile TASK-0046"
+    role: "Authorizes the next bounded Agent Runtime capability task and establishes repo_fast_forward as the first reproduced platform-compliance gap to close before repo_publish, model-vision Stage B, or screen_capture."
+    precedence: 1
+  - source: "phatnguyen03022001/agent-skills@4f4ef2b45e1a025bc499702919431c0d0d61419c:.agent/tasks/TASK-0054/review.yaml"
+    role: "ACCEPTED platform-compliant capability-routing/publication governance: semantic capability first, narrow bounded action preference, no safety bypass, no quality downgrade, immutable handoff and operator fallback semantics."
+    precedence: 2
+  - source: "phatnguyen03022001/architect-profile@4cbac8f89a26206f342e8cacf7401a466eb5df05:.agent/tasks/TASK-0046/review.yaml"
+    role: "ACCEPTED dev authority snapshot selecting agent-skills source 87a37a72a4952b1da273d9af308642f4295fda6b and Agent Runtime accepted source candidate 9c12dcae6f1a5e23fc152ff94c65917cbff96df5."
+    precedence: 3
+  - source: "phatnguyen03022001/agent-runtime@99d9e94346ca54916686911c998b5721d60014b6:.agent/tasks/TASK-0086/review.yaml"
+    role: "ACCEPTED source-level public tool 8 repo_observer and its bounded local Git observation contract."
+    precedence: 4
+  - source: "phatnguyen03022001/agent-runtime@8f2a63af886192acc7129654185d6f91d99295d0"
+    role: "Current canonical dev including accepted TASK-0088/TASK-0089 evidence closure; production source still exposes exactly eight tools and README still incorrectly says seven."
+    precedence: 5
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing typed-tool pattern in agent_runtime/server.py, agent_runtime/contracts.py, agent_runtime/repo_observer.py and tests/test_repo_observer*.py"
+  rationale: "Add one narrow source-level typed Git consequence capability using the existing MCP registration/contracts/error patterns. Do not add a Git framework, provider registry, job system, publication subsystem, dependency, or lifecycle machinery."
+
+objective: "Add source-level public tool 9 repo_fast_forward: one replay-safe, expected-state-guarded, fixed-origin Git fetch plus exact fast-forward of the current clean branch to one caller-bound expected remote commit. The tool exists to replace generic-shell local mirror synchronization when platform-safe typed execution is available. It MUST NOT commit, push, reset, rebase, merge divergent history, change branches, accept arbitrary Git argv/refspec/remote names, or perform any Runtime lifecycle action."
+
+scope:
+  required_changes:
+    - "Fresh-bind TASK-0090 at its exact planning base. Require canonical dev/main unchanged, canonical local checkout /Users/tienphat/Developer/agent-runtime on branch dev, clean with zero staged paths and no concurrent writer before mutation. Local may be clean/behind and may require one explicitly authorized operator publication/synchronization consequence before Executor mutation if the platform blocks automated synchronization; do not bypass safety."
+    - "Add agent_runtime/repo_fast_forward.py as the single implementation owner for the new consequence. Use fixed /usr/bin/git, shell=False, disconnected stdin, bounded stdout/stderr handling, a fixed call deadline, GIT_TERMINAL_PROMPT=0 and noninteractive/pager/color settings. No caller-supplied executable, argv, timeout, remote, URL, refspec, fetch option, merge option, force flag or cleanup flag."
+    - "Expose exactly repo_fast_forward(cwd, branch, expected_local_head, expected_remote_head). cwd uses the existing connector-portable absolute-cwd schema and Runtime workspace enforcement. branch is bounded text but MUST be validated as a legal Git branch and MUST equal the currently checked-out non-detached branch. expected_local_head and expected_remote_head MUST be exact lowercase 40-hex commit SHAs."
+    - "The only remote identity is literal origin. Require current upstream to equal origin/<branch>. Require cwd to resolve to the repository root, not merely a subdirectory. Reject bare or shallow repositories, dirty tracked/staged/untracked state, conflicts, or merge/rebase/cherry-pick/bisect operation state before network consequence."
+    - "Precondition local HEAD MUST equal either expected_local_head or expected_remote_head. Equality with expected_remote_head is the replay-safe already-applied case; any third local HEAD is LOCAL_HEAD_MISMATCH and MUST NOT be synchronized."
+    - "Fetch exactly the named branch from fixed origin with no tags, no prune, no submodule recursion, no broad ref discovery and no arbitrary refspec. Update only refs/remotes/origin/<branch>. Do not use git pull. The fetch is the only intended network consequence."
+    - "After fetch, require refs/remotes/origin/<branch> to resolve exactly expected_remote_head. Any different canonical remote head is REMOTE_HEAD_MISMATCH/STALE_REMOTE and MUST NOT move local HEAD."
+    - "Require expected_local_head to be an ancestor of expected_remote_head. Divergence or reversed history is NON_FAST_FORWARD and MUST NOT move local HEAD. This ancestry contract applies even when replay observes local HEAD already at expected_remote_head so misbound inputs do not silently pass."
+    - "Freshly re-check branch, HEAD, cleanliness and operation state after fetch and immediately before local branch movement. If local state changed, fail LOCAL_STATE_CHANGED. The tool is not a distributed writer lock; one-writer governance remains external authority."
+    - "When local HEAD equals expected_local_head and all guards pass, perform exactly one git merge --ff-only --no-edit to expected_remote_head with Git hooks disabled for this tool invocation and submodule recursion disabled. Do not allow merge commits. Do not invoke reset, rebase, checkout/switch, cherry-pick, update-index, clean, stash, commit or push."
+    - "After the fast-forward, fresh-observe and require branch unchanged, HEAD exactly expected_remote_head, origin/<branch> exactly expected_remote_head, clean tree, zero staged/untracked/conflicted paths and no in-progress Git operation. Any ambiguous or failed local update returns a typed failure instructing the caller to re-observe before another consequence; never auto-repair or auto-retry."
+    - "Replay with the same exact inputs after a successful consequence MUST fresh-fetch and verify the same expected remote head, then return status already_at_target without another branch movement. If remote advanced after the first call, replay fails REMOTE_HEAD_MISMATCH instead of advancing further."
+    - "Add a fixed closed RepoFastForwardResult schema containing only bounded machine-useful proof: schema_version, status fast_forwarded|already_at_target, repository_root, branch, remote literal origin, upstream, expected_local_head, expected_remote_head, head_before, head_after, tracking_head, fetched=true, network_used=true, fast_forwarded boolean and deadline_seconds. Do not return Git stdout, credentials, remote URLs, arbitrary config, environment, file contents or large changed-path lists."
+    - "Add tool-specific fixed error codes sufficient to distinguish invalid arguments/workspace/repository root, dirty/in-progress/detached/branch/upstream/local-head state, stale remote, non-fast-forward, local-state-changed, fetch/deadline/transient failure, fast-forward failure and internal failure. Error messages are bounded and MUST NOT echo credentials or remote URLs. Do not broaden repo_observer's actual behavior."
+    - "Register repo_fast_forward as public tool 9 after repo_observer. Annotation MUST truthfully be readOnlyHint=false, destructiveHint=true, idempotentHint=true, openWorldHint=true. Add it to timing allowlist and server instructions."
+    - "Update README Tool surface to say exactly nine public tools and document both the already-accepted repo_observer and new repo_fast_forward. Keep Runtime described as an execution provider, not Git authority or orchestration. Fix only this reproduced stale seven-tool documentation while editing the tool-surface section."
+    - "Add focused implementation and MCP contract tests first. Record genuine RED before implementation for missing tool 9/contract. Use local temporary Git repositories and local/bare origin fixtures for focused tests; focused tests MUST NOT require GitHub, credentials or the live Runtime."
+    - "Focused tests MUST cover: successful clean fast-forward; exact replay returns already_at_target; remote-head mismatch does not move local HEAD; non-fast-forward does not move local HEAD; dirty/staged/untracked and in-progress state reject before fetch; cwd subdirectory, detached head, branch mismatch, upstream mismatch and third local HEAD reject; input schema has no remote/refspec/argv/command/force/timeout knobs; exact nine-tool order/annotations; fixed success schema; timing allowlist/server instructions; bounded error envelope; no shell=True; no push/reset/rebase/checkout/clean/stash/commit path."
+    - "After focused GREEN and stable diff, run canonical PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify exactly once for TASK-0090 and preserve durable exact command/start/finish/exit/summary evidence. Do not rerun the full canonical verifier merely because control transport changes; ambiguous exactly-once verification is a blocker/successor concern, not permission for a second physical run."
+    - "Only on canonical PASS, publish the exact implementation candidate non-force to dev. Then create, validate and publish .agent/tasks/TASK-0090/report.yaml as the sole report-only direct child, fresh-resolve dev/main and exact lineage, and stop at NEEDS_REVIEW."
+  allowed_existing_files_or_components:
+    - "agent_runtime/contracts.py"
+    - "agent_runtime/server.py"
+    - "agent_runtime/timing.py"
+    - "tests/test_mcp_contracts.py"
+    - "README.md"
+    - ".agent/tasks/TASK-0090/report.yaml"
+  allowed_new_files_or_components:
+    - "agent_runtime/repo_fast_forward.py"
+    - "tests/test_repo_fast_forward.py"
+    - "tests/test_repo_fast_forward_mcp.py"
+  expected_files_are_restrictive: true
+
+invariants:
+  - "Production public surface becomes exactly nine tools in this order: terminal_exec, terminal_start, terminal_poll, terminal_control, terminal_resize, capacity_observer, fs_read_batch, repo_observer, repo_fast_forward."
+  - "repo_fast_forward is a narrow synchronization consequence, not repository authority. Caller/task authority supplies exact expected branch/local/remote identities."
+  - "Remote is fixed to origin; caller cannot supply a remote name, URL or refspec."
+  - "No force fetch/push, no push of any kind, no commit creation, no reset, no rebase, no branch switch/checkout, no stash, no clean and no divergent merge."
+  - "The only permitted branch update is an exact fast-forward from expected_local_head to expected_remote_head after fresh origin/<branch> equality proof."
+  - "Replay is safe only for the same expected identities: already-at-target is a fresh-verified no-op; a later remote head does not get followed automatically."
+  - "repo_fast_forward is truthfully open-world because it performs one Git fetch. It is truthfully destructive because a fast-forward may replace/delete tracked working-tree paths. It is idempotent under exact bound inputs."
+  - "Generic terminal tools remain available as fallback; adding the typed tool does not forbid terminal when canonical governance permits it."
+  - "repo_observer remains read-only/local-only and does not gain fetch or mutation."
+  - "repo_publish is explicitly deferred to a separate successor task after TASK-0090 acceptance. No publication capability is smuggled into repo_fast_forward."
+  - "Image transport proof remains accepted; TASK-0090 does not perform model-vision Stage B, screen_capture, repo_diff_read, Accessibility or UI-control work."
+  - "No package, candidate freeze, install, activation, Runtime/tunnel restart, cutover, rollback/recovery, TASK-0084 lifecycle action, main promotion, tag or release is authorized."
+  - "No dependency, MCP SDK version, branch topology or workspace policy change is authorized."
+
+forbidden_changes:
+  - "Do not implement repo_publish, remote commit creation, push, tag, release, GitHub API mutation or arbitrary Git command execution."
+  - "Do not accept arbitrary remote/refspec/URL/argv/command/timeout/force/prune/tags/submodule controls from callers."
+  - "Do not use shell=True or invoke a shell for Git."
+  - "Do not use git pull, reset, rebase, checkout/switch, stash, clean, cherry-pick, commit, push or branch creation/deletion as part of repo_fast_forward."
+  - "Do not auto-resolve dirty state, conflicts, divergence, detached HEAD, upstream mismatch, remote drift or local-state races."
+  - "Do not broaden filesystem access beyond AGENT_RUNTIME_WORKSPACE_ROOT or expose remote URLs/credentials/config/environment in results/errors."
+  - "Do not change requirements.txt, requirements.lock, mcp==2.2.0 pin or add dependencies."
+  - "Do not implement screen_capture, model-vision proof, repo_diff_read, Accessibility, click, scroll or type."
+  - "Do not package/freeze/install/restart/reload/cut over/rollback/recover the live Runtime or tunnel."
+  - "Do not mutate main, tags, releases, sibling repositories or architect-profile."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: allowed_only_for_exact_repo_fast_forward_tool_9
+  blocking_gap_behavior: BLOCKED
+
+structure_policy:
+  expected_new_files:
+    - "agent_runtime/repo_fast_forward.py"
+    - "tests/test_repo_fast_forward.py"
+    - "tests/test_repo_fast_forward_mcp.py"
+    - ".agent/tasks/TASK-0090/report.yaml"
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "No other new tracked files are authorized."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Public tool 9 is exactly one closed expected-state repo_fast_forward capability."
+    evidence_required: "Production MCP listing/order/annotations and closed input/output schema prove exactly cwd, branch, expected_local_head, expected_remote_head inputs with no generic Git/network knobs."
+  - id: AC-2
+    requirement: "A clean current branch can fast-forward only from the caller-bound expected local commit to the freshly fetched expected origin commit."
+    evidence_required: "Focused local-origin integration proof shows exact precondition SHA, exact fetched origin/<branch> SHA, ancestry PASS, one ff-only update, exact post HEAD/tracking/clean state and structured fast_forwarded result."
+  - id: AC-3
+    requirement: "Replay is exact-input idempotent and does not follow later remote drift."
+    evidence_required: "Second identical call after success returns already_at_target after fresh fetch with no branch movement; a fixture where remote later advances returns REMOTE_HEAD_MISMATCH and leaves local HEAD at the prior target."
+  - id: AC-4
+    requirement: "Dirty, divergent, ambiguous or misbound local state fails closed before unauthorized branch movement."
+    evidence_required: "Focused tests cover dirty/staged/untracked, in-progress operations, detached/branch/upstream/cwd mismatch, third local HEAD, stale remote, non-fast-forward and local-state-changed conditions with local HEAD preserved where movement was not authorized."
+  - id: AC-5
+    requirement: "The implementation performs only bounded fixed Git operations and exposes no hidden generic shell/Git interface."
+    evidence_required: "Source/test proof shows /usr/bin/git, shell=False, fixed origin, bounded I/O/deadline/noninteractive env, hooks disabled for ff invocation, exact fetch/observation/merge-base/ff-only/post-proof path, and absence of forbidden Git verbs/caller knobs."
+  - id: AC-6
+    requirement: "Existing Runtime contracts remain intact while documentation matches actual source surface."
+    evidence_required: "Directly affected MCP/observer/timing tests PASS; repo_observer remains read-only/local-only; README states exactly nine tools and documents tool 8 and tool 9 without changing Runtime authority model."
+  - id: AC-7
+    requirement: "Exact TASK-0090 candidate passes canonical repository verification once."
+    evidence_required: "Focused RED->GREEN evidence plus exactly one physical canonical PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify execution exits 0 with durable identity/timing/summary evidence."
+  - id: AC-8
+    requirement: "Publication is bounded and independently reviewable."
+    evidence_required: "Implementation candidate changes only authorized paths, report-only direct child is validator-PASS, dev publication is non-force, fresh remote lineage closes, main remains c49d777efa09db7f6c51bd8d8616db4623499fb8 and no live Runtime lifecycle consequence occurs."
+
+verification:
+  executor_checks:
+    - id: CHECK-BIND
+      command_or_check: "Fresh-resolve exact TASK-0090 base, dev/main, local branch/clean/staged/worktree/writer state, selected agent-skills authority, accepted TASK-0086/TASK-0088/TASK-0089 lineage and required current EXECUTION capabilities before mutation."
+      required: true
+    - id: CHECK-RED
+      command_or_check: "Add focused TASK-0090 tests first and capture genuine RED for absent repo_fast_forward/public tool 9 before production implementation."
+      required: true
+    - id: CHECK-FOCUSED
+      command_or_check: "Iterate only focused repo_fast_forward, MCP contract, timing and directly affected repo_observer tests until GREEN. Use local temporary Git remotes only."
+      required: true
+    - id: CHECK-SAFETY
+      command_or_check: "Inspect exact source/contract/schema and test fixed Git argv/env/deadline/error behavior, exact annotations, replay, stale-remote/non-ff preservation, forbidden verbs/knobs and repo_observer non-regression."
+      required: true
+    - id: CHECK-DIFF
+      command_or_check: "Run git diff --check and prove exact tracked candidate scope is restricted to authorized existing/new implementation/test/README paths."
+      required: true
+    - id: CHECK-CANONICAL
+      command_or_check: "After focused GREEN and stable diff, execute PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify exactly once. Persist durable exact command/start/finish/exit/summary evidence; no second physical full verify on ambiguity."
+      required: true
+    - id: CHECK-FINAL
+      command_or_check: "Only on canonical PASS: commit/publish exact implementation non-force to dev, create/validate/publish TASK-0090 report-only direct child with agent-skills@87a37a72a4952b1da273d9af308642f4295fda6b, fresh-resolve dev/main/lineage/local clean state and stop at NEEDS_REVIEW."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "Independent Architect review of exact task/candidate/report, typed tool safety semantics, canonical verification evidence and publication closure."
+    expected_signal: "Architect ACCEPT of source-level repo_fast_forward tool 9 only; repo_publish and live installation remain separately gated."
+
+capability_requirements:
+  EXECUTION:
+    - repository_content_read
+    - repository_content_write
+    - native_repository_execution
+    - git_history_read
+    - git_commit
+    - non_force_git_push
+    - remote_ref_read
+  REVIEW:
+    - repository_content_read
+    - repository_content_write
+    - git_history_read
+    - remote_ref_read
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
