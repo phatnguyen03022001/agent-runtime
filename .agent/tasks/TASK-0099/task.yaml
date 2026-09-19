@@ -1,14 +1,14 @@
 protocol_version: 3
 
 task_id: TASK-0099
-task_revision: 5
+task_revision: 6
 state: APPROVED
 
 origin:
   type: architect_recovery
   task_id: TASK-0099
-  predecessor_revision: 4
-  gap_id: "bounded_runtime_agent_registration_refresh_sufficiency_test"
+  predecessor_revision: 5
+  gap_id: "install_accepted_successor_before_live_runtime_acceptance"
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -17,7 +17,7 @@ target:
   repository: phatnguyen03022001/agent-runtime
   branch:
     name: dev
-    role: runtime_agent_registration_refresh_recovery
+    role: accepted_successor_live_installation
 
 execution_base:
   mode: handoff_snapshot
@@ -49,134 +49,130 @@ external_skills:
   execution_recommended: []
 
 authority_sources:
-  - source: ".agent/tasks/TASK-0099/review.yaml@49f37e24805620ea6b85a24fd9a006f37d1dee3a"
-    role: "Architect ACCEPT of revision-4 BLOCKED_AFTER_PARENT_REGISTRATION_BASELINE evidence and authorization basis for considering a bounded Runtime-agent registration refresh hypothesis."
+  - source: ".agent/tasks/TASK-0099/review.yaml@6d5c88120be80d8f0ca6bc1aab0c153240988a2f"
+    role: "Architect ACCEPT of revision-5 CURRENT_PHASE_CAPABILITY_UNAVAILABLE evidence. No Runtime-agent unregister/register mutation reached the host and those revision-5 counters remain unconsumed but are not reused here."
     precedence: 1
-  - source: ".agent/tasks/TASK-0099/report.yaml@af410b440b891ad50afc951d3144c49265e7cb3c"
-    role: "Exact revision-4 one-shot register-main result, deterministic 40x250ms negative sufficiency test, immutable predecessor/config/successor evidence."
-    precedence: 2
-  - source: "Fresh Architect live diagnosis after revision-4 terminal"
-    role: "ServiceManagement remains main_app=enabled/runtime_agent=enabled, BTM app/agent generation 1, but launchd Runtime job remains ServiceManagement-managed, spawn-failed with last exit 78 EX_CONFIG and no Runtime/tunnel/MCP process. Runtime-agent refresh is therefore the next minimal owner-surface experiment, not a proven root-cause repair."
-    precedence: 3
-  - source: "macos/Sources/AgentRuntimeMenuBar/ServiceManagementController.swift at revision-5 planning source"
-    role: "Installed owner app exposes explicit unregister-runtime and register-runtime commands backed by SMAppService.agent(plistName:). They are independent of main-app registration and return typed status snapshots / approval-required outcome."
-    precedence: 4
   - source: ".agent/tasks/TASK-0098/review.yaml@66281456699d005f90b64f58d6ab2f2464bee676"
-    role: "Accepted immutable successor remains future input only; revision 5 grants no successor installation authority."
+    role: "Architect-accepted immutable signed successor candidate and exact handoff identity."
+    precedence: 2
+  - source: "Fresh Architect live diagnosis after revision-5 acceptance"
+    role: "Current predecessor remains installed with main_app=enabled/runtime_agent=enabled, ServiceManagement-managed Runtime job spawn-failed with last exit 78 EX_CONFIG, no port-8080 listener, healthz=000, readyz=000, no cutover transaction, exact predecessor helper/config/desired-state identities, and strict deep codesign PASS."
+    precedence: 3
+  - source: "./install.sh --install-prebuilt and macos/candidate_cutover.py at revision-6 planning source"
+    role: "Canonical prebuilt cutover mechanism. It installs a sealed accepted app/handoff into ~/Applications/Agent Runtime.app and creates a schema-5 transaction. Commit, rollback, resume and recovery are separate authorities."
+    precedence: 4
+  - source: ".agent/tasks/TASK-0084/task.yaml"
+    role: "Accepted prior lifecycle pattern: exact immutable successor install through --install-prebuilt, leave resulting generation PENDING / APP_SWAPPED for separate live acceptance before commit-cutover."
     precedence: 5
 
 structure_authority:
   status: RESOLVED
-  source: "Installed predecessor ServiceManagement command surface."
-  rationale: "Refresh only the already-enabled Runtime agent registration through the installed owner app. Do not manipulate launchd directly, execute the Runtime helper manually, alter app bytes/configuration, or install the successor. The experiment is bounded and causal-neutral."
+  source: "Existing canonical prebuilt cutover path."
+  rationale: "No new implementation or lifecycle mechanism is introduced. Revision 6 uses the existing sealed-candidate install transaction exactly once and leaves commit-cutover for later independent acceptance."
 
-objective: "Test whether one owner-surface Runtime-agent registration refresh is sufficient to recover the exact restored predecessor control-plane baseline. Perform exactly one unregister-runtime followed, only after deterministic absence convergence, by exactly one register-runtime; then apply an exact bounded health window. Treat success as incident-specific sufficiency and failure as a bounded negative result, not as proof of a general root cause."
+objective: "Install the exact TASK-0098 accepted immutable successor exactly once through the canonical prebuilt cutover path, prove the installed successor/transaction identities, test whether its live Runtime control plane reaches a deterministic healthy baseline, and stop for Architect review with the successor transaction still PENDING. Do not repair the predecessor first, do not commit-cutover, and do not infer that successor installation proves the historical EX_CONFIG root cause."
 
 checkpoint:
-  predecessor_revision: 4
-  predecessor_terminal: BLOCKED_AFTER_PARENT_REGISTRATION_BASELINE
-  revision4_register_main:
-    authority_consumed: "1/1"
-    returncode: 0
-    post_state:
-      main_app: enabled
-      runtime_agent: enabled
-    bounded_health_result: NOT_SUFFICIENT_IN_THIS_INCIDENT_WINDOW
-    poll_observations: 40
-    sleep_before_each_observation_ms: 250
-    observation_41: false
-  live_state:
+  predecessor_revision: 5
+  predecessor_terminal: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+  predecessor_review_commit: "6d5c88120be80d8f0ca6bc1aab0c153240988a2f"
+  live_predecessor:
     cutover_transaction_present: false
     installed_app_closure_record_count: 1224
     installed_app_closure_sha256: "56a94498ce74b8337394e4bfaf4c8d69bdefaaf26429352ea3f8218a47621bf2"
     installed_runtime_revision: "b5ac0ed5b461d3a259e4111e1a8f13933985f81f"
     installed_runtime_tree: "5d9b40221e42d96aa78cc25bca7e94092e8426a9"
-    installed_bundle_identifier: "com.picmao.agent-runtime"
-    installed_bundle_version: "6"
     runtime_helper_sha256: "69cf1f00d423315e9e281cd4558665ef675b75278c88f8014ced943145e3f1df"
     runtime_env_sha256: "6e6fef8e255b140f28703f8bd515726e1fd93d644e6f838b33ebf319e8133077"
     desired_state_present: true
     desired_state_sha256: "e3b0c44298fc1c149afbf4d8996fb92427ae41e4649b934ca495991b7852b855"
+    strict_deep_codesign: PASS
     service_management_main_app: enabled
     service_management_runtime_agent: enabled
-    btm_app_generation: 1
-    btm_runtime_agent_generation: 1
     runtime_launchd_present: true
-    runtime_launchd_last_exit: "78 EX_CONFIG"
     runtime_launchd_job_state: "spawn failed"
+    runtime_launchd_last_exit: "78 EX_CONFIG"
     runtime_launchd_program_identifier: "Contents/MacOS/AgentRuntimeRuntimeService"
-    tunnel_client_count: 0
     listener_8080_count: 0
     healthz: "000"
     readyz: "000"
   accepted_successor:
     candidate_sha256: "496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c"
+    source_revision: "b0dec3e556ff914fb9ca041c6b52f53c04ee3fd2"
+    source_tree: "087af89591d0959c07124b0154cfb8f77b27c3d4"
+    requirements_lock_sha256: "80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
     app_closure_record_count: 1229
     app_closure_sha256: "bebb19c204f1f4238351b869b8fd99d708543a808f9cfd505d977fa3bb7f5e2f"
     handoff_sha256: "68c5266a2eee23708405c243b9178f548f3024cc3f6375cb4b498712c6d87c41"
+    app_path: "build/candidates/496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c/Agent Runtime.app"
+    handoff_path: "build/candidates/496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c/Agent Runtime.candidate.json"
 
 authority_counters:
   revision1_rollback: "CONSUMED_1_OF_1"
   revision2_partial_recovery: "CONSUMED_1_OF_1"
   revision4_register_main: "CONSUMED_1_OF_1"
-  revision5_unregister_runtime: "0/1"
-  revision5_register_runtime: "0/1"
-  revision5_launchctl_mutation: "NONE"
-  revision5_successor_install_prebuilt: "NONE"
-  revision5_commit_cutover: "NONE"
+  revision5_unregister_runtime: "UNCONSUMED_NOT_REUSED"
+  revision5_register_runtime: "UNCONSUMED_NOT_REUSED"
+  revision6_install_prebuilt: "0/1"
+  revision6_commit_cutover: "NONE"
+  revision6_rollback: "NONE"
+  revision6_resume: "NONE"
+  revision6_recover: "NONE"
 
 scope:
   required_changes:
-    - "Fresh-bind TASK-0099 revision 5 at exact planning HEAD. Require local dev and remote dev at that HEAD, remote main c49d777efa09db7f6c51bd8d8616db4623499fb8, one clean canonical worktree, no Git lock and no concurrent repository writer."
-    - "Re-resolve revision-4 ACCEPTED review/report and require checkpoint.live_state exactly before mutation: no transaction, exact predecessor closure/revision/tree/helper/codesign/config/desired-state identities, main_app=enabled/runtime_agent=enabled, modern Runtime job present with the same spawn-failed/78-EX_CONFIG class, zero tunnel/listener/health/readiness, and exact accepted successor identities."
-    - "Read-only record the Runtime service launchd identity and BTM app/agent identities before mutation. Do not use those tools for mutation."
-    - "Revision-5 unregister-runtime authority is exactly 0/1 -> 1/1. Invoke only the installed predecessor executable ~/Applications/Agent Runtime.app/Contents/MacOS/AgentRuntimeMenuBar with arguments --service-management unregister-runtime exactly once."
-    - "Require exit 0 and JSON-equivalent ServiceManagement snapshot main_app=enabled and runtime_agent in {not-registered, not-found}. If exit is nonzero, output is malformed, main_app changes from enabled, runtime_agent remains enabled/requires-approval, or any unexpected ownership appears, STOP BLOCKED_AFTER_RUNTIME_AGENT_UNREGISTER. Do not retry and do not invoke register-runtime."
-    - "After successful unregister-runtime, run the exact deterministic absence window: at most 40 observations; before each observation sleep exactly 100 milliseconds; observe owner-app ServiceManagement status and read-only launchctl presence for com.picmao.agent-runtime-runtime-service. Stop early only when main_app=enabled, runtime_agent in {not-registered, not-found}, and the modern Runtime launchd job is absent. Maximum scheduled delay is exactly 4.0 seconds. No observation 41 is authorized."
-    - "If observation 40 still has the Runtime launchd job present or ServiceManagement state is not the exact absent-agent predicate, STOP BLOCKED_AFTER_RUNTIME_AGENT_UNREGISTER_CONVERGENCE. Do not invoke register-runtime, launchctl mutation, direct helper execution, or any compensation outside a future Architect revision."
-    - "Only after exact absence convergence, revision-5 register-runtime authority is exactly 0/1 -> 1/1. Invoke only the installed predecessor AgentRuntimeMenuBar with arguments --service-management register-runtime exactly once."
-    - "If register-runtime exits 3 with the command's typed approval-required outcome, STOP OPERATOR_INPUT_REQUIRED_RUNTIME_AGENT_APPROVAL. Do not use System Settings, GUI automation, retry registration, or infer approval."
-    - "If register-runtime exits nonzero other than the typed approval-required result, returns malformed output, changes main_app away from enabled, or does not produce runtime_agent=enabled, STOP BLOCKED_AFTER_RUNTIME_AGENT_REGISTER. Do not retry or use direct launchctl/helper/tunnel repair."
-    - "After successful register-runtime, run the exact deterministic health window: at most 40 observations; before each observation sleep exactly 250 milliseconds; observe ServiceManagement status, canonical tunnel-client count, listener count on 127.0.0.1:8080, healthz and readyz. Stop early only when main_app=enabled, runtime_agent=enabled, tunnel-client count=1, listener count=1, healthz=200 and readyz=200. Maximum scheduled delay is exactly 10.0 seconds. No observation 41 is authorized."
-    - "If observation 40 is not healthy under the exact predicate, STOP BLOCKED_AFTER_RUNTIME_AGENT_REFRESH_BASELINE. This falsifies only the bounded hypothesis that one Runtime-agent registration refresh is sufficient in this incident window; it does not identify another root cause."
-    - "On healthy baseline, require installed predecessor closure/helper/runtime.env/desired-state unchanged, no cutover transaction, main_app=enabled/runtime_agent=enabled, exact singleton control-plane health and accepted successor original/handoff unchanged."
-    - "Do not install the successor in revision 5. Do not perform direct MCP semantic acceptance, screen_capture, TCC or Stage-B model vision."
-    - "Publish only TASK-0099 report revision 5 on dev and stop NEEDS_REVIEW on healthy success or the exact blocked/operator terminal reached."
+    - "Fresh-bind TASK-0099 revision 6 at the exact planning HEAD. Require local dev and remote dev at that HEAD, remote main c49d777efa09db7f6c51bd8d8616db4623499fb8, one clean canonical worktree, no Git lock and no concurrent repository writer."
+    - "Freshly re-resolve the revision-5 ACCEPTED review and TASK-0098 ACCEPTED successor review before mutation."
+    - "Read-only prove there is no cutover transaction and revalidate the exact predecessor helper/runtime.env/desired-state identities plus current ServiceManagement/launchd/listener/health checkpoint. Current live observations may differ only in non-authoritative process counters; any app/config/transaction/candidate identity drift is BLOCKED."
+    - "Read-only rehash the exact accepted successor app closure and handoff before mutation. Require candidate SHA-256, source revision/tree, requirements-lock SHA-256, closure 1229/bebb19c204f1f4238351b869b8fd99d708543a808f9cfd505d977fa3bb7f5e2f and handoff SHA-256 68c5266a2eee23708405c243b9178f548f3024cc3f6375cb4b498712c6d87c41. Do not execute, modify, rebuild or re-sign the immutable source candidate."
+    - "Immediately before the first lifecycle mutation, preflight that the selected local execution capability can invoke the canonical install-prebuilt command literally. If unavailable or platform-blocked before host execution, STOP CURRENT_PHASE_CAPABILITY_UNAVAILABLE with revision6_install_prebuilt still 0/1. Do not reroute, encode, split, delegate to another provider, or substitute a different lifecycle primitive."
+    - "Revision-6 install-prebuilt authority is exactly 0/1 -> 1/1. From the canonical checkout invoke exactly once: ./install.sh --install-prebuilt 'build/candidates/496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c/Agent Runtime.app' 'build/candidates/496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c/Agent Runtime.candidate.json'. No retry."
+    - "If the canonical installer returns failure, automatic internal rollback is permitted only when performed by the installer itself. After the command returns, do not manually rollback/resume/recover/repair. Capture the resulting transaction/app state and STOP BLOCKED_AFTER_SUCCESSOR_INSTALL."
+    - "On successful install, require exactly one new schema-5 transaction in PENDING / APP_SWAPPED state and statically validate ~/Applications/Agent Runtime.app against the transaction handoff. Require installed candidate/source/tree/requirements identities to equal the accepted TASK-0098 successor and require valid predecessor rollback evidence."
+    - "Require the immutable source candidate/handoff under build/candidates/** to remain byte-identical after installation. runtime.env and desired-state must remain unchanged."
+    - "After successful PENDING install, run the exact deterministic live-health window: at most 60 observations; before each observation sleep exactly 250 milliseconds; observe installed-app ServiceManagement state, canonical Runtime/tunnel process ownership when available, listener count on 127.0.0.1:8080, healthz and readyz. Stop early only when ServiceManagement ownership is non-error, exactly one listener exists, healthz=200 and readyz=200. Maximum scheduled polling delay is exactly 15.0 seconds. No observation 61 is authorized."
+    - "If observation 60 is not healthy, STOP BLOCKED_AFTER_SUCCESSOR_INSTALL_BASELINE. Preserve the PENDING transaction exactly. Do not commit, rollback, resume, recover, manually restart Runtime/tunnel, mutate launchd, edit configuration, or reinstall."
+    - "If healthy, preserve the PENDING transaction and stop NEEDS_REVIEW. Health proves only that the accepted successor reached the required control-plane baseline; it does not by itself prove historical EX_CONFIG causation, direct MCP semantic acceptance, screen_capture behavior, TCC/Stage-B acceptance, or freeze readiness."
+    - "Publish only TASK-0099 report revision 6 on dev at the terminal reached."
 
   allowed_existing_files_or_components:
-    - "~/Applications/Agent Runtime.app/Contents/MacOS/AgentRuntimeMenuBar --service-management unregister-runtime"
-    - "~/Applications/Agent Runtime.app/Contents/MacOS/AgentRuntimeMenuBar --service-management register-runtime"
-    - "~/Applications/Agent Runtime.app read-only identity checks"
+    - "./install.sh --install-prebuilt"
+    - "macos/candidate_cutover.py only as invoked by install.sh"
+    - "macos/package_provenance.py and existing validation tooling read-only"
+    - "build/candidates/496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c/Agent Runtime.app immutable source"
+    - "build/candidates/496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c/Agent Runtime.candidate.json immutable handoff"
+    - "build/.task-0099-r6-* ignored task-owned evidence only"
+    - "~/Applications/Agent Runtime.app lifecycle target"
+    - "~/Library/Application Support/Agent Runtime/cutover-transaction"
     - "~/Library/Application Support/Agent Runtime/runtime.env read-only"
     - "~/Library/Application Support/Agent Runtime/protected-runtime-running read-only"
-    - "build/candidates/496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c read-only"
-    - "build/.task-0099-r5-* ignored logs/evidence only"
-    - ".agent/tasks/TASK-0099/report.yaml report revision 5"
+    - ".agent/tasks/TASK-0099/report.yaml"
   expected_files_are_restrictive: true
 
 invariants:
-  - "Revision 1 rollback, revision 2 partial recovery and revision 4 register-main authorities remain consumed and are never retried."
-  - "No cutover transaction exists at revision-5 start and none may be created."
-  - "Installed predecessor bytes/configuration/desired-state are immutable."
-  - "The only lifecycle mutations authorized are one unregister-runtime and, only after exact absence convergence, one register-runtime through the installed owner app."
-  - "No direct launchctl mutation, kickstart, helper execution, tunnel restart/repoint, configuration edit or app-byte repair is authorized."
-  - "Main-app ServiceManagement registration must remain enabled throughout revision 5."
-  - "Successor installation authority is NONE in revision 5."
-  - "A negative bounded health result does not establish a new root cause."
-  - "main, tags, releases, sibling repositories and branch topology remain unchanged."
+  - "The accepted successor identity is exactly candidate SHA-256 496c8493909799268ea8a90959ce8c3f6f477a43e40f58bdef2018d7de49290c, closure 1229/bebb19c204f1f4238351b869b8fd99d708543a808f9cfd505d977fa3bb7f5e2f and handoff SHA-256 68c5266a2eee23708405c243b9178f548f3024cc3f6375cb4b498712c6d87c41."
+  - "No cutover transaction exists at revision-6 start."
+  - "install-prebuilt is exactly 0/1 -> 1/1 and is the only authorized lifecycle mutation."
+  - "Revision-5 unregister/register counters are not reused or consumed."
+  - "The resulting successor transaction MUST remain PENDING / APP_SWAPPED if installation succeeds."
+  - "commit-cutover, rollback, resume and recover authority are NONE."
+  - "The immutable source candidate is never executed in place, rebuilt, modified, cleaned or re-signed."
+  - "runtime.env and desired-state are immutable."
+  - "No direct launchctl mutation, direct helper execution, start.sh execution, tunnel-client execution or manual ServiceManagement repair is authorized."
+  - "No direct MCP semantic acceptance, screen_capture, TCC or Stage-B model vision occurs in revision 6."
+  - "main, tags, releases, branch topology and sibling repositories remain unchanged."
 
 forbidden_changes:
-  - "Do not invoke rollback-cutover, recover-partial-cutover, resume-cutover, commit-cutover or install-prebuilt."
-  - "Do not invoke --service-management unregister-main, register-main, register, or unregister."
-  - "Do not invoke unregister-runtime or register-runtime more than their exact 1/1 authorities."
-  - "Do not invoke register-runtime before exact unregister convergence."
+  - "Do not invoke --commit-cutover, --rollback-cutover, --resume-cutover or --recover-partial-cutover."
+  - "Do not invoke install-prebuilt more than once."
+  - "Do not invoke --service-management register/unregister/register-main/unregister-main/register-runtime/unregister-runtime."
   - "Do not use launchctl bootout/bootstrap/kickstart/enable/disable for Agent Runtime."
   - "Do not execute AgentRuntimeRuntimeService, start.sh or tunnel-client directly."
-  - "Do not modify app bundle, runtime.env, desired-state, embedded plist, source, tests, docs, dependencies or lifecycle scripts."
-  - "Do not use System Settings or GUI automation for approval or repair."
-  - "Do not mutate accepted successor candidate or handoff."
-  - "Do not perform direct MCP/screen_capture/Stage-B/TCC/control work."
+  - "Do not rebuild or re-sign the accepted successor."
+  - "Do not mutate runtime.env, desired-state, source, tests, docs, requirements, packaging scripts or lifecycle scripts."
+  - "Do not use System Settings or GUI automation for repair."
   - "Do not create branch/worktree/clone/stash or mutate main/tags/releases/sibling repositories."
+  - "Do not reroute a platform-blocked install action to Codex, another provider, encoded commands, split commands or operator manual RPC merely to obtain a different safety judgment."
 
 gap_policy:
   local_auto_fix: false
@@ -193,57 +189,57 @@ structure_policy:
     allowed: false
     max: 0
     within: []
-    purpose: "Only existing TASK-0099 report.yaml may be updated; ignored build/.task-0099-r5-* evidence is not tracked structure."
+    purpose: "Only existing TASK-0099 report.yaml may be updated; ignored build/.task-0099-r6-* evidence is not tracked structure."
   allow_new_top_level_directories: false
   allow_new_shared_modules: false
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "Revision 5 starts from the exact revision-4 terminal and exact current live checkpoint."
-    evidence_required: "Exact refs/worktree, no transaction, predecessor/config/desired-state/successor identities, enabled/enabled ServiceManagement state, launchd spawn-failed/EX_CONFIG class and zero baseline health."
+    requirement: "Revision 6 starts from exact canonical refs, no transaction, exact accepted successor, and preserved predecessor/config identities."
+    evidence_required: "Exact refs/worktree, no transaction, predecessor helper/config/desired-state hashes, current read-only live checkpoint, successor app closure/handoff/source identities."
   - id: AC-2
-    requirement: "Runtime-agent unregister is performed exactly once and converges deterministically to absent ownership while main-app registration remains enabled."
-    evidence_required: "One unregister-runtime invocation; exit 0; main_app=enabled/runtime_agent absent state; exact max 40x100ms absence window; launchd Runtime job absent before any register-runtime."
+    requirement: "The exact accepted successor is installed exactly once through canonical --install-prebuilt."
+    evidence_required: "Exactly one literal install-prebuilt invocation, no retry, successful canonical result or exact blocked failure evidence; source candidate pre/post immutable."
   - id: AC-3
-    requirement: "Runtime-agent register is performed exactly once only after clean absence convergence."
-    evidence_required: "One register-runtime invocation; either typed approval-required terminal or exit 0 with main_app=enabled/runtime_agent=enabled; no retry."
+    requirement: "Successful installation creates the exact accepted successor as a schema-5 PENDING / APP_SWAPPED generation."
+    evidence_required: "Installed candidate validates against transaction handoff; exact candidate/source/tree/requirements identity; valid predecessor rollback evidence; transaction exact PENDING / APP_SWAPPED."
   - id: AC-4
-    requirement: "The bounded refresh hypothesis is evaluated with one deterministic health predicate."
-    evidence_required: "Exact max 40x250ms health window, no observation 41; PASS only with enabled/enabled plus exactly one canonical tunnel-client/listener and healthz=200/readyz=200; otherwise exact BLOCKED_AFTER_RUNTIME_AGENT_REFRESH_BASELINE."
+    requirement: "The installed successor is evaluated by one deterministic live-health window."
+    evidence_required: "At most 60 observations, exactly 250 ms sleep before each, no observation 61; PASS only with non-error ServiceManagement ownership, listener=1, healthz=200 and readyz=200; otherwise exact BLOCKED_AFTER_SUCCESSOR_INSTALL_BASELINE."
   - id: AC-5
-    requirement: "All immutable inputs and authority boundaries remain intact."
-    evidence_required: "Predecessor closure/helper/config/desired-state and successor app/handoff unchanged; no transaction; no launchctl mutation; no successor install; main unchanged."
+    requirement: "No commit or unrelated recovery/repair occurs."
+    evidence_required: "Successor transaction remains PENDING on successful install; commit/rollback/resume/recover counts all 0; runtime.env/desired-state unchanged; main unchanged."
 
 verification:
   executor_checks:
     - id: CHECK-BASE
-      command_or_check: "Fresh-resolve revision-5 planning/dev/main/local identity and revision-4 accepted report."
+      command_or_check: "Fresh-resolve revision-6 planning/dev/main/local binding, revision-5 ACCEPTED review and TASK-0098 ACCEPTED review."
       required: true
-    - id: CHECK-LIVE
-      command_or_check: "Read-only prove exact predecessor/config/ServiceManagement/launchd/health checkpoint and immutable successor."
+    - id: CHECK-CANDIDATE
+      command_or_check: "Read-only prove exact accepted successor source app closure, handoff and provenance; do not execute candidate bytes in place."
       required: true
-    - id: CHECK-UNREGISTER
-      command_or_check: "Consume exactly one owner-app unregister-runtime and require enabled/absent ServiceManagement state."
+    - id: CHECK-PREINSTALL
+      command_or_check: "Read-only prove no transaction and preserved predecessor/helper/config/desired-state plus current live ServiceManagement/launchd/listener/health checkpoint."
       required: true
-    - id: CHECK-ABSENCE
-      command_or_check: "Run exact max 40-by-100ms absence schedule; require Runtime launchd job absent before registration."
+    - id: CHECK-INSTALL
+      command_or_check: "Preflight literal lifecycle capability, then invoke exact ./install.sh --install-prebuilt command at most once. No retry/reroute."
       required: true
-    - id: CHECK-REGISTER
-      command_or_check: "Consume exactly one owner-app register-runtime after absence; handle only exact success or typed approval-required terminal."
+    - id: CHECK-PENDING
+      command_or_check: "On install success, require schema5/PENDING/APP_SWAPPED, exact installed successor binding, rollback evidence and immutable source/config preservation."
       required: true
     - id: CHECK-HEALTH
-      command_or_check: "Run exact max 40-by-250ms health schedule with canonical enabled/enabled plus singleton tunnel/listener and 200/200 predicate."
+      command_or_check: "Run exact maximum 60-by-250ms successor health schedule; no observation 61."
       required: true
     - id: CHECK-PRESERVATION
-      command_or_check: "Rehash predecessor/config/successor, prove no transaction/unapproved mutation and main unchanged."
+      command_or_check: "Prove transaction remains PENDING on success, source candidate/config unchanged, forbidden lifecycle counts 0 and main unchanged."
       required: true
     - id: CHECK-FINAL
-      command_or_check: "Validate and publish TASK-0099 report revision 5 only; fresh remote proof; stop at exact terminal."
+      command_or_check: "Validate and publish TASK-0099 report revision 6 only; fresh remote closure; stop at exact terminal."
       required: true
   authoritative_verification:
     required: false
-    mechanism: "Independent Architect review of the one-shot Runtime-agent refresh experiment and deterministic absence/health evidence before any successor-install authority."
-    expected_signal: "Architect ACCEPT of either healthy recovered predecessor state, typed approval-required state, or correctly bounded negative refresh result; none alone is generalized into an undocumented ServiceManagement causal rule."
+    mechanism: "Independent Architect review of exact installed successor PENDING generation and deterministic live-health evidence before any direct MCP semantic acceptance or commit-cutover authority."
+    expected_signal: "Architect ACCEPT of a healthy PENDING successor checkpoint or truthful blocked/capability terminal evidence."
 
 capability_requirements:
   EXECUTION:
