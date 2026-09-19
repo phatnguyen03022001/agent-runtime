@@ -1,14 +1,14 @@
 protocol_version: 3
 
 task_id: TASK-0096
-task_revision: 5
+task_revision: 6
 state: APPROVED
 
 origin:
   type: architect_recovery
   task_id: TASK-0096
-  predecessor_revision: 4
-  gap_id: "recover_report_publication_after_implementation_closure"
+  predecessor_revision: 5
+  gap_id: "recover_report_publication_from_existing_remote_blob"
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -17,7 +17,7 @@ target:
   repository: phatnguyen03022001/agent-runtime
   branch:
     name: dev
-    role: immutable_report_publication
+    role: remote_object_report_publication
 
 execution_base:
   mode: handoff_snapshot
@@ -50,139 +50,137 @@ external_skills:
   execution_recommended: []
 
 authority_sources:
-  - source: "TASK-0096 revision-4 Executor terminal packet"
-    role: "Revision 4 is terminal CURRENT_PHASE_CAPABILITY_UNAVAILABLE after successful canonical implementation publication and before report publication/final closure. The Executor stopped at the first platform-safety block in the report Git Data write sequence and performed no retry, reroute, provider/encoding/payload substitution, or later mutation."
+  - source: "TASK-0096 revision-5 Executor terminal packet"
+    role: "Revision 5 is terminal CURRENT_PHASE_CAPABILITY_UNAVAILABLE. The platform-safety block occurred during read-only local candidate validation before candidate identity confirmation in that binding. No create_blob, create_tree, create_commit, update_ref, report mutation, implementation mutation, technical verification rerun, or preserved-checkpoint mutation occurred."
     precedence: 1
-  - source: "phatnguyen03022001/agent-runtime@ac33afadccf2b222ddf48d6c6b45de82951046a2"
-    role: "Canonical implementation commit. Fresh Architect proof establishes sole parent 7a2d5ea3416a465c41b80af025fde97103dd3467 and exactly 28 authorized implementation paths."
+  - source: "GitHub object phatnguyen03022001/agent-runtime blob 3ed3913558e053d03eb11110461d3663b54b5adc, fresh Architect fetch after revision-5 terminal"
+    role: "Canonical remote immutable publication source. The blob resolves directly in the target repository object store and its fetched content is TASK-0096 task_revision 4 / report_revision 2 / state REPORTED / result NEEDS_REVIEW with authorized_base_head 7a2d5ea3416a465c41b80af025fde97103dd3467 and final_execution_head ac33afadccf2b222ddf48d6c6b45de82951046a2."
     precedence: 2
-  - source: ".agent/tasks/TASK-0096/task.yaml@7a2d5ea3416a465c41b80af025fde97103dd3467"
-    role: "Revision-4 publication authority and exact inherited revision-3 verification evidence."
+  - source: "phatnguyen03022001/agent-runtime@ac33afadccf2b222ddf48d6c6b45de82951046a2"
+    role: "Canonical implementation publication: sole parent 7a2d5ea3416a465c41b80af025fde97103dd3467 and exact 28-path implementation delta."
     precedence: 3
-  - source: "/Users/tienphat/Developer/.task-0096-r4-report.yaml observed 2026-09-19"
-    role: "Immutable validated report candidate authored after implementation publication. Exact SHA-256 03ec5550d5397ce2232f88c5e3412dddf05cf128af35f4dd1499310db2e5bab9; exact Git blob SHA-1 3ed3913558e053d03eb11110461d3663b54b5adc. Candidate is TASK-0096 task_revision 4, report_revision 2, state REPORTED, result NEEDS_REVIEW."
+  - source: ".agent/tasks/TASK-0096/task.yaml@9c34111c4e7d0159419b3cbc83bd65a8bcf0e883"
+    role: "Revision-5 immutable-report-publication semantics and no-technical-rerun boundary."
     precedence: 4
   - source: "phatnguyen03022001/agent-skills@87a37a72a4952b1da273d9af308642f4295fda6b:protocols/TASK_PROTOCOL.md"
-    role: "Immutable publication handoff, content-identity publication, external post-publication proof, and no same-commit self-attestation semantics."
+    role: "Immutable publication handoff, exact content identity, external post-publication proof, and one-writer semantics."
     precedence: 5
 
 structure_authority:
   status: RESOLVED
-  source: "Exact immutable report candidate identity."
-  rationale: "Revision 5 authorizes publication only. It grants no report-content edit/recreation authority, no implementation mutation, and no technical verification authority."
+  source: "Existing canonical remote Git blob 3ed3913558e053d03eb11110461d3663b54b5adc."
+  rationale: "Revision 6 performs remote-object-only report publication. No local candidate read, report recreation, report edit, implementation mutation, or technical verification is required or authorized."
 
-objective: "Publish the exact immutable TASK-0096 revision-4 report candidate with Git blob identity 3ed3913558e053d03eb11110461d3663b54b5adc as the sole report-only direct child of the revision-5 planning commit, prove canonical remote lineage and unchanged main, and stop NEEDS_REVIEW without modifying implementation or rerunning technical verification."
+objective: "Publish existing canonical remote report blob 3ed3913558e053d03eb11110461d3663b54b5adc as the exact .agent/tasks/TASK-0096/report.yaml content in one report-only commit direct child of the revision-6 planning commit, update dev non-force, prove final remote lineage and unchanged main, and stop NEEDS_REVIEW."
 
 checkpoint:
   predecessor_task: TASK-0096
-  predecessor_revision: 4
+  predecessor_revision: 5
   predecessor_terminal: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
-  predecessor_failure_boundary: "report-publication Git Data write sequence before any update_ref"
+  predecessor_planning_head: "9c34111c4e7d0159419b3cbc83bd65a8bcf0e883"
+  predecessor_mutation_after_block: NONE
   implementation_commit: "ac33afadccf2b222ddf48d6c6b45de82951046a2"
   implementation_parent: "7a2d5ea3416a465c41b80af025fde97103dd3467"
-  implementation_tree: "36d5bb76c6f3f6b99c1dac1ee8b962b29e10956e"
   implementation_path_count: 28
   stable_main: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
-  local_branch: dev
-  local_head: "21f3b4c295986626c524304ce3e7c62ef966f0e3"
-  local_staged_count: 0
-  local_dirty_path_count: 28
-  local_diff_check: PASS
+  report_blob:
+    git_blob_sha1: "3ed3913558e053d03eb11110461d3663b54b5adc"
+    prior_sha256: "03ec5550d5397ce2232f88c5e3412dddf05cf128af35f4dd1499310db2e5bab9"
+    repository_object_resolves: true
+    architect_remote_fetch_proven: true
+    source_class: IMMUTABLE
+    publication_source: REMOTE_OBJECT_ONLY
   revision3_canonical:
     consumed: true
     count: "1/1"
-    command: "PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify"
     tests: 443
     result: PASS
     exit_code: 0
     verify_log_sha256: "c8056b9f6ff328cb2359431f7afc109486e9f759449c67eb8249fe8c50b9d8bc"
-  revision4_technical_verification:
-    authority: NONE
-    reruns: 0
-  revision5_technical_verification:
+  revision6_technical_verification:
     authority: NONE
     physical_runs_authorized: 0
 
-immutable_report_candidate:
-  external_path: "/Users/tienphat/Developer/.task-0096-r4-report.yaml"
-  target_path: ".agent/tasks/TASK-0096/report.yaml"
-  sha256: "03ec5550d5397ce2232f88c5e3412dddf05cf128af35f4dd1499310db2e5bab9"
+remote_report_identity:
+  path: ".agent/tasks/TASK-0096/report.yaml"
   git_blob_sha1: "3ed3913558e053d03eb11110461d3663b54b5adc"
   protocol_version: 3
+  task_id: TASK-0096
   task_revision: 4
   report_revision: 2
   state: REPORTED
   result: NEEDS_REVIEW
-  execution_authorized_base_head: "7a2d5ea3416a465c41b80af025fde97103dd3467"
-  execution_final_head: "ac33afadccf2b222ddf48d6c6b45de82951046a2"
-  prior_validation: PASS
+  authorized_base_head: "7a2d5ea3416a465c41b80af025fde97103dd3467"
+  final_execution_head: "ac33afadccf2b222ddf48d6c6b45de82951046a2"
   mutation_authority: NONE
-  rule: "Exact candidate bytes are immutable. Do not edit, re-author, normalize whitespace, reorder YAML, change status/evidence, or recreate semantically equivalent bytes."
 
 publication:
-  identity: EXACT_BLOB_CONTENT_IDENTITY
+  identity: EXACT_EXISTING_REMOTE_BLOB
   provider: "GitHub typed Git Data primitives"
-  report_blob_sha1: "3ed3913558e053d03eb11110461d3663b54b5adc"
-  report_sha256: "03ec5550d5397ce2232f88c5e3412dddf05cf128af35f4dd1499310db2e5bab9"
-  planning_parent: "revision-5 planning commit"
+  source_blob_sha1: "3ed3913558e053d03eb11110461d3663b54b5adc"
+  create_blob_authorized: false
+  local_candidate_required: false
+  planning_parent: "revision-6 planning commit"
+  tree_rule: "Create exactly one tree from the revision-6 planning tree replacing only .agent/tasks/TASK-0096/report.yaml with existing blob 3ed3913558e053d03eb11110461d3663b54b5adc."
+  commit_rule: "Create exactly one report publication commit with sole parent equal to the revision-6 planning commit and delta exactly .agent/tasks/TASK-0096/report.yaml."
   update_ref: dev
   force: false
-  object_reuse:
-    allowed: true
-    condition: "Exact report blob SHA may be reused only after read-only proof that 3ed3913558e053d03eb11110461d3663b54b5adc resolves in the target repository object store."
-  missing_blob_creation:
-    allowed: true
-    attempts: 1
-    rule: "If the exact blob does not resolve, create it once from the exact immutable external candidate bytes using typed GitHub create_blob with utf-8. Returned SHA must equal 3ed3913558e053d03eb11110461d3663b54b5adc."
-  report_tree_rule: "Create a tree from the revision-5 planning tree replacing only .agent/tasks/TASK-0096/report.yaml with the exact report blob."
-  report_commit_rule: "Create exactly one report publication commit with sole parent equal to the revision-5 planning commit and delta exactly .agent/tasks/TASK-0096/report.yaml."
-  safety_block_behavior: "CURRENT_PHASE_CAPABILITY_UNAVAILABLE. Stop immediately. Do not retry a blocked write, change provider/encoding/payload representation, split/reroute the blocked consequence, use local Git plumbing/Contents API/nested executor, or probe ambiguous write results after the terminal block."
+  safety_block_behavior: "CURRENT_PHASE_CAPABILITY_UNAVAILABLE. Stop immediately at the first platform-safety block. Do not retry, reroute, alter provider/API/payload, create a replacement blob, use local Git/Contents API/operator fallback/nested Executor, or probe ambiguous mutation results after the terminal block."
 
 scope:
   required_changes:
-    - "Resolve TASK-0096 revision 5 directly from canonical GitHub at the exact planning identity."
-    - "Fresh-resolve remote dev/main and require dev equals the revision-5 planning commit and main equals c49d777efa09db7f6c51bd8d8616db4623499fb8 before publication mutation."
-    - "Read-only prove the revision-5 planning commit is the sole direct child of implementation commit ac33afadccf2b222ddf48d6c6b45de82951046a2 and changes only .agent/tasks/TASK-0096/task.yaml."
-    - "Read-only re-prove implementation commit ac33afadccf2b222ddf48d6c6b45de82951046a2 has sole parent 7a2d5ea3416a465c41b80af025fde97103dd3467 and exact 28-path implementation delta."
-    - "Validate the external immutable report candidate exists and exactly matches SHA-256 03ec5550d5397ce2232f88c5e3412dddf05cf128af35f4dd1499310db2e5bab9 and Git blob SHA 3ed3913558e053d03eb11110461d3663b54b5adc. Any mismatch is CHECKPOINT_MISMATCH."
-    - "Confirm candidate header/identity fields: protocol_version 3, task_id TASK-0096, task_revision 4, report_revision 2, state REPORTED, result NEEDS_REVIEW, authorized_base_head 7a2d5ea3416a465c41b80af025fde97103dd3467, final_execution_head ac33afadccf2b222ddf48d6c6b45de82951046a2."
-    - "The prior pinned report-validator PASS is inherited only for this exact immutable candidate identity. A read-only pinned report validator rerun is permitted but not required; it grants no content-mutation authority."
-    - "Do not synchronize/reset/restore/stash/clean/checkout/switch/rebase/merge/cherry-pick the preserved dirty local implementation checkout. It is not publication input for revision 5."
-    - "Do not rerun canonical ./verify, focused tests, Swift test/build, privacy scans, or any technical verification."
-    - "Read-only resolve whether exact report blob 3ed3913558e053d03eb11110461d3663b54b5adc already exists remotely. Reuse it if present; otherwise create that exact blob once from the immutable candidate."
-    - "Create exactly one report tree and one report commit from the revision-5 planning tree/commit, changing only .agent/tasks/TASK-0096/report.yaml to the exact immutable candidate identity."
-    - "Immediately before dev ref update fresh-resolve dev and require it still equals the revision-5 planning commit. Update dev non-force to the report commit."
-    - "After publication fresh-resolve dev/main and prove: dev equals report commit; main unchanged; report commit sole parent equals revision-5 planning commit; compare is exactly one commit and one changed file; remote report blob equals 3ed3913558e053d03eb11110461d3663b54b5adc; remote report bytes hash to the declared SHA-256."
-    - "Stop NEEDS_REVIEW. Do not create another TASK-0096 report revision merely to self-attest publication; post-publication proof is external evidence for Architect review."
+    - "Resolve TASK-0096 revision 6 directly from canonical GitHub at the exact planning identity."
+    - "Fresh-resolve dev/main and require dev equals the revision-6 planning commit and main equals c49d777efa09db7f6c51bd8d8616db4623499fb8 before mutation."
+    - "Read-only prove the revision-6 planning commit has sole parent 9c34111c4e7d0159419b3cbc83bd65a8bcf0e883 and changes only .agent/tasks/TASK-0096/task.yaml."
+    - "Read-only prove revision-5 planning commit has sole parent implementation commit ac33afadccf2b222ddf48d6c6b45de82951046a2 and changes only .agent/tasks/TASK-0096/task.yaml."
+    - "Read-only prove implementation commit ac33afadccf2b222ddf48d6c6b45de82951046a2 has sole parent 7a2d5ea3416a465c41b80af025fde97103dd3467 and exact 28-path implementation delta."
+    - "Fetch existing remote blob 3ed3913558e053d03eb11110461d3663b54b5adc directly from the target GitHub repository object store and require it resolves. Validate its fetched report identity fields against remote_report_identity. This remote object is the sole publication source."
+    - "Do not access /Users/tienphat/Developer/.task-0096-r4-report.yaml or any other local report candidate. Local candidate validation is neither required nor authorized in revision 6."
+    - "Do not access, synchronize, reset, restore, stash, clean, checkout, switch, rebase, merge, cherry-pick, recreate or otherwise use the preserved local implementation checkout as publication input."
+    - "Do not create a report blob. The exact required blob already exists remotely and create_blob authority is false."
+    - "Do not rerun canonical ./verify, focused tests, Swift tests/build, privacy scans, report-content generation, or any technical verification."
+    - "Create exactly one report tree from the revision-6 planning tree, replacing only .agent/tasks/TASK-0096/report.yaml with existing blob 3ed3913558e053d03eb11110461d3663b54b5adc."
+    - "Create exactly one report commit with sole parent equal to the revision-6 planning commit."
+    - "Before update_ref, fresh-resolve dev/main again and require dev still equals the revision-6 planning commit and main still equals c49d777efa09db7f6c51bd8d8616db4623499fb8."
+    - "Update dev non-force to the report commit."
+    - "After publication fresh-resolve dev/main and prove: dev equals report commit; main unchanged; report commit sole parent equals revision-6 planning commit; compare is exactly one commit and one changed path; remote .agent/tasks/TASK-0096/report.yaml blob SHA equals 3ed3913558e053d03eb11110461d3663b54b5adc."
+    - "Stop NEEDS_REVIEW. Do not create another report revision or self-attest same-commit publication."
   local_mutation_authority:
+    local_report_candidate: NONE
+    local_implementation_checkout: NONE
     implementation: NONE
-    report_candidate: NONE
+    report_content: NONE
     technical_evidence: NONE
   canonical_mutation_authority:
     planning: "already established by Architect before handoff"
-    report_publication: "exact immutable candidate only"
+    report_tree: "one tree referencing exact existing remote blob"
+    report_commit: "one report-only direct child"
+    dev_ref: "one non-force update after fresh CAS proof"
   expected_files_are_restrictive: true
 
 invariants:
-  - "Revision 4 remains terminal CURRENT_PHASE_CAPABILITY_UNAVAILABLE at report publication; its successful implementation publication remains canonical."
-  - "Implementation commit ac33afadccf2b222ddf48d6c6b45de82951046a2 and all 28 implementation bytes are immutable."
+  - "Revision 5 remains terminal CURRENT_PHASE_CAPABILITY_UNAVAILABLE with zero repository mutation."
+  - "Implementation commit ac33afadccf2b222ddf48d6c6b45de82951046a2 and all 28 implementation bytes remain immutable."
   - "Revision-3 canonical PASS remains consumed exactly 1/1 and is never rerun."
-  - "Revision 5 grants zero technical verification authority and zero implementation/report-content edit authority."
-  - "The only publishable report content is exact blob 3ed3913558e053d03eb11110461d3663b54b5adc."
-  - "The report publication commit is direct child of the revision-5 planning commit and changes exactly one path."
-  - "Report publication truth is proven externally after publication and is not rewritten into the report itself."
+  - "Revision 6 grants zero technical verification authority, zero implementation mutation authority, zero report-content mutation authority, and zero create_blob authority."
+  - "Existing GitHub blob 3ed3913558e053d03eb11110461d3663b54b5adc is the sole report publication source."
+  - "Local candidate and local implementation checkout are outside the revision-6 execution dependency graph."
+  - "The report publication commit is direct child of the revision-6 planning commit and changes exactly one path."
+  - "Report publication truth is proven externally after publication."
   - "No live Runtime/package/install/activation/restart/reload/service/tunnel/port-8080/TCC consequence is authorized."
   - "main, tags, releases and sibling repositories remain unchanged."
 
 forbidden_changes:
-  - "Do not edit, recreate, normalize, amend, regenerate or semantically substitute the immutable report candidate."
-  - "Do not modify any implementation/source/test/package/doc/dependency path."
-  - "Do not rerun technical verification of any kind."
-  - "Do not synchronize, reset, restore, stash, clean, switch branch, rebase, merge, cherry-pick, create alternate worktree or local publication commit."
-  - "Do not retry a platform-safety-blocked write or switch provider/encoding/payload/API surface to obtain a different safety judgment."
-  - "Do not use GitHub Contents API, local Git push, operator fallback or nested Executor as a bypass."
-  - "Do not force-push or mutate main, tags, releases or sibling repositories."
-  - "Do not perform live lifecycle, Stage-B model vision, click/type/scroll, Accessibility, OCR, browser/DOM or roadmap expansion."
+  - "No local candidate read, validation, edit, recreation or normalization."
+  - "No source/test/package/doc/dependency or implementation mutation."
+  - "No report-content generation or mutation."
+  - "No create_blob call for the report."
+  - "No technical verification rerun."
+  - "No preserved local checkout operation of any kind for publication."
+  - "No retry of a blocked mutation and no provider/API/payload/routing substitution intended to obtain a different platform-safety judgment."
+  - "No GitHub Contents API, local Git push, operator fallback or nested Executor bypass."
+  - "No force push, main mutation, tag/release mutation or sibling-repository mutation."
+  - "No live lifecycle, Stage-B model vision, click/type/scroll, Accessibility, OCR, browser/DOM or roadmap expansion."
 
 gap_policy:
   local_auto_fix: false
@@ -195,41 +193,38 @@ gap_policy:
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "Canonical implementation closure is preserved and revision-5 planning lineage is exact."
-    evidence_required: "Fresh remote proof of main, implementation commit parent/delta, revision-5 planning parent, and planning-only task delta."
+    requirement: "Revision-6 binding and predecessor lineage are exact."
+    evidence_required: "Fresh dev/main proof; revision-6 planning parent/delta; revision-5 planning parent/delta; implementation parent and exact 28-path delta."
   - id: AC-2
-    requirement: "Exact immutable report candidate identity is preserved."
-    evidence_required: "External candidate SHA-256 and Git blob SHA exactly match declared values; identity/header fields match; no candidate mutation."
+    requirement: "Publication source is the exact existing remote report blob with no local dependency."
+    evidence_required: "Direct GitHub object-store fetch of 3ed3913558e053d03eb11110461d3663b54b5adc and matching report identity fields; no local candidate access; no create_blob."
   - id: AC-3
-    requirement: "Report publication is exact and bounded."
-    evidence_required: "One report publication commit sole-parented by revision-5 planning commit, delta exactly .agent/tasks/TASK-0096/report.yaml, exact remote blob 3ed3913558e053d03eb11110461d3663b54b5adc, non-force dev update."
+    requirement: "Report publication is one exact bounded canonical consequence."
+    evidence_required: "One report tree, one report commit sole-parented by revision-6 planning commit, exact one-path delta, non-force dev update."
   - id: AC-4
-    requirement: "Fresh external publication closure is proven without report self-attestation."
-    evidence_required: "Post-publication dev/main/parent/compare/blob/byte identity proof; main unchanged; terminal NEEDS_REVIEW."
+    requirement: "Fresh final remote closure is proven."
+    evidence_required: "dev/report commit/main/parent/compare/blob identity proof after publication; terminal NEEDS_REVIEW."
   - id: AC-5
-    requirement: "No technical or lifecycle authority is consumed."
-    evidence_required: "No implementation change, technical verifier rerun, live Runtime action, promotion, tag, release or sibling mutation."
+    requirement: "No technical, local-checkpoint or lifecycle authority is consumed."
+    evidence_required: "No verifier rerun, local candidate access, local implementation-checkout operation, implementation mutation, live Runtime action, promotion, tag, release or sibling mutation."
 
 verification:
   executor_checks:
     - id: CHECK-BIND
-      command_or_check: "Fresh-resolve revision-5 canonical task/dev/main and exact planning/implementation lineage before mutation."
+      command_or_check: "Fresh-resolve revision-6 task/dev/main and exact planning/predecessor/implementation lineage."
       required: true
-    - id: CHECK-CANDIDATE
-      command_or_check: "Read-only validate exact immutable report candidate SHA-256, Git blob SHA and identity fields; optional pinned report-validator rerun only if desired."
-      required: true
-    - id: CHECK-BLOB
-      command_or_check: "Read-only resolve exact report blob availability; create it at most once only if absent and require returned exact SHA."
+    - id: CHECK-REMOTE-BLOB
+      command_or_check: "Fetch exact existing GitHub blob 3ed3913558e053d03eb11110461d3663b54b5adc and validate report identity fields; no local candidate read and no create_blob."
       required: true
     - id: CHECK-PUBLISH
-      command_or_check: "Create one report tree and one report commit direct child of revision-5 planning commit; fresh CAS dev check; non-force ref update."
+      command_or_check: "Create one report tree and one report commit direct child of revision-6 planning commit; fresh CAS dev/main; non-force dev update."
       required: true
     - id: CHECK-FINAL
-      command_or_check: "Fresh-resolve dev/main and prove exact one-file report publication lineage and remote byte identity; stop NEEDS_REVIEW."
+      command_or_check: "Fresh-resolve dev/main and prove exact one-file report publication lineage and remote blob identity; stop NEEDS_REVIEW."
       required: true
   authoritative_verification:
     required: false
-    mechanism: "Independent Architect review of the exact published report revision 2, implementation commit ac33afadccf2b222ddf48d6c6b45de82951046a2, inherited revision-3 canonical PASS evidence, and fresh report-publication lineage."
+    mechanism: "Independent Architect review of the exact published report revision 2, implementation commit ac33afadccf2b222ddf48d6c6b45de82951046a2, inherited revision-3 canonical PASS evidence, and final report-publication lineage."
     expected_signal: "Architect ACCEPT of TASK-0096 source/package-level screen_capture tool 11 only; live activation and Stage-B model vision remain separately gated."
 
 capability_requirements:
