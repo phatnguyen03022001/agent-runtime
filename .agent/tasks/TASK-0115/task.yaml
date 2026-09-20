@@ -1,19 +1,20 @@
 protocol_version: 3
 
 task_id: TASK-0115
-task_revision: 1
+task_revision: 2
 state: APPROVED
 
 origin:
-  type: architect_followup
-  predecessor_task: TASK-0114
-  predecessor_review: "3496c444d0471e74b55e0c716ebc810bed0946c7"
+  type: architect_rework
+  predecessor_task_revision: 1
+  predecessor_report_commit: "1a7b4525f8046b358e1d45846dd311ffe320cee4"
+  predecessor_review_commit: "05ee6df7a450bb32b523896ccfcb2b27e5cfc44f"
 
 target:
   repository: phatnguyen03022001/agent-runtime
   branch:
     name: dev
-    role: trust_context_diagnosis
+    role: trust_context_diagnosis_rework
 
 execution_surface:
   id: CODEX_LOCAL
@@ -21,75 +22,87 @@ execution_surface:
   location: LOCAL
   transport: NATIVE
 
-objective: "Perform a bounded read-only diagnosis of why the exact immutable accepted candidate now fails strict code-sign trust on CODEX_LOCAL with CSSMERR_TP_NOT_TRUSTED, despite its byte-identical accepted closure and prior accepted strict verification. Classify the failure without installing, rebuilding, re-signing, modifying trust/keychain state, or changing image transport."
+objective: "Resolve the TASK-0115 revision-1 classification overreach with direct read-only trust discriminators. Preserve all accepted candidate-identity and no-mutation evidence. Prove CODEX_LOCAL_TRUST_CONTEXT_MISMATCH only if the execution context itself is directly implicated; otherwise conclude TRUST_ROOT_CAUSE_UNPROVEN. Do not install, rebuild, re-sign, alter trust/keychain state, or touch Stage B."
 
-accepted_candidate:
-  sha256: "0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77"
+accepted_revision_1_evidence:
+  candidate_sha256: "0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77"
   handoff_sha256: "f8e75129f942fe67541229a598ed8761be574ec5547ffd306c606131718130a8"
-  app_path: "/Users/tienphat/Developer/agent-runtime/build/candidates/0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77/Agent Runtime.app"
-  handoff_path: "/Users/tienphat/Developer/agent-runtime/build/candidates/0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77/Agent Runtime.candidate.json"
+  record_count: 1035
+  cms_structure_coherent: true
+  embedded_chain_classes:
+    - apple-development
+    - apple-wwdr-intermediate
+    - apple-root
+  prior_strict_diagnostic: CSSMERR_TP_NOT_TRUSTED
+  prior_strict_diagnostic_invocations: 1
+  candidate_mutation: false
+  host_security_state_mutation: false
 
-authoritative_prior_evidence:
-  - "TASK-0111 revision 3 accepted: the exact candidate closure passed strict codesign and validate-candidate on CHATGPT_LOCAL after packaging."
-  - "TASK-0114 revision 1 accepted terminal TRUST_CONTEXT_UNAVAILABLE: the same exact candidate closure on CODEX_LOCAL failed /usr/bin/codesign --verify --deep --strict with CSSMERR_TP_NOT_TRUSTED and provenance validation failed at that same strict trust gate."
-  - "TASK-0114 confirmed candidate SHA, handoff SHA, source revision/tree, requirements lock, record count, and non-null TeamIdentifier closure still matched exactly."
+architect_correction:
+  - "security find-identity is evidence about signing identities visible through keychain-file identity search; it is not sufficient proof of the trust anchors available to code verification."
+  - "A verifier does not require access to the signer's private signing identity."
+  - "SystemRootCertificates.keychain not appearing in an ordinary search-list dump is not by itself evidence that built-in macOS trust anchors are unavailable."
+  - "Revision 1 therefore did not directly prove CODEX_LOCAL_TRUST_CONTEXT_MISMATCH."
 
 required_classification:
   exactly_one_of:
-    - ARTIFACT_SIGNATURE_INVALID
     - CODEX_LOCAL_TRUST_CONTEXT_MISMATCH
+    - ARTIFACT_SIGNATURE_INVALID
     - HOST_TRUST_STORE_CHANGED
     - TRUST_ROOT_CAUSE_UNPROVEN
 
 classification_rules:
-  ARTIFACT_SIGNATURE_INVALID:
-    require_all:
-      - "Independent structural signature evidence proves the accepted app or a required nested executable has an invalid/malformed signature or sealed-resource mismatch, not merely an untrusted certificate chain."
-      - "The conclusion must reconcile how the unchanged accepted candidate closure previously passed strict validation."
   CODEX_LOCAL_TRUST_CONTEXT_MISMATCH:
     require_all:
-      - "The candidate closure remains exact."
-      - "Signature structure and embedded signer chain remain internally coherent."
-      - "Evidence identifies a CODEX_LOCAL-specific keychain/trust/search-list/security-session visibility difference sufficient to explain why trust cannot chain to the required root/intermediate while prior accepted CHATGPT_LOCAL verification succeeded."
+      - "Candidate identity remains exact and certificate validity/policy is not independently invalid."
+      - "Direct evidence demonstrates that the same CODEX_LOCAL process context fails to resolve/evaluate a chain that succeeds when evaluated with the relevant built-in anchor/chain material explicitly supplied, or another equally direct context-specific discriminator is proven."
+      - "Do not use zero signing identities or ordinary search-list absence as the deciding evidence."
+  ARTIFACT_SIGNATURE_INVALID:
+    require_all:
+      - "Read-only evidence proves a malformed/cryptographically invalid signature, sealed-resource mismatch, invalid certificate time/policy for the signing event, or another artifact-local defect."
+      - "CSSMERR_TP_NOT_TRUSTED alone is insufficient."
   HOST_TRUST_STORE_CHANGED:
     require_all:
-      - "Evidence proves a host/user trust-store or trust-settings change material to the signer chain, not merely that CODEX_LOCAL cannot see a keychain."
-      - "The relevant signer chain is otherwise structurally valid."
+      - "A material host/user trust-store change is proven from durable before/after evidence or an equivalent authoritative host-state discriminator."
   TRUST_ROOT_CAUSE_UNPROVEN:
     use_when:
-      - "The evidence narrows the failure but cannot satisfy another classification without speculation."
+      - "No other classification reaches its evidence threshold."
 
 preconditions:
-  - "Resolve this task directly from GitHub at the exact TASK-0115 planning HEAD."
-  - "Fresh-resolve remote dev/main; require dev equals the planning HEAD and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
-  - "Synchronize the clean canonical local dev checkout by ordinary fast-forward only."
-  - "Require working tree clean."
-  - "Require TASK-0114 accepted review 3496c444d0471e74b55e0c716ebc810bed0946c7 in ancestry."
-  - "Read-only recompute candidate closure and handoff SHA before any trust diagnosis; stop CANDIDATE_IDENTITY_CHANGED if either differs."
-  - "Do not treat the TASK-0114 strict codesign failure as evidence of artifact corruption by itself."
+  - "Resolve canonical TASK-0115 revision 2 from GitHub at the exact planning HEAD."
+  - "Fresh-resolve dev/main; require dev equals the planning HEAD and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "Synchronize clean local dev by ordinary fast-forward only."
+  - "Require revision-1 report 1a7b4525f8046b358e1d45846dd311ffe320cee4 and Architect REWORK review 05ee6df7a450bb32b523896ccfcb2b27e5cfc44f in ancestry."
+  - "Recompute candidate closure and handoff SHA read-only before diagnosis. Stop CANDIDATE_IDENTITY_CHANGED on mismatch."
 
 diagnostic_scope:
   required:
-    - "Inspect code-signature metadata for the app and the three responsible executables using read-only codesign display operations. Capture identifier, signature type/class, TeamIdentifier consistency, timestamp presence, Authority-chain count/class, CDHash or equivalent signature-structure evidence as appropriate."
-    - "Do not persist the literal leaf signing identity, certificate serial number, private-key information, or full certificate fingerprint. Hash or redact identity-bearing values where they are not already accepted public repository identities."
-    - "Inspect CODEX_LOCAL process identity and read-only keychain search-list/default-keychain visibility sufficient to determine whether the expected user trust context is visible."
-    - "Inspect user and admin trust-settings read-only. Record only whether material trust overrides exist and bounded hashes/sanitized evidence needed for the conclusion; do not change them."
-    - "Inspect whether the signer chain's required root/intermediate classes are available through the CODEX_LOCAL-visible trust/keychain context. Do not download or install certificates."
-    - "Use the already accepted TASK-0111 CHATGPT_LOCAL strict PASS as prior cross-surface evidence. Do not claim current CHATGPT_LOCAL state unless separately observed by an authorized task."
-    - "One diagnostic /usr/bin/codesign --verify --deep --strict --verbose=4 invocation on the exact candidate is authorized only if needed to bind detailed failure diagnostics. This is diagnosis of a changed question, not an installation trust-gate retry. Do not invoke it more than once."
-    - "If certificate extraction is indispensable, ephemeral files are allowed only under one task-specific /tmp directory, must contain public certificate material only, and must be removed before publication. No repository/product/keychain mutation is allowed."
+    - "Do not repeat /usr/bin/codesign --verify --deep --strict on the exact candidate; revision 1 already consumed the diagnostic needed to bind CSSMERR_TP_NOT_TRUSTED."
+    - "Extract only public certificates from the already embedded CMS into one task-specific /tmp directory if needed; delete the directory before publication."
+    - "Record sanitized certificate validity windows, key usage / extended-key-usage classes, basic constraints, issuer relationships, and signature-algorithm classes for leaf/intermediate/root. Do not persist subject identity literals, serials, full fingerprints, or private material."
+    - "Cryptographically verify leaf -> intermediate -> root relationships with a read-only certificate verifier independent of codesign."
+    - "Prove whether the exact embedded root certificate DER is byte-identical to a certificate present in macOS built-in SystemRootCertificates.keychain. Use hashes only in the report."
+    - "Perform one explicit read-only trust evaluation of the extracted leaf/intermediate chain against macOS trust / the matching built-in root using the appropriate code-signing policy when supported. Record bounded sanitized result."
+    - "Inspect the currently installed predecessor app under the same CODEX_LOCAL context as a control: preserve its bytes, inspect its signer-chain class/hash relationship to the candidate, and run at most one strict codesign verification on that predecessor. This is a control artifact, not a retry of the candidate trust judgment."
+    - "Optionally verify one Apple-signed system executable as a second control only if needed to distinguish a generally broken trust service from a development-certificate-specific failure."
+    - "Do not infer CODEX-specific behavior merely because the prior CHATGPT_LOCAL task passed. That prior PASS is historical evidence, not a current matched-context control."
+    - "If the explicit chain evaluation succeeds but candidate codesign had CSSMERR_TP_NOT_TRUSTED, identify the narrow observable boundary that differs. If that boundary cannot be attributed specifically to CODEX_LOCAL rather than host-wide code-sign policy/trust state, select TRUST_ROOT_CAUSE_UNPROVEN."
 
-diagnostic_limits:
-  codesign_strict_diagnostic_invocations_max: 1
-  candidate_mutations: 0
+limits:
+  exact_candidate_strict_codesign_invocations: 0
+  installed_predecessor_strict_codesign_invocations_max: 1
+  system_control_strict_codesign_invocations_max: 1
+  certificate_downloads: 0
+  certificate_imports: 0
   keychain_mutations: 0
   trust_setting_mutations: 0
-  certificate_imports: 0
-  certificate_downloads: 0
-  install_prebuilt_invocations: 0
+  keychain_unlock_or_search_list_mutations: 0
+  candidate_mutations: 0
+  installed_app_mutations: 0
   package_app_invocations: 0
   resign_invocations: 0
-  runtime_lifecycle_mutations: 0
+  install_prebuilt_invocations: 0
+  lifecycle_mutations: 0
   service_management_mutations: 0
   launchd_mutations: 0
   plugin_refreshes: 0
@@ -106,31 +119,32 @@ scope:
   host_security_state_mutation: NONE
 
 forbidden_changes:
-  - "Do not install or reinstall the candidate."
-  - "Do not package, rebuild, alter, copy-over, or re-sign the candidate."
-  - "Do not import, delete, trust, untrust, unlock, relock, reset, or otherwise mutate any keychain/certificate/trust setting."
-  - "Do not widen Full Disk Access, Developer Tool, Automation, Local Network, Screen Recording, or other permissions."
-  - "Do not change HOME, keychain search lists, security sessions, environment variables, shell startup files, or CODEX configuration as a workaround."
-  - "Do not switch execution surface to obtain a different trust judgment."
+  - "Do not install/reinstall, rebuild, copy-over, modify, or re-sign the candidate."
+  - "Do not import/delete/trust/untrust/unlock/relock/reset certificates, keychains, or trust settings."
+  - "Do not alter HOME, environment, security session, keychain search lists, CODEX configuration, permissions, or execution surface to seek a different trust result."
   - "Do not mutate source/tests/docs/dependencies."
-  - "Do not invoke Stage B, live screen_capture, plugin refresh, TCC changes, base64-in-text fallback, OCR, or visual control."
-  - "Do not mutate main/tags/releases/sibling repositories."
-  - "Do not force-push."
+  - "Do not invoke Stage B, live screen_capture, plugin refresh, TCC changes, base64-in-text, OCR, click, type, or scroll."
+  - "Do not mutate main/tags/releases/sibling repositories or force-push."
 
 verification:
   - id: IDENTITY
-    requirement: "Candidate closure and handoff identities remain exact before and after diagnosis."
-  - id: SIGNATURE_STRUCTURE
-    requirement: "Distinguish cryptographic/sealed-resource signature validity from certificate trust-chain evaluation; do not collapse CSSMERR_TP_NOT_TRUSTED into artifact corruption."
-  - id: TRUST_CONTEXT
-    requirement: "Bound CODEX_LOCAL keychain/trust visibility and material trust overrides with sanitized evidence."
+    requirement: "Exact candidate/handoff identity remains unchanged before and after revision-2 diagnosis."
+  - id: CERTIFICATE_POLICY
+    requirement: "Certificate time/policy/chain cryptography is bounded independently from codesign trust."
+  - id: BUILTIN_ROOT
+    requirement: "Matching embedded root presence or absence in macOS built-in roots is proven by DER/hash equality, not subject-name search."
+  - id: DIRECT_TRUST
+    requirement: "At least one explicit trust-chain evaluation is recorded with bounded sanitized evidence."
+  - id: CONTROL
+    requirement: "A same-CODEX_LOCAL signed-artifact control is evaluated without mutation."
   - id: CLASSIFICATION
-    requirement: "Return exactly one required classification and explicitly list which competing classifications were ruled out or remain unproven."
+    requirement: "Exactly one classification is returned. If CODEX_LOCAL-specific causality is not directly established, select TRUST_ROOT_CAUSE_UNPROVEN."
   - id: PRESERVATION
-    requirement: "Prove zero install, signing, keychain/trust, lifecycle, plugin, TCC, Stage-B, screen-capture, and visual-control mutation."
+    requirement: "Zero product/security/lifecycle/media mutation and no remaining temporary certificate files."
 
 publication:
-  - "Publish one truthful report-only commit as the sole direct child of the TASK-0115 planning HEAD."
+  - "Replace/update .agent/tasks/TASK-0115/report.yaml with report_revision: 2 and truthful revision-2 evidence."
+  - "Publish one report-only commit as the sole direct child of the revision-2 planning HEAD."
   - "No implementation commit is authorized."
 
 terminal_states:
@@ -138,23 +152,17 @@ terminal_states:
   candidate_identity_changed: CANDIDATE_IDENTITY_CHANGED
   capability_failure: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
 
-next_action_rules:
-  - "If CODEX_LOCAL_TRUST_CONTEXT_MISMATCH: report the smallest demonstrated context defect; do not repair it in this task."
-  - "If HOST_TRUST_STORE_CHANGED: report the exact bounded host trust-state defect; do not repair it in this task."
-  - "If ARTIFACT_SIGNATURE_INVALID: report evidence only; do not rebuild or re-sign in this task."
-  - "If TRUST_ROOT_CAUSE_UNPROVEN: stop. Do not guess or authorize install."
-
 acceptance_criteria:
   - id: AC-1
-    requirement: "Exact candidate identity remains unchanged."
+    requirement: "Revision-1 accepted identity/preservation evidence remains true."
   - id: AC-2
-    requirement: "Diagnostic evidence cleanly separates signature structure/integrity from certificate-chain trust."
+    requirement: "Root presence and certificate chain/policy are evaluated directly rather than inferred from find-identity/search-list output."
   - id: AC-3
-    requirement: "CODEX_LOCAL trust/keychain context is bounded without security-state mutation or sensitive identity disclosure."
+    requirement: "A same-context control distinguishes artifact-local failure from broader CODEX_LOCAL trust behavior where possible."
   - id: AC-4
-    requirement: "Exactly one allowed classification is returned and justified without speculation."
+    requirement: "Classification obeys the revised evidence threshold without speculation."
   - id: AC-5
-    requirement: "Only TASK-0115 report mutates dev; main and all product/security state remain unchanged."
+    requirement: "Only TASK-0115 report mutates dev; main and host/product security state remain unchanged."
 
 git_authority:
   create_branch: false
