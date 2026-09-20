@@ -1,0 +1,137 @@
+protocol_version: 3
+
+task_id: TASK-0112
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect
+  predecessor_task: TASK-0111
+  predecessor_review: "f66a01b2f4e336434b2c4dd66b709f23cb27f269"
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: accepted_candidate_installation_activation
+
+execution_surface:
+  id: CODEX_LOCAL
+  controller: CODEX
+  location: LOCAL
+  transport: NATIVE
+
+objective: "Install the exact Architect-accepted immutable candidate once through the canonical prebuilt cutover path, leave the transaction PENDING/APP_SWAPPED, and prove deterministic local Runtime+tunnel activation. Do not commit cutover, refresh the ChatGPT plugin, or perform live screen_capture."
+
+accepted_candidate:
+  sha256: "0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77"
+  handoff_sha256: "f8e75129f942fe67541229a598ed8761be574ec5547ffd306c606131718130a8"
+  source_revision: "18cdb515fe037c9b6cb81ce6529d85ae734e195a"
+  source_tree: "ed9a2b089d2f17d2a66eb25da4277f00d418bd07"
+  requirements_lock_sha256: "80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
+  app_path: "/Users/tienphat/Developer/agent-runtime/build/candidates/0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77/Agent Runtime.app"
+  handoff_path: "/Users/tienphat/Developer/agent-runtime/build/candidates/0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77/Agent Runtime.candidate.json"
+
+preconditions:
+  - "Resolve canonical task directly from GitHub at exact planning HEAD."
+  - "Fresh-resolve remote dev/main; require dev equals exact planning HEAD and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "Synchronize clean canonical local dev checkout to exact planning HEAD by ordinary fast-forward only."
+  - "Require working tree clean."
+  - "Require no pending cutover transaction before install."
+  - "Require exact candidate app/handoff paths exist, are non-symlink artifacts, and handoff SHA-256 equals f8e75129f942fe67541229a598ed8761be574ec5547ffd306c606131718130a8."
+  - "Require accepted TASK-0111 review and source revision are in ancestry."
+  - "Do not rebuild, re-sign, mutate or recreate the candidate."
+
+trust_preflight:
+  authority: "0/1"
+  requirements:
+    - "Run one read-only /usr/bin/codesign --verify --deep --strict against the exact candidate immediately before install."
+    - "Run one read-only package_provenance.py validate-candidate against the exact candidate/handoff."
+    - "Both must PASS in this execution context before install-prebuilt authority may be consumed."
+    - "If trust evaluation fails, stop TRUST_CONTEXT_UNAVAILABLE; do not retry, rebuild, re-sign or switch surface."
+
+installation:
+  install_prebuilt_authority: "0/1"
+  command: "./install.sh --install-prebuilt <accepted-app> <accepted-handoff>"
+  requirements:
+    - "Invoke exactly once."
+    - "No retry."
+    - "Do not run source packaging."
+    - "Do not edit runtime.env, tunnel identity, credentials, launchd or ServiceManagement directly."
+    - "Let the canonical installer own all lifecycle/registration mutation."
+
+post_install:
+  required:
+    - "Require cutover transaction exists with schema=5, status=PENDING, phase=APP_SWAPPED."
+    - "Require installed ~/Applications/Agent Runtime.app validates against the exact accepted handoff."
+    - "Require installed candidate SHA-256 equals 0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77."
+    - "Require strict codesign verification PASS on installed app."
+    - "Require canonical local Runtime health and ready predicates become true through bounded polling without manual restart/repair."
+    - "Require tunnel configuration/identity remains unchanged and the successor reports tunnel/local readiness."
+    - "Require predecessor rollback/recovery was not invoked."
+    - "Require repository working tree remains clean."
+
+health_polling:
+  observations_max: 40
+  sleep_before_each_observation_ms: 250
+  no_observation_41: true
+  success: "health=true and ready=true for installed successor"
+  failure_terminal: "LOCAL_ACTIVATION_UNPROVEN"
+
+scope:
+  allowed_repository_mutation:
+    - ".agent/tasks/TASK-0112/report.yaml"
+  allowed_product_mutation:
+    - "Exactly one canonical install-prebuilt transaction for the accepted candidate."
+  expected_files_are_restrictive: true
+
+forbidden_changes:
+  - "Do not package or sign another candidate."
+  - "Do not invoke install-prebuilt more than once."
+  - "Do not commit-cutover."
+  - "Do not rollback, resume or recover."
+  - "Do not manually restart/stop/signal Runtime after canonical installer execution."
+  - "Do not mutate ServiceManagement or launchd directly."
+  - "Do not edit runtime.env or tunnel configuration."
+  - "Do not refresh/reconnect ChatGPT plugin."
+  - "Do not invoke live screen_capture."
+  - "Do not mutate TCC."
+  - "Do not modify source/tests/docs/dependencies."
+  - "Do not mutate main/tags/releases/sibling repositories."
+  - "Do not force-push."
+
+publication:
+  - "Publish truthful report-only commit as sole direct child of planning HEAD."
+  - "No implementation commit is authorized."
+
+terminal_states:
+  success: NEEDS_REVIEW
+  trust_failure: TRUST_CONTEXT_UNAVAILABLE
+  install_failure: INSTALL_PREBUILT_FAILED
+  activation_failure: LOCAL_ACTIVATION_UNPROVEN
+  candidate_validation_failure: CANDIDATE_VALIDATION_FAILED
+  capability_failure: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact accepted candidate passes trust/provenance preflight in the execution context."
+  - id: AC-2
+    requirement: "install-prebuilt executes exactly once."
+  - id: AC-3
+    requirement: "Transaction closes at schema 5 / PENDING / APP_SWAPPED."
+  - id: AC-4
+    requirement: "Installed app identity/signature/provenance equals accepted candidate."
+  - id: AC-5
+    requirement: "Runtime health/ready and tunnel predicates pass without manual lifecycle repair."
+  - id: AC-6
+    requirement: "Cutover remains uncommitted for downstream CHATGPT_LOCAL live Stage B."
+  - id: AC-7
+    requirement: "Only report artifact mutates repository."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+execution_ready: true
