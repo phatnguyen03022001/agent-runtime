@@ -1,45 +1,70 @@
 protocol_version: 3
 
 task_id: TASK-0111
-task_revision: 2
+task_revision: 3
 review_revision: 1
 state: ACCEPTED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0111/report.yaml
-  commit: "452265964498bf72c8d5ae2daf85b861ef550b00"
-  report_revision: 2
+  commit: "338944c3ae5a5b04a1230231e44e4894ff565c99"
+  report_revision: 3
 
 acceptance:
-  terminal: CANONICAL_VERIFICATION_FAILED
-  disposition: ACCEPTED_WITH_ORCHESTRATION_EVIDENCE_LOSS
+  terminal: NEEDS_REVIEW
+  disposition: ACCEPTED
+
+canonical_verification:
+  tests: 445
+  duration_seconds: 177.585
+  exit_code: 0
+  result: PASS
+  durable_receipt: PASS
+
+candidate:
+  sha256: "0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77"
+  handoff_sha256: "f8e75129f942fe67541229a598ed8761be574ec5547ffd306c606131718130a8"
+  source_revision: "18cdb515fe037c9b6cb81ce6529d85ae734e195a"
+  source_tree: "ed9a2b089d2f17d2a66eb25da4277f00d418bd07"
+  requirements_lock_sha256: "80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
+  strict_codesign: PASS
+  validate_candidate: PASS
+  immutable_closure: PASS
+  team_identifier_closure: PASS
+
+orchestration:
+  preexecution_platform_rejections: 2
+  host_process_started: false
+  verify_authority_consumed_by_rejections: false
+  package_authority_consumed_by_rejections: false
+  signing_discovery_consumed_by_rejections: false
+  disposition: NON_CONSEQUENTIAL_ORCHESTRATION_NOISE
+  note: >-
+    The rejected requests were blocked before host execution and before any bounded
+    consequence authority was consumed. The eventual canonical verify, signing discovery
+    and package operations each executed exactly once. This review does not authorize
+    treating a blocked consequential host operation as retryable.
 
 evidence:
-  - "CHATGPT_LOCAL AF_UNIX host preflight passed: bind, close, unlink and cleanup all succeeded."
-  - "Canonical ./verify was invoked exactly once and was not retried."
-  - "The ChatGPT Code Mode orchestration boundary timed out before returning the typed terminal_exec result."
-  - "No durable receipt/log was created by revision 2 and no verify process remained running when independently observed later."
-  - "Therefore exit_code and zero-failure closure cannot be reconstructed."
-  - "No source mutation, packaging, signing, install, lifecycle, plugin, live capture or TCC mutation occurred."
-  - "The accepted implementation 9640122ede05137f12839ed0147236733554367b remains unchanged."
-
-root_cause:
-  classification: "CHATGPT_CODE_MODE_LONG_RUNNING_RESULT_EVIDENCE_LOSS"
-  production_regression_indicated: false
-  screen_capture_regression_indicated: false
-  host_capability_gap_indicated: false
+  - "Canonical ./verify executed exactly once with durable helper/receipt closure and completed 445 tests with OK."
+  - "Packaging executed exactly once after verification PASS."
+  - "Signing identity discovery executed exactly once; signing material was neither persisted nor disclosed."
+  - "Candidate strict codesign, provenance, source revision/tree, lock identity, immutable closure and matching non-null TeamIdentifier all passed."
+  - "Candidate app and handoff exist at the reported immutable candidate path and handoff SHA independently matches."
+  - "No install, lifecycle, cutover, plugin, live screen_capture or TCC mutation occurred."
+  - "No pending cutover transaction exists."
 
 next_state:
-  implementation_remains_accepted: true
-  af_unix_host_capability_proven: true
-  canonical_verify_fresh_authority_required: true
-  durable_detached_receipt_required: true
-  packaging_allowed_only_after_durable_verify_pass: true
-  install_authorized: false
-  prompt_2_milestone_complete: false
+  screen_capture_wire_fix_accepted: true
+  candidate_accepted: true
+  install_prebuilt_successor_required: true
+  candidate_rebuild_required: false
+  candidate_resign_required: false
+  cutover_commit_authorized: false
+  live_stage_b_required_after_activation: true
+  prompt_2_activation_milestone_complete: false
 
 notes:
-  - "Do not attempt to infer PASS or FAIL from disappearance of the process."
-  - "Do not reuse revision-2 verification authority."
-  - "Revision 3 must avoid a long-running synchronous terminal_exec result dependency."
+  - "Install the exact accepted candidate; do not rebuild or re-sign it."
+  - "Use a Runtime-independent execution surface for the installation consequence."
