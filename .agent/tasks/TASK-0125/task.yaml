@@ -1,0 +1,266 @@
+protocol_version: 3
+
+task_id: TASK-0125
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  predecessor_task: TASK-0124
+  predecessor_review: "672ee7950ab9bebf9eb7c326dfa140480e97f32f"
+  reason: "Visual perception remains PUBLIC_CONTRACT_INSUFFICIENT and must not be accidentally used by future ChatGPT sessions."
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: visual_perception_production_guard
+
+execution_surface:
+  id: CODEX_LOCAL
+  controller: CODEX
+  location: LOCAL
+  transport: NATIVE
+
+objective: "Install and activate a minimal production governance guard that keeps screen_capture in the exact eleven-tool MCP surface but makes every production screen_capture invocation fail closed with typed VISUAL_PERCEPTION_BLOCKED before the native capture helper can execute. Persist the capability status as repository SSOT so future tasks/chats cannot treat screen_capture exposure as usable model vision. Preserve the underlying capture implementation for future explicit Architect re-authorization."
+
+accepted_authority:
+  task_0122_review: "3a41d140d5e02f4a805f6dce044f1060eeef76a0"
+  task_0123_review: "5a256ec90314d7d44e86815a974bfc7ce5641563"
+  task_0124_review: "672ee7950ab9bebf9eb7c326dfa140480e97f32f"
+  current_classification: PUBLIC_CONTRACT_INSUFFICIENT
+  semantic_pixel_delivery_proven: false
+  runtime_capture_implementation_regression_proven: false
+  visual_control_authorized: false
+  stage_b_retry_authorized: false
+
+policy_semantics:
+  capability: visual_perception
+  state: BLOCKED
+  exposed_tool: screen_capture
+  invocation_policy: DENY
+  typed_error_code: VISUAL_PERCEPTION_BLOCKED
+  retryable: false
+  enforcement_point: "Production MCP screen_capture wrapper, before capture_screen/native helper invocation."
+  tool_surface_policy: "screen_capture remains registered; PUBLIC_TOOL_NAMES remains exactly eleven."
+  underlying_implementation_policy: "Preserve capture_screen, ScreenCaptureKit helper, media-first result implementation, and existing lower-layer tests. Blocking is governance, not deletion."
+  reauthorization: "Only a future Architect-approved task may remove/change the guard, followed by canonical verification, packaging, activation, and independent review. A prompt, ad-hoc chat request, or tool caller cannot override the guard."
+
+repository_ssot:
+  create:
+    path: .agent/capability-policy.yaml
+    required_content:
+      protocol_version: 1
+      visual_perception:
+        status: BLOCKED
+        tool: screen_capture
+        production_invocation: DENY
+        error_code: VISUAL_PERCEPTION_BLOCKED
+        reason: "ChatGPT custom-app -> model semantic pixel delivery remains unproven and public contract insufficient."
+        forbidden_reliance:
+          - model_visual_observation
+          - pixel_semantic_claims
+          - visual_control
+          - click_type_scroll_based_on_screen_capture
+          - OCR_or_textual_fallback
+        reauthorization_requires:
+          - architect_approved_task
+          - source_change
+          - canonical_verification
+          - package_and_activation
+          - independent_architect_review
+        authority_reviews:
+          - "3a41d140d5e02f4a805f6dce044f1060eeef76a0"
+          - "5a256ec90314d7d44e86815a974bfc7ce5641563"
+          - "672ee7950ab9bebf9eb7c326dfa140480e97f32f"
+  role: "Canonical machine-readable capability status for future task planning and review."
+
+authorized_source_changes:
+  required_paths:
+    - .agent/capability-policy.yaml
+    - agent_runtime/screen_capture.py
+    - agent_runtime/server.py
+    - tests/test_screen_capture_mcp.py
+    - tests/test_mcp_contracts.py
+  exact_intent:
+    agent_runtime/screen_capture.py:
+      - "Add VISUAL_PERCEPTION_BLOCKED to the closed screen-capture error-code set."
+      - "Do not change capture_screen behavior, helper invocation, image encoding, metadata, limits, TCC handling, or lower-layer capture semantics."
+    agent_runtime/server.py:
+      - "Keep screen_capture registered with identical arguments, annotations, and public name."
+      - "Before calling capture_screen, return capture_failure_result(ScreenCaptureFailure('VISUAL_PERCEPTION_BLOCKED', bounded non-secret message, retryable=False))."
+      - "The guard MUST be unconditional in production revision 1: no env flag, prompt token, caller field, hidden override, dynamic policy bypass, or per-request escape hatch."
+      - "Update SERVER_INSTRUCTIONS and screen_capture docstring to state that visual perception is governance-blocked and explicit future Architect re-authorization plus new activation is required."
+      - "Do not change any other tool behavior or schema."
+    tests/test_screen_capture_mcp.py:
+      - "Prove production screen_capture returns isError=true with exact code VISUAL_PERCEPTION_BLOCKED."
+      - "Prove capture_screen/native helper delegate is not invoked."
+      - "Prove no ImageContent is returned while blocked."
+      - "Preserve lower-layer image/capture tests that validate dormant implementation."
+    tests/test_mcp_contracts.py:
+      - "Prove PUBLIC_TOOL_NAMES remains exact eleven and screen_capture remains exposed."
+      - "Prove public description/instructions communicate the blocked state sufficiently for model-facing discovery."
+  expected_tracked_scope_exact: true
+
+invariants:
+  - "PUBLIC_TOOL_NAMES remains exactly eleven."
+  - "screen_capture input schema and annotations remain unchanged."
+  - "No screen pixels are produced by production MCP screen_capture while the guard is active."
+  - "No native ScreenCaptureKit helper process is spawned by a blocked production invocation."
+  - "No TCC or Screen Recording permission mutation."
+  - "No OCR, base64-in-text, textual description, file-upload, Drive/ZIP, DOM, Accessibility, or alternate vision fallback."
+  - "No click, type, scroll, focus, window control, or visual-control implementation."
+  - "Underlying capture implementation remains present and testable below the production governance wrapper."
+  - "main, tags, releases, sibling repositories, Keychain, SSH, Photos, browser secrets, and unrelated host state remain unchanged."
+
+local_execution:
+  repository: /Users/tienphat/Developer/agent-runtime
+  required_branch: dev
+  starting_state:
+    requirement: "Fresh-resolve remote dev/main before mutation. Fast-forward the one existing local dev worktree to the exact TASK-0125 planning HEAD using ordinary ff-only synchronization; no branch switch, reset, rebase, stash, clean, alternate worktree, or clone."
+    main_must_remain: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  one_writer: true
+
+authority_counters:
+  repository_sync: "0/1"
+  source_commit: "0/1"
+  source_push: "0/1"
+  canonical_verify: "0/1"
+  packaging: "0/1"
+  signing_identity_discovery: "0/1"
+  install_prebuilt: "0/1"
+  commit_cutover: "0/1"
+  installed_guard_probe: "0/1"
+  retries: 0
+
+verification:
+  focused:
+    - "Run tests.test_screen_capture_mcp and tests.test_mcp_contracts."
+    - "Run existing lower-layer tests.test_screen_capture and tests.test_image_transport to prove dormant capture/wire implementation was not damaged."
+    - "Run py_compile on changed Python files."
+    - "Run git diff --check and prove tracked dirty paths are exactly the five authorized paths."
+  canonical:
+    command: "PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify"
+    invocation_limit: "0/1"
+    requirement: "Invoke exactly once only after focused verification PASS and stable exact diff. No retry after ambiguous or failed canonical execution."
+  pass_gate: "Focused PASS + canonical exit 0 + exact scope closure."
+
+publication:
+  source_successor:
+    - "On verification PASS, create exactly one implementation commit containing the five authorized paths."
+    - "Push by ordinary non-force fast-forward to origin/dev."
+    - "Require clean local worktree and local HEAD=origin/dev before packaging."
+  executor_report_persistence: forbidden
+  architect_report_review_persistence: deferred
+
+packaging_and_activation:
+  rationale: "A repository-only note would not protect already-running Agent Runtime sessions. The guard must be present in the installed Runtime."
+  package:
+    command: "./macos/package_app.sh"
+    invocation_limit: "0/1"
+    requirements:
+      - "Discover one valid explicit non-ad-hoc signing identity exactly once without persisting or reporting its literal value."
+      - "Set AGENT_RUNTIME_CODESIGN_IDENTITY only for the packaging process."
+      - "Package from the clean exact implementation successor HEAD."
+      - "Require package provenance/manifest/seal/publication validation PASS and immutable candidate/handoff identities."
+      - "Do not modify package/sign/freeze implementation."
+  install:
+    command_shape: "./install.sh --install-prebuilt <candidate_app> <candidate_handoff> --expected-candidate-sha256 <candidate_sha256> --expected-handoff-sha256 <handoff_sha256>"
+    invocation_limit: "0/1"
+    requirements:
+      - "Use only the just-produced immutable candidate and exact handoff hashes."
+      - "Require canonical pinned candidate validation."
+      - "Do not use rollback/resume/recovery unless a future Architect revision explicitly authorizes it."
+      - "If installation reaches a nonzero terminal, stop and do not retry."
+  cutover_commit:
+    command: "./install.sh --commit-cutover"
+    invocation_limit: "0/1"
+    requirements:
+      - "Invoke only after install-prebuilt reports successful APP_SWAPPED/PENDING transaction and successor health/readiness PASS."
+      - "No retry."
+      - "Success requires COMMITTED and transaction directory absent."
+  lifecycle:
+    - "Only lifecycle actions inherent to the canonical install-prebuilt/cutover path are authorized."
+    - "No extra restart, stop/start, kill, launchctl experimentation, tunnel mutation, plugin reinstall, or TCC change."
+
+installed_guard_probe:
+  invocation_limit: "0/1"
+  requirements:
+    - "After committed cutover, perform one Runtime-independent local MCP stdio probe against the INSTALLED Agent Runtime server."
+    - "List tools and require exact eleven names including screen_capture."
+    - "Invoke installed screen_capture exactly once with its default request."
+    - "Require typed VISUAL_PERCEPTION_BLOCKED, retryable=false, isError=true."
+    - "Require zero ImageContent and no native capture helper consequence."
+    - "This invocation is a guard-denial probe, not an authorized visual capture; no pixels may be produced."
+    - "Do not use ChatGPT vision or screen_capture through the live custom app for this verification."
+  failure_terminal: INSTALLED_VISUAL_GUARD_UNPROVEN
+
+forbidden_changes:
+  - "Do not remove screen_capture from PUBLIC_TOOL_NAMES."
+  - "Do not add an override parameter, env toggle, secret token, feature flag, caller allowlist, or prompt-controlled bypass."
+  - "Do not change capture helper/native ScreenCaptureKit implementation."
+  - "Do not alter screen capture permissions/TCC."
+  - "Do not add or remove dependencies."
+  - "Do not change any tool except screen_capture governance messaging/wrapper."
+  - "Do not modify install/cutover/package/signing implementation."
+  - "Do not use force push."
+  - "Do not promote to main."
+  - "Do not create tags/releases."
+  - "Do not invoke real visual capture as part of verification."
+  - "Do not enter Stage B or visual-control work."
+
+terminal_states:
+  success: NEEDS_REVIEW
+  focused_failure: FOCUSED_VERIFICATION_FAILED
+  canonical_failure: CANONICAL_VERIFICATION_FAILED
+  packaging_failure: PACKAGING_FAILED
+  install_failure: INSTALL_PREBUILT_FAILED
+  cutover_failure: CUTOVER_COMMIT_FAILED
+  installed_guard_unproven: INSTALLED_VISUAL_GUARD_UNPROVEN
+  capability_failure: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+
+success_postconditions:
+  - "Remote dev contains exactly one verified implementation successor for the visual-perception guard."
+  - "Installed Agent Runtime is sourced from that successor candidate."
+  - "Cutover is COMMITTED with no pending transaction."
+  - "Public MCP surface remains exactly eleven tools."
+  - "Production screen_capture is exposed but fail-closed with VISUAL_PERCEPTION_BLOCKED before native capture."
+  - ".agent/capability-policy.yaml declares visual_perception BLOCKED."
+  - "Future chats cannot obtain screen pixels through production screen_capture until a separately reviewed source+activation task removes the guard."
+  - "Visual control remains unauthorized."
+
+reporting:
+  executor_output:
+    - "Return one bounded Vietnamese result packet only."
+    - "Include planning HEAD, implementation commit, focused/canonical results, candidate/handoff hashes, install/cutover counts and terminals, installed guard probe result, exact eleven-tool surface result, local/remote closure, and forbidden-effect counters."
+    - "Do not reveal signing identity literal, runtime.env values, credentials, tokens, tunnel IDs, cookies, Keychain/SSH data, screen content, or unrelated host state."
+  repository_report_by_executor: forbidden
+  architect_review: required
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Canonical machine-readable visual_perception BLOCKED policy is persisted with exact accepted authority."
+  - id: AC-2
+    requirement: "Production screen_capture remains in the eleven-tool surface but unconditionally returns VISUAL_PERCEPTION_BLOCKED before capture_screen/helper execution."
+  - id: AC-3
+    requirement: "Focused tests and canonical ./verify PASS without damaging dormant lower-layer screen/image transport implementation."
+  - id: AC-4
+    requirement: "Exact five-path implementation successor is normally published to dev."
+  - id: AC-5
+    requirement: "A newly packaged signed immutable candidate from that successor is installed and cutover committed exactly once."
+  - id: AC-6
+    requirement: "Installed-runtime MCP probe proves eleven tools and screen_capture typed denial with no ImageContent/native capture consequence."
+  - id: AC-7
+    requirement: "No unrelated repository, security, permission, visual, or host mutation occurs."
+
+downstream_if_accepted:
+  next_task: NONE
+  note: "The guard remains active indefinitely. A future Architect task may re-authorize visual perception only after contract/platform evidence changes; that task must explicitly remove the guard, verify, package, activate, and receive independent review."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+execution_ready: true
