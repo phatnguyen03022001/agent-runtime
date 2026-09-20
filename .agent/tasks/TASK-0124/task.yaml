@@ -1,0 +1,150 @@
+protocol_version: 3
+
+task_id: TASK-0124
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  predecessor_task: TASK-0123
+  predecessor_review: "5a256ec90314d7d44e86815a974bfc7ce5641563"
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: openai_mcp_image_support_repro
+
+execution_surface:
+  id: CHATGPT_GITHUB
+  controller: CHATGPT
+  location: GITHUB
+  transport: GITHUB
+
+objective: "Prepare a minimal, technically precise standards-conformance/support packet for OpenAI that asks whether MCP ImageContent returned by a ChatGPT custom app is contractually promoted to semantic model vision input. Use only accepted existing evidence. Do not perform another capture, do not modify Runtime, and do not claim a ChatGPT bug."
+
+accepted_authority:
+  task_0120_review: "a838b7750a086bb1e83f34731d349ee15340a7af"
+  task_0121_review: "18db9ab9a78683a87c893899571591c5fd469491"
+  task_0122_review: "3a41d140d5e02f4a805f6dce044f1060eeef76a0"
+  task_0123_review: "5a256ec90314d7d44e86815a974bfc7ce5641563"
+  host_media_classification: PUBLIC_CONTRACT_INSUFFICIENT
+
+source_scope:
+  repository_evidence:
+    - ".agent/tasks/TASK-0120/review.yaml"
+    - ".agent/tasks/TASK-0121/review.yaml"
+    - ".agent/tasks/TASK-0122/task.yaml"
+    - ".agent/tasks/TASK-0122/report.yaml"
+    - ".agent/tasks/TASK-0122/review.yaml"
+    - ".agent/tasks/TASK-0123/report.yaml"
+    - ".agent/tasks/TASK-0123/review.yaml"
+    - ".agent/tasks/TASK-0087/task.yaml"
+    - "tests/test_image_transport.py"
+    - "tests/test_screen_capture.py"
+    - "tests/test_screen_capture_mcp.py"
+    - "agent_runtime/screen_capture.py"
+    - "agent_runtime/server.py"
+  normative_sources:
+    - "https://developers.openai.com/plugins/reference"
+    - "https://developers.openai.com/plugins/concepts/plugins"
+    - "https://help.openai.com/en/articles/12584461-developer-mode-and-mcp-apps-in-chatgpt"
+    - "https://developers.openai.com/api/docs/guides/tools-computer-use-integration"
+    - "https://modelcontextprotocol.io/specification/2026-07-28"
+
+packet_requirements:
+  include:
+    - "One-sentence issue summary without calling it a bug."
+    - "Exact question to OpenAI: whether ChatGPT custom-app MCP tool-result ImageContent(image/png) is expected to become semantic model vision input, and if so which public contract documents that behavior."
+    - "Minimal architecture path: ChatGPT -> custom app/secure MCP tunnel -> local Agent Runtime -> production screen_capture -> MCP CallToolResult.content ImageContent(image/png) + bounded text metadata."
+    - "Accepted wire evidence: deterministic MCP tests preserve exact PNG bytes and SHA-256 through the MCP client/server boundary."
+    - "Accepted runtime evidence: no known production Runtime regression; postcommit CHATGPT_LOCAL continuity is proven."
+    - "Stage B observation: semantic pixel availability to the model remained MCP_IMAGE_HOST_COMPATIBILITY_UNPROVEN under one blind production capture attempt; do not claim more than accepted evidence."
+    - "Contract ambiguity: OpenAI docs say content/structuredContent are surfaced to model/component, but the reviewed public contract does not explicitly define MCP ImageContent promotion into semantic vision input."
+    - "Contrast with documented computer-use screenshot feedback, which has an explicit screenshot result shape for visual context."
+    - "Exact reproduction preconditions that do not expose secrets, credentials, tunnel IDs, cookies, or private screen contents."
+    - "Expected-vs-observed section where expected is phrased conditionally because public contract is insufficient."
+    - "Three support questions maximum."
+    - "A compact evidence matrix separating Runtime implementation, MCP wire, connector continuity, ChatGPT host ingestion, and model semantic vision."
+    - "A privacy-safe attachment manifest naming only repository paths or redacted artifacts that would be safe to provide if OpenAI asks."
+  exclude:
+    - "Any plaintext blind oracle/title from TASK-0122."
+    - "Credentials, tokens, tunnel IDs, cookies, runtime.env values, signing identity, Keychain/SSH data, screen pixels, screenshots, Photos, or unrelated host state."
+    - "Speculation that OpenAI dropped ImageContent."
+    - "Speculation that the connector or tunnel stripped bytes unless evidence proves it."
+    - "Claims that UI resource rendering implies model vision."
+    - "Any recommendation to change screen_capture before the contract question is answered."
+
+support_questions:
+  max_count: 3
+  required_topics:
+    - "Is MCP ImageContent in tool result content expected to be semantically inspectable by the ChatGPT model?"
+    - "If yes, what is the supported result shape/version/host requirement and where is that contract documented?"
+    - "If no or not currently supported, what is the recommended supported media path for a custom app that needs the model to inspect tool-produced screenshots?"
+
+classification_rules:
+  - "The packet must preserve TASK-0123 classification PUBLIC_CONTRACT_INSUFFICIENT."
+  - "Do not relabel the issue as CHATGPT_HOST_BUG, CONNECTOR_BUG, or RUNTIME_BUG."
+  - "Do not propose a Stage B retry."
+  - "Do not unblock visual control."
+
+required_output:
+  format: bounded_support_packet
+  sections:
+    - subject
+    - issue_summary
+    - exact_questions
+    - architecture
+    - accepted_evidence
+    - minimal_reproduction
+    - expected_vs_observed
+    - evidence_matrix
+    - official_contract_references
+    - privacy_safe_attachment_manifest
+    - current_classification
+    - requested_clarification
+  constraints:
+    - "Write the support packet in concise professional English."
+    - "Outside the packet, communicate with the operator in Vietnamese."
+    - "Do not persist or submit the packet. Architect handles any later persistence/submission decision."
+
+forbidden_actions:
+  - "Do not invoke Agent Runtime tools."
+  - "Do not invoke screen_capture."
+  - "Do not use CODEX_LOCAL, Remote Desktop Commander, SentinelX, operator Terminal, or another local execution surface."
+  - "Do not mutate repository files."
+  - "Do not create report.yaml, commit, push, branch, PR, issue, support ticket, or external submission."
+  - "Do not mutate Runtime, connector, tunnel, TCC, permissions, browser state, or host UI."
+  - "Do not perform new experiments, retries, screenshots, OCR, or alternate media transport."
+  - "Do not implement visual control."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Packet is entirely grounded in accepted TASK-0120 through TASK-0123 evidence plus cited public contracts."
+  - id: AC-2
+    requirement: "The packet asks for contract clarification rather than asserting a product bug."
+  - id: AC-3
+    requirement: "Minimal reproduction is precise but does not require another execution during this task."
+  - id: AC-4
+    requirement: "Privacy-sensitive host data and blind oracle content are excluded."
+  - id: AC-5
+    requirement: "At most three support questions cover semantic ImageContent support, documented requirements, and supported alternative media path."
+  - id: AC-6
+    requirement: "No mutation, new experiment, Stage B retry, or visual-control work occurs."
+
+terminal_states:
+  success: NEEDS_REVIEW
+  evidence_conflict: SUPPORT_PACKET_EVIDENCE_CONFLICT
+  capability_failure: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+
+downstream_if_accepted:
+  next_task: NONE
+  note: "Architect/operator may choose to submit the accepted packet to OpenAI support or retain it until public contract changes. Production Runtime and visual-control roadmap remain unchanged meanwhile."
+
+git_authority:
+  create_branch: false
+  commit: false
+  push: false
+  promote_to_main: false
+
+execution_ready: true
