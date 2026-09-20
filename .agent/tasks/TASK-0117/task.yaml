@@ -1,13 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0117
-task_revision: 1
+task_revision: 2
 state: APPROVED
 
 origin:
-  type: architect_followup
+  type: architect_resume_after_capability_loss
   predecessor_task: TASK-0116
   predecessor_review: "8562e713980e788dfaaad388ebc43e4426f52334"
+  predecessor_task_revision: 1
+  predecessor_terminal: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
 
 target:
   repository: phatnguyen03022001/agent-runtime
@@ -16,10 +18,17 @@ target:
     role: accepted_candidate_pinned_validation
 
 execution_surface:
-  id: CHATGPT_LOCAL
-  controller: CHATGPT
+  id: CODEX_LOCAL
+  controller: CODEX
   location: LOCAL
-  transport: AGENT_RUNTIME
+  transport: NATIVE
+
+surface_change_authority:
+  reason: "TASK-0117 revision 1 lost the required Agent Runtime tool surface after authorized repository mutation had already begun."
+  safety_judgment_change: false
+  previous_surface: CHATGPT_LOCAL
+  new_surface: CODEX_LOCAL
+  rule: "The surface change is authorized solely to resume an already-started local checkpoint after capability loss. It must not replay, retry, or reinterpret any platform safety judgment."
 
 objective: "Implement the smallest fail-closed separation between creation-time certificate trust proof and install-time immutable accepted-candidate proof. Preserve the existing strict generic validation path unchanged by default. Add an explicit pinned prebuilt path that is usable only when both exact externally-authorized candidate SHA-256 and handoff SHA-256 are supplied and all candidate provenance/identity bytes still match. Do not install, rebuild, re-sign, alter host trust, or touch Stage B."
 
@@ -31,6 +40,24 @@ architect_decision:
   invariant: "Strict validation remains the default and package-time sealing remains strict."
   forbidden_design: "No generic --skip-trust, --no-verify, environment bypass, implicit fallback, or automatic downgrade from strict to pinned validation."
 
+checkpoint_authority:
+  local_repository: /Users/tienphat/Developer/agent-runtime
+  checkpoint_base_head: "2b970d1e606a877f011885bb84ad30c1bc721471"
+  checkpoint_dirty_paths:
+    - install.sh
+    - macos/candidate_cutover.py
+    - macos/package_provenance.py
+    - tests/test_candidate_cutover.py
+  checkpoint_diff_sha256: "debbd7bb096936ebc764c663f195fa5da854f3b91ee1896090fe44fbf7e3a000"
+  checkpoint_diff_stat: "4 files changed, 391 insertions(+), 24 deletions(-)"
+  focused_verification_completed: false
+  canonical_verify_authority: "0/1"
+  canonical_verify_consumed: false
+  implementation_commit_created: false
+  remote_push_from_revision_1: false
+  product_consequence: NONE
+  binding_source: "Architect read-only observation through Remote Desktop Commander after revision-1 capability loss."
+
 accepted_candidate_reference:
   candidate_sha256: "0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77"
   handoff_sha256: "f8e75129f942fe67541229a598ed8761be574ec5547ffd306c606131718130a8"
@@ -40,11 +67,16 @@ accepted_candidate_reference:
   note: "These values define downstream TASK-0118 authority only. Production code must remain generic and must not hard-code this candidate."
 
 preconditions:
-  - "Resolve TASK-0117 revision 1 directly from GitHub at the exact planning HEAD."
-  - "Fresh-resolve dev/main; require dev equals the planning HEAD and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
-  - "Synchronize the clean canonical local dev checkout by ordinary fast-forward only."
-  - "Require working tree clean."
+  - "Resolve TASK-0117 revision 2 directly from GitHub at the exact revision-2 planning HEAD. Task authority comes from the remote planning HEAD; local consequence state comes from the separately authorized dirty checkpoint below."
+  - "Fresh-resolve remote dev/main; require dev equals the revision-2 planning HEAD and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "Before any synchronization, require local /Users/tienphat/Developer/agent-runtime HEAD equals 2b970d1e606a877f011885bb84ad30c1bc721471."
+  - "Before any synchronization, require the exact dirty path set is install.sh, macos/candidate_cutover.py, macos/package_provenance.py, tests/test_candidate_cutover.py and no other tracked/untracked path is dirty."
+  - "Before any synchronization, recompute git diff --binary SHA-256 and require debbd7bb096936ebc764c663f195fa5da854f3b91ee1896090fe44fbf7e3a000. If it differs, stop CHECKPOINT_IDENTITY_CHANGED."
+  - "Require the revision-2 remote planning delta from checkpoint base 2b970d1e606a877f011885bb84ad30c1bc721471 changes only .agent/tasks/TASK-0117/task.yaml."
+  - "Perform at most one ordinary dirty-preserving fast-forward of local dev from checkpoint base to the revision-2 planning HEAD. Do not stash, reset, checkout, restore, clean, rebase, or rewrite the dirty checkpoint."
+  - "Immediately after the fast-forward, require the exact same four dirty paths and exact same diff SHA-256 debbd7bb096936ebc764c663f195fa5da854f3b91ee1896090fe44fbf7e3a000. If the fast-forward cannot preserve the checkpoint byte-for-byte, stop CHECKPOINT_RESUME_UNAVAILABLE."
   - "Require TASK-0116 canonical review 8562e713980e788dfaaad388ebc43e4426f52334 in ancestry."
+  - "Treat all four checkpoint mutations as authorized TASK-0117 work. Do not restart implementation from revision 1 and do not recreate already-present changes merely for cleanliness."
   - "Do not inspect or mutate macOS trust/keychain state in this task."
   - "Do not invoke the accepted candidate or installed app as a live lifecycle consequence."
 
@@ -159,13 +191,16 @@ acceptance_criteria:
     requirement: "Implementation commit contains only allowed source/test files; report-only commit is its sole direct child and both publish non-force to dev."
 
 publication:
-  - "Create one implementation commit as direct child of the TASK-0117 planning HEAD."
+  - "After the checkpoint is byte-preservingly fast-forwarded to the revision-2 planning HEAD, create one implementation commit as the direct child of that planning HEAD."
+  - "The implementation commit may include only the allowed source/test paths and must include the resumed checkpoint work rather than replaying it."
   - "After implementation publication, create one report-only commit adding .agent/tasks/TASK-0117/report.yaml as the sole direct child of the implementation commit."
   - "Push both non-force to dev."
   - "Do not promote main."
 
 terminal_states:
   success: NEEDS_REVIEW
+  checkpoint_identity_changed: CHECKPOINT_IDENTITY_CHANGED
+  checkpoint_resume_unavailable: CHECKPOINT_RESUME_UNAVAILABLE
   verification_failure: VERIFICATION_FAILED
   scope_expansion_required: BLOCKED_SCOPE_EXPANSION
   capability_failure: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
