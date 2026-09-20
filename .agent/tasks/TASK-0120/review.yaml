@@ -1,68 +1,51 @@
 protocol_version: 3
 
 task_id: TASK-0120
-task_revision: 1
-review_revision: 1
+task_revision: 2
+review_revision: 2
 state: REWORK
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0120/report.yaml
-  commit: "40611298d83ffc01670c13d1c8fe0775167e7560"
-  report_revision: 1
-
-independence:
-  reviewer_role: ARCHITECT
-  separate_session_from_executor: true
-  exact_report_identity_verified: true
+  commit: "532e6bf1ef91c379572d31043637c0499d89ca81"
+  report_revision: 2
 
 acceptance:
   terminal: CUTOVER_COMMIT_PRECONDITION_UNPROVEN
   disposition: REWORK
 
-lineage:
-  planning_head: "f514d5a19a8fe388faa4ddc724f8268cb15609ed"
-  report_commit: "40611298d83ffc01670c13d1c8fe0775167e7560"
-  report_is_single_parent_direct_child: true
-  report_only_path_exact: .agent/tasks/TASK-0120/report.yaml
-  main_unchanged: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
-
 executor_result:
-  precommit_probe_invocations: 1
-  precommit_result: FAIL
+  planning_head_reported_correctly: false
+  static_transaction_predicates: PASS
+  candidate_validation_fields: PASS
+  live_tunnel_argv_identity: UNPROVEN
+  healthz: UNPROVEN
+  readyz: UNPROVEN
   commit_cutover_invocations: 0
   postcommit_probe_invocations: 0
-  repository_mutation: 0
   forbidden_effects: 0
 
 architect_diagnosis:
-  diagnosis: FALSE_NEGATIVE_PRECOMMIT_PROBE
-  transaction_schema: 5
-  transaction_status: PENDING
-  transaction_phase: APP_SWAPPED
-  candidate_validation_mode: pinned
-  candidate_sha256_matches: true
-  handoff_sha256_matches: true
-  transaction_handoff_sha256_matches: true
-  installed_manifest_matches: true
-  runtime_env_matches: true
-  tunnel_listener_count: 1
-  tunnel_executable_path_matches: true
-  tunnel_executable_sha256_matches: true
+  canonical_revision_2_head: "5b98b42fca962f335e5f6326c38ca5a22f43b11e"
+  remote_main: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  live_tunnel_listener_count: 1
+  live_tunnel_executable_path_matches: true
+  live_tunnel_executable_sha256_matches: true
   healthz_http: 200
   readyz_http: 200
+  product_failure_proven: false
+  diagnosis: EXECUTOR_LIVE_PROBE_AND_AUTHORITY_BINDING_FAILURE
   commit_authority_consumed: false
 
 architect_decision:
-  task_0120_revision_1_accepted: false
+  task_0120_revision_2_accepted: false
   rework_required: true
-  runtime_product_failure_proven: false
   cutover_commit_authority_remains: "0/1"
-  next_revision_may_grant_fresh_precommit_probe: true
-  next_revision_must_not_retry_commit_cutover: true
+  revision_3_strategy: "Remove CODEX_LOCAL live tunnel/health precommit gates. Bind only exact task authority, local source identity, static transaction/pinned candidate state, installed manifest identity, and runtime.env identity before commit. After COMMITTED, require transaction absence and unchanged local/static identities. Architect independently verifies live tunnel/health before ACCEPT."
   stage_b_authorized: false
 
 next_action:
   task: TASK-0120
-  revision: 2
-  intent: "Correct the false-negative precommit predicate implementation, re-prove the same unchanged PENDING/APP_SWAPPED state with one fresh bounded read-only probe, then execute canonical commit-cutover at most once if and only if every corrected precommit predicate passes."
+  revision: 3
+  intent: "Execute the still-unconsumed canonical cutover commit exactly once after minimal exact static guards. Do not require CODEX_LOCAL to prove live tunnel/health. Architect will perform independent live postcommit verification."
