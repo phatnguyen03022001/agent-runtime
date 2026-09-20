@@ -1,21 +1,21 @@
 protocol_version: 3
 
 task_id: TASK-0111
-task_revision: 2
+task_revision: 3
 state: APPROVED
 
 origin:
   type: architect_recovery
   task_id: TASK-0111
-  predecessor_revision: 1
-  predecessor_review: "0e67ad3fa5b8ec165e2a255996a475a048c20e8b"
-  gap_id: "codex_local_unix_socket_sandbox_capability_gap"
+  predecessor_revision: 2
+  predecessor_review: "f13606bbe559d2dc489bc96bce0bd8f95a1d245b"
+  gap_id: "chatgpt_code_mode_long_running_result_evidence_loss"
 
 target:
   repository: phatnguyen03022001/agent-runtime
   branch:
     name: dev
-    role: host_capable_verification_and_candidate_freeze
+    role: durable_verification_and_candidate_freeze
 
 execution_surface:
   id: CHATGPT_LOCAL
@@ -23,70 +23,92 @@ execution_surface:
   location: LOCAL
   transport: AGENT_RUNTIME
 
-objective: "Prove the accepted screen_capture wire fix on a host-capable CHATGPT_LOCAL execution path, run canonical ./verify exactly once under fresh authority, and only on PASS package/sign/validate/freeze exactly one new immutable candidate. No source mutation and no install/activation."
+objective: "Use durable detached receipts so ChatGPT orchestration timeout cannot lose canonical verification or packaging results. Run canonical ./verify exactly once under fresh authority, then on durable PASS package/sign/validate/freeze exactly one new immutable candidate. No source mutation and no install/activation."
 
 accepted_implementation:
   commit: "9640122ede05137f12839ed0147236733554367b"
-  changed_paths:
-    - macos/Sources/AgentRuntimeCore/ScreenCapture.swift
-    - macos/Tests/AgentRuntimeCoreTests/ScreenCaptureTests.swift
-    - tests/test_screen_capture.py
   focused_evidence:
     swift: "9/9 PASS"
     python_mcp: "32/32 PASS"
+  af_unix_host_capability: PASS
 
 preconditions:
-  - "Resolve canonical task directly from GitHub at exact revision-2 planning HEAD."
+  - "Resolve canonical task directly from GitHub at exact revision-3 planning HEAD."
   - "Fresh-resolve remote dev/main; require dev equals exact planning HEAD and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
   - "Synchronize clean local dev checkout to exact planning HEAD by authorized fast-forward only."
   - "Require accepted implementation commit 9640122ede05137f12839ed0147236733554367b in ancestry."
   - "Require working tree clean."
-  - "Do not modify source/tests/docs/requirements."
+  - "Do not modify source/tests/docs/dependencies."
 
-host_capability_preflight:
-  authority: "0/1"
+durable_execution:
+  root: "/tmp/task-0111-r3"
   requirements:
-    - "Before canonical verification, use terminal_exec to create one temporary AF_UNIX socket under /tmp, bind it, close it, remove it, and prove cleanup."
-    - "This probe must perform no repository mutation."
-    - "If AF_UNIX bind is blocked or denied, stop CURRENT_PHASE_CAPABILITY_UNAVAILABLE before consuming canonical verify authority."
-    - "Do not reroute to another surface after a failed host-capability preflight."
+    - "Before launch, require all revision-3 helper/state/log/receipt/temp paths absent."
+    - "Write bounded helper scripts that invoke the exact canonical command once, redirect complete stdout/stderr to fixed log, and atomically write a FINISHED receipt containing invoked=true, exit_code, log_sha256 and log_bytes."
+    - "Launch each helper exactly once using a detached subprocess/session so terminal_exec returns after launch rather than waiting for the long-running child."
+    - "Record child PID and helper SHA-256 before polling."
+    - "Poll only state/receipt/process existence; never invoke the canonical command again."
+    - "Validate helper SHA binding and recompute log SHA-256/byte count before accepting a receipt."
+    - "A lost synchronous launcher result does not authorize relaunch if durable state proves the child started."
 
 verification:
   canonical:
     authority: "0/1"
     command: "./verify"
+    helper: "/tmp/task-0111-r3-verify.sh"
+    state: "/tmp/task-0111-r3-verify.state"
+    log: "/tmp/task-0111-r3-verify.log"
+    receipt: "/tmp/task-0111-r3-verify.receipt"
+    temp_receipt: "/tmp/task-0111-r3-verify.receipt.tmp"
+    polling:
+      observations_max: 300
+      sleep_before_each_observation_seconds: 2
+      no_observation_301: true
+    pass_predicate:
+      - "invoked=true"
+      - "exit_code=0"
+      - "receipt helper SHA matches launched helper"
+      - "recomputed log_sha256 and log_bytes match receipt"
+      - "log reports canonical suite completion with zero failures/errors"
     requirements:
-      - "Run exactly once after AF_UNIX preflight PASS."
+      - "Invoke literal ./verify exactly once."
       - "No retry."
-      - "Require exit_code=0."
-      - "Require no test failures or errors."
-  focused_rerun:
-    required: false
-    reason: "Revision-1 focused screen_capture verification is Architect-accepted and no source mutation is authorized in revision 2."
+      - "If receipt exit_code is non-zero, stop CANONICAL_VERIFICATION_FAILED."
+      - "If no valid FINISHED receipt is obtainable within the bounded polling schedule, stop CANONICAL_VERIFICATION_RESULT_UNAVAILABLE."
 
 packaging:
   authority: "0/1"
-  precondition: "Canonical verification PASS only."
+  precondition: "Durable canonical verification PASS only."
+  command: "./macos/package_app.sh"
+  helper: "/tmp/task-0111-r3-package.sh"
+  state: "/tmp/task-0111-r3-package.state"
+  log: "/tmp/task-0111-r3-package.log"
+  receipt: "/tmp/task-0111-r3-package.receipt"
+  temp_receipt: "/tmp/task-0111-r3-package.receipt.tmp"
   requirements:
-    - "Use the canonical packaging interpreter identity CPython 3.13.x/cpython-313/macOS arm64."
-    - "Use exactly one valid non-ad-hoc signing identity bound non-disclosingly in-process."
-    - "Invoke package_app.sh exactly once."
+    - "Use canonical CPython 3.13.x/cpython-313/macOS arm64 packaging interpreter."
+    - "Discover exactly one valid non-ad-hoc codesigning identity once, non-disclosingly; bind its fingerprint only in the package child environment."
+    - "Invoke package_app.sh exactly once via durable detached helper."
     - "No retry."
+    - "Require package receipt exit_code=0 with validated helper/log closure."
+    - "Parse candidate_app, candidate_handoff and candidate_sha256 from fixed package log without exposing signing material."
     - "Require strict codesign, validate-candidate, source revision/tree, requirements lock, immutable closure and matching non-null TeamIdentifier closure PASS."
-    - "Candidate source revision must equal exact TASK-0111 revision-2 planning HEAD."
-    - "Record candidate SHA-256, app path, handoff path, handoff SHA-256, source revision/tree and requirements lock SHA-256."
+    - "Candidate source revision must equal exact TASK-0111 revision-3 planning HEAD."
 
 scope:
   allowed_repository_mutation:
     - ".agent/tasks/TASK-0111/report.yaml"
-  allowed_ignored_artifacts:
+  allowed_nonrepository_artifacts:
+    - "/tmp/task-0111-r3-*"
     - "build/candidates/**"
   expected_files_are_restrictive: true
 
 forbidden_changes:
   - "Do not modify implementation/source/tests/docs/dependencies."
-  - "Do not run canonical ./verify more than once."
-  - "Do not package if canonical verify is non-zero."
+  - "Do not invoke ./verify more than once."
+  - "Do not invoke package_app.sh more than once."
+  - "Do not package before durable canonical verification PASS."
+  - "Do not print or persist signing identity literal/fingerprint in report."
   - "Do not install-prebuilt."
   - "Do not install or replace Agent Runtime.app."
   - "Do not create or mutate cutover transaction state."
@@ -103,10 +125,11 @@ publication:
 
 terminal_states:
   success: NEEDS_REVIEW
-  host_capability_failure: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
   verification_failure: CANONICAL_VERIFICATION_FAILED
+  verification_evidence_failure: CANONICAL_VERIFICATION_RESULT_UNAVAILABLE
   packaging_failure: PACKAGING_FAILED
   candidate_validation_failure: CANDIDATE_VALIDATION_FAILED
+  capability_failure: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
 
 git_authority:
   create_branch: false
