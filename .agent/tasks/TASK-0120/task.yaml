@@ -1,0 +1,173 @@
+protocol_version: 3
+
+task_id: TASK-0120
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  predecessor_task: TASK-0119
+  predecessor_review: "c9414867ddaaa95a59d914c6328cbfe81bf658a0"
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: pending_cutover_commit
+
+execution_surface:
+  id: CODEX_LOCAL
+  controller: CODEX
+  location: LOCAL
+  transport: NATIVE
+  rationale: "Cutover commit finalizes Agent Runtime transaction state and must not depend on the Agent Runtime transport that is being finalized."
+
+objective: "Commit the already-proven schema-5 PENDING/APP_SWAPPED cutover exactly once through the canonical local commit path, then prove transaction finalization and retained healthy successor activation. Do not synchronize the local checkout, do not restart/reinstall/re-sign, and do not enter Stage B."
+
+accepted_authority:
+  task_0118_review: "4bd4f880a3bfd0946b4250ed157dd13f248d2e0d"
+  task_0119_review: "c9414867ddaaa95a59d914c6328cbfe81bf658a0"
+  candidate_sha256: "0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77"
+  handoff_sha256: "f8e75129f942fe67541229a598ed8761be574ec5547ffd306c606131718130a8"
+  candidate_source_revision: "18cdb515fe037c9b6cb81ce6529d85ae734e195a"
+  candidate_source_tree: "ed9a2b089d2f17d2a66eb25da4277f00d418bd07"
+  requirements_lock_sha256: "80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
+  runtime_env_sha256: "6e6fef8e255b140f28703f8bd515726e1fd93d644e6f838b33ebf319e8133077"
+  tunnel_process_executable: "/opt/homebrew/Cellar/tunnel-client/0.0.11/libexec/tunnel-client"
+  tunnel_process_executable_sha256: "a916406d4fd5506aab9a593808ebd10ab23aa7d11e1675d33612632b9ead7e51"
+
+local_consequence_source:
+  repository: /Users/tienphat/Developer/agent-runtime
+  required_branch: dev
+  required_head: "90203f901d2503f2289cbbfd8cfdce0bd0126a63"
+  required_clean: true
+  install_sh_blob: "7384cff41328467b2d044f17f94d3009ead76250"
+  candidate_cutover_blob: "4578037bf12b34550a9d0648ac7ec49876588ff1"
+  byte_equivalent_to_current_remote: true
+  repository_sync_required: false
+  repository_sync_authorized: false
+
+canonical_paths:
+  transaction_dir: "/Users/tienphat/Library/Application Support/Agent Runtime/cutover-transaction"
+  transaction_metadata: "/Users/tienphat/Library/Application Support/Agent Runtime/cutover-transaction/metadata.json"
+  transaction_handoff: "/Users/tienphat/Library/Application Support/Agent Runtime/cutover-transaction/candidate-handoff.json"
+  installed_app: "/Users/tienphat/Applications/Agent Runtime.app"
+  installed_manifest: "/Users/tienphat/Applications/Agent Runtime.app/Contents/Resources/runtime-manifest.json"
+  runtime_env: "/Users/tienphat/Library/Application Support/Agent Runtime/runtime.env"
+
+authority_counters:
+  precommit_probe: "0/1"
+  commit_cutover: "0/1"
+  postcommit_probe: "0/1"
+  retries: 0
+  repository_sync: NONE
+  install_prebuilt: NONE
+  rollback: NONE
+  resume: NONE
+  recover: NONE
+  runtime_restart: NONE
+
+precommit:
+  requirements:
+    - "Resolve TASK-0120 revision 1 and TASK-0119 ACCEPTED review from the exact remote planning HEAD. Remote main must remain c49d777efa09db7f6c51bd8d8616db4623499fb8."
+    - "Do not synchronize the local checkout. Require local repository branch dev, HEAD exactly 90203f901d2503f2289cbbfd8cfdce0bd0126a63, and clean working tree."
+    - "Require git blob identity of install.sh equals 7384cff41328467b2d044f17f94d3009ead76250 and macos/candidate_cutover.py equals 4578037bf12b34550a9d0648ac7ec49876588ff1."
+    - "Require transaction metadata is a regular non-symlink file with schema=5, status=PENDING, phase=APP_SWAPPED."
+    - "Require candidate_validation.mode=pinned with the exact accepted candidate and handoff SHA-256 values."
+    - "Require transaction-owned candidate-handoff.json is regular/non-symlink and SHA-256 equals the accepted handoff SHA-256."
+    - "Require installed manifest is regular/non-symlink with schema=1, owner=com.picmao.agent-runtime, runtime_revision exact, git_tree exact, and requirements_lock_sha256 exact."
+    - "Require runtime.env is regular/non-symlink, mode 0600, and SHA-256 equals accepted authority. Do not print raw values."
+    - "Require exactly one listener on 127.0.0.1:8080, live process executable path and SHA-256 equal accepted tunnel authority, /healthz=200, and /readyz=200."
+    - "Perform these checks in one bounded read-only precommit probe. If any predicate fails, stop CUTOVER_COMMIT_PRECONDITION_UNPROVEN without invoking commit-cutover."
+
+commit:
+  invocation_limit: "0/1"
+  command: "./install.sh --commit-cutover"
+  cwd: "/Users/tienphat/Developer/agent-runtime"
+  requirements:
+    - "Execute the canonical command exactly once only after all precommit predicates PASS."
+    - "Do not wrap, encode, split, alias, or transform the command to obtain a different safety judgment."
+    - "Do not retry under any outcome."
+    - "Success requires exit code 0 and canonical result status COMMITTED."
+  failure:
+    before_host_execution: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    reached_host_nonzero: CUTOVER_COMMIT_FAILED
+
+postcommit:
+  run_only_after_commit_success: true
+  requirements:
+    - "Perform exactly one bounded read-only postcommit probe."
+    - "Require cutover-transaction directory is absent."
+    - "Require local repository remains dev at HEAD 90203f901d2503f2289cbbfd8cfdce0bd0126a63 with clean working tree."
+    - "Require installed schema-1 manifest identity remains exactly accepted."
+    - "Require runtime.env remains mode 0600 with the accepted SHA-256."
+    - "Require exactly one listener on 127.0.0.1:8080 with the accepted tunnel executable path/SHA-256."
+    - "Require /healthz=200 and /readyz=200."
+    - "Do not restart, stop, start, reinstall, recover, rollback, or otherwise repair anything if a postcommit predicate fails."
+  failure_terminal: CUTOVER_COMMITTED_POSTCHECK_UNPROVEN
+
+success_postconditions:
+  - "Canonical commit-cutover executed exactly once and returned COMMITTED."
+  - "Canonical cutover transaction is absent after commit."
+  - "Installed successor identity, runtime.env identity, tunnel identity, listener count, health, and readiness remain accepted."
+  - "Local repository is unchanged and clean."
+  - "No Runtime lifecycle mutation occurs beyond the canonical transaction finalization itself."
+  - "No repository, connector, trust/TCC, screen capture, or Stage B mutation occurs."
+  - "Executor returns a bounded result packet only. Architect persists report/review separately."
+
+forbidden_changes:
+  - "Do not fetch, pull, merge, reset, rebase, checkout, stash, clean, fast-forward, or otherwise synchronize the repository."
+  - "Do not modify, stage, commit, push, or publish repository files."
+  - "Do not invoke install-prebuilt."
+  - "Do not invoke commit-cutover more than once."
+  - "Do not invoke rollback-cutover, resume-cutover, or recover-partial-cutover."
+  - "Do not start, stop, restart, signal, or reinstall Agent Runtime."
+  - "Do not mutate ServiceManagement, launchd, runtime.env, desired state, tunnel configuration, or connector configuration."
+  - "Do not invoke strict codesign or live trust evaluation."
+  - "Do not mutate trust, TCC, Keychain, SSH, browser secrets, Photos, or unrelated private state."
+  - "Do not invoke screen_capture or enter Stage B."
+  - "Do not modify implementation/tests/docs."
+  - "Do not run canonical ./verify, focused tests, packaging, signing, or freezing."
+
+reporting:
+  repository_mutation_authority: NONE
+  executor_output:
+    - "Return only a bounded Vietnamese result packet."
+    - "State exact remote planning HEAD, local consequence source identity, precommit result, commit invocation count/exit/result, postcommit result, and all forbidden-effect counters."
+    - "Do not disclose secrets, raw runtime.env values, tunnel IDs, credentials, tokens, cookies, or unrelated host state."
+  architect_persistence:
+    - "After the Executor result, Architect independently persists TASK-0120 report/review through remote SSOT."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Remote task authority and exact clean local consequence source are independently bound without repository synchronization."
+  - id: AC-2
+    requirement: "One bounded precommit probe proves exact PENDING/APP_SWAPPED pinned transaction and healthy accepted successor state."
+  - id: AC-3
+    requirement: "Canonical ./install.sh --commit-cutover executes exactly once, with no retry, and returns COMMITTED."
+  - id: AC-4
+    requirement: "One bounded postcommit probe proves transaction absence and retained accepted successor/runtime/tunnel/health state."
+  - id: AC-5
+    requirement: "No forbidden repository, lifecycle, connector, trust/TCC, visual, Stage-B, implementation, verification, packaging, signing, or reinstall consequence occurs."
+  - id: AC-6
+    requirement: "Executor returns only the truthful bounded result packet; Architect persistence is deferred."
+
+terminal_states:
+  success: NEEDS_REVIEW
+  capability_failure: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+  precondition_failure: CUTOVER_COMMIT_PRECONDITION_UNPROVEN
+  commit_failure: CUTOVER_COMMIT_FAILED
+  postcommit_unproven: CUTOVER_COMMITTED_POSTCHECK_UNPROVEN
+
+downstream_if_accepted:
+  next_task: TASK-0121
+  intent: "Prove postcommit CHATGPT_LOCAL continuity with exactly one read-only repo_observer call before Stage B."
+  stage_b_authorized: false
+
+git_authority:
+  create_branch: false
+  commit: false
+  push: false
+  promote_to_main: false
+
+execution_ready: true
