@@ -1,22 +1,22 @@
 protocol_version: 3
 
 task_id: TASK-0125
-task_revision: 5
+task_revision: 6
 state: APPROVED
 
 origin:
-  type: architect_rework_after_identity_binding_error
+  type: architect_activation_after_corrected_identity_verification
   predecessor_task: TASK-0125
-  predecessor_task_revision: 4
-  predecessor_report: "30166fed71455ffa2723fd6da146118315b5b968"
-  predecessor_review: "d7985df72d8453bf026a8c63876c8e682796fc07"
-  predecessor_terminal: INSTALL_PREBUILT_FAILED
+  predecessor_task_revision: 5
+  predecessor_report: "6691159608c999054b9f413fcb0643a87c257541"
+  predecessor_review: "ed8c2c8ceb35eb4a7e23e0528b5bbb1c9ecf749b"
+  predecessor_terminal: NEEDS_ARCHITECT_VERIFICATION
 
 target:
   repository: phatnguyen03022001/agent-runtime
   branch:
     name: dev
-    role: predecessor_identity_correction
+    role: visual_perception_guard_final_activation
 
 execution_surface:
   id: CODEX_LOCAL
@@ -24,122 +24,211 @@ execution_surface:
   location: LOCAL
   transport: NATIVE
 
-objective: "Correct the predecessor ServiceManagement compatibility identity from the invalid synthetic 63-character value to the actual installed 40-hex runtime_revision, and harden the regression so it exercises real manifest parsing without mocking _runtime_manifest_revision. Preserve the visual-perception guard and all other cutover behavior unchanged. Stop at a byte-bound dirty checkpoint for independent Architect canonical verification."
+objective: "Publish the exact Architect-verified revision-5 identity-correction checkpoint without source edits, package a fresh immutable candidate containing the accepted visual-perception guard plus the corrected split-v1 predecessor mapping, activate it exactly once, commit cutover exactly once, and prove the installed Runtime retains the exact eleven-tool public surface while screen_capture fails closed with VISUAL_PERCEPTION_BLOCKED and zero ImageContent before any native capture."
 
 accepted_authority:
-  task_0125_revision_4_review: "d7985df72d8453bf026a8c63876c8e682796fc07"
-  actual_installed_runtime_revision: "18cdb515fe037c9b6cb81ce6529d85ae734e195a"
-  actual_revision_length: 40
-  required_contract: split-v1
-  invalid_revision_to_remove: "18cdb515fe037c9b6cb81ce65287b64793d840a30267d9c4eac1dbf41720a77"
-  invalid_revision_length: 63
+  task_0125_revision_5_review: "ed8c2c8ceb35eb4a7e23e0528b5bbb1c9ecf749b"
+  visual_guard_implementation_commit: "768584093eae35efe8f7f2af4773440c7951a7d8"
   visual_perception_status: BLOCKED
-  guard_implementation_commit: "768584093eae35efe8f7f2af4773440c7951a7d8"
+  installed_predecessor_revision: "18cdb515fe037c9b6cb81ce6529d85ae734e195a"
+  installed_predecessor_contract: split-v1
+  canonical_verification:
+    environment: "Architect local outside CODEX sandbox"
+    command: "PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify"
+    invocations: "1/1"
+    exit_code: 0
+    tests_run: 454
+    duration_seconds: 98.170
+    result: PASS
+  failed_candidate_reuse_authorized: false
+  prior_failed_candidates:
+    - "5bf6506953610cceefcf7c30008dc956b578dc5baa319dd15d0a2279a21d1bc2"
+    - "165ae74f4f1d95d8567fee853d5a687b93c24eb9bcac528526cc00595872e928"
 
-starting_state:
-  local_repository: /Users/tienphat/Developer/agent-runtime
-  required_branch: dev
-  required_clean_head_before_sync: "f0517593f14351bb9d09cdb0e3bc35398c641cbc"
-  remote_main_must_remain: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+verified_checkpoint:
+  required_local_head_before_sync: "9f766310a19b25c4e8d4e841c8c6dbc536ed82bb"
+  dirty_paths_exact:
+    - macos/candidate_cutover.py
+    - tests/test_candidate_cutover.py
+  file_sha256:
+    macos/candidate_cutover.py: "0ab4b0a04de07761edf953b965edca9d552b53167408c74e94d38a85956c0309"
+    tests/test_candidate_cutover.py: "a3760771703d49b6e54affd1a01caecb51c69e6169eea743f327d535b58ed485"
+  diff_checkpoint_sha256: "d20276672bc018dcf341038f6ddac461a0459554f1ddc2927597f7ee47275ca9"
+  diff_check: PASS
+  source_edit_authority_revision_6: "0/0"
 
 sync:
   authority: "0/1"
   requirements:
     - "Fresh-resolve remote dev/main."
-    - "Require remote dev equals the exact revision-5 planning HEAD supplied by the operator."
-    - "Require local dev HEAD f0517593f14351bb9d09cdb0e3bc35398c641cbc and clean worktree."
+    - "Require remote dev equals the exact revision-6 planning HEAD supplied by the operator."
+    - "Require remote main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+    - "Before sync, require local dev HEAD 9f766310a19b25c4e8d4e841c8c6dbc536ed82bb with exactly the verified two dirty paths and exact file/checkpoint hashes."
     - "Execute exactly one git pull --ff-only origin dev."
-    - "No reset, rebase, stash, clean, checkout, alternate worktree, clone, or merge commit."
-    - "After sync require local HEAD equals the exact revision-5 planning HEAD and worktree clean."
+    - "No reset, rebase, stash, clean, checkout, alternate worktree, clone, merge commit, or conflict resolution."
+    - "After sync require local HEAD equals exact revision-6 planning HEAD and both dirty files plus diff checkpoint remain byte-identical."
+    - "If any checkpoint byte changes, stop CHECKPOINT_CHANGED."
 
-authorized_source_changes:
-  paths_exact:
-    - macos/candidate_cutover.py
-    - tests/test_candidate_cutover.py
-  macos/candidate_cutover.py:
-    - "Remove the invalid synthetic revision 18cdb515fe037c9b6cb81ce65287b64793d840a30267d9c4eac1dbf41720a77 from SPLIT_SERVICE_MANAGEMENT_REVISIONS."
-    - "Add the actual installed 40-hex runtime_revision 18cdb515fe037c9b6cb81ce6529d85ae734e195a to SPLIT_SERVICE_MANAGEMENT_REVISIONS."
-    - "Do not alter any other compatibility mapping or cutover behavior."
-  tests/test_candidate_cutover.py:
-    - "Replace the synthetic identity regression with the actual 40-hex installed revision."
-    - "The installed predecessor recognition test MUST exercise real _runtime_manifest_revision parsing; do not patch/mock _runtime_manifest_revision."
-    - "The refresh regression MUST use a fixture whose manifest contains the real 40-hex revision and prove unregister-runtime is used while aggregate unregister is not."
-    - "Add an assertion that the installed revision is valid HEX40 if useful."
-    - "Preserve unknown predecessor fail-closed coverage."
-  source_edits_other_paths: forbidden
+publication:
+  source_commit:
+    authority: "0/1"
+    requirements:
+      - "Create exactly one implementation commit containing exactly macos/candidate_cutover.py and tests/test_candidate_cutover.py."
+      - "No source edits before commit."
+      - "Commit must be the sole direct child of revision-6 planning HEAD."
+  source_push:
+    authority: "0/1"
+    requirements:
+      - "Push exactly once by ordinary non-force fast-forward to origin/dev."
+      - "Require local HEAD=origin/dev and clean worktree afterward."
+  forbidden:
+    - amend
+    - force_push
+    - rebase
+    - merge_commit
+    - additional_source_commit
 
-guard_invariants:
-  - ".agent/capability-policy.yaml byte-unchanged."
-  - "agent_runtime/screen_capture.py byte-unchanged."
-  - "agent_runtime/server.py byte-unchanged."
-  - "tests/test_mcp_contracts.py byte-unchanged."
-  - "tests/test_screen_capture_mcp.py byte-unchanged."
-  - "Visual perception remains BLOCKED."
-  - "Production screen_capture remains VISUAL_PERCEPTION_BLOCKED, retryable=false, zero ImageContent."
-  - "Public tool surface remains exactly eleven."
+verification_policy:
+  focused_revision_6: "0/0"
+  canonical_verify_revision_6: "0/0"
+  rule: "Do not rerun focused or canonical verification. Publication is authorized only for the exact Architect-verified checkpoint hashes above."
 
-verification:
-  focused:
-    - "Run tests.test_candidate_cutover.CandidateCutoverTests."
-    - "Run tests.test_screen_capture_mcp and tests.test_mcp_contracts."
-    - "Run py_compile on macos/candidate_cutover.py and tests/test_candidate_cutover.py."
-    - "Run git diff --check."
-    - "Require dirty paths exactly the two authorized paths."
-    - "Require a direct read-only production-classification proof using current source: _runtime_manifest_revision(installed app) returns 18cdb515fe037c9b6cb81ce6529d85ae734e195a and _predecessor_service_contract(installed app) returns split-v1."
-  canonical:
-    authority: "0/0"
-    rule: "Do not run ./verify in CODEX_LOCAL revision 5. Architect will run exactly one canonical verification outside the CODEX sandbox against the frozen checkpoint."
-
-checkpoint_output:
+pre_activation_classifier:
+  authority: "0/1"
+  execution: "Read-only local proof from the clean committed revision-6 source against the currently installed Agent Runtime app."
   requirements:
-    - "Do not commit or push."
-    - "Return SHA-256 for both changed files."
-    - "Return one SHA-256 over git diff --binary for exactly both changed files."
-    - "Return local HEAD and exact dirty paths."
-    - "Do not alter checkpoint after hashes are frozen."
+    - "_runtime_manifest_revision(installed app) must equal 18cdb515fe037c9b6cb81ce6529d85ae734e195a."
+    - "_predecessor_service_contract(installed app) must equal split-v1."
+    - "No mocking, patching, synthetic manifest, or source mutation."
+    - "If either predicate fails, stop PREDECESSOR_CLASSIFICATION_UNPROVEN before packaging or installation."
+
+package:
+  authority: "0/1"
+  command: "./macos/package_app.sh"
+  signing_identity_discovery: "0/1"
+  requirements:
+    - "Discover one valid explicit non-ad-hoc signing identity exactly once without reporting or persisting its literal value."
+    - "Set AGENT_RUNTIME_CODESIGN_IDENTITY only for the package process."
+    - "Package from the clean exact revision-6 implementation successor HEAD."
+    - "Require strict codesign, manifest/provenance validation, immutable publication, candidate SHA-256, and handoff SHA-256."
+    - "New candidate SHA must differ from both prior failed candidate hashes."
+    - "Do not mutate package/sign/freeze implementation."
+  failure_terminal: PACKAGING_FAILED
+
+activation:
+  install_prebuilt:
+    authority: "0/1"
+    command_shape: "./install.sh --install-prebuilt <candidate_app> <candidate_handoff> --expected-candidate-sha256 <candidate_sha256> --expected-handoff-sha256 <handoff_sha256>"
+    requirements:
+      - "Use only the fresh revision-6 candidate and exact handoff hashes."
+      - "Do not reuse or retry either prior failed candidate."
+      - "No retry."
+      - "If install fails before transaction creation, stop INSTALL_PREBUILT_FAILED."
+      - "If install yields a typed approval-required / awaiting-approval state, stop RUNTIME_SERVICE_APPROVAL_REQUIRED; do not resume, rollback, or mutate approval settings."
+      - "Successful install gate requires schema=5, status=PENDING, phase=APP_SWAPPED."
+  post_install_gate:
+    requirements:
+      - "Installed manifest runtime_revision equals the revision-6 implementation successor."
+      - "Installed runtime.env identity is retained; do not disclose its contents."
+      - "Exactly one tunnel listener."
+      - "healthz HTTP 200."
+      - "readyz HTTP 200."
+  commit_cutover:
+    authority: "0/1"
+    command: "./install.sh --commit-cutover"
+    requirements:
+      - "Invoke exactly once only after post-install gate PASS."
+      - "Require exit 0, COMMITTED, and transaction directory absent."
+      - "No retry."
+    failure_terminal: CUTOVER_COMMIT_FAILED
+  forbidden:
+    - resume
+    - rollback
+    - recovery
+    - extra_restart
+    - stop_start
+    - kill_or_signal
+    - launchctl_experiment
+    - tunnel_mutation
+    - plugin_reinstall
+    - tcc_mutation
+
+installed_guard_probe:
+  authority: "0/1"
+  execution: "Runtime-independent local MCP stdio probe against the INSTALLED Agent Runtime server after committed cutover."
+  requirements:
+    - "List tools and require exact eleven public names including screen_capture."
+    - "Invoke installed screen_capture exactly once with its default request."
+    - "This invocation is a denial probe, not an authorized visual capture."
+    - "Require isError=true."
+    - "Require exact error code VISUAL_PERCEPTION_BLOCKED."
+    - "Require retryable=false."
+    - "Require zero ImageContent."
+    - "Require no capture_screen/native ScreenCaptureKit helper consequence and no screen pixels."
+    - "Do not use ChatGPT custom-app screen_capture or model vision."
+  failure_terminal: INSTALLED_VISUAL_GUARD_UNPROVEN
+
+guard_postconditions:
+  repository_ssot:
+    path: .agent/capability-policy.yaml
+    visual_perception: BLOCKED
+    production_invocation: DENY
+    error_code: VISUAL_PERCEPTION_BLOCKED
+  production_surface:
+    tool_count: 11
+    screen_capture_exposed: true
+    screen_capture_usable_for_pixels: false
+  reauthorization:
+    rule: "Only a future Architect-approved source+verification+package+activation task may remove or alter the guard."
 
 authority_counters:
   sync: "0/1"
-  source_edits: "0/1 bounded two-path mutation"
-  focused_verification: "0/1 logical phase"
+  source_edits: "0/0"
+  source_commit: "0/1"
+  source_push: "0/1"
+  focused_tests: "0/0"
   canonical_verify: "0/0"
-  commit: "0/0"
-  push: "0/0"
-  package: "0/0"
-  install_prebuilt: "0/0"
-  commit_cutover: "0/0"
-  screen_capture: "0/0"
+  pre_activation_classifier: "0/1"
+  package: "0/1"
+  signing_identity_discovery: "0/1"
+  install_prebuilt: "0/1"
+  commit_cutover: "0/1"
+  installed_guard_probe: "0/1"
   retries: 0
 
 forbidden_actions:
-  - "Do not package, sign, install, cut over, resume, rollback, or recover."
-  - "Do not retry/reuse candidate 165ae74f4f1d95d8567fee853d5a687b93c24eb9bcac528526cc00595872e928."
-  - "Do not run ./verify."
-  - "Do not edit visual guard files."
-  - "Do not weaken unknown-predecessor fail-closed semantics."
-  - "Do not add dynamic contract inference or runtime mutation probing."
-  - "Do not invoke screen_capture or any visual action."
-  - "Do not mutate TCC, main, tags, releases, sibling repositories, Keychain, SSH, Photos, browser secrets, or unrelated host state."
+  - "Do not modify source files."
+  - "Do not rerun tests or ./verify."
+  - "Do not reuse either failed candidate."
+  - "Do not invoke a real visual capture."
+  - "Do not mutate Screen Recording/TCC."
+  - "Do not add OCR, base64/text fallback, Accessibility, browser DOM, file-upload side channels, click/type/scroll, or visual control."
+  - "Do not modify main, tags, releases, sibling repositories, Keychain, SSH, Photos, browser secrets, or unrelated host state."
 
 terminal_states:
-  success: NEEDS_ARCHITECT_VERIFICATION
-  sync_failure: CHECKPOINT_SYNC_FAILED
-  focused_failure: FOCUSED_VERIFICATION_FAILED
-  scope_failure: SOURCE_SCOPE_VIOLATION
-  classification_failure: PREDECESSOR_CLASSIFICATION_UNPROVEN
+  success: NEEDS_REVIEW
+  checkpoint_changed: CHECKPOINT_CHANGED
+  publication_failed: PUBLICATION_FAILED
+  classification_unproven: PREDECESSOR_CLASSIFICATION_UNPROVEN
+  packaging_failed: PACKAGING_FAILED
+  install_failed: INSTALL_PREBUILT_FAILED
+  approval_required: RUNTIME_SERVICE_APPROVAL_REQUIRED
+  cutover_failed: CUTOVER_COMMIT_FAILED
+  installed_guard_unproven: INSTALLED_VISUAL_GUARD_UNPROVEN
   capability_failure: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
 
 reporting:
   executor_output:
     - "Return one bounded Vietnamese result packet only."
-    - "Include planning HEAD, sync result, exact two changed paths, focused results, direct installed predecessor classification result, per-file SHA-256, diff checkpoint SHA-256, guard invariants, local HEAD, and authority/forbidden counters."
-    - "Do not create report.yaml, commit, or push."
-  architect_persistence: required_after_review
+    - "Include planning HEAD, pre/post-sync checkpoint closure, implementation commit, push closure, inherited Architect canonical verification identity, pre-activation classifier result, candidate/handoff hashes, install result and transaction state, post-install gate, cutover result, installed manifest binding, exact eleven-tool probe, screen_capture denial result, and all authority/forbidden counters."
+    - "Do not reveal signing identity literal, runtime.env contents, credentials, tokens, tunnel IDs, cookies, Keychain/SSH data, screenshots, screen content, or unrelated host state."
+  executor_report_yaml: forbidden
+  architect_review: required
 
 git_authority:
   create_branch: false
-  commit: false
-  push: false
+  commit: true
+  push: true
   promote_to_main: false
 
 execution_ready: true
