@@ -152,6 +152,66 @@ class CandidateClosureTests(unittest.TestCase):
             with self.assertRaises(provenance.PackageProvenanceError):
                 provenance.validate_candidate(app, handoff)
 
+    def test_strict_candidate_validation_still_requires_strict_trust(self) -> None:
+        provenance = load_module(PROVENANCE_PATH, "package_provenance_strict_trust")
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            app = self._signed_app(provenance, root)
+            handoff = root / "candidate.json"
+            provenance.seal_candidate(app, handoff)
+            failure = provenance.PackageProvenanceError("synthetic strict trust failure")
+            with mock.patch.object(provenance, "_verify_codesign", side_effect=failure) as strict:
+                with self.assertRaisesRegex(provenance.PackageProvenanceError, "strict trust"):
+                    provenance.validate_candidate(app, handoff)
+            strict.assert_called_once_with(app)
+
+    def test_pinned_candidate_validation_uses_exact_external_hashes_without_strict_trust(self) -> None:
+        provenance = load_module(PROVENANCE_PATH, "package_provenance_pinned")
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            app = self._signed_app(provenance, root)
+            handoff = root / "candidate.json"
+            sealed = provenance.seal_candidate(app, handoff)
+            candidate_sha = sealed["candidate_sha256"]
+            handoff_sha = hashlib.sha256(handoff.read_bytes()).hexdigest()
+
+            strict = mock.Mock(side_effect=AssertionError("strict trust must not run"))
+            provenance._verify_codesign = strict
+            validated = provenance.validate_pinned_candidate(
+                app, handoff, candidate_sha, handoff_sha
+            )
+            self.assertEqual(validated, sealed)
+            strict.assert_not_called()
+
+            with self.assertRaises(provenance.PackageProvenanceError):
+                provenance.validate_pinned_candidate(app, handoff, "0" * 64, handoff_sha)
+            with self.assertRaises(provenance.PackageProvenanceError):
+                provenance.validate_pinned_candidate(app, handoff, candidate_sha, "0" * 64)
+            for malformed in ("A" * 64, "a" * 63, "g" * 64):
+                with self.subTest(identity="candidate", malformed=malformed):
+                    with self.assertRaises(provenance.PackageProvenanceError):
+                        provenance.validate_pinned_candidate(app, handoff, malformed, handoff_sha)
+                with self.subTest(identity="handoff", malformed=malformed):
+                    with self.assertRaises(provenance.PackageProvenanceError):
+                        provenance.validate_pinned_candidate(app, handoff, candidate_sha, malformed)
+
+            original_reader = provenance._codesign_team_identifier
+            provenance._codesign_team_identifier = lambda _path: "OTHERTEAM"
+            with self.assertRaisesRegex(provenance.PackageProvenanceError, "external handoff"):
+                provenance.validate_pinned_candidate(app, handoff, candidate_sha, handoff_sha)
+            provenance._codesign_team_identifier = original_reader
+
+            tx_handoff = root / "mutated-handoff.json"
+            tx_handoff.write_bytes(handoff.read_bytes() + b" ")
+            with self.assertRaisesRegex(provenance.PackageProvenanceError, "handoff SHA-256"):
+                provenance.validate_pinned_candidate(app, tx_handoff, candidate_sha, handoff_sha)
+
+            payload = app / "Contents" / "Resources" / "runtime" / "agent_runtime" / "server.py"
+            payload.write_bytes(payload.read_bytes() + b"# drift\n")
+            with self.assertRaisesRegex(provenance.PackageProvenanceError, "closure"):
+                provenance.validate_pinned_candidate(app, handoff, candidate_sha, handoff_sha)
+            strict.assert_not_called()
+
     def test_candidate_validation_is_write_free_after_seal(self) -> None:
         provenance = load_module(PROVENANCE_PATH, "package_provenance_write_free")
         with tempfile.TemporaryDirectory() as raw:
@@ -430,14 +490,32 @@ class CandidateCutoverTests(unittest.TestCase):
             "set_modern_runtime_loaded": set_modern_runtime_loaded,
         }
 
-    def _cutover(self, cutover, fx, *, fail_stages=frozenset()):
+    def _cutover(
+        self,
+        cutover,
+        fx,
+        *,
+        fail_stages=frozenset(),
+        expected_candidate_sha256=None,
+        expected_handoff_sha256=None,
+    ):
         return cutover.cutover_candidate(
-            fx["candidate"], fx["handoff"], target_app=fx["target"],
+            fx["candidate"], fx["handoff"],
+            expected_candidate_sha256=expected_candidate_sha256,
+            expected_handoff_sha256=expected_handoff_sha256,
+            target_app=fx["target"],
             ui_plist=fx["ui_plist"], runtime_plist=fx["runtime_plist"],
             state_dir=fx["state_dir"], transaction_dir=fx["transaction"],
             home=fx["home"], launchctl=fx["launchctl"],
             uid=501, fail_stages=set(fail_stages),
         )
+
+    def _pins(self, fx):
+        handoff = json.loads(fx["handoff"].read_text())
+        return {
+            "expected_candidate_sha256": handoff["candidate_sha256"],
+            "expected_handoff_sha256": hashlib.sha256(fx["handoff"].read_bytes()).hexdigest(),
+        }
 
     def _set_launch_program(self, fx, service: str, program: Path | None) -> None:
         loaded = set(json.loads(fx["launch_state"].read_text()))
@@ -468,7 +546,7 @@ class CandidateCutoverTests(unittest.TestCase):
         self.assertIsNotNone(error_type, "typed ServiceManagement approval result is required")
         return error_type(operation, dict(state))
 
-    def _awaiting_approval(self, cutover, fx):
+    def _awaiting_approval(self, cutover, fx, **cutover_kwargs):
         fx["modern_state"].update(main_app="not-registered", runtime_agent="not-registered")
 
         def service_management(app: Path, operation: str) -> dict[str, str]:
@@ -487,7 +565,7 @@ class CandidateCutoverTests(unittest.TestCase):
             return dict(fx["modern_state"])
 
         cutover._service_management = service_management
-        return self._cutover(cutover, fx)
+        return self._cutover(cutover, fx, **cutover_kwargs)
 
     def _schema1_partial_fixture(self, provenance, cutover, fx) -> dict[str, object]:
         previous_closure = cutover._rollback_app_closure(fx["target"])
@@ -1257,6 +1335,75 @@ class CandidateCutoverTests(unittest.TestCase):
             self.assertEqual(raised.exception.operation, "register-runtime")
             self.assertEqual(raised.exception.state["runtime_agent"], "not-registered")
 
+    def test_partial_pinned_authority_fails_before_product_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            provenance, cutover, fx = self._fixture(raw)
+            target_before = provenance.candidate_closure(fx["target"])
+            pins = self._pins(fx)
+            with self.assertRaisesRegex(cutover.CutoverError, "requires both"):
+                self._cutover(
+                    cutover,
+                    fx,
+                    expected_candidate_sha256=pins["expected_candidate_sha256"],
+                )
+            self.assertEqual(provenance.candidate_closure(fx["target"]), target_before)
+            self.assertFalse(fx["transaction"].exists())
+            self.assertEqual(fx["service_operations"], [])
+
+    def test_pinned_cutover_persists_authority_and_never_invokes_strict_trust(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            pins = self._pins(fx)
+            strict = mock.Mock(side_effect=AssertionError("strict trust must not run"))
+            cutover.provenance._verify_codesign = strict
+            result = self._cutover(cutover, fx, **pins)
+            self.assertEqual(result["status"], "PENDING")
+            metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
+            self.assertEqual(
+                metadata["candidate_validation"],
+                {
+                    "mode": "pinned",
+                    "expected_candidate_sha256": pins["expected_candidate_sha256"],
+                    "expected_handoff_sha256": pins["expected_handoff_sha256"],
+                },
+            )
+            strict.assert_not_called()
+
+    def test_pinned_resume_reuses_persisted_handoff_hash_and_fails_on_byte_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            pins = self._pins(fx)
+            self._awaiting_approval(cutover, fx, **pins)
+            tx_handoff = fx["transaction"] / "candidate-handoff.json"
+            tx_handoff.write_bytes(tx_handoff.read_bytes() + b" ")
+            fx["modern_state"]["runtime_agent"] = "enabled"
+            fx["set_modern_runtime_loaded"](fx["target"], True)
+            with self.assertRaisesRegex(Exception, "handoff SHA-256"):
+                cutover.resume_transaction(
+                    fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501
+                )
+            self.assertTrue(fx["transaction"].is_dir())
+
+    def test_pinned_commit_reuses_persisted_handoff_hash_and_rejects_malformed_pin_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw)
+            pins = self._pins(fx)
+            self._cutover(cutover, fx, **pins)
+            metadata_path = fx["transaction"] / "metadata.json"
+            metadata = json.loads(metadata_path.read_text())
+            malformed = json.loads(json.dumps(metadata))
+            del malformed["candidate_validation"]["expected_handoff_sha256"]
+            metadata_path.write_text(json.dumps(malformed, indent=2) + "\n")
+            with self.assertRaisesRegex(cutover.CutoverError, "validation metadata"):
+                cutover.commit_transaction(fx["transaction"], fx["target"])
+
+            metadata_path.write_text(json.dumps(metadata, indent=2) + "\n")
+            tx_handoff = fx["transaction"] / "candidate-handoff.json"
+            tx_handoff.write_bytes(tx_handoff.read_bytes() + b" ")
+            with self.assertRaisesRegex(Exception, "handoff SHA-256"):
+                cutover.commit_transaction(fx["transaction"], fx["target"])
+            self.assertTrue(fx["transaction"].is_dir())
+
     def test_approval_denial_reaches_awaiting_approval_without_claiming_registration(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             provenance, cutover, fx = self._fixture(raw)
@@ -1978,6 +2125,21 @@ class CandidateCutoverTests(unittest.TestCase):
         self.assertNotIn("codesign", branch)
         self.assertNotIn("AGENT_RUNTIME_CODESIGN_IDENTITY", branch)
         self.assertNotIn("tunnel-client", branch)
+
+    def test_prebuilt_install_contract_keeps_strict_form_and_requires_exact_pinned_pair(self) -> None:
+        text = (ROOT / "install.sh").read_text()
+        branch_start = text.index("--install-prebuilt)")
+        branch_end = text.index("--resume-cutover)", branch_start)
+        branch = text[branch_start:branch_end]
+        self.assertIn('[[ "$#" == "3" ]]', branch)
+        self.assertIn('[[ "$#" == "7"', branch)
+        self.assertIn('"$4" == "--expected-candidate-sha256"', branch)
+        self.assertIn('"$6" == "--expected-handoff-sha256"', branch)
+        self.assertIn('is_lower_sha256 "$5"', branch)
+        self.assertIn('is_lower_sha256 "$7"', branch)
+        self.assertIn('"${PINNED_ARGS[@]}"', branch)
+        self.assertNotIn("--skip-trust", branch)
+        self.assertNotIn("--no-verify", branch)
 
     def test_package_script_seals_external_candidate_only_after_final_integrity_checks(self) -> None:
         text = (ROOT / "macos" / "package_app.sh").read_text()

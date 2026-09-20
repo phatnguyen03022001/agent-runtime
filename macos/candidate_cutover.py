@@ -26,6 +26,12 @@ SCHEMA4_ROLLBACK_SCHEMA = 4
 SCHEMA2_RECOVERY_SCHEMA = 2
 LEGACY_RECOVERY_SCHEMA = 1
 TRANSACTION_PHASES = {"PRE_SWAP", "APP_SWAPPED"}
+CANDIDATE_VALIDATION_MODES = {"strict", "pinned"}
+CANDIDATE_VALIDATION_KEYS = {
+    "mode",
+    "expected_candidate_sha256",
+    "expected_handoff_sha256",
+}
 AGGREGATE_ONLY_SERVICE_MANAGEMENT_REVISIONS = {
     "4fbf5b1b0ef3708c8fff479ca6718344f3bfd3c0",
 }
@@ -295,6 +301,70 @@ def _validate_transaction_phase(value: object) -> str:
     return value
 
 
+def _candidate_validation_authority(
+    expected_candidate_sha256: str | None = None,
+    expected_handoff_sha256: str | None = None,
+) -> dict[str, object]:
+    if expected_candidate_sha256 is None and expected_handoff_sha256 is None:
+        return {
+            "mode": "strict",
+            "expected_candidate_sha256": None,
+            "expected_handoff_sha256": None,
+        }
+    if expected_candidate_sha256 is None or expected_handoff_sha256 is None:
+        raise CutoverError("pinned candidate validation requires both expected SHA-256 identities")
+    if provenance.HEX64.fullmatch(expected_candidate_sha256) is None:
+        raise CutoverError("expected candidate SHA-256 must be exact lowercase 64-hex")
+    if provenance.HEX64.fullmatch(expected_handoff_sha256) is None:
+        raise CutoverError("expected handoff SHA-256 must be exact lowercase 64-hex")
+    return {
+        "mode": "pinned",
+        "expected_candidate_sha256": expected_candidate_sha256,
+        "expected_handoff_sha256": expected_handoff_sha256,
+    }
+
+
+def _validate_candidate_validation_authority(value: object) -> dict[str, object]:
+    if not isinstance(value, dict) or set(value) != CANDIDATE_VALIDATION_KEYS:
+        raise CutoverError("candidate validation metadata is malformed")
+    mode = value.get("mode")
+    candidate_sha = value.get("expected_candidate_sha256")
+    handoff_sha = value.get("expected_handoff_sha256")
+    if mode not in CANDIDATE_VALIDATION_MODES:
+        raise CutoverError("candidate validation mode is invalid")
+    if mode == "strict":
+        if candidate_sha is not None or handoff_sha is not None:
+            raise CutoverError("strict candidate validation metadata must not contain pinned identities")
+        return _candidate_validation_authority()
+    if not isinstance(candidate_sha, str) or not isinstance(handoff_sha, str):
+        raise CutoverError("pinned candidate validation metadata is incomplete")
+    return _candidate_validation_authority(candidate_sha, handoff_sha)
+
+
+def _candidate_validation_from_metadata(metadata: dict[str, object]) -> dict[str, object]:
+    if metadata.get("schema") != TRANSACTION_SCHEMA:
+        return _candidate_validation_authority()
+    if "candidate_validation" not in metadata:
+        raise CutoverError("schema-5 transaction candidate validation metadata is missing")
+    return _validate_candidate_validation_authority(metadata["candidate_validation"])
+
+
+def _validate_transaction_candidate(
+    app: Path,
+    handoff_path: Path,
+    validation: dict[str, object],
+) -> dict[str, object]:
+    authority = _validate_candidate_validation_authority(validation)
+    if authority["mode"] == "strict":
+        return provenance.validate_candidate(app, handoff_path)
+    return provenance.validate_pinned_candidate(
+        app,
+        handoff_path,
+        str(authority["expected_candidate_sha256"]),
+        str(authority["expected_handoff_sha256"]),
+    )
+
+
 def _aggregate_refresh_is_reversible(main_state: str, runtime: dict[str, object]) -> bool:
     main_registered = main_state in REGISTERED_SERVICE_STATES
     classification = runtime.get("classification")
@@ -532,6 +602,8 @@ def _load_metadata(
     schemas = {TRANSACTION_SCHEMA} if allowed_schemas is None else set(allowed_schemas)
     if not isinstance(value, dict) or value.get("schema") not in schemas:
         raise CutoverError("cutover transaction metadata schema is invalid")
+    if value.get("schema") == TRANSACTION_SCHEMA:
+        _candidate_validation_from_metadata(value)
     return value
 
 
@@ -925,8 +997,10 @@ def _validate_approval_transaction_envelope(
     _transaction_modern_runtime_label(metadata, current_only=True)
     if _validate_transaction_phase(metadata.get("phase")) != "APP_SWAPPED":
         raise CutoverError("approval checkpoint requires APP_SWAPPED phase")
-    validated_candidate = provenance.validate_candidate(
-        target_app, transaction_dir / "candidate-handoff.json"
+    validated_candidate = _validate_transaction_candidate(
+        target_app,
+        transaction_dir / "candidate-handoff.json",
+        _candidate_validation_from_metadata(metadata),
     )
     if metadata.get("candidate") != validated_candidate:
         raise CutoverError("installed candidate identity does not match transaction metadata")
@@ -1055,8 +1129,10 @@ def _restore_transaction(
             if staged.is_symlink() or not staged.is_dir():
                 raise CutoverError("PRE_SWAP phase staged candidate is missing or unsafe after predecessor removal")
             try:
-                staged_candidate = provenance.validate_candidate(
-                    staged, transaction_dir / "candidate-handoff.json"
+                staged_candidate = _validate_transaction_candidate(
+                    staged,
+                    transaction_dir / "candidate-handoff.json",
+                    _candidate_validation_from_metadata(metadata),
                 )
             except provenance.PackageProvenanceError as exc:
                 raise CutoverError("PRE_SWAP phase staged candidate identity is invalid") from exc
@@ -1076,8 +1152,10 @@ def _restore_transaction(
             if staged.exists() or staged.is_symlink():
                 raise CutoverError("PRE_SWAP phase candidate/staged state is ambiguous")
             try:
-                installed_candidate = provenance.validate_candidate(
-                    target_app, transaction_dir / "candidate-handoff.json"
+                installed_candidate = _validate_transaction_candidate(
+                    target_app,
+                    transaction_dir / "candidate-handoff.json",
+                    _candidate_validation_from_metadata(metadata),
                 )
             except provenance.PackageProvenanceError as exc:
                 raise CutoverError("PRE_SWAP phase installed app is neither predecessor nor transaction candidate") from exc
@@ -1129,7 +1207,11 @@ def _restore_transaction(
         if target_app.is_symlink() or not target_app.is_dir():
             raise CutoverError("APP_SWAPPED phase installed app is missing or unsafe")
         try:
-            provenance.validate_candidate(target_app, transaction_dir / "candidate-handoff.json")
+            _validate_transaction_candidate(
+                target_app,
+                transaction_dir / "candidate-handoff.json",
+                _candidate_validation_from_metadata(metadata),
+            )
         except provenance.PackageProvenanceError as exc:
             raise CutoverError("APP_SWAPPED phase installed app does not match candidate identity") from exc
 
@@ -1207,6 +1289,8 @@ def cutover_candidate(
     candidate_app: Path,
     handoff_path: Path,
     *,
+    expected_candidate_sha256: str | None = None,
+    expected_handoff_sha256: str | None = None,
     target_app: Path,
     ui_plist: Path,
     runtime_plist: Path,
@@ -1218,11 +1302,15 @@ def cutover_candidate(
     fail_stages: set[str] | None = None,
 ) -> dict[str, object]:
     failures = set(fail_stages or ())
+    candidate_validation = _candidate_validation_authority(
+        expected_candidate_sha256,
+        expected_handoff_sha256,
+    )
     if transaction_dir.exists() or transaction_dir.is_symlink():
         raise CutoverError("a cutover transaction is already pending")
     if candidate_app.resolve() == target_app.resolve(strict=False):
         raise CutoverError("prebuilt candidate must be external to the installed app path")
-    expected = provenance.validate_candidate(candidate_app, handoff_path)
+    expected = _validate_transaction_candidate(candidate_app, handoff_path, candidate_validation)
     _runtime_bundle_identity(candidate_app)
 
     domain = f"gui/{uid}"
@@ -1303,7 +1391,11 @@ def cutover_candidate(
         shutil.copy2(handoff_path, transaction_dir / "candidate-handoff.json")
         staged = transaction_dir / "staged-candidate"
         _copy_app(candidate_app, staged)
-        provenance.validate_candidate(staged, transaction_dir / "candidate-handoff.json")
+        _validate_transaction_candidate(
+            staged,
+            transaction_dir / "candidate-handoff.json",
+            candidate_validation,
+        )
 
         metadata: dict[str, object] = {
             "schema": TRANSACTION_SCHEMA,
@@ -1311,6 +1403,7 @@ def cutover_candidate(
             "status": "PREPARED",
             "phase": "PRE_SWAP",
             "candidate": expected,
+            "candidate_validation": candidate_validation,
             "previous": previous,
             "modern_ownership_before": modern_before,
             "runtime_generation_changed": generation_changed,
@@ -1348,7 +1441,11 @@ def cutover_candidate(
         metadata["phase"] = "APP_SWAPPED"
         _atomic_json(transaction_dir / "metadata.json", metadata)
         _inject(failures, "after_app_swap")
-        provenance.validate_candidate(target_app, transaction_dir / "candidate-handoff.json")
+        _validate_transaction_candidate(
+            target_app,
+            transaction_dir / "candidate-handoff.json",
+            candidate_validation,
+        )
         _inject(failures, "after_installed_validation")
 
         _remove_legacy_predecessor(
@@ -1418,7 +1515,11 @@ def cutover_candidate(
                     ui_plist=checkpoint_ui_plist,
                     runtime_plist=checkpoint_runtime_plist,
                 )
-                provenance.validate_candidate(target_app, transaction_dir / "candidate-handoff.json")
+                _validate_transaction_candidate(
+                    target_app,
+                    transaction_dir / "candidate-handoff.json",
+                    candidate_validation,
+                )
                 metadata["status"] = "AWAITING_APPROVAL"
                 _atomic_json(transaction_dir / "metadata.json", metadata)
                 return {
@@ -1458,7 +1559,11 @@ def cutover_candidate(
             raise CutoverError("legacy LaunchAgent files remained after modern registration")
 
         _inject(failures, "activation_refresh")
-        provenance.validate_candidate(target_app, transaction_dir / "candidate-handoff.json")
+        _validate_transaction_candidate(
+            target_app,
+            transaction_dir / "candidate-handoff.json",
+            candidate_validation,
+        )
         metadata["status"] = "PENDING"
         _atomic_json(transaction_dir / "metadata.json", metadata)
         return {"status": "PENDING", "candidate": expected}
@@ -1829,7 +1934,11 @@ def resume_transaction(
         if runtime["classification"] != "healthy-registered":
             raise CutoverError("enabled Runtime ServiceManagement state has no healthy loaded Runtime job")
         operations["runtime_registered"] = True
-        provenance.validate_candidate(target_app, transaction_dir / "candidate-handoff.json")
+        _validate_transaction_candidate(
+            target_app,
+            transaction_dir / "candidate-handoff.json",
+            _candidate_validation_from_metadata(metadata),
+        )
         return persist(post, "PENDING")
     if runtime["registration_state"] == "requires-approval":
         if runtime["classification"] != "awaiting-approval":
@@ -1875,7 +1984,11 @@ def resume_transaction(
         if runtime["classification"] != "healthy-registered":
             raise CutoverError("enabled Runtime ServiceManagement state has no healthy loaded Runtime job")
         operations["runtime_registered"] = True
-        provenance.validate_candidate(target_app, transaction_dir / "candidate-handoff.json")
+        _validate_transaction_candidate(
+            target_app,
+            transaction_dir / "candidate-handoff.json",
+            _candidate_validation_from_metadata(metadata),
+        )
         return persist(post, "PENDING")
     raise CutoverError("Runtime registration result is inconsistent during resume")
 
@@ -1887,7 +2000,11 @@ def commit_transaction(transaction_dir: Path, target_app: Path) -> dict[str, obj
     expected_target = Path(str(metadata.get("paths", {}).get("target_app", "")))
     if expected_target != target_app:
         raise CutoverError("commit target does not match pending cutover transaction")
-    provenance.validate_candidate(target_app, transaction_dir / "candidate-handoff.json")
+    _validate_transaction_candidate(
+        target_app,
+        transaction_dir / "candidate-handoff.json",
+        _candidate_validation_from_metadata(metadata),
+    )
     shutil.rmtree(transaction_dir)
     return {"status": "COMMITTED"}
 
@@ -1911,6 +2028,8 @@ def main() -> int:
     cutover = sub.add_parser("cutover")
     cutover.add_argument("candidate", type=Path)
     cutover.add_argument("handoff", type=Path)
+    cutover.add_argument("--expected-candidate-sha256")
+    cutover.add_argument("--expected-handoff-sha256")
     cutover.add_argument("--home", type=Path, default=Path.home())
     cutover.add_argument("--launchctl", type=Path, required=True)
     cutover.add_argument("--uid", type=int, default=os.getuid())
@@ -1935,6 +2054,8 @@ def main() -> int:
             result = cutover_candidate(
                 args.candidate,
                 args.handoff,
+                expected_candidate_sha256=args.expected_candidate_sha256,
+                expected_handoff_sha256=args.expected_handoff_sha256,
                 target_app=target_app,
                 ui_plist=ui_plist,
                 runtime_plist=runtime_plist,

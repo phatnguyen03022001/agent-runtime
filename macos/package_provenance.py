@@ -439,6 +439,18 @@ def _load_candidate_handoff(path: Path) -> dict[str, object]:
     return value
 
 
+def _validate_external_sha256(value: object, label: str) -> str:
+    if not isinstance(value, str) or HEX64.fullmatch(value) is None:
+        raise PackageProvenanceError(f"{label} must be an exact lowercase 64-hex SHA-256")
+    return value
+
+
+def _candidate_handoff_sha256(path: Path) -> str:
+    if path.is_symlink() or not path.is_file():
+        raise PackageProvenanceError("candidate handoff must be a regular non-symlink file")
+    return _sha256(path)
+
+
 def validate_candidate(app: Path, handoff_path: Path) -> dict[str, object]:
     expected = _load_candidate_handoff(handoff_path)
     _verify_codesign(app)
@@ -449,6 +461,42 @@ def validate_candidate(app: Path, handoff_path: Path) -> dict[str, object]:
     final = _candidate_handoff_data(app)
     if final != expected:
         raise PackageProvenanceError("candidate changed during validation")
+    return expected
+
+
+def validate_pinned_candidate(
+    app: Path,
+    handoff_path: Path,
+    expected_candidate_sha256: str,
+    expected_handoff_sha256: str,
+) -> dict[str, object]:
+    candidate_sha = _validate_external_sha256(expected_candidate_sha256, "expected candidate SHA-256")
+    handoff_sha = _validate_external_sha256(expected_handoff_sha256, "expected handoff SHA-256")
+
+    handoff_before = _candidate_handoff_sha256(handoff_path)
+    if handoff_before != handoff_sha:
+        raise PackageProvenanceError("candidate handoff SHA-256 does not match external authority")
+    expected = _load_candidate_handoff(handoff_path)
+    if expected["candidate_sha256"] != candidate_sha:
+        raise PackageProvenanceError("candidate handoff closure does not match external candidate authority")
+
+    closure_before = candidate_closure(app)
+    if (
+        closure_before["candidate_sha256"] != candidate_sha
+        or closure_before["record_count"] != expected["record_count"]
+    ):
+        raise PackageProvenanceError("candidate closure does not match external authority")
+
+    actual = _candidate_handoff_data(app)
+    if actual != expected:
+        raise PackageProvenanceError("candidate identity does not match exact external handoff")
+
+    closure_after = candidate_closure(app)
+    if closure_after != closure_before or closure_after["candidate_sha256"] != candidate_sha:
+        raise PackageProvenanceError("candidate changed during pinned validation")
+    handoff_after = _candidate_handoff_sha256(handoff_path)
+    if handoff_after != handoff_before or handoff_after != handoff_sha:
+        raise PackageProvenanceError("candidate handoff changed during pinned validation")
     return expected
 
 
@@ -550,6 +598,11 @@ def main() -> int:
     candidate_validate = subparsers.add_parser("validate-candidate")
     candidate_validate.add_argument("app", type=Path)
     candidate_validate.add_argument("handoff", type=Path)
+    pinned_validate = subparsers.add_parser("validate-pinned-candidate")
+    pinned_validate.add_argument("app", type=Path)
+    pinned_validate.add_argument("handoff", type=Path)
+    pinned_validate.add_argument("expected_candidate_sha256")
+    pinned_validate.add_argument("expected_handoff_sha256")
     args = parser.parse_args()
     try:
         if args.command == "stage":
@@ -573,8 +626,20 @@ def main() -> int:
                 f"{published['candidate_app']}\t{published['candidate_handoff']}\t"
                 f"{published['candidate_sha256']}"
             )
-        else:
+        elif args.command == "validate-candidate":
             print(json.dumps(validate_candidate(args.app, args.handoff), sort_keys=True))
+        else:
+            print(
+                json.dumps(
+                    validate_pinned_candidate(
+                        args.app,
+                        args.handoff,
+                        args.expected_candidate_sha256,
+                        args.expected_handoff_sha256,
+                    ),
+                    sort_keys=True,
+                )
+            )
     except PackageProvenanceError as exc:
         print("PROVENANCE ERROR: " + str(exc), file=os.sys.stderr)
         return 2
