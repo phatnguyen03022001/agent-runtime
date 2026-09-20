@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0117
-task_revision: 3
+task_revision: 4
 state: APPROVED
 
 origin:
-  type: architect_rework_after_verification_failure
+  type: architect_resume_with_designated_host_verifier
   predecessor_task: TASK-0116
   predecessor_review: "8562e713980e788dfaaad388ebc43e4426f52334"
-  predecessor_task_revision: 2
-  predecessor_terminal: VERIFICATION_FAILED
+  predecessor_task_revision: 3
+  predecessor_terminal: VERIFICATION_ENVIRONMENT_UNAVAILABLE
 
 target:
   repository: phatnguyen03022001/agent-runtime
@@ -42,52 +42,65 @@ architect_decision:
 
 checkpoint_authority:
   local_repository: /Users/tienphat/Developer/agent-runtime
-  checkpoint_base_head: "35ca6751ad240c094ec51698636fc41d5cb2c70d"
+  checkpoint_base_head: "63030836dc5e7e9cf2ad7ceb42a1c33b3619c73f"
   checkpoint_dirty_paths:
     - install.sh
     - macos/candidate_cutover.py
     - macos/package_provenance.py
     - tests/test_candidate_cutover.py
-  checkpoint_diff_sha256: "debbd7bb096936ebc764c663f195fa5da854f3b91ee1896090fe44fbf7e3a000"
-  checkpoint_diff_stat: "4 files changed, 391 insertions(+), 24 deletions(-)"
+  checkpoint_diff_sha256: "3e99ff332ed508d983220f585bb5097b9e3b74c38001f2e32dd60e4812c4a43c"
+  checkpoint_diff_stat: "4 files changed, 385 insertions(+), 22 deletions(-)"
   focused_verification_completed: true
   focused_verification_result: "105 tests PASS"
-  canonical_verify_previous_authority: "1/1 consumed by revision 2"
-  canonical_verify_previous_result: "453 tests, 4 errors, exit 1"
-  canonical_verify_authority: "0/1 fresh revision-3 authority"
-  canonical_verify_consumed: false
+  canonical_verify_previous_authority: "revision 2 consumed 1/1; revision 3 consumed 0/1 because AF_UNIX preflight failed"
+  canonical_verify_previous_result: "revision 2: 453 tests, 4 errors; revision 3: not invoked"
+  executor_canonical_verify_authority: "0/0 in revision 4"
+  designated_verifier_authority: "0/1 host-native invocation"
+  designated_verifier_consumed: false
   implementation_commit_created: false
   remote_push_from_revision_1: false
   product_consequence: NONE
-  binding_source: "Architect read-only observation through Remote Desktop Commander after revision-2 verification failure."
+  binding_source: "Architect read-only observation through Remote Desktop Commander after revision-3 environment preflight failure."
 
-revision_2_failure_evidence:
-  focused_tests:
+revision_3_evidence:
+  regression_repair:
+    result: PASS
+    exact_tests: "2/2 PASS"
+  focused_suite:
     result: PASS
     count: 105
-  canonical_verify:
-    invocation_count: 1
-    exit_code: 1
-    test_count: 453
-    error_count: 4
-    retry_count: 0
-  errors:
-    environment:
-      count: 2
-      class: AF_UNIX_socket_environment
-      affected_tests:
-        - tests/test_fs_read_batch.py
-        - tests/test_fs_read_batch_adversarial.py
-      interpretation: "Environment failures are not accepted as product regressions. Revision 3 must preflight AF_UNIX capability before spending its fresh canonical verify authority."
-    regression:
-      count: 2
-      location: macos/candidate_cutover.py:958
-      root_cause: "TASK-0117 inserted unconditional transaction metadata loading into _unregister_modern_generation, while the helper has no production caller and two historical rollback tests intentionally exercise it without metadata.json."
-      affected_tests:
-        - tests/test_task0055_cutover.py::test_modern_rollback_accepts_never_registered_main_app
-        - tests/test_task0055_cutover.py::test_modern_rollback_unregisters_registered_runtime_when_main_was_never_registered
+  af_unix_preflight:
+    execution_surface: CODEX_LOCAL
+    result: FAIL
+    error: "PermissionError: Operation not permitted"
+    canonical_verify_invoked: false
+    interpretation: "CODEX_LOCAL sandbox cannot provide the AF_UNIX filesystem capability required by two unrelated canonical tests."
+  host_native_af_unix_control:
+    mechanism: "Architect subordinate Remote Desktop Commander probe"
+    result: PASS
+    interpretation: "The same Mac can create/bind/close/unlink an AF_UNIX socket outside the CODEX_LOCAL sandbox; the blocker is surface-specific, not host-wide."
   no_commit_or_push: true
   product_consequence: NONE
+
+designated_verification:
+  owner: ARCHITECT
+  role: DESIGNATED_VERIFIER
+  mechanism: REMOTE_DESKTOP_COMMANDER
+  mechanism_class: "subordinate local verification tool; not an execution surface"
+  target_base_head: "63030836dc5e7e9cf2ad7ceb42a1c33b3619c73f"
+  target_diff_sha256: "3e99ff332ed508d983220f585bb5097b9e3b74c38001f2e32dd60e4812c4a43c"
+  command: ./verify
+  authority: "0/1"
+  mutation_authority: NONE
+  evidence_path: .agent/tasks/TASK-0117/verifier.yaml
+  rules:
+    - "Before invocation, require exact local HEAD, exact four dirty paths, and exact target diff SHA-256."
+    - "Run one host-native AF_UNIX ephemeral preflight immediately before ./verify; require PASS."
+    - "Invoke ./verify exactly once. No retry."
+    - "After invocation, require the same exact four dirty paths and exact diff SHA-256; ignored temporary verifier outputs must not alter tracked target truth."
+    - "Persist verifier.yaml only after a truthful completed verifier result."
+    - "Verifier evidence does not grant implementation mutation authority."
+
 
 accepted_candidate_reference:
   candidate_sha256: "0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77"
@@ -98,16 +111,17 @@ accepted_candidate_reference:
   note: "These values define downstream TASK-0118 authority only. Production code must remain generic and must not hard-code this candidate."
 
 preconditions:
-  - "Resolve TASK-0117 revision 3 directly from GitHub at the exact revision-3 planning HEAD. Task authority comes from remote; local consequence state comes from the separately authorized dirty checkpoint."
-  - "Fresh-resolve remote dev/main; require dev equals the revision-3 planning HEAD and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
-  - "Before synchronization, require local /Users/tienphat/Developer/agent-runtime HEAD equals 35ca6751ad240c094ec51698636fc41d5cb2c70d."
+  - "Resolve TASK-0117 revision 4 directly from GitHub at the exact revision-4 planning HEAD."
+  - "Fresh-resolve remote dev/main; require dev equals the revision-4 planning HEAD and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "Before synchronization, require local /Users/tienphat/Developer/agent-runtime HEAD equals 63030836dc5e7e9cf2ad7ceb42a1c33b3619c73f."
   - "Before synchronization, require exact dirty path set: install.sh, macos/candidate_cutover.py, macos/package_provenance.py, tests/test_candidate_cutover.py, with no additional tracked or untracked dirty path."
-  - "Before synchronization, recompute git diff --binary SHA-256 and require debbd7bb096936ebc764c663f195fa5da854f3b91ee1896090fe44fbf7e3a000. If different, stop CHECKPOINT_IDENTITY_CHANGED."
-  - "Require the revision-3 remote planning delta from checkpoint base 35ca6751ad240c094ec51698636fc41d5cb2c70d changes only .agent/tasks/TASK-0117/task.yaml."
-  - "Perform at most one ordinary dirty-preserving fast-forward from checkpoint base to revision-3 planning HEAD. Do not stash, reset, checkout, restore, clean, rebase, or rewrite the checkpoint."
-  - "Immediately after fast-forward, require the same four dirty paths and exact diff SHA-256 debbd7bb096936ebc764c663f195fa5da854f3b91ee1896090fe44fbf7e3a000. Otherwise stop CHECKPOINT_RESUME_UNAVAILABLE."
-  - "Do not replay revision-2 canonical ./verify. Its 1/1 authority is consumed."
-  - "Treat the existing four dirty files as authorized TASK-0117 work; continue from them."
+  - "Before synchronization, recompute git diff --binary SHA-256 and require 3e99ff332ed508d983220f585bb5097b9e3b74c38001f2e32dd60e4812c4a43c. If different, stop CHECKPOINT_IDENTITY_CHANGED."
+  - "Require the revision-4 planning delta from checkpoint base 63030836dc5e7e9cf2ad7ceb42a1c33b3619c73f changes only .agent/tasks/TASK-0117/task.yaml and .agent/tasks/TASK-0117/verifier.yaml."
+  - "Require .agent/tasks/TASK-0117/verifier.yaml at the exact planning HEAD with result PASS, command ./verify, invocation_count 1, exact target base HEAD 63030836dc5e7e9cf2ad7ceb42a1c33b3619c73f, and exact target diff SHA-256 3e99ff332ed508d983220f585bb5097b9e3b74c38001f2e32dd60e4812c4a43c."
+  - "Perform at most one ordinary dirty-preserving fast-forward from checkpoint base to revision-4 planning HEAD. Do not stash, reset, checkout, restore, clean, rebase, or rewrite the checkpoint."
+  - "Immediately after fast-forward, require the same four dirty paths and exact diff SHA-256 3e99ff332ed508d983220f585bb5097b9e3b74c38001f2e32dd60e4812c4a43c. Otherwise stop CHECKPOINT_RESUME_UNAVAILABLE."
+  - "Do not invoke ./verify from CODEX_LOCAL in revision 4. The mandatory full suite is owned by the designated verifier artifact."
+  - "Treat the existing four dirty files as authorized TASK-0117 implementation work. No further production mutation is expected after designated verifier PASS unless exact evidence reveals a new defect; if so stop BLOCKED_SCOPE_EXPANSION."
   - "Do not inspect or mutate macOS trust/keychain state."
   - "Do not invoke the accepted candidate or installed app as a live lifecycle consequence."
 
@@ -177,28 +191,14 @@ security_invariants:
 
 focused_verification:
   required:
-    - "First run the two exact historical regression tests in tests/test_task0055_cutover.py that failed revision 2."
-    - "Then rerun the revision-2 focused TASK-0117 suite covering package provenance pinned validation, candidate cutover strict+pinned behavior, and install.sh contract."
-    - "Both stages must PASS before environment preflight and canonical verification."
-  retry_policy: "Normal focused development iteration is allowed before canonical verify; do not use retries to alter a platform safety judgment."
-
-environment_preflight:
-  purpose: "Avoid consuming fresh canonical verify authority when CODEX_LOCAL cannot create an AF_UNIX socket required by two canonical tests."
-  requirements:
-    - "Immediately before canonical ./verify, perform one minimal ephemeral AF_UNIX stream-socket bind/close/unlink probe under a task-specific temporary directory using the same local execution context."
-    - "The probe must not touch the repository, product, trust state, Runtime lifecycle, or network."
-    - "If socket creation/bind fails due environment/platform restriction, stop VERIFICATION_ENVIRONMENT_UNAVAILABLE. Do not invoke ./verify."
-    - "If the probe passes, remove all probe artifacts and proceed."
-  invocation_limit: 1
+    - "Reuse revision-3 focused evidence only if exact checkpoint diff SHA-256 remains 3e99ff332ed508d983220f585bb5097b9e3b74c38001f2e32dd60e4812c4a43c."
+    - "Do not rerun focused tests merely for confidence when the checkpoint is byte-identical."
+  result_expected: "revision-3 evidence: 2 regression tests PASS and 105 focused tests PASS"
 
 canonical_verification:
-  command: ./verify
-  authority: "0/1 fresh revision-3 host invocation"
-  requirements:
-    - "Invoke canonical ./verify exactly once after focused PASS and final diff review."
-    - "No retry after a host process has started."
-    - "A platform rejection before process creation does not consume the host invocation authority; record it truthfully."
-    - "If canonical verify fails, stop VERIFICATION_FAILED."
+  executor_authority: "0/0"
+  designated_verifier_artifact: .agent/tasks/TASK-0117/verifier.yaml
+  requirement: "PASS evidence from the Architect-owned host-native designated verifier is mandatory before implementation commit."
 
 scope:
   allowed_repository_mutation:
@@ -233,16 +233,17 @@ acceptance_criteria:
   - id: AC-4
     requirement: "install.sh exposes only an explicit fixed-order pinned form; malformed or partial pin authority fails before cutover execution."
   - id: AC-5
-    requirement: "The two revision-2 regression tests and the focused TASK-0117 suite pass; AF_UNIX preflight passes; canonical ./verify then passes exactly once under fresh revision-3 authority."
+    requirement: "Revision-3 regression/focused evidence remains bound to the exact checkpoint and the Architect-owned designated verifier records one host-native canonical ./verify PASS for that same exact checkpoint diff before implementation commit."
   - id: AC-6
     requirement: "No candidate/product/security/media consequence occurs."
   - id: AC-7
     requirement: "Implementation commit contains only allowed source/test files; report-only commit is its sole direct child and both publish non-force to dev."
 
 publication:
-  - "After the checkpoint is byte-preservingly fast-forwarded to the revision-3 planning HEAD, create one implementation commit as the direct child of that planning HEAD."
-  - "The implementation commit may include only the allowed source/test paths and must include the resumed checkpoint work rather than replaying it."
+  - "Only after verifier.yaml PASS is present at the exact planning HEAD and the dirty checkpoint is byte-preservingly fast-forwarded to that HEAD, create one implementation commit as its direct child."
+  - "The implementation commit must contain exactly the four authorized dirty paths and must correspond to the verified checkpoint diff; no post-verification implementation mutation is allowed."
   - "After implementation publication, create one report-only commit adding .agent/tasks/TASK-0117/report.yaml as the sole direct child of the implementation commit."
+  - "The report must bind the designated verifier artifact and implementation commit and state that CODEX_LOCAL did not rerun canonical ./verify."
   - "Push both non-force to dev."
   - "Do not promote main."
 
