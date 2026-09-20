@@ -742,6 +742,35 @@ class CandidateCutoverTests(unittest.TestCase):
             _, cutover, fx = self._fixture(raw, predecessor_revision=revision)
             self.assertEqual(cutover._predecessor_service_contract(fx["target"]), "split-v1")
 
+    def test_installed_split_v1_predecessor_refresh_uses_split_runtime_contract(self) -> None:
+        revision = "b0dec3e556ff914fb9ca041c6b52f53c04ee3fd2"
+        with tempfile.TemporaryDirectory() as raw:
+            provenance, cutover, fx = self._fixture(raw, predecessor_revision=revision)
+            self.assertEqual(cutover._predecessor_service_contract(fx["target"]), "split-v1")
+            fx["modern_state"].update(main_app="enabled", runtime_agent="enabled")
+            self._set_launch_program(
+                fx,
+                f"gui/501/{MODERN_RUNTIME_LABEL}",
+                fx["target"] / "Contents/MacOS/AgentRuntimeRuntimeService",
+            )
+            helper = fx["candidate"] / "Contents/MacOS/AgentRuntimeRuntimeService"
+            helper.write_bytes(helper.read_bytes() + b"installed-split-refresh\n")
+            provenance.seal_candidate(fx["candidate"], fx["handoff"])
+
+            result = self._cutover(cutover, fx)
+
+            self.assertEqual(result["status"], "PENDING")
+            metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
+            self.assertEqual(metadata["predecessor_service_contract"], "split-v1")
+            predecessor_ops = [
+                operation
+                for app_revision, operation in fx["service_revision_operations"]
+                if app_revision == revision
+            ]
+            self.assertIn("unregister-runtime", predecessor_ops)
+            self.assertNotIn("unregister", predecessor_ops)
+            self.assertNotIn("register-runtime", predecessor_ops)
+
     def test_preswap_stale_aggregate_refresh_rolls_back_without_candidate_identity_check(self) -> None:
         old_revision = "4fbf5b1b0ef3708c8fff479ca6718344f3bfd3c0"
         with tempfile.TemporaryDirectory() as raw:
