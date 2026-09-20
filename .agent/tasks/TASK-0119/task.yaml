@@ -1,14 +1,14 @@
 protocol_version: 3
 
 task_id: TASK-0119
-task_revision: 2
+task_revision: 3
 state: APPROVED
 
 origin:
-  type: architect_rework_after_repository_binding_block
+  type: architect_rework_after_turn_scoped_capability_loss
   predecessor_task: TASK-0118
   predecessor_review: "4bd4f880a3bfd0946b4250ed157dd13f248d2e0d"
-  predecessor_task_revision: 1
+  predecessor_task_revision: 2
   predecessor_terminal: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
 
 target:
@@ -35,10 +35,19 @@ accepted_authority:
   installed_target: "/Users/tienphat/Applications/Agent Runtime.app"
 
 operator_precondition:
-  requirement: "Before this task begins, the operator must open or use a ChatGPT conversation in which the Agent Runtime custom app/connector has been explicitly attached or reconnected after TASK-0118 successor activation."
-  rationale: "Connector attachment is a ChatGPT host/UI prerequisite, not Agent Runtime repository authority. The current Architect conversation does not expose the Agent Runtime tool namespace."
+  requirement: "Launch revision 3 from a NEW ChatGPT conversation or a freshly reattached conversation by explicitly selecting/invoking the Agent Runtime custom app in the SAME user message that contains the execution prompt."
+  rationale: "Revision 1 observed 11/11 tools, but revision 2 later observed 0/11 in the same conversation. Evidence therefore shows Agent Runtime capability exposure can be turn-scoped or otherwise lost between execution turns."
   task_action: NONE
   if_unsatisfied: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+
+turn_atomicity:
+  requirement: "Surface preflight and the single terminal_exec continuity proof must complete in one assistant execution turn with no intervening user message, no handoff to a later turn, and no pause after tool-surface discovery."
+  rationale: "Do not rely on Agent Runtime tool handles persisting to a subsequent execution turn."
+  if_surface_present:
+    action: "Immediately invoke the authorized terminal_exec proof in the same turn."
+  if_surface_absent:
+    terminal: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+  retries: 0
 
 surface_preflight:
   must_happen_before_repo_or_host_mutation: true
@@ -58,12 +67,13 @@ surface_preflight:
     - "Prove this exact ChatGPT conversation exposes the Agent Runtime MCP surface after connector attachment/reconnection."
     - "Require all eleven exact public tool names above. Do not invoke screen_capture."
     - "If the required surface is absent or incomplete, stop CURRENT_PHASE_CAPABILITY_UNAVAILABLE before any local/repository mutation."
+    - "If the required surface is complete, do not return an intermediate status and do not wait for another operator turn; immediately execute the one authorized terminal_exec continuity proof in this same assistant turn."
     - "Tool presence is schema evidence only; it is not sufficient by itself for end-to-end continuity."
 
 repository_binding:
   remote_task_authority:
-    - "Resolve TASK-0119 revision 2 directly from GitHub at the exact revision-2 planning HEAD."
-    - "Fresh-resolve remote dev/main; require dev equals the revision-2 planning HEAD and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+    - "Resolve TASK-0119 revision 3 directly from GitHub at the exact revision-3 planning HEAD."
+    - "Fresh-resolve remote dev/main; require dev equals the revision-3 planning HEAD and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
     - "Require TASK-0118 review 4bd4f880a3bfd0946b4250ed157dd13f248d2e0d in ancestry and state ACCEPTED."
   local_observation_source:
     repository: /Users/tienphat/Developer/agent-runtime
@@ -72,12 +82,13 @@ repository_binding:
     required_clean: true
     role: "separately authorized local observation source; not the canonical task source"
   requirements:
-    - "Do not synchronize the local checkout in revision 2."
+    - "Do not synchronize the local checkout in revision 3."
     - "Do not invoke repo_fast_forward, repo_publish, git fetch, pull, merge, checkout, reset, rebase, stash, clean, or any other repository synchronization/mutation action."
     - "Require local branch dev, exact local HEAD 90203f901d2503f2289cbbfd8cfdce0bd0126a63, and a clean working tree before the continuity proof."
     - "The local checkout intentionally predates TASK-0119 planning artifacts. This is accepted because TASK authority is resolved remotely and the local checkout is used only to host read-only observation commands."
     - "If local HEAD or cleanliness differs, stop LOCAL_OBSERVATION_SOURCE_CHANGED."
-    - "Revision 1 repo_fast_forward was blocked before Agent Runtime execution and consumed no host consequence. Revision 2 must not retry it or substitute another repository mutation mechanism."
+    - "Revision 1 repo_fast_forward was blocked before Agent Runtime execution and consumed no host consequence. Revision 3 must not retry it or substitute another repository mutation mechanism."
+    - "Revision 2 stopped at surface preflight with 0/11 Agent Runtime tools and consumed no terminal_exec authority or host consequence."
 
 continuity_proof:
   terminal_exec_authority: "1/1 read-only proof invocation"
@@ -109,7 +120,7 @@ reporting:
   repository_mutation_authority: NONE
   executor_output:
     - "Return a bounded Vietnamese result packet to the operator; do not create report.yaml, commit, or push."
-    - "The result packet must state: exact remote revision-2 planning HEAD; observed eleven-tool surface; terminal_exec invocation count and no-retry fact; compact JOIN result; transaction schema/status/phase and pinned hashes; installed successor source revision/tree/lock identity; runtime.env SHA-256/mode equality; listener/health/readiness results; local HEAD/cleanliness before and after; and forbidden-effect counters."
+    - "The result packet must state: exact remote revision-3 planning HEAD; that the 11/11 surface preflight and terminal_exec proof occurred in the same assistant execution turn; terminal_exec invocation count and no-retry fact; compact JOIN result; transaction schema/status/phase and pinned hashes; installed successor source revision/tree/lock identity; runtime.env SHA-256/mode equality; listener/health/readiness results; local HEAD/cleanliness before and after; and forbidden-effect counters."
     - "Do not disclose credentials, tunnel IDs, raw runtime.env values, cookies, tokens, private connector data, or screen content."
   architect_persistence:
     - "After the Executor returns a successful bounded result packet, the Architect will independently persist canonical TASK-0119 report/review artifacts through the remote SSOT."
@@ -150,9 +161,9 @@ forbidden_changes:
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "The exact ChatGPT conversation exposes all eleven Agent Runtime public MCP tools after connector attachment/reconnection, without invoking screen_capture."
+    requirement: "The exact execution turn exposes all eleven Agent Runtime public MCP tools after explicit same-message app invocation/attachment, without invoking screen_capture, and no later turn is required before terminal_exec."
   - id: AC-2
-    requirement: "Exactly one no-retry terminal_exec read-only execution bundle succeeds through CHATGPT_LOCAL."
+    requirement: "Exactly one no-retry terminal_exec read-only execution bundle succeeds through CHATGPT_LOCAL in the same assistant execution turn as the 11/11 surface preflight."
   - id: AC-3
     requirement: "The live proof binds to the exact activated successor using schema-5 PENDING/APP_SWAPPED pinned transaction identity and installed candidate source identity."
   - id: AC-4
