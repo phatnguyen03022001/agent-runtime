@@ -1,0 +1,185 @@
+protocol_version: 3
+
+task_id: TASK-0117
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  predecessor_task: TASK-0116
+  predecessor_review: "8562e713980e788dfaaad388ebc43e4426f52334"
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: accepted_candidate_pinned_validation
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  location: LOCAL
+  transport: AGENT_RUNTIME
+
+objective: "Implement the smallest fail-closed separation between creation-time certificate trust proof and install-time immutable accepted-candidate proof. Preserve the existing strict generic validation path unchanged by default. Add an explicit pinned prebuilt path that is usable only when both exact externally-authorized candidate SHA-256 and handoff SHA-256 are supplied and all candidate provenance/identity bytes still match. Do not install, rebuild, re-sign, alter host trust, or touch Stage B."
+
+architect_decision:
+  rationale:
+    - "TASK-0111 already produced and Architect-accepted the exact immutable candidate after strict codesign and validate-candidate PASS."
+    - "TASK-0116 proves the current native trust evaluator fails for both the candidate and an Apple-signed system control, so repeating live certificate trust at installation is not a reliable discriminator on this host/context."
+    - "The exceptional path must rely on exact immutable identity already accepted by authority, not a generic trust bypass."
+  invariant: "Strict validation remains the default and package-time sealing remains strict."
+  forbidden_design: "No generic --skip-trust, --no-verify, environment bypass, implicit fallback, or automatic downgrade from strict to pinned validation."
+
+accepted_candidate_reference:
+  candidate_sha256: "0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77"
+  handoff_sha256: "f8e75129f942fe67541229a598ed8761be574ec5547ffd306c606131718130a8"
+  source_revision: "18cdb515fe037c9b6cb81ce6529d85ae734e195a"
+  source_tree: "ed9a2b089d2f17d2a66eb25da4277f00d418bd07"
+  requirements_lock_sha256: "80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
+  note: "These values define downstream TASK-0118 authority only. Production code must remain generic and must not hard-code this candidate."
+
+preconditions:
+  - "Resolve TASK-0117 revision 1 directly from GitHub at the exact planning HEAD."
+  - "Fresh-resolve dev/main; require dev equals the planning HEAD and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "Synchronize the clean canonical local dev checkout by ordinary fast-forward only."
+  - "Require working tree clean."
+  - "Require TASK-0116 canonical review 8562e713980e788dfaaad388ebc43e4426f52334 in ancestry."
+  - "Do not inspect or mutate macOS trust/keychain state in this task."
+  - "Do not invoke the accepted candidate or installed app as a live lifecycle consequence."
+
+required_implementation:
+  package_provenance:
+    path: macos/package_provenance.py
+    requirements:
+      - "Add one explicit pinned candidate validator distinct from validate_candidate."
+      - "Inputs must include app path, external handoff path, expected candidate SHA-256, and expected handoff SHA-256."
+      - "Reject unless both expected hashes are exact lowercase 64-hex identities."
+      - "Hash the external handoff bytes and require exact equality with expected handoff SHA-256."
+      - "Load and validate the handoff shape using the existing canonical handoff parser."
+      - "Require the handoff's candidate_sha256 equals the externally expected candidate SHA-256."
+      - "Recompute candidate_closure and require candidate_sha256 and record_count equal the handoff and expected candidate SHA-256."
+      - "Recompute embedded runtime manifest/source/tree/lock identity and responsible executable TeamIdentifier equality through the existing read-only identity path; require the resulting candidate handoff data equals the exact external handoff."
+      - "Perform before/after closure and handoff-byte identity checks so mutation during validation fails closed."
+      - "The pinned validator MUST NOT invoke _verify_codesign or any certificate trust evaluation."
+      - "Existing validate_candidate and seal_candidate behavior must remain strict and unchanged."
+      - "Expose a CLI subcommand named validate-pinned-candidate with four required operands: app, handoff, expected candidate SHA-256, expected handoff SHA-256. Do not add a skip flag to validate-candidate."
+  candidate_cutover:
+    path: macos/candidate_cutover.py
+    requirements:
+      - "Keep strict validation as the default when no pinned identities are supplied."
+      - "Allow cutover to receive optional expected candidate SHA-256 and expected handoff SHA-256 only as a pair; one without the other must fail before product mutation."
+      - "When both are supplied, use the pinned validator for every candidate validation checkpoint owned by that cutover transaction, including pre-swap, post-swap, resume, and commit validation."
+      - "Persist transaction validation mode and the two expected hashes in schema-5 metadata so resume/commit cannot silently revert to strict or lose the pin."
+      - "Validate persisted mode/hash shape when loading a transaction; malformed or partial pin metadata fails closed."
+      - "Do not change predecessor ServiceManagement compatibility logic, lifecycle ordering, rollback semantics, or schema number."
+  install_entrypoint:
+    path: install.sh
+    requirements:
+      - "Preserve the current three-argument --install-prebuilt form and its strict behavior."
+      - "Extend --install-prebuilt with one explicit pinned form requiring both flags in fixed order after app/handoff: --expected-candidate-sha256 <64hex> --expected-handoff-sha256 <64hex>."
+      - "Pinned form must reject malformed hashes or partial/misordered arguments before invoking candidate_cutover.py."
+      - "Pass the exact hashes to candidate_cutover.py; do not use environment variables or hidden state."
+      - "Do not change default source-build packaging trust checks in package_app.sh."
+      - "Do not change default install flow to pinned mode in this task."
+  tests:
+    requirements:
+      - "Add focused tests proving strict validate_candidate still calls/fails on strict trust when trust verification fails."
+      - "Add focused tests proving pinned validation does not call strict trust and succeeds only for exact candidate + exact handoff hashes with full handoff/provenance equality."
+      - "Pinned validation must reject wrong candidate hash, wrong handoff hash, mutated candidate, mutated handoff, invalid TeamIdentifier/identity mismatch, and malformed expected hashes."
+      - "Cutover must reject partial pin authority before any product mutation."
+      - "Pinned cutover must persist mode+hashes and use pinned validation after app swap."
+      - "Resume and commit of a pinned transaction must continue using pinned validation and fail if candidate/handoff identity drifts."
+      - "Existing strict cutover tests must continue passing unchanged in semantics."
+      - "Install shell contract test must prove strict 3-argument form remains and pinned form requires exactly both explicit hash flags."
+      - "No test may weaken package-time strict sealing."
+
+security_invariants:
+  - "Pinned validation proves byte/provenance identity against externally supplied accepted hashes; it does not claim current certificate trust."
+  - "The pinned path may never be selected implicitly after strict validation failure."
+  - "The pinned path may never derive its expected candidate hash solely from the candidate or handoff being validated."
+  - "The pinned path may never derive its expected handoff hash from the handoff being validated."
+  - "Both external expected hashes are mandatory for pinned mode."
+  - "No hard-coded accepted candidate hashes in production source."
+  - "No host trust/keychain mutation or permission widening."
+  - "No generic skip/bypass switch."
+
+focused_verification:
+  required:
+    - "Run the smallest relevant unittest set covering package provenance pinned validation, candidate cutover strict+pinned transaction behavior, and install.sh contract."
+    - "Focused tests must PASS before canonical verification."
+  retry_policy: "Normal focused development iteration is allowed before canonical verify; do not use retries to alter a platform safety judgment."
+
+canonical_verification:
+  command: ./verify
+  authority: "0/1 host invocation"
+  requirements:
+    - "Invoke canonical ./verify exactly once after focused PASS and final diff review."
+    - "No retry after a host process has started."
+    - "A platform rejection before process creation does not consume the host invocation authority; record it truthfully."
+    - "If canonical verify fails, stop VERIFICATION_FAILED."
+
+scope:
+  allowed_repository_mutation:
+    - macos/package_provenance.py
+    - macos/candidate_cutover.py
+    - install.sh
+    - tests/test_candidate_cutover.py
+    - tests/test_package_provenance.py
+    - ".agent/tasks/TASK-0117/report.yaml"
+  optional_test_file_rule: "If tests/test_package_provenance.py does not already exist, do not create it merely for taxonomy; place focused tests in the smallest existing relevant test module."
+  expected_files_are_restrictive: true
+
+forbidden_changes:
+  - "Do not modify package_app.sh unless canonical verification exposes an existing test fixture that cannot be updated without it; if that occurs, stop BLOCKED_SCOPE_EXPANSION instead of editing it."
+  - "Do not install/reinstall the accepted candidate."
+  - "Do not package/rebuild/re-sign any candidate."
+  - "Do not invoke install-prebuilt against the real installed product."
+  - "Do not mutate ServiceManagement, launchd, Runtime lifecycle, runtime.env, tunnel state, keychain, certificates, or trust settings."
+  - "Do not refresh/reconnect the ChatGPT plugin."
+  - "Do not invoke screen_capture or Stage B."
+  - "Do not mutate TCC or perform click/type/scroll."
+  - "Do not mutate main/tags/releases/sibling repositories."
+  - "Do not force-push."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Existing strict generic validation/sealing behavior remains default and unchanged."
+  - id: AC-2
+    requirement: "Pinned validator requires two external exact hashes, performs full immutable/provenance/identity equality, and performs no live certificate trust evaluation."
+  - id: AC-3
+    requirement: "Cutover persists and enforces strict-vs-pinned validation mode across pre-swap/post-swap/resume/commit without schema change or implicit downgrade."
+  - id: AC-4
+    requirement: "install.sh exposes only an explicit fixed-order pinned form; malformed or partial pin authority fails before cutover execution."
+  - id: AC-5
+    requirement: "Focused regression suite passes and canonical ./verify passes exactly once."
+  - id: AC-6
+    requirement: "No candidate/product/security/media consequence occurs."
+  - id: AC-7
+    requirement: "Implementation commit contains only allowed source/test files; report-only commit is its sole direct child and both publish non-force to dev."
+
+publication:
+  - "Create one implementation commit as direct child of the TASK-0117 planning HEAD."
+  - "After implementation publication, create one report-only commit adding .agent/tasks/TASK-0117/report.yaml as the sole direct child of the implementation commit."
+  - "Push both non-force to dev."
+  - "Do not promote main."
+
+terminal_states:
+  success: NEEDS_REVIEW
+  verification_failure: VERIFICATION_FAILED
+  scope_expansion_required: BLOCKED_SCOPE_EXPANSION
+  capability_failure: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+
+downstream_if_accepted:
+  task: TASK-0118
+  intent: "Use the exact Architect-accepted candidate and handoff hashes through the new pinned install-prebuilt form exactly once, then prove schema-5 PENDING/APP_SWAPPED local activation before Stage B."
+  install_authority: "not granted by TASK-0117"
+  stage_b_authority: "not granted by TASK-0117"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+execution_ready: true
