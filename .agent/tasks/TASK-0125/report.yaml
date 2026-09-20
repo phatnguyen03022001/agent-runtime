@@ -1,0 +1,82 @@
+protocol_version: 3
+
+task_id: TASK-0125
+task_revision: 1
+report_revision: 1
+state: NEEDS_REVIEW
+
+execution:
+  surface: CODEX_LOCAL
+  planning_head: "9e24d1b9140f9a533ff0b41f6f4d14708c9312aa"
+
+local_checkpoint:
+  repository: /Users/tienphat/Developer/agent-runtime
+  branch: dev
+  head: "9e24d1b9140f9a533ff0b41f6f4d14708c9312aa"
+  dirty_paths:
+    - .agent/capability-policy.yaml
+    - agent_runtime/screen_capture.py
+    - agent_runtime/server.py
+    - tests/test_mcp_contracts.py
+    - tests/test_screen_capture_mcp.py
+  checkpoint_sha256: "a07661818ee8e10e102fcdff097fbfd0a11d02e4fec575e7dcdb18a932f4d8c4"
+  file_sha256:
+    .agent/capability-policy.yaml: "2209cea442b5a4f5bd523fec4a44e0d0ba39fa4d71892d8c4d353b0404ebf2e6"
+    agent_runtime/screen_capture.py: "844bccb7959f09ee2b66406d911be6ffc70a2316253f617c5b2a03a8eea91e4c"
+    agent_runtime/server.py: "8d77e8574f3907b07e5457e49d6bdc757cdd242efe37cffb208f2b5ba2338c97"
+    tests/test_mcp_contracts.py: "54088ff4a5d41db9658060b3c64788fa98d5636c402588d9a6014ac7b4f80bc9"
+    tests/test_screen_capture_mcp.py: "db2a08f35d7ea36df9ef4f360cf652f61106b0b622234ade6a91197c7b5dbcc8"
+
+implementation:
+  authorized_scope_exact: true
+  capability_policy_created: true
+  production_screen_capture_fail_closed: true
+  typed_error_code: VISUAL_PERCEPTION_BLOCKED
+  retryable: false
+  public_tool_surface_count: 11
+  helper_delegate_blocked_before_invocation: true
+
+verification:
+  focused:
+    result: PASS
+  compile:
+    result: PASS
+  diff_check:
+    result: PASS
+  canonical:
+    invocations: "1/1"
+    exit_code: 1
+    result: FAIL
+    failure_scope:
+      - tests/test_fs_read_batch.py::test_fifo_and_unix_socket_are_rejected_as_non_regular
+      - tests/test_fs_read_batch_adversarial.py::test_fifo_socket_and_device_modes_are_rejected_before_content_read
+    reported_cause: "CODEX sandbox denied AF_UNIX socket bind required by unrelated test fixtures."
+  architect_independent_diagnosis:
+    exact_failing_tests_only:
+      - test: tests.test_fs_read_batch.FsReadBatchBehaviorTests.test_fifo_and_unix_socket_are_rejected_as_non_regular
+        result: PASS
+      - test: tests.test_fs_read_batch_adversarial.FsReadBatchAdversarialTests.test_fifo_socket_and_device_modes_are_rejected_before_content_read
+        result: PASS
+    environment: "Runtime-independent local execution outside CODEX sandbox"
+    diagnosis: VERIFICATION_ENVIRONMENT_FALSE_NEGATIVE
+
+publication_activation:
+  implementation_commit: "0/1"
+  source_push: "0/1"
+  packaging: "0/1"
+  signing_identity_discovery: "0/1"
+  install_prebuilt: "0/1"
+  commit_cutover: "0/1"
+  installed_guard_probe: "0/1"
+
+forbidden_effects:
+  retries: 0
+  visual_capture: 0
+  screen_pixels: 0
+  tcc_mutation: 0
+  ocr_or_visual_fallback: 0
+  visual_control: 0
+  main_tags_releases: 0
+  executor_report_persistence: 0
+
+terminal_state: CANONICAL_VERIFICATION_FAILED
