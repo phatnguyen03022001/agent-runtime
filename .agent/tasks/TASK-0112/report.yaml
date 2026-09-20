@@ -1,0 +1,151 @@
+protocol_version: 3
+
+task_id: TASK-0112
+task_revision: 1
+report_revision: 1
+state: REPORTED
+terminal: INSTALL_PREBUILT_FAILED
+
+task_source:
+  path: .agent/tasks/TASK-0112/task.yaml
+  planning_head: a3c084fb5f3e39b40197df86d50a5e2ed4a7d6d5
+  planning_head_verified_exact: true
+  source: GitHub
+  repository: phatnguyen03022001/agent-runtime
+  branch: dev
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: dev
+  execution_surface: CODEX_LOCAL
+  transport: NATIVE
+  local_head_before_sync: 338944c3ae5a5b04a1230231e44e4894ff565c99
+  local_head_after_sync: a3c084fb5f3e39b40197df86d50a5e2ed4a7d6d5
+  repository_sync_performed: true
+  synchronization: ordinary_fast_forward_only
+  report_parent: a3c084fb5f3e39b40197df86d50a5e2ed4a7d6d5
+  working_tree_clean_before_report: true
+
+remote_heads:
+  status: PASS
+  dev: a3c084fb5f3e39b40197df86d50a5e2ed4a7d6d5
+  main: c49d777efa09db7f6c51bd8d8616db4623499fb8
+
+preconditions:
+  checkout_branch: dev
+  checkout_head_exact: PASS
+  checkout_clean: PASS
+  accepted_task_review_in_ancestry: PASS
+  accepted_source_revision_in_ancestry: PASS
+  transaction_absent_before_install: true
+  candidate_app_path: "/Users/tienphat/Developer/agent-runtime/build/candidates/0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77/Agent Runtime.app"
+  candidate_handoff_path: "/Users/tienphat/Developer/agent-runtime/build/candidates/0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77/Agent Runtime.candidate.json"
+  candidate_app_regular_non_symlink: true
+  candidate_handoff_regular_non_symlink: true
+  candidate_sha256: 0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77
+  handoff_sha256: f8e75129f942fe67541229a598ed8761be574ec5547ffd306c606131718130a8
+  expected_handoff_sha256: f8e75129f942fe67541229a598ed8761be574ec5547ffd306c606131718130a8
+  installed_app_present_before_install: true
+
+trust_preflight:
+  authority: "1/1"
+  codesign:
+    command: "/usr/bin/codesign --verify --deep --strict <accepted-app>"
+    invocations: 1
+    result: PASS
+  provenance:
+    command: "/opt/homebrew/bin/python3 macos/package_provenance.py validate-candidate <accepted-app> <accepted-handoff>"
+    invocations: 1
+    result: PASS
+    source_revision: 18cdb515fe037c9b6cb81ce6529d85ae734e195a
+    source_tree: ed9a2b089d2f17d2a66eb25da4277f00d418bd07
+    requirements_lock_sha256: 80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e
+    record_count: 1035
+    candidate_sha256: 0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77
+
+installation:
+  install_prebuilt_authority: "1/1"
+  install_prebuilt_invocations: 1
+  install_prebuilt_retries: 0
+  install_prebuilt_command: >-
+    ./install.sh --install-prebuilt "/Users/tienphat/Developer/agent-runtime/build/candidates/0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77/Agent Runtime.app" "/Users/tienphat/Developer/agent-runtime/build/candidates/0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77/Agent Runtime.candidate.json"
+  exit_code: 2
+  result: FAIL
+  error: "CUTOVER ERROR: predecessor ServiceManagement contract is unsupported for Runtime refresh"
+  source_packaging_invocations: 0
+  candidate_rebuilds: 0
+  candidate_resigns: 0
+
+post_install:
+  transaction_present_after_failure: false
+  transaction_schema: NOT_REACHED
+  transaction_status: NOT_REACHED
+  transaction_phase: NOT_REACHED
+  installed_candidate_validation: NOT_REACHED
+  installed_candidate_sha256: NOT_REACHED
+  installed_strict_codesign: NOT_REACHED
+  local_runtime_activation: NOT_REACHED
+  tunnel_configuration_mutated: false
+  accepted_handoff_unchanged_after_failure: true
+  predecessor_rollback_or_recovery_invoked: false
+
+preservation:
+  commit_cutover_invocations: 0
+  rollback_invocations: 0
+  resume_invocations: 0
+  recover_invocations: 0
+  runtime_restart_stop_signal_invocations: 0
+  manual_service_management_mutations: 0
+  direct_launchd_mutations: 0
+  runtime_env_mutations: 0
+  tunnel_configuration_mutations: 0
+  candidate_mutations: 0
+  source_test_doc_dependency_mutations: 0
+  chatgpt_plugin_refreshes: 0
+  live_screen_capture_invocations: 0
+  tcc_mutations: 0
+  main_tag_release_mutations: 0
+  sibling_repository_mutations: 0
+  force_pushes: 0
+
+acceptance:
+  AC-1:
+    result: PASS
+    evidence: "The exact accepted candidate passed one deep-strict codesign preflight and one package provenance validation in the CODEX_LOCAL execution context."
+  AC-2:
+    result: PASS
+    evidence: "The canonical install-prebuilt command was invoked exactly once with no retry."
+  AC-3:
+    result: FAIL
+    evidence: "The installer rejected the predecessor ServiceManagement contract before transaction creation; no schema-5 PENDING/APP_SWAPPED transaction exists."
+  AC-4:
+    result: NOT_REACHED
+    evidence: "The accepted candidate was not installed because canonical cutover failed before the swap."
+  AC-5:
+    result: NOT_REACHED
+    evidence: "Successor Runtime/tunnel activation polling was not entered because installation failed."
+  AC-6:
+    result: PASS
+    evidence: "No commit-cutover action was invoked; the failed installation left no pending transaction and no committed cutover."
+  AC-7:
+    result: PASS
+    evidence: "The only repository artifact created is this report; the checkout remained clean before report creation and no source/test/doc/dependency file was changed."
+
+publication:
+  report_only: true
+  report_is_sole_allowed_repository_mutation: true
+  report_is_sole_direct_child: true
+  report_parent: a3c084fb5f3e39b40197df86d50a5e2ed4a7d6d5
+  push_mode: non_force_dev
+  force_push: false
+  main_promoted: false
+
+notes:
+  - "The canonical task was resolved directly from GitHub at the exact planning HEAD."
+  - "Fresh remote refs matched the required planning dev HEAD and frozen main HEAD; local dev was synchronized by ordinary fast-forward only."
+  - "The accepted candidate and external handoff passed the required trust/provenance gate before installation."
+  - "The single canonical install-prebuilt invocation failed before transaction creation because the installed predecessor ServiceManagement contract was unsupported for Runtime refresh."
+  - "No retry, rebuild, re-sign, alternate execution surface, lifecycle repair, rollback, recovery, commit-cutover, plugin refresh, or live screen_capture was performed."
+  - "Read-only post-failure checks found no cutover transaction, preserved the exact handoff SHA-256, and confirmed the repository remained clean."
+
+result: INSTALL_PREBUILT_FAILED
