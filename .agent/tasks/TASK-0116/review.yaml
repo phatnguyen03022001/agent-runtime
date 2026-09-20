@@ -1,0 +1,67 @@
+protocol_version: 3
+
+task_id: TASK-0116
+task_revision: 1
+review_revision: 1
+state: ACCEPTED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0116/report.yaml
+  commit: "f52b617db6d7b8138878e931aa6bc66485bb3cc3"
+  report_revision: 1
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+acceptance:
+  terminal: NEEDS_REVIEW
+  disposition: ACCEPTED
+  classification: HOST_WIDE_TRUST_EVALUATION_FAILURE
+
+contract_compliance:
+  identity: PASS
+  native_probe_scope: PASS
+  candidate_strict_retry_limit: PASS
+  default_policy_evaluation: PASS
+  explicit_anchor_evaluation: PASS
+  system_control: PASS
+  no_mutation: PASS
+  publication_shape: PASS
+
+acceptance_basis:
+  - "Fresh GitHub resolution proves report commit f52b617db6d7b8138878e931aa6bc66485bb3cc3 is the sole direct child of TASK-0116 planning HEAD c2d4dbbe82355879a8b8bb0413e9f25d0bf153aa and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "Candidate closure and handoff identities remain exact before and after diagnosis."
+  - "The probe did not repeat candidate or predecessor strict codesign verification and used one ephemeral Security.framework probe only."
+  - "Candidate SecTrust evaluation fails with NSOSStatusErrorDomain/-26276 under the Apple code-signing policy with both default anchors and the exact embedded root explicitly set; explicit anchoring does not change the result."
+  - "SecTrustCopyAnchorCertificates returned errSecParam and the report correctly records anchor membership as unavailable rather than inferring a missing root."
+  - "The same native policy mechanism also fails for /usr/bin/security, a known-good Apple-signed system executable, with the same NSOSStatusErrorDomain/-26276 result."
+  - "Combined with accepted TASK-0115 evidence that the installed predecessor shares the exact signer DER chain and also fails strict verification, the failure is not bounded to candidate bytes or the candidate development chain."
+  - "The classification is intentionally bounded to a host/context-wide native trust or policy failure relative to the tested controls; it does not claim a specific missing root or authorize host trust mutation."
+
+architect_decision:
+  host_trust_repair_authorized: false
+  candidate_rebuild_authorized: false
+  candidate_resign_authorized: false
+  live_install_retry_authorized: false
+  stage_b_authorized: false
+  design_correction_required: true
+  correction: "Separate creation-time certificate trust proof from install-time immutable accepted-candidate proof."
+
+next_state:
+  candidate_remains_accepted: true
+  creation_time_strict_trust_evidence:
+    source_task: TASK-0111
+    candidate_sha256: "0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77"
+    handoff_sha256: "f8e75129f942fe67541229a598ed8761be574ec5547ffd306c606131718130a8"
+    strict_codesign: PASS
+    validate_candidate: PASS
+  install_time_requirement: "A new fail-closed pinned validation path may rely on exact externally authorized candidate SHA-256 and handoff SHA-256 plus full provenance/identity equality, while the existing generic validation path remains strict."
+  generic_skip_trust_switch_forbidden: true
+
+notes:
+  - "Do not mutate macOS trust settings, keychains, Security.framework state, or certificates based on this task."
+  - "Do not weaken package-time sealing or generic validate-candidate."
+  - "The next implementation must make the exceptional path cryptographically/byte identity pinned, explicit, and unavailable without both exact accepted hashes."
