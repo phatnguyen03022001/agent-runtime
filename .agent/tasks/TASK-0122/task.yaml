@@ -1,0 +1,185 @@
+protocol_version: 3
+
+task_id: TASK-0122
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  predecessor_task: TASK-0121
+  predecessor_review: "18db9ab9a78683a87c893899571591c5fd469491"
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: stage_b_image_host_compatibility
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  location: LOCAL
+  transport: AGENT_RUNTIME
+
+objective: "Run the production Stage B image-host compatibility proof with exactly one screen_capture call under a strict blindness barrier. Determine whether real PNG pixels returned by Agent Runtime are semantically available to the model. Do not use terminal tools, metadata fallbacks, OCR, alternate capture paths, UI control, or product mutation."
+
+accepted_authority:
+  task_0120_review: "a838b7750a086bb1e83f34731d349ee15340a7af"
+  task_0121_review: "18db9ab9a78683a87c893899571591c5fd469491"
+  cutover_committed: true
+  transaction_absent: true
+  postcommit_chatgpt_local_continuity: true
+  public_surface_count: 11
+
+operator_precondition:
+  requirement: "Launch revision 1 from a NEW ChatGPT conversation or freshly reattached conversation by explicitly selecting/invoking Agent Runtime in the SAME user message as the execution prompt."
+  if_unsatisfied: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+
+turn_atomicity:
+  requirement: "The exact 11/11 surface preflight and the one screen_capture call must occur in the same assistant execution turn with no intervening user message."
+  retries: 0
+
+surface_preflight:
+  required_exact_public_tools:
+    - terminal_exec
+    - terminal_start
+    - terminal_poll
+    - terminal_control
+    - terminal_resize
+    - capacity_observer
+    - fs_read_batch
+    - repo_observer
+    - repo_fast_forward
+    - repo_publish
+    - screen_capture
+  requirements:
+    - "Require all eleven exact public tool names in the executing ChatGPT conversation."
+    - "Invoke none except screen_capture."
+    - "If the exact surface is absent or incomplete, stop CURRENT_PHASE_CAPABILITY_UNAVAILABLE."
+    - "If present, immediately execute the one authorized capture in the same assistant turn."
+
+blind_oracle:
+  source: "Architect read-only pre-task CGWindow observation"
+  capture_target:
+    target: window
+    window_id: 7411
+    expected_owner: Code
+    expected_bundle_id: com.microsoft.VSCode
+  expected_title_authority:
+    owner: ARCHITECT_REVIEW_ONLY
+    plaintext_disclosure_before_observation: forbidden
+    sha256_utf8_no_trailing_newline: "9fd19850876e5460c4aeb8fa97d52c51f789115c949ae2919bbee5d3cb9507d1"
+    executor_hash_comparison: forbidden
+  model_facing_instruction: "Inspect only the actual image pixels delivered by the screen_capture result. Read the exact text visibly rendered in the captured window title bar and return that title text verbatim as observed_window_title. Do not infer it from metadata, prior text, filenames, source, history, or any other channel."
+  observation_rule: "Freeze the first title candidate verbatim. The Executor must not hash, compare, query, derive, or otherwise obtain the expected title outside the returned image pixels."
+
+authority_counters:
+  screen_capture: "0/1"
+  retries: 0
+  terminal_tools: "0"
+  repo_observer: "0"
+  fs_read_batch: "0"
+  capacity_observer: "0"
+  repo_fast_forward: "0"
+  repo_publish: "0"
+
+capture:
+  invocation:
+    tool: screen_capture
+    arguments:
+      target: window
+      window_id: 7411
+  requirements:
+    - "Invoke production screen_capture exactly once."
+    - "Do not change target, window_id, application, display, or region."
+    - "Do not retry under any outcome."
+    - "If platform safety blocks the call before Agent Runtime execution, stop CURRENT_PHASE_CAPABILITY_UNAVAILABLE."
+    - "If Agent Runtime returns SCREEN_CAPTURE_PERMISSION_REQUIRED, stop SCREEN_RECORDING_PERMISSION_REQUIRED. Do not mutate TCC, open System Settings, restart Runtime, or retry."
+    - "If the bound window no longer exists, is ambiguous, or another typed capture error is returned, stop SCREEN_CAPTURE_LIVE_PROOF_UNPROVEN. Do not select another target."
+    - "For a successful Runtime capture, require metadata status=captured, target=window, mime_type=image/png, permission=granted, capture_api=ScreenCaptureKit, window_id=7411, captured_application bundle_identifier=com.microsoft.VSCode, and at least one actual MCP ImageContent image/png payload."
+    - "If the tool reports a successful capture/metadata but the model does not receive inspectable image pixels and can only see metadata/text, stop exactly MCP_IMAGE_HOST_COMPATIBILITY_UNPROVEN. Do not guess observed_window_title."
+    - "If inspectable pixels are available, follow the model-facing instruction exactly and freeze observed_window_title verbatim."
+    - "Do not compare observed_window_title to the expected SHA authority. Independent Architect review performs semantic correctness judgment after the result packet."
+
+blindness_barrier:
+  forbidden_before_observation:
+    - "Do not query CGWindow APIs or window-list metadata."
+    - "Do not use AppleScript, Accessibility APIs, process/window title APIs, browser DOM, clipboard, OCR, source code, task history, reports, prior chat text, another model, or another local tool to obtain the title."
+    - "Do not read TASK-0107 report/review or other historical artifacts that may disclose prior visual observations."
+    - "Do not search Git history for the expected title."
+    - "Do not use terminal_exec, terminal_start, fs_read_batch, repo_observer, Remote Desktop Commander, CODEX_LOCAL, operator Terminal, or another capture/image path."
+  forbidden_after_observation_before_result:
+    - "Do not hash or compare observed_window_title against the oracle."
+    - "Do not run a second capture or query metadata to validate the text."
+    - "Do not correct the observed text using plausibility or external context."
+
+success_postconditions:
+  - "Exact 11/11 surface preflight PASS."
+  - "screen_capture invoked exactly 1/1 with retries=0."
+  - "Production capture returns valid image/png ImageContent plus bounded capture metadata."
+  - "Model has actual semantic access to the returned pixels and freezes observed_window_title from those pixels only."
+  - "No other Agent Runtime tool is invoked."
+  - "No repository, Runtime lifecycle, cutover, connector/tunnel, trust/TCC, UI-control, or other host mutation occurs."
+  - "Executor returns a bounded result packet only. Architect persists report/review separately and performs oracle comparison."
+
+forbidden_changes:
+  - "Do not invoke terminal_exec or any terminal lifecycle tool."
+  - "Do not invoke capacity_observer, fs_read_batch, repo_observer, repo_fast_forward, or repo_publish."
+  - "Do not invoke screen_capture more than once."
+  - "Do not capture another window/display/region."
+  - "Do not click, type, scroll, focus, activate, move, resize, open, close, or otherwise control the target window."
+  - "Do not use Accessibility, OCR, clipboard, browser DOM, camera, microphone, or audio."
+  - "Do not mutate Screen Recording/TCC or other permissions."
+  - "Do not restart/start/stop/reinstall Runtime or mutate connector/tunnel configuration."
+  - "Do not invoke commit-cutover, rollback, resume, recovery, or install-prebuilt."
+  - "Do not synchronize or mutate the repository."
+  - "Do not modify implementation/tests/docs."
+  - "Do not run tests, verify, packaging, signing, or freezing."
+  - "Do not enter visual-control work. Stage B proves image-host compatibility only."
+
+reporting:
+  repository_mutation_authority: NONE
+  executor_output:
+    - "Return only a bounded Vietnamese result packet."
+    - "State exact planning HEAD, 11/11 surface result, same-turn atomicity, screen_capture invocation count, retries, capture metadata status, whether actual image pixels were inspectable by the model, observed_window_title verbatim only when genuinely read from pixels, and all forbidden-effect counters."
+    - "If pixels are not semantically available to the model, do not emit any guessed title; return MCP_IMAGE_HOST_COMPATIBILITY_UNPROVEN."
+    - "Do not create report.yaml, commit, or push."
+  architect_persistence:
+    - "Architect independently compares observed_window_title against the embargoed expected-title authority."
+    - "Exact match plus valid one-capture production evidence permits Architect terminal IMAGE_TRANSPORT_SUPPORTED and ACCEPTED."
+    - "Mismatch or unavailable pixels does not permit semantic image-host acceptance."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "The exact 11/11 Agent Runtime production surface is present and screen_capture is the sole local invocation."
+  - id: AC-2
+    requirement: "Exactly one production screen_capture(target=window, window_id=7411) executes with no retry."
+  - id: AC-3
+    requirement: "Successful capture returns actual image/png MCP ImageContent plus closed capture metadata for the bound VS Code window."
+  - id: AC-4
+    requirement: "The model obtains observed_window_title from image pixels only, with the oracle embargo preserved and no fallback channel."
+  - id: AC-5
+    requirement: "No mutation, alternate capture path, OCR, UI control, terminal execution, repository action, TCC action, or Stage-B scope expansion occurs."
+  - id: AC-6
+    requirement: "Independent Architect can compare the frozen observation against the pre-task SHA authority and issue the final Stage-B judgment."
+
+terminal_states:
+  success_pending_review: NEEDS_REVIEW
+  capability_failure: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+  permission_required: SCREEN_RECORDING_PERMISSION_REQUIRED
+  capture_unproven: SCREEN_CAPTURE_LIVE_PROOF_UNPROVEN
+  host_image_unproven: MCP_IMAGE_HOST_COMPATIBILITY_UNPROVEN
+  architect_success_terminal: IMAGE_TRANSPORT_SUPPORTED
+
+downstream_if_accepted:
+  next_task: TASK-0123
+  intent: "Design separate visual-control capability work only after IMAGE_TRANSPORT_SUPPORTED."
+  visual_control_authorized_now: false
+
+git_authority:
+  create_branch: false
+  commit: false
+  push: false
+  promote_to_main: false
+
+execution_ready: true
