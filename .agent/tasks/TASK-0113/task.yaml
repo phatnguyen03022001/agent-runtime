@@ -1,0 +1,121 @@
+protocol_version: 3
+
+task_id: TASK-0113
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  predecessor_task: TASK-0112
+  predecessor_review: "239fe8792bb3813835a9d184a45c1f72e214c8a9"
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: predecessor_compatibility_fix
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  location: LOCAL
+  transport: AGENT_RUNTIME
+
+objective: "Make the smallest source correction required for the canonical cutover installer to recognize the actually installed predecessor revision b0dec3e556ff914fb9ca041c6b52f53c04ee3fd2 as the existing split-v1 ServiceManagement contract, while preserving fail-closed behavior for genuinely unknown predecessors. Do not install, activate, rebuild, re-sign, refresh the plugin, invoke screen_capture, or alter Stage-B image transport semantics."
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0112/review.yaml@239fe8792bb3813835a9d184a45c1f72e214c8a9"
+    role: "Accepted truthful INSTALL_PREBUILT_FAILED closure and exact blocker classification."
+  - source: ".agent/tasks/TASK-0111/review.yaml@f66a01b2f4e336434b2c4dd66b709f23cb27f269"
+    role: "Accepted exact immutable candidate 0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77; candidate rebuild/resign is not required."
+  - source: "macos/candidate_cutover.py"
+    role: "Canonical checkout-owned predecessor ServiceManagement contract classification and cutover implementation."
+  - source: "macos/Sources/AgentRuntimeMenuBar/ServiceManagementController.swift@b0dec3e556ff914fb9ca041c6b52f53c04ee3fd2"
+    role: "Installed predecessor exposes the split register-runtime/unregister-runtime contract and is byte-identical to the recognized split-v1 implementation blob at b5ac0ed5b461d3a259e4111e1a8f13933985f81f."
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing explicit predecessor revision classification in macos/candidate_cutover.py and regression coverage in tests/test_candidate_cutover.py."
+  rationale: "Extend the existing classification by the exact proven compatible predecessor revision; do not introduce a new abstraction or contract registry."
+
+scope:
+  required_changes:
+    - "Fresh-bind remote dev to the exact TASK-0113 planning HEAD and require main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+    - "Synchronize the clean canonical local dev checkout by ordinary fast-forward only."
+    - "Before mutation, re-prove that b0dec3e556ff914fb9ca041c6b52f53c04ee3fd2 contains the same ServiceManagementController.swift blob as recognized split-v1 revision b5ac0ed5b461d3a259e4111e1a8f13933985f81f. If this proof fails, stop BLOCKED rather than broadening scope."
+    - "Add exactly b0dec3e556ff914fb9ca041c6b52f53c04ee3fd2 to the existing SPLIT_SERVICE_MANAGEMENT_REVISIONS classification."
+    - "Add focused regression coverage proving that exact predecessor revision classifies as split-v1 and that a runtime-refresh cutover uses split Runtime unregister semantics rather than failing as unsupported."
+    - "Preserve the existing fail-closed test and behavior for an arbitrary unknown predecessor revision."
+    - "Run focused candidate-cutover tests first."
+    - "After focused PASS, run canonical ./verify exactly once. Do not retry a failed canonical verify under this task."
+    - "Publish one implementation commit and then one report-only commit on dev, non-force."
+
+allowed_repository_mutation:
+  - "macos/candidate_cutover.py"
+  - "tests/test_candidate_cutover.py"
+  - ".agent/tasks/TASK-0113/report.yaml"
+
+expected_files_are_restrictive: true
+
+invariants:
+  - "The accepted immutable candidate SHA-256 remains 0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77 and is not rebuilt, re-signed, modified, executed for installation, or replaced."
+  - "Unknown predecessor revisions continue to fail closed."
+  - "No generic compatibility inference, source hashing scheme, new manifest field, new registry, migration framework, or broader ServiceManagement redesign is introduced."
+  - "No install-prebuilt, commit-cutover, rollback, resume, recover, Runtime restart/stop/signal, ServiceManagement mutation, launchd mutation, runtime.env mutation, tunnel mutation, plugin refresh, TCC mutation, screen_capture invocation, Stage-B probe, click, type, or scroll occurs."
+  - "Stage B remains downstream and probe-only/read-only. Its only valid conclusions remain IMAGE_TRANSPORT_SUPPORTED or MCP_IMAGE_HOST_COMPATIBILITY_UNPROVEN."
+  - "No screen_capture transport change, base64-in-text fallback, OCR substitution, or image workaround is introduced."
+  - "main, tags, releases, candidate artifacts, installed app bytes, and sibling repositories remain unchanged."
+
+forbidden_changes:
+  - "Do not change screen_capture implementation, MCP ImageContent semantics, tool schema, media transport, or visual-control code."
+  - "Do not change candidate packaging/signing/provenance behavior."
+  - "Do not authorize or perform another installation attempt in this task."
+  - "Do not weaken predecessor validation globally or map unknown revisions to split-v1 by default."
+  - "Do not mutate files outside the restrictive allowlist."
+
+verification:
+  executor_checks:
+    - id: CHECK-IDENTITY
+      command_or_check: "Fresh remote/local identity, exact planning HEAD, clean dev checkout, main unchanged, and exact predecessor split-contract blob equality."
+      required: true
+    - id: CHECK-FOCUSED
+      command_or_check: "Run the focused tests for candidate_cutover predecessor classification/runtime-refresh behavior and require PASS."
+      required: true
+    - id: CHECK-UNKNOWN
+      command_or_check: "Re-prove genuinely unknown predecessor revision remains fail-closed before transaction creation."
+      required: true
+    - id: CHECK-CANONICAL
+      command_or_check: "Run ./verify exactly once after focused PASS and require exit 0."
+      required: true
+    - id: CHECK-DIFF
+      command_or_check: "Require implementation diff contains only macos/candidate_cutover.py and tests/test_candidate_cutover.py; report publication adds only .agent/tasks/TASK-0113/report.yaml."
+      required: true
+    - id: CHECK-PRESERVATION
+      command_or_check: "Read-only prove candidate/install/runtime/tunnel/TCC/main state was not mutated."
+      required: true
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Installed predecessor b0dec3e556ff914fb9ca041c6b52f53c04ee3fd2 is admitted only as the already-existing split-v1 contract on exact compatibility evidence."
+  - id: AC-2
+    requirement: "Focused regression proves classification and runtime-refresh path for b0dec3e..., while unknown predecessor behavior remains fail-closed."
+  - id: AC-3
+    requirement: "Canonical ./verify executes exactly once after focused PASS and passes."
+  - id: AC-4
+    requirement: "No product lifecycle, candidate, image-transport, Stage-B, visual-control, main, tag, release, or sibling consequence occurs."
+  - id: AC-5
+    requirement: "Repository publication is one bounded implementation commit followed by one report-only commit, both non-force on dev."
+
+terminal_states:
+  success: NEEDS_REVIEW
+  verification_failure: VERIFICATION_FAILED
+  compatibility_proof_failure: BLOCKED
+  capability_failure: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+execution_ready: true
