@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import base64
-import hashlib
 import json
 import unittest
 from pathlib import Path
@@ -14,7 +12,6 @@ from agent_runtime import server
 from agent_runtime.timing import ALLOWED_TOOL_NAMES
 
 ROOT = Path(__file__).resolve().parents[1]
-PNG = (ROOT / "tests" / "fixtures" / "task0087-tiny.png").read_bytes()
 EXPECTED_TOOLS = (
     "terminal_exec", "terminal_start", "terminal_poll", "terminal_control",
     "terminal_resize", "capacity_observer", "fs_read_batch", "repo_observer",
@@ -49,30 +46,6 @@ def _annotations(tool: object) -> tuple[bool, bool, bool, bool]:
     )
 
 
-def _framed(metadata: dict[str, object]) -> bytes:
-    return (
-        json.dumps(metadata, separators=(",", ":"), sort_keys=True).encode("utf-8")
-        + b"\n"
-        + PNG
-    )
-
-
-def _metadata() -> dict[str, object]:
-    app = {"pid": 123, "bundle_identifier": "com.example.app", "name": "Example"}
-    return {
-        "schema_version": 1, "status": "captured", "target": "frontmost_window",
-        "mime_type": "image/png", "raw_bytes": len(PNG),
-        "sha256": hashlib.sha256(PNG).hexdigest(),
-        "coordinate_space": "cg_global_points",
-        "bounds": {"x": -10.0, "y": 20.0, "width": 1.0, "height": 1.0},
-        "pixel_width": 2, "pixel_height": 2, "scale_factor": 2.0,
-        "display_id": 1, "window_id": 99,
-        "active_application": app, "captured_application": app,
-        "permission": "granted", "capture_api": "ScreenCaptureKit",
-        "deadline_seconds": 5.0,
-    }
-
-
 class ScreenCaptureMCPTests(unittest.IsolatedAsyncioTestCase):
     async def _tools(self) -> dict[str, object]:
         return {tool.name: tool for tool in await server.mcp.list_tools()}
@@ -104,7 +77,7 @@ class ScreenCaptureMCPTests(unittest.IsolatedAsyncioTestCase):
         schema = (await self._tools())["screen_capture"].output_schema
         self.assertIsNone(schema)
 
-    async def test_cross_field_failure_is_typed_bounded_error(self) -> None:
+    async def test_screen_capture_is_blocked_before_argument_validation(self) -> None:
         result = await server.mcp.call_tool("screen_capture", {"target": "window"})
         self.assertTrue(result.is_error)
         self.assertIsNone(result.structured_content)
@@ -114,41 +87,40 @@ class ScreenCaptureMCPTests(unittest.IsolatedAsyncioTestCase):
         error = json.loads(text)
         self.assertEqual(text, json.dumps(error, ensure_ascii=False, separators=(",", ":"), sort_keys=True))
         self.assertEqual(set(error), {"code", "message", "retryable"})
-        self.assertEqual(error["code"], "INVALID_ARGUMENT")
+        self.assertEqual(error["code"], "VISUAL_PERCEPTION_BLOCKED")
+        self.assertFalse(error["retryable"])
         self.assertLessEqual(len(error["message"]), 256)
         self.assertLessEqual(len(text.encode("utf-8")), screen_capture_feature.MAX_HEADER_BYTES)
 
-    async def test_success_is_one_byte_exact_png_then_one_metadata_text(self) -> None:
-        expected = _metadata()
-        with patch.object(
-            screen_capture_feature,
-            "_invoke_helper",
-            return_value=(0, _framed(expected)),
-        ):
-            result = await server.mcp.call_tool("screen_capture", {})
-        self.assertFalse(result.is_error)
+    async def test_production_guard_skips_capture_delegate_and_native_helper(self) -> None:
+        with patch.object(server, "capture_screen", side_effect=AssertionError("capture delegate invoked")) as capture:
+            with patch.object(
+                screen_capture_feature,
+                "_invoke_helper",
+                side_effect=AssertionError("native helper invoked"),
+            ) as helper:
+                result = await server.mcp.call_tool("screen_capture", {})
+
+        self.assertTrue(result.is_error)
+        self.assertIsNone(result.structured_content)
         images = [block for block in result.content if isinstance(block, ImageContent)]
         texts = [block for block in result.content if isinstance(block, TextContent)]
-        self.assertEqual(len(images), 1)
+        self.assertEqual(images, [])
         self.assertEqual(len(texts), 1)
-        self.assertIs(result.content[0], images[0])
-        self.assertIs(result.content[1], texts[0])
-        self.assertEqual(images[0].mime_type, "image/png")
-        decoded = base64.b64decode(images[0].data, validate=True)
-        self.assertEqual(decoded, PNG)
-        self.assertEqual(hashlib.sha256(decoded).hexdigest(), expected["sha256"])
-        self.assertEqual(result.structured_content, None)
-        self.assertEqual(
-            texts[0].text,
-            json.dumps(expected, ensure_ascii=False, separators=(",", ":"), sort_keys=True),
-        )
-        self.assertLessEqual(len(texts[0].text.encode("utf-8")), screen_capture_feature.MAX_HEADER_BYTES)
+        error = json.loads(texts[0].text)
+        self.assertEqual(error["code"], "VISUAL_PERCEPTION_BLOCKED")
+        self.assertFalse(error["retryable"])
+        capture.assert_not_called()
+        helper.assert_not_called()
 
     async def test_timing_and_instructions_expose_only_read_capture_boundary(self) -> None:
         self.assertIn("screen_capture", ALLOWED_TOOL_NAMES)
         self.assertIn("screen_capture", server.SERVER_INSTRUCTIONS)
-        self.assertIn("ScreenCaptureKit", server.SERVER_INSTRUCTIONS)
-        self.assertIn("cg_global_points", server.SERVER_INSTRUCTIONS)
+        self.assertIn("governance-blocked", server.SERVER_INSTRUCTIONS)
+        self.assertIn("VISUAL_PERCEPTION_BLOCKED", server.SERVER_INSTRUCTIONS)
+        self.assertIn("before native capture", server.SERVER_INSTRUCTIONS)
+        self.assertIn("future Architect re-authorization", server.SERVER_INSTRUCTIONS)
+        self.assertIn("new source verification, packaging, and activation", server.SERVER_INSTRUCTIONS)
         self.assertIn("never requested automatically", server.SERVER_INSTRUCTIONS)
 
     def test_readme_documents_exact_eleven_tool_surface(self) -> None:

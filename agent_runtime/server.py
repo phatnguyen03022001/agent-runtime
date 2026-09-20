@@ -103,8 +103,10 @@ SERVER_INSTRUCTIONS = (
     "one bound branch and permits only an exact fast-forward of the current clean branch. "
     "repo_publish performs expected-state-guarded fixed-origin publication of exactly the current clean branch HEAD "
     "when it is the sole direct child of the bound existing origin branch head; repository and task authority remain external. "
-    "screen_capture performs read-only package-owned ScreenCaptureKit capture and returns one PNG image plus closed "
-    "cg_global_points metadata; Screen Recording permission must already be granted and is never requested automatically."
+    "screen_capture remains exposed for contract compatibility, but visual perception is governance-blocked in "
+    "production: every invocation returns typed VISUAL_PERCEPTION_BLOCKED before native capture and produces no "
+    "image; only future Architect re-authorization plus new source verification, packaging, and activation may "
+    "change that state; Screen Recording permission is never requested automatically."
 )
 mcp = MCPServer(
     name="Agent Runtime",
@@ -418,12 +420,15 @@ def screen_capture(
     width: ScreenCaptureExtent | None = None,
     height: ScreenCaptureExtent | None = None,
 ) -> CallToolResult:
-    """Capture one bounded macOS screen target through the package-owned native helper."""
+    """Return a production governance denial before capture_screen or the native helper can execute."""
 
-    try:
-        return capture_screen(target, window_id, application_bundle_id, display_id, x, y, width, height)
-    except ScreenCaptureFailure as exc:
-        return capture_failure_result(exc)
+    return capture_failure_result(
+        ScreenCaptureFailure(
+            "VISUAL_PERCEPTION_BLOCKED",
+            "visual perception is governance-blocked in production",
+            retryable=False,
+        )
+    )
 
 
 def _install_timing_middleware() -> None:

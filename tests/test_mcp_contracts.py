@@ -386,7 +386,11 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
             "repo_fast_forward",
             "repo_publish",
             "screen_capture",
-            "ScreenCaptureKit",
+            "visual perception is governance-blocked",
+            "VISUAL_PERCEPTION_BLOCKED",
+            "before native capture",
+            "future Architect re-authorization",
+            "new source verification, packaging, and activation",
             "fixed-origin",
             "publication",
         ):

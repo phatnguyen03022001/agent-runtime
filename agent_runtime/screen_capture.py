@@ -32,6 +32,7 @@ _SCREEN_ERROR_CODES = frozenset(
         "CAPTURE_HELPER_UNAVAILABLE",
         "DEADLINE_EXCEEDED",
         "INTERNAL_ERROR",
+        "VISUAL_PERCEPTION_BLOCKED",
     }
 )
 
