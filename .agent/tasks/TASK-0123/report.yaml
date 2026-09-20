@@ -1,0 +1,61 @@
+protocol_version: 3
+
+task_id: TASK-0123
+task_revision: 1
+report_revision: 1
+state: NEEDS_REVIEW
+
+execution:
+  surface: CHATGPT_GITHUB
+  planning_head: "e9b3c9aa947da0eb905afd10a71a955f1a1e466a"
+  access_date: "2026-09-21"
+
+classification:
+  value: PUBLIC_CONTRACT_INSUFFICIENT
+
+official_findings:
+  - "OpenAI Plugin Reference documents structuredContent and content as surfaced to the model/component, while _meta is component-only."
+  - "Current public OpenAI documentation does not explicitly define MCP ImageContent(image/png) from a ChatGPT custom app as semantic model vision input."
+  - "OpenAI documents a separate computer-use screenshot path using computer_call_output/computer_screenshot for visual context."
+  - "MCP Apps UI/resource support is a component/UI path and is not evidence that the model semantically inspects returned pixels."
+
+repository_findings:
+  runtime_media_first_imagecontent_present: true
+  mcp_wire_byte_preservation_previously_proven: true
+  runtime_regression_proven: false
+  task_0122_stage_b_terminal: MCP_IMAGE_HOST_COMPATIBILITY_UNPROVEN
+
+research_questions:
+  RQ_1: AMBIGUOUS
+  RQ_2: NOT_EXPLICITLY_DOCUMENTED
+  RQ_3: DOCUMENTED_ALTERNATIVES_EXIST_BUT_ON_DIFFERENT_SEMANTICS_OR_SURFACES
+  RQ_4: "Documented computer-use visual feedback requires a different Responses API/computer-use integration architecture; MCP Apps UI/resource is UI rendering, not model-vision proof."
+  RQ_5: "Narrowest unresolved boundary is ChatGPT host-ingestion -> model semantic vision."
+  RQ_6: PUBLIC_CONTRACT_DOES_NOT_ESTABLISH_A_BUG
+
+boundary:
+  proven:
+    - "Agent Runtime production emits MCP ImageContent(image/png)."
+    - "Repository wire tests preserve image bytes/SHA across MCP client/server boundary."
+    - "Postcommit CHATGPT_LOCAL MCP continuity is accepted."
+  unproven:
+    - "ChatGPT custom-app MCP ImageContent is promoted to semantically inspectable model vision input."
+    - "Whether the remaining gap is specifically host ingestion or model modality promotion."
+
+architecture_judgment:
+  runtime_change_justified: false
+  stage_b_retry_justified: false
+  visual_control_may_be_unblocked: false
+  supported_next_step: "Prepare a standards-conformance/support repro/question using existing evidence. Do not change production Runtime."
+
+rejected_workarounds:
+  - OCR
+  - base64_in_text
+  - textual_image_description_substitute
+  - zip_or_google_drive_side_channel
+  - file_upload_side_channel
+  - operator_manual_rpc
+  - changing_screen_capture_for_undocumented_host_behavior
+  - treating_ui_rendering_as_model_semantic_vision
+
+result: PASS
