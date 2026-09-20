@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0120
-task_revision: 3
+task_revision: 4
 state: APPROVED
 
 origin:
-  type: architect_rework_after_executor_live_probe_limitation
+  type: architect_rework_after_codex_remote_authority_limitation
   predecessor_task: TASK-0120
-  predecessor_task_revision: 2
-  predecessor_report: "532e6bf1ef91c379572d31043637c0499d89ca81"
-  predecessor_review: "ecc14016b4217afd8b724fcd9921678567d8f40b"
+  predecessor_task_revision: 3
+  predecessor_report: "2c9562c9deba2902b28c3f963cf8e47916f1f2f7"
+  predecessor_review: "8e4b5da956d1372ceadad694aa762933d1f6c9c6"
   predecessor_terminal: CUTOVER_COMMIT_PRECONDITION_UNPROVEN
   accepted_predecessor_task: TASK-0119
   accepted_predecessor_review: "c9414867ddaaa95a59d914c6328cbfe81bf658a0"
@@ -27,11 +27,20 @@ execution_surface:
   transport: NATIVE
   rationale: "Cutover commit finalizes Agent Runtime transaction state and must not depend on the Agent Runtime transport that is being finalized."
 
-objective: "Execute the still-unconsumed canonical cutover commit exactly once after minimal exact static guards that CODEX_LOCAL can prove reliably. Do not require CODEX_LOCAL to prove live tunnel or HTTP health before commit. After COMMITTED, prove transaction absence and unchanged static identities; Architect performs independent live tunnel/health verification before acceptance."
+objective: "Execute the still-unconsumed canonical cutover commit exactly once after minimal exact LOCAL static guards. Remote task authority is Architect-bound before launch and MUST NOT be re-proven by CODEX_LOCAL. After COMMITTED, prove transaction absence and unchanged local static identities; Architect independently verifies remote lineage plus live tunnel/health before acceptance."
 
 accepted_authority:
   task_0118_review: "4bd4f880a3bfd0946b4250ed157dd13f248d2e0d"
   task_0119_review: "c9414867ddaaa95a59d914c6328cbfe81bf658a0"
+
+architect_remote_binding:
+  bound_before_launch: true
+  predecessor_review_head: "8e4b5da956d1372ceadad694aa762933d1f6c9c6"
+  remote_main: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  task_0119_review_commit: "c9414867ddaaa95a59d914c6328cbfe81bf658a0"
+  task_0119_review_state: ACCEPTED
+  task_0119_review_in_ancestry: true
+  executor_rule: "Do not perform GitHub/network reads to re-prove remote authority. The exact revision-4 planning HEAD is supplied in the Architect execution packet after publication and is launcher metadata, not a CODEX_LOCAL precondition."
   candidate_sha256: "0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77"
   handoff_sha256: "f8e75129f942fe67541229a598ed8761be574ec5547ffd306c606131718130a8"
   candidate_source_revision: "18cdb515fe037c9b6cb81ce6529d85ae734e195a"
@@ -63,7 +72,8 @@ canonical_paths:
 authority_counters:
   revision_1_precommit_probe: "1/1 consumed as false-negative evidence"
   revision_2_precommit_probe: "1/1 consumed as executor-limitation evidence"
-  revision_3_precommit_probe: "0/1 fresh minimal static probe"
+  revision_3_precommit_probe: "1/1 consumed as remote-authority limitation evidence"
+  revision_4_precommit_probe: "0/1 fresh local-static probe"
   commit_cutover: "0/1 remains unconsumed"
   postcommit_probe: "0/1"
   retries: 0
@@ -79,17 +89,17 @@ precommit:
     revision_1:
       terminal: CUTOVER_COMMIT_PRECONDITION_UNPROVEN
       commit_cutover_invocations: 0
-      diagnosis: FALSE_NEGATIVE_PRECOMMIT_PROBE
     revision_2:
       terminal: CUTOVER_COMMIT_PRECONDITION_UNPROVEN
       commit_cutover_invocations: 0
-      diagnosis: EXECUTOR_LIVE_PROBE_AND_AUTHORITY_BINDING_FAILURE
-      architect_review: "ecc14016b4217afd8b724fcd9921678567d8f40b"
-  probe_authority: "0/1 fresh revision-3 minimal static read-only probe"
+    revision_3:
+      terminal: CUTOVER_COMMIT_PRECONDITION_UNPROVEN
+      commit_cutover_invocations: 0
+      diagnosis: CODEX_LOCAL_REMOTE_AUTHORITY_PROOF_LIMITATION
+      architect_review: "8e4b5da956d1372ceadad694aa762933d1f6c9c6"
+  probe_authority: "0/1 fresh revision-4 local-static read-only probe"
   requirements:
-    - "Resolve TASK-0120 revision 3 from GitHub at the exact operator-supplied planning HEAD. Report that exact planning HEAD verbatim; do not substitute TASK-0119 or another prior task head."
-    - "Fresh-resolve remote dev/main; require dev equals the exact revision-3 planning HEAD and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
-    - "Require TASK-0119 review c9414867ddaaa95a59d914c6328cbfe81bf658a0 is in ancestry and state ACCEPTED."
+    - "Do NOT fetch GitHub, inspect remote refs, contact network services, or re-prove remote dev/main/TASK-0119 ancestry. Remote authority is already Architect-bound in this task and in the operator-supplied execution packet."
     - "Do not synchronize the local checkout. Require local repository branch dev, HEAD exactly 90203f901d2503f2289cbbfd8cfdce0bd0126a63, and clean working tree."
     - "Require git blob identity of install.sh equals 7384cff41328467b2d044f17f94d3009ead76250 and macos/candidate_cutover.py equals 4578037bf12b34550a9d0648ac7ec49876588ff1."
     - "Read exactly /Users/tienphat/Library/Application Support/Agent Runtime/cutover-transaction/metadata.json. Require regular non-symlink file, schema=5, status=PENDING, phase=APP_SWAPPED."
@@ -97,8 +107,8 @@ precommit:
     - "Require transaction-owned candidate-handoff.json is regular/non-symlink and SHA-256 equals f8e75129f942fe67541229a598ed8761be574ec5547ffd306c606131718130a8."
     - "Require installed runtime-manifest.json is regular/non-symlink with schema=1, owner=com.picmao.agent-runtime, runtime_revision=18cdb515fe037c9b6cb81ce6529d85ae734e195a, git_tree=ed9a2b089d2f17d2a66eb25da4277f00d418bd07, requirements_lock_sha256=80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e."
     - "Require runtime.env is regular/non-symlink, mode 0600, SHA-256=6e6fef8e255b140f28703f8bd515726e1fd93d644e6f838b33ebf319e8133077. Do not read or return raw values."
-    - "Do NOT inspect lsof, ps, tunnel process identity, /healthz, or /readyz in the revision-3 Executor precommit probe. Those live predicates are explicitly deferred to independent Architect postcommit review."
-    - "Perform all revision-3 precommit checks in exactly one bounded read-only probe. If any required static predicate fails, stop CUTOVER_COMMIT_PRECONDITION_UNPROVEN without invoking commit-cutover."
+    - "Do NOT inspect lsof, ps, tunnel identity, /healthz, or /readyz. These are Architect review predicates."
+    - "Perform all revision-4 local-static precommit checks in exactly one bounded read-only probe. If any required local-static predicate fails, stop CUTOVER_COMMIT_PRECONDITION_UNPROVEN without invoking commit-cutover."
   failure_terminal: CUTOVER_COMMIT_PRECONDITION_UNPROVEN
 
 commit:
@@ -106,7 +116,7 @@ commit:
   command: "./install.sh --commit-cutover"
   cwd: "/Users/tienphat/Developer/agent-runtime"
   requirements:
-    - "Execute the canonical command exactly once only after every corrected revision-2 precommit predicate PASS."
+    - "Execute the canonical command exactly once only after every revision-4 local-static precommit predicate PASS."
     - "Do not wrap, encode, split, alias, or transform the command to obtain a different safety judgment."
     - "Do not retry under any outcome."
     - "Success requires exit code 0 and canonical result status COMMITTED."
@@ -154,9 +164,13 @@ reporting:
   repository_mutation_authority: NONE
   revision_1_report: "40611298d83ffc01670c13d1c8fe0775167e7560"
   revision_1_review: "8b862b68754fb364382eb381d7c6d35dc4359d91"
+  revision_2_report: "532e6bf1ef91c379572d31043637c0499d89ca81"
+  revision_2_review: "ecc14016b4217afd8b724fcd9921678567d8f40b"
+  revision_3_report: "2c9562c9deba2902b28c3f963cf8e47916f1f2f7"
+  revision_3_review: "8e4b5da956d1372ceadad694aa762933d1f6c9c6"
   executor_output:
     - "Return only a bounded Vietnamese result packet."
-    - "State exact remote planning HEAD, local consequence source identity, precommit result, commit invocation count/exit/result, postcommit result, and all forbidden-effect counters."
+    - "Echo the exact revision-4 planning HEAD supplied in the Architect execution packet without attempting to verify it over the network. State local consequence source identity, precommit result, commit invocation count/exit/result, postcommit result, and all forbidden-effect counters."
     - "Do not disclose secrets, raw runtime.env values, tunnel IDs, credentials, tokens, cookies, or unrelated host state."
   architect_persistence:
     - "After the Executor result, Architect independently verifies live tunnel executable identity, listener count, /healthz and /readyz using a Runtime-independent read-only mechanism."
@@ -164,9 +178,9 @@ reporting:
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "Remote task authority and exact clean local consequence source are independently bound without repository synchronization."
+    requirement: "Architect-bound remote task authority is accepted from the canonical execution packet; CODEX_LOCAL independently proves only the exact clean local consequence source without repository synchronization or network access."
   - id: AC-2
-    requirement: "One fresh bounded revision-3 precommit probe proves exact remote authority, exact clean local source, unchanged PENDING/APP_SWAPPED pinned transaction, installed manifest identity, and runtime.env identity without requiring CODEX_LOCAL live tunnel/health observation."
+    requirement: "One fresh bounded revision-4 local-static precommit probe proves exact clean local source, unchanged PENDING/APP_SWAPPED pinned transaction, installed manifest identity, and runtime.env identity without network or live tunnel/health observation."
   - id: AC-3
     requirement: "Canonical ./install.sh --commit-cutover executes exactly once, with no retry, and returns COMMITTED."
   - id: AC-4
