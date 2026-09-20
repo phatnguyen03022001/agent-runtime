@@ -1,108 +1,112 @@
 protocol_version: 3
 
 task_id: TASK-0111
-task_revision: 1
+task_revision: 2
 state: APPROVED
 
 origin:
-  type: architect
-  predecessor_task: TASK-0110
-  predecessor_review: "8c29525c98a2aeb72ae54500220197ec1033c546"
-  gap_id: "screen_capture_display_region_nil_wire_contract"
+  type: architect_recovery
+  task_id: TASK-0111
+  predecessor_revision: 1
+  predecessor_review: "0e67ad3fa5b8ec165e2a255996a475a048c20e8b"
+  gap_id: "codex_local_unix_socket_sandbox_capability_gap"
 
 target:
   repository: phatnguyen03022001/agent-runtime
   branch:
     name: dev
-    role: screen_capture_display_region_wire_contract_repair
+    role: host_capable_verification_and_candidate_freeze
 
 execution_surface:
-  id: CODEX_LOCAL
-  controller: CODEX
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
   location: LOCAL
-  transport: NATIVE
+  transport: AGENT_RUNTIME
 
-objective: "Repair the exact Swift↔Python screen_capture wire-contract bug for display/region targets by emitting explicit null keys for nullable-required metadata fields, add regression coverage, run canonical verification once, and package/sign/freeze one new immutable candidate. Do not install or activate it."
+objective: "Prove the accepted screen_capture wire fix on a host-capable CHATGPT_LOCAL execution path, run canonical ./verify exactly once under fresh authority, and only on PASS package/sign/validate/freeze exactly one new immutable candidate. No source mutation and no install/activation."
 
-root_cause:
-  classification: "OPTIONAL_NIL_JSON_KEY_OMISSION"
-  evidence:
-    - "Swift resolveDisplay() sets windowID=nil and capturedApplication=nil for display and region targets."
-    - "Synthesized Codable omits Optional nil keys from JSON."
-    - "Python ScreenCaptureMetadata declares window_id: int | None and captured_application: ScreenCaptureApplication | None without defaults, therefore nullable but required."
-    - "ScreenCaptureMetadata.model_validate(header) rejects missing keys and returns CAPTURE_PROTOCOL_ERROR invalid screen capture metadata."
-    - "Window-based targets serialize both keys because values are non-nil."
-    - "Existing Swift wire test covers only non-nil window metadata and therefore misses this contract."
-  platform_block_indicated: false
-  production_png_path_indicated: true
+accepted_implementation:
+  commit: "9640122ede05137f12839ed0147236733554367b"
+  changed_paths:
+    - macos/Sources/AgentRuntimeCore/ScreenCapture.swift
+    - macos/Tests/AgentRuntimeCoreTests/ScreenCaptureTests.swift
+    - tests/test_screen_capture.py
+  focused_evidence:
+    swift: "9/9 PASS"
+    python_mcp: "32/32 PASS"
 
-required_fix:
-  - "Preserve the Python ScreenCaptureMetadata contract exactly; do not weaken required nullable fields by adding defaults."
-  - "Implement explicit Swift encoding for ScreenCaptureMetadata so window_id and captured_application are always present in the JSON object, using JSON null when nil."
-  - "Preserve existing snake_case wire names, all other fields, ordering irrelevance, framing, PNG bytes and bounded header behavior."
-  - "Do not change public MCP tool name, input schema, output_schema=None, media-first ImageContent+TextContent result shape or target semantics."
+preconditions:
+  - "Resolve canonical task directly from GitHub at exact revision-2 planning HEAD."
+  - "Fresh-resolve remote dev/main; require dev equals exact planning HEAD and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "Synchronize clean local dev checkout to exact planning HEAD by authorized fast-forward only."
+  - "Require accepted implementation commit 9640122ede05137f12839ed0147236733554367b in ancestry."
+  - "Require working tree clean."
+  - "Do not modify source/tests/docs/requirements."
 
-required_tests:
-  - "Add Swift wire regression proving display-style metadata with windowID=nil and capturedApplication=nil serializes both keys explicitly as JSON null."
-  - "Add or extend Python/native integration regression so display and region framed metadata with explicit null keys validates successfully."
-  - "Preserve existing window/frontmost/application capture tests."
-  - "Require no regression in media-first ImageContent first, TextContent metadata second contract."
+host_capability_preflight:
+  authority: "0/1"
+  requirements:
+    - "Before canonical verification, use terminal_exec to create one temporary AF_UNIX socket under /tmp, bind it, close it, remove it, and prove cleanup."
+    - "This probe must perform no repository mutation."
+    - "If AF_UNIX bind is blocked or denied, stop CURRENT_PHASE_CAPABILITY_UNAVAILABLE before consuming canonical verify authority."
+    - "Do not reroute to another surface after a failed host-capability preflight."
 
 verification:
-  focused:
-    - "Run Swift ScreenCaptureTests."
-    - "Run Python screen_capture, screen_capture_mcp and MCP contract tests."
-    - "Run any newly added targeted display/region regression tests."
   canonical:
     authority: "0/1"
     command: "./verify"
     requirements:
-      - "Run exactly once after focused tests PASS."
+      - "Run exactly once after AF_UNIX preflight PASS."
       - "No retry."
       - "Require exit_code=0."
-  package:
-    authority: "0/1"
-    requirements:
-      - "Only after canonical verification PASS."
-      - "Use canonical packaging interpreter and exactly one valid non-ad-hoc codesigning identity."
-      - "Package/sign/freeze exactly one new candidate."
-      - "Do not disclose or persist signing identity literal/fingerprint."
-      - "No retry."
-      - "Require strict codesign, validate-candidate, provenance, immutable closure and TeamIdentifier closure PASS."
+      - "Require no test failures or errors."
+  focused_rerun:
+    required: false
+    reason: "Revision-1 focused screen_capture verification is Architect-accepted and no source mutation is authorized in revision 2."
+
+packaging:
+  authority: "0/1"
+  precondition: "Canonical verification PASS only."
+  requirements:
+    - "Use the canonical packaging interpreter identity CPython 3.13.x/cpython-313/macOS arm64."
+    - "Use exactly one valid non-ad-hoc signing identity bound non-disclosingly in-process."
+    - "Invoke package_app.sh exactly once."
+    - "No retry."
+    - "Require strict codesign, validate-candidate, source revision/tree, requirements lock, immutable closure and matching non-null TeamIdentifier closure PASS."
+    - "Candidate source revision must equal exact TASK-0111 revision-2 planning HEAD."
+    - "Record candidate SHA-256, app path, handoff path, handoff SHA-256, source revision/tree and requirements lock SHA-256."
 
 scope:
-  allowed_tracked_mutation:
-    - "macos/Sources/AgentRuntimeCore/ScreenCapture.swift"
-    - "macos/Tests/AgentRuntimeCoreTests/ScreenCaptureTests.swift"
-    - "tests/test_screen_capture.py"
-    - "tests/test_screen_capture_mcp.py"
+  allowed_repository_mutation:
     - ".agent/tasks/TASK-0111/report.yaml"
+  allowed_ignored_artifacts:
+    - "build/candidates/**"
   expected_files_are_restrictive: true
 
 forbidden_changes:
-  - "Do not weaken Python metadata schema to make missing nullable-required keys acceptable."
-  - "Do not modify unrelated Runtime, tunnel, lifecycle, terminal_exec, repo tools or dependency contracts."
+  - "Do not modify implementation/source/tests/docs/dependencies."
+  - "Do not run canonical ./verify more than once."
+  - "Do not package if canonical verify is non-zero."
   - "Do not install-prebuilt."
-  - "Do not install/replace Agent Runtime.app."
+  - "Do not install or replace Agent Runtime.app."
   - "Do not create or mutate cutover transaction state."
   - "Do not restart/stop/signal Runtime."
   - "Do not refresh ChatGPT plugin."
-  - "Do not invoke live screen_capture as execution proof."
+  - "Do not invoke live screen_capture."
   - "Do not mutate TCC."
   - "Do not mutate main/tags/releases/sibling repositories."
   - "Do not force-push."
 
 publication:
-  - "On PASS publish one implementation successor containing only authorized tracked implementation/test paths."
-  - "Publish TASK-0111 report as sole direct child of implementation successor."
-  - "If canonical verify or packaging fails, publish truthful report-only terminal and do not widen scope."
+  - "Publish truthful report-only commit as sole direct child of planning HEAD."
+  - "No implementation commit is authorized."
 
 terminal_states:
   success: NEEDS_REVIEW
+  host_capability_failure: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
   verification_failure: CANONICAL_VERIFICATION_FAILED
   packaging_failure: PACKAGING_FAILED
   candidate_validation_failure: CANDIDATE_VALIDATION_FAILED
-  capability_failure: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
 
 git_authority:
   create_branch: false
