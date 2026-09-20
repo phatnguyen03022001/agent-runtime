@@ -821,18 +821,14 @@ class CandidateCutoverTests(unittest.TestCase):
             self.assertEqual(cutover._predecessor_service_contract(fx["target"]), "split-v1")
 
     def test_installed_predecessor_revision_is_recognized_as_split_v1(self) -> None:
-        revision = "18cdb515fe037c9b6cb81ce65287b64793d840a30267d9c4eac1dbf41720a77"
+        revision = "18cdb515fe037c9b6cb81ce6529d85ae734e195a"
         with tempfile.TemporaryDirectory() as raw:
-            _, cutover, fx = self._fixture(raw, predecessor_revision="a" * 40)
-            manifest_path = fx["target"] / "Contents" / "Resources" / "runtime-manifest.json"
-            manifest = json.loads(manifest_path.read_text())
-            manifest["runtime_revision"] = revision
-            manifest_path.write_text(json.dumps(manifest) + "\n")
-            with mock.patch.object(cutover, "_runtime_manifest_revision", return_value=revision):
-                self.assertEqual(cutover._predecessor_service_contract(fx["target"]), "split-v1")
+            _, cutover, fx = self._fixture(raw, predecessor_revision=revision)
+            self.assertEqual(cutover._runtime_manifest_revision(fx["target"]), revision)
+            self.assertEqual(cutover._predecessor_service_contract(fx["target"]), "split-v1")
 
     def test_installed_split_v1_predecessor_refresh_uses_split_runtime_contract(self) -> None:
-        exact_revision = "18cdb515fe037c9b6cb81ce65287b64793d840a30267d9c4eac1dbf41720a77"
+        exact_revision = "18cdb515fe037c9b6cb81ce6529d85ae734e195a"
         revisions = (
             "b0dec3e556ff914fb9ca041c6b52f53c04ee3fd2",
             exact_revision,
@@ -840,38 +836,32 @@ class CandidateCutoverTests(unittest.TestCase):
         for revision in revisions:
             with self.subTest(revision=revision):
                 with tempfile.TemporaryDirectory() as raw:
-                    fixture_revision = "a" * 40 if revision == exact_revision else revision
-                    provenance, cutover, fx = self._fixture(raw, predecessor_revision=fixture_revision)
-                    if fixture_revision != revision:
-                        manifest_path = fx["target"] / "Contents" / "Resources" / "runtime-manifest.json"
-                        manifest = json.loads(manifest_path.read_text())
-                        manifest["runtime_revision"] = revision
-                        manifest_path.write_text(json.dumps(manifest) + "\n")
-                    with mock.patch.object(cutover, "_runtime_manifest_revision", return_value=revision):
-                        self.assertEqual(cutover._predecessor_service_contract(fx["target"]), "split-v1")
-                        fx["modern_state"].update(main_app="enabled", runtime_agent="enabled")
-                        self._set_launch_program(
-                            fx,
-                            f"gui/501/{MODERN_RUNTIME_LABEL}",
-                            fx["target"] / "Contents/MacOS/AgentRuntimeRuntimeService",
-                        )
-                        helper = fx["candidate"] / "Contents/MacOS/AgentRuntimeRuntimeService"
-                        helper.write_bytes(helper.read_bytes() + b"installed-split-refresh\n")
-                        provenance.seal_candidate(fx["candidate"], fx["handoff"])
+                    provenance, cutover, fx = self._fixture(raw, predecessor_revision=revision)
+                    self.assertEqual(cutover._runtime_manifest_revision(fx["target"]), revision)
+                    self.assertEqual(cutover._predecessor_service_contract(fx["target"]), "split-v1")
+                    fx["modern_state"].update(main_app="enabled", runtime_agent="enabled")
+                    self._set_launch_program(
+                        fx,
+                        f"gui/501/{MODERN_RUNTIME_LABEL}",
+                        fx["target"] / "Contents/MacOS/AgentRuntimeRuntimeService",
+                    )
+                    helper = fx["candidate"] / "Contents/MacOS/AgentRuntimeRuntimeService"
+                    helper.write_bytes(helper.read_bytes() + b"installed-split-refresh\n")
+                    provenance.seal_candidate(fx["candidate"], fx["handoff"])
 
-                        result = self._cutover(cutover, fx)
+                    result = self._cutover(cutover, fx)
 
-                        self.assertEqual(result["status"], "PENDING")
-                        metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
-                        self.assertEqual(metadata["predecessor_service_contract"], "split-v1")
-                        predecessor_ops = [
-                            operation
-                            for app_revision, operation in fx["service_revision_operations"]
-                            if app_revision == revision
-                        ]
-                        self.assertIn("unregister-runtime", predecessor_ops)
-                        self.assertNotIn("unregister", predecessor_ops)
-                        self.assertNotIn("register-runtime", predecessor_ops)
+                    self.assertEqual(result["status"], "PENDING")
+                    metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
+                    self.assertEqual(metadata["predecessor_service_contract"], "split-v1")
+                    predecessor_ops = [
+                        operation
+                        for app_revision, operation in fx["service_revision_operations"]
+                        if app_revision == revision
+                    ]
+                    self.assertIn("unregister-runtime", predecessor_ops)
+                    self.assertNotIn("unregister", predecessor_ops)
+                    self.assertNotIn("register-runtime", predecessor_ops)
 
     def test_preswap_stale_aggregate_refresh_rolls_back_without_candidate_identity_check(self) -> None:
         old_revision = "4fbf5b1b0ef3708c8fff479ca6718344f3bfd3c0"
