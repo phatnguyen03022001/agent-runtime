@@ -1,0 +1,206 @@
+protocol_version: 3
+
+task_id: TASK-0118
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  predecessor_task: TASK-0117
+  predecessor_review: "c218be91ca02d152ca8aa79974b8d83f0e4ddda9"
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: pinned_candidate_activation
+
+execution_surface:
+  id: CODEX_LOCAL
+  controller: CODEX
+  location: LOCAL
+  transport: NATIVE
+
+objective: "Install the exact Architect-accepted immutable Agent Runtime candidate exactly once through the explicit TASK-0117 pinned install-prebuilt path, then prove the resulting schema-5 PENDING/APP_SWAPPED local activation and unchanged tunnel configuration. Stop before cutover commit, ChatGPT plugin/connector refresh, CHATGPT_LOCAL proof, screen capture, or Stage B."
+
+accepted_authority:
+  task_0117_review: "c218be91ca02d152ca8aa79974b8d83f0e4ddda9"
+  candidate_sha256: "0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77"
+  handoff_sha256: "f8e75129f942fe67541229a598ed8761be574ec5547ffd306c606131718130a8"
+  candidate_source_revision: "18cdb515fe037c9b6cb81ce6529d85ae734e195a"
+  candidate_source_tree: "ed9a2b089d2f17d2a66eb25da4277f00d418bd07"
+  requirements_lock_sha256: "80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
+  candidate_path: "/Users/tienphat/Developer/agent-runtime/build/candidates/0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77/Agent Runtime.app"
+  handoff_path: "/Users/tienphat/Developer/agent-runtime/build/candidates/0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77/Agent Runtime.candidate.json"
+  installed_target: "/Users/tienphat/Applications/Agent Runtime.app"
+  transaction_dir: "/Users/tienphat/Library/Application Support/Agent Runtime/cutover-transaction"
+  runtime_env: "/Users/tienphat/Library/Application Support/Agent Runtime/runtime.env"
+
+preconditions:
+  - "Resolve TASK-0118 revision 1 directly from GitHub at the exact planning HEAD."
+  - "Fresh-resolve remote dev/main; require dev equals the planning HEAD and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "Require canonical TASK-0117 review c218be91ca02d152ca8aa79974b8d83f0e4ddda9 in ancestry and state ACCEPTED."
+  - "Require the designated local checkout /Users/tienphat/Developer/agent-runtime has exact owner/repo identity, branch dev, is clean, and is synchronized to the planning HEAD by ordinary fast-forward only."
+  - "Require the accepted candidate path is a regular non-symlink directory and the accepted handoff is a regular non-symlink file."
+  - "Recompute the handoff file SHA-256 and require exact f8e75129f942fe67541229a598ed8761be574ec5547ffd306c606131718130a8."
+  - "Require no cutover transaction exists at the canonical transaction_dir before mutation. If present, stop PREEXISTING_CUTOVER_TRANSACTION."
+  - "Require canonical runtime.env is a regular non-symlink file. Record only its SHA-256 and file mode; do not print or persist its contents or individual secret values."
+  - "Require the current Runtime desired state is RUNNING and the pre-install local Runtime is healthy and ready: exactly one canonical tunnel-client listener owns 127.0.0.1:8080 and both /healthz and /readyz succeed."
+  - "Record a sanitized pre-install tunnel identity proof: resolved tunnel-client executable path plus executable SHA-256, listener count, and bounded argv-shape predicates only. Do not persist PID as an identity invariant and do not expose credentials or tunnel IDs."
+  - "Do not perform live certificate-trust diagnosis or strict codesign verification. TASK-0118 relies on the accepted pinned validation path."
+
+install_authority:
+  invocation: "1/1"
+  retry: false
+  exact_command_shape:
+    - ./install.sh
+    - --install-prebuilt
+    - "/Users/tienphat/Developer/agent-runtime/build/candidates/0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77/Agent Runtime.app"
+    - "/Users/tienphat/Developer/agent-runtime/build/candidates/0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77/Agent Runtime.candidate.json"
+    - --expected-candidate-sha256
+    - "0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77"
+    - --expected-handoff-sha256
+    - "f8e75129f942fe67541229a598ed8761be574ec5547ffd306c606131718130a8"
+  requirements:
+    - "Invoke the exact pinned install-prebuilt action once and only once."
+    - "Do not rebuild, package, freeze, re-sign, copy-repair, or otherwise modify the accepted candidate before invocation."
+    - "Do not retry the install after host process creation under any terminal result."
+    - "Do not substitute the legacy three-argument strict install-prebuilt form."
+    - "Do not invoke candidate_cutover.py directly as a substitute."
+    - "Capture bounded stdout/stderr and exact exit code without exposing secrets."
+
+success_postconditions:
+  transaction:
+    - "Canonical transaction_dir exists as a regular directory."
+    - "metadata.json is schema 5, status PENDING, phase APP_SWAPPED."
+    - "candidate.candidate_sha256 equals the accepted candidate SHA-256."
+    - "candidate source_revision/source_tree/requirements-lock identities equal the accepted candidate authority."
+    - "candidate_validation.mode equals pinned."
+    - "candidate_validation.expected_candidate_sha256 equals the exact accepted candidate SHA-256."
+    - "candidate_validation.expected_handoff_sha256 equals the exact accepted handoff SHA-256."
+    - "The transaction-owned candidate-handoff.json SHA-256 equals the accepted handoff SHA-256."
+  installed_candidate:
+    - "Run the read-only validate-pinned-candidate subcommand exactly once post-install against /Users/tienphat/Applications/Agent Runtime.app and the transaction-owned candidate-handoff.json using the same two external expected hashes."
+    - "The post-install pinned validator must PASS and must not invoke live certificate trust."
+    - "The installed app embedded runtime manifest/source/tree/lock and responsible TeamIdentifier equality must remain consistent with the accepted external handoff."
+  runtime_configuration:
+    - "Recompute canonical runtime.env SHA-256 and file mode; require exact equality with pre-install values."
+    - "Do not read or persist raw runtime.env values."
+  local_activation:
+    - "Require the desired-state marker remains RUNNING."
+    - "Require exactly one listener on 127.0.0.1:8080."
+    - "Require the listener resolves to the same canonical tunnel-client executable path and executable SHA-256 recorded before installation."
+    - "Require the listener argv shape remains canonical: run, poll-channel main, MCP command for agent_runtime.server channel main, health listen address 127.0.0.1:8080. Do not persist secret-bearing values."
+    - "Require HTTP /healthz PASS and /readyz PASS after cutover."
+    - "Do not require the tunnel PID to remain unchanged; process replacement is permitted."
+  git:
+    - "No tracked implementation file changes are permitted in TASK-0118."
+    - "Before writing report.yaml, require the working tree is clean."
+
+awaiting_approval_behavior:
+  trigger: "The one install invocation returns or leaves the canonical transaction in AWAITING_APPROVAL."
+  terminal: OPERATOR_INPUT_REQUIRED
+  requirements:
+    - "Do not retry install, registration, resume, start, restart, or ServiceManagement mutation."
+    - "Do not open System Settings or mutate approval state."
+    - "Record schema/status/phase, exact pinned validation metadata, installed candidate identity, runtime.env SHA preservation, and bounded current registration/health state."
+    - "Preserve the transaction for a separately authorized continuation."
+
+install_failure_behavior:
+  terminal: INSTALL_PREBUILT_FAILED
+  requirements:
+    - "Do not retry."
+    - "Read only enough state to establish whether canonical rollback completed, whether transaction_dir remains, whether installed predecessor/candidate is present, and whether runtime.env remained unchanged."
+    - "Do not manually rollback unless a later task explicitly authorizes it."
+    - "Do not repair trust/keychain state, ServiceManagement state, launchd state, candidate bytes, or Runtime configuration."
+
+postinstall_proof_failure_behavior:
+  terminal: POSTINSTALL_PROOF_FAILED
+  requirements:
+    - "Use when the install invocation reports success/PENDING but one or more mandatory postconditions cannot be proven."
+    - "Leave the PENDING transaction intact."
+    - "Do not commit or rollback the cutover."
+    - "Do not retry install or mutate lifecycle merely to make a proof green."
+
+verification:
+  canonical_verify_invocations: 0
+  focused_test_invocations: 0
+  rationale: "TASK-0117 already verified the exact implementation. TASK-0118 is a bounded live consequence proof, not a new source implementation task."
+
+scope:
+  allowed_repository_mutation:
+    - ".agent/tasks/TASK-0118/report.yaml"
+  expected_files_are_restrictive: true
+  allowed_product_mutation:
+    - "The single exact pinned install-prebuilt invocation and its canonical candidate_cutover consequences."
+  allowed_observation:
+    - "Read-only Git identity/status checks."
+    - "Read-only candidate/handoff hashing and transaction metadata inspection."
+    - "Read-only runtime.env hashing/mode inspection without content disclosure."
+    - "Read-only listener/process identity inspection with credential redaction."
+    - "Read-only local HTTP health/readiness probes."
+    - "One post-install validate-pinned-candidate invocation."
+
+forbidden_changes:
+  - "Do not invoke ./verify."
+  - "Do not modify source/tests/scripts."
+  - "Do not rebuild, freeze, package, re-sign, or mutate the accepted candidate."
+  - "Do not invoke strict validate-candidate or strict codesign verification."
+  - "Do not mutate Keychain, certificates, trust settings, Security.framework state, TCC, Full Disk Access, Local Network permissions, or developer settings."
+  - "Do not invoke --commit-cutover."
+  - "Do not invoke --rollback-cutover or --recover-partial-cutover unless a future task explicitly authorizes it."
+  - "Do not invoke --resume-cutover in this task."
+  - "Do not start/stop/restart Runtime separately from the one canonical install consequence."
+  - "Do not refresh/reconnect the ChatGPT plugin/connector."
+  - "Do not invoke CHATGPT_LOCAL tools as proof."
+  - "Do not invoke screen_capture or Stage B."
+  - "Do not click/type/scroll or mutate host UI."
+  - "Do not mutate main/tags/releases/sibling repositories."
+  - "Do not force-push."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "The exact accepted candidate/handoff identities are proven before consequence and the explicit pinned install form is invoked exactly once with no retry."
+  - id: AC-2
+    requirement: "The resulting canonical transaction is schema 5 / PENDING / APP_SWAPPED and persists exact pinned validation authority."
+  - id: AC-3
+    requirement: "The installed candidate passes one post-install pinned immutable/provenance validation against the exact external accepted hashes."
+  - id: AC-4
+    requirement: "Canonical runtime.env bytes/mode and canonical tunnel-client executable identity are unchanged."
+  - id: AC-5
+    requirement: "Local Runtime activation is healthy: exactly one canonical 127.0.0.1:8080 listener with green /healthz and /readyz under desired RUNNING."
+  - id: AC-6
+    requirement: "No cutover commit, plugin refresh, CHATGPT_LOCAL proof, Stage B, trust mutation, re-sign, rebuild, or unrelated host/repository mutation occurs."
+  - id: AC-7
+    requirement: "A truthful report-only commit is the sole direct child of the TASK-0118 planning HEAD and publishes non-force to dev; main remains unchanged."
+
+publication:
+  - "Create .agent/tasks/TASK-0118/report.yaml only after the bounded consequence reaches a terminal state."
+  - "The report must record exact install invocation count, exit/status, transaction state, accepted/persisted hashes, pre/post runtime.env SHA-256 equality, sanitized tunnel proof, health/readiness result, forbidden-effect counters, and terminal."
+  - "Create one report-only commit as the sole direct child of the TASK-0118 planning HEAD."
+  - "Push non-force to dev."
+  - "Do not promote main."
+
+terminal_states:
+  success: NEEDS_REVIEW
+  candidate_identity_changed: CANDIDATE_IDENTITY_CHANGED
+  preexisting_transaction: PREEXISTING_CUTOVER_TRANSACTION
+  preinstall_runtime_not_ready: PREINSTALL_RUNTIME_NOT_READY
+  operator_input_required: OPERATOR_INPUT_REQUIRED
+  install_failure: INSTALL_PREBUILT_FAILED
+  postinstall_proof_failure: POSTINSTALL_PROOF_FAILED
+  capability_failure: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+
+downstream_if_accepted:
+  next_phase: "Refresh/reconnect or otherwise re-establish the ChatGPT.com plugin/connector against the activated successor, prove CHATGPT_LOCAL continuity while the transaction remains PENDING, then authorize cutover commit separately. Stage B remains later and separately authorized."
+  cutover_commit_authorized: false
+  plugin_refresh_authorized: false
+  stage_b_authorized: false
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+execution_ready: true
