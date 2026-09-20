@@ -1,0 +1,46 @@
+protocol_version: 3
+
+task_id: TASK-0125
+task_revision: 4
+review_revision: 4
+state: REWORK
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0125/report-r4.yaml
+  commit: "30166fed71455ffa2723fd6da146118315b5b968"
+  report_revision: 4
+
+acceptance:
+  terminal: INSTALL_PREBUILT_FAILED
+  disposition: REWORK
+
+architect_judgment:
+  failure_class: ARCHITECT_IDENTITY_BINDING_ERROR
+  executor_fault: false
+  installer_fault: false
+  guard_implementation_fault: false
+  installed_app_changed: false
+  transaction_created: false
+  failed_candidate_reuse_authorized: false
+
+identity_correction:
+  actual_installed_runtime_revision: "18cdb515fe037c9b6cb81ce6529d85ae734e195a"
+  actual_revision_format: "40-hex Git revision"
+  wrongly_planned_revision: "18cdb515fe037c9b6cb81ce65287b64793d840a30267d9c4eac1dbf41720a77"
+  wrongly_planned_length: 63
+  current_contract_for_actual_revision: unknown
+  required_contract: split-v1
+
+test_gap:
+  cause: "Regression mocked _runtime_manifest_revision and bypassed production manifest identity validation."
+  required_fix:
+    - "Use the actual 40-hex installed runtime_revision."
+    - "Do not mock _runtime_manifest_revision in the installed predecessor mapping regression."
+    - "Exercise real manifest parsing so non-HEX40 identities cannot satisfy the compatibility test."
+    - "Preserve unknown predecessor fail-closed behavior."
+
+next_action:
+  task: TASK-0125
+  revision: 5
+  intent: "Correct the predecessor identity mapping and regression semantics only. No packaging/install/activation. Freeze a new two-path checkpoint for independent Architect canonical verification."
