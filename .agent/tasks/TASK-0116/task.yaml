@@ -1,0 +1,191 @@
+protocol_version: 3
+
+task_id: TASK-0116
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  predecessor_task: TASK-0115
+  predecessor_review: "d9770fba4067b5575edeb5a5c81b4561e7d5a26d"
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: native_security_trust_diagnosis
+
+execution_surface:
+  id: CODEX_LOCAL
+  controller: CODEX
+  location: LOCAL
+  transport: NATIVE
+
+objective: "Run one final bounded read-only native Security.framework trust diagnosis for the exact accepted candidate. Use SecTrust APIs to determine whether macOS built-in anchor membership, code-signing policy evaluation, or a host-wide trust/policy condition explains the existing CSSMERR_TP_NOT_TRUSTED evidence. Do not install, rebuild, re-sign, modify trust/keychain state, or touch Stage B."
+
+accepted_state:
+  candidate_sha256: "0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77"
+  handoff_sha256: "f8e75129f942fe67541229a598ed8761be574ec5547ffd306c606131718130a8"
+  record_count: 1035
+  prior_classification: TRUST_ROOT_CAUSE_UNPROVEN
+  candidate_strict_result_from_TASK_0115_r1: CSSMERR_TP_NOT_TRUSTED
+  predecessor_same_chain_strict_result_from_TASK_0115_r2: CSSMERR_TP_NOT_TRUSTED
+  cli_trust_diagnosis_closed: true
+
+architect_intent:
+  - "This is the final trust-diagnosis task before a design decision."
+  - "Do not repeat codesign/security CLI trust experiments already performed."
+  - "Use native Security.framework APIs because prior CLI evidence could not expose authoritative anchor membership or the detailed SecTrust decision."
+  - "If native evidence still cannot produce a bounded cause, return NATIVE_TRUST_ROOT_CAUSE_UNPROVEN and stop trust diagnosis."
+
+required_classification:
+  exactly_one_of:
+    - NATIVE_DEFAULT_TRUST_PASSES
+    - BUILTIN_ANCHOR_MISSING_OR_MISMATCHED
+    - CODE_SIGN_POLICY_REJECTS_CHAIN
+    - HOST_WIDE_TRUST_EVALUATION_FAILURE
+    - NATIVE_TRUST_ROOT_CAUSE_UNPROVEN
+
+classification_rules:
+  NATIVE_DEFAULT_TRUST_PASSES:
+    require:
+      - "SecTrustEvaluateWithError with normal system anchors and code-signing policy passes for the candidate leaf/intermediate chain."
+    consequence: "The prior codesign CLI failure is not reproduced at raw SecTrust policy level; report the exact observable boundary only. Do not install in this task."
+  BUILTIN_ANCHOR_MISSING_OR_MISMATCHED:
+    require_all:
+      - "SecTrustCopyAnchorCertificates does not contain the exact embedded root DER hash, or contains a different root for the chain."
+      - "Explicitly setting the embedded root as the sole anchor changes the same policy evaluation from fail to pass."
+  CODE_SIGN_POLICY_REJECTS_CHAIN:
+    require_all:
+      - "The exact embedded root is present among system anchors."
+      - "Cryptographic chain construction is valid."
+      - "SecTrustEvaluateWithError under SecPolicyCreateCodeSigning fails with a policy/certificate error that remains even when the matching root is explicitly supplied as anchor."
+      - "The reported CFError domain/code/reason is sanitized and specific enough to distinguish policy rejection from missing anchor."
+  HOST_WIDE_TRUST_EVALUATION_FAILURE:
+    require_all:
+      - "Candidate and installed predecessor share the same chain as already proven."
+      - "A known-good Apple-signed system control evaluated through the same native trust mechanism also fails unexpectedly under an appropriate Apple/code-sign trust policy or equivalent native trust path."
+      - "Do not use this classification if only development-signed artifacts fail."
+  NATIVE_TRUST_ROOT_CAUSE_UNPROVEN:
+    use_when:
+      - "Native Security.framework evidence still cannot satisfy another classification without speculation."
+
+preconditions:
+  - "Resolve this task directly from GitHub at the exact TASK-0116 planning HEAD."
+  - "Fresh-resolve remote dev/main; require dev equals planning HEAD and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  - "Synchronize clean canonical local dev by ordinary fast-forward only."
+  - "Require canonical TASK-0115 revision-2 review in .agent/tasks/TASK-0115/review.yaml and commit d9770fba4067b5575edeb5a5c81b4561e7d5a26d in ancestry."
+  - "Recompute exact candidate closure and handoff SHA before diagnosis; stop CANDIDATE_IDENTITY_CHANGED if either differs."
+  - "Do not repeat candidate or predecessor strict codesign verification."
+
+native_probe:
+  implementation:
+    - "Create one ephemeral Swift source file only under one task-specific /tmp directory."
+    - "Compile/run it with the system Swift toolchain and Security.framework/Foundation only."
+    - "Do not add probe source, binary, certificates, logs, or generated artifacts to the repository."
+    - "Delete the complete task-specific /tmp directory before report publication."
+  required_operations:
+    - "Read the candidate's embedded public CMS certificates without mutating the app."
+    - "Create SecCertificate objects for leaf, intermediate, and root."
+    - "Call SecTrustCopyAnchorCertificates and compare DER SHA-256 values in memory to prove whether the exact embedded root is present among built-in/system anchors."
+    - "Create SecTrust for leaf+intermediate using SecPolicyCreateCodeSigning."
+    - "Evaluate once with normal system anchors using SecTrustEvaluateWithError."
+    - "Capture sanitized CFError domain/code and bounded failure description/recovery reason, plus SecTrustCopyResult keys that materially identify the failure. Do not persist certificate subject literals, serials, or full fingerprints."
+    - "Evaluate a second trust object with the exact embedded root explicitly set through SecTrustSetAnchorCertificates and SecTrustSetAnchorCertificatesOnly(true), using the same code-signing policy."
+    - "Record whether explicit-anchor evaluation changes the result."
+    - "Record the evaluated certificate-chain count and DER-hash classes only."
+    - "If needed for HOST_WIDE_TRUST_EVALUATION_FAILURE discrimination, evaluate one Apple-signed system executable's signing certificate chain with an appropriate native Security.framework policy. At most one system control."
+  prohibited_shortcuts:
+    - "Do not use security find-identity or ordinary keychain search-list absence as causal proof."
+    - "Do not use openssl as the deciding trust engine."
+    - "Do not call codesign --verify on candidate or predecessor."
+    - "Do not change anchors, trust settings, keychains, environment, HOME, security session, permissions, or CODEX configuration."
+
+limits:
+  ephemeral_probe_source_count: 1
+  candidate_strict_codesign_invocations: 0
+  predecessor_strict_codesign_invocations: 0
+  system_control_count_max: 1
+  system_control_strict_codesign_invocations: 0
+  candidate_mutations: 0
+  installed_app_mutations: 0
+  keychain_mutations: 0
+  trust_setting_mutations: 0
+  certificate_imports: 0
+  certificate_downloads: 0
+  install_prebuilt_invocations: 0
+  package_app_invocations: 0
+  resign_invocations: 0
+  lifecycle_mutations: 0
+  service_management_mutations: 0
+  launchd_mutations: 0
+  plugin_refreshes: 0
+  screen_capture_invocations: 0
+  stage_b_probes: 0
+  tcc_mutations: 0
+  click_type_scroll_invocations: 0
+
+scope:
+  allowed_repository_mutation:
+    - ".agent/tasks/TASK-0116/report.yaml"
+  expected_files_are_restrictive: true
+  product_state_mutation: NONE
+  host_security_state_mutation: NONE
+
+forbidden_changes:
+  - "Do not install/reinstall, package/rebuild, modify, copy-over, or re-sign the candidate."
+  - "Do not import/delete/trust/untrust/unlock/relock/reset certificates, keychains, or trust settings."
+  - "Do not alter environment, HOME, keychain search lists, CODEX configuration, permissions, execution surface, or security session."
+  - "Do not mutate source/tests/docs/dependencies."
+  - "Do not invoke Stage B, live screen_capture, plugin refresh, TCC changes, base64-in-text, OCR, click, type, or scroll."
+  - "Do not mutate main/tags/releases/sibling repositories or force-push."
+
+verification:
+  - id: IDENTITY
+    requirement: "Candidate and handoff identities remain exact before and after diagnosis."
+  - id: SYSTEM_ANCHORS
+    requirement: "Exact embedded root membership in SecTrustCopyAnchorCertificates is proven by DER-hash equality."
+  - id: DEFAULT_POLICY
+    requirement: "Default system-anchor SecTrust code-signing evaluation result and sanitized error are recorded."
+  - id: EXPLICIT_ANCHOR
+    requirement: "The same code-signing policy is evaluated with the exact embedded root explicitly anchored; result delta is recorded."
+  - id: CLASSIFICATION
+    requirement: "Exactly one required classification is selected without speculation."
+  - id: PRESERVATION
+    requirement: "No product/security/media mutation and no task-specific temporary files remain."
+
+publication:
+  - "Publish one truthful report-only commit as the sole direct child of TASK-0116 planning HEAD."
+  - "No implementation commit is authorized."
+
+terminal_states:
+  success: NEEDS_REVIEW
+  candidate_identity_changed: CANDIDATE_IDENTITY_CHANGED
+  capability_failure: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+
+next_action_rules:
+  - "NATIVE_DEFAULT_TRUST_PASSES: report only; Architect decides whether install gate itself is over-constrained."
+  - "BUILTIN_ANCHOR_MISSING_OR_MISMATCHED: report exact native evidence; do not repair trust state."
+  - "CODE_SIGN_POLICY_REJECTS_CHAIN: report exact native policy failure; do not rebuild or re-sign."
+  - "HOST_WIDE_TRUST_EVALUATION_FAILURE: report host-wide native evidence; do not repair host trust."
+  - "NATIVE_TRUST_ROOT_CAUSE_UNPROVEN: stop trust diagnosis. Do not add another diagnostic task."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact immutable candidate identity remains unchanged."
+  - id: AC-2
+    requirement: "Built-in anchor membership is resolved through Security.framework, not inferred from CLI search lists."
+  - id: AC-3
+    requirement: "Default-vs-explicit-anchor SecTrust code-signing policy evaluation is captured with bounded sanitized error evidence."
+  - id: AC-4
+    requirement: "Exactly one classification follows directly from native trust evidence."
+  - id: AC-5
+    requirement: "Only TASK-0116 report mutates dev; main and host/product security state remain unchanged."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+execution_ready: true
