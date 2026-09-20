@@ -1,0 +1,162 @@
+protocol_version: 3
+
+task_id: TASK-0123
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup_after_stage_b_host_image_unproven
+  predecessor_task: TASK-0122
+  predecessor_review: "3a41d140d5e02f4a805f6dce044f1060eeef76a0"
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: host_media_contract_research
+
+execution_surface:
+  id: CHATGPT_GITHUB
+  controller: CHATGPT
+  location: GITHUB
+  transport: GITHUB
+
+objective: "Determine the documented support boundary for image-bearing MCP tool results in ChatGPT custom apps/plugins and identify the smallest standards-compliant next architecture, using current official OpenAI documentation plus existing repository evidence. Do not retry screen_capture, do not mutate Runtime or host state, and do not implement visual control."
+
+current_authority:
+  task_0120_review: "a838b7750a086bb1e83f34731d349ee15340a7af"
+  task_0121_review: "18db9ab9a78683a87c893899571591c5fd469491"
+  task_0122_review: "3a41d140d5e02f4a805f6dce044f1060eeef76a0"
+  stage_b_terminal: MCP_IMAGE_HOST_COMPATIBILITY_UNPROVEN
+  image_transport_supported: false
+  semantic_pixel_delivery_proven: false
+  runtime_regression_proven: false
+  visual_control_authorized: false
+
+official_source_scope:
+  allowed_domains:
+    - developers.openai.com
+    - platform.openai.com
+    - help.openai.com
+    - modelcontextprotocol.io
+  required_openai_sources:
+    - "https://developers.openai.com/plugins/reference"
+    - "https://developers.openai.com/plugins/concepts/plugins"
+    - "https://developers.openai.com/api/docs/guides/tools-computer-use-integration"
+    - "https://help.openai.com/en/articles/12584461-developer-mode-and-mcp-apps-in-chatgpt"
+  freshness:
+    observation_date: "2026-09-20"
+    requirement: "Use current live documentation. Do not rely on memory, cached assumptions, blog posts, Reddit, issue comments, or third-party summaries for normative support claims."
+
+repository_evidence:
+  inspect_only:
+    - ".agent/tasks/TASK-0122/task.yaml"
+    - ".agent/tasks/TASK-0122/report.yaml"
+    - ".agent/tasks/TASK-0122/review.yaml"
+    - ".agent/tasks/TASK-0121/review.yaml"
+    - ".agent/tasks/TASK-0120/review.yaml"
+    - ".agent/tasks/TASK-0087/task.yaml"
+    - "tests/test_image_transport.py"
+    - "tests/test_screen_capture.py"
+    - "tests/test_screen_capture_mcp.py"
+    - "agent_runtime/screen_capture.py"
+    - "agent_runtime/server.py"
+  restrictions:
+    - "Read only what is necessary to establish current Runtime output semantics, existing MCP wire proof, and Stage B boundary."
+    - "Do not widen into unrelated Runtime implementation or historical task archaeology."
+
+research_questions:
+  - id: RQ-1
+    question: "Does current official OpenAI documentation explicitly state that ChatGPT custom-app/plugin MCP tool-result content supports image content semantically as model vision input, rather than merely preserving MCP Content[] or exposing it to UI/components?"
+  - id: RQ-2
+    question: "If Content[] is documented as model-visible, does official documentation explicitly define image/image/png MCP content as semantically inspectable by the model in ChatGPT custom apps?"
+  - id: RQ-3
+    question: "Is there a documented supported alternative for tool-produced images, such as a UI resource, file/image input promotion, computer-tool screenshot output, or another OpenAI-supported media result shape?"
+  - id: RQ-4
+    question: "Would adopting any documented alternative require changing Agent Runtime transport semantics, adding a UI layer, changing only the ChatGPT integration layer, or using an API integration outside ChatGPT custom apps?"
+  - id: RQ-5
+    question: "Given accepted repository evidence that MCP ImageContent survives the Runtime/client boundary, what is the narrowest evidence-supported location of the remaining gap?"
+  - id: RQ-6
+    question: "Is there enough public documentation to classify this as a ChatGPT host limitation/bug, or must the result remain PUBLIC_CONTRACT_INSUFFICIENT?"
+
+classification:
+  allowed_terminal_classifications:
+    - CHATGPT_MCP_IMAGECONTENT_MODEL_VISION_DOCUMENTED
+    - SUPPORTED_ALTERNATE_MEDIA_PATH_IDENTIFIED
+    - CHATGPT_HOST_BEHAVIOR_CONTRADICTS_DOCUMENTED_CONTRACT
+    - PUBLIC_CONTRACT_INSUFFICIENT
+  rules:
+    - "Do not classify absence of documentation as proof of unsupported behavior."
+    - "Do not classify a single Stage B failure as a ChatGPT platform bug unless official documentation establishes the expected semantic behavior."
+    - "Do not claim Agent Runtime regression unless repository evidence contradicts previously accepted wire/image output behavior."
+    - "Separate MCP protocol validity, ChatGPT host ingestion, component/UI rendering, and model semantic vision as distinct layers."
+    - "Distinguish normative documentation from examples, implementation hints, and inference."
+
+required_output:
+  format: bounded_research_packet
+  fields:
+    - exact_planning_head
+    - official_sources_with_access_date
+    - repository_evidence_used
+    - per_research_question_findings
+    - normative_vs_inferred_claims
+    - classification
+    - narrowest_supported_gap_location
+    - supported_next_architecture
+    - unsupported_or_rejected_workarounds
+    - whether_runtime_change_is_justified
+    - whether_stage_b_retry_is_justified
+    - whether_visual_control_may_be_unblocked
+  constraints:
+    - "Every current OpenAI product/contract claim must cite an official source."
+    - "If documentation is ambiguous, say ambiguous and choose PUBLIC_CONTRACT_INSUFFICIENT."
+    - "Do not create a recommendation that depends on undocumented host behavior."
+    - "Do not recommend OCR, base64-in-text, textual image descriptions, file-upload side channels, Google Drive/ZIP handoffs, or manual operator RPC as a substitute for semantic image delivery."
+    - "Do not recommend changing screen_capture solely to work around the host."
+
+forbidden_actions:
+  - "Do not invoke Agent Runtime tools."
+  - "Do not invoke screen_capture."
+  - "Do not use CODEX_LOCAL, Remote Desktop Commander, SentinelX, operator Terminal, or another local execution surface."
+  - "Do not mutate repository files."
+  - "Do not create report.yaml, commit, push, branch, tag, release, or PR."
+  - "Do not mutate Runtime, connector, tunnel, TCC, permissions, browser state, or host UI."
+  - "Do not implement UI/resources or alternate media transport in this task."
+  - "Do not enter visual-control implementation."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Current official OpenAI documentation is checked directly and dated."
+  - id: AC-2
+    requirement: "Repository evidence is used only to establish existing Runtime/MCP wire semantics and accepted Stage B state."
+  - id: AC-3
+    requirement: "MCP protocol validity, ChatGPT host ingestion, optional UI/component delivery, and model semantic vision are analyzed as separate layers."
+  - id: AC-4
+    requirement: "Exactly one allowed terminal classification is selected, with explicit evidence and uncertainty."
+  - id: AC-5
+    requirement: "The next architecture, if any, uses a documented supported path and does not rely on OCR/base64/manual side channels."
+  - id: AC-6
+    requirement: "No Runtime, repository, connector, host, visual, or permission mutation occurs."
+
+terminal_states:
+  success: NEEDS_REVIEW
+  insufficient_sources: PUBLIC_CONTRACT_INSUFFICIENT
+  capability_failure: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+
+downstream_rules:
+  if_chatgpt_mcp_imagecontent_model_vision_documented:
+    next: "Create a minimal host-conformance/support-repro task; do not change Runtime first."
+  if_supported_alternate_media_path_identified:
+    next: "Architect a separate implementation task for the smallest documented integration-layer change."
+  if_host_behavior_contradicts_documented_contract:
+    next: "Create a minimal reproducible support/bug packet with existing Runtime wire evidence; no screen_capture retry required."
+  if_public_contract_insufficient:
+    next: "Keep visual control blocked. Optionally prepare a standards-conformance question/repro for OpenAI support without changing production Runtime."
+
+git_authority:
+  create_branch: false
+  commit: false
+  push: false
+  promote_to_main: false
+
+execution_ready: true
