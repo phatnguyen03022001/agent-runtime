@@ -1,13 +1,18 @@
 protocol_version: 3
 
 task_id: TASK-0120
-task_revision: 1
+task_revision: 2
 state: APPROVED
 
 origin:
-  type: architect_followup
-  predecessor_task: TASK-0119
-  predecessor_review: "c9414867ddaaa95a59d914c6328cbfe81bf658a0"
+  type: architect_rework_after_false_negative_precommit
+  predecessor_task: TASK-0120
+  predecessor_task_revision: 1
+  predecessor_report: "40611298d83ffc01670c13d1c8fe0775167e7560"
+  predecessor_review: "8b862b68754fb364382eb381d7c6d35dc4359d91"
+  predecessor_terminal: CUTOVER_COMMIT_PRECONDITION_UNPROVEN
+  accepted_predecessor_task: TASK-0119
+  accepted_predecessor_review: "c9414867ddaaa95a59d914c6328cbfe81bf658a0"
 
 target:
   repository: phatnguyen03022001/agent-runtime
@@ -22,7 +27,7 @@ execution_surface:
   transport: NATIVE
   rationale: "Cutover commit finalizes Agent Runtime transaction state and must not depend on the Agent Runtime transport that is being finalized."
 
-objective: "Commit the already-proven schema-5 PENDING/APP_SWAPPED cutover exactly once through the canonical local commit path, then prove transaction finalization and retained healthy successor activation. Do not synchronize the local checkout, do not restart/reinstall/re-sign, and do not enter Stage B."
+objective: "Re-prove the unchanged schema-5 PENDING/APP_SWAPPED cutover with a corrected exact precommit probe, then commit it exactly once through the canonical local commit path and prove transaction finalization plus retained healthy successor activation. Revision 1 did not invoke commit-cutover and consumed no cutover consequence authority."
 
 accepted_authority:
   task_0118_review: "4bd4f880a3bfd0946b4250ed157dd13f248d2e0d"
@@ -56,8 +61,9 @@ canonical_paths:
   runtime_env: "/Users/tienphat/Library/Application Support/Agent Runtime/runtime.env"
 
 authority_counters:
-  precommit_probe: "0/1"
-  commit_cutover: "0/1"
+  revision_1_precommit_probe: "1/1 consumed as false-negative evidence"
+  revision_2_precommit_probe: "0/1 fresh corrected read-only probe"
+  commit_cutover: "0/1 remains unconsumed"
   postcommit_probe: "0/1"
   retries: 0
   repository_sync: NONE
@@ -68,24 +74,36 @@ authority_counters:
   runtime_restart: NONE
 
 precommit:
-  requirements:
-    - "Resolve TASK-0120 revision 1 and TASK-0119 ACCEPTED review from the exact remote planning HEAD. Remote main must remain c49d777efa09db7f6c51bd8d8616db4623499fb8."
+  revision_1_status:
+    terminal: CUTOVER_COMMIT_PRECONDITION_UNPROVEN
+    commit_cutover_invocations: 0
+    diagnosis: FALSE_NEGATIVE_PRECOMMIT_PROBE
+    architect_review: "8b862b68754fb364382eb381d7c6d35dc4359d91"
+  probe_authority: "0/1 fresh revision-2 bounded read-only probe"
+  exact_semantics:
+    - "Resolve TASK-0120 revision 2 and TASK-0119 ACCEPTED review from the exact remote planning HEAD. Remote main must remain c49d777efa09db7f6c51bd8d8616db4623499fb8."
     - "Do not synchronize the local checkout. Require local repository branch dev, HEAD exactly 90203f901d2503f2289cbbfd8cfdce0bd0126a63, and clean working tree."
     - "Require git blob identity of install.sh equals 7384cff41328467b2d044f17f94d3009ead76250 and macos/candidate_cutover.py equals 4578037bf12b34550a9d0648ac7ec49876588ff1."
-    - "Require transaction metadata is a regular non-symlink file with schema=5, status=PENDING, phase=APP_SWAPPED."
-    - "Require candidate_validation.mode=pinned with the exact accepted candidate and handoff SHA-256 values."
-    - "Require transaction-owned candidate-handoff.json is regular/non-symlink and SHA-256 equals the accepted handoff SHA-256."
-    - "Require installed manifest is regular/non-symlink with schema=1, owner=com.picmao.agent-runtime, runtime_revision exact, git_tree exact, and requirements_lock_sha256 exact."
-    - "Require runtime.env is regular/non-symlink, mode 0600, and SHA-256 equals accepted authority. Do not print raw values."
-    - "Require exactly one listener on 127.0.0.1:8080, live process executable path and SHA-256 equal accepted tunnel authority, /healthz=200, and /readyz=200."
-    - "Perform these checks in one bounded read-only precommit probe. If any predicate fails, stop CUTOVER_COMMIT_PRECONDITION_UNPROVEN without invoking commit-cutover."
+    - "Read exactly /Users/tienphat/Library/Application Support/Agent Runtime/cutover-transaction/metadata.json. Require regular non-symlink file, schema=5, status=PENDING, phase=APP_SWAPPED."
+    - "Read metadata['candidate_validation'] as a mapping. Compare its fields individually: mode == 'pinned'; expected_candidate_sha256 == 0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77; expected_handoff_sha256 == f8e75129f942fe67541229a598ed8761be574ec5547ffd306c606131718130a8. Do not compare this object against another differently-named authority object."
+    - "Require transaction-owned candidate-handoff.json is regular/non-symlink and SHA-256 equals f8e75129f942fe67541229a598ed8761be574ec5547ffd306c606131718130a8."
+    - "Require installed manifest is regular/non-symlink and exact fields are schema=1, owner=com.picmao.agent-runtime, runtime_revision=18cdb515fe037c9b6cb81ce6529d85ae734e195a, git_tree=ed9a2b089d2f17d2a66eb25da4277f00d418bd07, requirements_lock_sha256=80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e."
+    - "Require runtime.env is regular/non-symlink, mode 0600, and SHA-256 6e6fef8e255b140f28703f8bd515726e1fd93d644e6f838b33ebf319e8133077. Do not print raw values."
+    - "Use lsof only to obtain the unique PID listening on 127.0.0.1:8080. Require exactly one PID."
+    - "Read that PID's full ps command with wide output and parse it with Python shlex.split or equivalent shell-token semantics. The parsed argv[0], not command -v and not a Homebrew wrapper path, is the live executable identity."
+    - "Require parsed argv[0] == /opt/homebrew/Cellar/tunnel-client/0.0.11/libexec/tunnel-client."
+    - "Hash exactly the file at parsed argv[0] and require SHA-256 == a916406d4fd5506aab9a593808ebd10ab23aa7d11e1675d33612632b9ead7e51."
+    - "Require the remaining parsed argv is one canonical supported tunnel form for runtime root /Users/tienphat/Applications/Agent Runtime.app/Contents/Resources/runtime, including run, --control-plane.poll-channel main, --mcp.command, agent_runtime.server channel=main, and --health.listen-addr 127.0.0.1:8080."
+    - "Require /healthz=200 and /readyz=200."
+    - "Perform all revision-2 precommit checks in exactly one bounded read-only probe. Do not invoke commit-cutover unless every predicate passes."
+  failure_terminal: CUTOVER_COMMIT_PRECONDITION_UNPROVEN
 
 commit:
   invocation_limit: "0/1"
   command: "./install.sh --commit-cutover"
   cwd: "/Users/tienphat/Developer/agent-runtime"
   requirements:
-    - "Execute the canonical command exactly once only after all precommit predicates PASS."
+    - "Execute the canonical command exactly once only after every corrected revision-2 precommit predicate PASS."
     - "Do not wrap, encode, split, alias, or transform the command to obtain a different safety judgment."
     - "Do not retry under any outcome."
     - "Success requires exit code 0 and canonical result status COMMITTED."
@@ -131,6 +149,8 @@ forbidden_changes:
 
 reporting:
   repository_mutation_authority: NONE
+  revision_1_report: "40611298d83ffc01670c13d1c8fe0775167e7560"
+  revision_1_review: "8b862b68754fb364382eb381d7c6d35dc4359d91"
   executor_output:
     - "Return only a bounded Vietnamese result packet."
     - "State exact remote planning HEAD, local consequence source identity, precommit result, commit invocation count/exit/result, postcommit result, and all forbidden-effect counters."
@@ -142,7 +162,7 @@ acceptance_criteria:
   - id: AC-1
     requirement: "Remote task authority and exact clean local consequence source are independently bound without repository synchronization."
   - id: AC-2
-    requirement: "One bounded precommit probe proves exact PENDING/APP_SWAPPED pinned transaction and healthy accepted successor state."
+    requirement: "One fresh bounded revision-2 precommit probe uses the exact corrected candidate_validation and live tunnel executable semantics and proves the unchanged PENDING/APP_SWAPPED pinned transaction plus healthy accepted successor state."
   - id: AC-3
     requirement: "Canonical ./install.sh --commit-cutover executes exactly once, with no retry, and returns COMMITTED."
   - id: AC-4
