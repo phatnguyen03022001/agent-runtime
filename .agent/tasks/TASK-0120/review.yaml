@@ -1,51 +1,48 @@
 protocol_version: 3
 
 task_id: TASK-0120
-task_revision: 2
-review_revision: 2
+task_revision: 3
+review_revision: 3
 state: REWORK
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0120/report.yaml
-  commit: "532e6bf1ef91c379572d31043637c0499d89ca81"
-  report_revision: 2
+  commit: "2c9562c9deba2902b28c3f963cf8e47916f1f2f7"
+  report_revision: 3
 
 acceptance:
   terminal: CUTOVER_COMMIT_PRECONDITION_UNPROVEN
   disposition: REWORK
 
 executor_result:
-  planning_head_reported_correctly: false
-  static_transaction_predicates: PASS
-  candidate_validation_fields: PASS
-  live_tunnel_argv_identity: UNPROVEN
-  healthz: UNPROVEN
-  readyz: UNPROVEN
+  planning_head_reported_correctly: true
+  local_source_identity: PASS
+  remote_dev_main_proof: UNPROVEN
+  task_0119_accepted_ancestry_proof: UNPROVEN
   commit_cutover_invocations: 0
   postcommit_probe_invocations: 0
   forbidden_effects: 0
 
 architect_diagnosis:
-  canonical_revision_2_head: "5b98b42fca962f335e5f6326c38ca5a22f43b11e"
-  remote_main: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
-  live_tunnel_listener_count: 1
-  live_tunnel_executable_path_matches: true
-  live_tunnel_executable_sha256_matches: true
-  healthz_http: 200
-  readyz_http: 200
+  canonical_revision_3_head: "080760bfc6a7683551e7693e35243f18a572f54b"
+  remote_dev_matches: true
+  remote_main_matches: true
+  task_0119_review_commit: "c9414867ddaaa95a59d914c6328cbfe81bf658a0"
+  task_0119_review_state: ACCEPTED
+  task_0119_review_in_ancestry: true
+  diagnosis: CODEX_LOCAL_REMOTE_AUTHORITY_PROOF_LIMITATION
   product_failure_proven: false
-  diagnosis: EXECUTOR_LIVE_PROBE_AND_AUTHORITY_BINDING_FAILURE
   commit_authority_consumed: false
 
 architect_decision:
-  task_0120_revision_2_accepted: false
+  task_0120_revision_3_accepted: false
   rework_required: true
   cutover_commit_authority_remains: "0/1"
-  revision_3_strategy: "Remove CODEX_LOCAL live tunnel/health precommit gates. Bind only exact task authority, local source identity, static transaction/pinned candidate state, installed manifest identity, and runtime.env identity before commit. After COMMITTED, require transaction absence and unchanged local/static identities. Architect independently verifies live tunnel/health before ACCEPT."
+  revision_4_strategy: "Architect binds remote task authority before launch. CODEX_LOCAL must not re-prove GitHub dev/main or TASK-0119 ancestry. Executor proves only the exact local consequence source and static transaction/product identities, then executes the still-unconsumed canonical commit-cutover exactly once."
   stage_b_authorized: false
 
 next_action:
   task: TASK-0120
-  revision: 3
-  intent: "Execute the still-unconsumed canonical cutover commit exactly once after minimal exact static guards. Do not require CODEX_LOCAL to prove live tunnel/health. Architect will perform independent live postcommit verification."
+  revision: 4
+  intent: "Use Architect-bound remote authority and minimal local static guards, then execute the still-unconsumed cutover commit exactly once and prove transaction absence."
