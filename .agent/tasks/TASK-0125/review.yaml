@@ -1,0 +1,58 @@
+protocol_version: 3
+
+task_id: TASK-0125
+task_revision: 1
+review_revision: 1
+state: REWORK
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0125/report.yaml
+  commit: "fdec9bfa3bb60965333dee8aea2e2077ab360de4"
+  report_revision: 1
+
+acceptance:
+  terminal: CANONICAL_VERIFICATION_FAILED
+  disposition: REWORK
+
+architect_diagnosis:
+  implementation_scope_exact: true
+  guard_semantics_match_task: true
+  focused_verification: PASS
+  canonical_verify_invocations: "1/1"
+  canonical_verify_exit_code: 1
+  failing_tests_related_to_guard: false
+  exact_failing_tests:
+    - tests.test_fs_read_batch.FsReadBatchBehaviorTests.test_fifo_and_unix_socket_are_rejected_as_non_regular
+    - tests.test_fs_read_batch_adversarial.FsReadBatchAdversarialTests.test_fifo_socket_and_device_modes_are_rejected_before_content_read
+  exact_failing_tests_pass_outside_codex_sandbox: true
+  diagnosis: VERIFICATION_ENVIRONMENT_FALSE_NEGATIVE
+  product_failure_proven: false
+
+checkpoint_authority:
+  preserve_dirty_checkpoint: true
+  local_head: "9e24d1b9140f9a533ff0b41f6f4d14708c9312aa"
+  checkpoint_sha256: "a07661818ee8e10e102fcdff097fbfd0a11d02e4fec575e7dcdb18a932f4d8c4"
+  source_mutation_needed_in_revision_2: false
+
+consumed_authority:
+  revision_1_canonical_verify: "1/1"
+  implementation_commit: "0/1"
+  source_push: "0/1"
+  packaging: "0/1"
+  install_prebuilt: "0/1"
+  commit_cutover: "0/1"
+  installed_guard_probe: "0/1"
+
+architect_decision:
+  task_0125_revision_1_accepted: false
+  revision_2_required: true
+  revision_1_verify_must_not_be_replayed: true
+  revision_2_verification_basis: "Composite evidence: revision-1 focused/compile/diff PASS; revision-1 canonical verify failed only at two AF_UNIX sandbox fixture binds; independent Architect rerun of exactly those two tests outside CODEX sandbox PASS."
+  stage_b_authorized: false
+  visual_control_authorized: false
+
+next_action:
+  task: TASK-0125
+  revision: 2
+  intent: "Resume the exact dirty checkpoint without source edits or canonical verify replay; bind composite verification evidence, publish the exact five-path implementation successor, package/activate it, and prove installed VISUAL_PERCEPTION_BLOCKED enforcement."
