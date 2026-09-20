@@ -1,0 +1,185 @@
+protocol_version: 3
+
+task_id: TASK-0121
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: architect_followup
+  predecessor_task: TASK-0120
+  predecessor_review: "a838b7750a086bb1e83f34731d349ee15340a7af"
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: dev
+    role: postcommit_chatgpt_local_continuity
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  location: LOCAL
+  transport: AGENT_RUNTIME
+
+objective: "Prove that CHATGPT_LOCAL remains usable after the accepted cutover commit using exactly one production read-only repo_observer call. This task is transport continuity only. Do not use terminal execution, do not mutate repository or product state, do not invoke screen_capture, and do not enter Stage B."
+
+accepted_authority:
+  task_0120_review: "a838b7750a086bb1e83f34731d349ee15340a7af"
+  cutover_committed: true
+  transaction_absent: true
+  local_observation_head: "90203f901d2503f2289cbbfd8cfdce0bd0126a63"
+  postcommit_healthz: 200
+  postcommit_readyz: 200
+  tunnel_executable_path: "/opt/homebrew/Cellar/tunnel-client/0.0.11/libexec/tunnel-client"
+  tunnel_executable_sha256: "a916406d4fd5506aab9a593808ebd10ab23aa7d11e1675d33612632b9ead7e51"
+
+operator_precondition:
+  requirement: "Launch revision 1 from a NEW ChatGPT conversation or a freshly reattached conversation by explicitly selecting/invoking the Agent Runtime custom app in the SAME user message that contains the execution prompt."
+  if_unsatisfied: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+
+turn_atomicity:
+  requirement: "The exact 11/11 Agent Runtime surface preflight and the one repo_observer proof must complete in the same assistant execution turn with no intervening user message."
+  retries: 0
+
+surface_preflight:
+  required_exact_public_tools:
+    - terminal_exec
+    - terminal_start
+    - terminal_poll
+    - terminal_control
+    - terminal_resize
+    - capacity_observer
+    - fs_read_batch
+    - repo_observer
+    - repo_fast_forward
+    - repo_publish
+    - screen_capture
+  requirements:
+    - "Require all eleven exact public tool names in this ChatGPT conversation."
+    - "Invoke none of them except the one authorized repo_observer call."
+    - "If the exact surface is absent or incomplete, stop CURRENT_PHASE_CAPABILITY_UNAVAILABLE."
+    - "If present, immediately invoke repo_observer in the same assistant turn without an intermediate response."
+
+repository_binding:
+  remote_task_authority:
+    - "Resolve TASK-0121 revision 1 directly from GitHub at the exact planning HEAD supplied by the operator."
+    - "Fresh-resolve remote dev/main; require dev equals that planning HEAD and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+    - "Require TASK-0120 review a838b7750a086bb1e83f34731d349ee15340a7af in ancestry and state ACCEPTED."
+  local_observation_source:
+    repository: /Users/tienphat/Developer/agent-runtime
+    required_branch: dev
+    required_head: "90203f901d2503f2289cbbfd8cfdce0bd0126a63"
+    required_clean: true
+
+continuity_authority:
+  repo_observer: "0/1"
+  retries: 0
+  terminal_exec: "0/0"
+
+continuity_proof:
+  invocation:
+    tool: repo_observer
+    arguments:
+      cwd: /Users/tienphat/Developer/agent-runtime
+      max_paths: 200
+  required_result:
+    schema_version: 1
+    repository:
+      root: /Users/tienphat/Developer/agent-runtime
+      cwd: /Users/tienphat/Developer/agent-runtime
+      bare: false
+      inside_workspace_root: true
+      cwd_inside_repo: true
+      cwd_is_repo_root: true
+    branch:
+      name: dev
+      head_sha: "90203f901d2503f2289cbbfd8cfdce0bd0126a63"
+      detached: false
+    changes: []
+    diff_summary:
+      staged_files: 0
+      unstaged_files: 0
+      untracked_files: 0
+      conflicted_files: 0
+    operation_state:
+      merge: false
+      rebase: false
+      cherry_pick: false
+      bisect: false
+    observation:
+      fetched: false
+      network_used: false
+  proof_meaning:
+    - "A successful same-turn repo_observer response satisfying all predicates proves current postcommit ChatGPT.com -> attached Agent Runtime connector -> secure tunnel -> local Agent Runtime -> production MCP execution continuity."
+    - "TASK-0120 ACCEPTED review remains authoritative for committed transaction state, transaction absence, successor identity, tunnel identity, health and readiness."
+    - "Do not re-probe those host predicates with terminal tools."
+
+success_postconditions:
+  - "11/11 surface preflight PASS."
+  - "repo_observer invoked exactly 1/1 with retries=0."
+  - "Every required repo_observer predicate PASS."
+  - "terminal_exec and every other forbidden Agent Runtime tool remain 0."
+  - "No repository sync/publication/mutation, Runtime lifecycle/cutover/connector/trust/TCC mutation, screen capture, or Stage B occurs."
+  - "Executor returns bounded result packet only; Architect persists report/review separately."
+
+forbidden_invocations:
+  - terminal_exec
+  - terminal_start
+  - terminal_poll
+  - terminal_control
+  - terminal_resize
+  - capacity_observer
+  - fs_read_batch
+  - repo_fast_forward
+  - repo_publish
+  - screen_capture
+
+forbidden_changes:
+  - "Do not invoke commit-cutover again."
+  - "Do not invoke install-prebuilt, rollback, resume, or recovery."
+  - "Do not synchronize or mutate the repository."
+  - "Do not start, stop, restart, signal, or reinstall Runtime."
+  - "Do not mutate connector/tunnel configuration, ServiceManagement, launchd, runtime.env, trust, TCC, Keychain, SSH, browser secrets, Photos, or unrelated private state."
+  - "Do not modify implementation/tests/docs."
+  - "Do not run tests, verify, packaging, signing, or freezing."
+  - "Do not invoke screen_capture or enter Stage B."
+
+reporting:
+  repository_mutation_authority: NONE
+  executor_output:
+    - "Return only a bounded Vietnamese result packet."
+    - "State exact planning HEAD, 11/11 surface result, same-turn atomicity, repo_observer 1/1, retries=0, terminal_exec=0/0, PASS/FAIL for every required repo_observer predicate, and forbidden-effect counters."
+    - "Do not create report.yaml, commit, or push."
+  architect_persistence:
+    - "Architect independently persists TASK-0121 report/review after successful Executor result."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact 11/11 Agent Runtime public surface is available postcommit."
+  - id: AC-2
+    requirement: "Exactly one repo_observer call executes through CHATGPT_LOCAL in the same assistant turn, with retries=0 and terminal_exec=0/0."
+  - id: AC-3
+    requirement: "repo_observer returns exact clean local source identity and fetched=false/network_used=false."
+  - id: AC-4
+    requirement: "No forbidden invocation or mutation occurs."
+  - id: AC-5
+    requirement: "Successful proof establishes postcommit CHATGPT_LOCAL continuity cumulatively with accepted TASK-0120 state."
+
+terminal_states:
+  success: NEEDS_REVIEW
+  capability_failure: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+  local_observation_source_changed: LOCAL_OBSERVATION_SOURCE_CHANGED
+  continuity_unproven: POSTCOMMIT_CHATGPT_LOCAL_CONTINUITY_UNPROVEN
+
+downstream_if_accepted:
+  next_task: TASK-0122
+  intent: "Stage B production image-host compatibility proof with exactly one authorized screen_capture under blindness barrier."
+  stage_b_may_be_authorized_next: true
+
+git_authority:
+  create_branch: false
+  commit: false
+  push: false
+  promote_to_main: false
+
+execution_ready: true
