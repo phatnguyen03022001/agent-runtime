@@ -1,15 +1,16 @@
 protocol_version: 3
 
 task_id: TASK-0119
-task_revision: 5
+task_revision: 6
 state: APPROVED
 
 origin:
-  type: architect_rework_after_probe_contract_failure
-  predecessor_task: TASK-0118
-  predecessor_review: "4bd4f880a3bfd0946b4250ed157dd13f248d2e0d"
-  predecessor_task_revision: 3
+  type: architect_rework_after_platform_safety_block
+  predecessor_task: TASK-0119
+  predecessor_task_revision: 5
   predecessor_terminal: CHATGPT_LOCAL_CONTINUITY_UNPROVEN
+  accepted_predecessor_task: TASK-0118
+  accepted_predecessor_review: "4bd4f880a3bfd0946b4250ed157dd13f248d2e0d"
 
 target:
   repository: phatnguyen03022001/agent-runtime
@@ -23,34 +24,35 @@ execution_surface:
   location: LOCAL
   transport: AGENT_RUNTIME
 
-objective: "Prove the real refreshed ChatGPT.com -> Agent Runtime connector -> secure tunnel -> activated local successor -> MCP path while the exact TASK-0118 schema-5 cutover transaction remains PENDING/APP_SWAPPED. This is a continuity proof only: do not commit or rollback the cutover, do not invoke screen_capture, and do not enter Stage B."
+objective: "Close current CHATGPT_LOCAL execution continuity with exactly one first-class production repo_observer call. This revision proves only the current ChatGPT.com -> attached Agent Runtime connector -> secure tunnel -> local Agent Runtime -> production MCP execution path. It relies on cumulative accepted evidence for successor activation and PENDING/APP_SWAPPED cutover state and does not re-probe those host predicates."
 
 accepted_authority:
   task_0118_review: "4bd4f880a3bfd0946b4250ed157dd13f248d2e0d"
   task_0118_report: "90203f901d2503f2289cbbfd8cfdce0bd0126a63"
-  candidate_sha256: "0e0fb14a551f2567b2f3a68665287b64793d840a30267d9c4eac1dbf41720a77"
-  handoff_sha256: "f8e75129f942fe67541229a598ed8761be574ec5547ffd306c606131718130a8"
-  candidate_source_revision: "18cdb515fe037c9b6cb81ce6529d85ae734e195a"
-  transaction_dir: "/Users/tienphat/Library/Application Support/Agent Runtime/cutover-transaction"
-  installed_target: "/Users/tienphat/Applications/Agent Runtime.app"
+  local_observation_head: "90203f901d2503f2289cbbfd8cfdce0bd0126a63"
+  cutover_state: PENDING
+  cutover_phase: APP_SWAPPED
+
+cumulative_evidence:
+  - "TASK-0118 is Architect-ACCEPTED and already proved exact successor activation with the schema-5 cutover transaction left PENDING/APP_SWAPPED."
+  - "TASK-0119 revisions 3 and 4 already proved same-turn 11/11 Agent Runtime surface exposure plus terminal_exec reaching the local Runtime. Their JOIN failures were subsequently diagnosed as false-negative probe predicates rather than Runtime/product failure."
+  - "TASK-0119 revision 5 again proved same-turn 11/11 surface exposure and turn atomicity, but terminal_exec was blocked by platform safety before Agent Runtime execution. terminal_exec attempts=1, reached_runtime=0, retries=0, and no repository, Runtime, lifecycle, cutover, connector, trust/TCC, screen-capture, or Stage-B consequence occurred."
+  - "Revision 6 changes the proof primitive to the lower-risk first-class repo_observer contract. It is not a terminal_exec retry and must not be framed or executed as an attempt to obtain a different safety judgment for the same operation."
 
 operator_precondition:
-  requirement: "Launch revision 5 from a NEW ChatGPT conversation or a freshly reattached conversation by explicitly selecting/invoking the Agent Runtime custom app in the SAME user message that contains the execution prompt."
-  rationale: "Revision 4 proved that same-turn 11/11 surface exposure and terminal_exec execution work. Revision 5 retains turn-atomic execution while correcting only the remaining false-negative probe predicates identified by Architect read-only diagnosis."
+  requirement: "Launch revision 6 from a NEW ChatGPT conversation or a freshly reattached conversation by explicitly selecting/invoking the Agent Runtime custom app in the SAME user message that contains the execution prompt."
   task_action: NONE
   if_unsatisfied: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
 
 turn_atomicity:
-  requirement: "Surface preflight and the single terminal_exec continuity proof must complete in one assistant execution turn with no intervening user message, no handoff to a later turn, and no pause after tool-surface discovery."
-  rationale: "Do not rely on Agent Runtime tool handles persisting to a subsequent execution turn."
+  requirement: "The 11/11 Agent Runtime surface preflight and the single repo_observer continuity proof must complete in one assistant execution turn with no intervening user message."
   if_surface_present:
-    action: "Immediately invoke the authorized terminal_exec proof in the same turn."
+    action: "Immediately invoke the one authorized repo_observer call in the same assistant execution turn. Do not return an intermediate status."
   if_surface_absent:
     terminal: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
   retries: 0
 
 surface_preflight:
-  must_happen_before_repo_or_host_mutation: true
   required_exact_public_tools:
     - terminal_exec
     - terminal_start
@@ -64,126 +66,148 @@ surface_preflight:
     - repo_publish
     - screen_capture
   requirements:
-    - "Prove this exact ChatGPT conversation exposes the Agent Runtime MCP surface after connector attachment/reconnection."
-    - "Require all eleven exact public tool names above. Do not invoke screen_capture."
-    - "If the required surface is absent or incomplete, stop CURRENT_PHASE_CAPABILITY_UNAVAILABLE before any local/repository mutation."
-    - "If the required surface is complete, do not return an intermediate status and do not wait for another operator turn; immediately execute the one authorized terminal_exec continuity proof in this same assistant turn."
-    - "Tool presence is schema evidence only; it is not sufficient by itself for end-to-end continuity."
+    - "Require all eleven exact public tool names above in this ChatGPT conversation after connector attachment/reconnection."
+    - "Tool presence is schema evidence only. Invoke none of them during this task except the one authorized repo_observer call."
+    - "If the exact 11/11 surface is absent or incomplete, stop CURRENT_PHASE_CAPABILITY_UNAVAILABLE."
+    - "If the exact 11/11 surface is present, immediately execute repo_observer in the same assistant turn."
 
 repository_binding:
   remote_task_authority:
-    - "Resolve TASK-0119 revision 5 directly from GitHub at the exact revision-5 planning HEAD."
-    - "Fresh-resolve remote dev/main; require dev equals the revision-5 planning HEAD and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+    - "Resolve TASK-0119 revision 6 directly from GitHub at the exact revision-6 planning HEAD supplied by the operator."
+    - "Fresh-resolve remote dev/main; require dev equals the revision-6 planning HEAD and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
     - "Require TASK-0118 review 4bd4f880a3bfd0946b4250ed157dd13f248d2e0d in ancestry and state ACCEPTED."
   local_observation_source:
     repository: /Users/tienphat/Developer/agent-runtime
     required_branch: dev
     required_head: "90203f901d2503f2289cbbfd8cfdce0bd0126a63"
     required_clean: true
-    role: "separately authorized local observation source; not the canonical task source"
+    role: "read-only local observation source; not canonical task authority"
   requirements:
-    - "Do not synchronize the local checkout in revision 5."
-    - "Do not invoke repo_fast_forward, repo_publish, git fetch, pull, merge, checkout, reset, rebase, stash, clean, or any other repository synchronization/mutation action."
-    - "Require local branch dev, exact local HEAD 90203f901d2503f2289cbbfd8cfdce0bd0126a63, and a clean working tree before the continuity proof."
-    - "The local checkout intentionally predates TASK-0119 planning artifacts. This is accepted because TASK authority is resolved remotely and the local checkout is used only to host read-only observation commands."
-    - "If local HEAD or cleanliness differs, stop LOCAL_OBSERVATION_SOURCE_CHANGED."
-    - "Revision 1 repo_fast_forward was blocked before Agent Runtime execution and consumed no host consequence. Revision 4 must not retry it or substitute another repository mutation mechanism."
-    - "Revision 2 stopped at surface preflight with 0/11 Agent Runtime tools and consumed no terminal_exec authority or host consequence."
-    - "Revision 3 completed 11/11 surface preflight and consumed its terminal_exec 1/1 authority with exit code 2 / JOIN FAIL. It made no mutation."
-    - "Architect read-only follow-up proved revision-3 false negatives: runtime-manifest.json is present and uses schema-1 keys runtime_revision and git_tree; live tunnel argv matches the canonical Runtime token shape but ps renders the app path space as an escaped space."
-    - "Revision 4 again completed 11/11 surface preflight and same-turn terminal_exec with zero forbidden consequences, but terminated CHATGPT_LOCAL_CONTINUITY_UNPROVEN because two remaining probe predicates used incorrect transaction-metadata and live-tunnel executable semantics."
-    - "Architect read-only diagnosis after revision 4 established the exact canonical metadata file/key and accepted live tunnel libexec identity used by revision 5 below."
+    - "Do not synchronize or mutate the local checkout."
+    - "The local checkout intentionally predates TASK-0119 planning artifacts. This is accepted because task authority is resolved remotely and repo_observer only observes the local repository."
+    - "Require the exact branch/head/cleanliness predicates from the repo_observer result below."
 
+continuity_authority:
+  repo_observer: "0/1"
+  retries: 0
+  terminal_exec: "0/0"
+  rationale:
+    - "repo_observer is a first-class production Agent Runtime MCP tool with readOnlyHint=true, destructiveHint=false, idempotentHint=true, and openWorldHint=false."
+    - "Its contract is bounded local-only Git observation with fetched=false, network_used=false, and no repository mutation."
+    - "This is a substantively different, lower-risk proof primitive from terminal_exec."
 
 continuity_proof:
-  terminal_exec_authority: "0/1 fresh revision-5 read-only proof invocation"
-  retry: false
-  reason_for_fresh_authority: "Revision 4 reached the host and failed only because its probe used incorrect transaction-metadata field semantics and the Homebrew wrapper instead of the accepted live libexec executable identity. Revision 5 changes only those faulty proof predicates and is not a retry seeking a different platform safety judgment."
-  execution_bundle:
-    - "Use exactly one bounded terminal_exec invocation for the end-to-end successor proof. Compose all checks inside this one read-only command."
-    - "Require the exact canonical transaction metadata file /Users/tienphat/Library/Application Support/Agent Runtime/cutover-transaction/metadata.json is regular/non-symlink. Read schema from the exact field schema and require schema=5, status=PENDING, phase=APP_SWAPPED. Do not use or infer schema_version."
-    - "Require candidate_validation.mode is pinned and its expected candidate/handoff hashes equal the exact accepted authority."
-    - "Require the transaction-owned candidate-handoff.json SHA-256 equals f8e75129f942fe67541229a598ed8761be574ec5547ffd306c606131718130a8."
-    - "Require /Users/tienphat/Applications/Agent Runtime.app is a regular non-symlink directory."
-    - "Read /Users/tienphat/Applications/Agent Runtime.app/Contents/Resources/runtime-manifest.json using the exact schema-1 fields: require schema=1, runtime_revision=18cdb515fe037c9b6cb81ce6529d85ae734e195a, git_tree=ed9a2b089d2f17d2a66eb25da4277f00d418bd07, requirements_lock_sha256=80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e, and owner=com.picmao.agent-runtime. Do not use schema_version and do not look for source_revision/source_tree keys in this schema-1 manifest."
-    - "Require exactly one LISTEN socket on 127.0.0.1:8080 and obtain only that listener PID for process identity inspection."
-    - "Read the listener command line with a wide ps command, parse it with shell-token semantics such as Python shlex.split so escaped spaces in 'Agent Runtime.app' are normalized before comparison. Do not compare the raw ps string literally."
-    - "After token parsing, require argv[0] equals the accepted live process executable /opt/homebrew/Cellar/tunnel-client/0.0.11/libexec/tunnel-client. Require SHA-256 of that exact executable equals a916406d4fd5506aab9a593808ebd10ab23aa7d11e1675d33612632b9ead7e51. /opt/homebrew/bin/tunnel-client is only the Homebrew wrapper and MUST NOT be accepted as the live process executable identity. Require the remaining tokens equal one of the production-supported canonical forms for Runtime root /Users/tienphat/Applications/Agent Runtime.app/Contents/Resources/runtime: run, --control-plane.poll-channel, main, --mcp.command, then either one combined command=<runtime>/.venv/bin/python -m agent_runtime.server,channel=main token or the supported split-token command form, followed by --health.listen-addr, 127.0.0.1:8080."
-    - "Do not persist PID as an identity invariant, and do not return credentials or tunnel IDs."
-    - "Require /healthz HTTP 200 and /readyz HTTP 200."
-    - "Require canonical runtime.env remains a regular non-symlink file with mode 0600 and SHA-256 6e6fef8e255b140f28703f8bd515726e1fd93d644e6f838b33ebf319e8133077. Do not read or return raw values."
-    - "Require local branch dev, HEAD 90203f901d2503f2289cbbfd8cfdce0bd0126a63, and clean working tree both before and after the proof."
-    - "Return one compact attributable JOIN result. No mutation."
+  invocation:
+    tool: repo_observer
+    arguments:
+      cwd: /Users/tienphat/Developer/agent-runtime
+      max_paths: 200
+  required_result:
+    schema_version: 1
+    repository:
+      root: /Users/tienphat/Developer/agent-runtime
+      cwd: /Users/tienphat/Developer/agent-runtime
+      bare: false
+      inside_workspace_root: true
+      cwd_inside_repo: true
+      cwd_is_repo_root: true
+    branch:
+      name: dev
+      head_sha: "90203f901d2503f2289cbbfd8cfdce0bd0126a63"
+      detached: false
+    changes: []
+    diff_summary:
+      staged_files: 0
+      unstaged_files: 0
+      untracked_files: 0
+      conflicted_files: 0
+    operation_state:
+      merge: false
+      rebase: false
+      cherry_pick: false
+      bisect: false
+    observation:
+      fetched: false
+      network_used: false
   proof_meaning:
-    - "Successful terminal_exec response itself proves ChatGPT.com -> attached Agent Runtime connector -> secure tunnel -> local Agent Runtime MCP execution."
-    - "The exact eleven-tool surface plus schema-5 transaction identity plus corrected schema-1 installed manifest identity binds that path to the activated successor generation."
-    - "Do not use screen_capture as part of this proof."
+    - "A successful same-turn repo_observer response satisfying every required predicate proves the current path ChatGPT.com -> attached Agent Runtime connector -> secure tunnel -> local Agent Runtime -> production MCP execution."
+    - "Evaluate revision 6 cumulatively with accepted TASK-0118 and prior TASK-0119 evidence. Revision 6 does not independently re-probe transaction metadata, installed manifest identity, listener state, health/readiness, runtime.env, or lifecycle state."
+    - "Do not use another local execution primitive to strengthen, repeat, or substitute this proof."
 
 success_postconditions:
-  - "The one terminal_exec proof invocation returns success with all continuity predicates PASS."
-  - "The transaction remains schema 5 / PENDING / APP_SWAPPED with exact pinned authority after the proof."
-  - "No local product state is mutated by the proof."
-  - "No Runtime lifecycle action, ServiceManagement action, cutover action, connector mutation, TCC action, trust action, or screen capture occurs."
-  - "After the proof, require local Git HEAD remains 90203f901d2503f2289cbbfd8cfdce0bd0126a63 and the working tree remains clean."
+  - "The exact 11/11 surface preflight and the one repo_observer call occur in the same assistant execution turn."
+  - "repo_observer invocation count is exactly 1/1 with retries=0 and every required result predicate passes."
+  - "terminal_exec and every other forbidden Agent Runtime tool invocation remain 0."
+  - "No repository synchronization, publication, repository mutation, Runtime/product mutation, lifecycle action, cutover action, connector mutation, trust/TCC mutation, screen capture, or Stage B occurs."
+  - "Architect report/review persistence remains deferred until after a successful bounded Executor result packet."
 
 reporting:
   repository_mutation_authority: NONE
   executor_output:
-    - "Return a bounded Vietnamese result packet to the operator; do not create report.yaml, commit, or push."
-    - "The result packet must state: exact remote revision-5 planning HEAD; that the 11/11 surface preflight and terminal_exec proof occurred in the same assistant execution turn; terminal_exec invocation count and no-retry fact; compact JOIN result; exact transaction metadata path plus schema/status/phase and pinned hashes; installed schema-1 manifest schema/runtime_revision/git_tree/requirements_lock/owner identity; parsed canonical tunnel argv result plus accepted libexec path/SHA-256 equality; runtime.env SHA-256/mode equality; listener/health/readiness results; local HEAD/cleanliness before and after; and forbidden-effect counters."
-    - "Do not disclose credentials, tunnel IDs, raw runtime.env values, cookies, tokens, private connector data, or screen content."
+    - "Return only a bounded Vietnamese result packet to the operator. Do not create report.yaml, commit, or push."
+    - "State the exact remote revision-6 planning HEAD, 11/11 surface result, same-turn atomicity result, repo_observer invocation count, retries, terminal_exec=0/0, exact invocation arguments, and PASS/FAIL for every required repo_observer predicate."
+    - "State forbidden-effect counters as zero and explicitly state fetched=false and network_used=false when proven."
+    - "Do not disclose credentials, tunnel IDs, tokens, cookies, private connector data, or unrelated host state."
   architect_persistence:
-    - "After the Executor returns a successful bounded result packet, the Architect will independently persist canonical TASK-0119 report/review artifacts through the remote SSOT."
-    - "This deferred persistence is deliberate: repository mutation is excluded from the CHATGPT_LOCAL continuity proof after revision-1 repo_fast_forward was platform-blocked."
+    - "After a successful bounded result packet, the Architect will independently persist canonical TASK-0119 report/review artifacts through the remote SSOT."
+    - "Executor-side report persistence remains forbidden in revision 6."
 
 failure_behavior:
   tool_surface_absent:
     terminal: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
     actions:
-      - "Do not substitute CODEX_LOCAL, CHATGPT_GITHUB, Remote Desktop Commander, SentinelX, or another surface for the required CHATGPT_LOCAL proof."
-      - "Do not create a false report claiming continuity."
+      - "Do not substitute another execution surface or provider."
+  repo_observer_unavailable_or_platform_blocked_before_execution:
+    terminal: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    actions:
+      - "Do not retry, split, encode, obfuscate, or substitute another execution provider merely to obtain a different safety judgment."
+  local_observation_mismatch:
+    terminal: LOCAL_OBSERVATION_SOURCE_CHANGED
+    actions:
+      - "Do not repair, synchronize, clean, reset, checkout, or otherwise mutate the repository."
   proof_failure:
     terminal: CHATGPT_LOCAL_CONTINUITY_UNPROVEN
     actions:
-      - "Do not retry terminal_exec."
-      - "Do not mutate connector, Runtime lifecycle, transaction, trust, TCC, or product state."
-      - "Preserve the PENDING cutover transaction for Architect review."
+      - "Do not retry repo_observer."
+      - "Do not invoke terminal_exec or another proof primitive."
+      - "Preserve all product and cutover state for Architect review."
+
+forbidden_invocations:
+  - terminal_exec
+  - terminal_start
+  - terminal_poll
+  - terminal_control
+  - terminal_resize
+  - fs_read_batch
+  - capacity_observer
+  - repo_fast_forward
+  - repo_publish
+  - screen_capture
 
 forbidden_changes:
-  - "Do not invoke --commit-cutover."
-  - "Do not invoke --rollback-cutover, --resume-cutover, or --recover-partial-cutover."
-  - "Do not invoke install-prebuilt."
+  - "Do not run Git fetch, pull, merge, reset, rebase, checkout, stash, clean, or any repository synchronization action."
+  - "Do not create, edit, delete, stage, commit, or push repository files."
   - "Do not start, stop, or restart Runtime."
-  - "Do not mutate ServiceManagement or launchd."
-  - "Do not mutate runtime.env."
-  - "Do not refresh/reconnect/detach the connector from inside execution; connector attachment/reconnection is the operator precondition."
-  - "Do not invoke screen_capture."
+  - "Do not invoke cutover commit, rollback, resume, or recovery."
+  - "Do not mutate connector attachment/configuration."
+  - "Do not mutate trust, TCC, Keychain, SSH, browser secrets, or unrelated private state."
   - "Do not enter Stage B."
-  - "Do not click/type/scroll or mutate host UI."
-  - "Do not inspect cookies, browser secrets, Keychain, SSH, Photos, hidden photos, or unrelated private state."
-  - "Do not invoke strict codesign verification or live certificate trust evaluation."
-  - "Do not run ./verify or focused tests."
-  - "Do not modify implementation files."
-  - "Do not mutate any repository, including report artifacts."
-  - "Do not invoke repo_fast_forward or repo_publish."
-  - "Do not mutate main/tags/releases/sibling repositories."
-  - "Do not force-push."
+  - "Do not modify implementation."
+  - "Do not run tests, packaging, signing, install, or verification commands."
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "The exact execution turn exposes all eleven Agent Runtime public MCP tools after explicit same-message app invocation/attachment, without invoking screen_capture, and no later turn is required before terminal_exec."
+    requirement: "The exact execution turn exposes all eleven Agent Runtime public MCP tools after explicit same-message app invocation/attachment."
   - id: AC-2
-    requirement: "Exactly one no-retry terminal_exec read-only execution bundle succeeds through CHATGPT_LOCAL in the same assistant execution turn as the 11/11 surface preflight."
+    requirement: "Exactly one repo_observer call with cwd=/Users/tienphat/Developer/agent-runtime and max_paths=200 executes through CHATGPT_LOCAL in the same assistant turn as the 11/11 surface preflight; retries=0; terminal_exec=0/0."
   - id: AC-3
-    requirement: "The live proof binds to the exact activated successor using the exact metadata.json field schema=5 with PENDING/APP_SWAPPED pinned transaction identity and the installed schema-1 manifest fields schema/runtime_revision/git_tree/requirements_lock_sha256/owner."
+    requirement: "The repo_observer structured result satisfies every exact repository, branch, cleanliness, operation-state, fetched=false, and network_used=false predicate in continuity_proof.required_result."
   - id: AC-4
-    requirement: "runtime.env SHA-256/mode remain unchanged and raw values remain undisclosed."
+    requirement: "The successful repo_observer response is accepted as current end-to-end production MCP execution continuity, evaluated cumulatively with accepted TASK-0118 and prior TASK-0119 evidence rather than by re-running host probes."
   - id: AC-5
-    requirement: "Exactly one canonical tunnel listener remains on 127.0.0.1:8080; its ps command is parsed with token semantics before comparison; the live process executable is exactly the accepted libexec path with the accepted SHA-256 and the remaining argv matches a production-supported canonical form; /healthz + /readyz both return HTTP 200."
+    requirement: "No forbidden Agent Runtime tool, repository synchronization/publication, repository mutation, Runtime/product mutation, lifecycle/cutover/connector/trust/TCC action, screen capture, Stage B, implementation change, or Executor report persistence occurs."
   - id: AC-6
-    requirement: "No cutover commit/rollback/resume, lifecycle mutation, connector mutation, Stage B, screen_capture, trust/TCC mutation, or implementation mutation occurs."
-  - id: AC-7
-    requirement: "The Executor returns a truthful bounded result packet with zero repository mutation; local HEAD remains 90203f901d2503f2289cbbfd8cfdce0bd0126a63 and clean. Architect persistence is deferred outside this execution."
+    requirement: "The Executor returns only the bounded truthful result packet; Architect persistence remains deferred."
 
 terminal_states:
   success: NEEDS_REVIEW
