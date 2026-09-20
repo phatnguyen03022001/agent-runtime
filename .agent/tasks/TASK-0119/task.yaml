@@ -1,7 +1,7 @@
 protocol_version: 3
 
 task_id: TASK-0119
-task_revision: 4
+task_revision: 5
 state: APPROVED
 
 origin:
@@ -35,8 +35,8 @@ accepted_authority:
   installed_target: "/Users/tienphat/Applications/Agent Runtime.app"
 
 operator_precondition:
-  requirement: "Launch revision 4 from a NEW ChatGPT conversation or a freshly reattached conversation by explicitly selecting/invoking the Agent Runtime custom app in the SAME user message that contains the execution prompt."
-  rationale: "Revision 3 proved that same-turn 11/11 surface exposure and terminal_exec execution work. Revision 4 retains turn-atomic execution while correcting two false-negative predicates in the read-only JOIN probe."
+  requirement: "Launch revision 5 from a NEW ChatGPT conversation or a freshly reattached conversation by explicitly selecting/invoking the Agent Runtime custom app in the SAME user message that contains the execution prompt."
+  rationale: "Revision 4 proved that same-turn 11/11 surface exposure and terminal_exec execution work. Revision 5 retains turn-atomic execution while correcting only the remaining false-negative probe predicates identified by Architect read-only diagnosis."
   task_action: NONE
   if_unsatisfied: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
 
@@ -72,8 +72,8 @@ surface_preflight:
 
 repository_binding:
   remote_task_authority:
-    - "Resolve TASK-0119 revision 4 directly from GitHub at the exact revision-4 planning HEAD."
-    - "Fresh-resolve remote dev/main; require dev equals the revision-4 planning HEAD and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+    - "Resolve TASK-0119 revision 5 directly from GitHub at the exact revision-5 planning HEAD."
+    - "Fresh-resolve remote dev/main; require dev equals the revision-5 planning HEAD and main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
     - "Require TASK-0118 review 4bd4f880a3bfd0946b4250ed157dd13f248d2e0d in ancestry and state ACCEPTED."
   local_observation_source:
     repository: /Users/tienphat/Developer/agent-runtime
@@ -82,7 +82,7 @@ repository_binding:
     required_clean: true
     role: "separately authorized local observation source; not the canonical task source"
   requirements:
-    - "Do not synchronize the local checkout in revision 4."
+    - "Do not synchronize the local checkout in revision 5."
     - "Do not invoke repo_fast_forward, repo_publish, git fetch, pull, merge, checkout, reset, rebase, stash, clean, or any other repository synchronization/mutation action."
     - "Require local branch dev, exact local HEAD 90203f901d2503f2289cbbfd8cfdce0bd0126a63, and a clean working tree before the continuity proof."
     - "The local checkout intentionally predates TASK-0119 planning artifacts. This is accepted because TASK authority is resolved remotely and the local checkout is used only to host read-only observation commands."
@@ -91,22 +91,24 @@ repository_binding:
     - "Revision 2 stopped at surface preflight with 0/11 Agent Runtime tools and consumed no terminal_exec authority or host consequence."
     - "Revision 3 completed 11/11 surface preflight and consumed its terminal_exec 1/1 authority with exit code 2 / JOIN FAIL. It made no mutation."
     - "Architect read-only follow-up proved revision-3 false negatives: runtime-manifest.json is present and uses schema-1 keys runtime_revision and git_tree; live tunnel argv matches the canonical Runtime token shape but ps renders the app path space as an escaped space."
+    - "Revision 4 again completed 11/11 surface preflight and same-turn terminal_exec with zero forbidden consequences, but terminated CHATGPT_LOCAL_CONTINUITY_UNPROVEN because two remaining probe predicates used incorrect transaction-metadata and live-tunnel executable semantics."
+    - "Architect read-only diagnosis after revision 4 established the exact canonical metadata file/key and accepted live tunnel libexec identity used by revision 5 below."
 
 
 continuity_proof:
-  terminal_exec_authority: "0/1 fresh revision-4 read-only proof invocation"
+  terminal_exec_authority: "0/1 fresh revision-5 read-only proof invocation"
   retry: false
-  reason_for_fresh_authority: "Revision 3 reached the host and failed only because its probe used incorrect manifest field names and brittle raw-string argv matching. Revision 4 is a corrected proof contract, not a retry seeking a different platform safety judgment."
+  reason_for_fresh_authority: "Revision 4 reached the host and failed only because its probe used incorrect transaction-metadata field semantics and the Homebrew wrapper instead of the accepted live libexec executable identity. Revision 5 changes only those faulty proof predicates and is not a retry seeking a different platform safety judgment."
   execution_bundle:
     - "Use exactly one bounded terminal_exec invocation for the end-to-end successor proof. Compose all checks inside this one read-only command."
-    - "Require the canonical transaction metadata file is regular/non-symlink, schema 5, status PENDING, phase APP_SWAPPED."
+    - "Require the exact canonical transaction metadata file /Users/tienphat/Library/Application Support/Agent Runtime/cutover-transaction/metadata.json is regular/non-symlink. Read schema from the exact field schema and require schema=5, status=PENDING, phase=APP_SWAPPED. Do not use or infer schema_version."
     - "Require candidate_validation.mode is pinned and its expected candidate/handoff hashes equal the exact accepted authority."
     - "Require the transaction-owned candidate-handoff.json SHA-256 equals f8e75129f942fe67541229a598ed8761be574ec5547ffd306c606131718130a8."
     - "Require /Users/tienphat/Applications/Agent Runtime.app is a regular non-symlink directory."
-    - "Read /Users/tienphat/Applications/Agent Runtime.app/Contents/Resources/runtime-manifest.json as schema 1. Require owner=com.picmao.agent-runtime, runtime_revision=18cdb515fe037c9b6cb81ce6529d85ae734e195a, git_tree=ed9a2b089d2f17d2a66eb25da4277f00d418bd07, and requirements_lock_sha256=80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e. Do not look for source_revision/source_tree keys in this schema-1 manifest."
+    - "Read /Users/tienphat/Applications/Agent Runtime.app/Contents/Resources/runtime-manifest.json using the exact schema-1 fields: require schema=1, runtime_revision=18cdb515fe037c9b6cb81ce6529d85ae734e195a, git_tree=ed9a2b089d2f17d2a66eb25da4277f00d418bd07, requirements_lock_sha256=80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e, and owner=com.picmao.agent-runtime. Do not use schema_version and do not look for source_revision/source_tree keys in this schema-1 manifest."
     - "Require exactly one LISTEN socket on 127.0.0.1:8080 and obtain only that listener PID for process identity inspection."
     - "Read the listener command line with a wide ps command, parse it with shell-token semantics such as Python shlex.split so escaped spaces in 'Agent Runtime.app' are normalized before comparison. Do not compare the raw ps string literally."
-    - "After token parsing, require argv[0] resolves to the canonical tunnel-client executable and the remaining tokens equal one of the production-supported canonical forms for Runtime root /Users/tienphat/Applications/Agent Runtime.app/Contents/Resources/runtime: run, --control-plane.poll-channel, main, --mcp.command, then either one combined command=<runtime>/.venv/bin/python -m agent_runtime.server,channel=main token or the supported split-token command form, followed by --health.listen-addr, 127.0.0.1:8080."
+    - "After token parsing, require argv[0] equals the accepted live process executable /opt/homebrew/Cellar/tunnel-client/0.0.11/libexec/tunnel-client. Require SHA-256 of that exact executable equals a916406d4fd5506aab9a593808ebd10ab23aa7d11e1675d33612632b9ead7e51. /opt/homebrew/bin/tunnel-client is only the Homebrew wrapper and MUST NOT be accepted as the live process executable identity. Require the remaining tokens equal one of the production-supported canonical forms for Runtime root /Users/tienphat/Applications/Agent Runtime.app/Contents/Resources/runtime: run, --control-plane.poll-channel, main, --mcp.command, then either one combined command=<runtime>/.venv/bin/python -m agent_runtime.server,channel=main token or the supported split-token command form, followed by --health.listen-addr, 127.0.0.1:8080."
     - "Do not persist PID as an identity invariant, and do not return credentials or tunnel IDs."
     - "Require /healthz HTTP 200 and /readyz HTTP 200."
     - "Require canonical runtime.env remains a regular non-symlink file with mode 0600 and SHA-256 6e6fef8e255b140f28703f8bd515726e1fd93d644e6f838b33ebf319e8133077. Do not read or return raw values."
@@ -128,7 +130,7 @@ reporting:
   repository_mutation_authority: NONE
   executor_output:
     - "Return a bounded Vietnamese result packet to the operator; do not create report.yaml, commit, or push."
-    - "The result packet must state: exact remote revision-4 planning HEAD; that the 11/11 surface preflight and terminal_exec proof occurred in the same assistant execution turn; terminal_exec invocation count and no-retry fact; compact JOIN result; transaction schema/status/phase and pinned hashes; installed schema-1 manifest runtime_revision/git_tree/requirements_lock identity; parsed canonical tunnel argv result; runtime.env SHA-256/mode equality; listener/health/readiness results; local HEAD/cleanliness before and after; and forbidden-effect counters."
+    - "The result packet must state: exact remote revision-5 planning HEAD; that the 11/11 surface preflight and terminal_exec proof occurred in the same assistant execution turn; terminal_exec invocation count and no-retry fact; compact JOIN result; exact transaction metadata path plus schema/status/phase and pinned hashes; installed schema-1 manifest schema/runtime_revision/git_tree/requirements_lock/owner identity; parsed canonical tunnel argv result plus accepted libexec path/SHA-256 equality; runtime.env SHA-256/mode equality; listener/health/readiness results; local HEAD/cleanliness before and after; and forbidden-effect counters."
     - "Do not disclose credentials, tunnel IDs, raw runtime.env values, cookies, tokens, private connector data, or screen content."
   architect_persistence:
     - "After the Executor returns a successful bounded result packet, the Architect will independently persist canonical TASK-0119 report/review artifacts through the remote SSOT."
@@ -173,11 +175,11 @@ acceptance_criteria:
   - id: AC-2
     requirement: "Exactly one no-retry terminal_exec read-only execution bundle succeeds through CHATGPT_LOCAL in the same assistant execution turn as the 11/11 surface preflight."
   - id: AC-3
-    requirement: "The live proof binds to the exact activated successor using schema-5 PENDING/APP_SWAPPED pinned transaction identity and the installed schema-1 manifest fields runtime_revision/git_tree/requirements_lock_sha256."
+    requirement: "The live proof binds to the exact activated successor using the exact metadata.json field schema=5 with PENDING/APP_SWAPPED pinned transaction identity and the installed schema-1 manifest fields schema/runtime_revision/git_tree/requirements_lock_sha256/owner."
   - id: AC-4
     requirement: "runtime.env SHA-256/mode remain unchanged and raw values remain undisclosed."
   - id: AC-5
-    requirement: "Exactly one canonical tunnel listener remains on 127.0.0.1:8080; its ps command is tokenized before comparison and matches a production-supported canonical argv form; /healthz + /readyz both return HTTP 200."
+    requirement: "Exactly one canonical tunnel listener remains on 127.0.0.1:8080; its ps command is parsed with token semantics before comparison; the live process executable is exactly the accepted libexec path with the accepted SHA-256 and the remaining argv matches a production-supported canonical form; /healthz + /readyz both return HTTP 200."
   - id: AC-6
     requirement: "No cutover commit/rollback/resume, lifecycle mutation, connector mutation, Stage B, screen_capture, trust/TCC mutation, or implementation mutation occurs."
   - id: AC-7
