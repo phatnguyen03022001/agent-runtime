@@ -7,12 +7,57 @@ import stat
 from .contracts import FsReadErrorCode, FsReadItem
 from .errors import RuntimeValidationError
 from .executor import _validated_cwd_with_identity, _workspace_root
+from .tool_contract import (
+    Authority,
+    MutationAuthority,
+    NetworkAuthority,
+    ToolAnnotations,
+    ToolClass,
+    ToolContract,
+)
 
 ITEM_OUTPUT_LIMIT_BYTES = 128 * 1024
 BATCH_OUTPUT_LIMIT_BYTES = 256 * 1024
 ITEM_SCAN_LIMIT_BYTES = 1024 * 1024
 BATCH_SCAN_LIMIT_BYTES = 4 * 1024 * 1024
 _READ_CHUNK_BYTES = 64 * 1024
+
+FS_READ_BATCH_CONTRACT = ToolContract(
+    name="fs_read_batch",
+    tool_class=ToolClass.READ,
+    authority=Authority(
+        workspace_bound=True,
+        network=NetworkAuthority.NONE,
+        mutation=MutationAuthority.NONE,
+    ),
+    annotations=ToolAnnotations(
+        read_only=True,
+        destructive=False,
+        idempotent=True,
+        open_world=False,
+    ),
+    preconditions={
+        "cwd": "validated-workspace-descendant",
+        "path": {
+            "kind": "cwd-relative-descendant",
+            "disallowed_components": ["", ".", ".."],
+            "symlink_traversal": False,
+            "regular_files_only": True,
+        },
+    },
+    bounds={
+        "max_items": 20,
+        "item_output_bytes": ITEM_OUTPUT_LIMIT_BYTES,
+        "batch_output_bytes": BATCH_OUTPUT_LIMIT_BYTES,
+        "item_scan_bytes": ITEM_SCAN_LIMIT_BYTES,
+        "batch_scan_bytes": BATCH_SCAN_LIMIT_BYTES,
+    },
+    postconditions={
+        "content_encoding": "utf-8-strict",
+        "result_order": "request-order",
+        "filesystem_failures": "per-item",
+    },
+)
 
 _ERROR_MESSAGES: dict[str, str] = {
     "NOT_FOUND": "File not found",
