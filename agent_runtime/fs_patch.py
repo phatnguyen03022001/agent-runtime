@@ -235,7 +235,14 @@ def _revalidate_target(
                 "LOCAL_STATE_CHANGED",
                 "target identity changed before replacement",
             )
-        raw = _read_bounded(check_fd, MAX_INPUT_FILE_BYTES)
+        try:
+            raw = _read_bounded(check_fd, MAX_INPUT_FILE_BYTES)
+        except CapabilityFailure as exc:
+            raise CapabilityFailure(
+                ContractErrorCode.STATE_CHANGED,
+                "LOCAL_STATE_CHANGED",
+                "target content changed before replacement",
+            ) from exc
         digest = hashlib.sha256(raw).hexdigest()
         if digest != expected_sha256:
             raise CapabilityFailure(
