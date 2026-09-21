@@ -1,0 +1,424 @@
+protocol_version: 3
+
+task_id: TASK-0137
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: successor_task
+  task_id: TASK-0136
+  gap_id: ""
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  transport: AGENT_RUNTIME
+  model: GPT-5.6 Sol
+  effort: HIGH
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+execution_skills:
+  required:
+    - executor
+    - verification
+  recommended:
+    - simplicity
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0136/review-r1.yaml@1f146748ae6d47ed9db6fb81217c2ceccbec0d0e"
+    role: "Accepted Runtime version SSOT, 19-capability registry/discovery, and deterministic schema export."
+    precedence: 1
+  - source: "agent_runtime/version.py@1f146748ae6d47ed9db6fb81217c2ceccbec0d0e"
+    role: "Runtime version SSOT."
+    precedence: 2
+  - source: "agent_runtime/capability_registry.py@1f146748ae6d47ed9db6fb81217c2ceccbec0d0e"
+    role: "Capability inventory and static availability authority."
+    precedence: 3
+  - source: "agent_runtime/schema_export.py@1f146748ae6d47ed9db6fb81217c2ceccbec0d0e"
+    role: "Generated schema consistency authority."
+    precedence: 4
+  - source: "macos/package_provenance.py@1f146748ae6d47ed9db6fb81217c2ceccbec0d0e"
+    role: "Accepted package/install identity semantics."
+    precedence: 5
+  - source: "macos/candidate_cutover.py@1f146748ae6d47ed9db6fb81217c2ceccbec0d0e"
+    role: "Accepted schema-5 cutover transaction identity semantics."
+    precedence: 6
+
+structure_authority:
+  status: RESOLVED
+  source: existing_agent_runtime_structure
+  rationale: >-
+    Runtime doctor is a read-only CLI consumer of already accepted Runtime identity,
+    registry/schema, local workspace/config, package/install, and cutover evidence. It must
+    not become a new MCP capability, orchestration layer, network monitor, or mutation path.
+
+executor_fit:
+  status: FIT
+  rationale: >-
+    One canonical diagnostic report object plus JSON/human rendering and bounded local checks
+    form one coherent independently reviewable outcome.
+
+objective: >-
+  Implement runtime doctor --json as a bounded read-only local diagnostic that composes the
+  accepted Runtime identity, capability registry, MCP/schema consistency, workspace/config,
+  Git readiness, installed package, service-registration, cutover, and governance/protection
+  evidence into one canonical report object without mutating repository, Runtime, package,
+  service, TCC, or host state.
+
+public_surface:
+  mcp_tool_count: 19
+  rule: "Do not add a twentieth MCP tool."
+  cli:
+    required: "python -m agent_runtime.doctor --json"
+    optional_human: "python -m agent_runtime.doctor"
+  rendering_rule: >-
+    JSON and optional human output must render the same canonical report object; human mode
+    must not run additional checks or change diagnostic semantics.
+
+report_contract:
+  schema_version: 1
+  top_level_fields:
+    - schema_version
+    - runtime_version
+    - status
+    - checks
+  status_values:
+    - healthy
+    - degraded
+    - unhealthy
+  check_fields:
+    - id
+    - status
+    - reason_code
+    - message
+    - evidence
+  check_status_values:
+    - pass
+    - warn
+    - fail
+    - not_applicable
+  composition:
+    healthy: "all applicable required checks pass and no warnings exist"
+    degraded: "no check fails and at least one warning exists"
+    unhealthy: "one or more checks fail"
+  exit_codes:
+    healthy: 0
+    degraded: 1
+    unhealthy: 1
+    invalid_invocation_or_internal_serialization_failure: 2
+  output_rules:
+    - "JSON mode emits exactly one JSON object to stdout and diagnostics only through that object."
+    - "JSON is deterministic for an unchanged observed local state."
+    - "No secret value, credential, token, raw environment dump, arbitrary command output, or unbounded path content is emitted."
+    - "Messages and evidence are bounded."
+
+checks:
+  - id: runtime_identity
+    purpose: >-
+      Prove Runtime version SSOT matches MCP server metadata, runtime_capabilities, and
+      schema-export Runtime identity.
+    required: true
+  - id: capability_registry
+    purpose: >-
+      Prove registry names/order equal the 19-tool MCP surface, descriptors remain valid,
+      and screen_capture remains supported but unavailable with VISUAL_PERCEPTION_BLOCKED.
+    required: true
+  - id: tool_contract_schema
+    purpose: >-
+      Prove all 19 bindings retain ToolContract Kernel v1 alignment and the generated schema
+      bundle remains internally valid with request/result schemas equal to actual MCP schemas.
+    required: true
+  - id: workspace
+    purpose: >-
+      Validate AGENT_RUNTIME_WORKSPACE_ROOT is present, absolute, existing, directory-shaped,
+      and safely resolved without traversing arbitrary user data.
+    required: true
+  - id: capacity_session_config
+    purpose: >-
+      Validate configured parallelism/session limits against accepted bounds and report only
+      safe numeric/config status. Do not enumerate user processes or session payloads.
+    required: true
+  - id: git_readiness
+    purpose: >-
+      Validate fixed /usr/bin/git availability plus Runtime Git identity environment readiness
+      for repo_commit. Never print Git name/email values.
+    required: true
+  - id: installed_package_identity
+    purpose: >-
+      Inspect only the canonical installed Agent Runtime app location and bounded package
+      metadata: bundle identity/version, runtime-manifest identity, package-owned executables,
+      and code-signing consistency where available. Do not build, install, sign, repair, or
+      mutate the package.
+    required: false
+  - id: service_registration
+    purpose: >-
+      If the canonical installed app exists, use only the accepted fixed read-only service
+      status interface or equivalent bounded local observation to classify UI/runtime service
+      registration. Do not bootstrap, kickstart, kill, register, unregister, or prompt.
+    required: false
+  - id: cutover_identity
+    purpose: >-
+      Inspect only the canonical cutover-transaction location. Validate recognized schema-5
+      metadata/phase/identity when present using accepted semantics. Absence is valid when no
+      transaction is expected; malformed or contradictory present state is a failure.
+    required: true
+  - id: governance_protection
+    purpose: >-
+      Prove public tool count remains 19, screen_capture remains governance-blocked before
+      native capture, protected-runtime policy remains active, and no diagnostic path widens
+      permissions or mutation authority.
+    required: true
+
+installed_state_semantics:
+  canonical_app: "~/Applications/Agent Runtime.app"
+  canonical_state_dir: "~/Library/Application Support/Agent Runtime"
+  absence_behavior:
+    installed_package_identity: "not_applicable when app is absent"
+    service_registration: "not_applicable when app is absent"
+    cutover_identity: "pass when transaction is absent; validate strictly when present"
+  final_task_dependency: >-
+    TASK-0138 will package/install/cut over and then require doctor healthy against the
+    resulting installed state; TASK-0137 must not perform those consequences itself.
+
+fixed_read_only_processes:
+  allowed_when_material:
+    - "/usr/bin/git --version"
+    - "/usr/bin/codesign read-only identity/verification inspection"
+    - "canonical installed AgentRuntimeMenuBar --service-management status"
+  forbidden:
+    - arbitrary shell
+    - arbitrary caller-supplied argv
+    - launchctl mutation
+    - service bootstrap/kickstart/kill
+    - network commands
+    - package/build/install commands
+
+network_policy:
+  allowed: false
+  rule: >-
+    Doctor performs no network access, including git fetch/push/ls-remote, HTTP probes,
+    tunnel-client doctor, GitHub API calls, or arbitrary connectivity checks.
+
+privacy_and_permission_policy:
+  forbidden:
+    - TCC prompts
+    - screen capture invocation
+    - Accessibility or Automation prompts
+    - Keychain reads
+    - SSH secret/key reads
+    - browser cookies/history inspection
+    - Photos access
+    - CONTROL_PLANE_API_KEY value reads
+    - token/credential output
+    - generic environment dumps
+  environment_rules:
+    - "Read only explicitly required non-secret variables by name."
+    - "Git identity values may be validated for presence/shape but never returned."
+    - "Workspace root may be returned only in bounded normalized form if needed for diagnosis."
+
+scope:
+  expected_files_are_restrictive: false
+  allowed_components:
+    - agent_runtime/doctor.py
+    - agent_runtime/contracts.py
+    - agent_runtime/version.py
+    - agent_runtime/capability_registry.py
+    - agent_runtime/schema_export.py
+    - "existing Runtime modules only for minimal pure/read-only helper extraction required by doctor"
+    - tests
+    - README.md
+    - .agent/tasks/TASK-0137/report-r1.yaml
+  required_changes:
+    - "Add canonical closed Pydantic doctor report/check models."
+    - "Add read-only doctor collection and CLI JSON rendering."
+    - "Reuse accepted authorities instead of duplicating version/registry/schema semantics."
+    - "Add bounded fixtures for installed package, service status, cutover state, malformed state, and privacy/no-mutation guarantees."
+    - "Document doctor invocation and semantics if README would otherwise be incomplete."
+
+invariants:
+  - "Public MCP surface remains exactly 19 tools in accepted order."
+  - "Runtime version remains 0.2.0."
+  - "ToolContract Kernel v1 remains unchanged."
+  - "Capability registry/discovery semantics remain unchanged."
+  - "Schema export semantics and bundle derivation remain unchanged."
+  - "repo_publish exact-CAS semantics remain unchanged."
+  - "repo_stage, repo_diff ReceiptV1, and repo_commit semantics remain unchanged."
+  - "screen_capture remains governance-blocked before native capture."
+  - "Doctor performs zero repository/package/service/host mutation."
+  - "Doctor performs zero network access."
+  - "Doctor does not expose secrets or private user content."
+  - "Doctor is not an install/cutover repair command."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "python -m agent_runtime.doctor --json emits the closed DoctorReport v1 contract and correct exit status."
+    evidence_required: >-
+      CLI tests prove exact fields/enums, one JSON object on stdout, bounded output,
+      exit 0 only for healthy state, exit 1 for degraded/unhealthy state, and exit 2 only
+      for invalid invocation/internal serialization failure.
+  - id: AC-2
+    requirement: "Runtime identity, registry, ToolContract, and schema consistency checks reuse accepted TASK-0136 authorities."
+    evidence_required: >-
+      Tests prove version equality, exact 19-tool order, descriptor semantics, ToolContract
+      Kernel v1 alignment, and actual registered-schema equality without a second metadata SSOT.
+  - id: AC-3
+    requirement: "Workspace, capacity/session config, and Git readiness checks are bounded and secret-safe."
+    evidence_required: >-
+      Tests cover missing/invalid workspace, invalid configured limits, missing Git executable,
+      missing/malformed Runtime Git identity, and prove identity values are never emitted.
+  - id: AC-4
+    requirement: "Installed package identity inspection is bounded, read-only, and exact when the canonical app exists."
+    evidence_required: >-
+      Disposable fixtures cover absent app, valid owned bundle/runtime manifest/version,
+      malformed/foreign package state, executable/code-signing identity handling, and prove no
+      package/build/install/sign mutation occurs.
+  - id: AC-5
+    requirement: "Service registration inspection is read-only and fixed-surface."
+    evidence_required: >-
+      Tests prove only the accepted canonical status interface/equivalent read-only observation
+      is used, valid enabled/not-registered/requires-approval states are classified, and no
+      service-management mutation verb can execute.
+  - id: AC-6
+    requirement: "Cutover identity check understands canonical schema-5 state without mutation."
+    evidence_required: >-
+      Fixtures cover absent transaction, valid recognized transaction/phase, malformed metadata,
+      path/identity contradiction, and prove no rollback/resume/commit/cutover consequence occurs.
+  - id: AC-7
+    requirement: "Governance/protection check proves blocked visual capability and preserved mutation boundaries."
+    evidence_required: >-
+      Tests prove screen_capture remains VISUAL_PERCEPTION_BLOCKED before native capture,
+      19-tool surface remains unchanged, protected-runtime policy remains active, and doctor
+      never widens capability authority.
+  - id: AC-8
+    requirement: "Doctor has no network, TCC, secret, or private-data side effects."
+    evidence_required: >-
+      Focused tests block subprocess/network/filesystem access outside approved fixed local
+      surfaces and fail if doctor attempts network, Screen Recording/TCC, Keychain, SSH,
+      browser-cookie, Photos, control-plane secret, or generic environment inspection.
+  - id: AC-9
+    requirement: "JSON and optional human rendering derive from the same canonical report object."
+    evidence_required: "Renderer tests prove no additional checks/probes and consistent status/check identities."
+  - id: AC-10
+    requirement: "Prior accepted Runtime contracts remain green."
+    evidence_required: >-
+      Focused regressions cover TASK-0136 registry/schema export, repo_publish exact CAS,
+      native stage/diff/commit, ToolContract Kernel v1, and screen_capture governance.
+  - id: AC-11
+    requirement: "Canonical local ./verify completes with zero failures."
+    evidence_required: "Observed local verifier totals and exit code are recorded in Executor report."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Run focused doctor fixtures/CLI/privacy/read-only tests."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Run focused TASK-0136 registry/schema and prior mutation/governance regressions."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Run git diff --check."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Run canonical local ./verify with durable exact totals."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Inspect exact final diff before staging."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "GitHub Actions workflow_dispatch remains optional independent evidence only."
+    expected_signal: "Not required when canonical local verification is clean."
+
+executor_flow:
+  - "Fresh-resolve canonical GitHub main and require exact handoff base."
+  - "Require local target identity, main branch, exact HEAD/tracking base, and clean worktree/index."
+  - "Mutate only TASK-0137-authorized paths."
+  - "Run focused acceptance proofs."
+  - "Run canonical local ./verify and require zero failures."
+  - "Inspect exact final diff."
+  - "Stage through native repo_stage."
+  - "Obtain repo_diff(staged) ReceiptV1."
+  - "Commit through native repo_commit."
+  - "Publish implementation directly to main through exact-CAS repo_publish."
+  - "Fresh-prove canonical remote main."
+  - "Persist .agent/tasks/TASK-0137/report-r1.yaml through the governed native mutation chain."
+  - "Fresh-prove canonical remote main and stop for independent Architect review."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+forbidden_changes:
+  - "Add a twentieth MCP tool."
+  - "Implement TASK-0138 package/install/cutover/freeze consequences."
+  - "Build, package, install, sign, restart, register, unregister, rollback, resume, commit, or cut over Runtime."
+  - "Run network probes or remote Git operations from doctor."
+  - "Add generic shell execution or caller-supplied command execution."
+  - "Add plugin/skill scanning, dynamic loading, worktrees, fan-out, workers, scheduler, orchestration, SQLite, policy DSL, or model loop."
+  - "Prompt or widen TCC permissions."
+  - "Read Keychain, SSH secret material, browser cookies/history, Photos, or control-plane credentials."
+  - "Change Runtime version, ToolContract Kernel, registry/discovery, schema export, repo mutation, or screen_capture governance semantics."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+failure_policy:
+  - "Fail closed on task/base/local/remote identity drift."
+  - "Do not repair unhealthy doctor findings inside doctor."
+  - "Do not broaden filesystem/process/network authority to make a check easier."
+  - "If accepted package/cutover identity cannot be reused safely without duplicating large mutation code, stop for Architect judgment and report the smallest helper-boundary gap."
+  - "Do not switch execution surface solely to obtain a different platform safety judgment."
+
+reporting:
+  path: .agent/tasks/TASK-0137/report-r1.yaml
+  owner: EXECUTOR
+  state_on_success: NEEDS_REVIEW
+  required_evidence:
+    - "exact execution base and tree"
+    - "exact changed paths"
+    - "DoctorReport v1 schema and CLI exit semantics"
+    - "exact implemented check inventory"
+    - "healthy/degraded/unhealthy composition proof"
+    - "runtime/registry/schema consistency proof"
+    - "workspace/capacity/session/Git readiness proof"
+    - "installed package/service/cutover fixture proof"
+    - "privacy/no-network/no-mutation proof"
+    - "public 19-tool and screen_capture governance regression proof"
+    - "focused test totals"
+    - "canonical ./verify totals"
+    - "staged repo_diff ReceiptV1"
+    - "repo_commit commit SHA and receipt"
+    - "implementation publication identity"
+    - "final report publication identity and local hygiene"
+
+successor:
+  if_accepted: TASK-0138
+  intent: "Package/install/cutover + final audit/freeze/cleanup using doctor healthy state as accepted evidence."
+
+blocking_decisions: []
+execution_ready: true
