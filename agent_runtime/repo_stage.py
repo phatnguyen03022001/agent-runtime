@@ -211,7 +211,9 @@ def _run_git(
     deadline: float,
     stdin: bytes | None = None,
     stdout_limit: int = MAX_METADATA_BYTES,
+    env: dict[str, str] | None = None,
 ) -> _GitResult:
+    git_env = _git_env() if env is None else env
     try:
         completed = subprocess.run(
             _git_argv(args),
@@ -219,7 +221,7 @@ def _run_git(
             input=stdin,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            env=_git_env(),
+            env=git_env,
             shell=False,
             timeout=_remaining(deadline),
             check=False,
@@ -830,11 +832,14 @@ def _is_ignored(repo: Path, path: str, deadline: float) -> bool:
             "INVALID_PATH",
             "candidate path must be valid UTF-8",
         ) from exc
+    check_env = _git_env()
+    check_env.pop("GIT_LITERAL_PATHSPECS", None)
     result = _run_git(
         repo,
         ["check-ignore", "--stdin", "-z"],
         deadline=deadline,
         stdin=stdin,
+        env=check_env,
     )
     if result.returncode == 0:
         return True
