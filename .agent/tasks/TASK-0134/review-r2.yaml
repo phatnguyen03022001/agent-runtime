@@ -1,0 +1,41 @@
+protocol_version: 3
+
+task_id: TASK-0134
+task_revision: 2
+review_revision: 2
+state: REWORK
+
+reviewed_report:
+  path: .agent/tasks/TASK-0134/report-r2.yaml
+  commit: "7837c1b3d2b84ee4c0744f5c63d53d27ed41754c"
+
+architect_judgment:
+  contract_change_required: false
+  public_surface_change_required: false
+  repo_commit_defect_proven: false
+  repo_stage_architecture_defect_proven: false
+  narrow_environment_defect_proven: true
+  root_cause: CHECK_IGNORE_GLOBAL_LITERAL_PATHSPEC_MODE_INCOMPATIBLE
+
+decision:
+  revision: 3
+  reuse_branch: task-0134-r1
+  reuse_pr: 5
+  new_branch: false
+  new_pr: false
+  allowed_revision_3_delta_paths:
+    - agent_runtime/repo_stage.py
+    - tests/test_repo_stage.py
+
+required_fix:
+  - "Keep _git_env() semantics unchanged for normal Git commands."
+  - "Extend _run_git with a narrow explicit environment override capability without changing default behavior."
+  - "For _is_ignored only, derive env from _git_env(), remove GIT_LITERAL_PATHSPECS, and pass that explicit env to _run_git."
+  - "Keep git check-ignore --stdin -z and NUL-delimited validated path input."
+  - "Do not set GIT_NOGLOB_PATHSPECS/GIT_GLOB_PATHSPECS/GIT_ICASE_PATHSPECS for check-ignore."
+  - "Do not pass candidate path in argv."
+  - "0 => ignored, 1 => not ignored, other => GIT_UNAVAILABLE."
+  - "Add regression asserting only check-ignore omits GIT_LITERAL_PATHSPECS while another representative Git call retains it."
+
+next_action:
+  intent: "Repair only check-ignore environment isolation, run new PR CI, and stop for Architect review."
