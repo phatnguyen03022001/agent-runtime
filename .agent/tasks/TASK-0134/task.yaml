@@ -1,0 +1,667 @@
+protocol_version: 3
+
+task_id: TASK-0134
+task_revision: 1
+state: APPROVED
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  governance_branch: control
+  source_branch: main
+  ephemeral_branch: task-0134-r1
+
+execution_surface:
+  id: CHATGPT_GITHUB
+  controller: CHATGPT
+  transport: GITHUB
+  model: GPT-5.6 Sol
+  effort: HIGH
+
+governance_identity:
+  control: SELF_GOVERNANCE_HEAD
+  rule: >-
+    The immutable governance_head is supplied externally in the launch packet.
+    Governance history must never be synchronized into main.
+
+operator_transition:
+  required: true
+  reason: >-
+    TASK-0133 proved create_branch is blocked by platform safety before GitHub dispatch.
+    Do not retry that primitive.
+  exact_transition: >-
+    Operator creates exactly one ephemeral branch ref task-0134-r1 at exact source_base,
+    with no additional commit or mutation.
+  executor_precondition: >-
+    task-0134-r1 must already exist and point exactly to source_base before any source mutation.
+  failure_terminal: OPERATOR_TRANSITION_REQUIRED
+
+delivery_authority:
+  source_base: "049e8e129a92943b4544cfd66c9e9076d46faad1"
+  source_base_tree: "c48412471bf51ff94ffcc95744de097030ca3456"
+  source_expected_branch: main
+
+  allowed_source_paths:
+    - agent_runtime/contracts.py
+    - agent_runtime/repo_stage.py
+    - agent_runtime/repo_commit.py
+    - agent_runtime/server.py
+    - tests/test_repo_stage.py
+    - tests/test_repo_commit.py
+    - tests/test_repo_stage_commit_mcp.py
+    - tests/test_repo_diff.py
+    - tests/test_fs_read_batch.py
+    - tests/test_fs_write_mcp.py
+    - tests/test_mcp_client_conformance.py
+    - tests/test_mcp_contracts.py
+    - tests/test_repo_fast_forward_mcp.py
+    - tests/test_repo_observer_mcp.py
+    - tests/test_repo_publish_mcp.py
+    - tests/test_screen_capture_mcp.py
+    - tests/test_surface_and_scripts.py
+    - tests/test_timing.py
+    - tests/test_tool_contract.py
+    - tests/test_wave1_mcp.py
+
+existing_blob_preconditions:
+  agent_runtime/contracts.py: "584c09fa3a307120f468e307cb19a88fb026c321"
+  agent_runtime/server.py: "00b958d82ca64694f919624c802eb3f208f92780"
+  agent_runtime/tool_contract.py: "153f1272d4840d41091f52480dfa3a43a333c13f"
+  agent_runtime/repo_diff.py: "0d0d77fd992f89fba8a2ddbf1aaa99ff81519461"
+  agent_runtime/repo_fast_forward.py: "0ff32e5a79940d2372cdc80f0b5269320d7e24b0"
+  agent_runtime/repo_publish.py: "c696388c9d112fa4593a066aecae1765748f0087"
+  agent_runtime/fs_safety.py: "4bf378678eedb39668bce139600dc8357a7d2851"
+  tests/test_fs_read_batch.py: "6bc904390118beb37ffe115d2d2bb897ae005e26"
+  tests/test_fs_write_mcp.py: "894d7883ac73ac4f360f9b27a1616fb83f41a345"
+  tests/test_mcp_client_conformance.py: "05d57ef1445a045b2583fb7ad34792bb75400b13"
+  tests/test_mcp_contracts.py: "6da4fb1a07490d650a5a086f6514669561d73af0"
+  tests/test_repo_diff.py: "13db85bc327ed5f7836c28b25da8e58b4e96bf56"
+  tests/test_repo_fast_forward_mcp.py: "c813827a4db843c88c20552dc6770c61fcc4ce77"
+  tests/test_repo_observer_mcp.py: "45f47edad0266566935098108f5fbee01bf675da"
+  tests/test_repo_publish_mcp.py: "d20a15a5e3bac5bd1155fa3a5b98e1bcebd3cabf"
+  tests/test_screen_capture_mcp.py: "efa94b4c581bcc92d9a81dbb8c33d1238d526ba8"
+  tests/test_surface_and_scripts.py: "0f04c2806d3bd9abd7c926073993021937472a0d"
+  tests/test_timing.py: "48045ede7ab9011ffc4d432a409ddad46d79347a"
+  tests/test_tool_contract.py: "92cc953fe96fca73f976b107f4d38e316aac2b14"
+  tests/test_wave1_mcp.py: "0725030918c1e561c2bb936e110ad0c989a62420"
+
+required_absent_paths:
+  - agent_runtime/repo_stage.py
+  - agent_runtime/repo_commit.py
+  - tests/test_repo_stage.py
+  - tests/test_repo_commit.py
+  - tests/test_repo_stage_commit_mcp.py
+
+objective: >-
+  Add a bounded native repository mutation chain:
+  repo_stage stages exactly one complete explicit text-file candidate into an initially clean index;
+  repo_commit commits only the exact staged state authorized by a repo_diff(staged) ReceiptV1.
+  repo_commit must use Git plumbing and compare-and-swap branch ref update. Neither capability may
+  use network, implicit git add, hooks, signing, push, fetch, shell, or arbitrary external helpers.
+  Grow the public MCP surface from 16 to exactly 18 tools.
+
+architecture:
+  chain: >-
+    fs_search/fs_patch/fs_write -> repo_stage -> repo_diff(staged receipt) -> repo_commit
+    -> later repo_publish.
+  invariants:
+    - "repo_stage never uses git add or git add -A."
+    - "repo_stage accepts the full commit candidate in one bounded explicit batch."
+    - "repo_stage requires staged diff empty before mutation."
+    - "repo_commit never stages."
+    - "repo_commit requires exact expected HEAD and exact staged repo-diff receipt."
+    - "repo_commit never pushes or fetches."
+    - "Git branch mutation uses update-ref new old compare-and-swap."
+    - "Only ordinary UTF-8 regular files/deletes/executable-bit changes are native v1."
+    - "Binary files, symlinks, gitlinks/submodules, and special modes remain outside native v1."
+    - "ToolContract Kernel v1 remains unchanged."
+    - "One authorized repository writer remains an external governance invariant; do not build a scheduler or distributed lock here."
+
+git_execution:
+  executable: /usr/bin/git
+  shell: false
+  network: none
+  environment:
+    - "Construct a bounded explicit environment; do not blindly inherit GIT_* variables."
+    - "GIT_LITERAL_PATHSPECS=1"
+    - "GIT_OPTIONAL_LOCKS=0"
+    - "GIT_TERMINAL_PROMPT=0"
+    - "GIT_PAGER=cat"
+    - "PAGER=cat"
+    - "GIT_CONFIG_NOSYSTEM=1"
+    - "Use fixed -c overrides for core.fsmonitor=false, core.pager=cat, color.ui=false, submodule.recurse=false, core.hooksPath=/dev/null, commit.gpgSign=false, gc.auto=0, maintenance.auto=false."
+    - "LC_ALL=C and LANG=C."
+  fixed_repo_preconditions:
+    - "cwd is exactly repository root inside workspace"
+    - "repository non-bare"
+    - "attached HEAD"
+    - "current branch equals requested branch"
+    - "configured upstream equals origin/<branch>"
+    - "current HEAD equals expected_head_sha"
+    - "no merge/rebase/cherry-pick/bisect"
+    - "no conflicts"
+
+repo_stage:
+  implementation_path: agent_runtime/repo_stage.py
+  contract_constant: REPO_STAGE_CONTRACT
+  tool_contract:
+    tool_class: repo
+    authority:
+      workspace_bound: true
+      network: none
+      mutation: bounded
+    annotations:
+      read_only: false
+      destructive: true
+      idempotent: false
+      open_world: false
+
+  public_input:
+    cwd: AbsoluteCwd
+    branch:
+      type: strict_string
+      max_chars: 255
+    expected_head_sha:
+      type: lowercase_git_sha40
+    items:
+      min: 1
+      max: 50
+      item:
+        path:
+          type: strict_string
+          max_chars: 4096
+          semantics: normalized_repo_relative_descendant
+        operation:
+          enum:
+            - present
+            - delete
+        expected_sha256:
+          type: "lowercase_sha256|null"
+          present: required
+          delete: forbidden
+
+  bounds:
+    max_items: 50
+    path_chars: 4096
+    per_file_bytes: 1048576
+    aggregate_present_bytes: 16777216
+    metadata_output_bytes: 262144
+    deadline_seconds: 5
+
+  preconditions:
+    - "All item paths are unique."
+    - "No path is absolute, empty, dot, dot-dot, inside .git, or traverses a symlink."
+    - "repo_diff(scope=staged) is exactly empty before staging."
+    - "All non-ignored tracked worktree changes and non-ignored untracked files are exactly the selected item path set; no unselected candidate path may exist."
+    - "For operation=present, target is current regular no-follow file, <=1 MiB, strict UTF-8, NUL-free, and exact raw SHA-256 equals expected_sha256."
+    - "For operation=present, if HEAD already contains the path, HEAD mode must be ordinary regular 100644/100755 and HEAD blob must be <=1 MiB strict UTF-8 NUL-free."
+    - "For operation=present with path absent from HEAD, path must be a non-ignored untracked file."
+    - "For operation=delete, worktree path must be absent, HEAD must track the path as ordinary regular 100644/100755, and HEAD blob must be <=1 MiB strict UTF-8 NUL-free."
+    - "Reject symlink/gitlink/submodule/special-mode baseline or candidate entries."
+
+  mutation:
+    - "Prevalidate every item completely before index mutation."
+    - "Immediately before index mutation, recheck HEAD, branch, operation state, empty staged diff, candidate path set, present-file identity/content SHA, and delete absence."
+    - "For each present item, write the exact raw bytes as a Git blob using fixed /usr/bin/git hash-object -w --stdin without path filters. Object writes may leave unreachable blobs if a later state guard fails; this is bounded acceptable Git object-store residue."
+    - "Derive Git mode as 100755 when the regular worktree file has executable bits, otherwise 100644."
+    - "For delete use index removal entry."
+    - "Apply the entire candidate to the index through one fixed git update-index --index-info invocation with NUL-safe input; no git add."
+    - "Git index locking is authoritative for the single invocation; do not implement a custom index transaction manager."
+    - "HEAD must remain unchanged."
+
+  postconditions:
+    - "Staged path set equals exactly selected item path set."
+    - "Compute staged state using the exact existing repo_diff(scope=staged) semantics."
+    - "Returned staged_diff_receipt must be kind=repo-diff and identical to an immediate public repo_diff(staged) receipt over the same state."
+    - "Report whether tracked worktree and non-ignored untracked state are clean after staging."
+    - "Normal successful path requires post_stage_clean=true."
+    - "If external state changes after the atomic index update, fail STATE_CHANGED / LOCAL_STATE_CHANGED rather than claiming a clean candidate. Do not attempt unsafe rollback over concurrent state."
+
+  public_result:
+    schema_version: 1
+    fields:
+      branch: string
+      head_sha: git_sha40
+      staged_paths:
+        - path
+        - operation
+        - worktree_sha256
+        - git_blob_sha
+        - git_mode
+      staged_diff_receipt:
+        schema_version: 1
+        kind: repo-diff
+        digest: sha256
+      post_stage_clean: true
+      network_used: false
+
+  failure_reasons:
+    - INVALID_BRANCH
+    - INVALID_ITEMS
+    - INVALID_PATH
+    - DUPLICATE_PATH
+    - EXPECTED_SHA_REQUIRED
+    - EXPECTED_SHA_FORBIDDEN
+    - NOT_REPOSITORY_ROOT
+    - BARE_REPOSITORY
+    - DETACHED_HEAD
+    - BRANCH_MISMATCH
+    - UPSTREAM_MISMATCH
+    - HEAD_MISMATCH
+    - OPERATION_IN_PROGRESS
+    - CONFLICTS_PRESENT
+    - STAGED_CHANGES_PRESENT
+    - UNSELECTED_CHANGES_PRESENT
+    - TARGET_NOT_FOUND
+    - TARGET_ALREADY_ABSENT
+    - EXPECTED_SHA_MISMATCH
+    - SYMLINK_DISALLOWED
+    - NOT_REGULAR_FILE
+    - INVALID_UTF8
+    - BINARY_CONTENT
+    - INPUT_FILE_LIMIT
+    - AGGREGATE_FILE_LIMIT
+    - UNSUPPORTED_GIT_MODE
+    - IGNORED_PATH
+    - LOCAL_STATE_CHANGED
+    - GIT_UNAVAILABLE
+    - INDEX_UPDATE_FAILED
+
+repo_commit:
+  implementation_path: agent_runtime/repo_commit.py
+  contract_constant: REPO_COMMIT_CONTRACT
+  tool_contract:
+    tool_class: repo
+    authority:
+      workspace_bound: true
+      network: none
+      mutation: bounded
+    annotations:
+      read_only: false
+      destructive: true
+      idempotent: false
+      open_world: false
+
+  public_input:
+    cwd: AbsoluteCwd
+    branch:
+      type: strict_string
+      max_chars: 255
+    expected_head_sha:
+      type: lowercase_git_sha40
+    expected_diff_receipt:
+      closed_object:
+        schema_version: 1
+        kind: repo-diff
+        digest: lowercase_sha256
+    message:
+      type: strict_utf8_string
+      min_utf8_bytes: 1
+      max_utf8_bytes: 16384
+      nul: forbidden
+
+  runtime_git_identity:
+    source: process_environment
+    variables:
+      name: AGENT_RUNTIME_GIT_NAME
+      email: AGENT_RUNTIME_GIT_EMAIL
+    rules:
+      - "Both must be present and non-empty."
+      - "Each must be strict UTF-8, <=256 UTF-8 bytes, and contain no NUL, CR, or LF."
+      - "Do not accept author/committer identity from MCP input."
+      - "Do not silently fallback to repository/global Git user.name or user.email."
+      - "Use the same validated identity as author and committer in v1."
+      - "If unavailable or invalid, fail UNAVAILABLE / GIT_IDENTITY_UNAVAILABLE before commit object creation."
+
+  bounds:
+    message_utf8_bytes: 16384
+    staged_paths: 50
+    per_blob_bytes: 1048576
+    aggregate_staged_blob_bytes: 16777216
+    deadline_seconds: 5
+
+  preconditions:
+    - "All fixed repository preconditions above."
+    - "Staged diff is non-empty."
+    - "Current repo_diff(staged).diff_receipt equals expected_diff_receipt exactly."
+    - "No tracked unstaged changes."
+    - "No non-ignored untracked files."
+    - "Every staged path is ordinary regular UTF-8 text add/modify/delete or executable-mode change."
+    - "Reject symlink, gitlink/submodule, special modes, binary content, invalid UTF-8, NUL, >1MiB blob, >50 paths, or >16MiB aggregate staged blob content."
+    - "No merge commit: exactly one parent, expected_head_sha."
+
+  mutation:
+    - "Capture tree_sha using fixed git write-tree."
+    - "Immediately recheck expected staged receipt, HEAD, branch, clean worktree/untracked state, and require a second write-tree equals captured tree_sha."
+    - "Create commit object with fixed git commit-tree <tree_sha> -p <expected_head_sha>, message supplied through stdin, validated Runtime identity via environment, no hooks and no signing."
+    - "Commit object creation may leave an unreachable object if the final branch CAS fails; this bounded Git object-store residue is acceptable."
+    - "Immediately before ref mutation recheck HEAD==expected_head_sha and write-tree==tree_sha."
+    - "Update refs/heads/<branch> using fixed git update-ref <new_commit> <expected_head_sha>; expected old SHA is mandatory CAS."
+    - "Never call git commit, git add, push, fetch, pull, merge, rebase, reset, checkout, stash, clean, or network transport."
+
+  receipt:
+    result_field: commit_receipt
+    schema:
+      schema_version: 1
+      kind: repo-commit
+      digest: lowercase_sha256
+    make_receipt_v1:
+      kind: repo-commit
+      subject:
+        - repository_root
+        - branch
+        - commit_sha
+      semantic_parameters:
+        - parent_sha
+        - expected_diff_receipt_digest
+        - sha256_of_exact_commit_message_bytes
+      observed_state_bytes: "exact commit object content bytes returned by fixed local git cat-file commit <commit_sha>"
+    rules:
+      - "Do not change repo-diff ReceiptV1 semantics."
+      - "Do not require repo_publish to consume commit_receipt; downstream publication identity remains Git commit SHA."
+
+  postconditions:
+    - "HEAD == commit_sha."
+    - "Current branch unchanged."
+    - "Index tree == commit tree."
+    - "Tracked worktree clean."
+    - "No non-ignored untracked files."
+    - "No staged changes."
+    - "network_used=false."
+
+  public_result:
+    schema_version: 1
+    fields:
+      branch: string
+      parent_sha: git_sha40
+      tree_sha: git_sha40
+      commit_sha: git_sha40
+      diff_receipt:
+        schema_version: 1
+        kind: repo-diff
+        digest: sha256
+      commit_receipt:
+        schema_version: 1
+        kind: repo-commit
+        digest: sha256
+      network_used: false
+      post_commit_clean: true
+
+  failure_reasons:
+    - INVALID_BRANCH
+    - INVALID_COMMIT_MESSAGE
+    - INVALID_DIFF_RECEIPT
+    - NOT_REPOSITORY_ROOT
+    - BARE_REPOSITORY
+    - DETACHED_HEAD
+    - BRANCH_MISMATCH
+    - UPSTREAM_MISMATCH
+    - OPERATION_IN_PROGRESS
+    - HEAD_MISMATCH
+    - NO_STAGED_CHANGES
+    - UNSTAGED_CHANGES_PRESENT
+    - UNTRACKED_CHANGES_PRESENT
+    - CONFLICTS_PRESENT
+    - DIFF_RECEIPT_MISMATCH
+    - UNSUPPORTED_STAGED_TYPE
+    - BINARY_STAGED_CONTENT
+    - INVALID_UTF8_STAGED_CONTENT
+    - STAGED_PATH_LIMIT
+    - STAGED_BYTES_LIMIT
+    - GIT_IDENTITY_UNAVAILABLE
+    - HEAD_CHANGED
+    - INDEX_CHANGED
+    - WORKTREE_CHANGED
+    - GIT_UNAVAILABLE
+    - TREE_CAPTURE_FAILED
+    - COMMIT_OBJECT_FAILED
+    - REF_UPDATE_FAILED
+    - POST_COMMIT_STATE_INVALID
+
+contracts:
+  path: agent_runtime/contracts.py
+  requirements:
+    - "Add closed request/result models for repo_stage and repo_commit."
+    - "Reuse exact existing SHA types where semantically correct."
+    - "Expected diff receipt input must require schema_version=1 and kind=repo-diff."
+    - "Add dedicated RepoCommitReceiptResult kind=repo-commit; do not broaden repo-diff receipt result."
+    - "All models extra=forbid."
+
+server_integration:
+  path: agent_runtime/server.py
+  public_tool_count: 18
+  exact_order:
+    - terminal_exec
+    - terminal_start
+    - terminal_poll
+    - terminal_control
+    - terminal_resize
+    - capacity_observer
+    - fs_read_batch
+    - fs_list
+    - fs_search
+    - fs_patch
+    - fs_write
+    - repo_observer
+    - repo_diff
+    - repo_stage
+    - repo_commit
+    - repo_fast_forward
+    - repo_publish
+    - screen_capture
+  annotations:
+    repo_stage: [false, true, false, false]
+    repo_commit: [false, true, false, false]
+  requirements:
+    - "Annotations sourced from REPO_STAGE_CONTRACT / REPO_COMMIT_CONTRACT."
+    - "Both use existing CapabilityErrorEnvelope."
+    - "Existing 16 public tool signatures/schemas/behavior remain accepted except exact surface order assertions updated."
+    - "screen_capture remains VISUAL_PERCEPTION_BLOCKED before native capture."
+
+unchanged_source_guards:
+  agent_runtime/tool_contract.py: "153f1272d4840d41091f52480dfa3a43a333c13f"
+  agent_runtime/repo_diff.py: "0d0d77fd992f89fba8a2ddbf1aaa99ff81519461"
+  agent_runtime/repo_fast_forward.py: "0ff32e5a79940d2372cdc80f0b5269320d7e24b0"
+  agent_runtime/repo_publish.py: "c696388c9d112fa4593a066aecae1765748f0087"
+  agent_runtime/fs_safety.py: "4bf378678eedb39668bce139600dc8357a7d2851"
+  note: >-
+    Existing repo_diff semantics, repo_publish behavior, ToolContract Kernel, filesystem substrate,
+    and accepted fs capabilities must not change in TASK-0134.
+
+tests:
+  canonical_baseline: 572
+  required_new_files:
+    - tests/test_repo_stage.py
+    - tests/test_repo_commit.py
+    - tests/test_repo_stage_commit_mcp.py
+  required_existing_updates:
+    - tests/test_repo_diff.py
+    - tests/test_fs_read_batch.py
+    - tests/test_fs_write_mcp.py
+    - tests/test_mcp_client_conformance.py
+    - tests/test_mcp_contracts.py
+    - tests/test_repo_fast_forward_mcp.py
+    - tests/test_repo_observer_mcp.py
+    - tests/test_repo_publish_mcp.py
+    - tests/test_screen_capture_mcp.py
+    - tests/test_surface_and_scripts.py
+    - tests/test_timing.py
+    - tests/test_tool_contract.py
+    - tests/test_wave1_mcp.py
+
+  repo_stage_proofs:
+    - "Exact full candidate batch only; duplicate/unselected paths rejected."
+    - "Initially staged diff must be empty."
+    - "Explicit present/delete semantics and SHA conditional validation."
+    - "New regular UTF-8 file stage."
+    - "Tracked UTF-8 modification stage."
+    - "Tracked UTF-8 deletion stage."
+    - "Executable-bit change stage."
+    - "Rename represented by explicit delete + present can be staged."
+    - "Ignored untracked candidate rejected."
+    - "Binary, invalid UTF-8, NUL, symlink, gitlink/submodule, special mode, oversized, >50 paths, >16MiB aggregate rejected."
+    - "No git add invocation."
+    - "hash-object input equals exact validated raw bytes."
+    - "One index-info mutation invocation for full batch."
+    - "HEAD unchanged."
+    - "Post staged path set equals candidate."
+    - "Returned staged repo-diff receipt equals immediate repo_diff(staged) receipt."
+    - "post_stage_clean true on normal path."
+    - "State drift before index mutation returns STATE_CHANGED without index mutation."
+
+  repo_commit_proofs:
+    - "Missing/invalid Runtime Git identity fails before commit object creation."
+    - "Expected staged receipt required and exact."
+    - "Empty staged state rejected."
+    - "Unstaged/untracked/conflicted/operation-in-progress states rejected."
+    - "Binary/symlink/gitlink/special/oversized staged candidates rejected."
+    - "git write-tree captures candidate tree."
+    - "Receipt and tree rechecked before commit object creation/ref update."
+    - "git commit is never invoked."
+    - "commit-tree receives one parent and exact message bytes."
+    - "hooks disabled and signing disabled."
+    - "update-ref receives new commit plus exact expected old SHA."
+    - "HEAD race at CAS returns STATE_CHANGED/HEAD_CHANGED and does not move branch."
+    - "Index/tree drift returns STATE_CHANGED/INDEX_CHANGED."
+    - "Commit output SHA/tree/parent exact."
+    - "Post commit clean."
+    - "repo-commit receipt deterministic over exact commit object plus semantic binding."
+    - "repo-diff receipt schema/meaning unchanged."
+    - "No network, push, fetch, merge, reset, checkout, stash, or clean."
+
+  mcp_proofs:
+    - "Exact 18-tool order."
+    - "repo_stage and repo_commit annotations exactly false/true/false/false."
+    - "Input/output schemas closed."
+    - "Expected receipt object schema exact."
+    - "CapabilityErrorEnvelope exact."
+    - "Existing 16 tools retain accepted schemas/annotations."
+    - "All authorized legacy hard-coded surface assertions updated to exact 18-tool surface."
+    - "screen_capture governance guard remains green."
+
+  canonical_requirement:
+    - "Agent Runtime Verify must run >572 tests."
+    - "Zero failures."
+
+authoring:
+  normal_path: GITHUB_CONTENTS_API_ON_OPERATOR_BOOTSTRAPPED_EPHEMERAL_BRANCH
+  branch:
+    name: task-0134-r1
+    required_existing_head: "049e8e129a92943b4544cfd66c9e9076d46faad1"
+  rules:
+    - "Do not invoke create_branch."
+    - "Require task-0134-r1 exists and points exactly to source_base before first mutation."
+    - "Use GitHub create_file/update_file only on task-0134-r1."
+    - "Before first update of every existing path, fresh-fetch and require the pinned source-base blob."
+    - "New files must be absent before create_file."
+    - "Do not use create_blob, create_tree, create_commit, update_ref, direct-main source mutation, local source authoring, Agent Runtime, Desktop Commander, or Codex."
+    - "Multiple branch commits are acceptable; Architect will squash-merge."
+    - "After authoring compare main...task-0134-r1 and require only allowed_source_paths."
+
+pull_request:
+  base: main
+  head: task-0134-r1
+  draft: false
+  title: "feat: add staged native repository commit chain"
+  body_requirements:
+    - "Reference TASK-0134."
+    - "State source base."
+    - "State repo_stage is explicit batch/no git add."
+    - "State repo_commit is staged-only, receipt-guarded, commit-tree/update-ref CAS, no push."
+    - "State public surface grows 16 -> 18."
+    - "State repo_publish hardening/package/install/cutover remain out of scope."
+  rules:
+    - "Exactly one PR."
+    - "Do not merge in Executor task."
+
+verification:
+  - "Observe Agent Runtime Verify for exact PR/head."
+  - "Require event=pull_request and job=canonical-verify."
+  - "Wait for exact run."
+  - "Do not rerun a failed workflow in revision 1."
+  - "Require workflow/job conclusion=success."
+  - "Fetch final logs."
+  - "Require failures=0 and test count >572."
+  - "Confirm repo_stage, repo_commit, exact 18-tool surface, existing capability regressions, and screen_capture guard."
+
+architect_merge_boundary:
+  executor_merge_authority: false
+  required_terminal: NEEDS_REVIEW
+  architect_expected_merge:
+    method: squash
+    expected_head_sha: final_pr_head
+  architect_post_merge:
+    - "Independently inspect repository state guards, index mutation, Git plumbing, identity isolation, receipt chain, and update-ref CAS."
+    - "Squash merge with expected head SHA only after green PR CI."
+    - "Require push-to-main Agent Runtime Verify PASS."
+    - "Require task-0134-r1 auto-deleted."
+    - "Persist ACCEPT/REWORK on control."
+
+forbidden:
+  - implicit_git_add
+  - git_commit_porcelain
+  - push
+  - fetch
+  - pull
+  - merge
+  - rebase
+  - reset
+  - checkout
+  - stash
+  - clean
+  - hooks
+  - signing
+  - repo_publish_hardening
+  - capability_registry
+  - capability_discovery
+  - schema_export
+  - runtime_doctor
+  - worktree_isolation
+  - package
+  - install
+  - restart
+  - cutover
+  - screen_capture_invocation
+  - tool_contract_kernel_rewrite
+  - repo_diff_semantic_change
+  - direct_main_source_mutation
+  - dev_mutation
+  - control_mutation_from_executor
+  - second_branch
+  - second_pr
+  - workflow_mutation
+  - create_branch
+  - create_blob
+  - create_tree
+  - create_commit
+  - update_ref_via_connector
+  - local_source_authoring
+  - Agent_Runtime
+  - Desktop_Commander
+  - Codex
+
+failure_policy:
+  - "If task-0134-r1 is absent or not exact source_base, stop OPERATOR_TRANSITION_REQUIRED without mutation."
+  - "Any pinned ref/blob/path precondition mismatch => SOURCE_CLOSURE_FAILED."
+  - "Any source mutation blocked => PLATFORM_BLOCK; report exact remote residue and stop."
+  - "Any ambiguity requiring public-contract expansion => NEEDS_ARCHITECTURE_REVIEW."
+  - "Any PR CI failure => VERIFICATION_FAILED; leave one branch/PR intact and do not patch again in revision 1."
+  - "Never switch mutation surface solely to obtain a different platform safety judgment."
+
+terminal_states:
+  success: NEEDS_REVIEW
+  operator_transition_required: OPERATOR_TRANSITION_REQUIRED
+  source_closure_failed: SOURCE_CLOSURE_FAILED
+  platform_block: PLATFORM_BLOCK
+  architecture_review: NEEDS_ARCHITECTURE_REVIEW
+  verification_failed: VERIFICATION_FAILED
+
+reporting:
+  - "Return one bounded Vietnamese result packet."
+  - "Include governance_head, source_base/tree, verified initial branch head, exact changed paths, final branch head, PR number/URL, repo_stage proof, staged receipt proof, repo_commit CAS proof, commit receipt proof, exact 18-tool surface proof, workflow run/job IDs, canonical test count/result, current main/control/dev refs, and branch existence."
+  - "Do not create governance report/review files; Architect owns governance persistence."
+
+successor:
+  if_accepted: TASK-0135
+  intent: "Harden repo_publish with exact expected-old remote ref CAS and close the end-to-end mutation chain."
+
+execution_ready: true
