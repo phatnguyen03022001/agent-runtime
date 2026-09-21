@@ -258,6 +258,8 @@ required = {
     "CONTROL_PLANE_API_KEY",
     "CONTROL_PLANE_TUNNEL_ID",
     "AGENT_RUNTIME_WORKSPACE_ROOT",
+    "AGENT_RUNTIME_GIT_NAME",
+    "AGENT_RUNTIME_GIT_EMAIL",
 }
 optional = {"AGENT_RUNTIME_MAX_ACTIVE_SESSIONS", "AGENT_RUNTIME_MAX_PARALLELISM"}
 values = {}
@@ -285,6 +287,14 @@ if parallelism is not None and (re.fullmatch(r"[1-9][0-9]*", parallelism) is Non
 session_limit = values.get("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS")
 if session_limit is not None and (re.fullmatch(r"[1-9][0-9]*", session_limit) is None or not 1 <= int(session_limit) <= 6):
     fail("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS must be an integer from 1 through 6.")
+for key in ("AGENT_RUNTIME_GIT_NAME", "AGENT_RUNTIME_GIT_EMAIL"):
+    value = values[key]
+    try:
+        raw = value.encode("utf-8", errors="strict")
+    except UnicodeEncodeError:
+        fail("Runtime Git identity is malformed.")
+    if len(raw) > 256 or any(ch in value for ch in ("\x00", "\r", "\n")):
+        fail("Runtime Git identity is malformed.")
 
 runtime_env = {
     "PATH": runtime_path,
@@ -292,6 +302,8 @@ runtime_env = {
     "CONTROL_PLANE_API_KEY": values["CONTROL_PLANE_API_KEY"],
     "CONTROL_PLANE_TUNNEL_ID": values["CONTROL_PLANE_TUNNEL_ID"],
     "AGENT_RUNTIME_WORKSPACE_ROOT": values["AGENT_RUNTIME_WORKSPACE_ROOT"],
+    "AGENT_RUNTIME_GIT_NAME": values["AGENT_RUNTIME_GIT_NAME"],
+    "AGENT_RUNTIME_GIT_EMAIL": values["AGENT_RUNTIME_GIT_EMAIL"],
     "PYTHONPATH": runtime_root,
     # The signed installed payload is immutable at runtime; do not create
     # bytecode resources inside the app bundle.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import os
 import plistlib
 import shutil
@@ -8,8 +9,16 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
+CONFIG_SPEC = importlib.util.spec_from_file_location(
+    "runtime_config_revision4",
+    ROOT / "macos" / "runtime_config.py",
+)
+assert CONFIG_SPEC is not None and CONFIG_SPEC.loader is not None
+runtime_config = importlib.util.module_from_spec(CONFIG_SPEC)
+CONFIG_SPEC.loader.exec_module(runtime_config)
 
 
 class Revision4RuntimeConfigTests(unittest.TestCase):
@@ -36,6 +45,8 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
             f"CONTROL_PLANE_API_KEY=test-key\n"
             f"CONTROL_PLANE_TUNNEL_ID=stable-test-id\n"
             f"AGENT_RUNTIME_WORKSPACE_ROOT={temp}\n"
+            "AGENT_RUNTIME_GIT_NAME=Runtime Fixture\n"
+            "AGENT_RUNTIME_GIT_EMAIL=runtime-fixture@example.invalid\n"
         )
         env_file.chmod(0o600)
         desired = home / "Library/Application Support/Agent Runtime/protected-runtime-running"
@@ -48,7 +59,8 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
             f"printf 'argv=%s\\n' \"$*\" >> {str(capture)!r}\n"
             f"for key in CONTROL_PLANE_API_KEY CONTROL_PLANE_TUNNEL_ID TUNNEL_CLIENT_CONFIG "
             "TUNNEL_CLIENT_PROFILE TUNNEL_CLIENT_PROFILE_FILE TUNNEL_CLIENT_PROFILE_DIR "
-            "XDG_CONFIG_HOME AGENT_RUNTIME_TUNNEL_PROFILE; do "
+            "XDG_CONFIG_HOME AGENT_RUNTIME_TUNNEL_PROFILE AGENT_RUNTIME_GIT_NAME "
+            "AGENT_RUNTIME_GIT_EMAIL; do "
             f"printf 'env:%s=%s\\n' \"$key\" \"${{!key-}}\" >> {str(capture)!r}; done\n"
             "exit 0\n"
         )
@@ -64,6 +76,8 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
                 "CONTROL_PLANE_TUNNEL_ID": "ambient-wrong-id",
                 "TUNNEL_CLIENT_PROFILE_FILE": "/tmp/wrong.yaml",
                 "AGENT_RUNTIME_TUNNEL_PROFILE": "wrong-profile",
+                "AGENT_RUNTIME_GIT_NAME": "ambient-wrong-name",
+                "AGENT_RUNTIME_GIT_EMAIL": "ambient-wrong@example.invalid",
             }
             result = subprocess.run(
                 [str(repo / "start.sh"), "--serve", str(tunnel)],
@@ -78,6 +92,11 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
             lines = capture.read_text().splitlines()
             self.assertEqual(sum(line == "env:CONTROL_PLANE_TUNNEL_ID=stable-test-id" for line in lines), 2)
             self.assertEqual(sum(line == "env:CONTROL_PLANE_API_KEY=test-key" for line in lines), 2)
+            self.assertEqual(sum(line == "env:AGENT_RUNTIME_GIT_NAME=Runtime Fixture" for line in lines), 2)
+            self.assertEqual(
+                sum(line == "env:AGENT_RUNTIME_GIT_EMAIL=runtime-fixture@example.invalid" for line in lines),
+                2,
+            )
             for line in lines:
                 self.assertNotIn("--profile", line)
                 if line.startswith("env:TUNNEL_CLIENT_") or line.startswith("env:AGENT_RUNTIME_TUNNEL_PROFILE"):
@@ -227,6 +246,142 @@ printf '%s\n' "$*" >> {str(state / "curl.log")!r}
         self.assertIn("--control-plane.poll-channel", text)
         self.assertIn("--mcp.command", text)
         self.assertIn("--health.listen-addr", text)
+
+    def test_runtime_config_migrates_missing_git_identity_atomically_and_preserves_it(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            repo = temp / "repo"
+            workspace = temp / "workspace"
+            repo.mkdir()
+            workspace.mkdir()
+            source = repo / ".env"
+            source.write_text(
+                "CONTROL_PLANE_API_KEY=test-key\n"
+                "CONTROL_PLANE_TUNNEL_ID=test-tunnel\n"
+                f"AGENT_RUNTIME_WORKSPACE_ROOT={workspace}\n"
+            )
+            source.chmod(0o600)
+            canonical = temp / "config" / "runtime.env"
+            canonical.parent.mkdir()
+            canonical.write_bytes(source.read_bytes())
+            canonical.chmod(0o600)
+            before = canonical.read_bytes()
+            real_replace = runtime_config.os.replace
+            replaced = False
+
+            def atomic_replace(source_path, destination_path) -> None:
+                nonlocal replaced
+                private = Path(source_path)
+                self.assertEqual(canonical.read_bytes(), before)
+                self.assertEqual(private.stat().st_mode & 0o777, 0o600)
+                replaced = True
+                real_replace(source_path, destination_path)
+
+            with mock.patch.dict(
+                runtime_config.os.environ,
+                {
+                    "AGENT_RUNTIME_GIT_NAME": "Installer Fixture",
+                    "AGENT_RUNTIME_GIT_EMAIL": "installer-fixture@example.invalid",
+                },
+                clear=False,
+            ), mock.patch.object(runtime_config.os, "replace", side_effect=atomic_replace):
+                runtime_config.ensure(source, canonical, workspace, require_git_identity=True)
+
+            self.assertTrue(replaced)
+            migrated = canonical.read_bytes()
+            self.assertTrue(migrated.startswith(before))
+            self.assertIn(b"AGENT_RUNTIME_GIT_NAME=Installer Fixture\n", migrated)
+            self.assertIn(b"AGENT_RUNTIME_GIT_EMAIL=installer-fixture@example.invalid\n", migrated)
+            self.assertEqual(canonical.stat().st_mode & 0o777, 0o600)
+
+            with mock.patch.dict(
+                runtime_config.os.environ,
+                {
+                    "AGENT_RUNTIME_GIT_NAME": "Replacement Must Not Win",
+                    "AGENT_RUNTIME_GIT_EMAIL": "replacement@example.invalid",
+                },
+                clear=False,
+            ):
+                runtime_config.ensure(source, canonical, workspace, require_git_identity=True)
+            self.assertEqual(canonical.read_bytes(), migrated)
+
+    def test_runtime_config_git_identity_fallback_and_validation_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            repo = temp / "repo"
+            workspace = temp / "workspace"
+            repo.mkdir()
+            workspace.mkdir()
+            subprocess.run(["/usr/bin/git", "-C", str(repo), "init", "-q"], check=True)
+            subprocess.run(
+                ["/usr/bin/git", "-C", str(repo), "config", "--local", "user.name", "Local Fixture"],
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "/usr/bin/git",
+                    "-C",
+                    str(repo),
+                    "config",
+                    "--local",
+                    "user.email",
+                    "local-fixture@example.invalid",
+                ],
+                check=True,
+            )
+            source = repo / ".env"
+            source.write_text(
+                "CONTROL_PLANE_API_KEY=test-key\n"
+                "CONTROL_PLANE_TUNNEL_ID=test-tunnel\n"
+                f"AGENT_RUNTIME_WORKSPACE_ROOT={workspace}\n"
+            )
+            source.chmod(0o600)
+            canonical = temp / "config" / "runtime.env"
+
+            with mock.patch.dict(
+                runtime_config.os.environ,
+                {"AGENT_RUNTIME_GIT_NAME": "", "AGENT_RUNTIME_GIT_EMAIL": ""},
+                clear=False,
+            ):
+                runtime_config.ensure(source, canonical, workspace, require_git_identity=True)
+            text = canonical.read_text()
+            self.assertIn("AGENT_RUNTIME_GIT_NAME=Local Fixture\n", text)
+            self.assertIn("AGENT_RUNTIME_GIT_EMAIL=local-fixture@example.invalid\n", text)
+
+            for name, email in (
+                ("Partial Fixture", ""),
+                ("x" * 257, "valid@example.invalid"),
+                ("bad\nname", "valid@example.invalid"),
+            ):
+                with self.subTest(name_length=len(name), email_present=bool(email)):
+                    candidate = temp / f"candidate-{len(name)}-{bool(email)}.env"
+                    with mock.patch.dict(
+                        runtime_config.os.environ,
+                        {"AGENT_RUNTIME_GIT_NAME": name, "AGENT_RUNTIME_GIT_EMAIL": email},
+                        clear=False,
+                    ):
+                        with self.assertRaises(SystemExit) as caught:
+                            runtime_config.ensure(
+                                source,
+                                candidate,
+                                workspace,
+                                require_git_identity=True,
+                            )
+                    self.assertFalse(candidate.exists())
+                    self.assertNotIn(name, str(caught.exception))
+
+            duplicate = temp / "duplicate.env"
+            duplicate.write_text(
+                "CONTROL_PLANE_API_KEY=test-key\n"
+                "CONTROL_PLANE_TUNNEL_ID=test-tunnel\n"
+                f"AGENT_RUNTIME_WORKSPACE_ROOT={workspace}\n"
+                "AGENT_RUNTIME_GIT_NAME=One\n"
+                "AGENT_RUNTIME_GIT_NAME=Two\n"
+                "AGENT_RUNTIME_GIT_EMAIL=one@example.invalid\n"
+            )
+            duplicate.chmod(0o600)
+            with self.assertRaisesRegex(SystemExit, "duplicate AGENT_RUNTIME_GIT_NAME"):
+                runtime_config.ensure(source, duplicate, workspace, require_git_identity=True)
 
 
 if __name__ == "__main__":

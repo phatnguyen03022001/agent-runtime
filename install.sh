@@ -168,7 +168,13 @@ try:
 except OSError as exc:
     fail("Could not read checkout-local .env: " + str(exc))
 
-required = ("CONTROL_PLANE_API_KEY", "CONTROL_PLANE_TUNNEL_ID", "AGENT_RUNTIME_WORKSPACE_ROOT")
+required = (
+    "CONTROL_PLANE_API_KEY",
+    "CONTROL_PLANE_TUNNEL_ID",
+    "AGENT_RUNTIME_WORKSPACE_ROOT",
+    "AGENT_RUNTIME_GIT_NAME",
+    "AGENT_RUNTIME_GIT_EMAIL",
+)
 optional = {"AGENT_RUNTIME_MAX_ACTIVE_SESSIONS"}
 values = {}
 other = []
@@ -202,6 +208,8 @@ runtime_env = {
     "CONTROL_PLANE_API_KEY": values["CONTROL_PLANE_API_KEY"],
     "CONTROL_PLANE_TUNNEL_ID": values["CONTROL_PLANE_TUNNEL_ID"],
     "AGENT_RUNTIME_WORKSPACE_ROOT": values["AGENT_RUNTIME_WORKSPACE_ROOT"],
+    "AGENT_RUNTIME_GIT_NAME": values["AGENT_RUNTIME_GIT_NAME"],
+    "AGENT_RUNTIME_GIT_EMAIL": values["AGENT_RUNTIME_GIT_EMAIL"],
     "PYTHONPATH": str(env_file.parent),
     "OPEN_WEB_UI": "false",
 }

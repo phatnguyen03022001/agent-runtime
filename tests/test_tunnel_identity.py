@@ -47,7 +47,7 @@ class TunnelIdentityTests(unittest.TestCase):
 set -euo pipefail
 CAPTURE="$(dirname "$0")/capture.log"
 printf 'argv=%s\n' "$*" >> "$CAPTURE"
-for key in CONTROL_PLANE_API_KEY CONTROL_PLANE_TUNNEL_ID TUNNEL_CLIENT_CONFIG TUNNEL_CLIENT_PROFILE TUNNEL_CLIENT_PROFILE_FILE TUNNEL_CLIENT_PROFILE_DIR XDG_CONFIG_HOME AGENT_RUNTIME_TUNNEL_PROFILE AGENT_RUNTIME_WORKSPACE_ROOT AGENT_RUNTIME_MAX_PARALLELISM; do
+for key in CONTROL_PLANE_API_KEY CONTROL_PLANE_TUNNEL_ID TUNNEL_CLIENT_CONFIG TUNNEL_CLIENT_PROFILE TUNNEL_CLIENT_PROFILE_FILE TUNNEL_CLIENT_PROFILE_DIR XDG_CONFIG_HOME AGENT_RUNTIME_TUNNEL_PROFILE AGENT_RUNTIME_WORKSPACE_ROOT AGENT_RUNTIME_MAX_PARALLELISM AGENT_RUNTIME_GIT_NAME AGENT_RUNTIME_GIT_EMAIL; do
   if [[ -n "${!key-}" ]]; then printf 'env:%s=%s\n' "$key" "${!key}" >> "$CAPTURE"; fi
 done
 if [[ "${1-}" == init ]]; then
@@ -91,7 +91,7 @@ fi
         self._write(repo / ".venv/bin/python", "#!/bin/sh\nexit 0\n", 0o700)
         self._write(
             repo / ".env",
-            f"CONTROL_PLANE_API_KEY=test-key\nCONTROL_PLANE_TUNNEL_ID=stable-test-id\nAGENT_RUNTIME_WORKSPACE_ROOT={workspace}\nAGENT_RUNTIME_MAX_PARALLELISM=10\n",
+            f"CONTROL_PLANE_API_KEY=test-key\nCONTROL_PLANE_TUNNEL_ID=stable-test-id\nAGENT_RUNTIME_WORKSPACE_ROOT={workspace}\nAGENT_RUNTIME_MAX_PARALLELISM=10\nAGENT_RUNTIME_GIT_NAME=Runtime Fixture\nAGENT_RUNTIME_GIT_EMAIL=runtime-fixture@example.invalid\n",
         )
         self._fake_tunnel_client(bin_dir)
         capture = bin_dir / "capture.log"
@@ -112,6 +112,8 @@ fi
             "TUNNEL_CLIENT_PROFILE_DIR": "/tmp/wrong-dir",
             "XDG_CONFIG_HOME": "/tmp/wrong-xdg",
             "AGENT_RUNTIME_TUNNEL_PROFILE": "wrong-agent-profile",
+            "AGENT_RUNTIME_GIT_NAME": "ambient-wrong-name",
+            "AGENT_RUNTIME_GIT_EMAIL": "ambient-wrong@example.invalid",
         }
         desired = home / "Library" / "Application Support" / "Agent Runtime" / "protected-runtime-running"
         desired.parent.mkdir(parents=True, exist_ok=True)
@@ -132,6 +134,11 @@ fi
             self.assertEqual(sum(line == "env:CONTROL_PLANE_API_KEY=test-key" for line in lines), 2)
             self.assertEqual(sum(line == "env:CONTROL_PLANE_TUNNEL_ID=stable-test-id" for line in lines), 2)
             self.assertEqual(sum(line == "env:AGENT_RUNTIME_MAX_PARALLELISM=10" for line in lines), 2)
+            self.assertEqual(sum(line == "env:AGENT_RUNTIME_GIT_NAME=Runtime Fixture" for line in lines), 2)
+            self.assertEqual(
+                sum(line == "env:AGENT_RUNTIME_GIT_EMAIL=runtime-fixture@example.invalid" for line in lines),
+                2,
+            )
             self.assertFalse((home / ".config/tunnel-client/agent-runtime.yaml").exists())
 
     def test_start_rejects_invalid_parallelism_limit_instead_of_clamping(self) -> None:
@@ -401,6 +408,8 @@ esac
         *,
         api_key: str | None = None,
         tunnel_id: str | None = None,
+        git_name: str | None = None,
+        git_email: str | None = None,
         args: tuple[str, ...] = (),
     ) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
@@ -410,12 +419,26 @@ esac
             "AGENT_RUNTIME_TEST_TEAM_IDENTIFIER": "TEAMTEST",
             "AGENT_RUNTIME_TEST_SKIP_CODESIGN_VERIFY": "1",
         })
-        for key in ("CONTROL_PLANE_API_KEY", "CONTROL_PLANE_TUNNEL_ID", "TUNNEL_CLIENT_CONFIG", "TUNNEL_CLIENT_PROFILE", "TUNNEL_CLIENT_PROFILE_FILE", "TUNNEL_CLIENT_PROFILE_DIR", "XDG_CONFIG_HOME"):
+        for key in (
+            "CONTROL_PLANE_API_KEY",
+            "CONTROL_PLANE_TUNNEL_ID",
+            "TUNNEL_CLIENT_CONFIG",
+            "TUNNEL_CLIENT_PROFILE",
+            "TUNNEL_CLIENT_PROFILE_FILE",
+            "TUNNEL_CLIENT_PROFILE_DIR",
+            "XDG_CONFIG_HOME",
+            "AGENT_RUNTIME_GIT_NAME",
+            "AGENT_RUNTIME_GIT_EMAIL",
+        ):
             env.pop(key, None)
         if api_key is not None:
             env["CONTROL_PLANE_API_KEY"] = api_key
         if tunnel_id is not None:
             env["CONTROL_PLANE_TUNNEL_ID"] = tunnel_id
+        if git_name is not None:
+            env["AGENT_RUNTIME_GIT_NAME"] = git_name
+        if git_email is not None:
+            env["AGENT_RUNTIME_GIT_EMAIL"] = git_email
         return subprocess.run(["/bin/bash", str(repo / "install.sh"), *args], cwd=repo, env=env, text=True, capture_output=True, check=False)
 
     def _env(self, repo: Path, tunnel_id: str | None = None, api_key: str = "test-key") -> Path:
@@ -499,6 +522,30 @@ esac
             canonical_text = canonical.read_text()
             self.assertIn(f"AGENT_RUNTIME_WORKSPACE_ROOT={repo.parent.resolve()}\n", canonical_text)
             self.assertIn("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS=6\n", canonical_text)
+            self.assertIn("AGENT_RUNTIME_GIT_NAME=Test\n", canonical_text)
+            self.assertIn("AGENT_RUNTIME_GIT_EMAIL=test@example.invalid\n", canonical_text)
+
+    def test_install_explicit_git_identity_precedes_repository_local_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            repo, home, bin_dir, capture = self._install_fixture(Path(raw))
+            self._env(repo, "same-id")
+            result = self._run_install(
+                repo,
+                home,
+                bin_dir,
+                capture,
+                git_name="Installer Fixture",
+                git_email="installer-fixture@example.invalid",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            canonical = home / "Library/Application Support/Agent Runtime/runtime.env"
+            canonical_text = canonical.read_text()
+            self.assertIn("AGENT_RUNTIME_GIT_NAME=Installer Fixture\n", canonical_text)
+            self.assertIn("AGENT_RUNTIME_GIT_EMAIL=installer-fixture@example.invalid\n", canonical_text)
+            self.assertNotIn("AGENT_RUNTIME_GIT_NAME=Test\n", canonical_text)
+            self.assertNotIn("AGENT_RUNTIME_GIT_EMAIL=test@example.invalid\n", canonical_text)
+            self.assertNotIn("Installer Fixture", result.stdout + result.stderr)
+            self.assertNotIn("installer-fixture@example.invalid", result.stdout + result.stderr)
 
     def test_install_accepts_a_verified_homebrew_style_tunnel_symlink(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

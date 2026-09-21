@@ -64,11 +64,20 @@ win, while `CONTROL_PLANE_API_KEY` and `CONTROL_PLANE_TUNNEL_ID` from the
 installer process environment fill only missing/empty checkout values. A
 checkout `.env` created from `.env.example` is made mode `0600` before bootstrap.
 Once canonical `runtime.env` exists, process-environment fallback never overrides
-it. The checkout file remains only source development/bootstrap input.
+its control-plane credentials or an existing valid Runtime Git identity. A
+pre-identity canonical file may be migrated exactly once by atomically appending
+`AGENT_RUNTIME_GIT_NAME` and `AGENT_RUNTIME_GIT_EMAIL`: an explicit non-empty
+installer pair wins, otherwise repository-local `user.name` / `user.email` is
+used. Partial, duplicate, malformed, newline/NUL-containing, or overlong identity
+values fail closed, and the canonical file remains mode `0600`. The checkout
+file remains only source development/bootstrap input.
 
 `CONTROL_PLANE_API_KEY`, `CONTROL_PLANE_TUNNEL_ID`,
-`AGENT_RUNTIME_WORKSPACE_ROOT`, and optional `AGENT_RUNTIME_MAX_PARALLELISM`
-are read from the canonical file. `AGENT_RUNTIME_MAX_PARALLELISM` accepts only
+`AGENT_RUNTIME_WORKSPACE_ROOT`, `AGENT_RUNTIME_GIT_NAME`,
+`AGENT_RUNTIME_GIT_EMAIL`, and optional `AGENT_RUNTIME_MAX_PARALLELISM`
+are read from the canonical file. The launch path forwards the Git identity pair
+only into the sanitized Runtime environment; `repo_commit` does not fall back to
+ambient Git configuration and Runtime diagnostics never print identity values. `AGENT_RUNTIME_MAX_PARALLELISM` accepts only
 integers from `1` through `10`; when absent its effective default is `2`. Invalid
 values fail configuration validation instead of being silently clamped. The
 shared heavy-execution admission limit is always `min(operator setting, 6)`, so
