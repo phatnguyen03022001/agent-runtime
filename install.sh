@@ -21,21 +21,24 @@ is_lower_sha256() {
 case "${1-}" in
   --install-prebuilt)
     if [[ "$#" == "3" ]]; then
-      PINNED_ARGS=()
+      :
     elif [[ "$#" == "7" && "$4" == "--expected-candidate-sha256" && "$6" == "--expected-handoff-sha256" ]]; then
       is_lower_sha256 "$5" || fail "expected candidate SHA-256 must be exact lowercase 64-hex."
       is_lower_sha256 "$7" || fail "expected handoff SHA-256 must be exact lowercase 64-hex."
-      PINNED_ARGS=(
-        --expected-candidate-sha256 "$5"
-        --expected-handoff-sha256 "$7"
-      )
     else
       fail "usage: ./install.sh --install-prebuilt <Agent Runtime.app> <candidate.json> [--expected-candidate-sha256 <64hex> --expected-handoff-sha256 <64hex>]"
     fi
     [[ "$(uname -s)" == "Darwin" ]] || fail "prebuilt candidate installation supports macOS only."
     command -v launchctl >/dev/null 2>&1 || fail "launchctl is required for candidate cutover."
-    run_cutover_helper cutover "$2" "$3" "${PINNED_ARGS[@]}" --home "$HOME" \
-      --launchctl "$(command -v launchctl)"
+    if [[ "$#" == "3" ]]; then
+      run_cutover_helper cutover "$2" "$3" --home "$HOME" \
+        --launchctl "$(command -v launchctl)"
+    else
+      run_cutover_helper cutover "$2" "$3" \
+        --expected-candidate-sha256 "$5" \
+        --expected-handoff-sha256 "$7" \
+        --home "$HOME" --launchctl "$(command -v launchctl)"
+    fi
     ;;
   --resume-cutover)
     [[ "$#" == "1" ]] || fail "usage: ./install.sh --resume-cutover"

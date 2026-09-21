@@ -415,10 +415,12 @@ class TerminalSessionTests(unittest.TestCase):
             str(self.cwd),
         )
         session_id = str(result["session_id"])
-        time.sleep(0.2)
+        deadline = time.monotonic() + 2.0
+        while manager.has_session(session_id) and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertFalse(manager.has_session(session_id))
         with self.assertRaisesRegex(ValueError, "unknown|expired"):
             manager.poll(session_id)
-        self.assertFalse(manager.has_session(session_id))
 
     def test_controlled_time_idle_reap_terminates_process_group(self) -> None:
         from agent_runtime.session import TerminalSessionManager
