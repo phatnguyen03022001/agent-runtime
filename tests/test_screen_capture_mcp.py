@@ -23,6 +23,7 @@ EXPECTED_TOOLS = (
     "fs_list",
     "fs_search",
     "fs_patch",
+    "fs_write",
     "repo_observer",
     "repo_diff",
     "repo_fast_forward",
@@ -40,6 +41,7 @@ EXPECTED_ANNOTATIONS = {
     "fs_list": (True, False, True, False),
     "fs_search": (True, False, True, False),
     "fs_patch": (False, True, False, False),
+    "fs_write": (False, True, False, False),
     "repo_observer": (True, False, True, False),
     "repo_diff": (True, False, True, False),
     "repo_fast_forward": (False, True, True, True),
@@ -66,7 +68,7 @@ class ScreenCaptureMCPTests(unittest.IsolatedAsyncioTestCase):
     async def _tools(self) -> dict[str, object]:
         return {tool.name: tool for tool in await server.mcp.list_tools()}
 
-    async def test_screen_capture_is_exact_public_tool_15_with_annotations(self) -> None:
+    async def test_screen_capture_is_exact_public_tool_16_with_annotations(self) -> None:
         tools = await self._tools()
         self.assertEqual(tuple(tools), EXPECTED_TOOLS)
         for name, tool in tools.items():

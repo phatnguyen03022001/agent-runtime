@@ -39,6 +39,11 @@ from .contracts import (
     FsPatchExpectedSha256,
     FsPatchPath,
     FsPatchResult,
+    FsWriteContent,
+    FsWriteExpectedSha256,
+    FsWriteOperation,
+    FsWritePath,
+    FsWriteResult,
     FsSearchMaxResults,
     FsSearchMode,
     FsSearchQuery,
@@ -76,6 +81,7 @@ from .executor import execute_terminal, shutdown_terminal_executions
 from .fs_read import FS_READ_BATCH_CONTRACT, read_files_batch
 from .fs_list import FS_LIST_CONTRACT, list_directory
 from .fs_patch import FS_PATCH_CONTRACT, patch_file
+from .fs_write import FS_WRITE_CONTRACT, write_file
 from .fs_search import FS_SEARCH_CONTRACT, search_files
 from .protection import ProtectedRuntimeDenied
 from .repo_diff import REPO_DIFF_CONTRACT, diff_repository
@@ -102,6 +108,7 @@ PUBLIC_TOOL_NAMES = (
     "fs_list",
     "fs_search",
     "fs_patch",
+    "fs_write",
     "repo_observer",
     "repo_diff",
     "repo_fast_forward",
@@ -122,7 +129,8 @@ SERVER_INSTRUCTIONS = (
     "fs_read_batch performs read-only ordered cwd-relative UTF-8 file reads for at most 20 items "
     "with fixed output and scan-work ceilings and per-item filesystem failures. "
     "fs_list and fs_search provide bounded no-follow filesystem discovery; fs_patch performs "
-    "expected-SHA exact text edits with atomic replacement, and repo_diff returns bounded local-only "
+    "expected-SHA exact text edits, fs_write performs whole-file expected-state create/replace, "
+    "and repo_diff returns bounded local-only "
     "tracked diffs with full-state receipts. "
     "repo_observer performs bounded local-only Git repository observation with no fetch, network use, "
     "or repository mutation; it reports local tracking refs, typed changes, diff summary, operation state, "
@@ -429,6 +437,27 @@ def fs_patch(
         return patch_file(cwd, path, expected_sha256, edits)
     except CapabilityFailure as exc:
         return cast(FsPatchResult, _capability_error_result(exc))
+
+
+@_tool(
+    read_only=FS_WRITE_CONTRACT.annotations.read_only,
+    destructive=FS_WRITE_CONTRACT.annotations.destructive,
+    idempotent=FS_WRITE_CONTRACT.annotations.idempotent,
+    open_world=FS_WRITE_CONTRACT.annotations.open_world,
+)
+def fs_write(
+    cwd: AbsoluteCwd,
+    path: FsWritePath,
+    operation: FsWriteOperation,
+    content: FsWriteContent,
+    expected_sha256: FsWriteExpectedSha256 | None = None,
+) -> FsWriteResult:
+    """Create or replace one whole UTF-8 file under explicit expected-state guards."""
+
+    try:
+        return write_file(cwd, path, operation, content, expected_sha256)
+    except CapabilityFailure as exc:
+        return cast(FsWriteResult, _capability_error_result(exc))
 
 
 @_tool(read_only=True, destructive=False, idempotent=True, open_world=False)
