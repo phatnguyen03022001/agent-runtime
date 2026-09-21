@@ -20,7 +20,11 @@ EXPECTED_TOOLS = (
     "terminal_resize",
     "capacity_observer",
     "fs_read_batch",
+    "fs_list",
+    "fs_search",
+    "fs_patch",
     "repo_observer",
+    "repo_diff",
     "repo_fast_forward",
     "repo_publish",
     "screen_capture",
@@ -69,7 +73,7 @@ class RepoFastForwardMCPTests(unittest.IsolatedAsyncioTestCase):
     async def _tools(self) -> dict[str, object]:
         return {tool.name: tool for tool in await server.mcp.list_tools()}
 
-    async def test_repo_fast_forward_is_public_tool_9_with_exact_annotations(self) -> None:
+    async def test_repo_fast_forward_is_public_tool_13_with_exact_annotations(self) -> None:
         tools = await self._tools()
         self.assertEqual(tuple(tools), EXPECTED_TOOLS)
         tool = tools["repo_fast_forward"]
