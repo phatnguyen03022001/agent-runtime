@@ -1,7 +1,7 @@
 protocol_version: 3
 
 task_id: TASK-0134
-task_revision: 1
+task_revision: 2
 state: APPROVED
 
 target:
@@ -665,3 +665,77 @@ successor:
   intent: "Harden repo_publish with exact expected-old remote ref CAS and close the end-to-end mutation chain."
 
 execution_ready: true
+
+
+revision_2_override:
+  predecessor_review: "8bd34db72b334eb4bc50c6b80f9e2187cbdb1d97"
+  predecessor_terminal: VERIFICATION_FAILED
+  existing_branch: task-0134-r1
+  expected_existing_branch_head: "307f3de69c16cc713ca7733d037796486e2158fe"
+  existing_pr: 5
+
+  scope:
+    contract_change: false
+    public_surface_change: false
+    implementation_delta_paths:
+      - agent_runtime/repo_stage.py
+      - tests/test_repo_stage.py
+
+  exact_current_blobs:
+    agent_runtime/repo_stage.py: "0137f219173985854fb0640f41854d150a7a3473"
+    tests/test_repo_stage.py: "fe60dc5e569d2f7edaa547ac63b8a067ccbf551e"
+
+  root_cause:
+    classification: CHECK_IGNORE_PATHSPEC_TRANSPORT_DEFECT
+    detail: >-
+      GIT_LITERAL_PATHSPECS=1 is intentionally retained globally. git check-ignore rejects literal
+      pathspec magic when a candidate path is passed positionally, causing fatal exit and a false
+      GIT_UNAVAILABLE result. For this command only, path transport must be stdin data.
+
+  required_fix:
+    - "Keep _git_env and GIT_LITERAL_PATHSPECS=1 unchanged."
+    - "Change only _is_ignored behavior needed for the transport repair."
+    - "Invoke fixed Git check-ignore --stdin -z."
+    - "Encode the already-validated repository-relative path as strict UTF-8 plus exactly one NUL byte."
+    - "Pass that byte sequence through _run_git(..., stdin=...)."
+    - "Do not include the candidate path in argv."
+    - "Return code 0 => ignored=true."
+    - "Return code 1 => ignored=false."
+    - "Any other return code => UNAVAILABLE / GIT_UNAVAILABLE, preserving current retryable semantics."
+    - "Do not weaken path validation or ignore handling."
+
+  required_regressions:
+    - "new regular UTF-8 untracked file stages successfully"
+    - "explicit rename delete+present stages successfully"
+    - "ignored untracked candidate returns IGNORED_PATH"
+    - "check-ignore path is transported via NUL-delimited stdin, not argv"
+    - "a validated filename containing pathspec-looking characters is treated literally"
+    - "repo_commit focused suite remains unchanged and green"
+    - "exact 18-tool surface remains unchanged and green"
+    - "screen_capture governance guard remains green"
+
+  authoring:
+    - "Do not create another branch."
+    - "Do not create another PR."
+    - "Use only GitHub Contents API update_file on task-0134-r1."
+    - "Before each mutation fresh-fetch and require exact_current_blobs."
+    - "Do not modify any path except the two implementation_delta_paths."
+    - "Do not use create_branch/create_blob/create_tree/create_commit/update_ref."
+    - "Do not use local authoring, Agent Runtime, Desktop Commander, or Codex."
+
+  verification:
+    - "Branch update must trigger a new Agent Runtime Verify pull_request run for PR #5."
+    - "Do not rerun workflow run 35586235055."
+    - "Require tests >=612, failures=0, errors=0."
+    - "Require all three prior repo_stage failures now pass."
+    - "Require repo_commit, receipt chain, CAS, exact 18-tool surface, existing capability regressions, and screen_capture guard remain green."
+    - "If the new CI run fails for any reason, stop VERIFICATION_FAILED and do not patch again in revision 2."
+
+  terminal_states:
+    success: NEEDS_REVIEW
+    source_closure_failed: SOURCE_CLOSURE_FAILED
+    platform_block: PLATFORM_BLOCK
+    verification_failed: VERIFICATION_FAILED
+
+  reporting:
+    - "Return governance HEAD, old/new branch HEAD, exact two-file r2 delta, PR #5 state, new workflow run/job IDs, canonical test count/result, prior-three-failure closure, unchanged repo_commit proof, exact 18-tool surface proof, current refs, and final classification."
