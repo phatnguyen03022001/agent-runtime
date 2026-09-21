@@ -147,6 +147,17 @@ class FsSearchTests(unittest.TestCase):
         self.assertEqual(result.limit_reason, "deadline")
         self.assertEqual(result.files_scanned, 0)
 
+    def test_deadline_is_enforced_while_reading_content(self) -> None:
+        (self.root / "a.txt").write_text("needle")
+        with patch(
+            "agent_runtime.fs_search.time.monotonic",
+            side_effect=[0.0, 0.0, 0.0, 0.0, 6.0],
+        ):
+            result = search_files(str(self.root), "needle", "content")
+        self.assertTrue(result.truncated)
+        self.assertEqual(result.limit_reason, "deadline")
+        self.assertEqual(result.results, [])
+
     def test_line_text_truncation_preserves_utf8_boundary(self) -> None:
         line = "needle-" + ("é" * 3000)
         (self.root / "a.txt").write_text(line + "\n", encoding="utf-8")
