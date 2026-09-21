@@ -39,6 +39,8 @@ EXPECTED_TOOLS = (
     "fs_write",
     "repo_observer",
     "repo_diff",
+    "repo_stage",
+    "repo_commit",
     "repo_fast_forward",
     "repo_publish",
     "screen_capture",
@@ -57,6 +59,8 @@ LEGACY_ANNOTATIONS = {
     "fs_patch": (False, True, False, False),
     "repo_observer": (True, False, True, False),
     "repo_diff": (True, False, True, False),
+    "repo_stage": (False, True, False, False),
+    "repo_commit": (False, True, False, False),
     "repo_fast_forward": (False, True, True, True),
     "repo_publish": (False, True, True, True),
     "screen_capture": (True, False, True, False),
@@ -101,7 +105,7 @@ class FsWriteMCPTests(unittest.IsolatedAsyncioTestCase):
     async def _tools(self) -> dict[str, object]:
         return {tool.name: tool for tool in await server.mcp.list_tools()}
 
-    async def test_exact_16_tool_order_and_fs_write_annotations(self) -> None:
+    async def test_exact_18_tool_order_and_fs_write_annotations(self) -> None:
         tools = await self._tools()
         self.assertEqual(tuple(tools), EXPECTED_TOOLS)
         self.assertEqual(server.PUBLIC_TOOL_NAMES, EXPECTED_TOOLS)

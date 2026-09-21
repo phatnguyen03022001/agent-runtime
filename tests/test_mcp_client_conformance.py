@@ -28,6 +28,8 @@ EXPECTED_TOOLS = (
     "fs_write",
     "repo_observer",
     "repo_diff",
+    "repo_stage",
+    "repo_commit",
     "repo_fast_forward",
     "repo_publish",
     "screen_capture",
@@ -46,6 +48,8 @@ EXPECTED_ANNOTATIONS = {
     "fs_write": (False, True, False, False),
     "repo_observer": (True, False, True, False),
     "repo_diff": (True, False, True, False),
+    "repo_stage": (False, True, False, False),
+    "repo_commit": (False, True, False, False),
     "repo_fast_forward": (False, True, True, True),
     "repo_publish": (False, True, True, True),
     "screen_capture": (True, False, True, False),
@@ -114,6 +118,16 @@ EXPECTED_OUTPUT_FIELDS = {
     "repo_diff": {
         "schema_version", "scope", "head_sha", "patch", "patch_truncated",
         "full_diff_bytes", "diff_receipt", "kind", "digest", "network_used",
+    },
+    "repo_stage": {
+        "schema_version", "branch", "head_sha", "staged_paths", "staged_diff_receipt",
+        "post_stage_clean", "network_used", "path", "operation", "worktree_sha256",
+        "git_blob_sha", "git_mode", "kind", "digest",
+    },
+    "repo_commit": {
+        "schema_version", "branch", "parent_sha", "tree_sha", "commit_sha",
+        "diff_receipt", "commit_receipt", "network_used", "post_commit_clean",
+        "kind", "digest",
     },
     "repo_fast_forward": {
         "schema_version", "status", "repository_root", "branch", "remote", "upstream",
