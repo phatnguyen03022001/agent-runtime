@@ -119,7 +119,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
 
         self.assertEqual(
             assigned.get("PUBLIC_TOOL_NAMES"),
-            ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch", "repo_observer", "repo_fast_forward", "repo_publish", "screen_capture"),
+            ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch", "fs_list", "fs_search", "fs_patch", "repo_observer", "repo_diff", "repo_fast_forward", "repo_publish", "screen_capture"),
         )
         for name in assigned["PUBLIC_TOOL_NAMES"]:
             self.assertIn(name, functions)
@@ -188,7 +188,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
             module = importlib.import_module("agent_runtime.server")
             self.assertEqual(
                 tuple(module.mcp.tools),
-                ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch", "repo_observer", "repo_fast_forward", "repo_publish", "screen_capture"),
+                ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch", "fs_list", "fs_search", "fs_patch", "repo_observer", "repo_diff", "repo_fast_forward", "repo_publish", "screen_capture"),
             )
             expected = {
                 "terminal_exec": (False, True, False, True),
@@ -198,7 +198,11 @@ class SurfaceAndScriptsTests(unittest.TestCase):
                 "terminal_resize": (False, False, True, False),
                 "capacity_observer": (True, False, True, False),
                 "fs_read_batch": (True, False, True, False),
+                "fs_list": (True, False, True, False),
+                "fs_search": (True, False, True, False),
+                "fs_patch": (False, True, False, False),
                 "repo_observer": (True, False, True, False),
+                "repo_diff": (True, False, True, False),
                 "repo_fast_forward": (False, True, True, True),
                 "repo_publish": (False, True, True, True),
                 "screen_capture": (True, False, True, False),
