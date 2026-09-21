@@ -439,7 +439,7 @@ def search_files(
                     stop("deadline")
                     break
 
-        return FsSearchResult(**_payload(
+        payload = _payload(
             results,
             truncated=truncated,
             limit_reason=limit_reason,
@@ -448,6 +448,27 @@ def search_files(
             skipped_invalid_utf8=skipped_invalid_utf8,
             skipped_nul=skipped_nul,
             skipped_symlinks=skipped_symlinks,
-        ))
+        )
+        while _serialized_size(payload) > MAX_SERIALIZED_RESULT_BYTES and results:
+            results.pop()
+            truncated = True
+            limit_reason = "max_output"
+            payload = _payload(
+                results,
+                truncated=truncated,
+                limit_reason=limit_reason,
+                files_scanned=files_scanned,
+                bytes_scanned=bytes_scanned,
+                skipped_invalid_utf8=skipped_invalid_utf8,
+                skipped_nul=skipped_nul,
+                skipped_symlinks=skipped_symlinks,
+            )
+        if _serialized_size(payload) > MAX_SERIALIZED_RESULT_BYTES:
+            raise CapabilityFailure(
+                ContractErrorCode.LIMIT_EXCEEDED,
+                "RESULT_METADATA_LIMIT",
+                "search result metadata exceeds the serialized output bound",
+            )
+        return FsSearchResult(**payload)
     finally:
         os.close(cwd_fd)
