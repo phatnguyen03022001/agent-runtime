@@ -1724,6 +1724,79 @@ class CandidateCutoverTests(unittest.TestCase):
             self.assertIn("register-runtime", operations)
             self.assertLess(operations.index("unregister-runtime"), operations.index("register-runtime"))
 
+    def test_split_v1_refresh_waits_for_launchd_absence_before_swap_and_registration(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            predecessor_revision = "99518e694467be8525d813a4e638c4c8e0324365"
+            provenance, cutover, fx = self._fixture(raw, predecessor_revision=predecessor_revision)
+            modern_service = f"gui/501/{MODERN_RUNTIME_LABEL}"
+            fx["modern_state"].update(main_app="enabled", runtime_agent="enabled")
+            self._set_launch_program(
+                fx,
+                modern_service,
+                fx["target"] / "Contents/MacOS/AgentRuntimeRuntimeService",
+            )
+            helper = fx["candidate"] / "Contents/MacOS/AgentRuntimeRuntimeService"
+            helper.write_bytes(helper.read_bytes() + b"changed-generation-delayed-unload\n")
+            provenance.seal_candidate(fx["candidate"], fx["handoff"])
+
+            original_service_management = cutover._service_management
+            original_service_loaded = cutover._service_loaded
+            original_ownership_snapshot = cutover._modern_ownership_snapshot
+            events: list[str] = []
+            polls = 0
+
+            def installed_revision() -> str:
+                manifest = json.loads(
+                    (fx["target"] / "Contents/Resources/runtime-manifest.json").read_text()
+                )
+                return str(manifest["runtime_revision"])
+
+            def service_management(app: Path, operation: str) -> dict[str, str]:
+                if operation == "unregister-runtime":
+                    fx["service_operations"].append((str(app), operation))
+                    fx["modern_state"]["runtime_agent"] = "not-registered"
+                    events.append("unregister-returned")
+                    return dict(fx["modern_state"])
+                if operation == "register-runtime":
+                    loaded = set(json.loads(fx["launch_state"].read_text()))
+                    self.assertNotIn(modern_service, loaded)
+                    events.append("register-runtime")
+                return original_service_management(app, operation)
+
+            def service_loaded(launchctl: Path, service: str) -> bool:
+                nonlocal polls
+                if (
+                    service == modern_service
+                    and "unregister-returned" in events
+                    and "register-runtime" not in events
+                ):
+                    polls += 1
+                    self.assertEqual(installed_revision(), predecessor_revision)
+                    if polls < 3:
+                        events.append("launchd-still-loaded")
+                        return True
+                    fx["set_modern_runtime_loaded"](fx["target"], False)
+                    events.append("launchd-absent")
+                    return False
+                return original_service_loaded(launchctl, service)
+
+            def ownership_snapshot(app: Path, **kwargs):
+                if "unregister-returned" in events:
+                    self.assertIn("launchd-absent", events)
+                    events.append("candidate-inspection")
+                return original_ownership_snapshot(app, **kwargs)
+
+            cutover._service_management = service_management
+            cutover._service_loaded = service_loaded
+            cutover._modern_ownership_snapshot = ownership_snapshot
+            cutover.time.sleep = lambda _seconds: None
+
+            result = self._cutover(cutover, fx)
+            self.assertEqual(result["status"], "PENDING")
+            self.assertGreaterEqual(polls, 3)
+            self.assertLess(events.index("launchd-absent"), events.index("candidate-inspection"))
+            self.assertLess(events.index("launchd-absent"), events.index("register-runtime"))
+
     def test_unchanged_healthy_runtime_is_not_destructively_refreshed(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             _, cutover, fx = self._fixture(raw)

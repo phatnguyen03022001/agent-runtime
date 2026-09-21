@@ -1434,6 +1434,8 @@ def cutover_candidate(
                 runtime_before=runtime_before,
                 operations=operations,
             )
+            if predecessor_contract == "split-v1":
+                _wait_for_service_absence(launchctl, modern_runtime_service)
             _atomic_json(transaction_dir / "metadata.json", metadata)
             _inject(failures, "after_predecessor_refresh")
 
