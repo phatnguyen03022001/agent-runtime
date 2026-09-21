@@ -1,0 +1,297 @@
+protocol_version: 3
+
+task_id: TASK-0126
+task_revision: 1
+state: APPROVED
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch: dev
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  transport: AGENT_RUNTIME
+  model: GPT-5.6 Sol
+  effort: HIGH
+
+objective: >-
+  Implement Wave 1 native coding capabilities as one coherent delivery:
+  fs_list, fs_search, repo_diff, and fs_patch.
+  Preserve the current eleven public tools unchanged and append the four new tools
+  in that exact order, producing exactly fifteen public tools.
+  This revision is source implementation + verification + publication only.
+  Do not package, install, restart, cut over, or invoke screen_capture.
+
+planning_base:
+  remote_dev: "798af59523b8322ca391f23bf190dac7a9dbbfcc"
+  remote_main: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  expected_local_pre_sync_head: "4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b"
+  local_repository: "/Users/tienphat/Developer/agent-runtime"
+
+preflight:
+  - "Resolve this task from GitHub at the exact planning HEAD supplied by the operator."
+  - "Require the currently installed Agent Runtime exposes all eleven accepted public tools."
+  - "Do not invoke screen_capture."
+  - "Require local branch dev, expected pre-sync HEAD, and clean worktree."
+  - "Use repo_fast_forward exactly once to synchronize local dev to the exact planning HEAD."
+  - "After sync require local HEAD equals planning HEAD and worktree clean."
+
+public_surface:
+  existing_order:
+    - terminal_exec
+    - terminal_start
+    - terminal_poll
+    - terminal_control
+    - terminal_resize
+    - capacity_observer
+    - fs_read_batch
+    - repo_observer
+    - repo_fast_forward
+    - repo_publish
+    - screen_capture
+  append_order:
+    - fs_list
+    - fs_search
+    - repo_diff
+    - fs_patch
+  final_count: 15
+  requirements:
+    - "Do not remove, rename, reorder, or weaken existing public tool contracts."
+    - "Register the four new MCP functions after screen_capture."
+    - "Update PUBLIC_TOOL_NAMES, timing.ALLOWED_TOOL_NAMES, README, and exact-surface tests."
+    - "screen_capture must remain VISUAL_PERCEPTION_BLOCKED before native capture."
+
+filesystem_safety:
+  shared_helper: agent_runtime/fs_safety.py
+  requirements:
+    - "Extract only low-level workspace/cwd/component/no-follow descriptor-relative safety shared by fs_read_batch and new filesystem tools."
+    - "Preserve fs_read_batch public behavior, schema, errors, limits, and semantics."
+    - "Do not build a generic filesystem service."
+
+fs_list:
+  annotations: {readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false}
+  input:
+    cwd: AbsoluteCwd
+    path: "optional cwd-relative directory; null means cwd"
+    max_entries: "default 200; 1..1000"
+  contract:
+    - "Non-recursive immediate children only."
+    - "Deterministic lexical ordering."
+    - "Return schema_version=1, path, entries[{path,type,size_bytes}], truncated."
+    - "type is file|directory|symlink; only regular files report size_bytes."
+    - "Symlinks may be reported but never followed/traversed."
+    - "Reject unsafe/absolute/dot-dot/NUL/outside-workspace paths."
+    - "Hard scan/output/deadline bounds; no recursive tree mode."
+
+fs_search:
+  annotations: {readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false}
+  input:
+    cwd: AbsoluteCwd
+    root: "optional cwd-relative directory; null means cwd"
+    target: "content|path"
+    query: "non-empty UTF-8 literal"
+    case_sensitive: "default true"
+    max_results: "default 100; 1..500"
+  contract:
+    - "Recursive bounded literal search only; no regex/glob/shell/background session."
+    - "No required ripgrep dependency."
+    - "Never traverse symlinks or .git."
+    - "Content search scans regular UTF-8 text files, skips NUL/binary-like and invalid UTF-8 files."
+    - "Content results are one per matching line with 1-based line/column and bounded preview."
+    - "Path results return path with null line/column/preview."
+    - "Case-insensitive mode uses deterministic Unicode casefold semantics."
+    - "Return schema_version=1, results, files_scanned, bytes_scanned, truncated, deadline_seconds."
+    - "Server hard ceilings: 20,000 regular files, 64 MiB scanned bytes, 500 results, 256 KiB response, 5 seconds."
+    - "Do not silently treat inaccessible descendants as exhaustive success; use typed failure."
+
+repo_diff:
+  annotations: {readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false}
+  input:
+    cwd: AbsoluteCwd
+    scope: "worktree|staged"
+    paths: "optional <=64 literal relative paths; aggregate <=64 KiB"
+    context_lines: "default 3; 0..20"
+  contract:
+    - "Require supported Git working tree and cwd at repository root."
+    - "Use fixed /usr/bin/git, shell=False, sanitized environment, local only."
+    - "Set GIT_LITERAL_PATHSPECS=1."
+    - "Disable external diff, textconv, fsmonitor, pager, color, submodule recursion, and prompting."
+    - "No network, fetch, hooks, arbitrary Git argv, index/worktree/ref mutation, or optional locks."
+    - "scope=worktree means index-to-working-tree; scope=staged means HEAD-to-index; untracked files are not included."
+    - "Return schema_version=1, head_sha, files, patch, truncated, state_token."
+    - "Patch transport <=256 KiB; complete diff scan <=64 MiB; <=1000 returned file names; 5 second deadline."
+    - "state_token is SHA-256 over a versioned canonical preimage containing scope, HEAD, canonical path filter, and complete raw selected diff bytes before returned-patch truncation."
+    - "If complete diff state exceeds the internal ceiling, fail OUTPUT_LIMIT; never hash only a prefix."
+
+fs_patch:
+  annotations: {readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false}
+  input:
+    cwd: AbsoluteCwd
+    path: "required safe cwd-relative regular-file path"
+    expected_sha256: "required lowercase 64-hex current file digest"
+    edits: "ordered 1..20 exact old_text/new_text edits; aggregate <=256 KiB"
+  contract:
+    - "UTF-8 regular text only; reject NUL/binary-like and files >1 MiB."
+    - "Verify expected_sha256 before mutation."
+    - "Apply edits sequentially in memory; each non-empty old_text must match exactly once in the evolving text."
+    - "Zero or multiple matches => PATCH_TARGET_MISMATCH and zero mutation."
+    - "No regex, fuzzy matching, unified diff, line-number patch, append, chmod/chown, directory creation, or full-file write API."
+    - "Write a task-owned same-directory temporary regular file, preserve original permission bits, fsync as appropriate, revalidate target pathname/inode/content before replacement, then atomic os.replace."
+    - "Observed drift before commit point => LOCAL_STATE_CHANGED and zero replacement."
+    - "Replay with stale expected_sha256 must fail closed without a second mutation."
+    - "Return schema_version=1, path, old_sha256, new_sha256, edits_applied, bytes_before, bytes_after."
+    - "Always cleanup task-owned temporary artifacts."
+
+errors:
+  add:
+    - NOT_FOUND
+    - ACCESS_DENIED
+    - SYMLINK_DISALLOWED
+    - NOT_REGULAR_FILE
+    - NOT_DIRECTORY
+    - INVALID_UTF8
+    - BINARY_FILE
+    - FILE_SIZE_LIMIT
+    - PATCH_TARGET_MISMATCH
+  reuse:
+    - INVALID_ARGUMENT
+    - OUTSIDE_WORKSPACE
+    - NOT_GIT_REPOSITORY
+    - NOT_REPOSITORY_ROOT
+    - LOCAL_STATE_CHANGED
+    - OUTPUT_LIMIT
+    - DEADLINE_EXCEEDED
+    - TRANSIENT_FAILURE
+    - INTERNAL_ERROR
+
+allowed_source_paths:
+  - agent_runtime/contracts.py
+  - agent_runtime/server.py
+  - agent_runtime/fs_read.py
+  - agent_runtime/fs_safety.py
+  - agent_runtime/fs_list.py
+  - agent_runtime/fs_search.py
+  - agent_runtime/repo_diff.py
+  - agent_runtime/fs_patch.py
+  - agent_runtime/timing.py
+  - README.md
+  - tests/test_fs_list.py
+  - tests/test_fs_list_mcp.py
+  - tests/test_fs_search.py
+  - tests/test_fs_search_mcp.py
+  - tests/test_repo_diff.py
+  - tests/test_repo_diff_mcp.py
+  - tests/test_fs_patch.py
+  - tests/test_fs_patch_mcp.py
+  - tests/test_fs_read_batch.py
+  - tests/test_fs_read_batch_adversarial.py
+  - tests/test_fs_read_batch_mcp.py
+  - tests/test_mcp_client_conformance.py
+  - tests/test_mcp_contracts.py
+  - tests/test_repo_fast_forward_mcp.py
+  - tests/test_repo_observer_mcp.py
+  - tests/test_repo_publish_mcp.py
+  - tests/test_screen_capture_mcp.py
+  - tests/test_surface_and_scripts.py
+  - tests/test_task0041_boundedness.py
+  - tests/test_timing.py
+
+implementation_policy:
+  - "KISS and reuse-first; standard library only."
+  - "No Wave-2 fs_write or repo_commit."
+  - "No LSP/index/database/background worker/stateful search."
+  - "No repo_exec/git_exec or generic filesystem god-tool."
+  - "terminal_exec may be used only for bounded source authoring, tests, git diff --check, canonical verify, and local git commit because Wave-1 authoring tools do not yet exist."
+  - "Do not use terminal_exec for synchronization or publication when repo_fast_forward/repo_publish cover the operation."
+  - "Keep terminal calls single-purpose; do not hide multiple consequence classes in giant compound commands."
+
+focused_verification:
+  primary: >-
+    PYTHONPATH="$PWD" ./.venv/bin/python -m unittest -v
+    tests.test_fs_list tests.test_fs_list_mcp
+    tests.test_fs_search tests.test_fs_search_mcp
+    tests.test_repo_diff tests.test_repo_diff_mcp
+    tests.test_fs_patch tests.test_fs_patch_mcp
+  regressions: >-
+    PYTHONPATH="$PWD" ./.venv/bin/python -m unittest -v
+    tests.test_fs_read_batch tests.test_fs_read_batch_adversarial tests.test_fs_read_batch_mcp
+    tests.test_repo_observer tests.test_repo_observer_mcp
+    tests.test_repo_fast_forward_mcp tests.test_repo_publish_mcp
+    tests.test_screen_capture_mcp tests.test_mcp_contracts
+    tests.test_mcp_client_conformance tests.test_surface_and_scripts
+    tests.test_task0041_boundedness tests.test_timing
+
+canonical_verification:
+  command: "PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify"
+  happy_path_invocations: 1
+  rules:
+    - "Before canonical verify, run git diff --check and require all changed paths are inside allowed_source_paths."
+    - "Run canonical verify once after implementation is final."
+    - "If it fails due to implementation/test failure, source correction is allowed within scope and every canonical invocation must be reported truthfully."
+    - "Never rerun a passing canonical verification on unchanged bytes."
+
+publication:
+  implementation_commit:
+    count: 1
+    rules:
+      - "Commit only after canonical verification PASS."
+      - "No amend, reset, rebase, stash, merge commit, or force operation."
+  repo_publish:
+    authority: "0/1"
+    rules:
+      - "Publish the exact implementation commit to origin/dev with expected-state-guarded repo_publish."
+      - "Do not use terminal git push."
+      - "Require local HEAD = origin/dev = implementation commit and worktree clean."
+      - "Require remote main unchanged."
+
+forbidden:
+  - screen_capture invocation
+  - package_app
+  - install_prebuilt
+  - Runtime restart/stop/signal
+  - commit_cutover/rollback/recovery
+  - TCC/System Settings mutation
+  - Keychain mutation
+  - tunnel mutation
+  - main/tag/release mutation
+  - sibling repository mutation
+  - Codex delegation
+
+failure_policy:
+  classes:
+    - PLATFORM_BLOCK
+    - RUNTIME_REJECTION
+    - HOST_PERMISSION
+    - TOOL_CONTRACT_FAILURE
+    - IMPLEMENTATION_FAILURE
+  rule: >-
+    A platform block before Runtime execution is not an implementation failure.
+    Do not obfuscate, re-encode, or switch surfaces solely to obtain a different safety decision.
+
+terminal_states:
+  success: NEEDS_REVIEW
+  capability_unavailable: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+  source_closure_failed: SOURCE_CLOSURE_FAILED
+  verification_failed: VERIFICATION_FAILED
+  publication_failed: PUBLICATION_FAILED
+  platform_block: PLATFORM_BLOCK
+
+reporting:
+  - "Return one bounded Vietnamese result packet only."
+  - "Include planning HEAD, sync closure, changed paths, per-tool contract summary, focused verification, canonical verify invocation count/result/test count, implementation commit, repo_publish result, and final local/remote closure."
+  - "Do not create report.yaml; Architect persists durable report/review after independent review."
+  - "Do not include giant transcripts or unrelated host state."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+successor_boundary:
+  package_or_activation_authorized: false
+  codex_required: false
+  next: "Independent Architect review; package/activation only in a separate Runtime-independent successor if accepted."
+
+execution_ready: true
