@@ -1,0 +1,99 @@
+protocol_version: 3
+
+task_id: TASK-MAIN-ONLY-MIGRATION
+task_revision: 2
+report_revision: 2
+state: NEEDS_REVIEW
+
+execution:
+  architecture_role: ARCHITECT_OPERATOR_MAINTENANCE
+  github_surface: CHATGPT_GITHUB
+  local_admin_surface: REMOTE_DESKTOP_COMMANDER
+  execution_base: "763324f4e81a7aafc3141e61657a9259634f1b98"
+  execution_base_tree: "df8ffacc19948f5c3973e872aea862bebcdbb6b9"
+
+stage_1:
+  purpose: "Make canonical verify manual-only."
+  commit: "0581f56e2b074975e68b88afa6731662e4ec39e7"
+  tree: "7a6d0cc0bdb63d05af834e72af045b3751061ade"
+  parent: "763324f4e81a7aafc3141e61657a9259634f1b98"
+  changed_paths:
+    - .github/workflows/verify.yml
+  workflow_trigger: workflow_dispatch_only
+
+stage_2:
+  purpose: "Converge accepted governance history to MAIN_ONLY without importing control/dev source."
+  commit: "d63abb69b358fb043291c3f8bdbe95eebb5eca9b"
+  tree: "36d85140d47e9371595a8ae694af47ded27d7dec"
+  parents:
+    - "0581f56e2b074975e68b88afa6731662e4ec39e7"
+    - "e69bf4865ad4b0a6302253e14e36f5cba0766ae7"
+  governance_subtrees:
+    TASK-0126: "afb3cc0070994493b0938736de296550da7281a3"
+    TASK-0127: "c318aff69edfb624a3f46522632da122b2507184"
+    TASK-0128: "f8723c11260b43447031381fe8ad161e6c662e0c"
+    TASK-0129: "5e036089e0d4e1fa794247bfd18cd4ead0befd8e"
+    TASK-0130: "cb43184cec9abcdff51109a8d17663653c52af0e"
+    TASK-0131: "4ab1aaa2ad6c67082ed9070d0496f8d825dc6263"
+    TASK-0132: "d546a3696be084b4d1991fa1c420aa505889c373"
+    TASK-0133: "09666e96e13d436f73431e13e9f101fb556c8f6e"
+    TASK-0134: "7e047a5c0c854dcba71e19ad340abd5e1fb15284"
+  task_0135_current_tree: ABSENT
+  product_source_test_imported_from_control_or_dev: false
+
+remote_retirement:
+  branches:
+    current:
+      - main
+    deleted:
+      - control
+      - dev
+  ruleset:
+    id: 22462972
+    name: main-ref-integrity
+    enforcement: active
+    include:
+      - refs/heads/main
+    rules:
+      - deletion
+      - non_fast_forward
+    required_pull_request: false
+    required_status_checks: false
+  open_pull_requests: 0
+
+local_closure:
+  repository: /Users/tienphat/Developer/agent-runtime
+  branch: main
+  head_before_report: "d63abb69b358fb043291c3f8bdbe95eebb5eca9b"
+  tree: "36d85140d47e9371595a8ae694af47ded27d7dec"
+  worktree: CLEAN
+  local_branches:
+    - main
+  remote_tracking:
+    - origin/main
+  retired_local_dev_unique_commits: 0
+
+verification:
+  verifier: ./verify
+  surface: REMOTE_DESKTOP_COMMANDER_LOCAL
+  exit_code: 0
+  tests_run: 615
+  failures: 0
+  skipped: 1
+  result: PASS
+  github_actions_dispatched: false
+
+result:
+  topology: MAIN_ONLY
+  canonical_truth: main
+  normal_verification: "CHATGPT_LOCAL / Agent Runtime -> ./verify"
+  github_actions_role: "manual independent evidence only"
+  task_branches_required: false
+  pull_requests_required: false
+  per_task_github_actions_required: false
+  next_task: TASK-0135
+  next_revision: 2
+  next_surface: CHATGPT_LOCAL
+
+classification:
+  terminal: READY_FOR_INDEPENDENT_REVIEW
