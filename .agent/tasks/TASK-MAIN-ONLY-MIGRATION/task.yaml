@@ -1,0 +1,364 @@
+protocol_version: 3
+
+task_id: TASK-MAIN-ONLY-MIGRATION
+task_revision: 1
+state: APPROVED
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  canonical_branch: main
+
+execution_surface:
+  id: CHATGPT_GITHUB
+  controller: CHATGPT
+  transport: GITHUB
+  model: GPT-5.6 Sol
+  effort: HIGH
+
+objective: >-
+  Perform the one-time governance/delivery migration from split control/dev/main
+  topology to MAIN_ONLY without changing Agent Runtime product semantics.
+  Preserve governance history on main, disable automatic per-task GitHub Actions,
+  retire control/dev authority, and leave main ready for CHATGPT_LOCAL direct-main
+  exact-CAS execution. Do not implement TASK-0135 or TASK-0136 product work.
+
+planning_identity:
+  execution_base: SELF_MAIN_HEAD
+  observed_preplanning_main: "ba084a4cd3a653d3676287a64e98ee51ded5d4a0"
+  observed_preplanning_main_tree: "c2d0869835ed862e17b3ea14483d2620034bcc3c"
+  control_head: "e69bf4865ad4b0a6302253e14e36f5cba0766ae7"
+  control_tree: "b70e7e3863b64890dbd28e7b80ad6f3921188cb0"
+  dev_head: "0030238d4be37f8b6e37362bf81f31fc9459dace"
+  rule: >-
+    The launch packet supplies the exact main HEAD containing this task.
+    Before any mutation require live main equals that exact execution_base.
+    Require control and dev equal the pinned heads above.
+
+observed_evidence:
+  canonical_tests: "615 tests / 0 failures / 1 skipped"
+  public_mcp_surface: 18
+  open_pull_requests: 0
+  control_relation:
+    base: "0030238d4be37f8b6e37362bf81f31fc9459dace"
+    head: "e69bf4865ad4b0a6302253e14e36f5cba0766ae7"
+    status: ahead
+    ahead_by: 54
+    behind_by: 0
+    implication: >-
+      dev is an ancestor of control. Making exact control HEAD reachable from main
+      also preserves the dev lineage without retaining the dev ref.
+  main_control_relation:
+    merge_base: "b619d3d8856df3a0ef12ccb833b49afe9c68a867"
+    status: diverged
+    main_unique_commits: 7
+    control_unique_commits: 59
+  governance_tree_delta:
+    main_agent_blob_count: 359
+    control_agent_blob_count: 409
+    control_added_vs_main: 50
+    control_changed_vs_main: 1
+    control_missing_vs_main: 0
+    affected_tasks:
+      - TASK-0126
+      - TASK-0127
+      - TASK-0128
+      - TASK-0129
+      - TASK-0130
+      - TASK-0131
+      - TASK-0132
+      - TASK-0133
+      - TASK-0134
+      - TASK-0135
+    note: >-
+      TASK-0135 revision 1 is historical evidence only and must not become the active
+      task on migrated main.
+
+repository_policy:
+  current_ruleset:
+    id: 22462972
+    name: dev-main-ref-integrity
+    enforcement: active
+    refs:
+      - refs/heads/dev
+      - refs/heads/main
+    rules:
+      - deletion
+      - non_fast_forward
+    required_pull_request: false
+    required_status_checks: false
+  desired_main_only_policy:
+    - "main remains protected from deletion."
+    - "main remains protected from non-fast-forward updates."
+    - "No pull-request requirement is introduced."
+    - "No required GitHub Actions status check is introduced."
+    - "Do not weaken unrelated repository security controls."
+
+migration_design:
+  history_preservation:
+    method: CONTROLLED_TREE_MERGE
+    requirements:
+      - >-
+        Create exactly one migration commit whose first parent is exact execution_base
+        and whose second parent is exact control_head.
+      - >-
+        The migration commit tree MUST be constructed from execution_base, not from
+        control or dev. The second parent exists only to make historical governance
+        commits reachable from main.
+      - >-
+        Because dev_head is an ancestor of control_head, the second parent preserves
+        both retired branch histories without tags or replacement refs.
+      - >-
+        Never use a normal Git merge result, recursive merge, checkout merge, or any
+        mechanism that can import obsolete control/dev source snapshots into HEAD.
+
+  governance_materialization:
+    source_authority: "exact blobs reachable from control_head"
+    requirements:
+      - >-
+        Materialize the exact current governance artifacts from control for TASK-0126
+        through TASK-0134 into the execution_base tree.
+      - >-
+        For TASK-0126, add report-r1.yaml, report-r2.yaml, review-r1.yaml,
+        review-r2.yaml and replace task.yaml with the exact control revision-2 blob.
+      - >-
+        For TASK-0127 through TASK-0134, materialize every current file under each
+        exact control task directory byte-for-byte.
+      - >-
+        Do NOT materialize .agent/tasks/TASK-0135/task.yaml into the migrated current
+        tree. Its exact revision-1 bytes and planning history are preserved through the
+        second parent and remain historical only.
+      - >-
+        Do not alter .agent/capability-policy.yaml or any pre-TASK-0126 governance path.
+      - >-
+        Do not synthesize, normalize, reformat, or rewrite imported governance YAML.
+        Reuse exact existing Git blob identities where possible.
+
+  product_source_guard:
+    requirement: >-
+      Every execution_base path outside the explicitly authorized governance paths
+      and .github/workflows/verify.yml must retain the exact same blob/tree identity
+      in the migration commit tree.
+    forbidden_imports:
+      - "Any agent_runtime/** blob from control/dev."
+      - "Any tests/** blob from control/dev."
+      - "README.md from control/dev."
+      - "install.sh, start.sh, requirements files, macos/**, or any other source snapshot from control/dev."
+
+github_actions:
+  path: .github/workflows/verify.yml
+  current_blob: "f6323da109ebf10f85cea836b0293bc04e7b38bb"
+  required_change:
+    from:
+      - "push: main"
+      - "pull_request: main"
+    to: "workflow_dispatch only"
+  invariants:
+    - "Keep the workflow available."
+    - "Keep the same canonical-verify job."
+    - "Keep invoking repository-owned ./verify."
+    - "No schedule."
+    - "No push trigger."
+    - "No pull_request trigger."
+    - "Do not duplicate test logic."
+    - "Do not create a second workflow or CI framework."
+
+allowed_tree_mutation:
+  governance:
+    - ".agent/tasks/TASK-0126/**"
+    - ".agent/tasks/TASK-0127/**"
+    - ".agent/tasks/TASK-0128/**"
+    - ".agent/tasks/TASK-0129/**"
+    - ".agent/tasks/TASK-0130/**"
+    - ".agent/tasks/TASK-0131/**"
+    - ".agent/tasks/TASK-0132/**"
+    - ".agent/tasks/TASK-0133/**"
+    - ".agent/tasks/TASK-0134/**"
+    - ".agent/tasks/TASK-MAIN-ONLY-MIGRATION/report-r1.yaml"
+  ci:
+    - ".github/workflows/verify.yml"
+  explicitly_not_active:
+    - ".agent/tasks/TASK-0135/task.yaml"
+
+commit_protocol:
+  migration_commit:
+    count: 1
+    first_parent: SELF_MAIN_HEAD
+    second_parent: "e69bf4865ad4b0a6302253e14e36f5cba0766ae7"
+    message: "migrate: converge governance to MAIN_ONLY"
+    publication:
+      branch: main
+      force: false
+      rules:
+        - >-
+          Create the commit from the exact execution_base first parent. Update main
+          only with a non-force fast-forward ref update.
+        - >-
+          If remote main moved after preflight, the update must fail closed. Do not
+          recreate the candidate on the drifted head and do not retry automatically.
+        - "Never force-push, reset, rebase, amend, or rewrite history."
+  executor_report_commit:
+    count: 1
+    parent: exact_migration_commit
+    path: ".agent/tasks/TASK-MAIN-ONLY-MIGRATION/report-r1.yaml"
+    rules:
+      - "Persist one bounded English Executor report after fresh remote proof."
+      - "Create a direct-child commit of exact migration commit."
+      - "Publish with non-force fast-forward only."
+      - "If main drifted, fail closed and report exact residue."
+
+verification:
+  before_publication:
+    - "Freshly require main/control/dev exact heads."
+    - "Freshly require ruleset 22462972 still matches observed policy."
+    - "Freshly require open PR count remains zero."
+    - "Freshly require workflow current blob equals pinned current_blob."
+    - >-
+      Independently derive the control-vs-execution_base governance delta. Require
+      no intended imported current-tree path outside TASK-0126..TASK-0134.
+  migration_commit_proofs:
+    - "First parent equals exact execution_base."
+    - "Second parent equals exact control_head."
+    - "control_head is reachable from migration commit."
+    - "dev_head is reachable through control_head."
+    - >-
+      Compare execution_base...migration_commit and require every changed path is
+      within allowed_tree_mutation excluding the later report path.
+    - >-
+      Require every non-governance/non-workflow execution_base blob remains identical.
+    - "Require .agent/tasks/TASK-0135/task.yaml is absent from migration commit tree."
+    - >-
+      Require TASK-0126..TASK-0134 imported current artifacts match exact control blobs.
+    - >-
+      Require .github/workflows/verify.yml has workflow_dispatch only and its remaining
+      canonical verifier behavior is unchanged.
+  canonical_verifier:
+    doctrine: >-
+      ./verify remains the canonical repository verifier. No GitHub Actions run is
+      required for acceptance of this governance-only migration because product source,
+      tests, and ./verify are byte-identical to execution_base.
+    inherited_baseline: "615 tests / 0 failures / 1 skipped"
+    optional_remote_evidence: >-
+      A manually dispatched workflow may be used later as independent final-audit
+      evidence, but absence of such a run is not a migration failure.
+
+authority_after_migration_commit:
+  canonical_truth: main
+  control: NON_AUTHORITATIVE
+  dev: NON_AUTHORITATIVE
+  normal_task_branches_required: false
+  pull_requests_required: false
+  per_task_github_actions_required: false
+  normal_execution_surface:
+    id: CHATGPT_LOCAL
+    transport: AGENT_RUNTIME
+  normal_flow: >-
+    Architect task on main -> exact main base -> one Executor writer -> focused checks
+    -> local ./verify -> repo_stage -> repo_diff(staged ReceiptV1) -> repo_commit
+    -> repo_publish exact expected-old CAS to main -> fresh GitHub main proof
+    -> Executor report on main -> independent Architect review on main.
+
+remote_retirement:
+  desired:
+    ruleset_scope:
+      ruleset_id: 22462972
+      keep_rules:
+        - deletion
+        - non_fast_forward
+      include_only:
+        - refs/heads/main
+    delete_refs:
+      - control
+      - dev
+  tool_capability_boundary: >-
+    If GitHub administrative ruleset mutation or remote ref deletion is unavailable
+    to the connected execution surface, do not retain old authority and do not route
+    around the limitation. Complete and publish the migration/report commits, mark
+    control/dev NON_AUTHORITATIVE, then return OPERATOR_TRANSITION_REQUIRED only for
+    the remaining repository-administration consequences.
+  exact_operator_transition_if_required:
+    - >-
+      In GitHub repository rules, edit ruleset 22462972 (dev-main-ref-integrity) so
+      its ref include set contains only refs/heads/main; retain deletion and
+      non_fast_forward rules.
+    - "Delete remote branch control."
+    - "Delete remote branch dev."
+    - "Create no replacement branch, tag, or ruleset ceremony."
+    - >-
+      After the operator transition, Architect must fresh-verify branches == [main],
+      ruleset scope == main only, and migrated governance reachability before ACCEPT.
+
+forbidden:
+  - "TASK-0135 implementation or revision-2 authoring"
+  - "TASK-0136 implementation"
+  - "Agent Runtime product semantic changes"
+  - "ToolContract Kernel redesign"
+  - "repo_publish schema changes"
+  - "source import from control/dev"
+  - "normal merge result from control/dev"
+  - "task-* branch creation"
+  - "pull request creation"
+  - "squash merge"
+  - "automatic CI acceptance"
+  - "new integration branch"
+  - "staging branch"
+  - "new governance repository"
+  - "new metadata store"
+  - "tag created only to preserve retired branch topology"
+  - "force push"
+  - "history rewrite"
+  - "reset"
+  - "rebase"
+  - "amend"
+  - "automatic retry after remote drift"
+  - "local Mac source mutation"
+  - "Codex delegation"
+  - "screen_capture"
+
+failure_policy:
+  source_closure_failed: SOURCE_CLOSURE_FAILED
+  remote_drift: REMOTE_MAIN_DRIFT
+  publication_failed: PUBLICATION_FAILED
+  platform_block: PLATFORM_BLOCK
+  admin_transition_required: OPERATOR_TRANSITION_REQUIRED
+  rules:
+    - "Fail closed on any unexpected main/control/dev identity."
+    - "Fail closed on any unexpected imported path or source blob change."
+    - "Do not retry a failed main publication against a new remote head."
+    - >-
+      A missing GitHub administrative capability blocks only ruleset/ref retirement;
+      it does not invalidate a correctly published MAIN_ONLY governance commit.
+
+terminal_states:
+  success: NEEDS_REVIEW
+  operator_transition_required: OPERATOR_TRANSITION_REQUIRED
+  source_closure_failed: SOURCE_CLOSURE_FAILED
+  remote_main_drift: REMOTE_MAIN_DRIFT
+  publication_failed: PUBLICATION_FAILED
+  platform_block: PLATFORM_BLOCK
+
+reporting:
+  language: English
+  required:
+    - "execution_base and tree"
+    - "migration commit and both parent SHAs"
+    - "exact changed paths"
+    - "governance import byte/blob proof"
+    - "TASK-0135 revision-1 historical-only proof"
+    - "workflow trigger proof"
+    - "product source identity proof"
+    - "fresh remote main proof"
+    - "control/dev authority state"
+    - "ruleset state"
+    - "branch deletion state"
+    - "operator transition, if administrative capability is unavailable"
+  operator_message: "Return one bounded Vietnamese result packet."
+
+successor:
+  gate: >-
+    Do not author or launch TASK-0135 revision 2 until an independent Architect
+    review accepts MAIN_ONLY and any required operator branch/ruleset transition
+    is fresh-verified.
+  next: TASK-0135
+  next_revision: 2
+
+execution_ready: true
