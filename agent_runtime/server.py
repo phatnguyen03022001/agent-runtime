@@ -51,6 +51,15 @@ from .contracts import (
     FsSearchRootPath,
     RepoDiffResult,
     RepoDiffScope,
+    RepoStageBranch,
+    RepoStageItems,
+    RepoStageResult,
+    RepoStageSha,
+    RepoCommitBranch,
+    RepoCommitExpectedDiffReceipt,
+    RepoCommitMessage,
+    RepoCommitResult,
+    RepoCommitSha,
     RepoFastForwardBranch,
     RepoFastForwardResult,
     RepoFastForwardSha,
@@ -85,6 +94,8 @@ from .fs_write import FS_WRITE_CONTRACT, write_file
 from .fs_search import FS_SEARCH_CONTRACT, search_files
 from .protection import ProtectedRuntimeDenied
 from .repo_diff import REPO_DIFF_CONTRACT, diff_repository
+from .repo_stage import REPO_STAGE_CONTRACT, stage_repository
+from .repo_commit import REPO_COMMIT_CONTRACT, commit_repository
 from .repo_fast_forward import RepoFastForwardFailure, fast_forward_repository
 from .repo_observer import RepoObserverFailure, observe_repository
 from .repo_publish import RepoPublishFailure, publish_repository
@@ -111,6 +122,8 @@ PUBLIC_TOOL_NAMES = (
     "fs_write",
     "repo_observer",
     "repo_diff",
+    "repo_stage",
+    "repo_commit",
     "repo_fast_forward",
     "repo_publish",
     "screen_capture",
@@ -132,6 +145,8 @@ SERVER_INSTRUCTIONS = (
     "expected-SHA exact text edits, fs_write performs whole-file expected-state create/replace, "
     "and repo_diff returns bounded local-only "
     "tracked diffs with full-state receipts. "
+    "repo_stage stages exactly one complete explicit regular-text candidate with expected-state guards and no implicit git add; "
+    "repo_commit commits only the exact receipt-authorized staged state with write-tree, commit-tree, and update-ref compare-and-swap. "
     "repo_observer performs bounded local-only Git repository observation with no fetch, network use, "
     "or repository mutation; it reports local tracking refs, typed changes, diff summary, operation state, "
     "and policy-safe worktree topology. "
@@ -503,6 +518,53 @@ def repo_diff(
         return diff_repository(cwd, scope)
     except CapabilityFailure as exc:
         return cast(RepoDiffResult, _capability_error_result(exc))
+
+
+@_tool(
+    read_only=REPO_STAGE_CONTRACT.annotations.read_only,
+    destructive=REPO_STAGE_CONTRACT.annotations.destructive,
+    idempotent=REPO_STAGE_CONTRACT.annotations.idempotent,
+    open_world=REPO_STAGE_CONTRACT.annotations.open_world,
+)
+def repo_stage(
+    cwd: AbsoluteCwd,
+    branch: RepoStageBranch,
+    expected_head_sha: RepoStageSha,
+    items: RepoStageItems,
+) -> RepoStageResult:
+    """Stage one complete explicit regular-text repository candidate."""
+
+    try:
+        return stage_repository(cwd, branch, expected_head_sha, items)
+    except CapabilityFailure as exc:
+        return cast(RepoStageResult, _capability_error_result(exc))
+
+
+@_tool(
+    read_only=REPO_COMMIT_CONTRACT.annotations.read_only,
+    destructive=REPO_COMMIT_CONTRACT.annotations.destructive,
+    idempotent=REPO_COMMIT_CONTRACT.annotations.idempotent,
+    open_world=REPO_COMMIT_CONTRACT.annotations.open_world,
+)
+def repo_commit(
+    cwd: AbsoluteCwd,
+    branch: RepoCommitBranch,
+    expected_head_sha: RepoCommitSha,
+    expected_diff_receipt: RepoCommitExpectedDiffReceipt,
+    message: RepoCommitMessage,
+) -> RepoCommitResult:
+    """Commit exactly one receipt-authorized staged state using Git plumbing."""
+
+    try:
+        return commit_repository(
+            cwd,
+            branch,
+            expected_head_sha,
+            expected_diff_receipt,
+            message,
+        )
+    except CapabilityFailure as exc:
+        return cast(RepoCommitResult, _capability_error_result(exc))
 
 
 @_tool(read_only=False, destructive=True, idempotent=True, open_world=True)
