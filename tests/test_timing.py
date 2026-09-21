@@ -158,6 +158,7 @@ class TimingToolTests(unittest.TestCase):
             "fs_list",
             "fs_search",
             "fs_patch",
+            "fs_write",
             "repo_observer",
             "repo_diff",
             "repo_fast_forward",
