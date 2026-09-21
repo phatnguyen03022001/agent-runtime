@@ -153,6 +153,17 @@ class RepoDiffTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, ContractErrorCode.LIMIT_EXCEEDED)
         self.assertEqual(caught.exception.reason_code, "DIFF_STATE_LIMIT")
 
+    def test_five_second_deadline_fails_before_unbounded_git_work(self) -> None:
+        with patch(
+            "agent_runtime.repo_diff.time.monotonic",
+            side_effect=[0.0, 6.0],
+        ):
+            with self.assertRaises(CapabilityFailure) as caught:
+                diff_repository(str(self.repo), "worktree")
+        self.assertEqual(caught.exception.code, ContractErrorCode.TIMEOUT)
+        self.assertEqual(caught.exception.reason_code, "DEADLINE_EXCEEDED")
+        self.assertTrue(caught.exception.retryable)
+
     def test_invalid_scope_is_rejected_before_git(self) -> None:
         with self.assertRaises(CapabilityFailure) as caught:
             diff_repository(str(self.repo), "all")
