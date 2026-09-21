@@ -1,0 +1,51 @@
+protocol_version: 3
+
+task_id: TASK-0126
+task_revision: 2
+review_revision: 2
+state: REWORK
+
+reviewed_report:
+  path: .agent/tasks/TASK-0126/report-r2.yaml
+  commit: "16621782ddfecd10cd8537c1d797b4de9fbce0f5"
+
+acceptance:
+  terminal: PLATFORM_BLOCK
+  disposition: REWORK
+
+architect_judgment:
+  source_defect_proven: false
+  implementation_defect_proven: false
+  local_source_clean: true
+  local_source_head: "b619d3d8856df3a0ef12ccb833b49afe9c68a867"
+  sync_reached_agent_runtime: false
+  source_authoring_started: false
+  codex_required: false
+
+root_cause:
+  classification: GOVERNANCE_TO_SOURCE_SYNC_COUPLING
+  explanation: >-
+    Revision 2 required the local source checkout to fast-forward through governance-only planning history
+    before source work could begin. The exact repo_fast_forward request was blocked before Agent Runtime execution.
+    The source checkout itself was already clean and at an immutable commit with the accepted source bytes.
+    Governance identity and source identity must therefore be modeled separately.
+
+architect_decision:
+  task_0126_complete: false
+  task_0126_next_revision: none
+  superseded_by_foundation_task: TASK-0127
+  codex_allowed: false
+  principles:
+    - "governance_head is remote control-plane identity and must not imply local source synchronization"
+    - "source_base is an immutable commit SHA, never a branch-name substitute"
+    - "source_base must bind expected branch and allowed_source_paths"
+    - "future Executor preflight proves local HEAD == source_base and clean; it does not sync governance history into source checkout"
+    - "typed source authoring remains preferred over generic terminal authoring"
+    - "ToolContract Kernel v1 should standardize cross-tool authority/preconditions/bounds/postconditions/errors/receipts without migrating all legacy tools"
+
+next_action:
+  task: TASK-0127
+  intent: >-
+    Implement the minimal Contract + Delivery Foundation: governance/source identity separation plus ToolContract Kernel v1
+    and one reference read-tool adoption, with deterministic receipt semantics binding subject identity, semantic parameters,
+    and observed state. Do not implement Wave-1 capabilities yet and do not migrate the full existing tool surface.
