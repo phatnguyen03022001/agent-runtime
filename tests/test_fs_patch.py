@@ -106,6 +106,38 @@ class FsPatchTests(unittest.TestCase):
         self.assertEqual(missing.exception.reason_code, "OLD_TEXT_NOT_FOUND")
         self.assertEqual(self.path.read_bytes(), raw)
 
+    def test_overlapping_old_text_occurrences_are_conflict(self) -> None:
+        raw = self._write(b"aaa")
+        with self.assertRaises(CapabilityFailure) as caught:
+            patch_file(str(self.root), "target.txt", _sha(raw), [self._edit("aa", "b")])
+        self.assertEqual(caught.exception.code, ContractErrorCode.CONFLICT)
+        self.assertEqual(caught.exception.reason_code, "OLD_TEXT_NOT_UNIQUE")
+        self.assertEqual(self.path.read_bytes(), raw)
+
+    def test_noop_edit_revalidates_but_does_not_replace_inode(self) -> None:
+        raw = self._write(b"alpha\n")
+        inode_before = self.path.stat().st_ino
+        with patch(
+            "agent_runtime.fs_patch.os.replace",
+            side_effect=AssertionError("no-op edit must not replace target"),
+        ):
+            first = patch_file(
+                str(self.root),
+                "target.txt",
+                _sha(raw),
+                [self._edit("alpha", "alpha")],
+            )
+            second = patch_file(
+                str(self.root),
+                "target.txt",
+                _sha(raw),
+                [self._edit("alpha", "alpha")],
+            )
+        self.assertEqual(first.sha256_before, first.sha256_after)
+        self.assertEqual(second.sha256_before, second.sha256_after)
+        self.assertEqual(self.path.stat().st_ino, inode_before)
+        self.assertEqual(self.path.read_bytes(), raw)
+
     def test_replay_after_success_cannot_mutate_again(self) -> None:
         raw = self._write(b"alpha\n")
         patch_file(str(self.root), "target.txt", _sha(raw), [self._edit("alpha", "beta")])
