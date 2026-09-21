@@ -1,0 +1,322 @@
+protocol_version: 3
+
+task_id: TASK-0135
+task_revision: 2
+state: APPROVED
+
+origin:
+  type: successor_task
+  task_id: TASK-0134
+  gap_id: ""
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  transport: AGENT_RUNTIME
+  model: GPT-5.6 Sol
+  effort: HIGH
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+execution_skills:
+  required:
+    - executor
+    - verification
+  recommended:
+    - simplicity
+
+authority_sources:
+  - source: ".agent/tasks/TASK-MAIN-ONLY-MIGRATION/review-r2.yaml@a1912aa4f729a3f0ecd6830e1cfe765c0cd5c017"
+    role: "Accepted MAIN_ONLY topology and local-first execution doctrine."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0134/review-r3.yaml@a1912aa4f729a3f0ecd6830e1cfe765c0cd5c017"
+    role: "Accepted repo_stage/repo_diff/repo_commit native mutation chain and exact 18-tool surface."
+    precedence: 2
+  - source: "agent_runtime/repo_publish.py@a1912aa4f729a3f0ecd6830e1cfe765c0cd5c017"
+    role: "Current repo_publish implementation baseline."
+    precedence: 3
+
+structure_authority:
+  status: RESOLVED
+  source: existing_agent_runtime_structure
+  rationale: >-
+    The change belongs in the existing repo_publish module and existing test tree.
+    No new subsystem, registry, branch topology, service, or shared abstraction is required.
+
+revision_2:
+  supersedes_historical_revision_1_delivery_mechanics: true
+  historical_revision_1_must_not_be_restored: true
+  executor_fit: FIT
+  rationale: >-
+    Exact remote compare-and-swap publication and the native mutation-chain proof form one
+    coherent independently reviewable outcome. Capability registry, doctor, and cutover
+    remain separate successor outcomes.
+
+objective: >-
+  Harden repo_publish so publication of one exact direct-child commit to fixed origin uses
+  an explicit expected-old remote compare-and-swap lease, while preserving the existing
+  public API and bounded consequence model. Prove the complete native mutation chain from
+  fs_write/fs_patch through repo_publish on a disposable Git fixture.
+
+scope:
+  expected_files_are_restrictive: false
+  required_changes:
+    - >-
+      Change repo_publish publication from an unguarded single-ref push to one exact
+      expected-old lease bound to refs/heads/<branch>:<expected_remote_head>.
+    - >-
+      Preserve exact local-candidate, branch/upstream, clean-state, operation-state,
+      commit-existence, and sole-direct-child preconditions.
+    - >-
+      Refresh mutable local and remote state at the publication consequence boundary,
+      push exactly one destination ref with the exact expected-old lease, and freshly
+      observe remote state after any push attempt before classification.
+    - >-
+      Add bounded focused proof for stale state, publication races, replay, rejected pushes,
+      transport ambiguity, lineage rejection, exact push authority, and the end-to-end
+      native mutation chain.
+    - >-
+      Update publication documentation only if required to keep the public contract accurate.
+  allowed_existing_files_or_components:
+    - agent_runtime/repo_publish.py
+    - tests/test_repo_publish.py
+    - tests/test_repo_publish_mcp.py
+    - tests
+    - README.md
+    - .agent/tasks/TASK-0135/report-r2.yaml
+
+invariants:
+  - "Canonical repository topology remains MAIN_ONLY; branch is main."
+  - "repo_publish public input remains exactly cwd, branch, expected_remote_head, commit."
+  - "commit remains the exact local publication candidate and must equal current local HEAD."
+  - "Do not add expected_local_head or any compatibility alias."
+  - "ToolContract Kernel v1 is unchanged."
+  - "ReceiptV1 semantics are unchanged."
+  - "No publication receipt is added; Git commit SHA plus fresh exact remote ref identity remain sufficient composition evidence."
+  - "The publication commit must have exactly one parent and that parent must equal expected_remote_head."
+  - "The expected-old lease authorizes only exact remote CAS; it does not authorize arbitrary force push or history rewriting."
+  - "No fetch is introduced."
+  - "No generic shell mutation surface is added."
+  - "Exact public MCP surface remains 18 tools in the accepted order."
+  - "screen_capture remains governance-blocked."
+  - "repo_stage, repo_diff, and repo_commit semantics remain unchanged."
+
+publication_contract:
+  required_push_authority:
+    lease: "--force-with-lease=refs/heads/<branch>:<expected_remote_head>"
+    refspec: "<commit>:refs/heads/<branch>"
+    destination_refs: 1
+  forbidden_authority:
+    - "--force"
+    - "-f"
+    - "bare --force-with-lease"
+    - "+refspec"
+    - arbitrary remote
+    - arbitrary refspec
+    - multi-ref publication
+    - tags
+    - mirror
+    - history rewrite
+  preconditions:
+    - "cwd is the exact repository root inside workspace."
+    - "current branch equals requested branch."
+    - "upstream equals origin/<branch>."
+    - "local HEAD equals commit."
+    - "local tracking origin/<branch> equals expected_remote_head before publication."
+    - "commit exists locally."
+    - "commit has exactly one parent equal to expected_remote_head."
+    - "working tree/index satisfy the existing repo_publish clean-state contract."
+    - "no conflicting or in-progress Git operation exists."
+  remote_observation:
+    normal_before: "remote_before == expected_remote_head"
+    replay_before: "remote_before == commit"
+    replay_rule: "Return already_published without another push after fresh observation."
+  consequence_boundary:
+    - "Immediately before publication refresh every mutable local predicate required by the contract."
+    - "Freshly observe the fixed origin branch before publication."
+    - "Push exactly one destination ref using the exact expected-old lease."
+    - "Do not automatically retry."
+    - "Freshly observe the fixed origin branch after any push attempt before classifying consequence."
+  outcomes:
+    success: "remote_after == commit"
+    transport_ambiguity_success: >-
+      A transport error may be classified as success only when fresh post-attempt remote
+      observation independently proves remote_after == commit.
+    push_failed: >-
+      If publication fails and fresh remote_after remains expected_remote_head, return the
+      existing bounded PUSH_FAILED failure.
+    remote_conflict: >-
+      If fresh remote_after is an unexpected third commit, return the existing deterministic
+      remote-state conflict behavior and leave that remote history untouched.
+    publication_ambiguous: >-
+      If post-attempt remote state cannot be established, return PUBLICATION_AMBIGUOUS.
+
+bootstrap_publication:
+  rule: >-
+    TASK-0135 hardens repo_publish itself. Do not require the not-yet-implemented exact-lease
+    behavior as a precondition for publishing the implementation commit or Executor report.
+    Use the currently accepted bounded repo_publish capability available at execution time,
+    under its existing direct-child and expected-state guards.
+  after_publication: >-
+    The new exact-CAS behavior must be exercised and proven on disposable fixtures before
+    Architect acceptance. Do not invent a second publication mechanism.
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "repo_publish public API and output schema remain unchanged."
+    evidence_required: "MCP contract/schema tests prove exact four-field input and unchanged closed success/error shapes."
+  - id: AC-2
+    requirement: >-
+      The single publication push contains exactly
+      --force-with-lease=refs/heads/<branch>:<expected_remote_head> and exactly one
+      <commit>:refs/heads/<branch> refspec.
+    evidence_required: >-
+      Focused argv-level proof shows the exact lease and one refspec, with no unguarded push,
+      arbitrary force authority, +refspec, extra destination ref, tags, mirror, or alternate remote.
+  - id: AC-3
+    requirement: >-
+      Local publication remains bound to current branch/upstream, current HEAD == commit,
+      clean repository state, and a sole direct-child commit whose parent is expected_remote_head.
+    evidence_required: >-
+      Focused negative proofs reject two-commit publication, merge commits, local state drift,
+      dirty/conflicted/in-progress state, and mismatched branch/upstream/HEAD.
+  - id: AC-4
+    requirement: >-
+      Remote compare-and-swap is race-safe and consequence classification is based on fresh
+      post-attempt remote observation.
+    evidence_required: >-
+      Focused proofs cover stale remote before push, a race between observation and push
+      without overwrite, successful fresh postcondition, exact replay without a second push,
+      rejected remote push as bounded PUSH_FAILED, unexpected third-commit conflict, transport
+      ambiguity recovered only by exact remote proof, and unobservable post-push state as
+      PUBLICATION_AMBIGUOUS.
+  - id: AC-5
+    requirement: "repo_publish introduces no fetch and performs no automatic retry."
+    evidence_required: "Focused call/argv assertions prove no fetch path and at most one push attempt per invocation."
+  - id: AC-6
+    requirement: >-
+      One bounded disposable Git fixture proves fs_write or fs_patch -> repo_stage ->
+      repo_diff(staged ReceiptV1) -> repo_commit -> exact Git commit SHA -> repo_publish
+      exact expected-old CAS -> fresh remote == commit.
+    evidence_required: "End-to-end reproducible test using only disposable repositories; never the live agent-runtime repository."
+  - id: AC-7
+    requirement: >-
+      Existing repo_stage, repo_diff ReceiptV1, repo_commit, exact 18-tool MCP surface,
+      and screen_capture governance block remain green.
+    evidence_required: "Focused regression suites plus canonical ./verify."
+  - id: AC-8
+    requirement: "Canonical local ./verify completes with zero failures."
+    evidence_required: "Observed local verifier result and exact test totals recorded in Executor report."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Run focused repo_publish and native mutation-chain regression tests."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Run canonical local ./verify."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Inspect the exact final implementation diff before staging."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Fresh-prove canonical remote main after each authorized publication consequence."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "GitHub Actions workflow_dispatch may be used only if a concrete independent clean-environment ambiguity materially warrants it."
+    expected_signal: "Not required for normal acceptance."
+
+executor_flow:
+  - "Fresh-resolve canonical GitHub main and require exact handoff base."
+  - "Require local target repo identity, branch main, exact HEAD/tracking base, and clean worktree/index."
+  - "Mutate only task-authorized paths."
+  - "Run focused acceptance proofs."
+  - "Run canonical local ./verify and require zero failures."
+  - "Inspect exact resulting diff."
+  - "Stage through native repo_stage."
+  - "Obtain repo_diff(staged) ReceiptV1."
+  - "Commit through native repo_commit."
+  - "Publish the implementation commit directly to main using the accepted current repo_publish capability available at execution time."
+  - "Fresh-prove canonical remote main."
+  - "Persist .agent/tasks/TASK-0135/report-r2.yaml on main using the same governed native mutation chain."
+  - "Fresh-prove canonical remote main and stop for independent Architect review."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+forbidden_changes:
+  - "Create or use control, dev, task-*, staging, or PR delivery branches."
+  - "Create a pull request."
+  - "Enable push or pull_request GitHub Actions triggers."
+  - "Dispatch GitHub Actions merely for ceremony."
+  - "Implement TASK-0136, TASK-0137, or TASK-0138."
+  - "Change ToolContract Kernel v1."
+  - "Change repo_stage, repo_diff, or repo_commit semantics."
+  - "Add capability registry/discovery/schema export."
+  - "Add runtime doctor."
+  - "Package, install, restart, cut over, or freeze Runtime."
+  - "Add worktrees, fan-out, workers, scheduler, orchestration, SQLite, plugin scanning, dynamic extensions, policy DSL, or a model/agent loop."
+  - "Invoke screen_capture."
+  - "Use the live agent-runtime repository as a publication-race test fixture."
+  - "Expose credentials or secret material."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+failure_policy:
+  - "Fail closed on repository, branch, task, execution-base, local-state, or remote-state drift."
+  - "Refresh mutable state at every consequence boundary."
+  - "Do not automatically retry a failed publication."
+  - "Do not retry or switch surface solely to obtain a different platform safety judgment."
+  - "If a required local capability is genuinely unavailable, report exact capability evidence for Architect judgment."
+  - "Do not automatically fall back to GitHub Actions for local-environment ambiguity."
+
+reporting:
+  path: .agent/tasks/TASK-0135/report-r2.yaml
+  owner: EXECUTOR
+  state_on_success: NEEDS_REVIEW
+  required_evidence:
+    - "exact execution base and tree"
+    - "exact changed paths"
+    - "focused proof results"
+    - "canonical ./verify result and test totals"
+    - "staged repo_diff ReceiptV1"
+    - "repo_commit commit SHA and receipt"
+    - "implementation publication result and fresh remote main identity"
+    - "end-to-end disposable mutation-chain proof"
+    - "exact 18-tool surface proof"
+    - "screen_capture governance-block proof"
+    - "final report publication identity"
+
+successor:
+  if_accepted: TASK-0136
+  intent: "Runtime version SSOT + deterministic capability registry/discovery + generated schema export."
+
+blocking_decisions: []
+execution_ready: true
