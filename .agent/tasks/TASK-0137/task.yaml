@@ -1,7 +1,7 @@
 protocol_version: 3
 
 task_id: TASK-0137
-task_revision: 2
+task_revision: 3
 state: APPROVED
 
 origin:
@@ -93,6 +93,41 @@ revision_2:
     - repo_commit
     - repo_publish
     - runtime_capabilities
+
+revision_3:
+  supersedes_revision_2_execution_binding: true
+  revision_2_repository_consequence: ZERO
+  objective_changed: false
+  architecture_changed: false
+  verification_scope_changed: false
+  rationale: >-
+    Revision 2 could not execute because its ChatGPT contexts retained an eleven-tool snapshot.
+    The local substrate has since been transactionally upgraded and committed to the accepted
+    nineteen-tool Runtime, and the narrow split-v1 predecessor compatibility repair is now
+    canonical on main. Revision 3 rebinds execution to current canonical main without changing
+    doctor scope or acceptance semantics.
+  substrate_evidence:
+    installed_tool_count: 19
+    installed_runtime_revision: "99518e694467be8525d813a4e638c4c8e0324365"
+    installed_runtime_tree: "691d338da9e36a876549d7d2d58ff148c113b1d4"
+    cutover_transaction: ABSENT
+    codesign: PASS
+    healthz: 200
+    readyz: 200
+    bootstrap_repair_commit: "01dd2597388ec33bd7f05a495b50dd95b9b83ee0"
+  required_execution_capabilities:
+    - fs_write
+    - fs_patch
+    - fs_search
+    - repo_diff
+    - repo_stage
+    - repo_commit
+    - repo_publish
+    - runtime_capabilities
+  preflight_rule: >-
+    Before mutation, fresh-discover the Agent Runtime surface and require exactly nineteen
+    tools including all required execution capabilities. If the ChatGPT app still exposes
+    fewer tools, perform zero mutation and return CURRENT_PHASE_CAPABILITY_UNAVAILABLE.
 
 objective: >-
   Implement runtime doctor --json as a bounded read-only local diagnostic that composes the
@@ -264,7 +299,7 @@ scope:
     - agent_runtime/contracts.py
     - tests/test_doctor.py
     - README.md
-    - .agent/tasks/TASK-0137/report-r2.yaml
+    - .agent/tasks/TASK-0137/report-r3.yaml
   reuse_without_modification:
     - agent_runtime/version.py
     - agent_runtime/capability_registry.py
@@ -394,7 +429,7 @@ executor_flow:
   - "Commit through native repo_commit."
   - "Publish implementation directly to main through exact-CAS repo_publish."
   - "Fresh-prove canonical remote main."
-  - "Persist .agent/tasks/TASK-0137/report-r1.yaml through the governed native mutation chain."
+  - "Persist .agent/tasks/TASK-0137/report-r3.yaml through the governed native mutation chain."
   - "Fresh-prove canonical remote main and stop for independent Architect review."
 
 git_authority:
@@ -431,7 +466,7 @@ failure_policy:
   - "Do not switch execution surface solely to obtain a different platform safety judgment."
 
 reporting:
-  path: .agent/tasks/TASK-0137/report-r2.yaml
+  path: .agent/tasks/TASK-0137/report-r3.yaml
   owner: EXECUTOR
   state_on_success: NEEDS_REVIEW
   required_evidence:
