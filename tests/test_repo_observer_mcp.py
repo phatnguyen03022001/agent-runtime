@@ -39,7 +39,7 @@ class RepoObserverMCPTests(unittest.IsolatedAsyncioTestCase):
     async def _tools(self) -> dict[str, object]:
         return {tool.name: tool for tool in await server.mcp.list_tools()}
 
-    async def test_repo_observer_is_public_tool_8_with_closed_read_only_contract(self) -> None:
+    async def test_repo_observer_is_public_tool_11_with_closed_read_only_contract(self) -> None:
         tools = await self._tools()
         self.assertEqual(
             tuple(tools),
@@ -51,7 +51,11 @@ class RepoObserverMCPTests(unittest.IsolatedAsyncioTestCase):
                 "terminal_resize",
                 "capacity_observer",
                 "fs_read_batch",
+                "fs_list",
+                "fs_search",
+                "fs_patch",
                 "repo_observer",
+                "repo_diff",
                 "repo_fast_forward",
                 "repo_publish",
                 "screen_capture",

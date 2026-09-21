@@ -13,6 +13,8 @@ from pydantic import (
     model_serializer,
 )
 
+from .tool_contract import ContractErrorCode
+
 ARGV_MAX_ITEMS = 128
 ARGV_ITEM_MAX_BYTES = 16 * 1024
 ARGV_TOTAL_MAX_BYTES = 256 * 1024
@@ -428,3 +430,123 @@ class ScreenCaptureMetadata(_ClosedResult):
     permission: Literal["granted"]
     capture_api: Literal["ScreenCaptureKit"]
     deadline_seconds: float
+
+CapabilityReasonCode = Annotated[StrictStr, Field(min_length=1, max_length=128)]
+CapabilityMessage = Annotated[StrictStr, Field(max_length=256)]
+FsListPath = Annotated[StrictStr, Field(min_length=1, max_length=4096)]
+FsListMaxEntries = Annotated[int, Field(strict=True, ge=1, le=1000)]
+FsSearchQuery = Annotated[StrictStr, Field(min_length=1, max_length=4096)]
+FsSearchMode = Literal["content", "path"]
+FsSearchRootPath = Annotated[StrictStr, Field(min_length=1, max_length=4096)]
+FsSearchMaxResults = Annotated[int, Field(strict=True, ge=1, le=500)]
+FsPatchPath = Annotated[StrictStr, Field(min_length=1, max_length=4096)]
+FsPatchExpectedSha256 = Annotated[
+    StrictStr,
+    Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$"),
+]
+RepoDiffScope = Literal["worktree", "staged"]
+
+
+class CapabilityErrorPayload(_ClosedResult):
+    code: ContractErrorCode
+    reason_code: CapabilityReasonCode
+    message: CapabilityMessage
+    retryable: bool
+
+
+class CapabilityErrorEnvelope(_ClosedResult):
+    error: CapabilityErrorPayload
+
+
+class CapabilityFailure(Exception):
+    def __init__(
+        self,
+        code: ContractErrorCode,
+        reason_code: str,
+        message: str,
+        *,
+        retryable: bool = False,
+    ) -> None:
+        if not isinstance(code, ContractErrorCode):
+            raise TypeError("code must be ContractErrorCode")
+        if not isinstance(reason_code, str) or not reason_code or len(reason_code) > 128:
+            raise ValueError("reason_code must be a stable non-empty string up to 128 characters")
+        if not isinstance(message, str) or len(message) > 256:
+            raise ValueError("message must be a string up to 256 characters")
+        super().__init__(message)
+        self.code = code
+        self.reason_code = reason_code
+        self.message = message
+        self.retryable = retryable
+
+
+class FsListEntry(_ClosedResult):
+    name: str
+    path: str
+    kind: Literal["file", "directory", "symlink", "other"]
+    size_bytes: int | None
+
+
+class FsListResult(_ClosedResult):
+    schema_version: Literal[1]
+    path: str
+    entries: list[FsListEntry]
+    truncated: bool
+    scanned_entries: int
+    skipped_invalid_names: int
+
+
+class FsSearchResultItem(_ClosedResult):
+    path: str
+    line_number: int | None
+    line_text: str | None
+    line_truncated: bool
+    file_sha256: FsPatchExpectedSha256 | None
+
+
+class FsSearchResult(_ClosedResult):
+    schema_version: Literal[1]
+    results: list[FsSearchResultItem]
+    truncated: bool
+    limit_reason: Literal["max_files", "max_bytes", "max_results", "max_output", "deadline"] | None
+    files_scanned: int
+    bytes_scanned: int
+    skipped_invalid_utf8: int
+    skipped_nul: int
+    skipped_symlinks: int
+
+
+class FsPatchEdit(_ClosedResult):
+    old_text: Annotated[StrictStr, Field(min_length=1)]
+    new_text: StrictStr
+
+
+FsPatchEdits = Annotated[list[FsPatchEdit], Field(strict=True, min_length=1, max_length=20)]
+
+
+class FsPatchResult(_ClosedResult):
+    schema_version: Literal[1]
+    path: str
+    sha256_before: FsPatchExpectedSha256
+    sha256_after: FsPatchExpectedSha256
+    bytes_before: int
+    bytes_after: int
+    edits_applied: int
+
+
+class ReceiptV1Result(_ClosedResult):
+    schema_version: Literal[1]
+    kind: Literal["repo-diff"]
+    digest: FsPatchExpectedSha256
+
+
+class RepoDiffResult(_ClosedResult):
+    schema_version: Literal[1]
+    scope: RepoDiffScope
+    head_sha: RepoFastForwardSha
+    patch: str
+    patch_truncated: bool
+    full_diff_bytes: int
+    diff_receipt: ReceiptV1Result
+    network_used: Literal[False]
+

@@ -13,9 +13,21 @@ from agent_runtime.timing import ALLOWED_TOOL_NAMES
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_TOOLS = (
-    "terminal_exec", "terminal_start", "terminal_poll", "terminal_control",
-    "terminal_resize", "capacity_observer", "fs_read_batch", "repo_observer",
-    "repo_fast_forward", "repo_publish", "screen_capture",
+    "terminal_exec",
+    "terminal_start",
+    "terminal_poll",
+    "terminal_control",
+    "terminal_resize",
+    "capacity_observer",
+    "fs_read_batch",
+    "fs_list",
+    "fs_search",
+    "fs_patch",
+    "repo_observer",
+    "repo_diff",
+    "repo_fast_forward",
+    "repo_publish",
+    "screen_capture",
 )
 EXPECTED_ANNOTATIONS = {
     "terminal_exec": (False, True, False, True),
@@ -25,7 +37,11 @@ EXPECTED_ANNOTATIONS = {
     "terminal_resize": (False, False, True, False),
     "capacity_observer": (True, False, True, False),
     "fs_read_batch": (True, False, True, False),
+    "fs_list": (True, False, True, False),
+    "fs_search": (True, False, True, False),
+    "fs_patch": (False, True, False, False),
     "repo_observer": (True, False, True, False),
+    "repo_diff": (True, False, True, False),
     "repo_fast_forward": (False, True, True, True),
     "repo_publish": (False, True, True, True),
     "screen_capture": (True, False, True, False),
@@ -50,12 +66,13 @@ class ScreenCaptureMCPTests(unittest.IsolatedAsyncioTestCase):
     async def _tools(self) -> dict[str, object]:
         return {tool.name: tool for tool in await server.mcp.list_tools()}
 
-    async def test_screen_capture_is_exact_public_tool_11_with_annotations(self) -> None:
+    async def test_screen_capture_is_exact_public_tool_15_with_annotations(self) -> None:
         tools = await self._tools()
         self.assertEqual(tuple(tools), EXPECTED_TOOLS)
         for name, tool in tools.items():
             self.assertEqual(_annotations(tool), EXPECTED_ANNOTATIONS[name])
-        self.assertEqual(tuple(tools)[:10], EXPECTED_TOOLS[:10])
+        self.assertEqual(tuple(tools)[:-1], EXPECTED_TOOLS[:-1])
+        self.assertEqual(tuple(tools)[-1], "screen_capture")
 
     async def test_input_schema_is_closed_and_exact(self) -> None:
         schema = (await self._tools())["screen_capture"].input_schema

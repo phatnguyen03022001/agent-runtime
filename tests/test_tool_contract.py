@@ -6,6 +6,28 @@ from dataclasses import FrozenInstanceError
 from enum import Enum
 
 from agent_runtime import server
+from agent_runtime.fs_list import DIRECTORY_SCAN_LIMIT, FS_LIST_CONTRACT, MAX_ENTRIES
+from agent_runtime.fs_patch import (
+    FS_PATCH_CONTRACT,
+    MAX_EDITS,
+    MAX_EDIT_BYTES,
+    MAX_INPUT_FILE_BYTES,
+    MAX_OUTPUT_FILE_BYTES,
+)
+from agent_runtime.fs_search import (
+    CALL_DEADLINE_SECONDS as FS_SEARCH_DEADLINE_SECONDS,
+    FS_SEARCH_CONTRACT,
+    MAX_CONTENT_BYTES_SCANNED,
+    MAX_FILES_SCANNED,
+    MAX_RESULTS,
+    MAX_SERIALIZED_RESULT_BYTES,
+)
+from agent_runtime.repo_diff import (
+    CALL_DEADLINE_SECONDS as REPO_DIFF_DEADLINE_SECONDS,
+    FULL_DIFF_MAX_BYTES,
+    REPO_DIFF_CONTRACT,
+    RETURNED_PATCH_MAX_BYTES,
+)
 from agent_runtime.fs_read import (
     BATCH_OUTPUT_LIMIT_BYTES,
     BATCH_SCAN_LIMIT_BYTES,
@@ -269,7 +291,11 @@ class FsReadBatchContractAdoptionTests(unittest.IsolatedAsyncioTestCase):
                 "terminal_resize",
                 "capacity_observer",
                 "fs_read_batch",
+                "fs_list",
+                "fs_search",
+                "fs_patch",
                 "repo_observer",
+                "repo_diff",
                 "repo_fast_forward",
                 "repo_publish",
                 "screen_capture",
@@ -327,6 +353,99 @@ class FsReadBatchContractAdoptionTests(unittest.IsolatedAsyncioTestCase):
             },
         )
         self.assertNotIn("receipt", output["properties"])
+
+
+class Wave1ToolContractTests(unittest.IsolatedAsyncioTestCase):
+    def test_fs_list_contract_matches_implemented_authority_and_bounds(self) -> None:
+        self.assertEqual(FS_LIST_CONTRACT.name, "fs_list")
+        self.assertIs(FS_LIST_CONTRACT.tool_class, ToolClass.READ)
+        self.assertEqual(
+            FS_LIST_CONTRACT.authority,
+            Authority(True, NetworkAuthority.NONE, MutationAuthority.NONE),
+        )
+        self.assertEqual(FS_LIST_CONTRACT.annotations, ToolAnnotations(True, False, True, False))
+        self.assertEqual(FS_LIST_CONTRACT.bounds["max_entries"], MAX_ENTRIES)  # type: ignore[index]
+        self.assertEqual(
+            FS_LIST_CONTRACT.bounds["directory_scan_entries"], DIRECTORY_SCAN_LIMIT  # type: ignore[index]
+        )
+        self.assertIs(FS_LIST_CONTRACT.preconditions["path"]["symlink_traversal"], False)  # type: ignore[index]
+
+    def test_fs_search_contract_matches_implemented_authority_and_bounds(self) -> None:
+        self.assertEqual(FS_SEARCH_CONTRACT.name, "fs_search")
+        self.assertIs(FS_SEARCH_CONTRACT.tool_class, ToolClass.READ)
+        self.assertEqual(
+            FS_SEARCH_CONTRACT.authority,
+            Authority(True, NetworkAuthority.NONE, MutationAuthority.NONE),
+        )
+        self.assertEqual(FS_SEARCH_CONTRACT.annotations, ToolAnnotations(True, False, True, False))
+        self.assertEqual(FS_SEARCH_CONTRACT.bounds["max_files_scanned"], MAX_FILES_SCANNED)  # type: ignore[index]
+        self.assertEqual(
+            FS_SEARCH_CONTRACT.bounds["max_content_bytes_scanned"], MAX_CONTENT_BYTES_SCANNED  # type: ignore[index]
+        )
+        self.assertEqual(FS_SEARCH_CONTRACT.bounds["max_results"], MAX_RESULTS)  # type: ignore[index]
+        self.assertEqual(
+            FS_SEARCH_CONTRACT.bounds["max_serialized_result_bytes"], MAX_SERIALIZED_RESULT_BYTES  # type: ignore[index]
+        )
+        self.assertEqual(
+            FS_SEARCH_CONTRACT.bounds["deadline_milliseconds"], int(FS_SEARCH_DEADLINE_SECONDS * 1000)  # type: ignore[index]
+        )
+
+    def test_repo_diff_contract_matches_implemented_authority_and_bounds(self) -> None:
+        self.assertEqual(REPO_DIFF_CONTRACT.name, "repo_diff")
+        self.assertIs(REPO_DIFF_CONTRACT.tool_class, ToolClass.REPO)
+        self.assertEqual(
+            REPO_DIFF_CONTRACT.authority,
+            Authority(True, NetworkAuthority.NONE, MutationAuthority.NONE),
+        )
+        self.assertEqual(REPO_DIFF_CONTRACT.annotations, ToolAnnotations(True, False, True, False))
+        self.assertEqual(REPO_DIFF_CONTRACT.bounds["complete_raw_diff_bytes"], FULL_DIFF_MAX_BYTES)  # type: ignore[index]
+        self.assertEqual(REPO_DIFF_CONTRACT.bounds["returned_patch_bytes"], RETURNED_PATCH_MAX_BYTES)  # type: ignore[index]
+        self.assertEqual(
+            REPO_DIFF_CONTRACT.bounds["deadline_milliseconds"], int(REPO_DIFF_DEADLINE_SECONDS * 1000)  # type: ignore[index]
+        )
+        self.assertEqual(REPO_DIFF_CONTRACT.postconditions["receipt_kind"], "repo-diff")  # type: ignore[index]
+
+    def test_fs_patch_contract_matches_implemented_authority_and_bounds(self) -> None:
+        self.assertEqual(FS_PATCH_CONTRACT.name, "fs_patch")
+        self.assertIs(FS_PATCH_CONTRACT.tool_class, ToolClass.WRITE)
+        self.assertEqual(
+            FS_PATCH_CONTRACT.authority,
+            Authority(True, NetworkAuthority.NONE, MutationAuthority.BOUNDED),
+        )
+        self.assertEqual(FS_PATCH_CONTRACT.annotations, ToolAnnotations(False, True, False, False))
+        self.assertEqual(FS_PATCH_CONTRACT.bounds["input_file_bytes"], MAX_INPUT_FILE_BYTES)  # type: ignore[index]
+        self.assertEqual(FS_PATCH_CONTRACT.bounds["output_file_bytes"], MAX_OUTPUT_FILE_BYTES)  # type: ignore[index]
+        self.assertEqual(FS_PATCH_CONTRACT.bounds["max_edits"], MAX_EDITS)  # type: ignore[index]
+        self.assertEqual(FS_PATCH_CONTRACT.bounds["aggregate_edit_utf8_bytes"], MAX_EDIT_BYTES)  # type: ignore[index]
+        self.assertEqual(
+            FS_PATCH_CONTRACT.postconditions["pre_replace_revalidation"],  # type: ignore[index]
+            "identity-and-original-sha256",
+        )
+
+    async def test_server_annotations_for_all_four_are_sourced_from_contracts(self) -> None:
+        tools = {tool.name: tool for tool in await server.mcp.list_tools()}
+        for name, contract in (
+            ("fs_list", FS_LIST_CONTRACT),
+            ("fs_search", FS_SEARCH_CONTRACT),
+            ("fs_patch", FS_PATCH_CONTRACT),
+            ("repo_diff", REPO_DIFF_CONTRACT),
+        ):
+            values = tools[name].annotations.model_dump(by_alias=True)
+            self.assertEqual(
+                (
+                    values["readOnlyHint"],
+                    values["destructiveHint"],
+                    values["idempotentHint"],
+                    values["openWorldHint"],
+                ),
+                (
+                    contract.annotations.read_only,
+                    contract.annotations.destructive,
+                    contract.annotations.idempotent,
+                    contract.annotations.open_world,
+                ),
+                name,
+            )
 
 
 if __name__ == "__main__":
