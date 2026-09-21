@@ -1,7 +1,7 @@
 protocol_version: 3
 
 task_id: TASK-0137
-task_revision: 1
+task_revision: 2
 state: APPROVED
 
 origin:
@@ -74,6 +74,25 @@ executor_fit:
   rationale: >-
     One canonical diagnostic report object plus JSON/human rendering and bounded local checks
     form one coherent independently reviewable outcome.
+
+revision_2:
+  supersedes_revision_1_verification_breadth: true
+  revision_1_repository_consequence: ZERO
+  objective_changed: false
+  architecture_changed: false
+  rationale: >-
+    Revision 1 could not execute because the ChatGPT execution context retained a stale
+    eleven-tool MCP snapshot while the live installed Agent Runtime exposed the accepted
+    nineteen-tool surface. Revision 2 keeps the same doctor objective and contracts while
+    narrowing implementation and focused verification to the smallest coherent surface.
+  required_execution_capabilities:
+    - fs_write
+    - fs_patch
+    - repo_diff
+    - repo_stage
+    - repo_commit
+    - repo_publish
+    - runtime_capabilities
 
 objective: >-
   Implement runtime doctor --json as a bounded read-only local diagnostic that composes the
@@ -234,17 +253,28 @@ privacy_and_permission_policy:
     - "Workspace root may be returned only in bounded normalized form if needed for diagnosis."
 
 scope:
-  expected_files_are_restrictive: false
+  expected_files_are_restrictive: true
+  expected_implementation_paths:
+    - agent_runtime/doctor.py
+    - agent_runtime/contracts.py
+    - tests/test_doctor.py
+    - README.md
   allowed_components:
     - agent_runtime/doctor.py
     - agent_runtime/contracts.py
+    - tests/test_doctor.py
+    - README.md
+    - .agent/tasks/TASK-0137/report-r2.yaml
+  reuse_without_modification:
     - agent_runtime/version.py
     - agent_runtime/capability_registry.py
     - agent_runtime/schema_export.py
-    - "existing Runtime modules only for minimal pure/read-only helper extraction required by doctor"
-    - tests
-    - README.md
-    - .agent/tasks/TASK-0137/report-r1.yaml
+    - macos/package_provenance.py
+    - macos/candidate_cutover.py
+  scope_exception: >-
+    If a required accepted read-only identity semantic cannot be consumed without modifying
+    an authority module outside this list, stop for Architect judgment rather than expanding
+    the implementation surface.
   required_changes:
     - "Add canonical closed Pydantic doctor report/check models."
     - "Add read-only doctor collection and CLI JSON rendering."
@@ -316,10 +346,12 @@ acceptance_criteria:
     requirement: "JSON and optional human rendering derive from the same canonical report object."
     evidence_required: "Renderer tests prove no additional checks/probes and consistent status/check identities."
   - id: AC-10
-    requirement: "Prior accepted Runtime contracts remain green."
+    requirement: "Prior accepted Runtime contracts remain compatible."
     evidence_required: >-
-      Focused regressions cover TASK-0136 registry/schema export, repo_publish exact CAS,
-      native stage/diff/commit, ToolContract Kernel v1, and screen_capture governance.
+      Focused compatibility smoke proves the exact nineteen-tool order, runtime_capabilities
+      descriptor semantics, deterministic schema export, ToolContract Kernel v1 identity, and
+      screen_capture governance block. Do not rerun broad repo mutation suites as focused
+      development checks; the final canonical ./verify owns full regression coverage.
   - id: AC-11
     requirement: "Canonical local ./verify completes with zero failures."
     evidence_required: "Observed local verifier totals and exit code are recorded in Executor report."
@@ -327,16 +359,20 @@ acceptance_criteria:
 verification:
   executor_checks:
     - id: CHECK-1
-      command_or_check: "Run focused doctor fixtures/CLI/privacy/read-only tests."
+      command_or_check: "Run tests/test_doctor.py as the primary focused development suite."
       required: true
     - id: CHECK-2
-      command_or_check: "Run focused TASK-0136 registry/schema and prior mutation/governance regressions."
+      command_or_check: >-
+        Run only the smallest direct compatibility smoke needed for registry/schema/governance
+        assertions not already covered by test_doctor. Do not run broad repo mutation suites here.
       required: true
     - id: CHECK-3
       command_or_check: "Run git diff --check."
       required: true
     - id: CHECK-4
-      command_or_check: "Run canonical local ./verify with durable exact totals."
+      command_or_check: >-
+        Run canonical local ./verify exactly once after focused tests and final diff stabilization,
+        capture durable exact totals, and require zero failures/errors.
       required: true
     - id: CHECK-5
       command_or_check: "Inspect exact final diff before staging."
@@ -395,7 +431,7 @@ failure_policy:
   - "Do not switch execution surface solely to obtain a different platform safety judgment."
 
 reporting:
-  path: .agent/tasks/TASK-0137/report-r1.yaml
+  path: .agent/tasks/TASK-0137/report-r2.yaml
   owner: EXECUTOR
   state_on_success: NEEDS_REVIEW
   required_evidence:
