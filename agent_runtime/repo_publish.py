@@ -8,6 +8,7 @@ from .repo_fast_forward import (
     RepoFastForwardFailure,
     _LocalState,
     _read_local_state,
+    _require_expected_tracking_head,
     _require_repository_root,
     _run_git,
     _text,
@@ -208,6 +209,7 @@ def _push_deadline(deadline: float) -> float:
 def _push_once(
     repo,
     branch: str,
+    expected_remote_head: str,
     commit: str,
     deadline: float,
 ):
@@ -219,6 +221,7 @@ def _push_once(
             "push",
             "--no-verify",
             "--recurse-submodules=no",
+            f"--force-with-lease=refs/heads/{branch}:{expected_remote_head}",
             "origin",
             f"{commit}:refs/heads/{branch}",
         ],
@@ -275,12 +278,54 @@ def _publish_repository(
             "fixed origin branch does not match the expected remote commit",
         )
 
+    remote_before = _observe_remote_head(
+        repo,
+        branch,
+        deadline,
+        after_push=False,
+    )
+    if remote_before == commit:
+        return RepoPublishResult(
+            schema_version=1,
+            status="already_published",
+            repository_root=str(repo),
+            branch=branch,
+            remote="origin",
+            upstream=f"origin/{branch}",
+            expected_remote_head=expected_remote_head,
+            commit=commit,
+            head=initial.head,
+            remote_head_before=remote_before,
+            remote_head_after=remote_before,
+            network_used=True,
+            push_attempted=False,
+            published=False,
+            deadline_seconds=CALL_DEADLINE_SECONDS,
+        )
+    if remote_before != expected_remote_head:
+        raise RepoPublishFailure(
+            "REMOTE_HEAD_MISMATCH",
+            "fixed origin branch changed before publication",
+        )
+
     _require_unchanged_local_state(repo, initial, deadline)
+    _require_expected_tracking_head(
+        repo,
+        branch,
+        expected_remote_head,
+        deadline,
+    )
 
     push_result = None
     push_error: RepoFastForwardFailure | None = None
     try:
-        push_result = _push_once(repo, branch, commit, deadline)
+        push_result = _push_once(
+            repo,
+            branch,
+            expected_remote_head,
+            commit,
+            deadline,
+        )
     except RepoFastForwardFailure as exc:
         push_error = exc
 

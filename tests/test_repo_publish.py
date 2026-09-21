@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import subprocess
 import tempfile
@@ -9,11 +10,16 @@ from pathlib import Path
 from unittest.mock import patch
 
 import agent_runtime.repo_publish as module
+from agent_runtime.contracts import RepoStageItem
+from agent_runtime.fs_write import write_file
+from agent_runtime.repo_commit import commit_repository
+from agent_runtime.repo_diff import diff_repository
 from agent_runtime.repo_fast_forward import RepoFastForwardFailure
 from agent_runtime.repo_publish import (
     RepoPublishFailure,
     publish_repository,
 )
+from agent_runtime.repo_stage import stage_repository
 
 GIT = "/usr/bin/git"
 
@@ -73,7 +79,11 @@ class RepoPublishTests(unittest.TestCase):
 
         self._env = patch.dict(
             os.environ,
-            {"AGENT_RUNTIME_WORKSPACE_ROOT": str(self.root)},
+            {
+                "AGENT_RUNTIME_WORKSPACE_ROOT": str(self.root),
+                "AGENT_RUNTIME_GIT_NAME": "Agent Runtime",
+                "AGENT_RUNTIME_GIT_EMAIL": "runtime@example.invalid",
+            },
         )
         self._env.start()
         self.addCleanup(self._env.stop)
@@ -146,6 +156,18 @@ class RepoPublishTests(unittest.TestCase):
         _git(self.seed, "push", "-q", "origin", ":dev")
         self._assert_failure("REMOTE_HEAD_MISMATCH", self._call)
 
+    def test_tracking_head_mismatch_fails_before_push(self) -> None:
+        _git(
+            self.local,
+            "update-ref",
+            "refs/remotes/origin/dev",
+            self.commit,
+        )
+        with patch.object(module, "_push_once", wraps=module._push_once) as push:
+            self._assert_failure("REMOTE_HEAD_MISMATCH", self._call)
+            push.assert_not_called()
+        self.assertEqual(self._remote_head(), self.expected_remote)
+
     def test_remote_race_fails_closed_without_force(self) -> None:
         real_push = module._push_once
         raced: list[str] = []
@@ -190,7 +212,7 @@ class RepoPublishTests(unittest.TestCase):
             nonlocal observations
             if args and args[0] == "ls-remote":
                 observations += 1
-                if observations == 2:
+                if observations == 3:
                     raise RepoFastForwardFailure(
                         "DEADLINE_EXCEEDED",
                         "simulated post observation failure",
@@ -333,7 +355,37 @@ class RepoPublishTests(unittest.TestCase):
             self._assert_failure("LOCAL_STATE_CHANGED", self._call)
         self.assertEqual(self._remote_head(), self.expected_remote)
 
-    def test_push_argv_is_fixed_single_ref_non_force_and_hooks_disabled(self) -> None:
+    def test_local_state_change_after_final_remote_observation_fails_closed(self) -> None:
+        real_observe = module._observe_remote_head
+        observations = 0
+
+        def racing_observe(repo, branch, deadline, *, after_push):
+            nonlocal observations
+            result = real_observe(
+                repo,
+                branch,
+                deadline,
+                after_push=after_push,
+            )
+            observations += 1
+            if observations == 2:
+                (self.local / "after-final-observe.txt").write_text(
+                    "race\n",
+                    encoding="utf-8",
+                )
+            return result
+
+        with patch.object(
+            module,
+            "_observe_remote_head",
+            side_effect=racing_observe,
+        ):
+            with patch.object(module, "_push_once", wraps=module._push_once) as push:
+                self._assert_failure("LOCAL_STATE_CHANGED", self._call)
+                push.assert_not_called()
+        self.assertEqual(self._remote_head(), self.expected_remote)
+
+    def test_push_argv_is_fixed_single_ref_exact_lease_and_hooks_disabled(self) -> None:
         real_run = module._run_git
         calls: list[tuple[list[str], dict[str, object]]] = []
 
@@ -344,14 +396,21 @@ class RepoPublishTests(unittest.TestCase):
         with patch.object(module, "_run_git", side_effect=recording_run):
             self._call()
 
-        push_args, push_kwargs = next(
+        push_calls = [
             (args, kwargs)
             for args, kwargs in calls
             if "push" in args
+        ]
+        self.assertEqual(len(push_calls), 1)
+        push_args, push_kwargs = push_calls[0]
+        lease = (
+            "--force-with-lease="
+            f"refs/heads/dev:{self.expected_remote}"
         )
         self.assertEqual(push_args[0:3], ["-c", "push.followTags=false", "push"])
         self.assertIn("--no-verify", push_args)
         self.assertIn("--recurse-submodules=no", push_args)
+        self.assertIn(lease, push_args)
         self.assertIn("origin", push_args)
         self.assertEqual(
             push_args[-1],
@@ -369,8 +428,74 @@ class RepoPublishTests(unittest.TestCase):
             "--delete",
         }
         self.assertFalse(forbidden.intersection(push_args), push_args)
-        refspecs = [arg for arg in push_args if ":refs/" in arg]
+        self.assertFalse(any(arg.startswith("+") for arg in push_args))
+        refspecs = [arg for arg in push_args if ":refs/" in arg and not arg.startswith("--")]
         self.assertEqual(refspecs, [f"{self.commit}:refs/heads/dev"])
+        self.assertFalse(any(args and args[0] == "fetch" for args, _ in calls))
+
+    def test_disposable_native_mutation_chain_publishes_exact_cas(self) -> None:
+        chain = self.root / "chain"
+        _git(
+            self.root,
+            "clone",
+            "-q",
+            "-b",
+            "dev",
+            str(self.remote),
+            str(chain),
+        )
+        parent = _git(chain, "rev-parse", "HEAD")
+        target = chain / "tracked.txt"
+        before_sha = hashlib.sha256(target.read_bytes()).hexdigest()
+
+        written = write_file(
+            str(chain),
+            "tracked.txt",
+            "replace",
+            "native chain\n",
+            before_sha,
+        )
+        staged = stage_repository(
+            str(chain),
+            "dev",
+            parent,
+            [
+                RepoStageItem(
+                    path="tracked.txt",
+                    operation="present",
+                    expected_sha256=written.sha256_after,
+                )
+            ],
+        )
+        diff = diff_repository(str(chain), "staged")
+        self.assertEqual(diff.diff_receipt, staged.staged_diff_receipt)
+
+        committed = commit_repository(
+            str(chain),
+            "dev",
+            parent,
+            diff.diff_receipt,
+            "native mutation chain",
+        )
+        self.assertEqual(committed.parent_sha, parent)
+        self.assertEqual(_git(chain, "rev-parse", "HEAD"), committed.commit_sha)
+
+        published = publish_repository(
+            str(chain),
+            "dev",
+            parent,
+            committed.commit_sha,
+        )
+        self.assertEqual(published.status, "published")
+        self.assertEqual(published.remote_head_after, committed.commit_sha)
+        remote_head = _git(
+            chain,
+            "ls-remote",
+            "--exit-code",
+            "origin",
+            "refs/heads/dev",
+        ).split()[0]
+        self.assertEqual(remote_head, committed.commit_sha)
 
     def test_push_deadline_preserves_post_observation_budget(self) -> None:
         with patch.object(module.time, "monotonic", return_value=10.0):
