@@ -1,7 +1,7 @@
 protocol_version: 3
 
 task_id: TASK-0138
-task_revision: 1
+task_revision: 2
 state: APPROVED
 
 origin:
@@ -29,6 +29,54 @@ execution_base:
   mode: handoff_snapshot
   capture: after_final_planning_commit
   require_exact_match: true
+
+revision_2:
+  supersedes_revision_1_execution_authority: true
+  objective_changed: false
+  architecture_changed: false
+  revision_1_published_implementation:
+    commit: "87dc96d1d526d47717990af1a41e26530b9b4a6f"
+    tree: "1e4c6604a888c2f35957e2387d0fdc2ac8b6859e"
+    parent: "d66ae397b9c399e6a04409e4afaa61cb5ba6ec0b"
+    repository_state: CLEAN
+    remote_main: "87dc96d1d526d47717990af1a41e26530b9b4a6f"
+  revision_1_verification:
+    focused: "145/145 PASS"
+    diff_check: PASS
+    canonical_install_verify:
+      tests_run: 645
+      failures: 3
+      errors: 0
+      skipped: 1
+      exit_code: 1
+  revision_1_host_consequence: ZERO
+  revision_1_report: ABSENT
+  authority_block_reason: >-
+    Revision 1 consumed its one local implementation-commit exception before the canonical
+    install verifier exposed three source-lifecycle regressions. Native repo_commit remains
+    unavailable until the final Git-identity propagation is installed.
+  corrective_root_cause: >-
+    start.sh currently requires AGENT_RUNTIME_GIT_NAME and AGENT_RUNTIME_GIT_EMAIL for every
+    --serve invocation. Canonical installed Runtime must require the pair, but source/dev
+    lifecycle fixtures intentionally execute source start.sh with checkout .env and do not
+    model installed runtime.env.
+  corrective_boundary:
+    production_path: start.sh
+    allowed_semantics: >-
+      Require the Git identity pair only when serving the canonical installed Runtime from
+      canonical runtime.env. Source/dev --serve may omit both keys. If either key is present
+      on a source/dev path, require the complete valid pair and forward it using the same
+      bounded validation as installed Runtime.
+    forbidden:
+      - "Do not weaken installed canonical runtime.env Git identity requirements."
+      - "Do not add repo_commit fallback to Git config."
+      - "Do not change runtime_config precedence/migration semantics already published in revision 1."
+      - "Do not edit tests merely to hide the three existing lifecycle regressions."
+    corrective_implementation_paths:
+      - start.sh
+  continuation_rule: >-
+    Preserve all revision-1 implementation bytes except the exact corrective start.sh delta.
+    Repair forward from revision-1 implementation commit; do not amend, reset, or rewrite it.
 
 authority_sources:
   - source: ".agent/tasks/TASK-0137/review-r3.yaml@fe774afd0adbe1cb7aa665a5c3057774bf92f254"
@@ -113,7 +161,7 @@ scope:
     - tests/test_candidate_cutover.py
     - tests/test_doctor.py
     - README.md
-    - .agent/tasks/TASK-0138/report-r1.yaml
+    - .agent/tasks/TASK-0138/report-r2.yaml
   scope_exception: >-
     Any required production change outside this set requires Architect judgment before mutation.
 
@@ -130,6 +178,8 @@ required_behavior:
 
 verification_strategy:
   focused_first:
+    - "Run tests.test_supervised_lifecycle first; the three revision-1 failing tests must pass unchanged."
+    - "Re-run the revision-1 focused verification bundle and require all 145 prior focused tests remain green."
     - "Runtime configuration migration/validation tests."
     - "start/install environment propagation tests."
     - "split-v1 predecessor regression."
@@ -138,9 +188,10 @@ verification_strategy:
   canonical_verify:
     mechanism: "./install.sh internal canonical verify"
     invocation_policy: >-
-      The full canonical install flow already executes ./verify before packaging. Count that
-      exact successful invocation as TASK-0138 canonical verification; do not run a redundant
-      full ./verify beforehand merely for ceremony.
+      Revision 1 consumed one failed canonical install verifier invocation with 645 tests and
+      three lifecycle failures. Revision 2 explicitly authorizes one new canonical ./install.sh
+      flow after the corrective start.sh delta is published. Count that flow's internal ./verify
+      as the revision-2 canonical verification; do not run a redundant full ./verify beforehand.
     requirement: "zero failures/errors with exact totals durably captured"
   github_actions:
     required: false
@@ -148,13 +199,18 @@ verification_strategy:
 
 implementation_publication:
   constraint: >-
-    Before the final candidate is installed, the currently live Runtime still cannot perform
-    native repo_commit because the Git identity gap is the implementation target.
-  authorized_exception: >-
-    After focused tests and diff stabilization, use the existing Git identity configuration
-    for exactly one local implementation commit if native repo_commit returns
-    GIT_IDENTITY_UNAVAILABLE. Do not mutate Git config, stage via shell, push via shell, amend,
-    rebase, merge, or rewrite history.
+    Before the final corrected candidate is installed, the currently live Runtime still cannot
+    perform native repo_commit because the Git identity gap is the implementation target.
+  revision_1_exception:
+    consumed: true
+    commit: "87dc96d1d526d47717990af1a41e26530b9b4a6f"
+  revision_2_authorized_exception: >-
+    After corrective focused tests and exact diff stabilization, stage only the corrective
+    start.sh delta through native repo_stage and obtain native repo_diff(staged) ReceiptV1.
+    Attempt native repo_commit exactly once. If and only if it returns GIT_IDENTITY_UNAVAILABLE,
+    use the existing Git identity configuration for exactly one additional forward local commit
+    whose sole parent is 87dc96d1d526d47717990af1a41e26530b9b4a6f. Do not mutate Git config,
+    stage via shell, push via shell, amend, rebase, merge, reset, or rewrite history.
   staging: "native repo_stage"
   diff_receipt: "native repo_diff(staged) ReceiptV1"
   publication: "native repo_publish exact expected-old CAS"
@@ -278,18 +334,18 @@ acceptance_criteria:
   - id: AC-10
     requirement: "Final Executor report is persisted through the now-working native mutation chain."
     evidence_required: >-
-      report-r1 staged by native repo_stage, staged ReceiptV1, committed by native repo_commit,
+      report-r2 staged by native repo_stage, staged ReceiptV1, committed by native repo_commit,
       published by native repo_publish exact CAS, and final local/remote main proof.
 
 executor_flow:
   - "Fresh-resolve exact canonical main execution base and require clean local main."
   - "Fresh-require current 19-tool Agent Runtime surface."
-  - "Implement only the authorized final-gap changes."
-  - "Run focused tests and git diff --check."
-  - "Inspect exact diff."
-  - "Stage implementation through native repo_stage and obtain repo_diff(staged) ReceiptV1."
-  - "Attempt native repo_commit once; if and only if it returns GIT_IDENTITY_UNAVAILABLE, use the authorized one-time local implementation-commit exception."
-  - "Publish implementation through native repo_publish exact CAS and fresh-prove remote main."
+  - "Preserve revision-1 implementation and implement only the revision-2 corrective start.sh delta."
+  - "Run tests.test_supervised_lifecycle first, then the revision-1 focused verification bundle, then git diff --check."
+  - "Require the corrective implementation diff to contain start.sh only."
+  - "Stage corrective implementation through native repo_stage and obtain repo_diff(staged) ReceiptV1."
+  - "Attempt native repo_commit once; if and only if it returns GIT_IDENTITY_UNAVAILABLE, use the revision-2 authorized one-additional-forward-commit exception."
+  - "Publish the corrective implementation through native repo_publish exact CAS and fresh-prove remote main."
   - "Require clean published implementation checkout."
   - "Run canonical ./install.sh with validated repo .venv packaging Python and existing signing Authority; capture its internal ./verify totals."
   - "Validate PENDING / APP_SWAPPED candidate and live Runtime gates."
@@ -328,7 +384,7 @@ failure_policy:
   - "If live Runtime reconnect is required after cutover and the current context cannot reacquire the same 19-tool surface, preserve transaction state and return a continuation packet rather than bypassing native proof."
 
 reporting:
-  path: .agent/tasks/TASK-0138/report-r1.yaml
+  path: .agent/tasks/TASK-0138/report-r2.yaml
   owner: EXECUTOR
   state_on_success: NEEDS_REVIEW
   required_evidence:
