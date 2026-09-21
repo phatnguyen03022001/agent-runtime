@@ -26,6 +26,7 @@ EXPECTED_TOOLS = (
     "fs_list",
     "fs_search",
     "fs_patch",
+    "fs_write",
     "repo_observer",
     "repo_diff",
     "repo_fast_forward",
@@ -79,7 +80,7 @@ class Wave1MCPTests(unittest.IsolatedAsyncioTestCase):
         self._env.start()
         self.addCleanup(self._env.stop)
 
-    async def test_exact_15_tool_surface_and_contract_sourced_annotations(self) -> None:
+    async def test_exact_16_tool_surface_and_contract_sourced_annotations(self) -> None:
         listed = await server.mcp.list_tools()
         self.assertEqual(tuple(tool.name for tool in listed), EXPECTED_TOOLS)
         self.assertEqual(server.PUBLIC_TOOL_NAMES, EXPECTED_TOOLS)
