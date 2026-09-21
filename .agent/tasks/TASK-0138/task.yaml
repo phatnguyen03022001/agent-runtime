@@ -1,0 +1,357 @@
+protocol_version: 3
+
+task_id: TASK-0138
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: successor_task
+  task_id: TASK-0137
+  gap_id: RUNTIME_GIT_IDENTITY_PROPAGATION
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  transport: AGENT_RUNTIME
+  model: GPT-5.6 Sol
+  effort: HIGH
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0137/review-r3.yaml@fe774afd0adbe1cb7aa665a5c3057774bf92f254"
+    role: "Accepted runtime doctor and open final-freeze Git-identity propagation gap."
+    precedence: 1
+  - source: "agent_runtime/repo_commit.py@fe774afd0adbe1cb7aa665a5c3057774bf92f254"
+    role: "Runtime Git identity authority: AGENT_RUNTIME_GIT_NAME and AGENT_RUNTIME_GIT_EMAIL only."
+    precedence: 2
+  - source: "macos/runtime_config.py@fe774afd0adbe1cb7aa665a5c3057774bf92f254"
+    role: "Canonical runtime.env initialization and validation authority."
+    precedence: 3
+  - source: "start.sh@fe774afd0adbe1cb7aa665a5c3057774bf92f254"
+    role: "Installed Runtime environment construction and launch authority."
+    precedence: 4
+  - source: "install.sh@fe774afd0adbe1cb7aa665a5c3057774bf92f254"
+    role: "Canonical package/install/cutover entry point."
+    precedence: 5
+  - source: "macos/candidate_cutover.py@fe774afd0adbe1cb7aa665a5c3057774bf92f254"
+    role: "Schema-5 transactional cutover and explicit predecessor-contract authority."
+    precedence: 6
+
+objective: >-
+  Close the Agent Runtime program by fixing canonical Runtime Git-identity propagation,
+  building and installing one final signed immutable candidate, proving healthy live Runtime
+  and doctor state, committing schema-5 cutover, cleaning transient artifacts, and persisting
+  final freeze evidence without changing the accepted public capability architecture.
+
+architecture:
+  runtime_git_identity:
+    keys:
+      - AGENT_RUNTIME_GIT_NAME
+      - AGENT_RUNTIME_GIT_EMAIL
+    authority: >-
+      repo_commit continues to accept these Runtime environment keys only. Do not add fallback
+      to ambient Git config inside repo_commit.
+    canonical_storage: "~/Library/Application Support/Agent Runtime/runtime.env"
+    bootstrap_precedence:
+      - "preserve existing valid non-empty canonical runtime.env values"
+      - "explicit non-empty installer process AGENT_RUNTIME_GIT_NAME / AGENT_RUNTIME_GIT_EMAIL"
+      - "repository-local git config user.name / user.email at install time"
+    pair_rule: >-
+      Treat name and email as one identity pair. Partial/malformed identity fails closed.
+      Never print identity values in doctor/report/log evidence.
+    migration: >-
+      Existing canonical runtime.env lacking both keys may be atomically migrated during the
+      canonical install flow. Existing valid values must not be silently replaced.
+    launch: >-
+      start.sh must require and forward both keys into the sanitized Runtime environment so
+      native repo_commit works without persistence exceptions.
+  predecessor_compatibility:
+    installed_revision: "99518e694467be8525d813a4e638c4c8e0324365"
+    contract: split-v1
+    requirement: >-
+      Add this exact already-proven installed revision to the explicit split-v1 predecessor
+      allowlist with regression coverage. Do not replace immutable revision recognition with
+      heuristic capability detection.
+  public_surface:
+    runtime_version: "0.2.0"
+    mcp_tool_count: 19
+    changes_allowed: false
+    screen_capture: "supported=true, available=false, VISUAL_PERCEPTION_BLOCKED"
+
+scope:
+  expected_files_are_restrictive: true
+  expected_implementation_paths:
+    - macos/runtime_config.py
+    - install.sh
+    - start.sh
+    - macos/candidate_cutover.py
+    - tests/test_revision4_runtime_config.py
+    - tests/test_tunnel_identity.py
+    - tests/test_candidate_cutover.py
+    - tests/test_doctor.py
+    - README.md
+  allowed_components:
+    - macos/runtime_config.py
+    - install.sh
+    - start.sh
+    - macos/candidate_cutover.py
+    - tests/test_revision4_runtime_config.py
+    - tests/test_tunnel_identity.py
+    - tests/test_candidate_cutover.py
+    - tests/test_doctor.py
+    - README.md
+    - .agent/tasks/TASK-0138/report-r1.yaml
+  scope_exception: >-
+    Any required production change outside this set requires Architect judgment before mutation.
+
+required_behavior:
+  - "Canonical runtime.env ends with both valid Git identity keys while preserving mode 0600 and existing secrets/config."
+  - "Install bootstrap preserves existing canonical Git identity; otherwise resolves the pair from explicit installer env, then repository-local Git config."
+  - "Malformed, duplicate, overlong, newline/NUL, or partial Git identity fails closed."
+  - "start.sh validates and forwards both Git identity keys into the live Runtime environment."
+  - "Native repo_commit succeeds after final installation without terminal/local-Git persistence exception."
+  - "Installed predecessor 99518e694467be8525d813a4e638c4c8e0324365 is recognized as split-v1."
+  - "No Runtime version bump."
+  - "No public MCP schema/tool change."
+  - "No change to ToolContract Kernel v1, capability registry semantics, doctor contract, repo_publish CAS, repo_stage, repo_diff ReceiptV1, or screen_capture governance."
+
+verification_strategy:
+  focused_first:
+    - "Runtime configuration migration/validation tests."
+    - "start/install environment propagation tests."
+    - "split-v1 predecessor regression."
+    - "doctor Git-readiness regression."
+  diff_check: required
+  canonical_verify:
+    mechanism: "./install.sh internal canonical verify"
+    invocation_policy: >-
+      The full canonical install flow already executes ./verify before packaging. Count that
+      exact successful invocation as TASK-0138 canonical verification; do not run a redundant
+      full ./verify beforehand merely for ceremony.
+    requirement: "zero failures/errors with exact totals durably captured"
+  github_actions:
+    required: false
+    rule: "workflow_dispatch only; do not dispatch unless a concrete clean-environment ambiguity appears"
+
+implementation_publication:
+  constraint: >-
+    Before the final candidate is installed, the currently live Runtime still cannot perform
+    native repo_commit because the Git identity gap is the implementation target.
+  authorized_exception: >-
+    After focused tests and diff stabilization, use the existing Git identity configuration
+    for exactly one local implementation commit if native repo_commit returns
+    GIT_IDENTITY_UNAVAILABLE. Do not mutate Git config, stage via shell, push via shell, amend,
+    rebase, merge, or rewrite history.
+  staging: "native repo_stage"
+  diff_receipt: "native repo_diff(staged) ReceiptV1"
+  publication: "native repo_publish exact expected-old CAS"
+  direct_child: required
+
+final_package_install:
+  source_binding: >-
+    Package only the exact clean published implementation commit/tree. Governance report/review
+    commits are not part of the installed Runtime payload.
+  packaging_python: >-
+    Use the repository .venv/bin/python only after canonical packaging-python validation.
+    Do not use the installed Runtime Python as packaging interpreter.
+  signing: >-
+    Use the existing installed Agent Runtime signing Authority through normal /usr/bin/codesign.
+    Read only the installed app signing Authority needed for selection. Do not enumerate,
+    unlock, export, import, dump, or modify Keychain items and never read private-key material.
+  build: "canonical ./install.sh full flow"
+  bytecode: >-
+    All direct installed-Runtime Python diagnostics must set PYTHONDONTWRITEBYTECODE=1.
+    The installed signed bundle must remain closure-identical and pass strict codesign.
+  pending_cutover_gate:
+    - "installed runtime-manifest revision/tree equals implementation commit/tree"
+    - "installed and live Runtime expose exactly 19 tools"
+    - "healthz = 200 and readyz = 200"
+    - "strict deep codesign passes"
+    - "schema-5 transaction is PENDING / APP_SWAPPED"
+    - "runtime.env contains both Git identity keys without exposing their values"
+    - "live native repo_commit succeeds on a bounded disposable Git fixture"
+    - "installed doctor executed through the live Runtime environment returns healthy / exit 0"
+    - "screen_capture remains governance-blocked"
+  commit_cutover: >-
+    Only after every pending-cutover gate passes, execute canonical ./install.sh --commit-cutover
+    and require the transaction directory to be absent afterwards.
+  rollback: >-
+    If any pre-commit gate fails, do not commit cutover. Use only canonical rollback/recovery
+    semantics when required by the existing transaction state.
+
+doctor_final_proof:
+  execution: >-
+    Run the installed doctor from a live Runtime-inherited environment so the proof exercises
+    the actual propagated Git identity. Do not print or persist Git name/email or control-plane
+    credential values.
+  required_status: healthy
+  exit_code: 0
+  checks:
+    runtime_identity: pass
+    capability_registry: pass
+    tool_contract_schema: pass
+    workspace: pass
+    capacity_session_config: pass
+    git_readiness: pass
+    installed_package_identity: pass
+    service_registration: pass
+    cutover_identity: pass
+    governance_protection: pass
+
+cleanup_and_freeze:
+  cleanup:
+    - "After committed cutover and after recording candidate hashes/provenance, remove repository build/ transient artifacts."
+    - "Do not delete the canonical installed app or runtime.env."
+    - "Do not scan or delete unrelated user data."
+  repository:
+    - "remote branches = main only"
+    - "open PRs = 0"
+    - "workflow .github/workflows/verify.yml remains workflow_dispatch-only"
+    - "worktree/index clean"
+    - "ahead/behind 0/0"
+  host:
+    - "exactly one canonical installed Agent Runtime.app under ~/Applications within bounded owner-safe scan"
+    - "no cutover transaction remains"
+    - "live Runtime/tunnel point to the canonical installed app"
+    - "health/ready remain good"
+    - "strict codesign remains good"
+    - "no generated pyc/__pycache__ drift inside signed installed bundle"
+  freeze_evidence: >-
+    TASK-0138 report plus final Architect review are the freeze evidence. Do not introduce a
+    second freeze framework or new governance repository.
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Runtime Git identity propagation is canonical and migration-safe."
+    evidence_required: >-
+      Focused tests prove precedence, atomic migration, preservation, pair validation, 0600 mode,
+      no value disclosure, and start.sh forwarding.
+  - id: AC-2
+    requirement: "Native repo_commit works after final install with no persistence exception."
+    evidence_required: >-
+      Live installed Runtime commits a bounded disposable Git fixture through native repo_commit;
+      exact commit/receipt evidence is recorded without exposing Git identity values.
+  - id: AC-3
+    requirement: "Final implementation preserves accepted public architecture."
+    evidence_required: >-
+      Runtime version 0.2.0, exact nineteen-tool order, ToolContract Kernel v1, schema export,
+      repo_publish CAS, and screen_capture governance regressions remain green.
+  - id: AC-4
+    requirement: "Canonical install verification is green."
+    evidence_required: "The ./install.sh internal ./verify invocation records exact zero-failure totals and exit 0."
+  - id: AC-5
+    requirement: "Final signed candidate is exact and immutable."
+    evidence_required: >-
+      Candidate SHA-256, handoff SHA-256, source revision/tree, requirements lock, TeamIdentifier,
+      runtime manifest, candidate validation, and strict codesign all pass.
+  - id: AC-6
+    requirement: "Schema-5 install/cutover completes safely from the current installed predecessor."
+    evidence_required: >-
+      Exact predecessor split-v1 proof, PENDING/APP_SWAPPED validation, live health gates, then
+      committed transaction with no transaction directory remaining.
+  - id: AC-7
+    requirement: "Final installed doctor is healthy."
+    evidence_required: "Doctor exits 0 and every canonical check is pass with no secret/identity value disclosure."
+  - id: AC-8
+    requirement: "Final installed Runtime is the accepted nineteen-tool Runtime."
+    evidence_required: >-
+      Installed/runtime process identity, exact 19-tool inventory, healthz/readyz 200, canonical
+      tunnel command, package identity, codesign, and immutable closure evidence pass.
+  - id: AC-9
+    requirement: "Final repository/host cleanup is bounded and complete."
+    evidence_required: >-
+      build/ absent, repo clean, main-only, no open PR, workflow_dispatch-only verifier,
+      no cutover debris, no duplicate owner app in bounded scan, no signed-bundle pyc drift.
+  - id: AC-10
+    requirement: "Final Executor report is persisted through the now-working native mutation chain."
+    evidence_required: >-
+      report-r1 staged by native repo_stage, staged ReceiptV1, committed by native repo_commit,
+      published by native repo_publish exact CAS, and final local/remote main proof.
+
+executor_flow:
+  - "Fresh-resolve exact canonical main execution base and require clean local main."
+  - "Fresh-require current 19-tool Agent Runtime surface."
+  - "Implement only the authorized final-gap changes."
+  - "Run focused tests and git diff --check."
+  - "Inspect exact diff."
+  - "Stage implementation through native repo_stage and obtain repo_diff(staged) ReceiptV1."
+  - "Attempt native repo_commit once; if and only if it returns GIT_IDENTITY_UNAVAILABLE, use the authorized one-time local implementation-commit exception."
+  - "Publish implementation through native repo_publish exact CAS and fresh-prove remote main."
+  - "Require clean published implementation checkout."
+  - "Run canonical ./install.sh with validated repo .venv packaging Python and existing signing Authority; capture its internal ./verify totals."
+  - "Validate PENDING / APP_SWAPPED candidate and live Runtime gates."
+  - "Prove native repo_commit on a disposable fixture and installed doctor healthy through live Runtime environment."
+  - "Commit cutover canonically."
+  - "Fresh-prove transaction absent and final installed identity/health/codesign/closure."
+  - "Capture candidate/provenance hashes, then delete repository build/ transient artifacts."
+  - "Run final bounded repository/host audit."
+  - "Create report-r1 with complete freeze evidence."
+  - "Stage report through native repo_stage, obtain ReceiptV1, commit through native repo_commit, publish through native repo_publish."
+  - "Fresh-prove local HEAD = origin/main, ahead/behind 0/0, worktree/index clean, then stop for independent Architect review."
+
+forbidden_changes:
+  - "Add or remove MCP tools."
+  - "Change Runtime semantic version from 0.2.0."
+  - "Change ToolContract Kernel v1."
+  - "Change doctor report contract/check inventory."
+  - "Add worktrees, fan-out, workers, scheduler, orchestration, SQLite, plugin scanning, policy DSL, or model loop."
+  - "Add Git-config fallback inside repo_commit."
+  - "Print/persist Git identity values in report/log evidence."
+  - "Read/export private signing keys or enumerate Keychain."
+  - "Prompt or widen TCC permissions."
+  - "Invoke native screen capture."
+  - "Touch Photos, SSH secrets, browser cookies/history, or unrelated user data."
+  - "Create branch/PR/staging/dev/control topology."
+  - "Enable automatic push/pull_request GitHub Actions."
+  - "Rewrite accepted history."
+
+failure_policy:
+  - "Fail closed on identity drift or unexpected diff."
+  - "Do not chase green with repeated full verifier runs."
+  - "Do not commit cutover when any pending-cutover gate fails."
+  - "Do not use shell Git push."
+  - "Do not switch execution surface solely to obtain a different platform safety judgment."
+  - "If signing requires interactive approval unavailable in the current GUI session, stop with exact signing evidence."
+  - "If live Runtime reconnect is required after cutover and the current context cannot reacquire the same 19-tool surface, preserve transaction state and return a continuation packet rather than bypassing native proof."
+
+reporting:
+  path: .agent/tasks/TASK-0138/report-r1.yaml
+  owner: EXECUTOR
+  state_on_success: NEEDS_REVIEW
+  required_evidence:
+    - "exact execution base/tree and implementation changed paths"
+    - "Git identity propagation/migration focused proofs"
+    - "implementation staged ReceiptV1 and commit/publication identity"
+    - "canonical install internal ./verify totals"
+    - "candidate SHA-256 and handoff SHA-256"
+    - "candidate source revision/tree, requirements lock, TeamIdentifier, validation"
+    - "PENDING/APP_SWAPPED evidence and predecessor split-v1 identity"
+    - "live native repo_commit disposable-fixture proof"
+    - "installed doctor healthy JSON status/check summary without secret values"
+    - "installed/live 19-tool inventory"
+    - "healthz/readyz, codesign, runtime-manifest, tunnel identity"
+    - "committed cutover and transaction absence"
+    - "build cleanup and bounded duplicate-app/debris audit"
+    - "main-only/open-PR/workflow/manual-CI audit"
+    - "report native repo_stage ReceiptV1, native repo_commit receipt, native repo_publish exact-CAS result"
+    - "final local/remote main and clean/ahead-behind state"
+
+successor:
+  if_accepted: PROGRAM_FREEZE
+  intent: "No planned successor task; final Architect review freezes the Agent Runtime program."
+
+blocking_decisions: []
+execution_ready: true
