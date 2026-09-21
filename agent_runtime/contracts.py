@@ -648,3 +648,44 @@ class RepoCommitResult(_ClosedResult):
     network_used: Literal[False]
     post_commit_clean: Literal[True]
 
+
+
+CapabilityLifecycle = Literal["stable", "experimental", "deprecated"]
+RuntimeVersion = Annotated[StrictStr, Field(min_length=1, max_length=64)]
+
+
+class CapabilityAuthority(_ClosedResult):
+    workspace_bound: bool
+    network: Literal["none", "bounded"]
+    mutation: Literal["none", "bounded", "destructive"]
+
+
+class CapabilityAnnotations(_ClosedResult):
+    read_only: bool
+    destructive: bool
+    idempotent: bool
+    open_world: bool
+
+
+class CapabilityDescriptor(_ClosedResult):
+    schema_version: Literal[1]
+    runtime_version: RuntimeVersion
+    tool_contract_kernel_version: Literal[1]
+    name: Annotated[StrictStr, Field(min_length=1, max_length=128)]
+    tool_contract_version: Literal[1]
+    lifecycle: CapabilityLifecycle
+    authority: CapabilityAuthority
+    annotations: CapabilityAnnotations
+    request_schema_version: Literal[1]
+    result_schema_version: Literal[1] | None
+    bounds: dict[str, object]
+    supported: bool
+    available: bool
+    unavailable_reason_code: CapabilityReasonCode | None
+
+
+class RuntimeCapabilitiesResult(_ClosedResult):
+    schema_version: Literal[1]
+    runtime_version: RuntimeVersion
+    tool_contract_kernel_version: Literal[1]
+    capabilities: list[CapabilityDescriptor]

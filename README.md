@@ -89,9 +89,11 @@ architecture prerequisite.
 There are no blanket TCC permissions for Runtime. Accessibility, Automation/
 Apple Events, Screen & System Audio Recording, Full Disk Access, Files &
 Folders, Developer Tools, Input Monitoring, and Local Network are not baseline
-Runtime permissions. The read-only `screen_capture` tool requires Screen Recording
-permission to have already been granted; Runtime never requests it, opens System
-Settings, or mutates TCC state. Background Activity is the separate operator-controlled
+Runtime permissions. Production `screen_capture` is governance-blocked before
+native capture and never requests Screen Recording permission, opens System
+Settings, or mutates TCC state. The retained native helper contract would require
+pre-existing Screen Recording permission if separately re-authorized in a future
+source/package activation. Background Activity is the separate operator-controlled
 ServiceManagement approval described above; denial or revocation is reported and
 fails closed rather than widening permissions.
 
@@ -139,58 +141,66 @@ kernel compromise, and out-of-band tools.
 
 ## Tool surface
 
-The MCP server exposes exactly eleven public tools:
+The MCP server exposes exactly nineteen public tools in one canonical registry order:
 
 - `terminal_exec(argv, cwd, timeout_seconds=300)` executes one literal argv
   with `shell=False`, disconnected stdin, bounded output, and bounded cleanup.
-  `argv` is limited to 128 items, 16 KiB UTF-8 bytes per item, and 256 KiB
-  aggregate UTF-8 content.
-- `terminal_start(argv, cwd)` starts one literal argv in a PTY-backed process
-  group and returns promptly with a session id and bounded initial output; it
-  uses the same fixed `argv` limits as `terminal_exec`.
-- `terminal_poll(session_id, cursor=0, wait_ms=0)` returns bounded incremental
-  PTY output and current status. `session_id` is limited to 128 characters and
-  `wait_ms` is bounded to 1000 ms.
-- `terminal_control(session_id, action, data=None)` supports exactly `write`,
-  `interrupt`, and `terminate`. It remains truthfully destructive/open-world;
-  `session_id` is limited to 128 characters and write data to 64 KiB UTF-8 bytes.
-- `terminal_resize(session_id, rows, cols)` performs only bounded PTY resize with
-  dimensions from 1 through 65535. It is non-destructive, closed-world, and
-  idempotent at the public tool-contract level.
+- `terminal_start(argv, cwd)`, `terminal_poll(...)`, `terminal_control(...)`,
+  and `terminal_resize(...)` provide the bounded PTY lifecycle. Destructive
+  control remains explicitly separate from idempotent resize.
+- `capacity_observer()` returns one read-only advisory local-capacity snapshot.
+- `fs_read_batch(cwd, items)` performs bounded ordered UTF-8 regular-file reads.
+- `fs_list(cwd, path=".", max_entries=200)` lists one directory without
+  recursive or symlink traversal.
+- `fs_search(...)` performs bounded literal path/content search.
+- `fs_patch(...)` applies exact expected-SHA text edits.
+- `fs_write(...)` performs whole-file expected-state create or replace.
+- `repo_observer(...)` provides typed local-only read-only Git observation with
+  no fetch, network use, or repository mutation.
+- `repo_diff(...)` returns a bounded tracked diff plus a full-state receipt.
+- `repo_stage(...)` stages exactly one explicit receipt-bound candidate.
+- `repo_commit(...)` commits only the exact receipt-authorized staged state.
+- `repo_fast_forward(...)` performs expected-state-guarded fixed-origin synchronization
+  of one clean bound branch.
+- `repo_publish(...)` performs expected-state-guarded fixed-origin publication
+  of exactly one clean direct-child commit using an exact expected-old remote
+  lease and fresh postcondition observation; repository/task authority remains
+  outside Runtime.
+- `screen_capture(...)` remains public for contract compatibility but is
+  governance-blocked in production. Every invocation returns
+  `VISUAL_PERCEPTION_BLOCKED` before native capture; it has no MCP output schema,
+  produces no image, and does not request Screen Recording permission. The dormant
+  media-first contract retains deterministic `cg_global_points` metadata semantics
+  for any future separately authorized implementation.
+- `runtime_capabilities()` returns deterministic static capability descriptors
+  for the same nineteen-tool registry. It performs no readiness, host,
+  repository, package, TCC, permission, or network probes.
 
-- `capacity_observer()` returns one read-only, on-demand, stateless capacity
-  snapshot with a bounded signal summary, reason codes, and advisory
-  `capacity_parallelism_ceiling`. It does not spawn, schedule, queue, reorder,
-  retry, or cancel work.
-- `fs_read_batch(cwd, items)` reads 1..20 ordered cwd-relative UTF-8 regular
-  files or inclusive line ranges. It rejects absolute/dot/dot-dot/empty path
-  components and symlinks, never truncates successful text, and enforces fixed
-  128 KiB per-item plus 256 KiB aggregate UTF-8 output ceilings, 1 MiB actual
-  FD-read bytes per item, and 4 MiB actual FD-read bytes per batch. Scan-limit
-  failures return no partial text; after batch scan exhaustion, remaining items
-  fail without file I/O. Line indexes are limited to 2147483647. It is read-only
-  and exposes no caller limit knobs.
-- `repo_observer(cwd, max_paths=200)` provides typed local-only read-only Git observation
-  with no fetch, network use, or repository mutation.
-- `repo_fast_forward(cwd, branch, expected_local_head, expected_remote_head)` provides
-  expected-state-guarded fixed-origin synchronization. It fresh-fetches only the
-  bound branch from literal `origin` and permits only an exact fast-forward of the
-  current clean branch. Runtime executes this consequence; repository/task authority
-  remains outside Runtime.
-- `repo_publish(cwd, branch, expected_remote_head, commit)` provides
-  expected-state-guarded fixed-origin publication of exactly the current clean branch
-  HEAD when `commit` is the sole direct child of the bound existing `origin/<branch>`
-  head. Same-input replay freshly verifies remote state and does not push twice. Runtime
-  executes the publication consequence; repository/task authority remains outside Runtime.
-- `screen_capture(target="frontmost_window", ...)` captures exactly one selected window,
-  application window, display, or contained display region through package-owned
-  ScreenCaptureKit. Success is an unstructured media-first result: one PNG
-  `ImageContent`, followed by one bounded deterministic JSON `TextContent` of validated
-  `cg_global_points` metadata; it has no output schema or structured content. Failures are
-  one bounded deterministic JSON error `TextContent` with `code`, `message`, and
-  `retryable`, also without structured content. No cursor, audio, OCR, Accessibility,
-  clipboard, DOM, URL, or keystroke surface is exposed. Screen Recording permission must
-  already be granted.
+Every public capability is bound to exactly one ToolContract v1. The canonical
+registry is also the source of public inventory identity; it does not duplicate
+the individual capability semantics owned by their implementation modules.
+Descriptors expose independent lifecycle, request-schema, result-schema,
+support, and availability fields. All current capabilities are `stable` and
+supported. `screen_capture` is intentionally supported but unavailable with
+reason `VISUAL_PERCEPTION_BLOCKED`; ordinary capabilities are available.
+
+Runtime version identity has one source value in `agent_runtime.version`.
+Server metadata and capability descriptors use that value. The macOS bundle
+version remains a packaging projection and `macos/package_app.sh` rejects a
+projection that differs from the Runtime version source.
+
+A deterministic machine-readable contract bundle is available without writing
+generated catalog files:
+
+```bash
+python -m agent_runtime.schema_export
+```
+
+The exporter writes canonical UTF-8 JSON plus at most one trailing LF. It
+includes the Runtime version, ToolContract kernel version, every descriptor,
+the exact ToolContract projection, and the actual registered MCP request/result
+schemas. `bundle_sha256` is SHA-256 over the canonical bundle body before the
+digest field is added.
 
 Capacity Observer v2 reports an advisory healthy-host ceiling up to x6. The
 effective healthy ceiling is `min(AGENT_RUNTIME_MAX_PARALLELISM, 6)`: the

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .contracts import RepoFastForwardResult, TypedToolErrorCode
+from .tool_contract import Authority, MutationAuthority, NetworkAuthority, ToolAnnotations, ToolClass, ToolContract
 
 GIT_EXECUTABLE = "/usr/bin/git"
 CALL_DEADLINE_SECONDS = 30.0
@@ -23,6 +24,21 @@ _OPERATION_PATHS = (
     "rebase-merge",
     "rebase-apply",
     "BISECT_START",
+)
+
+REPO_FAST_FORWARD_CONTRACT = ToolContract(
+    name="repo_fast_forward",
+    tool_class=ToolClass.REPO,
+    authority=Authority(True, NetworkAuthority.BOUNDED, MutationAuthority.DESTRUCTIVE),
+    annotations=ToolAnnotations(False, True, True, True),
+    preconditions={
+        "cwd": "exact-clean-nonbare-repository-root-inside-workspace",
+        "branch": "attached-current-branch-with-origin-upstream",
+        "expected_local_head": "exact-bound-commit",
+        "expected_remote_head": "exact-bound-commit",
+    },
+    bounds={"branch_chars": _BRANCH_MAX_CHARS, "deadline_milliseconds": int(CALL_DEADLINE_SECONDS * 1000)},
+    postconditions={"remote": "origin-only", "fetch": "bound-branch-only", "mutation": "exact-fast-forward-only", "post_state": "clean"},
 )
 
 

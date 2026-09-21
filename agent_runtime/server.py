@@ -20,7 +20,7 @@ except ImportError:
 
 from mcp.types import CallToolResult
 
-from .capacity import observe_capacity
+from .capacity import CAPACITY_OBSERVER_CONTRACT, observe_capacity
 from .contracts import (
     AbsoluteCwd,
     Argv,
@@ -28,6 +28,7 @@ from .contracts import (
     CapabilityErrorPayload,
     CapabilityFailure,
     CapacityObserverResult,
+    RuntimeCapabilitiesResult,
     ControlAction,
     Cursor,
     FsReadBatchResult,
@@ -86,7 +87,7 @@ from .contracts import (
     WaitMilliseconds,
 )
 from .errors import RuntimeStateError, RuntimeValidationError
-from .executor import execute_terminal, shutdown_terminal_executions
+from .executor import TERMINAL_EXEC_CONTRACT, execute_terminal, shutdown_terminal_executions
 from .fs_read import FS_READ_BATCH_CONTRACT, read_files_batch
 from .fs_list import FS_LIST_CONTRACT, list_directory
 from .fs_patch import FS_PATCH_CONTRACT, patch_file
@@ -96,38 +97,29 @@ from .protection import ProtectedRuntimeDenied
 from .repo_diff import REPO_DIFF_CONTRACT, diff_repository
 from .repo_stage import REPO_STAGE_CONTRACT, stage_repository
 from .repo_commit import REPO_COMMIT_CONTRACT, commit_repository
-from .repo_fast_forward import RepoFastForwardFailure, fast_forward_repository
-from .repo_observer import RepoObserverFailure, observe_repository
-from .repo_publish import RepoPublishFailure, publish_repository
-from .screen_capture import ScreenCaptureFailure, capture_failure_result, capture_screen
+from .repo_fast_forward import REPO_FAST_FORWARD_CONTRACT, RepoFastForwardFailure, fast_forward_repository
+from .repo_observer import REPO_OBSERVER_CONTRACT, RepoObserverFailure, observe_repository
+from .repo_publish import REPO_PUBLISH_CONTRACT, RepoPublishFailure, publish_repository
+from .screen_capture import SCREEN_CAPTURE_CONTRACT, ScreenCaptureFailure, capture_failure_result, capture_screen
 from .session import (
+    TERMINAL_CONTROL_CONTRACT,
+    TERMINAL_POLL_CONTRACT,
+    TERMINAL_RESIZE_CONTRACT,
+    TERMINAL_START_CONTRACT,
     control_terminal as _control_terminal,
     poll_terminal as _poll_terminal,
     shutdown_terminal_sessions,
     start_terminal as _start_terminal,
 )
 from .timing import timed_tool_wrapper, timing_middleware
-
-PUBLIC_TOOL_NAMES = (
-    "terminal_exec",
-    "terminal_start",
-    "terminal_poll",
-    "terminal_control",
-    "terminal_resize",
-    "capacity_observer",
-    "fs_read_batch",
-    "fs_list",
-    "fs_search",
-    "fs_patch",
-    "fs_write",
-    "repo_observer",
-    "repo_diff",
-    "repo_stage",
-    "repo_commit",
-    "repo_fast_forward",
-    "repo_publish",
-    "screen_capture",
+from .capability_registry import (
+    CAPABILITY_NAMES,
+    RUNTIME_CAPABILITIES_CONTRACT,
+    runtime_capabilities_result,
 )
+from .version import RUNTIME_VERSION
+
+PUBLIC_TOOL_NAMES = CAPABILITY_NAMES
 SERVER_DESCRIPTION = "Bounded local command execution and advisory capacity MCP server; terminal tools may modify the host."
 SERVER_INSTRUCTIONS = (
     "Execute literal argv with shell=False and no implicit shell. "
@@ -157,11 +149,13 @@ SERVER_INSTRUCTIONS = (
     "screen_capture remains exposed for contract compatibility, but visual perception is governance-blocked in "
     "production: every invocation returns typed VISUAL_PERCEPTION_BLOCKED before native capture and produces no "
     "image; only future Architect re-authorization plus new source verification, packaging, and activation may "
-    "change that state; Screen Recording permission is never requested automatically."
+    "change that state; Screen Recording permission is never requested automatically. "
+    "runtime_capabilities returns deterministic static Runtime identity and capability metadata only; "
+    "it performs no readiness, host, repository, package, permission, or network probes."
 )
 mcp = MCPServer(
     name="Agent Runtime",
-    version="0.2.0",
+    version=RUNTIME_VERSION,
     description=SERVER_DESCRIPTION,
     instructions=SERVER_INSTRUCTIONS,
 )
@@ -317,7 +311,12 @@ def _tool(
     return decorator
 
 
-@_tool(read_only=False, destructive=True, idempotent=False, open_world=True)
+@_tool(
+    read_only=TERMINAL_EXEC_CONTRACT.annotations.read_only,
+    destructive=TERMINAL_EXEC_CONTRACT.annotations.destructive,
+    idempotent=TERMINAL_EXEC_CONTRACT.annotations.idempotent,
+    open_world=TERMINAL_EXEC_CONTRACT.annotations.open_world,
+)
 def terminal_exec(
     argv: Argv,
     cwd: AbsoluteCwd,
@@ -328,14 +327,24 @@ def terminal_exec(
     return cast(TerminalExecResult, _call_runtime_tool(execute_terminal, argv, cwd, timeout_seconds))
 
 
-@_tool(read_only=False, destructive=True, idempotent=False, open_world=True)
+@_tool(
+    read_only=TERMINAL_START_CONTRACT.annotations.read_only,
+    destructive=TERMINAL_START_CONTRACT.annotations.destructive,
+    idempotent=TERMINAL_START_CONTRACT.annotations.idempotent,
+    open_world=TERMINAL_START_CONTRACT.annotations.open_world,
+)
 def terminal_start(argv: Argv, cwd: AbsoluteCwd) -> TerminalSessionResult:
     """Start one literal argv in a bounded persistent PTY session; the process may modify the host."""
 
     return cast(TerminalSessionResult, _call_runtime_tool(_start_terminal, argv, cwd))
 
 
-@_tool(read_only=False, destructive=False, idempotent=False, open_world=False)
+@_tool(
+    read_only=TERMINAL_POLL_CONTRACT.annotations.read_only,
+    destructive=TERMINAL_POLL_CONTRACT.annotations.destructive,
+    idempotent=TERMINAL_POLL_CONTRACT.annotations.idempotent,
+    open_world=TERMINAL_POLL_CONTRACT.annotations.open_world,
+)
 def terminal_poll(
     session_id: SessionId,
     cursor: Cursor = 0,
@@ -346,7 +355,12 @@ def terminal_poll(
     return cast(TerminalSessionResult, _call_runtime_tool(_poll_terminal, session_id, cursor, wait_ms))
 
 
-@_tool(read_only=False, destructive=True, idempotent=False, open_world=True)
+@_tool(
+    read_only=TERMINAL_CONTROL_CONTRACT.annotations.read_only,
+    destructive=TERMINAL_CONTROL_CONTRACT.annotations.destructive,
+    idempotent=TERMINAL_CONTROL_CONTRACT.annotations.idempotent,
+    open_world=TERMINAL_CONTROL_CONTRACT.annotations.open_world,
+)
 def terminal_control(
     session_id: SessionId,
     action: ControlAction,
@@ -360,7 +374,12 @@ def terminal_control(
     )
 
 
-@_tool(read_only=False, destructive=False, idempotent=True, open_world=False)
+@_tool(
+    read_only=TERMINAL_RESIZE_CONTRACT.annotations.read_only,
+    destructive=TERMINAL_RESIZE_CONTRACT.annotations.destructive,
+    idempotent=TERMINAL_RESIZE_CONTRACT.annotations.idempotent,
+    open_world=TERMINAL_RESIZE_CONTRACT.annotations.open_world,
+)
 def terminal_resize(
     session_id: SessionId,
     rows: TerminalDimension,
@@ -374,7 +393,12 @@ def terminal_resize(
     )
 
 
-@_tool(read_only=True, destructive=False, idempotent=True, open_world=False)
+@_tool(
+    read_only=CAPACITY_OBSERVER_CONTRACT.annotations.read_only,
+    destructive=CAPACITY_OBSERVER_CONTRACT.annotations.destructive,
+    idempotent=CAPACITY_OBSERVER_CONTRACT.annotations.idempotent,
+    open_world=CAPACITY_OBSERVER_CONTRACT.annotations.open_world,
+)
 def capacity_observer() -> CapacityObserverResult:
     """Report a bounded read-only advisory machine-capacity ceiling."""
 
@@ -475,7 +499,12 @@ def fs_write(
         return cast(FsWriteResult, _capability_error_result(exc))
 
 
-@_tool(read_only=True, destructive=False, idempotent=True, open_world=False)
+@_tool(
+    read_only=REPO_OBSERVER_CONTRACT.annotations.read_only,
+    destructive=REPO_OBSERVER_CONTRACT.annotations.destructive,
+    idempotent=REPO_OBSERVER_CONTRACT.annotations.idempotent,
+    open_world=REPO_OBSERVER_CONTRACT.annotations.open_world,
+)
 def repo_observer(
     cwd: AbsoluteCwd,
     max_paths: RepoObserverMaxPaths = 200,
@@ -567,7 +596,12 @@ def repo_commit(
         return cast(RepoCommitResult, _capability_error_result(exc))
 
 
-@_tool(read_only=False, destructive=True, idempotent=True, open_world=True)
+@_tool(
+    read_only=REPO_FAST_FORWARD_CONTRACT.annotations.read_only,
+    destructive=REPO_FAST_FORWARD_CONTRACT.annotations.destructive,
+    idempotent=REPO_FAST_FORWARD_CONTRACT.annotations.idempotent,
+    open_world=REPO_FAST_FORWARD_CONTRACT.annotations.open_world,
+)
 def repo_fast_forward(
     cwd: AbsoluteCwd,
     branch: RepoFastForwardBranch,
@@ -601,7 +635,12 @@ def repo_fast_forward(
         return cast(RepoFastForwardResult, error_result)
 
 
-@_tool(read_only=False, destructive=True, idempotent=True, open_world=True)
+@_tool(
+    read_only=REPO_PUBLISH_CONTRACT.annotations.read_only,
+    destructive=REPO_PUBLISH_CONTRACT.annotations.destructive,
+    idempotent=REPO_PUBLISH_CONTRACT.annotations.idempotent,
+    open_world=REPO_PUBLISH_CONTRACT.annotations.open_world,
+)
 def repo_publish(
     cwd: AbsoluteCwd,
     branch: RepoPublishBranch,
@@ -630,7 +669,12 @@ def repo_publish(
         return cast(RepoPublishResult, error_result)
 
 
-@_tool(read_only=True, destructive=False, idempotent=True, open_world=False)
+@_tool(
+    read_only=SCREEN_CAPTURE_CONTRACT.annotations.read_only,
+    destructive=SCREEN_CAPTURE_CONTRACT.annotations.destructive,
+    idempotent=SCREEN_CAPTURE_CONTRACT.annotations.idempotent,
+    open_world=SCREEN_CAPTURE_CONTRACT.annotations.open_world,
+)
 def screen_capture(
     target: ScreenCaptureTarget = "frontmost_window",
     window_id: ScreenCaptureWindowId | None = None,
@@ -650,6 +694,18 @@ def screen_capture(
             retryable=False,
         )
     )
+
+
+@_tool(
+    read_only=RUNTIME_CAPABILITIES_CONTRACT.annotations.read_only,
+    destructive=RUNTIME_CAPABILITIES_CONTRACT.annotations.destructive,
+    idempotent=RUNTIME_CAPABILITIES_CONTRACT.annotations.idempotent,
+    open_world=RUNTIME_CAPABILITIES_CONTRACT.annotations.open_world,
+)
+def runtime_capabilities() -> RuntimeCapabilitiesResult:
+    """Return deterministic Runtime identity and static public capability descriptors."""
+
+    return runtime_capabilities_result()
 
 
 def _install_timing_middleware() -> None:

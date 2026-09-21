@@ -107,21 +107,24 @@ class SurfaceAndScriptsTests(unittest.TestCase):
     def test_public_mcp_surface_adds_capacity_observer_to_four_terminal_tools(self) -> None:
         source = (ROOT / "agent_runtime/server.py").read_text()
         tree = ast.parse(source)
-        assigned = {}
+        public_binding = None
         functions = set()
         for node in tree.body:
             if isinstance(node, ast.Assign):
                 for target in node.targets:
                     if isinstance(target, ast.Name) and target.id == "PUBLIC_TOOL_NAMES":
-                        assigned[target.id] = ast.literal_eval(node.value)
+                        public_binding = node.value
             elif isinstance(node, ast.FunctionDef):
                 functions.add(node.name)
 
+        self.assertIsInstance(public_binding, ast.Name)
+        self.assertEqual(public_binding.id, "CAPABILITY_NAMES")
+        from agent_runtime.capability_registry import CAPABILITY_NAMES
         self.assertEqual(
-            assigned.get("PUBLIC_TOOL_NAMES"),
-            ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch", "fs_list", "fs_search", "fs_patch", "fs_write", "repo_observer", "repo_diff", "repo_stage", "repo_commit", "repo_fast_forward", "repo_publish", "screen_capture"),
+            CAPABILITY_NAMES,
+            ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch", "fs_list", "fs_search", "fs_patch", "fs_write", "repo_observer", "repo_diff", "repo_stage", "repo_commit", "repo_fast_forward", "repo_publish", "screen_capture", "runtime_capabilities"),
         )
-        for name in assigned["PUBLIC_TOOL_NAMES"]:
+        for name in CAPABILITY_NAMES:
             self.assertIn(name, functions)
         for retired in ("get_head", "sync", "run_verify", "get_last_log"):
             self.assertNotIn(f"def {retired}(", source)
@@ -188,7 +191,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
             module = importlib.import_module("agent_runtime.server")
             self.assertEqual(
                 tuple(module.mcp.tools),
-                ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch", "fs_list", "fs_search", "fs_patch", "fs_write", "repo_observer", "repo_diff", "repo_stage", "repo_commit", "repo_fast_forward", "repo_publish", "screen_capture"),
+                ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch", "fs_list", "fs_search", "fs_patch", "fs_write", "repo_observer", "repo_diff", "repo_stage", "repo_commit", "repo_fast_forward", "repo_publish", "screen_capture", "runtime_capabilities"),
             )
             expected = {
                 "terminal_exec": (False, True, False, True),
@@ -209,6 +212,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
                 "repo_fast_forward": (False, True, True, True),
                 "repo_publish": (False, True, True, True),
                 "screen_capture": (True, False, True, False),
+                "runtime_capabilities": (True, False, True, False),
             }
             for name, values in expected.items():
                 _, annotations = module.mcp.tools[name]
@@ -231,9 +235,10 @@ class SurfaceAndScriptsTests(unittest.TestCase):
 
     def test_server_declares_conservative_annotations_and_no_env_api(self) -> None:
         source = (ROOT / "agent_runtime/server.py").read_text()
-        self.assertIn("read_only=False", source)
-        self.assertIn("destructive=True", source)
-        self.assertIn("open_world=True", source)
+        self.assertIn("TERMINAL_EXEC_CONTRACT.annotations.read_only", source)
+        self.assertIn("TERMINAL_EXEC_CONTRACT.annotations.destructive", source)
+        self.assertIn("TERMINAL_EXEC_CONTRACT.annotations.open_world", source)
+        self.assertIn("RUNTIME_CAPABILITIES_CONTRACT.annotations.read_only", source)
         functions = {
             node.name: node
             for node in ast.parse(source).body
@@ -366,7 +371,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertIn("protected singleton", docs)
         self.assertIn("root/sudo", docs)
         self.assertIn("malicious local administrator", docs)
-        self.assertIn("exactly eleven public tools", docs)
+        self.assertIn("exactly nineteen public tools", docs)
         self.assertIn("AGENT_RUNTIME_MAX_PARALLELISM", docs)
         self.assertIn("capacity_observer", docs)
 

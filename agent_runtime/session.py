@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from .capacity import HeavyExecutionAdmission, HeavyExecutionLease, heavy_execution_admission
+from .contracts import ARGV_ITEM_MAX_BYTES, ARGV_MAX_ITEMS, ARGV_TOTAL_MAX_BYTES, TERMINAL_DATA_MAX_BYTES
 from .errors import RuntimeStateError, RuntimeValidationError
 from .executor import (
     _minimal_child_env,
@@ -26,6 +27,14 @@ from .executor import (
 )
 from .protection import _PROTECTED_GUARD
 from .timing import TimingContext, current_call_context, emit_process_end
+from .tool_contract import (
+    Authority,
+    MutationAuthority,
+    NetworkAuthority,
+    ToolAnnotations,
+    ToolClass,
+    ToolContract,
+)
 
 SESSION_LIMIT_ENV = "AGENT_RUNTIME_MAX_ACTIVE_SESSIONS"
 MAX_ACTIVE_SESSIONS = 6
@@ -38,6 +47,50 @@ MAX_WAIT_MS = 1000
 _READ_CHUNK_BYTES = 8192
 _READER_DRAIN_SECONDS = 0.2
 _REAPER_INTERVAL_SECONDS = 1.0
+
+TERMINAL_START_CONTRACT = ToolContract(
+    name="terminal_start",
+    tool_class=ToolClass.PROCESS,
+    authority=Authority(True, NetworkAuthority.BOUNDED, MutationAuthority.DESTRUCTIVE),
+    annotations=ToolAnnotations(False, True, False, True),
+    preconditions={"cwd": "validated-workspace-descendant", "argv": "literal-nonempty-shell-false-protected-runtime-filtered"},
+    bounds={
+        "argv_items": ARGV_MAX_ITEMS,
+        "argv_item_utf8_bytes": ARGV_ITEM_MAX_BYTES,
+        "argv_total_utf8_bytes": ARGV_TOTAL_MAX_BYTES,
+        "active_sessions": MAX_ACTIVE_SESSIONS,
+        "retained_output_bytes": MAX_RETAINED_OUTPUT_BYTES,
+        "idle_ttl_milliseconds": int(IDLE_TTL_SECONDS * 1000),
+    },
+    postconditions={"pty_process_group": True, "lifecycle": "managed-by-session-tools"},
+)
+TERMINAL_POLL_CONTRACT = ToolContract(
+    name="terminal_poll",
+    tool_class=ToolClass.PROCESS,
+    authority=Authority(False, NetworkAuthority.NONE, MutationAuthority.BOUNDED),
+    annotations=ToolAnnotations(False, False, False, False),
+    preconditions={"session_id": "known-or-retained-session", "cursor": "non-negative"},
+    bounds={"poll_output_bytes": MAX_POLL_OUTPUT_BYTES, "wait_milliseconds": MAX_WAIT_MS},
+    postconditions={"output": "bounded-incremental", "process_control": False},
+)
+TERMINAL_CONTROL_CONTRACT = ToolContract(
+    name="terminal_control",
+    tool_class=ToolClass.PROCESS,
+    authority=Authority(False, NetworkAuthority.BOUNDED, MutationAuthority.DESTRUCTIVE),
+    annotations=ToolAnnotations(False, True, False, True),
+    preconditions={"session_id": "known-running-session", "actions": ["write", "interrupt", "terminate"]},
+    bounds={"write_utf8_bytes": TERMINAL_DATA_MAX_BYTES},
+    postconditions={"control": "one-explicit-session-action"},
+)
+TERMINAL_RESIZE_CONTRACT = ToolContract(
+    name="terminal_resize",
+    tool_class=ToolClass.PROCESS,
+    authority=Authority(False, NetworkAuthority.NONE, MutationAuthority.BOUNDED),
+    annotations=ToolAnnotations(False, False, True, False),
+    preconditions={"session_id": "known-running-session", "dimensions": "positive-integers"},
+    bounds={"rows": 65535, "cols": 65535},
+    postconditions={"effect": "pty-window-size-only"},
+)
 
 
 def effective_session_limit(raw_value: str | None = None) -> int:

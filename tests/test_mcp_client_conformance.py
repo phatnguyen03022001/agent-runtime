@@ -11,6 +11,7 @@ from mcp import Client
 from mcp.types import TextContent
 
 from agent_runtime import server
+from agent_runtime.version import RUNTIME_VERSION
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE_ROOT = ROOT.parent
@@ -33,6 +34,7 @@ EXPECTED_TOOLS = (
     "repo_fast_forward",
     "repo_publish",
     "screen_capture",
+    "runtime_capabilities",
 )
 EXPECTED_ANNOTATIONS = {
     "terminal_exec": (False, True, False, True),
@@ -53,6 +55,7 @@ EXPECTED_ANNOTATIONS = {
     "repo_fast_forward": (False, True, True, True),
     "repo_publish": (False, True, True, True),
     "screen_capture": (True, False, True, False),
+    "runtime_capabilities": (True, False, True, False),
 }
 EXPECTED_OUTPUT_FIELDS = {
     "terminal_exec": {
@@ -139,6 +142,13 @@ EXPECTED_OUTPUT_FIELDS = {
         "expected_remote_head", "commit", "head", "remote_head_before", "remote_head_after",
         "network_used", "push_attempted", "published", "deadline_seconds",
     },
+    "runtime_capabilities": {
+        "schema_version", "runtime_version", "tool_contract_kernel_version", "capabilities",
+        "name", "tool_contract_version", "lifecycle", "authority", "annotations",
+        "request_schema_version", "result_schema_version", "bounds", "supported",
+        "available", "unavailable_reason_code", "workspace_bound", "network", "mutation",
+        "read_only", "destructive", "idempotent", "open_world",
+    },
 }
 
 
@@ -198,7 +208,7 @@ class MCPClientConformanceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(client.protocol_version, "2026-07-28")
             self.assertIsNotNone(client.server_info)
             self.assertEqual(client.server_info.name, "Agent Runtime")
-            self.assertEqual(client.server_info.version, "0.2.0")
+            self.assertEqual(client.server_info.version, RUNTIME_VERSION)
             self.assertEqual(client.instructions, server.SERVER_INSTRUCTIONS)
             for phrase in (
                 "may modify the host",

@@ -41,6 +41,14 @@ SERVICE_PLIST="$SOURCE_PACKAGE_ROOT/AppBundle/Library/LaunchAgents/com.picmao.ag
   || { echo "PACKAGE ERROR: requirements.lock is missing from exact HEAD" >&2; exit 2; }
 [[ -f "$SOURCE_ROOT/agent_runtime/server.py" ]] \
   || { echo "PACKAGE ERROR: staged agent_runtime payload is incomplete" >&2; exit 2; }
+[[ -f "$SOURCE_ROOT/agent_runtime/version.py" ]] \
+  || { echo "PACKAGE ERROR: Runtime version SSOT is missing" >&2; exit 2; }
+RUNTIME_VERSION="$("$PYTHON_BIN" "$SOURCE_ROOT/agent_runtime/version.py")" \
+  || { echo "PACKAGE ERROR: Runtime version SSOT could not be read" >&2; exit 2; }
+PLIST_RUNTIME_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$SOURCE_PACKAGE_ROOT/AppBundle/Info.plist")" \
+  || { echo "PACKAGE ERROR: package Runtime version projection is missing" >&2; exit 2; }
+[[ "$PLIST_RUNTIME_VERSION" == "$RUNTIME_VERSION" ]] \
+  || { echo "PACKAGE ERROR: CFBundleShortVersionString does not match Runtime version SSOT" >&2; exit 2; }
 [[ -f "$APP_ICON" ]] \
   || { echo "PACKAGE ERROR: approved application icon is missing" >&2; exit 2; }
 [[ -f "$NOTIFICATION_SOUND" ]] \

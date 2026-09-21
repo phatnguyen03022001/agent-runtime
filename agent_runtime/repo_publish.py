@@ -5,6 +5,7 @@ import time
 from .contracts import RepoPublishResult, TypedToolErrorCode
 from .repo_fast_forward import (
     CALL_DEADLINE_SECONDS,
+    _BRANCH_MAX_CHARS,
     RepoFastForwardFailure,
     _LocalState,
     _read_local_state,
@@ -17,8 +18,24 @@ from .repo_fast_forward import (
     _validate_sha,
     _workspace_root,
 )
+from .tool_contract import Authority, MutationAuthority, NetworkAuthority, ToolAnnotations, ToolClass, ToolContract
 
 _POST_PUSH_RESERVE_SECONDS = 5.0
+
+REPO_PUBLISH_CONTRACT = ToolContract(
+    name="repo_publish",
+    tool_class=ToolClass.REPO,
+    authority=Authority(True, NetworkAuthority.BOUNDED, MutationAuthority.DESTRUCTIVE),
+    annotations=ToolAnnotations(False, True, True, True),
+    preconditions={
+        "cwd": "exact-clean-nonbare-repository-root-inside-workspace",
+        "branch": "attached-current-branch-with-origin-upstream",
+        "expected_remote_head": "exact-current-fixed-origin-head",
+        "commit": "current-head-and-sole-direct-child-of-expected-remote-head",
+    },
+    bounds={"branch_chars": _BRANCH_MAX_CHARS, "deadline_milliseconds": int(CALL_DEADLINE_SECONDS * 1000)},
+    postconditions={"remote": "origin-only", "push_attempts": 1, "lease": "exact-expected-old", "fresh_remote_postcondition": True},
+)
 
 
 class RepoPublishFailure(Exception):

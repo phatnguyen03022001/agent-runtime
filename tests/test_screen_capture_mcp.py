@@ -31,6 +31,7 @@ EXPECTED_TOOLS = (
     "repo_fast_forward",
     "repo_publish",
     "screen_capture",
+    "runtime_capabilities",
 )
 EXPECTED_ANNOTATIONS = {
     "terminal_exec": (False, True, False, True),
@@ -51,6 +52,7 @@ EXPECTED_ANNOTATIONS = {
     "repo_fast_forward": (False, True, True, True),
     "repo_publish": (False, True, True, True),
     "screen_capture": (True, False, True, False),
+    "runtime_capabilities": (True, False, True, False),
 }
 INPUT_FIELDS = {
     "target", "window_id", "application_bundle_id", "display_id",
@@ -78,7 +80,8 @@ class ScreenCaptureMCPTests(unittest.IsolatedAsyncioTestCase):
         for name, tool in tools.items():
             self.assertEqual(_annotations(tool), EXPECTED_ANNOTATIONS[name])
         self.assertEqual(tuple(tools)[:-1], EXPECTED_TOOLS[:-1])
-        self.assertEqual(tuple(tools)[-1], "screen_capture")
+        self.assertEqual(tuple(tools)[-2], "screen_capture")
+        self.assertEqual(tuple(tools)[-1], "runtime_capabilities")
 
     async def test_input_schema_is_closed_and_exact(self) -> None:
         schema = (await self._tools())["screen_capture"].input_schema
@@ -148,7 +151,7 @@ class ScreenCaptureMCPTests(unittest.IsolatedAsyncioTestCase):
 
     def test_readme_documents_exact_eleven_tool_surface(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("exactly eleven public tools", readme)
+        self.assertIn("exactly nineteen public tools", readme)
         self.assertIn("screen_capture", readme)
         self.assertIn("Screen Recording", readme)
         self.assertIn("cg_global_points", readme)

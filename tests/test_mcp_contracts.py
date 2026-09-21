@@ -8,6 +8,7 @@ from unittest.mock import patch
 from jsonschema import Draft202012Validator
 
 from agent_runtime import server
+from agent_runtime.version import RUNTIME_VERSION
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE_ROOT = ROOT.parent
@@ -30,6 +31,7 @@ EXPECTED_TOOLS = (
     "repo_fast_forward",
     "repo_publish",
     "screen_capture",
+    "runtime_capabilities",
 )
 EXPECTED_ANNOTATIONS = {
     "terminal_exec": (False, True, False, True),
@@ -50,6 +52,7 @@ EXPECTED_ANNOTATIONS = {
     "repo_fast_forward": (False, True, True, True),
     "repo_publish": (False, True, True, True),
     "screen_capture": (True, False, True, False),
+    "runtime_capabilities": (True, False, True, False),
 }
 
 
@@ -389,7 +392,7 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_server_metadata_is_explicit_and_machine_useful(self) -> None:
         self.assertEqual(server.mcp.name, "Agent Runtime")
-        self.assertEqual(server.mcp.version, "0.2.0")
+        self.assertEqual(server.mcp.version, RUNTIME_VERSION)
         self.assertTrue(server.mcp.description.strip())
         instructions = server.mcp.instructions
         self.assertTrue(instructions.strip())

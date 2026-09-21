@@ -10,9 +10,18 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 from .capacity import heavy_execution_admission
+from .contracts import ARGV_ITEM_MAX_BYTES, ARGV_MAX_ITEMS, ARGV_TOTAL_MAX_BYTES
 from .errors import RuntimeValidationError
 from .protection import _PROTECTED_GUARD
 from .timing import current_call_context, emit_process_end
+from .tool_contract import (
+    Authority,
+    MutationAuthority,
+    NetworkAuthority,
+    ToolAnnotations,
+    ToolClass,
+    ToolContract,
+)
 
 WORKSPACE_ROOT_ENV = "AGENT_RUNTIME_WORKSPACE_ROOT"
 MAX_TIMEOUT_SECONDS = 3600.0
@@ -20,6 +29,31 @@ MAX_OUTPUT_BYTES = 64 * 1024
 _READ_CHUNK_BYTES = 8192
 _TERMINATE_GRACE_SECONDS = 0.5
 _PRESERVED_ENV_NAMES = ("PATH", "HOME", "USER", "TMPDIR", "LANG")
+
+TERMINAL_EXEC_CONTRACT = ToolContract(
+    name="terminal_exec",
+    tool_class=ToolClass.PROCESS,
+    authority=Authority(True, NetworkAuthority.BOUNDED, MutationAuthority.DESTRUCTIVE),
+    annotations=ToolAnnotations(False, True, False, True),
+    preconditions={
+        "cwd": "validated-workspace-descendant",
+        "argv": "literal-nonempty-shell-false-protected-runtime-filtered",
+        "stdin": "disconnected",
+    },
+    bounds={
+        "argv_items": ARGV_MAX_ITEMS,
+        "argv_item_utf8_bytes": ARGV_ITEM_MAX_BYTES,
+        "argv_total_utf8_bytes": ARGV_TOTAL_MAX_BYTES,
+        "timeout_milliseconds": int(MAX_TIMEOUT_SECONDS * 1000),
+        "stdout_bytes": MAX_OUTPUT_BYTES,
+        "stderr_bytes": MAX_OUTPUT_BYTES,
+    },
+    postconditions={
+        "shell": False,
+        "process_group_cleanup": "bounded-term-then-kill",
+        "output": "bounded",
+    },
+)
 
 
 class _ActiveExecutionRegistry:

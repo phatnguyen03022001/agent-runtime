@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from .errors import RuntimeCapacityError, RuntimeValidationError
+from .tool_contract import Authority, MutationAuthority, NetworkAuthority, ToolAnnotations, ToolClass, ToolContract
 
 MAX_PARALLELISM_ENV = "AGENT_RUNTIME_MAX_PARALLELISM"
 DEFAULT_MAX_PARALLELISM = 2
@@ -25,6 +26,16 @@ MIN_DISK_AVAILABLE_BYTES = 5 * 1024**3
 _HOST_CPU_LOAD_INFO = 3
 _HOST_VM_INFO64 = 4
 _CPU_STATE_IDLE = 2
+
+CAPACITY_OBSERVER_CONTRACT = ToolContract(
+    name="capacity_observer",
+    tool_class=ToolClass.HOST,
+    authority=Authority(False, NetworkAuthority.NONE, MutationAuthority.NONE),
+    annotations=ToolAnnotations(True, False, True, False),
+    preconditions={"source": "aggregate-local-host-capacity-signals"},
+    bounds={"sample_window_milliseconds": SAMPLE_WINDOW_MS, "parallelism_ceiling": HARD_EXECUTION_CEILING},
+    postconditions={"advisory_only": True, "persistent_state": False, "process_inventory": False},
+)
 
 
 @dataclass(frozen=True)

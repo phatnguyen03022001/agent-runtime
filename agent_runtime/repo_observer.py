@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from .tool_contract import Authority, MutationAuthority, NetworkAuthority, ToolAnnotations, ToolClass, ToolContract
+
 from .contracts import (
     RepoBranch,
     RepoChange,
@@ -40,6 +42,22 @@ _NETWORK_VERBS = frozenset(
     {"fetch", "pull", "push", "clone", "ls-remote", "archive", "submodule"}
 )
 _STATUS_VALUES = frozenset({"M", "T", "A", "D", "R", "C", "U", "?", "!"})
+
+REPO_OBSERVER_CONTRACT = ToolContract(
+    name="repo_observer",
+    tool_class=ToolClass.REPO,
+    authority=Authority(True, NetworkAuthority.NONE, MutationAuthority.NONE),
+    annotations=ToolAnnotations(True, False, True, False),
+    preconditions={"cwd": "workspace-contained-git-working-tree", "network_verbs": "forbidden"},
+    bounds={
+        "max_paths": MAX_PATHS_LIMIT,
+        "status_bytes": _STATUS_MAX_BYTES,
+        "diff_bytes": _DIFF_MAX_BYTES,
+        "worktree_bytes": _WORKTREE_MAX_BYTES,
+        "deadline_milliseconds": int(CALL_DEADLINE_SECONDS * 1000),
+    },
+    postconditions={"fetched": False, "network_used": False, "repository_mutation": False},
+)
 
 class RepoObserverFailure(Exception):
     def __init__(

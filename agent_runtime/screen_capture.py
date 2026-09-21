@@ -13,6 +13,7 @@ from mcp.types import CallToolResult, ImageContent, TextContent
 from pydantic import ValidationError
 
 from .contracts import ScreenCaptureMetadata, ScreenCaptureTarget
+from .tool_contract import Authority, MutationAuthority, NetworkAuthority, ToolAnnotations, ToolClass, ToolContract
 
 DEADLINE_SECONDS = 5.0
 MAX_PNG_BYTES = 16 * 1024 * 1024
@@ -20,6 +21,16 @@ MAX_PIXELS = 16 * 1024 * 1024
 MAX_HEADER_BYTES = 16 * 1024
 MAX_STDOUT_BYTES = MAX_HEADER_BYTES + 1 + MAX_PNG_BYTES
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+
+SCREEN_CAPTURE_CONTRACT = ToolContract(
+    name="screen_capture",
+    tool_class=ToolClass.HOST,
+    authority=Authority(False, NetworkAuthority.NONE, MutationAuthority.NONE),
+    annotations=ToolAnnotations(True, False, True, False),
+    preconditions={"production_policy": "VISUAL_PERCEPTION_BLOCKED"},
+    bounds={"error_metadata_bytes": MAX_HEADER_BYTES},
+    postconditions={"native_capture_invoked": False, "permission_requested": False, "image_produced": False},
+)
 
 _SCREEN_ERROR_CODES = frozenset(
     {
