@@ -1,0 +1,37 @@
+protocol_version: 3
+
+task_id: TASK-0129
+task_revision: 1
+review_revision: 2
+state: REWORK
+
+evidence:
+  operator_closure_path: .agent/tasks/TASK-0129/operator-closure.yaml
+  operator_closure_commit: "b32b28023997910719bde132e9d9e44c1b0499b5"
+  workflow_run_id: 35568955147
+  workflow_job_id: 106236325839
+
+architect_judgment:
+  workflow_file_created: true
+  workflow_triggered_for_exact_source_commit: true
+  dependency_install_passed: true
+  full_canonical_suite_executed: true
+  tests_run: 454
+  failures: 7
+  bootstrap_compute_plane: ACCEPTED
+  canonical_verification: FAILED
+
+root_causes:
+  - classification: BASH_3_2_PORTABILITY
+    count: 6
+    detail: "Empty PINNED_ARGS array expansion under set -u is not portable to the clean macOS runner's Bash semantics."
+  - classification: TIMING_FLAKY_TEST
+    count: 1
+    detail: "Background reaper test uses fixed 0.2s sleep instead of a bounded eventual-condition wait."
+
+decision:
+  mutate_workflow_again: false
+  rerun_without_source_fix: false
+  kernel_task_now: false
+  next_task: TASK-0130
+  next_intent: "Repair only CI portability and timing determinism, then require GitHub Actions canonical verify PASS."
