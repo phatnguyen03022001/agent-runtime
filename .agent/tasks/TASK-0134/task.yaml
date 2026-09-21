@@ -1,7 +1,7 @@
 protocol_version: 3
 
 task_id: TASK-0134
-task_revision: 2
+task_revision: 3
 state: APPROVED
 
 target:
@@ -739,3 +739,83 @@ revision_2_override:
 
   reporting:
     - "Return governance HEAD, old/new branch HEAD, exact two-file r2 delta, PR #5 state, new workflow run/job IDs, canonical test count/result, prior-three-failure closure, unchanged repo_commit proof, exact 18-tool surface proof, current refs, and final classification."
+
+
+revision_3_override:
+  predecessor_review: "21bd0175a6bb3a84b7ca4b2fc902916967042231"
+  predecessor_terminal: VERIFICATION_FAILED
+  existing_branch: task-0134-r1
+  expected_existing_branch_head: "39c23976ad8bece2cec78b46c93b6c7d30ccefc2"
+  existing_pr: 5
+
+  scope:
+    contract_change: false
+    public_surface_change: false
+    implementation_delta_paths:
+      - agent_runtime/repo_stage.py
+      - tests/test_repo_stage.py
+
+  exact_current_blobs:
+    agent_runtime/repo_stage.py: "224d7f77908be76fe9899a0f4254b763f5205974"
+    tests/test_repo_stage.py: "c8cee4fa874d91565151358549f5cc75a95c19dc"
+
+  root_cause:
+    classification: CHECK_IGNORE_GLOBAL_LITERAL_PATHSPEC_MODE_INCOMPATIBLE
+    detail: >-
+      Revision 2 correctly uses git check-ignore --stdin -z with NUL-delimited path data, but
+      _run_git still supplies the shared Git environment containing GIT_LITERAL_PATHSPECS=1.
+      Git check-ignore rejects the globally forced literal pathspec mode and returns fatal status.
+      The fix is invocation-local environment isolation, not a global path-safety relaxation.
+
+  required_fix:
+    - "Keep _git_env() unchanged."
+    - "Extend _run_git with an optional explicit environment parameter; default behavior must continue to use _git_env()."
+    - "Do not expose this environment control outside repo_stage.py."
+    - "In _is_ignored, build check_env = _git_env(); remove only GIT_LITERAL_PATHSPECS from check_env."
+    - "Do not set GIT_NOGLOB_PATHSPECS, GIT_GLOB_PATHSPECS, or GIT_ICASE_PATHSPECS in check_env."
+    - "Keep fixed git check-ignore --stdin -z."
+    - "Keep exact strict-UTF-8 path bytes plus one NUL on stdin."
+    - "Candidate path must remain absent from argv."
+    - "Exit 0 => ignored true; exit 1 => ignored false; any other exit => UNAVAILABLE / GIT_UNAVAILABLE."
+    - "Do not alter ignore semantics, path validation, candidate authority, index mutation, repo_commit, receipts, contracts, or server surface."
+
+  required_regressions:
+    - "new regular UTF-8 untracked file stages successfully"
+    - "explicit rename delete+present stages successfully"
+    - "ignored untracked candidate returns IGNORED_PATH"
+    - "pathspec-looking filename stages literally"
+    - "check-ignore uses --stdin -z and NUL-delimited stdin"
+    - "check-ignore explicit env omits GIT_LITERAL_PATHSPECS"
+    - "representative non-check-ignore _run_git call still uses GIT_LITERAL_PATHSPECS=1 by default"
+    - "repo_commit focused suite remains unchanged and green"
+    - "staged receipt chain remains green"
+    - "update-ref CAS remains green"
+    - "repo-commit receipt remains green"
+    - "exact 18-tool surface remains unchanged and green"
+    - "screen_capture governance guard remains green"
+
+  authoring:
+    - "Do not create another branch."
+    - "Do not create another PR."
+    - "Use only GitHub Contents API update_file on task-0134-r1."
+    - "Before each mutation fresh-fetch and require exact_current_blobs."
+    - "Do not modify any path except the two implementation_delta_paths."
+    - "Do not use create_branch/create_blob/create_tree/create_commit/update_ref."
+    - "Do not use local authoring, Agent Runtime, Desktop Commander, or Codex."
+
+  verification:
+    - "Branch update must trigger a new Agent Runtime Verify pull_request run for PR #5."
+    - "Do not rerun workflow runs 35586235055 or 35587318993."
+    - "Require tests >=614, failures=0, errors=0."
+    - "Require all four prior repo_stage failures now pass."
+    - "Require repo_commit, receipt chain, CAS, exact 18-tool surface, existing capability regressions, and screen_capture guard remain green."
+    - "If the new CI run fails for any reason, stop VERIFICATION_FAILED and do not patch again in revision 3."
+
+  terminal_states:
+    success: NEEDS_REVIEW
+    source_closure_failed: SOURCE_CLOSURE_FAILED
+    platform_block: PLATFORM_BLOCK
+    verification_failed: VERIFICATION_FAILED
+
+  reporting:
+    - "Return governance HEAD, old/new branch HEAD, exact two-file r3 delta, PR #5 state, new workflow run/job IDs, canonical test count/result, prior-four-failure closure, check-ignore environment-isolation proof, repo_commit unchanged proof, exact 18-tool surface proof, current refs, and final classification."
