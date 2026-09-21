@@ -1,7 +1,7 @@
 protocol_version: 3
 
 task_id: TASK-0138
-task_revision: 4
+task_revision: 5
 state: APPROVED
 
 origin:
@@ -174,6 +174,84 @@ revision_4:
     revision-4 execution base supplied in the launch packet. No earlier task or implementation
     commit is a valid direct-parent requirement.
 
+revision_5:
+  supersedes_revision_4_execution_authority: true
+  objective_changed: false
+  architecture_changed: false
+  revision_4_published_implementation:
+    commit: "97c6d146401aec3ee24f43957da48659500bdaf1"
+    tree: "756ea77dedf8e5add939bf74ea2187f0d66a1f18"
+    repository_state: CLEAN
+    remote_main: "97c6d146401aec3ee24f43957da48659500bdaf1"
+  revision_4_verification:
+    canonical_install_verify:
+      tests_run: 645
+      failures: 0
+      errors: 0
+      skipped: 1
+      result: PASS
+    packaging: PASS
+    signing: PASS
+  revision_4_candidate:
+    candidate_sha256: "dfbb93cd2afbdd2c62971e5c5a560a842f9c23a9733efa8dc4600aaa0936c878"
+    handoff_sha256: "fcc4c6a67d32ca02a13f26f1a0d6d4de207750ff03faab9bb553255f7e31da85"
+    source_revision: "97c6d146401aec3ee24f43957da48659500bdaf1"
+    source_tree: "756ea77dedf8e5add939bf74ea2187f0d66a1f18"
+    strict_codesign: PASS
+    retained_candidate_validation: PASS
+    generated_bytecode_entries: 0
+  revision_4_host_result:
+    cutover_reached_phase_transiently: APP_SWAPPED
+    pending_reached: false
+    automatic_rollback: PASS
+    final_installed_revision: "99518e694467be8525d813a4e638c4c8e0324365"
+    final_installed_tree: "691d338da9e36a876549d7d2d58ff148c113b1d4"
+    cutover_transaction: ABSENT
+    healthz: 200
+    readyz: 200
+    strict_codesign: PASS
+    runtime_env_git_identity_migration: PASS
+  corrective_root_cause: >-
+    During split-v1 Runtime refresh, unregister-runtime can report the ServiceManagement
+    registration as absent before launchd has unloaded the modern Runtime LaunchAgent.
+    The current refresh path proceeds directly to app swap and candidate ownership inspection,
+    where absent registration plus a still-loaded modern job is correctly classified as
+    inconsistent ownership and fails closed.
+  corrective_boundary:
+    production_path: macos/candidate_cutover.py
+    regression_path: tests/test_candidate_cutover.py
+    semantics: >-
+      For split-v1 predecessor Runtime refresh only, after unregister-runtime has converged to
+      an absent ServiceManagement registration, wait boundedly for the modern Runtime launchd
+      service to become absent before app swap or candidate ownership inspection. Reuse the
+      existing _wait_for_service_absence helper and existing timeout/poll policy.
+    synchronization_target: "gui/<uid>/com.picmao.agent-runtime-runtime-service"
+    forbidden:
+      - "Do not broaden the change to aggregate-v1 unless concrete evidence proves required."
+      - "Do not change ServiceManagement Swift commands or registration semantics."
+      - "Do not weaken runtime ownership classification."
+      - "Do not sleep a fixed arbitrary duration."
+      - "Do not change Git-identity implementation, start.sh, public MCP surface, Runtime version, doctor contract, or package provenance."
+    corrective_implementation_paths:
+      - macos/candidate_cutover.py
+      - tests/test_candidate_cutover.py
+  regression_proof: >-
+    Add a deterministic fixture in which unregister-runtime first makes ServiceManagement
+    registration absent while the modern launchd job remains loaded for bounded polls, then
+    disappears. Prove cutover waits, does not inspect/register the candidate prematurely,
+    reaches PENDING, and re-registers only after launchd absence. Preserve the existing
+    unchanged-generation non-refresh proof. Add a bounded timeout/fail-closed proof only if
+    needed to demonstrate no app swap occurs before absence; reuse existing wait-helper timeout
+    coverage rather than duplicating it unnecessarily.
+  implementation_parent_authority: >-
+    The revision-5 corrective implementation commit must be the sole direct child of the exact
+    revision-5 execution base supplied in the launch packet.
+  canonical_install_authority: >-
+    After the corrective implementation is published and the checkout is clean, revision 5
+    authorizes exactly one new canonical ./install.sh flow. Its internal ./verify is the full
+    regression authority. If the install is platform-blocked before process execution, return
+    OPERATOR_TRANSITION_REQUIRED without retrying through another ChatGPT tool surface.
+
 authority_sources:
   - source: ".agent/tasks/TASK-0137/review-r3.yaml@fe774afd0adbe1cb7aa665a5c3057774bf92f254"
     role: "Accepted runtime doctor and open final-freeze Git-identity propagation gap."
@@ -257,7 +335,7 @@ scope:
     - tests/test_candidate_cutover.py
     - tests/test_doctor.py
     - README.md
-    - .agent/tasks/TASK-0138/report-r4.yaml
+    - .agent/tasks/TASK-0138/report-r5.yaml
   scope_exception: >-
     Any required production change outside this set requires Architect judgment before mutation.
 
@@ -274,19 +352,18 @@ required_behavior:
 
 verification_strategy:
   focused_first:
-    - "Revision 4 does not retry the platform-blocked tests.test_supervised_lifecycle command."
-    - "Run bash -n start.sh once as the only pre-publication executable check."
-    - "Use native repo_diff exact diff/ReceiptV1 to prove the corrective scope is start.sh only."
-    - "Do not reconstruct or rerun the revision-1 145-test focused bundle."
-    - "Do not rerun candidate-cutover focused coverage merely for ceremony; candidate_cutover bytes are unchanged from the published revision-1 implementation."
-  diff_check: "native repo_diff exact diff/ReceiptV1; no separate git diff --check gate in revision 4"
+    - "Run only targeted CandidateCutoverTests for changed-generation refresh, delayed launchd disappearance, and any new bounded synchronization regression."
+    - "Require the existing unchanged-generation non-destructive refresh proof to remain green."
+    - "Do not run the entire CandidateCutoverTests class merely for ceremony."
+    - "Use native repo_diff exact diff/ReceiptV1 to prove the corrective scope is candidate_cutover.py plus its regression test only."
+  diff_check: "native repo_diff exact diff/ReceiptV1; separate git diff --check is optional when platform execution is unavailable"
   canonical_verify:
     mechanism: "./install.sh internal canonical verify"
     invocation_policy: >-
-      Revision 4 explicitly authorizes exactly one new canonical ./install.sh flow after the
-      corrective start.sh delta is published. Its internal ./verify is the only revision-4
-      behavioral regression run and executes before package/install/cutover consequence.
-      Do not run a redundant full ./verify or standalone tests.test_supervised_lifecycle first.
+      Revision 5 authorizes exactly one new canonical ./install.sh flow after the cutover
+      synchronization correction is published. Its internal ./verify is the full repository
+      regression authority and executes before package/install/cutover consequence.
+      Do not run a redundant standalone full ./verify first.
     requirement: "zero failures/errors with exact totals durably captured"
   github_actions:
     required: false
@@ -304,14 +381,17 @@ implementation_publication:
     reason: "The hard-coded r1 parent conflicts with the published r2 planning commit."
   revision_3_authorized_exception:
     superseded: true
-  revision_4_authorized_exception: >-
-    After exact checkpoint binding, bash syntax validation, and native diff stabilization,
-    stage only start.sh through native repo_stage and obtain native repo_diff(staged) ReceiptV1.
-    Attempt native repo_commit exactly once. If and only if it returns GIT_IDENTITY_UNAVAILABLE,
-    use the existing Git identity configuration for exactly one additional forward local commit
-    whose sole parent is the exact revision-4 execution base supplied in the launch packet.
-    Do not mutate Git config, stage via shell, push via shell, amend, rebase, merge, reset,
-    or rewrite history.
+  revision_4_authorized_exception:
+    consumed: true
+    commit: "97c6d146401aec3ee24f43957da48659500bdaf1"
+  revision_5_authorized_exception: >-
+    Stage only macos/candidate_cutover.py and tests/test_candidate_cutover.py through native
+    repo_stage and obtain native repo_diff(staged) ReceiptV1. Attempt native repo_commit exactly
+    once. If and only if it returns GIT_IDENTITY_UNAVAILABLE because the rolled-back predecessor
+    still lacks live Git-identity propagation, use the existing Git identity configuration for
+    exactly one additional forward local commit whose sole parent is the exact revision-5
+    execution base supplied in the launch packet. Do not mutate Git config, stage via shell,
+    push via shell, amend, rebase, merge, reset, or rewrite history.
   staging: "native repo_stage"
   diff_receipt: "native repo_diff(staged) ReceiptV1"
   publication: "native repo_publish exact expected-old CAS"
@@ -435,28 +515,28 @@ acceptance_criteria:
   - id: AC-10
     requirement: "Final Executor report is persisted through the now-working native mutation chain."
     evidence_required: >-
-      report-r4 staged by native repo_stage, staged ReceiptV1, committed by native repo_commit,
+      report-r5 staged by native repo_stage, staged ReceiptV1, committed by native repo_commit,
       published by native repo_publish exact CAS, and final local/remote main proof.
 
 executor_flow:
   - "Fresh-resolve exact canonical main execution base and require clean local main."
   - "Fresh-require current 19-tool Agent Runtime surface."
-  - "Preserve revision-1 implementation and implement only the revision-2 corrective start.sh delta."
-  - "Do not retry the platform-blocked tests.test_supervised_lifecycle command."
-  - "Require exact preserved start.sh SHA-256, run bash -n start.sh once, and use native repo_diff to prove start.sh-only scope."
-  - "Do not reconstruct the revision-1 145-test focused bundle and do not require a separate git diff --check in revision 4."
+  - "Preserve all published revision-4 implementation bytes except the revision-5 cutover synchronization correction."
+  - "Implement only macos/candidate_cutover.py and tests/test_candidate_cutover.py."
+  - "Run only the targeted split-v1 refresh synchronization proofs required by revision 5."
+  - "Use native repo_diff to prove exact two-path corrective scope."
   - "Stage corrective implementation through native repo_stage and obtain repo_diff(staged) ReceiptV1."
-  - "Attempt native repo_commit once; if and only if it returns GIT_IDENTITY_UNAVAILABLE, use the revision-4 one-additional-forward-commit exception bound to the exact revision-4 execution base."
+  - "Attempt native repo_commit once; if and only if it returns GIT_IDENTITY_UNAVAILABLE, use the revision-5 one-additional-forward-commit exception bound to the exact revision-5 execution base."
   - "Publish the corrective implementation through native repo_publish exact CAS and fresh-prove remote main."
   - "Require clean published implementation checkout."
-  - "Run canonical ./install.sh with validated repo .venv packaging Python and existing signing Authority; capture its internal ./verify totals."
+  - "Run exactly one canonical ./install.sh with validated repo .venv packaging Python, existing signing Authority, and the already-migrated canonical runtime.env; capture its internal ./verify totals."
   - "Validate PENDING / APP_SWAPPED candidate and live Runtime gates."
   - "Prove native repo_commit on a disposable fixture and installed doctor healthy through live Runtime environment."
   - "Commit cutover canonically."
   - "Fresh-prove transaction absent and final installed identity/health/codesign/closure."
   - "Capture candidate/provenance hashes, then delete repository build/ transient artifacts."
   - "Run final bounded repository/host audit."
-  - "Create report-r3 with complete freeze evidence."
+  - "Create report-r5 with complete freeze evidence."
   - "Stage report through native repo_stage, obtain ReceiptV1, commit through native repo_commit, publish through native repo_publish."
   - "Fresh-prove local HEAD = origin/main, ahead/behind 0/0, worktree/index clean, then stop for independent Architect review."
 
@@ -486,7 +566,7 @@ failure_policy:
   - "If live Runtime reconnect is required after cutover and the current context cannot reacquire the same 19-tool surface, preserve transaction state and return a continuation packet rather than bypassing native proof."
 
 reporting:
-  path: .agent/tasks/TASK-0138/report-r4.yaml
+  path: .agent/tasks/TASK-0138/report-r5.yaml
   owner: EXECUTOR
   state_on_success: NEEDS_REVIEW
   required_evidence:
