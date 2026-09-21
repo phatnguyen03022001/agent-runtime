@@ -35,6 +35,8 @@ class FsReadBatchContractTests(unittest.IsolatedAsyncioTestCase):
                 "fs_write",
                 "repo_observer",
                 "repo_diff",
+                "repo_stage",
+                "repo_commit",
                 "repo_fast_forward",
                 "repo_publish",
                 "screen_capture",
