@@ -26,6 +26,8 @@ EXPECTED_TOOLS = (
     "fs_write",
     "repo_observer",
     "repo_diff",
+    "repo_stage",
+    "repo_commit",
     "repo_fast_forward",
     "repo_publish",
     "screen_capture",
@@ -44,6 +46,8 @@ EXPECTED_ANNOTATIONS = {
     "fs_write": (False, True, False, False),
     "repo_observer": (True, False, True, False),
     "repo_diff": (True, False, True, False),
+    "repo_stage": (False, True, False, False),
+    "repo_commit": (False, True, False, False),
     "repo_fast_forward": (False, True, True, True),
     "repo_publish": (False, True, True, True),
     "screen_capture": (True, False, True, False),
@@ -92,7 +96,7 @@ class RepoPublishMCPTests(unittest.IsolatedAsyncioTestCase):
     async def _tools(self) -> dict[str, object]:
         return {tool.name: tool for tool in await server.mcp.list_tools()}
 
-    async def test_repo_publish_is_public_tool_15(self) -> None:
+    async def test_repo_publish_is_public_tool_17(self) -> None:
         tools = await self._tools()
         self.assertEqual(tuple(tools), EXPECTED_TOOLS)
         for name, tool in tools.items():
