@@ -575,3 +575,76 @@ class FsWriteResult(_ClosedResult):
     mode_before: int | None
     mode_after: int
     write_receipt: FsWriteReceiptResult
+
+RepoStageBranch = RepoFastForwardBranch
+RepoStageSha = RepoFastForwardSha
+RepoStagePath = Annotated[StrictStr, Field(min_length=1, max_length=4096)]
+RepoStageOperation = Literal["present", "delete"]
+
+
+class RepoStageItem(_ClosedResult):
+    path: RepoStagePath
+    operation: RepoStageOperation
+    expected_sha256: FsPatchExpectedSha256 | None
+
+
+RepoStageItems = Annotated[
+    list[RepoStageItem],
+    Field(strict=True, min_length=1, max_length=50),
+]
+
+
+class RepoStagePathResult(_ClosedResult):
+    path: str
+    operation: RepoStageOperation
+    worktree_sha256: FsPatchExpectedSha256 | None
+    git_blob_sha: RepoFastForwardSha | None
+    git_mode: Literal["100644", "100755"] | None
+
+
+class RepoStageResult(_ClosedResult):
+    schema_version: Literal[1]
+    branch: str
+    head_sha: RepoFastForwardSha
+    staged_paths: list[RepoStagePathResult]
+    staged_diff_receipt: ReceiptV1Result
+    post_stage_clean: Literal[True]
+    network_used: Literal[False]
+
+
+def _validate_repo_commit_message(value: str) -> str:
+    size = _utf8_size(value, "commit message")
+    if size < 1 or size > 16 * 1024:
+        raise ValueError("commit message must contain 1..16384 UTF-8 bytes")
+    if "\x00" in value:
+        raise ValueError("commit message must not contain NUL")
+    return value
+
+
+RepoCommitBranch = RepoFastForwardBranch
+RepoCommitSha = RepoFastForwardSha
+RepoCommitExpectedDiffReceipt = ReceiptV1Result
+RepoCommitMessage = Annotated[
+    StrictStr,
+    Field(min_length=1, max_length=16 * 1024),
+    AfterValidator(_validate_repo_commit_message),
+]
+
+
+class RepoCommitReceiptResult(_ClosedResult):
+    schema_version: Literal[1]
+    kind: Literal["repo-commit"]
+    digest: FsPatchExpectedSha256
+
+
+class RepoCommitResult(_ClosedResult):
+    schema_version: Literal[1]
+    branch: str
+    parent_sha: RepoFastForwardSha
+    tree_sha: RepoFastForwardSha
+    commit_sha: RepoFastForwardSha
+    diff_receipt: ReceiptV1Result
+    commit_receipt: RepoCommitReceiptResult
+    network_used: Literal[False]
+    post_commit_clean: Literal[True]
+
