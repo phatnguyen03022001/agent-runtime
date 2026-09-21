@@ -33,6 +33,8 @@ def _file_flags() -> int:
 def split_descendant(path: str, *, allow_dot: bool = False) -> tuple[str, ...]:
     if not isinstance(path, str) or not path:
         raise ValueError("path must be a non-empty string")
+    if len(path) > 4096:
+        raise ValueError("path must contain at most 4096 characters")
     if "\x00" in path:
         raise ValueError("path must not contain NUL")
     if path.startswith("/"):
