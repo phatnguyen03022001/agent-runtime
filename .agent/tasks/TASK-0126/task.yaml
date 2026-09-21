@@ -1,7 +1,7 @@
 protocol_version: 3
 
 task_id: TASK-0126
-task_revision: 1
+task_revision: 2
 state: APPROVED
 
 target:
@@ -11,9 +11,20 @@ target:
 execution_surface:
   id: CHATGPT_LOCAL
   controller: CHATGPT
-  transport: AGENT_RUNTIME
+  primary_transport: AGENT_RUNTIME
+  bootstrap_authoring_transport: REMOTE_DESKTOP_COMMANDER_TYPED_FILESYSTEM
   model: GPT-5.6 Sol
   effort: HIGH
+
+revision_2_delta:
+  predecessor_report: "c72943cdecef792cefb11ad8e4ae8f85262746cb"
+  predecessor_review: "f208564120fb04d1057abce24f5fea4077013ead"
+  predecessor_terminal: PLATFORM_BLOCK
+  source_checkpoint_to_preserve: none
+  reason: >-
+    Revision 1 proved generic terminal source authoring can be blocked before Agent Runtime execution.
+    Revision 2 preserves the same implementation contract but moves source authoring to bounded typed
+    Desktop Commander file operations. This is not a retry of the blocked shell command and Codex remains forbidden.
 
 objective: >-
   Implement Wave 1 native coding capabilities as one coherent delivery:
@@ -24,13 +35,14 @@ objective: >-
   Do not package, install, restart, cut over, or invoke screen_capture.
 
 planning_base:
-  remote_dev: "798af59523b8322ca391f23bf190dac7a9dbbfcc"
+  remote_dev: "f208564120fb04d1057abce24f5fea4077013ead"
   remote_main: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
-  expected_local_pre_sync_head: "4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b"
+  expected_local_pre_sync_head: "b619d3d8856df3a0ef12ccb833b49afe9c68a867"
   local_repository: "/Users/tienphat/Developer/agent-runtime"
 
 preflight:
   - "Resolve this task from GitHub at the exact planning HEAD supplied by the operator."
+  - "Require Desktop Commander allowedDirectories includes /Users/tienphat/Developer and do not mutate its configuration."
   - "Require the currently installed Agent Runtime exposes all eleven accepted public tools."
   - "Do not invoke screen_capture."
   - "Require local branch dev, expected pre-sync HEAD, and clean worktree."
@@ -202,8 +214,15 @@ implementation_policy:
   - "No Wave-2 fs_write or repo_commit."
   - "No LSP/index/database/background worker/stateful search."
   - "No repo_exec/git_exec or generic filesystem god-tool."
-  - "terminal_exec may be used only for bounded source authoring, tests, git diff --check, canonical verify, and local git commit because Wave-1 authoring tools do not yet exist."
-  - "Do not use terminal_exec for synchronization or publication when repo_fast_forward/repo_publish cover the operation."
+  - "Source authoring through terminal_exec is FORBIDDEN in revision 2."
+  - "Desktop Commander may be used only through typed filesystem operations for source authoring/readback: write_file, edit_block, read_file, read_multiple_files, get_file_info."
+  - "Desktop Commander start_process, interact_with_process, read_process_output, kill/terminate, shell execution, search-process lifecycle, config mutation, and unrelated filesystem operations are forbidden."
+  - "Desktop Commander writes are restricted to /Users/tienphat/Developer/agent-runtime and canonical allowed_source_paths."
+  - "For existing files, prefer edit_block with exact expected replacement count and minimal unique context."
+  - "For new files, require pre-write nonexistence proof, one rewrite operation, immediate readback, and later canonical diff verification."
+  - "The CHATGPT_LOCAL Executor remains the sole source writer; Desktop Commander is a bounded authoring primitive, not a second Executor."
+  - "terminal_exec may be used only for focused tests, git diff --check, canonical verify, and the final local git commit."
+  - "Do not use terminal_exec for repository synchronization or publication when repo_fast_forward/repo_publish cover the operation."
   - "Keep terminal calls single-purpose; do not hide multiple consequence classes in giant compound commands."
 
 focused_verification:
@@ -257,6 +276,11 @@ forbidden:
   - main/tag/release mutation
   - sibling repository mutation
   - Codex delegation
+
+authoring_failure_policy:
+  - "If a Desktop Commander typed file mutation is rejected before execution, classify PLATFORM_BLOCK or TOOL_CONTRACT_FAILURE truthfully and stop; do not fall back to terminal source authoring."
+  - "If a Desktop Commander write partially materializes a new file before failure, inspect exact bytes/state and either continue only when the same bounded operation has a deterministic continuation, or clean the task-owned partial artifact with typed file operations; never hide partial state."
+  - "Do not switch to Codex or another shell/process surface solely to obtain a different safety judgment."
 
 failure_policy:
   classes:
