@@ -23,6 +23,7 @@ EXPECTED_TOOLS = (
     "fs_list",
     "fs_search",
     "fs_patch",
+    "fs_write",
     "repo_observer",
     "repo_diff",
     "repo_fast_forward",
@@ -40,6 +41,7 @@ EXPECTED_ANNOTATIONS = {
     "fs_list": (True, False, True, False),
     "fs_search": (True, False, True, False),
     "fs_patch": (False, True, False, False),
+    "fs_write": (False, True, False, False),
     "repo_observer": (True, False, True, False),
     "repo_diff": (True, False, True, False),
     "repo_fast_forward": (False, True, True, True),
@@ -90,7 +92,7 @@ class RepoPublishMCPTests(unittest.IsolatedAsyncioTestCase):
     async def _tools(self) -> dict[str, object]:
         return {tool.name: tool for tool in await server.mcp.list_tools()}
 
-    async def test_repo_publish_is_public_tool_14(self) -> None:
+    async def test_repo_publish_is_public_tool_15(self) -> None:
         tools = await self._tools()
         self.assertEqual(tuple(tools), EXPECTED_TOOLS)
         for name, tool in tools.items():
@@ -158,8 +160,8 @@ class RepoPublishMCPTests(unittest.IsolatedAsyncioTestCase):
             tuple(name for name in tools if name in legacy_order),
             legacy_order,
         )
-        self.assertEqual(tuple(tools)[7:10], ("fs_list", "fs_search", "fs_patch"))
-        self.assertEqual(tuple(tools)[11], "repo_diff")
+        self.assertEqual(tuple(tools)[7:11], ("fs_list", "fs_search", "fs_patch", "fs_write"))
+        self.assertEqual(tuple(tools)[12], "repo_diff")
         for name, tool in tools.items():
             self.assertEqual(_annotation_tuple(tool), EXPECTED_ANNOTATIONS[name])
         self.assertIn("repo_publish", ALLOWED_TOOL_NAMES)
