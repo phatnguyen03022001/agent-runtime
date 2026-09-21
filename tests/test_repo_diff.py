@@ -138,6 +138,13 @@ class RepoDiffTests(unittest.TestCase):
         self.assertEqual(full.full_diff_bytes, truncated.full_diff_bytes)
         self.assertEqual(full.diff_receipt.digest, truncated.diff_receipt.digest)
 
+    def test_empty_staged_receipt_remains_repo_diff_v1(self) -> None:
+        result = diff_repository(str(self.repo), "staged")
+        self.assertEqual(result.full_diff_bytes, 0)
+        self.assertEqual(result.diff_receipt.schema_version, 1)
+        self.assertEqual(result.diff_receipt.kind, "repo-diff")
+        self.assertRegex(result.diff_receipt.digest, r"^[0-9a-f]{64}$")
+
     def test_receipt_changes_when_raw_diff_changes(self) -> None:
         (self.repo / "tracked.txt").write_text("two\n", encoding="utf-8")
         first = diff_repository(str(self.repo), "worktree")
