@@ -1,0 +1,158 @@
+protocol_version: 3
+
+task_id: TASK-0127
+task_revision: 2
+state: APPROVED
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  governance_branch: control
+  source_branch: main
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  transport: AGENT_RUNTIME
+  model: GPT-5.6 Sol
+  effort: HIGH
+
+objective: >-
+  Perform the one-time local source-plane rebind after the remote governance/source topology split.
+  Rebind /Users/tienphat/Developer/agent-runtime from local dev@b619... to local main@b619...
+  with upstream origin/main, while preserving the exact source commit/tree and clean worktree.
+  This task performs Git metadata transition only. It must not modify source bytes.
+
+delivery_authority:
+  source_base: "b619d3d8856df3a0ef12ccb833b49afe9c68a867"
+  source_expected_branch_before: dev
+  source_expected_branch_after: main
+  allowed_source_paths: []
+
+governance_identity:
+  control: SELF_GOVERNANCE_HEAD
+  rule: >-
+    The canonical task does not and cannot literalize the SHA of the commit that contains itself.
+    The exact immutable governance_head is supplied by the operator launch packet and used to fetch this task.
+    Execution preflight must require the live control ref equals that supplied governance_head.
+
+remote_topology:
+  main: "b619d3d8856df3a0ef12ccb833b49afe9c68a867"
+  dev: "0030238d4be37f8b6e37362bf81f31fc9459dace"
+  dev_status: FROZEN_NON_AUTHORITATIVE_NO_NEW_WRITES
+
+local_preconditions:
+  repository: "/Users/tienphat/Developer/agent-runtime"
+  current_branch: dev
+  current_head: "b619d3d8856df3a0ef12ccb833b49afe9c68a867"
+  worktree_clean: true
+  local_dev_ref: "b619d3d8856df3a0ef12ccb833b49afe9c68a867"
+  local_main_ref: "d15bda58cad974d94b50406a3e4b247fc5fe95b1"
+  local_origin_main_tracking_ref: "c49d777efa09db7f6c51bd8d8616db4623499fb8"
+  main_upstream_existing: origin/main
+
+authority:
+  terminal_exec:
+    total: "0/3"
+    retries: 0
+  repo_fast_forward: "0/0"
+  repo_publish: "0/0"
+  source_edits: "0/0"
+  network: "0/0"
+
+exact_transition:
+  step_1:
+    argv:
+      - /usr/bin/git
+      - update-ref
+      - refs/remotes/origin/main
+      - b619d3d8856df3a0ef12ccb833b49afe9c68a867
+      - c49d777efa09db7f6c51bd8d8616db4623499fb8
+    semantics: "CAS-update local origin/main tracking ref to the already-verified remote main identity."
+  step_2:
+    argv:
+      - /usr/bin/git
+      - update-ref
+      - refs/heads/main
+      - b619d3d8856df3a0ef12ccb833b49afe9c68a867
+      - d15bda58cad974d94b50406a3e4b247fc5fe95b1
+    semantics: "CAS-move the existing local main branch to the immutable source_base."
+  step_3:
+    argv:
+      - /usr/bin/git
+      - switch
+      - main
+    semantics: "Switch HEAD symbolic branch from dev to main while both resolve to the identical source_base commit/tree."
+
+revision_2_delta:
+  predecessor_report: "37d2bf01445cda3202bff04df57a111013226288"
+  predecessor_review: "62a49202d825d62163cdd434783031c00b07cad5"
+  predecessor_terminal: SOURCE_CLOSURE_FAILED
+  reason: >-
+    Revision 1 incorrectly literalized the pre-task control SHA inside the task commit itself.
+    Revision 2 fixes only governance self-identity semantics; local transition authority is unchanged.
+
+execution_rules:
+  - "Resolve this task from GitHub at the exact governance HEAD supplied by the operator."
+  - "Fresh-observe remote control/main/dev before local mutation."
+  - "Require live control == the supplied governance_head from the launch packet."
+  - "Require remote main/dev equal the literal remote_topology identities."
+  - "Fresh-observe all local_preconditions before mutation."
+  - "Invoke only the three exact terminal_exec argv sequences above, in order, each at cwd /Users/tienphat/Developer/agent-runtime."
+  - "Do not combine commands into one shell invocation."
+  - "shell/wrapper execution is forbidden; execute literal argv only."
+  - "If any precondition differs, stop SOURCE_CLOSURE_FAILED before mutation."
+  - "If any authorized call is platform-blocked before Runtime execution, stop PLATFORM_BLOCK and do not retry or switch surfaces."
+  - "If step 1 succeeds and a later step fails, do not invent rollback; report exact partial metadata state for Architect reconciliation."
+  - "No fetch, pull, reset, checkout with paths, rebase, stash, clean, commit, push, branch creation/deletion, or force push."
+  - "Do not mutate control/main/dev remote refs."
+  - "Do not use Desktop Commander process/shell, Codex, or another execution surface as fallback."
+
+postconditions:
+  branch: main
+  head: "b619d3d8856df3a0ef12ccb833b49afe9c68a867"
+  local_main_ref: "b619d3d8856df3a0ef12ccb833b49afe9c68a867"
+  upstream: origin/main
+  local_origin_main_tracking_ref: "b619d3d8856df3a0ef12ccb833b49afe9c68a867"
+  ahead: 0
+  behind: 0
+  worktree_clean: true
+  source_tree_changed: false
+  source_file_content_changed: false
+  remote_refs_changed: false
+
+verification:
+  - "After step 3, use repo_observer once for local branch/HEAD/worktree/upstream/ahead-behind proof."
+  - "Fresh-observe remote control/main/dev through GitHub and require unchanged identities."
+  - "Do not run tests or canonical ./verify because no source bytes change."
+
+forbidden:
+  - source_file_mutation
+  - task_file_mutation_from_executor
+  - screen_capture
+  - package
+  - install
+  - runtime_restart_stop_signal
+  - cutover_rollback_recovery
+  - tcc_system_settings_keychain_tunnel_mutation
+  - remote_ref_mutation
+  - codex
+  - alternate_shell_or_process_fallback
+
+terminal_states:
+  success: NEEDS_REVIEW
+  source_closure_failed: SOURCE_CLOSURE_FAILED
+  platform_block: PLATFORM_BLOCK
+  partial_transition: LOCAL_REBIND_PARTIAL
+  implementation_failure: LOCAL_REBIND_FAILED
+
+reporting:
+  - "Return a bounded Vietnamese result packet."
+  - "Include exact governance HEAD, remote preflight identities, local preflight identities, each terminal_exec reached-runtime/result, final repo_observer state, final remote identities, and whether source bytes changed."
+  - "Do not create report.yaml; Architect persists report/review on control."
+
+successor_boundary:
+  source_mutation_after_acceptance: true
+  next_task: TASK-0128
+  next_intent: "ToolContract Kernel v1 foundation on main using governance authority from control."
+
+execution_ready: true

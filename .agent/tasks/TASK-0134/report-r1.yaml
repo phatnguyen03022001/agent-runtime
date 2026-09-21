@@ -1,0 +1,51 @@
+protocol_version: 3
+
+task_id: TASK-0134
+task_revision: 1
+report_revision: 1
+state: NEEDS_REVIEW
+
+execution:
+  surface: CHATGPT_GITHUB
+  governance_head: "ea689b20112ce66522098bb65ed2ad4db7cf26db"
+  source_base: "049e8e129a92943b4544cfd66c9e9076d46faad1"
+  branch: task-0134-r1
+  branch_head: "307f3de69c16cc713ca7733d037796486e2158fe"
+  pull_request: 5
+
+verification:
+  workflow_run_id: 35586235055
+  job_id: 106290122292
+  tests_run: 612
+  failures: 1
+  errors: 2
+  skipped: 1
+  conclusion: failure
+
+failure_scope:
+  implementation_path: agent_runtime/repo_stage.py
+  function: _is_ignored
+  affected_tests:
+    - test_new_regular_utf8_file_stages
+    - test_rename_is_explicit_delete_plus_present
+    - test_ignored_untracked_candidate_is_rejected_explicitly
+  unaffected:
+    repo_commit: PASS
+    staged_diff_receipt_chain: PASS
+    update_ref_expected_old_cas: PASS
+    repo_commit_receipt: PASS
+    runtime_git_identity: PASS
+    exact_18_tool_surface: PASS
+    screen_capture_guard: PASS
+
+root_cause:
+  classification: CHECK_IGNORE_PATHSPEC_TRANSPORT_DEFECT
+  detail: >-
+    repo_stage globally and correctly sets GIT_LITERAL_PATHSPECS=1, but _is_ignored passes the candidate
+    path as a positional pathspec to git check-ignore. Git rejects literal pathspec magic for this command
+    and returns fatal status, which repo_stage maps to GIT_UNAVAILABLE. The correct narrow fix is to retain
+    GIT_LITERAL_PATHSPECS globally and pass the validated path as NUL-delimited stdin to
+    git check-ignore --stdin -z.
+
+classification:
+  terminal: VERIFICATION_FAILED

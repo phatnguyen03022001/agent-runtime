@@ -1,0 +1,250 @@
+protocol_version: 3
+
+task_id: TASK-0131
+task_revision: 2
+state: APPROVED
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  governance_branch: control
+  source_branch: main
+  ephemeral_branch: task-0131-r1
+
+execution_surface:
+  id: CHATGPT_GITHUB
+  controller: CHATGPT
+  transport: GITHUB
+  model: GPT-5.6 Sol
+  effort: HIGH
+
+governance_identity:
+  control: SELF_GOVERNANCE_HEAD
+  rule: >-
+    The immutable governance_head is supplied externally in the launch packet.
+    Governance history must never be synchronized into the source branch.
+
+revision_2_delta:
+  predecessor_review: "9ccbc9a39c471e9133fd3d2399a3027b543fa3bd"
+  predecessor_terminal: PLATFORM_BLOCK
+  blocked_primitive: create_commit
+  blocked_before_github: true
+  retry_blocked_primitive: false
+  preserved_candidate_tree: "90f366d6230f3bfba8fa79be9622c0a7bcea96d2"
+  reason: >-
+    Revision 1 produced a reviewed Git tree with the intended ToolContract Kernel implementation,
+    but low-level Git create_commit was blocked by platform safety before GitHub execution.
+    Revision 2 reuses the exact candidate bytes through high-level GitHub Contents mutations
+    on one ephemeral branch. It must not retry create_commit or re-author the implementation.
+
+delivery_authority:
+  source_base: "cea5a83b2cdd8475b92b2065f2c125bb7b83358e"
+  source_base_tree: "17e05bb59648c0f7ca685983398cc752a59c5d06"
+  source_expected_branch: main
+  allowed_source_paths:
+    - agent_runtime/tool_contract.py
+    - agent_runtime/fs_read.py
+    - agent_runtime/server.py
+    - tests/test_tool_contract.py
+
+source_base_blob_preconditions:
+  agent_runtime/fs_read.py: "1e310a9edbc65dcb007ba8b23cdca274d887e2fb"
+  agent_runtime/server.py: "4de69e7f953e0fb07bb4dee0df60f932252f86bd"
+
+required_absent_at_source_base:
+  - agent_runtime/tool_contract.py
+  - tests/test_tool_contract.py
+
+preserved_candidate_blobs:
+  agent_runtime/tool_contract.py: "153f1272d4840d41091f52480dfa3a43a333c13f"
+  agent_runtime/fs_read.py: "4549d043358cbae8b11dba8301de6b08203a2955"
+  agent_runtime/server.py: "9b0045576a9d89a6d96c9ab96e5a471c8acfcde7"
+  tests/test_tool_contract.py: "5b1425e10ea4c943bf93ec8de53e0d9106a95599"
+
+objective: >-
+  Materialize exactly the four reviewed revision-1 candidate blobs on one ephemeral branch using
+  GitHub Contents API, open one PR to main, run canonical pull-request CI, and stop for Architect review.
+  Do not change implementation bytes in revision 2.
+
+preconditions:
+  - "Resolve this task from the exact governance_head supplied by the operator."
+  - "Require live control == supplied governance_head."
+  - "Require main == cea5a83b2cdd8475b92b2065f2c125bb7b83358e."
+  - "Require dev == 0030238d4be37f8b6e37362bf81f31fc9459dace."
+  - "Require source-base tree == 17e05bb59648c0f7ca685983398cc752a59c5d06."
+  - "Require source-base existing blob guards above."
+  - "Require new-file paths are absent on source base."
+  - "Require candidate tree 90f366d6230f3bfba8fa79be9622c0a7bcea96d2 remains readable."
+  - "Require all four preserved candidate blobs remain readable and match the pinned SHAs."
+  - "Require remote branch task-0131-r1 is absent."
+  - "Require no open PR with head task-0131-r1."
+  - "Require repository delete_branch_on_merge == true."
+  - "Do not inspect or mutate local checkout state."
+
+byte_source:
+  rule: >-
+    Fetch exact complete UTF-8 contents from the four pinned Git blob objects above.
+    These blobs are the only authorized implementation bytes for revision 2.
+  forbidden:
+    - re_authoring
+    - formatting_changes
+    - generated_rewrites
+    - semantic_edits
+
+ephemeral_branch:
+  name: task-0131-r1
+  create:
+    - "Create exactly one remote branch from exact source_base cea5a83b2cdd8475b92b2065f2c125bb7b83358e."
+    - "Do not create any local branch/worktree."
+    - "Do not move main."
+  expected_initial_head: "cea5a83b2cdd8475b92b2065f2c125bb7b83358e"
+
+contents_materialization:
+  method: GITHUB_CONTENTS_API_ON_EPHEMERAL_BRANCH
+  order:
+    - path: agent_runtime/tool_contract.py
+      operation: create_file
+      expected_precondition: absent
+      expected_final_blob: "153f1272d4840d41091f52480dfa3a43a333c13f"
+      commit_message: "feat: add ToolContract Kernel v1"
+    - path: agent_runtime/fs_read.py
+      operation: update_file
+      expected_precondition_blob: "1e310a9edbc65dcb007ba8b23cdca274d887e2fb"
+      expected_final_blob: "4549d043358cbae8b11dba8301de6b08203a2955"
+      commit_message: "refactor: bind fs read contract metadata"
+    - path: agent_runtime/server.py
+      operation: update_file
+      expected_precondition_blob: "4de69e7f953e0fb07bb4dee0df60f932252f86bd"
+      expected_final_blob: "9b0045576a9d89a6d96c9ab96e5a471c8acfcde7"
+      commit_message: "refactor: source fs read annotations from contract"
+    - path: tests/test_tool_contract.py
+      operation: create_file
+      expected_precondition: absent
+      expected_final_blob: "5b1425e10ea4c943bf93ec8de53e0d9106a95599"
+      commit_message: "test: cover ToolContract Kernel v1"
+  rules:
+    - "Perform exactly these four Contents mutations on task-0131-r1."
+    - "After each mutation, fresh-fetch the written path from task-0131-r1 and require its blob SHA == expected_final_blob."
+    - "If any resulting blob differs, stop SOURCE_CLOSURE_FAILED; do not normalize or repair."
+    - "Do not use create_tree, create_commit, create_blob, update_ref, local authoring, or another mutation surface."
+    - "Multiple branch commits are intentionally allowed; Architect will squash-merge."
+
+post_materialization_proof:
+  - "Compare main...task-0131-r1."
+  - "Require exactly four changed paths: agent_runtime/tool_contract.py, agent_runtime/fs_read.py, agent_runtime/server.py, tests/test_tool_contract.py."
+  - "Require no workflow/governance/other path change."
+  - "Require final four branch blob SHAs exactly equal preserved_candidate_blobs."
+  - "Require source-base blobs for tests/test_fs_read_batch.py, tests/test_fs_read_batch_mcp.py, and tests/test_mcp_contracts.py remain unchanged."
+  - "Require public workflow .github/workflows/verify.yml remains unchanged."
+  - "Require main still equals source_base immediately before PR creation."
+
+implementation_invariants:
+  kernel:
+    - "Exact ToolClass values: read, write, process, repo, host."
+    - "Exact NetworkAuthority values: none, bounded."
+    - "Exact MutationAuthority values: none, bounded, destructive."
+    - "Exact ContractErrorCode values remain as revision-1 task."
+    - "Canonical structured values support only dict[string,*], list, string, integer, bool, null."
+    - "ReceiptV1 uses namespace agent-runtime.receipt.v1 and uint64-BE framing."
+    - "Observed state requires exact bytes."
+    - "No new dependency, policy engine, generic success envelope, timestamp, randomness, or host metadata."
+  fs_read_batch:
+    - "FS_READ_BATCH_CONTRACT remains internal metadata adoption only."
+    - "Public request/result/error contracts unchanged."
+    - "Public tool surface stays exactly 11 in accepted order."
+    - "screen_capture remains VISUAL_PERCEPTION_BLOCKED."
+  scope:
+    - "Do not implement Wave 1 or Wave 2 capabilities."
+    - "Do not migrate the other ten tools."
+
+pull_request:
+  base: main
+  head: task-0131-r1
+  draft: false
+  title: "feat: add ToolContract Kernel v1"
+  body_requirements:
+    - "Reference TASK-0131."
+    - "State source base cea5a83b2cdd8475b92b2065f2c125bb7b83358e."
+    - "State exact four changed paths."
+    - "Summarize ToolContract Kernel + ReceiptV1 + fs_read_batch internal adoption."
+  rules:
+    - "Create exactly one PR."
+    - "Do not request reviewers automatically."
+    - "Do not merge in Executor task."
+
+verification:
+  - "Observe the Agent Runtime Verify run triggered by this exact PR."
+  - "Require event=pull_request and head branch task-0131-r1."
+  - "Require job canonical-verify."
+  - "Wait for this exact run to complete."
+  - "Do not rerun."
+  - "Require workflow conclusion=success and job conclusion=success."
+  - "Fetch final job logs."
+  - "Require failures=0."
+  - "Require canonical test count >454 because tests/test_tool_contract.py adds kernel tests."
+  - "Confirm exact 11-tool public surface tests pass."
+  - "Confirm fs_read_batch schema/annotation tests pass."
+  - "Confirm screen_capture governance guard remains green."
+  - "If CI fails, stop VERIFICATION_FAILED; do not patch in revision 2."
+
+architect_merge_boundary:
+  executor_merge_authority: false
+  required_terminal: NEEDS_REVIEW
+  architect_expected_merge:
+    method: squash
+    expected_head_sha: final_pr_head
+  post_merge:
+    - "Architect independently inspects four-file PR diff and kernel semantics."
+    - "Architect squash-merges with expected head SHA."
+    - "Require push-to-main canonical CI PASS."
+    - "Require task-0131-r1 auto-deleted."
+    - "Persist ACCEPT/REWORK on control."
+
+cleanliness:
+  - "No local Mac mutation."
+  - "No local branch/worktree/temp file."
+  - "Exactly one remote task branch and one PR at most."
+  - "No tags/releases/artifacts."
+  - "Unreferenced revision-1 tree is not to be attached to another ref."
+
+forbidden:
+  - create_commit
+  - create_tree
+  - create_blob
+  - update_ref
+  - direct_main_mutation
+  - dev_mutation
+  - control_mutation_from_executor
+  - second_branch
+  - second_pr
+  - workflow_mutation
+  - local_source_authoring
+  - Agent_Runtime
+  - Desktop_Commander
+  - Codex
+  - package_install_restart_cutover
+  - screen_capture_invocation
+  - Wave1_fs_list_fs_search_repo_diff_fs_patch
+  - Wave2_fs_write_repo_commit
+
+failure_policy:
+  - "If any pinned source/ref/blob precondition differs, stop SOURCE_CLOSURE_FAILED."
+  - "If create_branch or a Contents mutation is platform-blocked, stop PLATFORM_BLOCK and report exactly what branch/files exist."
+  - "Do not switch mutation surface solely to obtain a different platform judgment."
+  - "If PR CI fails, stop VERIFICATION_FAILED and leave the single branch/PR intact for Architect review."
+
+terminal_states:
+  success: NEEDS_REVIEW
+  source_closure_failed: SOURCE_CLOSURE_FAILED
+  platform_block: PLATFORM_BLOCK
+  verification_failed: VERIFICATION_FAILED
+
+reporting:
+  - "Return one bounded Vietnamese result packet."
+  - "Include governance_head, source_base, branch creation, four resulting blob SHAs, final branch head, exact changed paths, PR number/URL, kernel/receipt/fs_read proof, workflow run/job IDs, canonical test count/result, current main/control/dev refs, and branch existence."
+  - "Do not create governance report/review files; Architect owns governance persistence."
+
+successor:
+  if_accepted: TASK-0132
+  intent: "Wave 1 native capabilities: fs_list, fs_search, repo_diff, fs_patch on the accepted kernel."
+
+execution_ready: true

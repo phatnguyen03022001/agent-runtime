@@ -1,0 +1,227 @@
+protocol_version: 3
+
+task_id: TASK-0132
+task_revision: 2
+state: APPROVED
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  governance_branch: control
+  source_branch: main
+  ephemeral_branch: task-0132-r1
+  pull_request: 3
+
+execution_surface:
+  id: CHATGPT_GITHUB
+  controller: CHATGPT
+  transport: GITHUB
+  model: GPT-5.6 Sol
+  effort: HIGH
+
+governance_identity:
+  control: SELF_GOVERNANCE_HEAD
+  rule: >-
+    The immutable governance_head is supplied externally in the launch packet.
+
+revision_2_delta:
+  predecessor_review: "d0e5133aea0e6ef75061de280c50b99372aaf2b0"
+  predecessor_terminal: VERIFICATION_FAILED
+  existing_branch: task-0132-r1
+  existing_branch_head: "f2b3350b0b07cb07b09b3669814b9935156c938f"
+  existing_pr: 3
+  reason: >-
+    Revision 1 Wave 1 implementation and focused tests passed, but canonical CI exposed nine stale
+    legacy assertions across seven tests that hard-code the previous eleven-tool surface. The omission
+    of those files from the revision-1 allowlist was an Architect task-design defect. Revision 2 may
+    update only those stale legacy tests. No Wave 1 implementation bytes may change.
+
+source_identity:
+  main_expected: "ec011f92228392b213638e6abc05a9907f362e87"
+  branch_expected_head: "f2b3350b0b07cb07b09b3669814b9935156c938f"
+
+allowed_revision_2_delta_paths:
+  - tests/test_fs_read_batch.py
+  - tests/test_repo_fast_forward_mcp.py
+  - tests/test_repo_observer_mcp.py
+  - tests/test_repo_publish_mcp.py
+  - tests/test_screen_capture_mcp.py
+  - tests/test_surface_and_scripts.py
+  - tests/test_timing.py
+
+expected_current_blobs:
+  tests/test_fs_read_batch.py: "68e6be83a5b54feeca24ed5851f9247a7a8b3d8a"
+  tests/test_repo_fast_forward_mcp.py: "66e1c3e9f51f988edb3722f83a649aec68728d96"
+  tests/test_repo_observer_mcp.py: "688e7190fc9666a666a6ec4f192eeffb05708f9a"
+  tests/test_repo_publish_mcp.py: "51483ad1bd51d3921f2939609caa3ab4201af3bf"
+  tests/test_screen_capture_mcp.py: "e21b6dc1eac8418b66fe848b6b32f7e1686b04a8"
+  tests/test_surface_and_scripts.py: "4cc38640ece1505170d3d29f68f64f4c5ab2b897"
+  tests/test_timing.py: "6bb4142af64a2ba803ef1eb46c9c3af664f0a407"
+
+objective: >-
+  Align only stale legacy public-surface/order/annotation assertions with the already-authored
+  fifteen-tool Wave 1 surface on the existing PR. Do not modify implementation, capability contracts,
+  schemas, behavior, or any revision-1 Wave 1 test file.
+
+exact_public_tool_order:
+  - terminal_exec
+  - terminal_start
+  - terminal_poll
+  - terminal_control
+  - terminal_resize
+  - capacity_observer
+  - fs_read_batch
+  - fs_list
+  - fs_search
+  - fs_patch
+  - repo_observer
+  - repo_diff
+  - repo_fast_forward
+  - repo_publish
+  - screen_capture
+
+exact_annotations:
+  terminal_exec: [false, true, false, true]
+  terminal_start: [false, true, false, true]
+  terminal_poll: [false, false, false, false]
+  terminal_control: [false, true, false, true]
+  terminal_resize: [false, false, true, false]
+  capacity_observer: [true, false, true, false]
+  fs_read_batch: [true, false, true, false]
+  fs_list: [true, false, true, false]
+  fs_search: [true, false, true, false]
+  fs_patch: [false, true, false, false]
+  repo_observer: [true, false, true, false]
+  repo_diff: [true, false, true, false]
+  repo_fast_forward: [false, true, true, true]
+  repo_publish: [false, true, true, true]
+  screen_capture: [true, false, true, false]
+
+required_test_updates:
+  tests/test_fs_read_batch.py:
+    - "Update only the exact public tool-order expectation from 11 to the exact 15-tool order."
+    - "Preserve fs_read_batch annotation and schema assertions unchanged."
+  tests/test_repo_fast_forward_mcp.py:
+    - "Update EXPECTED_TOOLS to exact 15-tool order."
+    - "Rename stale ordinal wording from public tool 9 to public tool 13 if touched."
+    - "Do not alter repo_fast_forward schema, delegate, behavior, or annotation assertions."
+  tests/test_repo_observer_mcp.py:
+    - "Update exact surface expectation to 15 tools."
+    - "Rename stale ordinal wording from public tool 8 to public tool 11 if touched."
+    - "Preserve repo_observer schema and behavior assertions."
+  tests/test_repo_publish_mcp.py:
+    - "Update EXPECTED_TOOLS to exact 15-tool order."
+    - "Extend EXPECTED_ANNOTATIONS with fs_list, fs_search, fs_patch, repo_diff using exact tuples above."
+    - "Rename stale ordinal wording from public tool 10 to public tool 14 if touched."
+    - "Any test claiming tools 1 through 9 are preserved must be updated to the correct invariant: legacy tool relative order is preserved while Wave 1 tools occupy the canonical inserted positions."
+    - "Do not alter repo_publish public schema/behavior assertions."
+  tests/test_screen_capture_mcp.py:
+    - "Update EXPECTED_TOOLS and EXPECTED_ANNOTATIONS to exact 15-tool surface."
+    - "Rename stale public tool 11 wording to public tool 15 if touched."
+    - "Update any prefix assertion so it reflects the exact canonical 15-tool order without weakening the screen_capture-last invariant."
+    - "Preserve VISUAL_PERCEPTION_BLOCKED and capture schema assertions."
+  tests/test_surface_and_scripts.py:
+    - "Update AST/static PUBLIC_TOOL_NAMES expectation to exact 15-tool order."
+    - "Update fake MCP registration expectation to exact 15-tool order."
+    - "Extend expected annotations for fs_list, fs_search, fs_patch, repo_diff."
+    - "Rename stale capacity-observer-centric test names only if useful for truthfulness; no implementation edits."
+  tests/test_timing.py:
+    - "Update real MCP registration surface expectation to exact 15-tool order."
+    - "Preserve timing middleware and all existing legacy signature assertions."
+    - "Do not add behavior assertions unrelated to stale surface alignment."
+
+closure_guards:
+  - "Require live control == supplied governance_head."
+  - "Require main == ec011f92228392b213638e6abc05a9907f362e87."
+  - "Require task-0132-r1 == f2b3350b0b07cb07b09b3669814b9935156c938f before first revision-2 mutation."
+  - "Require PR #3 open, unmerged, head=task-0132-r1, base=main."
+  - "Require all seven expected_current_blobs above before mutation."
+  - "Do not inspect or mutate local checkout state."
+
+authoring:
+  method: GITHUB_CONTENTS_API_ON_EXISTING_EPHEMERAL_BRANCH
+  rules:
+    - "Use update_file only on task-0132-r1."
+    - "Before each write, fresh-fetch the file and require exact current blob."
+    - "Construct complete replacement text with only stale assertion alignment."
+    - "One commit per file is acceptable; do not create another branch or PR."
+    - "Do not modify any implementation path."
+    - "Do not modify revision-1 Wave 1 focused tests."
+    - "Do not use create_blob, create_tree, create_commit, update_ref, local tools, Agent Runtime, Desktop Commander, or Codex."
+
+post_authoring_proof:
+  - "Compare f2b3350b0b07cb07b09b3669814b9935156c938f...new_branch_head."
+  - "Require exactly the seven allowed_revision_2_delta_paths and no eighth path."
+  - "Compare main...new_branch_head and require the final PR changed paths are exactly the original 15 revision-1 paths plus these seven stale-test paths."
+  - "Require all revision-1 implementation blobs remain unchanged from old PR head."
+  - "Require agent_runtime/tool_contract.py and agent_runtime/fs_read.py remain unchanged."
+  - "Require PR #3 remains open and no second PR exists."
+
+verification:
+  - "Observe the new Agent Runtime Verify run triggered by the PR #3 branch update."
+  - "Require event=pull_request, head=task-0132-r1, job=canonical-verify."
+  - "Do not rerun workflow run 35577454090."
+  - "Wait for the new exact run to complete."
+  - "Require workflow conclusion=success and job conclusion=success."
+  - "Fetch final logs."
+  - "Require canonical test count >=535, failures=0."
+  - "The prior nine stale surface failures must all pass."
+  - "All Wave 1 focused suites must remain green."
+  - "Exact 15-tool surface must pass."
+  - "Accepted legacy tests and screen_capture governance guard must remain green."
+  - "If CI fails for any new reason, stop VERIFICATION_FAILED and do not patch again in revision 2."
+
+architect_merge_boundary:
+  executor_merge_authority: false
+  required_terminal: NEEDS_REVIEW
+  architect_expected_merge:
+    method: squash
+    expected_head_sha: final_pr_head
+  post_merge:
+    - "Architect independently reviews the complete 22-path PR."
+    - "Architect squash-merges only after green PR CI."
+    - "Require push-to-main canonical CI PASS."
+    - "Require task-0132-r1 auto-deleted."
+    - "Persist ACCEPT/REWORK on control."
+
+forbidden:
+  - implementation_changes
+  - Wave2
+  - package
+  - install
+  - restart
+  - cutover
+  - screen_capture_invocation
+  - new_branch
+  - new_pr
+  - merge_pr
+  - direct_main_mutation
+  - dev_mutation
+  - control_mutation_from_executor
+  - workflow_mutation
+  - local_source_authoring
+  - create_blob
+  - create_tree
+  - create_commit
+  - update_ref
+  - Agent_Runtime
+  - Desktop_Commander
+  - Codex
+
+failure_policy:
+  - "Any precondition mismatch => SOURCE_CLOSURE_FAILED."
+  - "Any Contents mutation blocked before GitHub => PLATFORM_BLOCK; report exact residue and stop."
+  - "Any implementation-byte drift => SOURCE_CLOSURE_FAILED."
+  - "Any CI failure => VERIFICATION_FAILED; no further patch in revision 2."
+
+terminal_states:
+  success: NEEDS_REVIEW
+  source_closure_failed: SOURCE_CLOSURE_FAILED
+  platform_block: PLATFORM_BLOCK
+  verification_failed: VERIFICATION_FAILED
+
+reporting:
+  - "Return one bounded Vietnamese result packet."
+  - "Include governance_head, old/new branch head, exact seven-file delta, final PR changed-path count, PR #3 state, workflow run/job IDs, canonical test count/result, prior-nine-failure closure, Wave 1 focused regression result, current main/control/dev refs, and branch existence."
+  - "Do not create governance report/review files."
+
+execution_ready: true

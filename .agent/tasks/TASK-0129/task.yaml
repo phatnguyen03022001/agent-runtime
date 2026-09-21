@@ -1,0 +1,165 @@
+protocol_version: 3
+
+task_id: TASK-0129
+task_revision: 1
+state: APPROVED
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  governance_branch: control
+  source_branch: main
+
+execution_surface:
+  id: CHATGPT_GITHUB
+  controller: CHATGPT
+  transport: GITHUB
+  model: GPT-5.6 Sol
+  effort: HIGH
+
+governance_identity:
+  control: SELF_GOVERNANCE_HEAD
+  rule: >-
+    The immutable governance_head is supplied externally by the launch packet and used to resolve this task.
+    The task must never literalize the SHA of its own containing commit.
+
+delivery_authority:
+  source_base: "b619d3d8856df3a0ef12ccb833b49afe9c68a867"
+  source_expected_branch: main
+  allowed_source_paths:
+    - .github/workflows/verify.yml
+
+objective: >-
+  Bootstrap the minimal GitHub-native canonical verification compute plane.
+  Add exactly one GitHub Actions workflow that runs the repository's existing canonical ./verify
+  on every push to main using macOS and Python 3.13. This task changes no Runtime/product source code.
+  Prove that a source-plane commit authored and published entirely through GitHub can trigger and
+  complete canonical verification without any local source synchronization or local file mutation.
+
+current_remote_state:
+  main: "b619d3d8856df3a0ef12ccb833b49afe9c68a867"
+  control: SELF_GOVERNANCE_HEAD
+  dev: "0030238d4be37f8b6e37362bf81f31fc9459dace"
+  dev_status: FROZEN_NON_AUTHORITATIVE_NO_NEW_WRITES
+
+preconditions:
+  - "Resolve this task from the exact governance_head supplied by the operator."
+  - "Fresh-observe control/main/dev before mutation."
+  - "Require live control == supplied governance_head."
+  - "Require remote main == source_base."
+  - "Require remote dev == the pinned frozen dev SHA."
+  - "Require .github/workflows/verify.yml absent at source_base."
+  - "Do not inspect or mutate local checkout state."
+
+workflow_contract:
+  path: .github/workflows/verify.yml
+  name: Agent Runtime Verify
+  triggers:
+    push:
+      branches: [main]
+  permissions:
+    contents: read
+  job:
+    name: canonical-verify
+    runner: macos-14
+    timeout_minutes: 30
+    steps:
+      - "actions/checkout@v4"
+      - "actions/setup-python@v5 with python-version 3.13"
+      - "python -m pip install --upgrade pip"
+      - "python -m pip install --require-hashes -r requirements.lock"
+      - "PYTHON=python PYTHONDONTWRITEBYTECODE=1 ./verify"
+
+workflow_rules:
+  - "Keep the workflow minimal; no matrix, cache, artifact upload, services, release, package, signing, or deployment."
+  - "No secrets."
+  - "No write permissions."
+  - "No pull_request trigger in this bootstrap task."
+  - "No workflow_dispatch because the connected GitHub surface does not expose a dispatch mutation."
+  - "Use the repository's existing verify script unchanged."
+  - "Do not modify requirements.txt, requirements.lock, verify, tests, or runtime source."
+  - "Do not add branch protection/rulesets in this task."
+
+source_authoring:
+  method: GITHUB_GIT_DATA_ATOMIC_COMMIT
+  requirements:
+    - "Fetch source_base commit/tree identity exactly."
+    - "Create the workflow blob."
+    - "Create one tree based on the exact source_base tree with only .github/workflows/verify.yml added."
+    - "Create exactly one commit whose sole parent is source_base."
+    - "Before publishing, inspect the candidate commit/tree and require exactly one changed path."
+    - "Publish by non-force CAS update of refs/heads/main from source_base to the candidate commit."
+    - "Do not use GitHub contents create_file/update_file for source publication because those APIs directly advance the branch."
+    - "Do not create feature/dev/staging/verification branches."
+    - "Do not mutate control or dev from the Executor."
+
+verification:
+  source_static:
+    - "Compare source_base...candidate and require exactly one added path: .github/workflows/verify.yml."
+    - "Require candidate parent == source_base."
+    - "Require no other file/tree delta."
+  post_publish:
+    - "Fresh-observe main == candidate."
+    - "Observe GitHub Actions workflow runs for the exact candidate SHA through GitHub APIs."
+    - "Require exactly the expected push-triggered Agent Runtime Verify run for candidate."
+    - "Require workflow conclusion == success."
+    - "Inspect job/step result and require canonical-verify succeeded."
+    - "If the workflow fails, inspect GitHub job logs and report the exact failing stage."
+    - "Do not rerun a failed workflow in revision 1."
+    - "Do not perform local verification as fallback."
+
+publication:
+  main_update:
+    force: false
+    expected_old: "b619d3d8856df3a0ef12ccb833b49afe9c68a867"
+    retries: 0
+  success_postcondition:
+    main: candidate_commit
+    control: unchanged_from_governance_head
+    dev: "0030238d4be37f8b6e37362bf81f31fc9459dace"
+
+forbidden:
+  - local Agent Runtime invocation
+  - Desktop Commander
+  - Codex
+  - local shell/terminal
+  - local source synchronization
+  - source/runtime/test changes outside workflow file
+  - package/install/restart/cutover
+  - screen_capture
+  - branch creation
+  - PR creation
+  - force push
+  - main rewrite
+  - control mutation from Executor
+  - dev mutation
+  - Actions rerun
+  - workflow secrets
+  - repository settings mutation
+
+failure_policy:
+  - "If GitHub refuses workflow-file mutation because the connection lacks workflow permission, stop GITHUB_WORKFLOW_PERMISSION_UNAVAILABLE."
+  - "If main changes before CAS publication, stop SOURCE_CLOSURE_FAILED; do not rebase or rebuild automatically."
+  - "If candidate publishes but Actions is unavailable/disabled, stop GITHUB_ACTIONS_UNAVAILABLE and preserve exact evidence."
+  - "If canonical verify fails, stop VERIFICATION_FAILED; do not patch source in this task."
+  - "Never fall back to local authoring or local verification."
+
+terminal_states:
+  success: NEEDS_REVIEW
+  source_closure_failed: SOURCE_CLOSURE_FAILED
+  workflow_permission_unavailable: GITHUB_WORKFLOW_PERMISSION_UNAVAILABLE
+  actions_unavailable: GITHUB_ACTIONS_UNAVAILABLE
+  verification_failed: VERIFICATION_FAILED
+  publication_failed: PUBLICATION_FAILED
+
+reporting:
+  - "Return one bounded Vietnamese result packet."
+  - "Include governance_head, source_base, candidate commit/tree, changed-path proof, main CAS publication result, exact workflow run/job identity, canonical verify conclusion/test count if visible, and final main/control/dev refs."
+  - "Do not create report/review files; Architect writes governance evidence on control."
+
+successor:
+  if_accepted: TASK-0130
+  intent: >-
+    Implement ToolContract Kernel v1 through GitHub-native source authoring on main and verify it through
+    the accepted GitHub Actions canonical verification plane.
+
+execution_ready: true

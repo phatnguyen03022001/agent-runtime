@@ -1,0 +1,57 @@
+protocol_version: 3
+
+task_id: TASK-0129
+task_revision: 1
+review_revision: 1
+state: BLOCKED
+
+reviewed_report:
+  path: .agent/tasks/TASK-0129/report-r1.yaml
+  commit: "17ab013551b2e745c962d80179c277ccbe3ff5aa"
+
+architect_judgment:
+  executor_fault: false
+  github_permission_failure_proven: false
+  platform_boundary_proven: true
+  source_or_repository_defect_proven: false
+  remote_source_unchanged: true
+  local_operations: 0
+
+classification:
+  terminal: PLATFORM_BLOCK
+  blocker: WORKFLOW_FILE_MUTATION_BLOCKED_PRE_GITHUB
+
+decision:
+  task_revision_2: none
+  alternate_git_primitive_retry: false
+  contents_api_fallback: false
+  local_fallback: false
+  codex_fallback: false
+  operator_bootstrap_required: true
+
+operator_bootstrap_contract:
+  source_branch: main
+  expected_source_head: "b619d3d8856df3a0ef12ccb833b49afe9c68a867"
+  path: .github/workflows/verify.yml
+  mutation_count: 1
+  purpose: >-
+    One-time creation of the minimal push-to-main canonical verification workflow.
+    After this bootstrap, normal source authoring must return to ChatGPT/GitHub and governance remains on control.
+  required_workflow:
+    name: Agent Runtime Verify
+    trigger: "push to main"
+    permissions: "contents: read"
+    runner: macos-14
+    python: "3.13"
+    canonical_command: "PYTHON=python PYTHONDONTWRITEBYTECODE=1 ./verify"
+  forbidden:
+    - any_other_source_change
+    - workflow_dispatch
+    - pull_request_trigger
+    - secrets
+    - write_permissions
+    - package_or_deploy
+
+successor:
+  after_operator_bootstrap: TASK-0130
+  intent: "ToolContract Kernel v1 via GitHub-native source authoring + GitHub Actions verification."

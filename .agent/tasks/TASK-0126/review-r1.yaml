@@ -1,0 +1,65 @@
+protocol_version: 3
+
+task_id: TASK-0126
+task_revision: 1
+review_revision: 1
+state: REWORK
+
+reviewed_report:
+  path: .agent/tasks/TASK-0126/report-r1.yaml
+  commit: "c72943cdecef792cefb11ad8e4ae8f85262746cb"
+
+acceptance:
+  terminal: PLATFORM_BLOCK
+  disposition: REWORK
+
+architect_judgment:
+  source_defect_proven: false
+  implementation_defect_proven: false
+  repository_state_clean: true
+  runtime_or_host_mutation_occurred: false
+  platform_block_before_runtime_on_second_authoring_call: true
+  codex_required: false
+
+root_cause:
+  classification: GENERIC_TERMINAL_AUTHORING_IS_WRONG_PRIMITIVE
+  explanation: >-
+    TASK-0126 r1 attempted source authoring through terminal_exec because native file mutation
+    primitives do not yet exist. The second authoring request was blocked by platform safety
+    before reaching Agent Runtime. Retrying the same authoring intent through alternate command
+    encoding or Codex is not authorized.
+
+architect_decision:
+  next_surface: CHATGPT_LOCAL
+  codex_allowed: false
+  source_writer: "same CHATGPT_LOCAL Executor"
+  bootstrap_authoring_transport: "Remote Desktop Commander typed filesystem tools only"
+  permitted_dc_tools:
+    - write_file
+    - edit_block
+    - read_file
+    - read_multiple_files
+    - get_file_info
+  forbidden_dc_tools:
+    - start_process
+    - interact_with_process
+    - read_process_output
+    - kill_process
+    - force_terminate
+    - any shell/process execution
+  agent_runtime_role:
+    - repo_fast_forward
+    - fs_read_batch
+    - repo_observer
+    - terminal_exec_for_tests_verify_and_local_git_commit_only
+    - repo_publish
+  rationale: >-
+    This is an architectural move from arbitrary shell authoring to bounded typed file operations,
+    not a retry of the blocked shell command on another execution surface. The controller and writer
+    remain ChatGPT; Desktop Commander is only a temporary authoring primitive until fs_patch exists.
+
+next_action:
+  task_revision: 2
+  intent: >-
+    Re-run the same four-tool Wave-1 implementation using typed file authoring only.
+    No terminal source authoring, no Codex, no package/install/cutover.

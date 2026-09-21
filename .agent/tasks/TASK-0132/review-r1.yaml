@@ -1,0 +1,45 @@
+protocol_version: 3
+
+task_id: TASK-0132
+task_revision: 1
+review_revision: 1
+state: REWORK
+
+reviewed_report:
+  path: .agent/tasks/TASK-0132/report-r1.yaml
+  commit: "26e358b166f330a6ba72032968527f2fa95f45c6"
+
+architect_judgment:
+  executor_fault: false
+  wave1_implementation_defect_proven: false
+  wave1_focused_proofs: PASS
+  exact_15_tool_surface: PASS
+  legacy_surface_assertions_stale: true
+  task_design_defect: true
+
+root_cause:
+  classification: TASK_ALLOWLIST_OMITTED_LEGACY_SURFACE_ASSERTIONS
+  detail: >-
+    TASK-0132 intentionally changed the public MCP surface from 11 to 15 tools, but revision 1
+    did not authorize all legacy tests that freeze the old 11-tool order/ordinal assumptions.
+    Canonical CI therefore failed in nine stale assertions across seven legacy test files.
+
+decision:
+  revision: 2
+  reuse_branch: task-0132-r1
+  reuse_pr: 3
+  new_branch: false
+  new_pr: false
+  implementation_changes_allowed: false
+  allowed_revision_2_delta_paths:
+    - tests/test_fs_read_batch.py
+    - tests/test_repo_fast_forward_mcp.py
+    - tests/test_repo_observer_mcp.py
+    - tests/test_repo_publish_mcp.py
+    - tests/test_screen_capture_mcp.py
+    - tests/test_surface_and_scripts.py
+    - tests/test_timing.py
+  expected_terminal_after_green_ci: NEEDS_REVIEW
+
+next_action:
+  intent: "Align only stale legacy surface/order/annotation assertions with the accepted 15-tool Wave 1 surface, then rerun PR CI automatically."

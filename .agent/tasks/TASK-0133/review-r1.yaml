@@ -1,0 +1,36 @@
+protocol_version: 3
+
+task_id: TASK-0133
+task_revision: 1
+review_revision: 1
+state: REWORK
+
+reviewed_report:
+  path: .agent/tasks/TASK-0133/report-r1.yaml
+  commit: "1136132fc3e3b991adc322530d935ac591c47bd1"
+
+architect_judgment:
+  executor_fault: false
+  source_logic_defect_proven: false
+  platform_boundary_proven: true
+  blocked_primitive: create_branch
+  retry_blocked_primitive: false
+  direct_main_contents_fallback: rejected
+  direct_main_reason: >-
+    GitHub Contents API is per-file and non-transactional. Authoring TASK-0133 directly on main would
+    expose intermediate unverified commits and can leave main partially mutated if a later write is blocked.
+  alternate_atomic_github_primitive_available: false
+
+decision:
+  revision: 2
+  operator_transition_required: true
+  transition_scope: "Create exactly one ephemeral branch ref task-0133-r1 at exact source base."
+  source_authoring_after_transition: "CHATGPT_GITHUB Contents API on existing ephemeral branch"
+  new_branch_count: 1
+  new_pr_count: 1
+  implementation_contract_change: false
+
+next_action:
+  intent: >-
+    After the operator creates task-0133-r1 at the exact pinned main SHA, materialize the original
+    TASK-0133 fs_write contract through GitHub Contents API, open one PR, run canonical CI, and stop for review.

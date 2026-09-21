@@ -1,0 +1,145 @@
+protocol_version: 3
+
+task_id: TASK-0130
+task_revision: 3
+state: APPROVED
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  governance_branch: control
+  source_branch: main
+  ephemeral_branch: task-0130-r2
+  pull_request: 1
+
+execution_surface:
+  id: CHATGPT_GITHUB
+  controller: CHATGPT
+  transport: GITHUB
+  model: GPT-5.6 Sol
+  effort: HIGH
+
+governance_identity:
+  control: SELF_GOVERNANCE_HEAD
+  rule: >-
+    The immutable governance_head is supplied externally by the launch packet and used to resolve this task.
+
+revision_3_delta:
+  predecessor_review: "b021a4fe005ffd8018daea5942121e0f01117895"
+  predecessor_terminal: VERIFICATION_FAILED
+  existing_pr: 1
+  existing_branch: task-0130-r2
+  existing_branch_head: "586c22af8a3d2c9a18294103045fe80ac0023b02"
+  reason: >-
+    Revision 2 fixed all seven originally targeted CI failures except one stale source-text contract assertion.
+    The remaining test requires the obsolete PINNED_ARGS implementation detail even though the intended Bash
+    portability repair explicitly removed empty-array expansion while preserving strict pinned/unpinned argv semantics.
+
+authority:
+  source_base: "14e51a439b3ee2cd830b204169af7426cdce556b"
+  main_expected: "14e51a439b3ee2cd830b204169af7426cdce556b"
+  branch_expected_head: "586c22af8a3d2c9a18294103045fe80ac0023b02"
+  allowed_source_paths:
+    - tests/test_candidate_cutover.py
+  expected_blob:
+    tests/test_candidate_cutover.py: "3d775c433bea53622086cb5ae165b8ab0c54c8b2"
+
+objective: >-
+  Update only the stale TASK-0130 candidate-cutover source-text contract test on the existing ephemeral branch.
+  Keep PR #1 and branch task-0130-r2. Do not create another branch or PR. Require the pull_request CI to pass,
+  then stop for independent Architect review and merge.
+
+preconditions:
+  - "Resolve this task from the exact governance_head supplied by the operator."
+  - "Require live control == supplied governance_head."
+  - "Require main == 14e51a439b3ee2cd830b204169af7426cdce556b."
+  - "Require dev == 0030238d4be37f8b6e37362bf81f31fc9459dace."
+  - "Require task-0130-r2 == 586c22af8a3d2c9a18294103045fe80ac0023b02."
+  - "Require PR #1 open, unmerged, head=task-0130-r2, base=main."
+  - "Require tests/test_candidate_cutover.py on task-0130-r2 has blob 3d775c433bea53622086cb5ae165b8ab0c54c8b2."
+  - "Require repository delete_branch_on_merge == true."
+  - "Do not inspect or mutate local checkout state."
+
+required_change:
+  path: tests/test_candidate_cutover.py
+  test: test_prebuilt_install_contract_keeps_strict_form_and_requires_exact_pinned_pair
+  requirements:
+    - "Preserve assertions for strict 3-argument and 7-argument forms."
+    - "Preserve assertions validating $4 == --expected-candidate-sha256 and $6 == --expected-handoff-sha256."
+    - "Preserve is_lower_sha256 validation assertions for $5 and $7."
+    - "Remove the stale assertion requiring the literal implementation detail \"\${PINNED_ARGS[@]}\"."
+    - "Add assertions proving the explicit invocation forwards --expected-candidate-sha256 \"$5\" and --expected-handoff-sha256 \"$7\"."
+    - "Assert PINNED_ARGS does not appear in the --install-prebuilt branch."
+    - "Preserve assertions forbidding --skip-trust and --no-verify."
+    - "Do not weaken the test to merely search generic flag names already present in input parsing; bind the assertions to the explicit forwarding values $5 and $7."
+
+authoring:
+  method: GITHUB_CONTENTS_UPDATE_ON_EPHEMERAL_BRANCH
+  rules:
+    - "Fetch the complete current test file from task-0130-r2."
+    - "Construct exactly one complete replacement with only the required test assertion update."
+    - "Use update_file on branch task-0130-r2 with exact expected content blob SHA."
+    - "Commit message: test: align prebuilt install contract with portable argv forwarding"
+    - "Do not mutate main directly."
+    - "Do not use update_ref, create_blob, create_tree, local tools, Agent Runtime, Desktop Commander, or Codex."
+
+post_authoring_proof:
+  - "Require task-0130-r2 advances by exactly one commit from 586c22af8a3d2c9a18294103045fe80ac0023b02."
+  - "Require PR #1 remains open and now reports four changed paths total."
+  - "Require the original three portability-fix blobs remain unchanged."
+  - "Require the only newly changed path relative to revision-2 head is tests/test_candidate_cutover.py."
+  - "Require .github/workflows/verify.yml remains unchanged."
+
+verification:
+  - "Observe the new Agent Runtime Verify pull_request run caused by the branch update."
+  - "Require exact PR #1 association, event=pull_request, job=canonical-verify."
+  - "Do not rerun any prior failed run."
+  - "Wait for the new exact run to complete."
+  - "Require workflow conclusion=success and job conclusion=success."
+  - "Fetch final job logs."
+  - "Require canonical test count >=454 and failures=0."
+  - "Confirm the stale candidate-cutover test now passes."
+  - "Confirm the six tunnel/install portability failures remain absent."
+  - "Confirm the idle-reaper timing test remains passing."
+
+architect_merge_boundary:
+  executor_merge_authority: false
+  required_terminal: NEEDS_REVIEW
+  architect_merge_method: squash
+  rationale: >-
+    Squash merge keeps main to one clean TASK-0130 commit even though the ephemeral PR needed one test-only
+    follow-up commit. Auto-delete-head-branches must remove task-0130-r2 after merge.
+
+forbidden:
+  - new_branch
+  - new_pr
+  - merge_pr
+  - update_ref_main
+  - direct_main_mutation
+  - workflow_mutation
+  - changes_outside_tests/test_candidate_cutover.py
+  - Agent Runtime
+  - Desktop Commander
+  - Codex
+  - local_shell
+  - local_filesystem_mutation
+  - workflow_rerun
+  - package_install_restart_cutover
+
+failure_policy:
+  - "If update_file is platform-blocked before GitHub execution, stop PLATFORM_BLOCK; do not switch mutation surface."
+  - "If branch or PR state differs, stop SOURCE_CLOSURE_FAILED."
+  - "If CI fails, stop VERIFICATION_FAILED and preserve branch/PR intact; do not patch again."
+  - "Never create additional remote debris as fallback."
+
+terminal_states:
+  success: NEEDS_REVIEW
+  platform_block: PLATFORM_BLOCK
+  source_closure_failed: SOURCE_CLOSURE_FAILED
+  verification_failed: VERIFICATION_FAILED
+
+reporting:
+  - "Return one bounded Vietnamese result packet."
+  - "Include governance_head, branch old/new head, updated test blob, exact diff summary, PR #1 state, workflow run/job IDs, canonical test count/result, main/control/dev refs, and current task-0130-r2 existence."
+  - "Do not create governance report/review files; Architect persists those on control."
+
+execution_ready: true

@@ -1,0 +1,486 @@
+protocol_version: 3
+
+task_id: TASK-0133
+task_revision: 2
+state: APPROVED
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  governance_branch: control
+  source_branch: main
+  ephemeral_branch: task-0133-r1
+
+execution_surface:
+  id: CHATGPT_GITHUB
+  controller: CHATGPT
+  transport: GITHUB
+  model: GPT-5.6 Sol
+  effort: HIGH
+
+governance_identity:
+  control: SELF_GOVERNANCE_HEAD
+  rule: >-
+    The immutable governance_head is supplied externally in the launch packet.
+    Governance history must never be synchronized into main.
+
+delivery_authority:
+  source_base: "6b00fc88297e8cc60bf02794bcd69e28b0166b31"
+  source_base_tree: "80bf597ce3be4425c0dfbe9fa7515bec8d5aa3f7"
+  source_expected_branch: main
+  allowed_source_paths:
+    - agent_runtime/contracts.py
+    - agent_runtime/fs_write.py
+    - agent_runtime/server.py
+    - tests/test_fs_write.py
+    - tests/test_fs_write_mcp.py
+    - tests/test_mcp_contracts.py
+    - tests/test_mcp_client_conformance.py
+    - tests/test_tool_contract.py
+    - tests/test_wave1_mcp.py
+    - tests/test_fs_read_batch.py
+    - tests/test_repo_fast_forward_mcp.py
+    - tests/test_repo_observer_mcp.py
+    - tests/test_repo_publish_mcp.py
+    - tests/test_screen_capture_mcp.py
+    - tests/test_surface_and_scripts.py
+    - tests/test_timing.py
+
+existing_blob_preconditions:
+  agent_runtime/contracts.py: "81063b020fed9b8260680af9b1a3fe64708981d7"
+  agent_runtime/server.py: "592a6b8e9e6a91a7582d51658c318574913edcfa"
+  agent_runtime/fs_safety.py: "4bf378678eedb39668bce139600dc8357a7d2851"
+  agent_runtime/fs_patch.py: "9d9eded102fd0395ce0b05e365a40167c2103728"
+  agent_runtime/tool_contract.py: "153f1272d4840d41091f52480dfa3a43a333c13f"
+  tests/test_mcp_contracts.py: "7131c8e745c2acd2d7d15928e566519995e6d37e"
+  tests/test_mcp_client_conformance.py: "b9a643c3afd13eb84057cdbd1a1f1b93112302f9"
+  tests/test_tool_contract.py: "74876925ddfb6faf9fa71649d955614c0f3ce15d"
+  tests/test_wave1_mcp.py: "e429064fe55200a5dffc75b7561ef597939a7e8f"
+  tests/test_fs_read_batch.py: "94be450d7fc44571dce053bd15875f79c6e6b912"
+  tests/test_repo_fast_forward_mcp.py: "a6fbe924ed95bb94664fd29b97a06d573828e1b9"
+  tests/test_repo_observer_mcp.py: "8f62dc4d951816d1d11bc7722d4e670e80267183"
+  tests/test_repo_publish_mcp.py: "22159ed71b4ea7a7f1f7be26a51f0f3bc66571f9"
+  tests/test_screen_capture_mcp.py: "76582576b4578ff5ad9d9c70d072d85490a13f24"
+  tests/test_surface_and_scripts.py: "a620cd9f67c0d9faa450d298f412eea815f3e839"
+  tests/test_timing.py: "29dac4c6481b426039802b97683410f6fef55ea9"
+
+required_absent_paths:
+  - agent_runtime/fs_write.py
+  - tests/test_fs_write.py
+  - tests/test_fs_write_mcp.py
+
+objective: >-
+  Add one bounded native fs_write capability for whole-file strict-UTF-8 create or replace.
+  Create must be atomic no-overwrite. Replace must be exact expected-SHA guarded and use the accepted
+  immediate revalidation + atomic replacement pattern. Emit deterministic fs-write ReceiptV1 evidence.
+  Grow the public MCP surface from 15 to exactly 16 tools. Do not implement staging, repo_commit,
+  repo_publish hardening, capability discovery, doctor, packaging, install, restart, or cutover.
+
+architecture:
+  relationship:
+    fs_patch: "existing-file localized exact-once UTF-8 edits"
+    fs_write: "whole-file UTF-8 create or replace"
+    terminal_exec: "escape hatch for binary/chmod/chown/xattr/generators/bulk operations"
+  principles:
+    - "fs_write is not upsert"
+    - "fs_write is not append"
+    - "fs_write is not a binary/blob API"
+    - "fs_write does not create parent directories"
+    - "fs_write does not accept mode/chown/xattr/ACL controls"
+    - "expected state is mandatory by operation: create=absence, replace=exact SHA"
+    - "policy/preconditions resolve before exact filesystem mutation"
+    - "no ToolContract Kernel rewrite"
+
+fs_write:
+  implementation_path: agent_runtime/fs_write.py
+  contract_constant: FS_WRITE_CONTRACT
+  tool_contract:
+    tool_class: write
+    authority:
+      workspace_bound: true
+      network: none
+      mutation: bounded
+    annotations:
+      read_only: false
+      destructive: true
+      idempotent: false
+      open_world: false
+
+  public_input:
+    cwd: AbsoluteCwd
+    path:
+      type: strict_string
+      max_chars: 4096
+      semantics: "normalized cwd-relative descendant file path"
+    operation:
+      exact_values:
+        - create
+        - replace
+    content:
+      type: strict_utf8_string
+      max_utf8_bytes: 1048576
+      nul: forbidden
+    expected_sha256:
+      type: "lowercase_sha256|null"
+      default: null
+      create: forbidden
+      replace: required
+
+  public_validation:
+    - "Pydantic input schema must remain closed extra=forbid."
+    - "operation=create with non-null expected_sha256 => INVALID_ARGUMENT / EXPECTED_SHA_FORBIDDEN."
+    - "operation=replace with null expected_sha256 => INVALID_ARGUMENT / EXPECTED_SHA_REQUIRED."
+    - "content must encode strict UTF-8; invalid surrogate => INVALID_ARGUMENT / INVALID_UTF8_CONTENT."
+    - "content containing U+0000 => INVALID_ARGUMENT / NUL_CONTENT_DISALLOWED."
+    - "content exact UTF-8 bytes must be <=1 MiB."
+
+  shared_safety:
+    - "Reuse existing fs_safety descriptor-relative/no-follow primitives."
+    - "Do not modify agent_runtime/fs_safety.py in this task."
+    - "Parent directory must already exist and remain within validated cwd/workspace."
+    - "Reject absolute path, NUL path, empty/dot/dot-dot path components, and symlink traversal."
+    - "No network, subprocess, shell, or external utility."
+
+  create_semantics:
+    precondition: target_absent
+    requirements:
+      - "Do not perform check-then-os.replace."
+      - "Create a same-directory temporary regular file with O_CREAT|O_EXCL|O_NOFOLLOW."
+      - "Use requested creation mode 0666 subject to the process umask/default directory policy; do not expose a mode input."
+      - "Write complete content bytes and fsync the temp file before publication."
+      - "Publish with an atomic no-overwrite primitive. A same-directory hard-link publication using dir_fd + EEXIST semantics is acceptable."
+      - "If target exists as any filesystem type at publication time, fail PRECONDITION_FAILED / TARGET_ALREADY_EXISTS without altering target."
+      - "After successful publication, remove the temp name and fsync the parent directory."
+      - "If post-publication temp-name cleanup fails, perform bounded compensation only when the target still identifies the just-published inode; never delete an unrelated replacement. If clean compensation cannot be proven, return INTERNAL_ERROR / CREATE_CLEANUP_AMBIGUOUS with truthful mutation ambiguity in the bounded message."
+      - "Do not claim stronger isolation than atomic no-overwrite publication."
+    mode:
+      - "Report actual final POSIX mode bits observed from the published file."
+      - "Do not claim ownership, ACL, xattr, resource-fork, or extended metadata preservation."
+
+  replace_semantics:
+    preconditions:
+      - "target exists"
+      - "target is regular file"
+      - "no symlink traversal"
+      - "target size <=1 MiB"
+      - "target content strict UTF-8 and NUL-free"
+      - "SHA256(exact original raw bytes) == expected_sha256"
+    requirements:
+      - "Preserve original POSIX mode bits exactly."
+      - "If replacement bytes == original bytes, revalidate exact original identity + SHA and return status=unchanged without replacing."
+      - "Otherwise create same-directory temp, write full bytes, fsync temp, preserve mode bits."
+      - "Immediately before os.replace, re-open target with no-follow semantics and require original dev/inode identity and original SHA still match."
+      - "Any drift => STATE_CHANGED / LOCAL_STATE_CHANGED and target remains unreplaced."
+      - "Use same-directory atomic os.replace after successful immediate revalidation."
+      - "fsync parent directory after replacement."
+      - "Best-effort cleanup temp on all failure paths."
+      - "Document/encode no stronger guarantee than immediate pre-replace identity+hash revalidation; arbitrary external same-UID mutation in the tiny revalidation-to-replace window is outside v1 isolation."
+
+  replay_semantics:
+    - "Capability annotation remains idempotent=false."
+    - "Successful create replay must not mutate again and returns TARGET_ALREADY_EXISTS."
+    - "Successful replace replay using old expected SHA must not mutate again and returns EXPECTED_SHA_MISMATCH, unless original and replacement bytes were identical and the expected SHA still matches."
+    - "status=unchanged is allowed only when requested final bytes already exactly equal accepted original bytes."
+
+  hard_bounds:
+    path_chars: 4096
+    content_utf8_bytes: 1048576
+    replace_input_file_bytes: 1048576
+    output_file_bytes: 1048576
+
+  receipt:
+    result_field: write_receipt
+    schema:
+      schema_version: 1
+      kind: fs-write
+      digest: lowercase_sha256
+    make_receipt_v1:
+      kind: fs-write
+      subject:
+        - validated_absolute_cwd
+        - normalized_relative_path
+      semantic_parameters:
+        - operation
+        - expected_sha256_or_expected_absent
+      observed_state_bytes: >-
+        frame(canonical_structured_bytes({"mode_bits": final_mode_bits}))
+        concatenated with frame(exact_final_file_bytes)
+    requirements:
+      - "Use ToolContract Kernel v1 helpers; do not modify tool_contract.py."
+      - "Receipt hashes exact final content and final mode evidence."
+      - "No timestamp/random/process identity is included in receipt semantics."
+      - "Receipt is evidence, not a mandatory downstream authorization token."
+      - "Same semantic final state produces same digest."
+
+  public_result:
+    schema_version: 1
+    fields:
+      status: "created|replaced|unchanged"
+      path: string
+      sha256_before: "lowercase_sha256|null"
+      sha256_after: lowercase_sha256
+      bytes_before: "integer|null"
+      bytes_after: integer
+      mode_before: "integer|null"
+      mode_after: integer
+      write_receipt:
+        schema_version: 1
+        kind: fs-write
+        digest: lowercase_sha256
+
+  error_contract:
+    use: CapabilityErrorEnvelope
+    reason_mapping:
+      INVALID_PATH: INVALID_ARGUMENT
+      INVALID_UTF8_CONTENT: INVALID_ARGUMENT
+      NUL_CONTENT_DISALLOWED: INVALID_ARGUMENT
+      EXPECTED_SHA_REQUIRED: INVALID_ARGUMENT
+      EXPECTED_SHA_FORBIDDEN: INVALID_ARGUMENT
+      PATH_OUTSIDE_WORKSPACE: OUTSIDE_WORKSPACE
+      TARGET_NOT_FOUND: NOT_FOUND
+      TARGET_ALREADY_EXISTS: PRECONDITION_FAILED
+      EXPECTED_SHA_MISMATCH: PRECONDITION_FAILED
+      SYMLINK_DISALLOWED: PRECONDITION_FAILED
+      NOT_REGULAR_FILE: PRECONDITION_FAILED
+      INVALID_UTF8_TARGET: PRECONDITION_FAILED
+      NUL_TARGET_DISALLOWED: PRECONDITION_FAILED
+      LOCAL_STATE_CHANGED: STATE_CHANGED
+      INPUT_FILE_LIMIT: LIMIT_EXCEEDED
+      OUTPUT_FILE_LIMIT: LIMIT_EXCEEDED
+      FILESYSTEM_PERMISSION_DENIED: PERMISSION_DENIED
+      FILESYSTEM_UNAVAILABLE: UNAVAILABLE
+      ATOMIC_WRITE_FAILED: INTERNAL_ERROR
+      CREATE_CLEANUP_AMBIGUOUS: INTERNAL_ERROR
+
+contracts:
+  path: agent_runtime/contracts.py
+  requirements:
+    - "Add closed request/result types required for fs_write without weakening existing models."
+    - "Reuse existing lowercase SHA-256 constrained type where appropriate."
+    - "Add a dedicated fs-write receipt result model; do not broaden repo_diff ReceiptV1Result.kind from literal repo-diff."
+    - "Strict content byte bound must be enforced by UTF-8 byte length, not only character count."
+
+server_integration:
+  path: agent_runtime/server.py
+  public_tool_count: 16
+  exact_order:
+    - terminal_exec
+    - terminal_start
+    - terminal_poll
+    - terminal_control
+    - terminal_resize
+    - capacity_observer
+    - fs_read_batch
+    - fs_list
+    - fs_search
+    - fs_patch
+    - fs_write
+    - repo_observer
+    - repo_diff
+    - repo_fast_forward
+    - repo_publish
+    - screen_capture
+  requirements:
+    - "Import FS_WRITE_CONTRACT + write_file."
+    - "fs_write annotations must be sourced from FS_WRITE_CONTRACT.annotations."
+    - "fs_write delegates only to write_file and maps CapabilityFailure through existing CapabilityErrorEnvelope."
+    - "Existing 15 tools retain accepted signatures/schemas/behavior except surface-order assertions updated for insertion."
+    - "screen_capture remains VISUAL_PERCEPTION_BLOCKED before native capture."
+
+unchanged_source_guards:
+  - "agent_runtime/tool_contract.py must remain blob 153f1272d4840d41091f52480dfa3a43a333c13f."
+  - "agent_runtime/fs_safety.py must remain blob 4bf378678eedb39668bce139600dc8357a7d2851."
+  - "agent_runtime/fs_patch.py must remain blob 9d9eded102fd0395ce0b05e365a40167c2103728."
+  - "Wave 1 capability implementation files fs_list.py, fs_search.py, repo_diff.py must remain unchanged."
+
+tests:
+  canonical_baseline: 535
+  required_new_files:
+    - tests/test_fs_write.py
+    - tests/test_fs_write_mcp.py
+  required_existing_updates:
+    - tests/test_mcp_contracts.py
+    - tests/test_mcp_client_conformance.py
+    - tests/test_tool_contract.py
+    - tests/test_wave1_mcp.py
+    - tests/test_fs_read_batch.py
+    - tests/test_repo_fast_forward_mcp.py
+    - tests/test_repo_observer_mcp.py
+    - tests/test_repo_publish_mcp.py
+    - tests/test_screen_capture_mcp.py
+    - tests/test_surface_and_scripts.py
+    - tests/test_timing.py
+
+  proof_requirements:
+    create:
+      - "strict UTF-8 + NUL rejection"
+      - "1 MiB byte bound"
+      - "parent must already exist"
+      - "symlink parent traversal rejected"
+      - "existing target of any type rejected without mutation"
+      - "race target creation at publication produces TARGET_ALREADY_EXISTS"
+      - "same-directory temp + fsync"
+      - "atomic no-overwrite publication"
+      - "actual mode follows 0666 subject to test-controlled umask/default policy"
+      - "parent fsync"
+      - "temp cleanup success path"
+      - "bounded cleanup/compensation failure behavior"
+      - "successful replay does not mutate"
+    replace:
+      - "expected SHA mandatory"
+      - "target regular UTF-8 NUL-free <=1MiB"
+      - "expected SHA mismatch no mutation"
+      - "replacement preserves mode bits"
+      - "same bytes returns unchanged without replace"
+      - "same-directory temp + fsync"
+      - "identity drift immediately before replace => STATE_CHANGED and original intact"
+      - "content drift immediately before replace => STATE_CHANGED and original intact"
+      - "atomic replace + parent fsync"
+      - "temp cleanup failure paths"
+      - "successful replace replay with old SHA does not mutate"
+    receipt:
+      - "kind exactly fs-write"
+      - "deterministic for same semantic final state"
+      - "changes when final content changes"
+      - "changes when final mode evidence changes"
+      - "create and replace semantic parameters do not collide"
+      - "repo_diff receipt schema remains kind=repo-diff only"
+    mcp:
+      - "exact 16-tool order"
+      - "fs_write annotation tuple = false/true/false/false"
+      - "input/output schemas closed"
+      - "conditional expected_sha semantics proven at runtime"
+      - "CapabilityErrorEnvelope exact"
+      - "all legacy surface assertions updated from 15 to canonical 16"
+      - "existing 15 tool signatures/schemas unchanged"
+      - "screen_capture governance guard green"
+    kernel:
+      - "FS_WRITE_CONTRACT exactly reflects implementation authority/annotations/bounds."
+      - "ToolContract Kernel source blob unchanged."
+
+  canonical_requirement:
+    - "Agent Runtime Verify must run >535 tests."
+    - "Zero failures."
+
+revision_2_delta:
+  predecessor_review: "619efb86d71b5d7de972cf81af3562da620178b4"
+  predecessor_terminal: PLATFORM_BLOCK
+  blocked_primitive: create_branch
+  blocked_before_github: true
+  retry_blocked_primitive: false
+  implementation_contract_change: false
+  operator_transition: >-
+    The operator must create exactly one ephemeral branch ref task-0133-r1 at exact source_base.
+    This is the only manual transition authorized by the proven platform boundary.
+
+authoring:
+  normal_path: GITHUB_CONTENTS_API_ON_OPERATOR_BOOTSTRAPPED_EPHEMERAL_BRANCH
+  branch:
+    name: task-0133-r1
+    required_existing_head: "6b00fc88297e8cc60bf02794bcd69e28b0166b31"
+  rules:
+    - "Do not create or recreate the branch in revision 2."
+    - "Require task-0133-r1 already exists and points exactly to source_base before any source mutation."
+    - "Use GitHub create_file/update_file only on task-0133-r1."
+    - "Before first update of every existing path, fresh-fetch and require the pinned source-base blob."
+    - "New files must be absent before create_file."
+    - "Do not use create_branch, create_blob, create_tree, create_commit, update_ref, local source authoring, Agent Runtime, Desktop Commander, or Codex."
+    - "Multiple branch commits are acceptable; Architect will squash-merge."
+    - "After authoring compare main...task-0133-r1 and require only allowed_source_paths."
+
+pull_request:
+  base: main
+  head: task-0133-r1
+  draft: false
+  title: "feat: add bounded fs_write capability"
+  body_requirements:
+    - "Reference TASK-0133."
+    - "State source base."
+    - "State fs_write create/replace expected-state semantics."
+    - "State public surface grows 15 -> 16."
+    - "State no repo staging/commit, publication hardening, packaging, install, or cutover."
+  rules:
+    - "Exactly one PR."
+    - "Do not request reviewers automatically."
+    - "Do not merge in Executor task."
+
+verification:
+  - "Observe Agent Runtime Verify for exact PR/head."
+  - "Require event=pull_request and job=canonical-verify."
+  - "Wait for exact run."
+  - "Do not rerun a failed workflow in revision 1."
+  - "Require workflow/job conclusion=success."
+  - "Fetch final logs."
+  - "Require failures=0 and test count >535."
+  - "Confirm exact 16-tool public surface, fs_write focused suites, legacy suites, Wave 1 suites, and screen_capture guard."
+
+architect_merge_boundary:
+  executor_merge_authority: false
+  required_terminal: NEEDS_REVIEW
+  architect_expected_merge:
+    method: squash
+    expected_head_sha: final_pr_head
+  architect_post_merge:
+    - "Independently inspect fs_write implementation, receipt semantics, all surface updates, and create/replace race handling."
+    - "Squash merge with expected head SHA only after green PR CI."
+    - "Require push-to-main Agent Runtime Verify PASS."
+    - "Require task-0133-r1 auto-deleted."
+    - "Persist ACCEPT/REWORK on control."
+
+forbidden:
+  - repo_stage
+  - repo_commit
+  - repo_publish_hardening
+  - capability_registry
+  - capability_discovery
+  - schema_export
+  - runtime_doctor
+  - worktree_isolation
+  - package
+  - install
+  - restart
+  - cutover
+  - screen_capture_invocation
+  - tool_contract_kernel_rewrite
+  - fs_safety_rewrite
+  - fs_patch_behavior_change
+  - direct_main_mutation
+  - dev_mutation
+  - control_mutation_from_executor
+  - second_branch
+  - second_pr
+  - workflow_mutation
+  - local_source_authoring
+  - create_blob
+  - create_tree
+  - create_commit
+  - update_ref
+  - Agent_Runtime
+  - Desktop_Commander
+  - Codex
+
+failure_policy:
+  - "If task-0133-r1 is absent or does not equal exact source_base, stop OPERATOR_TRANSITION_REQUIRED without mutation."
+  - "Any pinned ref/blob/path precondition mismatch => SOURCE_CLOSURE_FAILED."
+  - "Any branch or Contents mutation blocked => PLATFORM_BLOCK and report exact remote residue."
+  - "Any ambiguity requiring public-contract expansion => NEEDS_ARCHITECTURE_REVIEW."
+  - "Any PR CI failure => VERIFICATION_FAILED; leave one branch/PR intact and do not patch again in revision 1."
+  - "Never switch mutation surface solely to obtain a different platform safety judgment."
+
+terminal_states:
+  success: NEEDS_REVIEW
+  operator_transition_required: OPERATOR_TRANSITION_REQUIRED
+  source_closure_failed: SOURCE_CLOSURE_FAILED
+  platform_block: PLATFORM_BLOCK
+  architecture_review: NEEDS_ARCHITECTURE_REVIEW
+  verification_failed: VERIFICATION_FAILED
+
+reporting:
+  - "Return one bounded Vietnamese result packet."
+  - "Include governance_head, source_base/tree, exact changed paths, branch head, PR number/URL, fs_write create/replace proof, receipt proof, 16-tool surface proof, workflow run/job IDs, canonical test count/result, current main/control/dev refs, and branch existence."
+  - "Do not create governance report/review files; Architect owns governance persistence."
+
+successor:
+  if_accepted: TASK-0134
+  intent: "repo_stage + staged-only repo_commit with exact staged diff receipt authorization."
+
+execution_ready: true

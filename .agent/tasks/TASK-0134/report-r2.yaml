@@ -1,0 +1,58 @@
+protocol_version: 3
+
+task_id: TASK-0134
+task_revision: 2
+report_revision: 2
+state: NEEDS_REVIEW
+
+execution:
+  surface: CHATGPT_GITHUB
+  governance_head: "db42864cfabd7fdd7d813748632c81e14535c76c"
+  source_base: "049e8e129a92943b4544cfd66c9e9076d46faad1"
+  branch: task-0134-r1
+  branch_head: "39c23976ad8bece2cec78b46c93b6c7d30ccefc2"
+  pull_request: 5
+
+verification:
+  workflow_run_id: 35587318993
+  job_id: 106293539352
+  tests_run: 614
+  failures: 1
+  errors: 3
+  skipped: 1
+  conclusion: failure
+
+revision_2_delta:
+  paths:
+    - agent_runtime/repo_stage.py
+    - tests/test_repo_stage.py
+  stdin_nul_transport: PASS
+  candidate_path_removed_from_argv: PASS
+
+failure_scope:
+  affected_tests:
+    - test_new_regular_utf8_file_stages
+    - test_pathspec_looking_untracked_filename_is_treated_literally
+    - test_rename_is_explicit_delete_plus_present
+    - test_ignored_untracked_candidate_is_rejected_explicitly
+  unaffected:
+    repo_commit: PASS
+    staged_diff_receipt_chain: PASS
+    update_ref_expected_old_cas: PASS
+    repo_commit_receipt: PASS
+    runtime_git_identity: PASS
+    exact_18_tool_surface: PASS
+    screen_capture_guard: PASS
+
+root_cause:
+  classification: CHECK_IGNORE_GLOBAL_LITERAL_PATHSPEC_MODE_INCOMPATIBLE
+  detail: >-
+    Revision 2 correctly transports validated candidate paths as NUL-delimited stdin to
+    git check-ignore --stdin -z. However _run_git still injects the shared environment containing
+    GIT_LITERAL_PATHSPECS=1. Git check-ignore treats stdin entries as pathnames but internally rejects
+    the globally forced literal pathspec magic, producing fatal status. The repair must retain the
+    shared global environment for all other Git operations while removing GIT_LITERAL_PATHSPECS only
+    for the check-ignore invocation.
+
+classification:
+  terminal: VERIFICATION_FAILED
