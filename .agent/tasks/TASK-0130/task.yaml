@@ -1,7 +1,7 @@
 protocol_version: 3
 
 task_id: TASK-0130
-task_revision: 1
+task_revision: 2
 state: APPROVED
 
 target:
@@ -22,163 +22,144 @@ governance_identity:
     The immutable governance_head is supplied externally by the launch packet and used to resolve this task.
     The task must never literalize the SHA of its own containing commit.
 
+revision_2_delta:
+  predecessor_review: "f846ba4cc30683dee8d7ffee4abdb0f8e16edbcd"
+  operator_bootstrap: "2678ce0d805f76e5a4de59d12ec405d919bbd056"
+  preserved_candidate: "3bd8e7928dfe1f47831f5d4d94e137da13d7883f"
+  reason: >-
+    Revision 1 produced a correct atomic three-file candidate, but low-level main ref publication was
+    blocked before GitHub execution. Revision 2 changes only publication architecture to ephemeral
+    branch + PR + CI. The exact fixed file contents from the preserved candidate are transplanted
+    onto the new main base that contains pull_request CI.
+
 delivery_authority:
-  source_base: "1bdba7464f70a5193b15950c545ff27f7c8bfec4"
+  source_base: "14e51a439b3ee2cd830b204169af7426cdce556b"
   source_expected_branch: main
   allowed_source_paths:
     - install.sh
     - tests/test_tunnel_identity.py
     - tests/test_terminal_session.py
 
-source_blob_preconditions:
-  install.sh: "7384cff41328467b2d044f17f94d3009ead76250"
-  tests/test_tunnel_identity.py: "b6b365cda8665262f082d15908a50e41b400218c"
-  tests/test_terminal_session.py: "acbeb7341dd9a11ce9520cbf827f6dd3cdc3f7b0"
+preserved_fixed_blobs:
+  install.sh: "57a42016d17c169780db4b5434de87aed4baf529"
+  tests/test_tunnel_identity.py: "3a7713472be63f729e87d5ff3ecf119967acf9e8"
+  tests/test_terminal_session.py: "528d41451b74d0598e8b0ac41f955776de5dd234"
+
+source_base_tree: "8912531d7669cda0878d180a07b20b06f724bebd"
 
 objective: >-
-  Repair the seven canonical-verification failures exposed by the accepted GitHub Actions compute plane,
-  without changing Runtime product semantics. Fix Bash 3.2 portability for unpinned install.sh invocation
-  and remove one background-reaper timing flake. Publish one atomic source commit to main entirely through
-  GitHub Git Data, then require the existing Agent Runtime Verify workflow to pass for that exact commit.
-
-evidence_from_task_0129:
-  workflow_run_id: 35568955147
-  workflow_job_id: 106236325839
-  tests_run: 454
-  failures: 7
-  failure_groups:
-    install_bash_portability:
-      count: 6
-      error: "install.sh line 37: PINNED_ARGS[@]: unbound variable"
-    terminal_idle_reaper_timing:
-      count: 1
-      error: "fixed 0.2s sleep did not observe background reaper expiration"
+  Rebuild the already-reviewed TASK-0130 portability fixes on top of main@14e51a4,
+  publish them only to one ephemeral GitHub branch, open one PR to main, and require the
+  existing Agent Runtime Verify pull_request workflow to pass. Do not merge the PR in this Executor task.
 
 preconditions:
   - "Resolve this task from the exact governance_head supplied by the operator."
-  - "Fresh-observe control/main/dev before mutation."
   - "Require live control == supplied governance_head."
-  - "Require remote main == source_base."
-  - "Require remote dev == 0030238d4be37f8b6e37362bf81f31fc9459dace."
-  - "Fetch all three allowed source files from source_base and require exact blob SHAs above."
+  - "Require main == 14e51a439b3ee2cd830b204169af7426cdce556b."
+  - "Require dev == 0030238d4be37f8b6e37362bf81f31fc9459dace."
+  - "Require repository delete_branch_on_merge == true."
+  - "Require .github/workflows/verify.yml at source_base contains both push:main and pull_request:main."
+  - "Require preserved candidate commit 3bd8e7928dfe1f47831f5d4d94e137da13d7883f is readable."
+  - "Require the three preserved files at that commit match the pinned blob SHAs above."
+  - "Require remote branch task-0130-r2 is absent."
   - "Do not inspect or mutate local checkout state."
 
-required_source_changes:
-  install_sh:
-    path: install.sh
-    requirements:
-      - "Remove dependence on expanding an empty Bash array under set -u."
-      - "Do not weaken set -euo pipefail."
-      - "Do not change CLI surface or accepted argument forms."
-      - "The 3-argument --install-prebuilt form must call candidate cutover without pinned SHA flags."
-      - "The 7-argument pinned form must preserve exact --expected-candidate-sha256 and --expected-handoff-sha256 forwarding."
-      - "Prefer simple scalar/branch logic over compatibility tricks or shell-version detection."
-      - "Do not change install/cutover semantics beyond the empty-array portability repair."
-  tunnel_identity_tests:
-    path: tests/test_tunnel_identity.py
-    requirements:
-      - "Make install.sh regression tests execute the system /bin/bash explicitly rather than resolving bash through PATH/shebang."
-      - "Preserve fixture environment and all existing test semantics."
-      - "This must make the Bash portability contract reproducible on the operator Mac and GitHub macOS runner."
-  terminal_session_tests:
-    path: tests/test_terminal_session.py
-    requirements:
-      - "Replace the fixed time.sleep(0.2) assumption in test_idle_ttl_is_fixed_and_reaper_expires_without_a_follow_up_call."
-      - "Use a bounded eventual-condition wait based on time.monotonic with a generous hard deadline (maximum 2 seconds)."
-      - "Do not poll the session during the wait because poll updates activity."
-      - "Wait only on manager.has_session(session_id), sleeping in small bounded increments."
-      - "After the wait, assert the session is absent, then preserve the existing poll raises unknown|expired assertion."
-      - "Do not change production reaper timing or session.py."
+candidate_rebuild:
+  - "Fetch complete UTF-8 contents of the three preserved files from commit 3bd8e7928dfe1f47831f5d4d94e137da13d7883f."
+  - "Create one tree based on source_base_tree with inline content for exactly the three allowed paths."
+  - "Preserve existing source-base file modes, including install.sh executable mode."
+  - "Create exactly one candidate commit whose sole parent is source_base."
+  - "Compare source_base...candidate before branch creation."
+  - "Require ahead_by=1, behind_by=0, merge-base=source_base, and exactly the three allowed changed paths."
+  - "Require .github/workflows/verify.yml unchanged from source_base."
+  - "Do not use create_blob or Contents API mutation."
 
-non_goals:
-  - ToolContract Kernel
-  - ReceiptV1
-  - Wave 1 tools
-  - workflow modification
-  - production session/reaper implementation changes
-  - packaging/install/cutover execution
-  - branch topology changes
-
-source_authoring:
-  method: GITHUB_GIT_DATA_INLINE_TREE
+ephemeral_branch:
+  name: task-0130-r2
   rules:
-    - "Do not use create_blob."
-    - "Do not use GitHub contents create_file/update_file."
-    - "Fetch the exact source_base commit/tree."
-    - "Construct complete new UTF-8 contents for the three allowed files from the pinned source blobs."
-    - "Use create_tree with base_tree_sha equal to the exact source_base tree and inline content entries for only the three allowed paths."
-    - "Use regular-file mode matching each existing file; preserve install.sh executable mode."
-    - "Create exactly one candidate commit whose sole parent is source_base."
-    - "Before main publication, compare source_base...candidate and require exactly the three allowed changed paths and no others."
-    - "Do not create another branch, PR, tag, or staging ref."
+    - "Create exactly one remote branch directly at the rebuilt candidate commit."
+    - "Do not create any local branch or worktree."
+    - "Do not advance main directly."
+    - "If execution stops before merge, report branch existence explicitly for Architect cleanup."
 
-publication:
-  main_ref:
-    expected_old: "1bdba7464f70a5193b15950c545ff27f7c8bfec4"
-    force: false
-    retries: 0
+pull_request:
+  base: main
+  head: task-0130-r2
+  draft: false
+  title: "fix: make canonical verification portable on clean macOS"
   rules:
-    - "Publish candidate by one non-force update_ref of main."
-    - "If main moved, stop SOURCE_CLOSURE_FAILED; do not rebase or rebuild automatically."
+    - "Create exactly one PR."
+    - "PR body must state TASK-0130 scope, source base, and the three changed paths."
+    - "Do not request reviewers automatically."
+    - "Do not merge in the Executor task."
 
 verification:
-  post_publish_only:
-    - "Fresh-observe main == candidate commit."
-    - "Find the Agent Runtime Verify push workflow for the exact candidate SHA."
-    - "Require event=push, workflow name=Agent Runtime Verify, job=canonical-verify."
-    - "Require workflow and job conclusion=success."
-    - "Fetch job logs after completion and capture the canonical verify test count."
-    - "Expected canonical suite is at least the 454-test baseline; any changed count must be reported, not assumed."
-    - "Do not rerun a failed workflow in revision 1."
-    - "If it fails, fetch logs and report exact remaining failures."
-    - "Do not use local verification as fallback."
+  - "Observe the Agent Runtime Verify workflow triggered by this PR."
+  - "Require event=pull_request and association with task-0130-r2 / the created PR."
+  - "Require job canonical-verify."
+  - "Wait for that exact run to complete."
+  - "Require workflow conclusion=success and job conclusion=success."
+  - "Fetch final job logs and capture canonical test count."
+  - "Require zero failures and at least the 454-test baseline."
+  - "Prove the prior six PINNED_ARGS failures and one idle-reaper timing failure are absent."
+  - "Do not rerun a failed workflow."
+  - "If CI fails, return VERIFICATION_FAILED and leave PR/branch intact; do not patch again."
 
-expected_regression_proof:
-  - "All six prior tunnel identity failures no longer fail with PINNED_ARGS[@] unbound variable."
-  - "The idle reaper test no longer depends on a fixed 0.2 second scheduling assumption."
-  - "No production session.py change."
-  - "No workflow change."
-  - "No public MCP surface change."
+architect_merge_boundary:
+  executor_merge_authority: false
+  required_terminal: NEEDS_REVIEW
+  architect_expected_merge:
+    method: rebase
+    expected_head_sha: rebuilt_candidate_commit
+  post_merge_expectation:
+    - "main advances through GitHub PR merge semantics."
+    - "push-to-main Agent Runtime Verify runs on final main."
+    - "task-0130-r2 auto-deletes because repository delete_branch_on_merge=true."
+    - "Architect verifies final main CI before ACCEPTED."
 
 forbidden:
-  - Agent Runtime invocation
+  - update_ref_main
+  - direct_main_publication
+  - Agent Runtime
   - Desktop Commander
   - Codex
   - local shell or local source mutation
   - create_blob
-  - contents API source mutation
+  - Contents API source mutation
   - workflow mutation
   - source paths outside allowed_source_paths
   - control mutation from Executor
   - dev mutation
   - force push
-  - branch creation
-  - PR creation
+  - second branch
+  - second PR
+  - PR merge by Executor
   - workflow rerun
   - package/install/restart/cutover
 
 failure_policy:
-  - "If create_tree inline-content mutation is platform-blocked before GitHub execution, stop PLATFORM_BLOCK; do not substitute create_blob, contents API, local authoring, Codex, or another surface."
-  - "If GitHub rejects the tree/commit contract, stop TOOL_CONTRACT_FAILURE with exact evidence."
-  - "If main changed before publication, stop SOURCE_CLOSURE_FAILED."
-  - "If workflow fails after publication, stop VERIFICATION_FAILED and preserve exact logs; no retry."
+  - "If create_tree/create_commit is platform-blocked, stop PLATFORM_BLOCK."
+  - "If create_branch is platform-blocked before GitHub execution, stop PLATFORM_BLOCK; do not substitute update_ref."
+  - "If PR creation is platform-blocked, stop PLATFORM_BLOCK and report whether the branch exists."
+  - "If main moves after preflight and before PR creation, stop SOURCE_CLOSURE_FAILED; do not rebuild automatically."
+  - "If CI fails, stop VERIFICATION_FAILED; no retry."
   - "Never change safety surface solely to obtain a different platform judgment."
 
 terminal_states:
   success: NEEDS_REVIEW
   platform_block: PLATFORM_BLOCK
   source_closure_failed: SOURCE_CLOSURE_FAILED
-  tool_contract_failure: TOOL_CONTRACT_FAILURE
   verification_failed: VERIFICATION_FAILED
   publication_failed: PUBLICATION_FAILED
 
 reporting:
   - "Return one bounded Vietnamese result packet."
-  - "Include governance_head, source_base, candidate tree/commit, changed-path proof, exact source changes, main CAS publication, workflow run/job identities, test count/result, and final main/control/dev refs."
+  - "Include governance_head, source_base, rebuilt candidate tree/commit, exact changed paths, ephemeral branch creation, PR number/URL, PR workflow run/job IDs, test count/result, current main/control/dev refs, and whether task-0130-r2 exists."
   - "Do not create report/review files; Architect persists governance evidence on control."
 
 successor:
-  if_accepted: TASK-0131
-  intent: "Implement ToolContract Kernel v1 through the proven GitHub-native source delivery and verification path."
+  architect_action: "Independent review, merge with expected_head_sha, verify push-main CI, confirm branch auto-deletion, then ACCEPT or REWORK."
+  if_accepted_next_task: TASK-0131
+  next_intent: "ToolContract Kernel v1 via GitHub-native ephemeral-PR delivery."
 
 execution_ready: true
