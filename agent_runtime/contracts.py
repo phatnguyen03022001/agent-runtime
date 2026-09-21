@@ -501,7 +501,7 @@ class FsSearchResultItem(_ClosedResult):
     line_number: int | None
     line_text: str | None
     line_truncated: bool
-    file_sha256: str | None
+    file_sha256: FsPatchExpectedSha256 | None
 
 
 class FsSearchResult(_ClosedResult):
@@ -527,8 +527,8 @@ FsPatchEdits = Annotated[list[FsPatchEdit], Field(strict=True, min_length=1, max
 class FsPatchResult(_ClosedResult):
     schema_version: Literal[1]
     path: str
-    sha256_before: str
-    sha256_after: str
+    sha256_before: FsPatchExpectedSha256
+    sha256_after: FsPatchExpectedSha256
     bytes_before: int
     bytes_after: int
     edits_applied: int
@@ -537,13 +537,13 @@ class FsPatchResult(_ClosedResult):
 class ReceiptV1Result(_ClosedResult):
     schema_version: Literal[1]
     kind: Literal["repo-diff"]
-    digest: Annotated[StrictStr, Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$")]
+    digest: FsPatchExpectedSha256
 
 
 class RepoDiffResult(_ClosedResult):
     schema_version: Literal[1]
     scope: RepoDiffScope
-    head_sha: str
+    head_sha: RepoFastForwardSha
     patch: str
     patch_truncated: bool
     full_diff_bytes: int
