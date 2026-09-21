@@ -288,6 +288,45 @@ class RepoStageTests(unittest.TestCase):
             )
         self.assertEqual(caught.exception.reason_code, "IGNORED_PATH")
 
+    def test_check_ignore_transports_candidate_path_via_nul_stdin(self) -> None:
+        import agent_runtime.repo_stage as module
+
+        candidate = "literal:[*?].txt"
+        with patch.object(module, "_run_git") as run:
+            run.return_value.returncode = 1
+            ignored = module._is_ignored(self.repo, candidate, 123.0)
+
+        self.assertFalse(ignored)
+        run.assert_called_once()
+        argv = run.call_args.args[1]
+        self.assertEqual(argv, ["check-ignore", "--stdin", "-z"])
+        self.assertNotIn(candidate, argv)
+        self.assertEqual(
+            run.call_args.kwargs["stdin"],
+            candidate.encode("utf-8", errors="strict") + b"\x00",
+        )
+        self.assertEqual(run.call_args.kwargs["deadline"], 123.0)
+
+    def test_pathspec_looking_untracked_filename_is_treated_literally(self) -> None:
+        head = self._head()
+        path = "literal:[*?].txt"
+        target = self.repo / path
+        target.write_text("literal\n", encoding="utf-8")
+        result = stage_repository(
+            str(self.repo),
+            "main",
+            head,
+            [self._item(path, "present", self._sha(target))],
+        )
+        self.assertEqual([item.path for item in result.staged_paths], [path])
+        self.assertTrue(result.post_stage_clean)
+        immediate = diff_repository(str(self.repo), "staged")
+        self.assertIn(path, immediate.patch)
+        self.assertEqual(
+            result.staged_diff_receipt.model_dump(),
+            immediate.diff_receipt.model_dump(),
+        )
+
     def test_binary_nul_candidate_rejected(self) -> None:
         head = self._head()
         target = self.repo / "tracked.txt"
