@@ -1,0 +1,32 @@
+name: Agent Runtime Verify
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  canonical-verify:
+    runs-on: macos-14
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install locked dependencies
+        run: python -m pip install --require-hashes -r requirements.lock
+
+      - name: Canonical verify
+        run: PYTHON=python PYTHONDONTWRITEBYTECODE=1 ./verify
