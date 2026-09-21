@@ -1,16 +1,16 @@
 protocol_version: 3
 
 task_id: TASK-0125
-task_revision: 9
+task_revision: 10
 state: APPROVED
 
 origin:
-  type: architect_rework_after_chatgpt_local_safety_block
+  type: architect_rework_use_accepted_local_signing_authority
   predecessor_task: TASK-0125
-  predecessor_task_revision: 8
-  predecessor_report: "fb4c378e880907645cf6ff3ce0aed22f663c8bf2"
-  predecessor_review: "a432cd31c60082bf415e4c507b95a7b113c6a5ad"
-  predecessor_terminal: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+  predecessor_task_revision: 9
+  predecessor_report: "8a8deb2e79e18d27af734a6796c09f13467afbb9"
+  predecessor_review: "51f7114faae97e52581be2b3bf305e7601e81672"
+  predecessor_terminal: PACKAGING_AUTHORITY_UNAVAILABLE
 
 target:
   repository: phatnguyen03022001/agent-runtime
@@ -24,10 +24,10 @@ execution_surface:
   location: LOCAL
   transport: NATIVE
 
-objective: "Finish TASK-0125 without source or verification replay. Use exactly one read-only codesigning identity discovery against the explicit login keychain path rather than the default search list. If exactly one valid identity is visible, package the already-verified implementation commit 4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b, install it exactly once, commit cutover exactly once, and prove the installed Runtime keeps the exact eleven-tool public surface while screen_capture fails closed with VISUAL_PERCEPTION_BLOCKED and zero ImageContent. If explicit-keychain discovery still yields zero identities, stop without retry."
+objective: "Finish TASK-0125 using the already-accepted repository-local signing identity authority from TASK-0061. Do not enumerate Keychain identities. Read only AGENT_RUNTIME_CODESIGN_IDENTITY from the ignored mode-0600 .env, verify its SHA-256 digest against the accepted bootstrap digest, prove that exact identity can sign and strict-verify one task-owned temporary Mach-O probe, then package the already-verified implementation commit 4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b exactly once. If packaging passes, install exactly once, commit cutover exactly once, and prove the installed Runtime keeps the exact eleven-tool public surface while screen_capture fails closed with VISUAL_PERCEPTION_BLOCKED and zero ImageContent."
 
 accepted_authority:
-  task_0125_revision_8_review: "a432cd31c60082bf415e4c507b95a7b113c6a5ad"
+  task_0125_revision_9_review: "51f7114faae97e52581be2b3bf305e7601e81672"
   implementation_commit: "4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b"
   inherited_architect_verify:
     result: PASS
@@ -38,10 +38,21 @@ accepted_authority:
     installed_runtime_revision: "18cdb515fe037c9b6cb81ce6529d85ae734e195a"
     contract: split-v1
     result: PASS
+  accepted_signing_bootstrap:
+    task: TASK-0061
+    review_commit: "a0899eb524327924e4adb2ed951ef4ba8da0bf45"
+    local_authority_path: "/Users/tienphat/Developer/agent-runtime/.env"
+    local_authority_key: AGENT_RUNTIME_CODESIGN_IDENTITY
+    identity_sha256: "caba6bba7c64a3efb58eafa09c300ca030ccb71a65cb2bc1a929cfc63a17e3e7"
+    env_mode: "0600"
+    env_gitignored: true
+    env_untracked: true
+    exact_identity_codesign_verified: true
+    strict_codesign_verified: true
+    team_identifier_non_null: true
+    future_keychain_enumeration_required: false
   visual_perception_status: BLOCKED
   guard_error_code: VISUAL_PERCEPTION_BLOCKED
-  explicit_login_keychain_path: "/Users/tienphat/Library/Keychains/login.keychain-db"
-  architect_read_only_host_identity_count_for_explicit_login_keychain: 1
   prior_failed_candidates:
     - "5bf6506953610cceefcf7c30008dc956b578dc5baa319dd15d0a2279a21d1bc2"
     - "165ae74f4f1d95d8567fee853d5a687b93c24eb9bcac528526cc00595872e928"
@@ -52,7 +63,7 @@ local_source:
   required_head: "4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b"
   required_worktree: clean
   requirements:
-    - "Do not fast-forward, pull, merge, checkout, reset, rebase, stash, or clean."
+    - "Do not pull, merge, checkout, reset, rebase, stash, clean, or otherwise change local HEAD."
     - "Candidate source_revision must remain exactly the implementation commit."
     - "Require requirements.lock SHA-256 = 80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e."
     - "Require direct read-only classifier from committed source against installed app returns runtime_revision=18cdb515fe037c9b6cb81ce6529d85ae734e195a and contract=split-v1."
@@ -62,45 +73,47 @@ remote_authority:
   refresh_authority: "0/1"
   requirements:
     - "Fresh-resolve remote dev/main before packaging."
-    - "Require remote dev equals the exact revision-9 planning HEAD supplied by the operator."
+    - "Require remote dev equals the exact revision-10 planning HEAD supplied by the operator."
     - "Require remote main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
     - "At most one ordinary fetch of origin/dev if needed only to establish ancestry/remote identity."
     - "Require implementation commit 4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b is an ancestor of remote dev."
     - "Do not change local HEAD."
 
 signing_authority:
-  discovery_authority: "0/1"
-  command_shape: "/usr/bin/security find-identity -v -p codesigning /Users/tienphat/Library/Keychains/login.keychain-db"
-  extraction_contract:
-    - "Invoke the exact explicit-login-keychain discovery exactly once."
-    - "Capture stdout only in process memory; do not print or persist raw output."
-    - "Parse standalone 40-hex SHA-1 fingerprints from valid identity lines."
-    - "Ignore the final '<N> valid identities found' summary when extracting fingerprints."
-    - "Require summary count exactly 1 and distinct fingerprint count exactly 1."
-    - "If count is zero, stop PACKAGING_AUTHORITY_UNAVAILABLE."
-    - "If ambiguous, stop SIGNING_IDENTITY_AMBIGUOUS."
-    - "Do not disclose fingerprint or human-readable identity."
-    - "Bind the sole fingerprint only to the package_app.sh child process environment as AGENT_RUNTIME_CODESIGN_IDENTITY."
-  mutation: forbidden
-  forbidden_keychain_actions:
-    - unlock-keychain
-    - set-keychain-settings
-    - list-keychains_mutation
-    - default-keychain_mutation
-    - import
-    - export
-    - add-trusted-cert
-    - set-key-partition-list
-    - certificate_or_key_creation
-    - certificate_or_key_deletion
+  keychain_enumeration: "0/0"
+  local_env_read: "0/1"
+  probe: "0/1"
+  requirements:
+    - "Read only AGENT_RUNTIME_CODESIGN_IDENTITY from /Users/tienphat/Developer/agent-runtime/.env."
+    - "Do not print or persist the literal."
+    - "Require .env exists, mode 0600, is gitignored, untracked, and contains exactly one AGENT_RUNTIME_CODESIGN_IDENTITY entry."
+    - "Require the value is non-empty."
+    - "Require SHA-256(value) = caba6bba7c64a3efb58eafa09c300ca030ccb71a65cb2bc1a929cfc63a17e3e7."
+    - "If any predicate fails, stop SIGNING_AUTHORITY_MISMATCH."
+    - "Do not invoke security find-identity, find-certificate, dump-keychain, unlock-keychain, list-keychains, default-keychain, import, export, add-trusted-cert, set-key-partition-list, or any other Keychain enumeration/mutation command."
+  temp_signing_probe:
+    - "Create one task-owned temporary directory under the canonical system temp root."
+    - "Copy /usr/bin/true by byte-only copy semantics into the task directory; do not preserve xattrs/ownership/source metadata."
+    - "Set executable permissions explicitly."
+    - "Sign the temporary copy exactly once with the accepted .env identity held only in process memory."
+    - "Run codesign --verify --strict on the signed probe."
+    - "Require a non-null TeamIdentifier but do not print/persist its literal."
+    - "Delete the task-owned temp directory after proof."
+    - "If signing or strict verification fails, stop SIGNING_AUTHORITY_UNUSABLE. Do not package."
+  mutation:
+    keychain: forbidden
+    repository: forbidden
+    installed_runtime: forbidden_before_package
 
 package:
   authority: "0/1"
   command: "./macos/package_app.sh"
   requirements:
-    - "Invoke exactly once only after explicit-keychain discovery succeeds."
+    - "Invoke exactly once only after the signing probe passes."
+    - "Bind AGENT_RUNTIME_CODESIGN_IDENTITY from the accepted .env value only to the package child environment."
     - "Package from clean local HEAD 4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b."
     - "No source edits and no retry."
+    - "Do not mutate AGENT_RUNTIME_PACKAGING_PYTHON."
     - "Require candidate source_revision exactly 4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b."
     - "Require strict codesign --verify --deep --strict PASS."
     - "Require package_provenance.py validate-candidate PASS."
@@ -115,7 +128,7 @@ activation:
     authority: "0/1"
     command_shape: "./install.sh --install-prebuilt <candidate_app> <candidate_handoff> --expected-candidate-sha256 <candidate_sha256> --expected-handoff-sha256 <handoff_sha256>"
     requirements:
-      - "Use only the fresh revision-9 candidate."
+      - "Use only the fresh revision-10 candidate."
       - "No retry."
       - "If install fails before transaction creation, stop INSTALL_PREBUILT_FAILED."
       - "If install returns a typed approval-required/AWAITING_APPROVAL state, stop RUNTIME_SERVICE_APPROVAL_REQUIRED without changing System Settings, resuming, rolling back, or recovering."
@@ -158,7 +171,7 @@ installed_guard_probe:
     - "Require exact error code VISUAL_PERCEPTION_BLOCKED."
     - "Require retryable=false."
     - "Require zero ImageContent."
-    - "Require no native ScreenCaptureKit helper consequence and no screen pixels."
+    - "Require no capture_screen/native ScreenCaptureKit helper consequence and no screen pixels."
     - "Do not use ChatGPT custom-app screen_capture or model vision."
   failure_terminal: INSTALLED_VISUAL_GUARD_UNPROVEN
 
@@ -180,7 +193,9 @@ authority_counters:
   focused_tests: "0/0"
   canonical_verify: "0/0"
   production_classifier: "0/1"
-  signing_identity_discovery: "0/1"
+  keychain_enumeration: "0/0"
+  local_env_read: "0/1"
+  temp_signing_probe: "0/1"
   package: "0/1"
   install_prebuilt: "0/1"
   commit_cutover: "0/1"
@@ -188,9 +203,9 @@ authority_counters:
   retries: 0
 
 forbidden_actions:
-  - "Do not use the default keychain search list for signing discovery."
+  - "Do not invoke security find-identity or any Keychain enumeration command."
   - "Do not mutate Keychain in any way."
-  - "Do not disclose raw security output, identity literal, or fingerprint."
+  - "Do not disclose the signing identity literal, TeamIdentifier literal, or any Keychain content."
   - "Do not modify source or local HEAD."
   - "Do not rerun tests or ./verify."
   - "Do not reuse prior failed candidates."
@@ -202,8 +217,8 @@ forbidden_actions:
 terminal_states:
   success: NEEDS_REVIEW
   source_closure_failed: SOURCE_CLOSURE_FAILED
-  packaging_authority_unavailable: PACKAGING_AUTHORITY_UNAVAILABLE
-  ambiguous_signing_identity: SIGNING_IDENTITY_AMBIGUOUS
+  signing_authority_mismatch: SIGNING_AUTHORITY_MISMATCH
+  signing_authority_unusable: SIGNING_AUTHORITY_UNUSABLE
   packaging_failed: PACKAGING_FAILED
   install_failed: INSTALL_PREBUILT_FAILED
   approval_required: RUNTIME_SERVICE_APPROVAL_REQUIRED
@@ -214,9 +229,9 @@ terminal_states:
 reporting:
   executor_output:
     - "Return one bounded Vietnamese result packet only."
-    - "Include exact planning HEAD, unchanged local source HEAD, remote authority closure, inherited canonical verification identity, production classifier result, explicit-login-keychain valid identity count and fingerprint-binding boolean only, package result and candidate/handoff hashes, install transaction state, post-install gate, cutover result, exact eleven-tool installed probe, screen_capture denial result, and all authority/forbidden counters."
+    - "Include exact planning HEAD, unchanged local source HEAD, remote authority closure, inherited canonical verification identity, production classifier result, .env authority predicates, accepted identity digest match boolean only, temp signing probe result, package result and candidate/handoff hashes, install transaction state, post-install gate, cutover result, exact eleven-tool installed probe, screen_capture denial result, and all authority/forbidden counters."
     - "Do not create report.yaml."
-    - "Do not disclose raw security output, signing identity literal/fingerprint, runtime.env contents, credentials, tokens, tunnel IDs, cookies, Keychain/SSH data, screenshots, screen content, or unrelated host state."
+    - "Do not disclose the signing identity literal, TeamIdentifier literal, .env contents, Keychain contents, runtime.env contents, credentials, tokens, tunnel IDs, cookies, SSH data, screenshots, screen content, or unrelated host state."
   architect_review: required
 
 git_authority:
