@@ -508,6 +508,20 @@ def _require_bound_state(state: _RepoState, expected_head_sha: str, deadline: fl
             "HEAD_CHANGED",
             "HEAD changed before commit branch update",
         )
+    upstream = _text(
+        _run_git(
+            state.root,
+            ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
+            deadline=deadline,
+        ),
+        "UPSTREAM_MISMATCH",
+    )
+    if upstream != f"origin/{state.branch}":
+        raise _fail(
+            ContractErrorCode.STATE_CHANGED,
+            "HEAD_CHANGED",
+            "branch upstream changed during repo_commit",
+        )
     conflicts = _run_git(state.root, ["ls-files", "-u", "-z"], deadline=deadline)
     if conflicts.returncode != 0:
         raise _fail(
