@@ -1,7 +1,7 @@
 protocol_version: 3
 
 task_id: TASK-0127
-task_revision: 1
+task_revision: 2
 state: APPROVED
 
 target:
@@ -28,8 +28,14 @@ delivery_authority:
   source_expected_branch_after: main
   allowed_source_paths: []
 
+governance_identity:
+  control: SELF_GOVERNANCE_HEAD
+  rule: >-
+    The canonical task does not and cannot literalize the SHA of the commit that contains itself.
+    The exact immutable governance_head is supplied by the operator launch packet and used to fetch this task.
+    Execution preflight must require the live control ref equals that supplied governance_head.
+
 remote_topology:
-  control: "0030238d4be37f8b6e37362bf81f31fc9459dace"
   main: "b619d3d8856df3a0ef12ccb833b49afe9c68a867"
   dev: "0030238d4be37f8b6e37362bf81f31fc9459dace"
   dev_status: FROZEN_NON_AUTHORITATIVE_NO_NEW_WRITES
@@ -77,9 +83,19 @@ exact_transition:
       - main
     semantics: "Switch HEAD symbolic branch from dev to main while both resolve to the identical source_base commit/tree."
 
+revision_2_delta:
+  predecessor_report: "37d2bf01445cda3202bff04df57a111013226288"
+  predecessor_review: "62a49202d825d62163cdd434783031c00b07cad5"
+  predecessor_terminal: SOURCE_CLOSURE_FAILED
+  reason: >-
+    Revision 1 incorrectly literalized the pre-task control SHA inside the task commit itself.
+    Revision 2 fixes only governance self-identity semantics; local transition authority is unchanged.
+
 execution_rules:
   - "Resolve this task from GitHub at the exact governance HEAD supplied by the operator."
-  - "Fresh-observe remote control/main/dev before local mutation and require exact remote_topology identities."
+  - "Fresh-observe remote control/main/dev before local mutation."
+  - "Require live control == the supplied governance_head from the launch packet."
+  - "Require remote main/dev equal the literal remote_topology identities."
   - "Fresh-observe all local_preconditions before mutation."
   - "Invoke only the three exact terminal_exec argv sequences above, in order, each at cwd /Users/tienphat/Developer/agent-runtime."
   - "Do not combine commands into one shell invocation."
