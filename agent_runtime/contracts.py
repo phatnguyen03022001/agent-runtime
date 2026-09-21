@@ -550,3 +550,28 @@ class RepoDiffResult(_ClosedResult):
     diff_receipt: ReceiptV1Result
     network_used: Literal[False]
 
+
+
+FsWritePath = Annotated[StrictStr, Field(min_length=1, max_length=4096)]
+FsWriteOperation = Literal["create", "replace"]
+FsWriteContent = Annotated[StrictStr, Field(max_length=1024 * 1024)]
+FsWriteExpectedSha256 = FsPatchExpectedSha256
+
+
+class FsWriteReceiptResult(_ClosedResult):
+    schema_version: Literal[1]
+    kind: Literal["fs-write"]
+    digest: FsWriteExpectedSha256
+
+
+class FsWriteResult(_ClosedResult):
+    schema_version: Literal[1]
+    status: Literal["created", "replaced", "unchanged"]
+    path: str
+    sha256_before: FsWriteExpectedSha256 | None
+    sha256_after: FsWriteExpectedSha256
+    bytes_before: int | None
+    bytes_after: int
+    mode_before: int | None
+    mode_after: int
+    write_receipt: FsWriteReceiptResult
