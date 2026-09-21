@@ -167,24 +167,32 @@ def _payload(
     }
 
 
-def _read_complete(file_fd: int, remaining: int) -> tuple[bytes | None, int]:
+def _read_complete(
+    file_fd: int,
+    remaining: int,
+    deadline: float,
+) -> tuple[bytes | None, int, str | None]:
+    if time.monotonic() >= deadline:
+        return None, 0, "deadline"
     observed = os.fstat(file_fd)
     if observed.st_size > remaining:
-        return None, 0
+        return None, 0, "max_bytes"
     output = bytearray()
     while True:
+        if time.monotonic() >= deadline:
+            return None, len(output), "deadline"
         available = remaining - len(output)
         if available <= 0:
             current = os.fstat(file_fd)
             if current.st_size > len(output):
-                return None, len(output)
-            return bytes(output), len(output)
+                return None, len(output), "max_bytes"
+            return bytes(output), len(output), None
         try:
             chunk = os.read(file_fd, min(_READ_CHUNK_BYTES, available))
         except OSError as exc:
             raise FsSafetyError("IO_ERROR") from exc
         if not chunk:
-            return bytes(output), len(output)
+            return bytes(output), len(output), None
         output.extend(chunk)
 
 
@@ -387,14 +395,14 @@ def search_files(
             except FsSafetyError as exc:
                 raise _safety_failure(exc) from None
             try:
-                raw, consumed = _read_complete(file_fd, remaining)
+                raw, consumed, read_limit = _read_complete(file_fd, remaining, deadline)
             except FsSafetyError as exc:
                 raise _safety_failure(exc) from None
             finally:
                 os.close(file_fd)
             bytes_scanned += consumed
             if raw is None:
-                stop("max_bytes")
+                stop(read_limit or "max_bytes")
                 break
             if b"\x00" in raw:
                 skipped_nul += 1
@@ -406,6 +414,9 @@ def search_files(
                 continue
             digest = hashlib.sha256(raw).hexdigest()
             for line_number, line in enumerate(text.splitlines(), start=1):
+                if time.monotonic() >= deadline:
+                    stop("deadline")
+                    break
                 line_haystack = line if case_sensitive else line.casefold()
                 if needle not in line_haystack:
                     continue
