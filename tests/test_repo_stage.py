@@ -4,6 +4,7 @@ import hashlib
 import os
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -306,6 +307,34 @@ class RepoStageTests(unittest.TestCase):
             candidate.encode("utf-8", errors="strict") + b"\x00",
         )
         self.assertEqual(run.call_args.kwargs["deadline"], 123.0)
+        check_env = run.call_args.kwargs["env"]
+        self.assertNotIn("GIT_LITERAL_PATHSPECS", check_env)
+        self.assertNotIn("GIT_NOGLOB_PATHSPECS", check_env)
+        self.assertNotIn("GIT_GLOB_PATHSPECS", check_env)
+        self.assertNotIn("GIT_ICASE_PATHSPECS", check_env)
+
+    def test_regular_run_git_keeps_literal_pathspec_guard_by_default(self) -> None:
+        import agent_runtime.repo_stage as module
+
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=b"",
+            stderr=b"",
+        )
+        with patch.object(module.subprocess, "run", return_value=completed) as run:
+            result = module._run_git(
+                self.repo,
+                ["rev-parse", "--is-inside-work-tree"],
+                deadline=time.monotonic() + 1.0,
+            )
+
+        self.assertEqual(result.returncode, 0)
+        run.assert_called_once()
+        self.assertEqual(
+            run.call_args.kwargs["env"]["GIT_LITERAL_PATHSPECS"],
+            "1",
+        )
 
     def test_pathspec_looking_untracked_filename_is_treated_literally(self) -> None:
         head = self._head()
