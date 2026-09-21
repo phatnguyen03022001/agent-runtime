@@ -367,20 +367,24 @@ def patch_file(
 
         evolving = text
         for edit in edits:
-            occurrences = evolving.count(edit.old_text)
-            if occurrences == 0:
+            first = evolving.find(edit.old_text)
+            if first < 0:
                 raise CapabilityFailure(
                     ContractErrorCode.PRECONDITION_FAILED,
                     "OLD_TEXT_NOT_FOUND",
                     "old_text was not found in the evolving target text",
                 )
-            if occurrences != 1:
+            if evolving.find(edit.old_text, first + 1) >= 0:
                 raise CapabilityFailure(
                     ContractErrorCode.CONFLICT,
                     "OLD_TEXT_NOT_UNIQUE",
                     "old_text is not unique in the evolving target text",
                 )
-            evolving = evolving.replace(edit.old_text, edit.new_text, 1)
+            evolving = (
+                evolving[:first]
+                + edit.new_text
+                + evolving[first + len(edit.old_text) :]
+            )
 
         try:
             replacement = evolving.encode("utf-8", errors="strict")
@@ -395,6 +399,19 @@ def patch_file(
                 ContractErrorCode.LIMIT_EXCEEDED,
                 "OUTPUT_FILE_LIMIT",
                 "edited output exceeds 1 MiB",
+            )
+
+        sha_after = hashlib.sha256(replacement).hexdigest()
+        if replacement == original:
+            _revalidate_target(parent_fd, final, original_identity, sha_before)
+            return FsPatchResult(
+                schema_version=1,
+                path="/".join(components),
+                sha256_before=sha_before,
+                sha256_after=sha_after,
+                bytes_before=len(original),
+                bytes_after=len(replacement),
+                edits_applied=len(edits),
             )
 
         temp_fd, temp_name = _create_temp(parent_fd, mode_bits)
@@ -434,7 +451,6 @@ def patch_file(
                 "parent directory could not be fsynced after replacement",
             ) from exc
 
-        sha_after = hashlib.sha256(replacement).hexdigest()
         return FsPatchResult(
             schema_version=1,
             path="/".join(components),
