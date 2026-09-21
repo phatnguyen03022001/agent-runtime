@@ -1,7 +1,7 @@
 protocol_version: 3
 
 task_id: TASK-0132
-task_revision: 1
+task_revision: 2
 state: APPROVED
 
 target:
@@ -9,6 +9,7 @@ target:
   governance_branch: control
   source_branch: main
   ephemeral_branch: task-0132-r1
+  pull_request: 3
 
 execution_surface:
   id: CHATGPT_GITHUB
@@ -21,536 +22,153 @@ governance_identity:
   control: SELF_GOVERNANCE_HEAD
   rule: >-
     The immutable governance_head is supplied externally in the launch packet.
-    Governance history must never be synchronized into main.
 
-delivery_authority:
-  source_base: "ec011f92228392b213638e6abc05a9907f362e87"
-  source_base_tree: "90f366d6230f3bfba8fa79be9622c0a7bcea96d2"
-  source_expected_branch: main
-  allowed_source_paths:
-    - agent_runtime/contracts.py
-    - agent_runtime/server.py
-    - agent_runtime/fs_safety.py
-    - agent_runtime/fs_list.py
-    - agent_runtime/fs_search.py
-    - agent_runtime/repo_diff.py
-    - agent_runtime/fs_patch.py
-    - tests/test_fs_list.py
-    - tests/test_fs_search.py
-    - tests/test_repo_diff.py
-    - tests/test_fs_patch.py
-    - tests/test_wave1_mcp.py
-    - tests/test_mcp_contracts.py
-    - tests/test_mcp_client_conformance.py
-    - tests/test_tool_contract.py
+revision_2_delta:
+  predecessor_review: "d0e5133aea0e6ef75061de280c50b99372aaf2b0"
+  predecessor_terminal: VERIFICATION_FAILED
+  existing_branch: task-0132-r1
+  existing_branch_head: "f2b3350b0b07cb07b09b3669814b9935156c938f"
+  existing_pr: 3
+  reason: >-
+    Revision 1 Wave 1 implementation and focused tests passed, but canonical CI exposed nine stale
+    legacy assertions across seven tests that hard-code the previous eleven-tool surface. The omission
+    of those files from the revision-1 allowlist was an Architect task-design defect. Revision 2 may
+    update only those stale legacy tests. No Wave 1 implementation bytes may change.
 
-existing_blob_preconditions:
-  agent_runtime/contracts.py: "a00eaeb9a6c88f90266aaa918462c388520816e6"
-  agent_runtime/server.py: "9b0045576a9d89a6d96c9ab96e5a471c8acfcde7"
-  tests/test_mcp_contracts.py: "b96c7419fd7108f8631c17b8978f328a07d58951"
-  tests/test_mcp_client_conformance.py: "1f2c631d672c9668129eea1291548afac91d8ace"
-  tests/test_tool_contract.py: "5b1425e10ea4c943bf93ec8de53e0d9106a95599"
+source_identity:
+  main_expected: "ec011f92228392b213638e6abc05a9907f362e87"
+  branch_expected_head: "f2b3350b0b07cb07b09b3669814b9935156c938f"
 
-kernel_preconditions:
-  agent_runtime/tool_contract.py: "153f1272d4840d41091f52480dfa3a43a333c13f"
-  agent_runtime/fs_read.py: "4549d043358cbae8b11dba8301de6b08203a2955"
+allowed_revision_2_delta_paths:
+  - tests/test_fs_read_batch.py
+  - tests/test_repo_fast_forward_mcp.py
+  - tests/test_repo_observer_mcp.py
+  - tests/test_repo_publish_mcp.py
+  - tests/test_screen_capture_mcp.py
+  - tests/test_surface_and_scripts.py
+  - tests/test_timing.py
 
-required_absent_paths:
-  - agent_runtime/fs_safety.py
-  - agent_runtime/fs_list.py
-  - agent_runtime/fs_search.py
-  - agent_runtime/repo_diff.py
-  - agent_runtime/fs_patch.py
-  - tests/test_fs_list.py
-  - tests/test_fs_search.py
-  - tests/test_repo_diff.py
-  - tests/test_fs_patch.py
-  - tests/test_wave1_mcp.py
+expected_current_blobs:
+  tests/test_fs_read_batch.py: "68e6be83a5b54feeca24ed5851f9247a7a8b3d8a"
+  tests/test_repo_fast_forward_mcp.py: "66e1c3e9f51f988edb3722f83a649aec68728d96"
+  tests/test_repo_observer_mcp.py: "688e7190fc9666a666a6ec4f192eeffb05708f9a"
+  tests/test_repo_publish_mcp.py: "51483ad1bd51d3921f2939609caa3ab4201af3bf"
+  tests/test_screen_capture_mcp.py: "e21b6dc1eac8418b66fe848b6b32f7e1686b04a8"
+  tests/test_surface_and_scripts.py: "4cc38640ece1505170d3d29f68f64f4c5ab2b897"
+  tests/test_timing.py: "6bb4142af64a2ba803ef1eb46c9c3af664f0a407"
 
 objective: >-
-  Deliver Wave 1 as one coherent native capability set on ToolContract Kernel v1:
-  fs_list, fs_search, repo_diff, and fs_patch. Preserve all accepted legacy tool behavior.
-  The final public MCP surface must contain exactly 15 tools. Do not implement Wave 2,
-  packaging, install, restart, cutover, or any full legacy migration.
+  Align only stale legacy public-surface/order/annotation assertions with the already-authored
+  fifteen-tool Wave 1 surface on the existing PR. Do not modify implementation, capability contracts,
+  schemas, behavior, or any revision-1 Wave 1 test file.
 
-architecture:
-  normal_typed_path:
-    - fs_list
-    - fs_search
-    - fs_read_batch
-    - fs_patch
-    - repo_diff
-  principles:
-    - "typed native capabilities are the normal path"
-    - "terminal_exec remains escape hatch for build/test/lint/project CLI"
-    - "tool implementation != ToolContract metadata"
-    - "new tools must use ToolContract Kernel v1"
-    - "success payloads remain tool-specific"
-    - "new Wave 1 typed failures use generic ContractErrorCode plus stable reason_code"
-    - "legacy 11 tools keep their existing public error/result contracts unless this task explicitly updates only surface-order expectations"
+exact_public_tool_order:
+  - terminal_exec
+  - terminal_start
+  - terminal_poll
+  - terminal_control
+  - terminal_resize
+  - capacity_observer
+  - fs_read_batch
+  - fs_list
+  - fs_search
+  - fs_patch
+  - repo_observer
+  - repo_diff
+  - repo_fast_forward
+  - repo_publish
+  - screen_capture
 
-shared_filesystem_safety:
-  path: agent_runtime/fs_safety.py
-  role: >-
-    Shared low-level descriptor-relative filesystem safety for Wave 1 only.
-    Do not migrate fs_read_batch onto this helper in TASK-0132.
-  requirements:
-    - "Reuse the existing workspace-root and validated-cwd authority from executor.py; do not fork workspace semantics."
-    - "Open directories/files descriptor-relative with no-follow semantics."
-    - "Reject absolute descendant paths, NUL, empty components, dot, and dot-dot."
-    - "Never traverse a symlink component."
-    - "Provide bounded helpers sufficient for safe directory traversal, regular-file open, parent-directory open, and identity revalidation."
-    - "Keep low-level helpers free of tool-specific response schema or policy."
-    - "No network, shell, subprocess, glob expansion, regex expansion, or hidden filesystem mutation."
+exact_annotations:
+  terminal_exec: [false, true, false, true]
+  terminal_start: [false, true, false, true]
+  terminal_poll: [false, false, false, false]
+  terminal_control: [false, true, false, true]
+  terminal_resize: [false, false, true, false]
+  capacity_observer: [true, false, true, false]
+  fs_read_batch: [true, false, true, false]
+  fs_list: [true, false, true, false]
+  fs_search: [true, false, true, false]
+  fs_patch: [false, true, false, false]
+  repo_observer: [true, false, true, false]
+  repo_diff: [true, false, true, false]
+  repo_fast_forward: [false, true, true, true]
+  repo_publish: [false, true, true, true]
+  screen_capture: [true, false, true, false]
 
-public_error_contract:
-  new_model_names:
-    - CapabilityErrorPayload
-    - CapabilityErrorEnvelope
-  required_fields:
-    code: ContractErrorCode_value
-    reason_code: stable_nonempty_string
-    message: bounded_string
-    retryable: bool
-  exact_code_values:
-    - INVALID_ARGUMENT
-    - OUTSIDE_WORKSPACE
-    - PRECONDITION_FAILED
-    - STATE_CHANGED
-    - CONFLICT
-    - LIMIT_EXCEEDED
-    - TIMEOUT
-    - PERMISSION_DENIED
-    - NOT_FOUND
-    - UNAVAILABLE
-    - INTERNAL_ERROR
-  rules:
-    - "Do not alter TypedToolErrorEnvelope used by existing repo/screen tools."
-    - "Do not add generic success envelopes."
-    - "New tool failures must return MCP CallToolResult with isError=true and structuredContent=CapabilityErrorEnvelope."
-    - "Messages must be bounded and contain no file content payloads."
+required_test_updates:
+  tests/test_fs_read_batch.py:
+    - "Update only the exact public tool-order expectation from 11 to the exact 15-tool order."
+    - "Preserve fs_read_batch annotation and schema assertions unchanged."
+  tests/test_repo_fast_forward_mcp.py:
+    - "Update EXPECTED_TOOLS to exact 15-tool order."
+    - "Rename stale ordinal wording from public tool 9 to public tool 13 if touched."
+    - "Do not alter repo_fast_forward schema, delegate, behavior, or annotation assertions."
+  tests/test_repo_observer_mcp.py:
+    - "Update exact surface expectation to 15 tools."
+    - "Rename stale ordinal wording from public tool 8 to public tool 11 if touched."
+    - "Preserve repo_observer schema and behavior assertions."
+  tests/test_repo_publish_mcp.py:
+    - "Update EXPECTED_TOOLS to exact 15-tool order."
+    - "Extend EXPECTED_ANNOTATIONS with fs_list, fs_search, fs_patch, repo_diff using exact tuples above."
+    - "Rename stale ordinal wording from public tool 10 to public tool 14 if touched."
+    - "Any test claiming tools 1 through 9 are preserved must be updated to the correct invariant: legacy tool relative order is preserved while Wave 1 tools occupy the canonical inserted positions."
+    - "Do not alter repo_publish public schema/behavior assertions."
+  tests/test_screen_capture_mcp.py:
+    - "Update EXPECTED_TOOLS and EXPECTED_ANNOTATIONS to exact 15-tool surface."
+    - "Rename stale public tool 11 wording to public tool 15 if touched."
+    - "Update any prefix assertion so it reflects the exact canonical 15-tool order without weakening the screen_capture-last invariant."
+    - "Preserve VISUAL_PERCEPTION_BLOCKED and capture schema assertions."
+  tests/test_surface_and_scripts.py:
+    - "Update AST/static PUBLIC_TOOL_NAMES expectation to exact 15-tool order."
+    - "Update fake MCP registration expectation to exact 15-tool order."
+    - "Extend expected annotations for fs_list, fs_search, fs_patch, repo_diff."
+    - "Rename stale capacity-observer-centric test names only if useful for truthfulness; no implementation edits."
+  tests/test_timing.py:
+    - "Update real MCP registration surface expectation to exact 15-tool order."
+    - "Preserve timing middleware and all existing legacy signature assertions."
+    - "Do not add behavior assertions unrelated to stale surface alignment."
 
-fs_list:
-  implementation_path: agent_runtime/fs_list.py
-  contract_constant: FS_LIST_CONTRACT
-  tool_contract:
-    tool_class: read
-    authority:
-      workspace_bound: true
-      network: none
-      mutation: none
-    annotations:
-      read_only: true
-      destructive: false
-      idempotent: true
-      open_world: false
-  public_input:
-    cwd: AbsoluteCwd
-    path:
-      type: string
-      default: "."
-      max_chars: 4096
-      semantics: "'.' means cwd; otherwise normalized cwd-relative descendant directory"
-    max_entries:
-      type: integer
-      default: 200
-      min: 1
-      max: 1000
-  behavior:
-    - "Non-recursive only."
-    - "Path itself must resolve without symlink traversal to an existing directory."
-    - "List entries using no-follow metadata; never traverse entry symlinks."
-    - "Entry kinds: file, directory, symlink, other."
-    - "Deterministic ascending order by returned UTF-8 name."
-    - "Skip names that cannot be represented as strict UTF-8 and count them."
-    - "Hard scan ceiling: 10000 directory entries. If exceeded, fail LIMIT_EXCEEDED / DIRECTORY_SCAN_LIMIT."
-    - "Response retains first max_entries after complete deterministic sort."
-    - "No file content reads and no hashing."
-  public_result:
-    schema_version: 1
-    fields:
-      path: string
-      entries:
-        item_fields:
-          name: string
-          path: string
-          kind: "file|directory|symlink|other"
-          size_bytes: "integer|null"
-      truncated: bool
-      scanned_entries: integer
-      skipped_invalid_names: integer
-  bounds:
-    response_entries: 1000
-    scanned_entries: 10000
-
-fs_search:
-  implementation_path: agent_runtime/fs_search.py
-  contract_constant: FS_SEARCH_CONTRACT
-  tool_contract:
-    tool_class: read
-    authority:
-      workspace_bound: true
-      network: none
-      mutation: none
-    annotations:
-      read_only: true
-      destructive: false
-      idempotent: true
-      open_world: false
-  public_input:
-    cwd: AbsoluteCwd
-    query:
-      type: strict_string
-      min_chars: 1
-      max_chars: 4096
-    mode:
-      exact_values:
-        - content
-        - path
-    root_path:
-      type: string
-      default: "."
-      max_chars: 4096
-    case_sensitive:
-      type: bool
-      default: true
-    max_results:
-      type: integer
-      default: 100
-      min: 1
-      max: 500
-  search_semantics:
-    - "Literal substring matching only. No regex, glob, shell, fuzzy matching, or external grep."
-    - "case_sensitive=false uses Unicode casefold on decoded strings."
-    - "Recursive deterministic traversal by normalized relative UTF-8 path."
-    - "Skip every directory component named .git."
-    - "Never traverse symlink directories and never search symlink file targets."
-    - "Search regular files only."
-    - "mode=path matches the normalized relative file path and does not read file content."
-    - "mode=content reads the complete regular file within global scan bounds, computes SHA-256 over exact raw bytes, rejects files containing NUL as binary, and skips files that are not strict UTF-8."
-    - "For content mode, emit at most one result per matching line, in file/path order then line-number order."
-    - "Each content result must include the complete raw-file sha256 so it can be used as fs_patch.expected_sha256."
-    - "Returned line_text is UTF-8 and capped at 4096 UTF-8 bytes with line_truncated=true when shortened; truncate only at a valid UTF-8 boundary."
-  hard_bounds:
-    max_files_scanned: 20000
-    max_content_bytes_scanned: 67108864
-    max_results: 500
-    max_serialized_result_bytes: 262144
-    deadline_seconds: 5.0
-  bounded_completion:
-    - "Bounds produce truthful partial success with truncated=true rather than hidden extra scanning."
-    - "limit_reason is one of max_files, max_bytes, max_results, max_output, deadline, or null."
-    - "Do not emit a file_sha256 for content results until the entire matched file has been read and hashed."
-  public_result:
-    schema_version: 1
-    fields:
-      results:
-        item_fields:
-          path: string
-          line_number: "integer|null"
-          line_text: "string|null"
-          line_truncated: bool
-          file_sha256: "lowercase_sha256|null"
-      truncated: bool
-      limit_reason: "max_files|max_bytes|max_results|max_output|deadline|null"
-      files_scanned: integer
-      bytes_scanned: integer
-      skipped_invalid_utf8: integer
-      skipped_nul: integer
-      skipped_symlinks: integer
-
-repo_diff:
-  implementation_path: agent_runtime/repo_diff.py
-  contract_constant: REPO_DIFF_CONTRACT
-  tool_contract:
-    tool_class: repo
-    authority:
-      workspace_bound: true
-      network: none
-      mutation: none
-    annotations:
-      read_only: true
-      destructive: false
-      idempotent: true
-      open_world: false
-  public_input:
-    cwd: AbsoluteCwd
-    scope:
-      exact_values:
-        - worktree
-        - staged
-      default: worktree
-  repository_preconditions:
-    - "cwd must be inside workspace and must be exactly the repository root."
-    - "Repository must be non-bare."
-    - "No network call, fetch, lock-taking intent, or mutation."
-  git_execution:
-    executable: "/usr/bin/git"
-    shell: false
-    environment:
-      - "GIT_LITERAL_PATHSPECS=1"
-      - "GIT_OPTIONAL_LOCKS=0"
-      - "GIT_TERMINAL_PROMPT=0"
-      - "pager disabled"
-      - "color disabled"
-      - "core.fsmonitor=false"
-      - "submodule.recurse=false"
-      - "external diff disabled"
-      - "textconv disabled"
-    rules:
-      - "Use fixed local Git only."
-      - "No aliases or user-configured external diff/textconv/fsmonitor/pager."
-      - "worktree means tracked unstaged diff relative to index."
-      - "staged means index diff relative to HEAD."
-      - "Untracked files are outside repo_diff v1."
-  bounds:
-    complete_raw_diff_bytes: 67108864
-    returned_patch_bytes: 262144
-    deadline_seconds: 5.0
-  receipt:
-    public_field: diff_receipt
-    type: ReceiptV1-shaped result
-    kind: repo-diff
-    subject:
-      - repository_root
-      - head_sha
-    semantic_parameters:
-      - scope
-    observed_state_bytes: "complete raw Git diff bytes before any display truncation"
-    rules:
-      - "If full raw diff exceeds 64 MiB or cannot complete before deadline, return error; never issue a receipt over partial state."
-      - "The receipt digest must remain the same regardless of returned patch truncation."
-  public_result:
-    schema_version: 1
-    fields:
-      scope: "worktree|staged"
-      head_sha: lowercase_git_sha
-      patch: string
-      patch_truncated: bool
-      full_diff_bytes: integer
-      diff_receipt:
-        fields:
-          schema_version: 1
-          kind: repo-diff
-          digest: lowercase_sha256
-      network_used: false
-
-fs_patch:
-  implementation_path: agent_runtime/fs_patch.py
-  contract_constant: FS_PATCH_CONTRACT
-  tool_contract:
-    tool_class: write
-    authority:
-      workspace_bound: true
-      network: none
-      mutation: bounded
-    annotations:
-      read_only: false
-      destructive: true
-      idempotent: false
-      open_world: false
-  public_input:
-    cwd: AbsoluteCwd
-    path:
-      type: cwd_relative_descendant_file
-      max_chars: 4096
-    expected_sha256:
-      type: exact_lowercase_sha256
-      required: true
-    edits:
-      min_items: 1
-      max_items: 20
-      item_fields:
-        old_text:
-          type: strict_utf8_string
-          min_chars: 1
-        new_text:
-          type: strict_utf8_string
-  hard_bounds:
-    max_input_file_bytes: 1048576
-    max_output_file_bytes: 1048576
-    max_edits: 20
-    aggregate_old_plus_new_utf8_bytes: 262144
-  edit_semantics:
-    - "Read exact raw file bytes from an existing regular file using no-follow safety."
-    - "Reject NUL-containing or invalid UTF-8 file content."
-    - "Hash exact raw bytes; require equality with expected_sha256 before any write."
-    - "Apply edits sequentially to the evolving text."
-    - "For each edit, old_text must occur exactly once in the current evolving text."
-    - "0 occurrences => PRECONDITION_FAILED / OLD_TEXT_NOT_FOUND."
-    - ">1 occurrence => CONFLICT / OLD_TEXT_NOT_UNIQUE."
-    - "No regex, fuzzy matching, unified diff parsing, whole-file replacement input, or newline normalization."
-  atomic_write:
-    - "Create temp file in the same parent directory."
-    - "Preserve original POSIX mode bits."
-    - "Write complete UTF-8 bytes and fsync temp."
-    - "Immediately before replace, re-open/revalidate the target path with no-follow semantics, require original file identity and exact original SHA-256 still match."
-    - "Any drift => STATE_CHANGED / LOCAL_STATE_CHANGED and no replacement."
-    - "Replace atomically with os.replace using same-directory authority."
-    - "fsync parent directory after replace."
-    - "Best-effort remove temp file on every failure path."
-    - "Do not claim preservation of xattrs/ACLs/ownership beyond what implementation explicitly preserves."
-  public_result:
-    schema_version: 1
-    fields:
-      path: string
-      sha256_before: lowercase_sha256
-      sha256_after: lowercase_sha256
-      bytes_before: integer
-      bytes_after: integer
-      edits_applied: integer
-
-tool_contract_adoption:
-  required_constants:
-    - FS_LIST_CONTRACT
-    - FS_SEARCH_CONTRACT
-    - REPO_DIFF_CONTRACT
-    - FS_PATCH_CONTRACT
-  rules:
-    - "Every constant must be an immutable ToolContract."
-    - "Server MCP annotations for all four new tools must source from the corresponding contract annotations."
-    - "Bounds/preconditions/postconditions must describe only implemented behavior."
-    - "Do not migrate legacy tools beyond existing fs_read_batch adoption."
-    - "Do not modify agent_runtime/tool_contract.py in TASK-0132."
-
-server_integration:
-  public_tool_count: 15
-  exact_order:
-    - terminal_exec
-    - terminal_start
-    - terminal_poll
-    - terminal_control
-    - terminal_resize
-    - capacity_observer
-    - fs_read_batch
-    - fs_list
-    - fs_search
-    - fs_patch
-    - repo_observer
-    - repo_diff
-    - repo_fast_forward
-    - repo_publish
-    - screen_capture
-  new_delegate_names:
-    fs_list: list_directory
-    fs_search: search_files
-    fs_patch: patch_file
-    repo_diff: diff_repository
-  requirements:
-    - "PUBLIC_TOOL_NAMES must exactly match the 15-tool order."
-    - "Existing 11 tools retain previous signatures and runtime behavior."
-    - "screen_capture remains production-governance blocked before native capture."
-    - "New tools use closed Pydantic request/result schemas with extra=forbid."
-    - "Server converts new tool-specific failures to CapabilityErrorEnvelope without altering legacy wrappers."
-
-tests:
-  canonical_baseline: 476
-  required_new_files:
-    - tests/test_fs_list.py
-    - tests/test_fs_search.py
-    - tests/test_repo_diff.py
-    - tests/test_fs_patch.py
-    - tests/test_wave1_mcp.py
-  required_existing_updates:
-    - tests/test_mcp_contracts.py
-    - tests/test_mcp_client_conformance.py
-    - tests/test_tool_contract.py
-  proof_requirements:
-    fs_list:
-      - "deterministic non-recursive sorting"
-      - "cwd root '.' behavior"
-      - "no symlink traversal"
-      - "file/directory/symlink/other classification"
-      - "max_entries truncation"
-      - "10000-entry scan ceiling"
-      - "invalid UTF-8 name handling"
-    fs_search:
-      - "literal path and content modes"
-      - "case-sensitive and casefold modes"
-      - "deterministic recursive ordering"
-      - ".git skip"
-      - "symlink skip"
-      - "invalid UTF-8 and NUL skip"
-      - "complete raw file SHA-256 on content results"
-      - "500 result / 20000 file / 64MiB / 256KiB / deadline bounded behavior"
-      - "line text UTF-8 truncation without splitting code points"
-    repo_diff:
-      - "fixed /usr/bin/git and shell=false"
-      - "cwd must be repo root"
-      - "worktree and staged semantics"
-      - "no network and hardened Git configuration"
-      - "patch truncation at 256KiB"
-      - "full-state limit 64MiB"
-      - "receipt hashes complete raw diff and is unaffected by display truncation"
-      - "receipt changes when raw diff changes"
-    fs_patch:
-      - "mandatory expected SHA"
-      - "1..20 edits and aggregate edit bound"
-      - "file input/output size bounds"
-      - "exact once semantics on evolving text"
-      - "not-found / non-unique error mapping"
-      - "replay after success cannot mutate again"
-      - "symlink and path traversal rejection"
-      - "invalid UTF-8/NUL rejection"
-      - "mode preservation"
-      - "same-dir temp + fsync + atomic replace"
-      - "pre-replace identity/hash drift produces STATE_CHANGED with original intact"
-      - "temp cleanup on failures"
-    mcp:
-      - "exact 15-tool order"
-      - "new annotations exact"
-      - "new closed schemas"
-      - "new CapabilityErrorEnvelope behavior"
-      - "legacy 11 tool schemas/signatures remain accepted"
-      - "screen_capture governance block remains green"
-    kernel:
-      - "four ToolContract constants exactly match implemented authority/annotations/bounds"
-      - "agent_runtime/tool_contract.py blob remains unchanged"
-  canonical_requirement:
-    - "Agent Runtime Verify must run >476 tests."
-    - "Zero failures."
+closure_guards:
+  - "Require live control == supplied governance_head."
+  - "Require main == ec011f92228392b213638e6abc05a9907f362e87."
+  - "Require task-0132-r1 == f2b3350b0b07cb07b09b3669814b9935156c938f before first revision-2 mutation."
+  - "Require PR #3 open, unmerged, head=task-0132-r1, base=main."
+  - "Require all seven expected_current_blobs above before mutation."
+  - "Do not inspect or mutate local checkout state."
 
 authoring:
-  normal_path: GITHUB_CONTENTS_API_ON_EPHEMERAL_BRANCH
-  branch:
-    name: task-0132-r1
-    base: "ec011f92228392b213638e6abc05a9907f362e87"
+  method: GITHUB_CONTENTS_API_ON_EXISTING_EPHEMERAL_BRANCH
   rules:
-    - "Create exactly one remote branch from exact source_base."
-    - "Author only allowed_source_paths using GitHub create_file/update_file on task-0132-r1."
-    - "Before each update_file, fresh-fetch current branch blob and require the expected source-base blob for the first update of that path."
-    - "New files must be absent before create_file."
-    - "Do not use create_blob, create_tree, create_commit, update_ref, local filesystem authoring, Agent Runtime, Desktop Commander, or Codex."
-    - "Multiple branch commits are expected; Architect will squash-merge."
-    - "After authoring compare main...task-0132-r1 and require only allowed changed paths."
-    - "Require agent_runtime/tool_contract.py and agent_runtime/fs_read.py blobs unchanged."
+    - "Use update_file only on task-0132-r1."
+    - "Before each write, fresh-fetch the file and require exact current blob."
+    - "Construct complete replacement text with only stale assertion alignment."
+    - "One commit per file is acceptable; do not create another branch or PR."
+    - "Do not modify any implementation path."
+    - "Do not modify revision-1 Wave 1 focused tests."
+    - "Do not use create_blob, create_tree, create_commit, update_ref, local tools, Agent Runtime, Desktop Commander, or Codex."
 
-pull_request:
-  base: main
-  head: task-0132-r1
-  draft: false
-  title: "feat: add Wave 1 native capabilities"
-  body_requirements:
-    - "Reference TASK-0132."
-    - "State source base."
-    - "List fs_list, fs_search, repo_diff, fs_patch."
-    - "State final public surface grows 11 -> 15."
-    - "State no Wave 2, packaging, install, or cutover."
-  rules:
-    - "Exactly one PR."
-    - "Do not request reviewers automatically."
-    - "Do not merge in Executor task."
+post_authoring_proof:
+  - "Compare f2b3350b0b07cb07b09b3669814b9935156c938f...new_branch_head."
+  - "Require exactly the seven allowed_revision_2_delta_paths and no eighth path."
+  - "Compare main...new_branch_head and require the final PR changed paths are exactly the original 15 revision-1 paths plus these seven stale-test paths."
+  - "Require all revision-1 implementation blobs remain unchanged from old PR head."
+  - "Require agent_runtime/tool_contract.py and agent_runtime/fs_read.py remain unchanged."
+  - "Require PR #3 remains open and no second PR exists."
 
 verification:
-  - "Observe Agent Runtime Verify for the exact PR/head."
-  - "Require event=pull_request and job=canonical-verify."
-  - "Wait for the exact run to complete."
-  - "Do not rerun a failed run in revision 1."
-  - "Require workflow/job conclusion=success."
+  - "Observe the new Agent Runtime Verify run triggered by the PR #3 branch update."
+  - "Require event=pull_request, head=task-0132-r1, job=canonical-verify."
+  - "Do not rerun workflow run 35577454090."
+  - "Wait for the new exact run to complete."
+  - "Require workflow conclusion=success and job conclusion=success."
   - "Fetch final logs."
-  - "Require failures=0 and test count >476."
-  - "Confirm exact 15-tool surface and all Wave 1 focused suites pass."
-  - "Confirm all accepted legacy tests remain green."
+  - "Require canonical test count >=535, failures=0."
+  - "The prior nine stale surface failures must all pass."
+  - "All Wave 1 focused suites must remain green."
+  - "Exact 15-tool surface must pass."
+  - "Accepted legacy tests and screen_capture governance guard must remain green."
+  - "If CI fails for any new reason, stop VERIFICATION_FAILED and do not patch again in revision 2."
 
 architect_merge_boundary:
   executor_merge_authority: false
@@ -558,38 +176,28 @@ architect_merge_boundary:
   architect_expected_merge:
     method: squash
     expected_head_sha: final_pr_head
-  architect_post_merge:
-    - "Independently inspect every changed path and Wave 1 contract semantics."
-    - "Squash merge with expected head SHA only after green PR CI."
-    - "Require push-to-main Agent Runtime Verify PASS."
+  post_merge:
+    - "Architect independently reviews the complete 22-path PR."
+    - "Architect squash-merges only after green PR CI."
+    - "Require push-to-main canonical CI PASS."
     - "Require task-0132-r1 auto-deleted."
     - "Persist ACCEPT/REWORK on control."
 
-cleanliness:
-  - "No Mac mutation."
-  - "No local branch/worktree/temp file."
-  - "At most one remote task branch and one PR."
-  - "No tags/releases/workflow mutation."
-  - "No repository artifact outside allowed source files and normal PR metadata."
-
 forbidden:
-  - Wave2_fs_write
-  - Wave2_repo_commit
+  - implementation_changes
+  - Wave2
   - package
   - install
   - restart
   - cutover
   - screen_capture_invocation
-  - full_legacy_tool_migration
-  - tool_contract_kernel_rewrite
-  - fs_read_batch_public_contract_change
+  - new_branch
+  - new_pr
+  - merge_pr
   - direct_main_mutation
   - dev_mutation
   - control_mutation_from_executor
-  - second_branch
-  - second_pr
   - workflow_mutation
-  - branch_protection_or_ruleset_mutation
   - local_source_authoring
   - create_blob
   - create_tree
@@ -600,26 +208,20 @@ forbidden:
   - Codex
 
 failure_policy:
-  - "If any pinned ref/blob/path precondition differs, stop SOURCE_CLOSURE_FAILED."
-  - "If branch or Contents mutation is platform-blocked, stop PLATFORM_BLOCK and report exact remote residue."
-  - "If authoring discovers an implementation contract ambiguity that cannot be resolved without expanding scope, stop NEEDS_ARCHITECTURE_REVIEW rather than inventing a new public contract."
-  - "If PR CI fails, stop VERIFICATION_FAILED and leave the single branch/PR intact; do not patch in revision 1."
-  - "Never switch mutation surface solely to obtain a different platform safety judgment."
+  - "Any precondition mismatch => SOURCE_CLOSURE_FAILED."
+  - "Any Contents mutation blocked before GitHub => PLATFORM_BLOCK; report exact residue and stop."
+  - "Any implementation-byte drift => SOURCE_CLOSURE_FAILED."
+  - "Any CI failure => VERIFICATION_FAILED; no further patch in revision 2."
 
 terminal_states:
   success: NEEDS_REVIEW
   source_closure_failed: SOURCE_CLOSURE_FAILED
   platform_block: PLATFORM_BLOCK
-  architecture_review: NEEDS_ARCHITECTURE_REVIEW
   verification_failed: VERIFICATION_FAILED
 
 reporting:
   - "Return one bounded Vietnamese result packet."
-  - "Include governance_head, source_base/tree, exact changed paths, branch head, PR number/URL, 15-tool surface proof, per-capability contract summary, repo_diff receipt proof, fs_patch atomicity proof, workflow run/job IDs, canonical test count/result, current main/control/dev refs, and branch existence."
-  - "Do not create governance report/review files; Architect owns governance persistence."
-
-successor:
-  if_accepted: TASK-0133
-  intent: "Wave 2 native write/commit capabilities: fs_write and repo_commit."
+  - "Include governance_head, old/new branch head, exact seven-file delta, final PR changed-path count, PR #3 state, workflow run/job IDs, canonical test count/result, prior-nine-failure closure, Wave 1 focused regression result, current main/control/dev refs, and branch existence."
+  - "Do not create governance report/review files."
 
 execution_ready: true
