@@ -1,0 +1,188 @@
+protocol_version: 3
+
+task_id: TASK-0135
+task_revision: 2
+report_revision: 2
+state: NEEDS_REVIEW
+
+task_source:
+  path: .agent/tasks/TASK-0135/task.yaml
+  exact_execution_base: cf4205ea643220c91a30111b675fc7f1e43c77fb
+  exact_execution_base_tree: 560bbf1562617c3147a39cfebe28d58a7bdd7978
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  surface: CHATGPT_LOCAL
+  transport: AGENT_RUNTIME
+  authorized_base_head: cf4205ea643220c91a30111b675fc7f1e43c77fb
+  authorized_base_tree: 560bbf1562617c3147a39cfebe28d58a7bdd7978
+  final_execution_head: b9f95c20ee09c7accc9877fe5b332dc218b568d9
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: 87a37a72a4952b1da273d9af308642f4295fda6b
+
+capability_preflight:
+  phase: EXECUTION_CONTINUATION
+  required:
+    - repository_content_read
+    - repository_content_write
+    - native_repository_execution
+    - local_git_observation
+    - remote_ref_read
+    - native_repo_stage
+    - native_repo_diff
+    - native_repo_commit
+    - bounded_repo_publish
+  available:
+    - repository_content_read
+    - repository_content_write
+    - native_repository_execution
+    - local_git_observation
+    - remote_ref_read
+    - native_repo_stage
+    - native_repo_diff
+    - native_repo_commit
+    - bounded_repo_publish
+  missing: []
+  passed: true
+
+implementation:
+  changed_paths:
+    - agent_runtime/repo_publish.py
+    - tests/test_repo_publish.py
+  sha256:
+    agent_runtime/repo_publish.py: 612f7f4406b4337803ed9fcf6fdabc93ac3a2feaaa02dd9084de471e285efd22
+    tests/test_repo_publish.py: a0e9be61177ec0c681b03f56cb23805e219cafd0e966294433370704cb9dc080
+  summary:
+    - "repo_publish uses the exact expected-old lease bound to refs/heads/<branch>:<expected_remote_head>."
+    - "The destination remains exactly one <commit>:refs/heads/<branch> refspec."
+    - "The final pre-push remote observation now occurs before the final local-state and tracking revalidation."
+    - "All required mutable local predicates are revalidated after that final remote observation and immediately before the single push attempt."
+    - "Replay, post-attempt observation, bounded failure classification, no-fetch behavior, and public schemas remain unchanged."
+
+focused_verification:
+  command: ".venv/bin/python -m unittest -v tests.test_repo_publish tests.test_repo_publish_mcp tests.test_repo_stage_commit_mcp tests.test_fs_write_mcp"
+  result: PASS
+  tests_run: 47
+  failures: 0
+  errors: 0
+  evidence:
+    exact_lease_and_single_refspec: PASS
+    local_tracking_guard: PASS
+    local_drift_after_final_remote_observation: PASS
+    stale_remote_and_publication_race_guards: PASS
+    replay_without_second_push: PASS
+    rejected_push_classification: PASS
+    transport_ambiguity_recovery: PASS
+    post_push_unobservable_classification: PASS
+    no_fetch_or_retry: PASS
+    disposable_native_mutation_chain: PASS
+    exact_public_tool_count_18: PASS
+    existing_repo_mutation_contracts: PASS
+    screen_capture_governance_guard: PASS
+
+canonical_verification:
+  command: "./verify"
+  result: PASS
+  tests_run: 618
+  failures: 0
+  errors: 0
+  skipped: 1
+  invocation_count_for_continuation: 1
+
+native_chain_proof:
+  fixture: disposable Git repository with local bare origin
+  sequence:
+    - fs_write
+    - repo_stage
+    - repo_diff_staged_receipt_v1
+    - repo_commit
+    - repo_publish
+    - fresh_remote_observation
+  result: PASS
+
+implementation_stage:
+  repo_stage_result: PASS
+  staged_diff_receipt:
+    schema_version: 1
+    kind: repo-diff
+    digest: 0b9da0b284c9238a752b3009a60c4e1e5418020b65403fe6a22579539024bf87
+  post_stage_clean: true
+
+implementation_commit:
+  result: PASS
+  parent_sha: cf4205ea643220c91a30111b675fc7f1e43c77fb
+  tree_sha: 617caeac2a626f276e152c87e75db4cc6995e111
+  commit_sha: b9f95c20ee09c7accc9877fe5b332dc218b568d9
+  commit_receipt:
+    schema_version: 1
+    kind: repo-commit
+    digest: ed4e0cff047a7167ff9d4a6fb3213b6794a8362d6b7f31cccd1106c830009d93
+  post_commit_clean: true
+
+implementation_publication:
+  result: PASS
+  status: published
+  expected_remote_head: cf4205ea643220c91a30111b675fc7f1e43c77fb
+  remote_head_before: cf4205ea643220c91a30111b675fc7f1e43c77fb
+  remote_head_after: b9f95c20ee09c7accc9877fe5b332dc218b568d9
+  push_attempted: true
+  fresh_remote_proof: b9f95c20ee09c7accc9877fe5b332dc218b568d9
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "Focused MCP contract/schema tests preserve the exact four-field repo_publish input and unchanged closed output/error shapes."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "Argv-level proof validates the exact expected-old lease and exactly one destination refspec with no arbitrary force authority."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "Negative proofs cover branch/upstream/HEAD mismatch, dirty/conflicted/in-progress state, lineage rejection, tracking mismatch, and local drift after the final remote observation."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "Focused proofs cover stale remote state, publication race without overwrite, fresh postcondition, exact replay, rejected push, transport ambiguity, unexpected remote state, and unobservable post-push state."
+  - criterion_id: AC-5
+    status: PASS
+    evidence: "Focused call/argv assertions prove no fetch path and at most one push attempt per invocation."
+  - criterion_id: AC-6
+    status: PASS
+    evidence: "Disposable fs_write -> repo_stage -> repo_diff(staged ReceiptV1) -> repo_commit -> repo_publish -> fresh remote observation chain passed."
+  - criterion_id: AC-7
+    status: PASS
+    evidence: "Focused regressions and canonical verification preserve repo_stage, repo_diff ReceiptV1, repo_commit, exact 18-tool surface, and the screen_capture governance block."
+  - criterion_id: AC-8
+    status: PASS
+    evidence: "One fresh continuation ./verify run completed 618 tests with zero failures/errors and one skip."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Focused TASK-0135 proofs passed 47/47."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "Canonical local ./verify passed 618 tests with zero failures/errors and one skip."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "Exact final implementation diff was inspected and git diff --check returned zero before staging."
+  - check_id: CHECK-4
+    result: PASS
+    evidence: "Fresh remote main was proven at the authorized base before implementation publication and at b9f95c20ee09c7accc9877fe5b332dc218b568d9 after publication."
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: NOT_REQUIRED
+  evidence: "Canonical local verification completed cleanly; no independent workflow dispatch was required."
+
+pushed: true
+
+local_hygiene:
+  result: PASS
+  evidence: "The prior report checkpoint was preserved byte-exact outside the repository only while producing the implementation-only commit, restored before report replacement, and its run-owned temporary root is scheduled for cleanup after report publication."
+
+result: NEEDS_REVIEW
