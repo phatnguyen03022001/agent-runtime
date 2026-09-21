@@ -25,6 +25,7 @@ EXPECTED_TOOLS = (
     "fs_list",
     "fs_search",
     "fs_patch",
+    "fs_write",
     "repo_observer",
     "repo_diff",
     "repo_fast_forward",
@@ -42,6 +43,7 @@ EXPECTED_ANNOTATIONS = {
     "fs_list": (True, False, True, False),
     "fs_search": (True, False, True, False),
     "fs_patch": (False, True, False, False),
+    "fs_write": (False, True, False, False),
     "repo_observer": (True, False, True, False),
     "repo_diff": (True, False, True, False),
     "repo_fast_forward": (False, True, True, True),
@@ -88,6 +90,11 @@ EXPECTED_OUTPUT_FIELDS = {
     "fs_patch": {
         "schema_version", "path", "sha256_before", "sha256_after",
         "bytes_before", "bytes_after", "edits_applied",
+    },
+    "fs_write": {
+        "schema_version", "status", "path", "sha256_before", "sha256_after",
+        "bytes_before", "bytes_after", "mode_before", "mode_after",
+        "write_receipt", "kind", "digest",
     },
     "repo_observer": {
         "schema_version", "repository", "branch", "tracking", "changes",
