@@ -572,18 +572,25 @@ def _require_candidate_state(
             "LOCAL_STATE_CHANGED",
             "HEAD changed before index mutation",
         )
+    upstream = _text(
+        _run_git(
+            state.root,
+            ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
+            deadline=deadline,
+        ),
+        "UPSTREAM_MISMATCH",
+    )
+    if upstream != f"origin/{state.branch}":
+        raise _fail(
+            ContractErrorCode.STATE_CHANGED,
+            "LOCAL_STATE_CHANGED",
+            "branch upstream changed before index mutation",
+        )
     if _operation_in_progress(state.root, deadline):
         raise _fail(
             ContractErrorCode.PRECONDITION_FAILED,
             "OPERATION_IN_PROGRESS",
             "repository has an in-progress Git operation",
-        )
-    staged_diff = diff_repository(str(state.root), "staged")
-    if staged_diff.full_diff_bytes != 0:
-        raise _fail(
-            ContractErrorCode.PRECONDITION_FAILED,
-            "STAGED_CHANGES_PRESENT",
-            "repo_stage requires an initially empty staged diff",
         )
     paths, staged, conflicts = _status_paths(state.root, deadline)
     if conflicts:
@@ -591,6 +598,13 @@ def _require_candidate_state(
             ContractErrorCode.PRECONDITION_FAILED,
             "CONFLICTS_PRESENT",
             "repository has conflicted paths",
+        )
+    staged_diff = diff_repository(str(state.root), "staged")
+    if staged_diff.full_diff_bytes != 0:
+        raise _fail(
+            ContractErrorCode.PRECONDITION_FAILED,
+            "STAGED_CHANGES_PRESENT",
+            "repo_stage requires an initially empty staged diff",
         )
     if staged:
         raise _fail(
