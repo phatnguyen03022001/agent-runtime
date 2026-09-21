@@ -1,7 +1,7 @@
 protocol_version: 3
 
 task_id: TASK-0133
-task_revision: 1
+task_revision: 2
 state: APPROVED
 
 target:
@@ -361,17 +361,29 @@ tests:
     - "Agent Runtime Verify must run >535 tests."
     - "Zero failures."
 
+revision_2_delta:
+  predecessor_review: "619efb86d71b5d7de972cf81af3562da620178b4"
+  predecessor_terminal: PLATFORM_BLOCK
+  blocked_primitive: create_branch
+  blocked_before_github: true
+  retry_blocked_primitive: false
+  implementation_contract_change: false
+  operator_transition: >-
+    The operator must create exactly one ephemeral branch ref task-0133-r1 at exact source_base.
+    This is the only manual transition authorized by the proven platform boundary.
+
 authoring:
-  normal_path: GITHUB_CONTENTS_API_ON_EPHEMERAL_BRANCH
+  normal_path: GITHUB_CONTENTS_API_ON_OPERATOR_BOOTSTRAPPED_EPHEMERAL_BRANCH
   branch:
     name: task-0133-r1
-    base: "6b00fc88297e8cc60bf02794bcd69e28b0166b31"
+    required_existing_head: "6b00fc88297e8cc60bf02794bcd69e28b0166b31"
   rules:
-    - "Create exactly one remote branch from exact source_base."
+    - "Do not create or recreate the branch in revision 2."
+    - "Require task-0133-r1 already exists and points exactly to source_base before any source mutation."
     - "Use GitHub create_file/update_file only on task-0133-r1."
     - "Before first update of every existing path, fresh-fetch and require the pinned source-base blob."
     - "New files must be absent before create_file."
-    - "Do not use create_blob, create_tree, create_commit, update_ref, local source authoring, Agent Runtime, Desktop Commander, or Codex."
+    - "Do not use create_branch, create_blob, create_tree, create_commit, update_ref, local source authoring, Agent Runtime, Desktop Commander, or Codex."
     - "Multiple branch commits are acceptable; Architect will squash-merge."
     - "After authoring compare main...task-0133-r1 and require only allowed_source_paths."
 
@@ -447,6 +459,7 @@ forbidden:
   - Codex
 
 failure_policy:
+  - "If task-0133-r1 is absent or does not equal exact source_base, stop OPERATOR_TRANSITION_REQUIRED without mutation."
   - "Any pinned ref/blob/path precondition mismatch => SOURCE_CLOSURE_FAILED."
   - "Any branch or Contents mutation blocked => PLATFORM_BLOCK and report exact remote residue."
   - "Any ambiguity requiring public-contract expansion => NEEDS_ARCHITECTURE_REVIEW."
@@ -455,6 +468,7 @@ failure_policy:
 
 terminal_states:
   success: NEEDS_REVIEW
+  operator_transition_required: OPERATOR_TRANSITION_REQUIRED
   source_closure_failed: SOURCE_CLOSURE_FAILED
   platform_block: PLATFORM_BLOCK
   architecture_review: NEEDS_ARCHITECTURE_REVIEW
