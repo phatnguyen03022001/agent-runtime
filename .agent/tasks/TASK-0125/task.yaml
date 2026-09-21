@@ -1,33 +1,33 @@
 protocol_version: 3
 
 task_id: TASK-0125
-task_revision: 8
+task_revision: 9
 state: APPROVED
 
 origin:
-  type: architect_surface_split_after_signing_visibility_mismatch
+  type: architect_rework_after_chatgpt_local_safety_block
   predecessor_task: TASK-0125
-  predecessor_task_revision: 7
-  predecessor_report: "dc3c08ca63efb96f4f5995ed5ffbf7155fb24d69"
-  predecessor_review: "6bf6baac4022b94d2fdc140027ccf895a7a1c844"
-  predecessor_terminal: PACKAGING_AUTHORITY_UNAVAILABLE
+  predecessor_task_revision: 8
+  predecessor_report: "fb4c378e880907645cf6ff3ce0aed22f663c8bf2"
+  predecessor_review: "a432cd31c60082bf415e4c507b95a7b113c6a5ad"
+  predecessor_terminal: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
 
 target:
   repository: phatnguyen03022001/agent-runtime
   branch:
     name: dev
-    role: signed_candidate_packaging_only
+    role: final_visual_guard_activation
 
 execution_surface:
-  id: CHATGPT_LOCAL
-  controller: CHATGPT
+  id: CODEX_LOCAL
+  controller: CODEX
   location: LOCAL
-  transport: AGENT_RUNTIME
+  transport: NATIVE
 
-objective: "Using the already-proven CHATGPT_LOCAL signing visibility, package and validate exactly one fresh immutable candidate from the already-verified clean implementation commit 4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b. Do not install, activate, restart, cut over, capture screen, mutate Keychain, or change local source HEAD."
+objective: "Finish TASK-0125 without source or verification replay. Use exactly one read-only codesigning identity discovery against the explicit login keychain path rather than the default search list. If exactly one valid identity is visible, package the already-verified implementation commit 4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b, install it exactly once, commit cutover exactly once, and prove the installed Runtime keeps the exact eleven-tool public surface while screen_capture fails closed with VISUAL_PERCEPTION_BLOCKED and zero ImageContent. If explicit-keychain discovery still yields zero identities, stop without retry."
 
 accepted_authority:
-  task_0125_revision_7_review: "6bf6baac4022b94d2fdc140027ccf895a7a1c844"
+  task_0125_revision_8_review: "a432cd31c60082bf415e4c507b95a7b113c6a5ad"
   implementation_commit: "4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b"
   inherited_architect_verify:
     result: PASS
@@ -38,19 +38,13 @@ accepted_authority:
     installed_runtime_revision: "18cdb515fe037c9b6cb81ce6529d85ae734e195a"
     contract: split-v1
     result: PASS
-  historical_signing_proof:
-    task: TASK-0109
-    surface: CHATGPT_LOCAL
-    valid_identity_count: 1
-    packaging_result: PASS
-
-remote_task_authority:
-  requirements:
-    - "Resolve this task directly from GitHub at the exact revision-8 planning HEAD supplied by the operator."
-    - "Fresh-resolve remote dev/main using GitHub authority, not local Git mutation."
-    - "Require remote dev equals the exact revision-8 planning HEAD."
-    - "Require remote main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
-    - "Do not synchronize local checkout to the planning HEAD."
+  visual_perception_status: BLOCKED
+  guard_error_code: VISUAL_PERCEPTION_BLOCKED
+  explicit_login_keychain_path: "/Users/tienphat/Library/Keychains/login.keychain-db"
+  architect_read_only_host_identity_count_for_explicit_login_keychain: 1
+  prior_failed_candidates:
+    - "5bf6506953610cceefcf7c30008dc956b578dc5baa319dd15d0a2279a21d1bc2"
+    - "165ae74f4f1d95d8567fee853d5a687b93c24eb9bcac528526cc00595872e928"
 
 local_source:
   repository: /Users/tienphat/Developer/agent-runtime
@@ -58,112 +52,171 @@ local_source:
   required_head: "4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b"
   required_worktree: clean
   requirements:
-    - "Require local HEAD exactly 4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b."
-    - "Require worktree clean."
+    - "Do not fast-forward, pull, merge, checkout, reset, rebase, stash, or clean."
+    - "Candidate source_revision must remain exactly the implementation commit."
     - "Require requirements.lock SHA-256 = 80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e."
-    - "Require direct read-only classifier from this committed source against installed app returns runtime_revision=18cdb515fe037c9b6cb81ce6529d85ae734e195a and contract=split-v1."
-    - "Do not run git pull/fetch/checkout/reset/rebase/stash/clean or change local HEAD."
+    - "Require direct read-only classifier from committed source against installed app returns runtime_revision=18cdb515fe037c9b6cb81ce6529d85ae734e195a and contract=split-v1."
+    - "Do not edit source or rerun tests/./verify."
 
-agent_runtime_surface:
-  preflight:
-    - "Require all eleven Agent Runtime public tools are exposed in the same assistant execution turn."
-    - "Do not invoke screen_capture."
-    - "Do not invoke repo_fast_forward or repo_publish."
-  permitted_tools:
-    repo_observer: "0/1"
-    terminal_exec: "0/3"
-  forbidden_tools:
-    - screen_capture
-    - repo_fast_forward
-    - repo_publish
-    - terminal_start
-    - terminal_poll
-    - terminal_control
-    - terminal_resize
-  note: "Use the minimum number of terminal_exec calls. Signing discovery and package_app.sh MUST occur in the same terminal_exec process so the fingerprint exists only in process memory."
+remote_authority:
+  refresh_authority: "0/1"
+  requirements:
+    - "Fresh-resolve remote dev/main before packaging."
+    - "Require remote dev equals the exact revision-9 planning HEAD supplied by the operator."
+    - "Require remote main remains c49d777efa09db7f6c51bd8d8616db4623499fb8."
+    - "At most one ordinary fetch of origin/dev if needed only to establish ancestry/remote identity."
+    - "Require implementation commit 4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b is an ancestor of remote dev."
+    - "Do not change local HEAD."
 
 signing_authority:
   discovery_authority: "0/1"
+  command_shape: "/usr/bin/security find-identity -v -p codesigning /Users/tienphat/Library/Keychains/login.keychain-db"
   extraction_contract:
-    - "Invoke /usr/bin/security find-identity -v -p codesigning exactly once inside the packaging terminal process."
-    - "Capture stdout only in process memory."
-    - "Do not echo, log, or persist raw security output."
-    - "Parse standalone 40-hex SHA-1 fingerprint tokens from valid identity lines."
-    - "Ignore the '<N> valid identities found' summary for fingerprint extraction."
-    - "Require summary valid count exactly 1 and distinct fingerprint count exactly 1."
-    - "If valid count is 0, stop PACKAGING_AUTHORITY_UNAVAILABLE."
-    - "If identity/fingerprint set is ambiguous, stop SIGNING_IDENTITY_AMBIGUOUS."
-    - "Do not print or persist fingerprint or human-readable identity."
-    - "Bind AGENT_RUNTIME_CODESIGN_IDENTITY only to the package_app.sh child environment."
-  keychain_mutation: forbidden
+    - "Invoke the exact explicit-login-keychain discovery exactly once."
+    - "Capture stdout only in process memory; do not print or persist raw output."
+    - "Parse standalone 40-hex SHA-1 fingerprints from valid identity lines."
+    - "Ignore the final '<N> valid identities found' summary when extracting fingerprints."
+    - "Require summary count exactly 1 and distinct fingerprint count exactly 1."
+    - "If count is zero, stop PACKAGING_AUTHORITY_UNAVAILABLE."
+    - "If ambiguous, stop SIGNING_IDENTITY_AMBIGUOUS."
+    - "Do not disclose fingerprint or human-readable identity."
+    - "Bind the sole fingerprint only to the package_app.sh child process environment as AGENT_RUNTIME_CODESIGN_IDENTITY."
+  mutation: forbidden
+  forbidden_keychain_actions:
+    - unlock-keychain
+    - set-keychain-settings
+    - list-keychains_mutation
+    - default-keychain_mutation
+    - import
+    - export
+    - add-trusted-cert
+    - set-key-partition-list
+    - certificate_or_key_creation
+    - certificate_or_key_deletion
 
-packaging:
-  package_authority: "0/1"
+package:
+  authority: "0/1"
   command: "./macos/package_app.sh"
   requirements:
-    - "Invoke exactly once after signing extraction succeeds."
-    - "No retry."
-    - "Package from exact clean implementation HEAD 4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b."
-    - "Do not mutate AGENT_RUNTIME_PACKAGING_PYTHON."
+    - "Invoke exactly once only after explicit-keychain discovery succeeds."
+    - "Package from clean local HEAD 4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b."
+    - "No source edits and no retry."
     - "Require candidate source_revision exactly 4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b."
-    - "Require candidate source tree equals the implementation commit tree."
-    - "Require candidate and handoff are siblings under build/candidates/<candidate_sha256>/."
     - "Require strict codesign --verify --deep --strict PASS."
     - "Require package_provenance.py validate-candidate PASS."
     - "Require immutable candidate closure PASS."
-    - "Require main app, AgentRuntimeRuntimeService and AgentRuntimeScreenCapture have matching non-null TeamIdentifier."
+    - "Require main app, AgentRuntimeRuntimeService, and AgentRuntimeScreenCapture have matching non-null TeamIdentifier."
     - "Record candidate SHA-256 and handoff SHA-256."
-    - "Require candidate SHA differs from 5bf6506953610cceefcf7c30008dc956b578dc5baa319dd15d0a2279a21d1bc2 and 165ae74f4f1d95d8567fee853d5a687b93c24eb9bcac528526cc00595872e928."
-  terminal_failure: PACKAGING_FAILED
+    - "Require candidate SHA differs from both prior failed candidates."
+  failure_terminal: PACKAGING_FAILED
 
-post_package:
+activation:
+  install_prebuilt:
+    authority: "0/1"
+    command_shape: "./install.sh --install-prebuilt <candidate_app> <candidate_handoff> --expected-candidate-sha256 <candidate_sha256> --expected-handoff-sha256 <handoff_sha256>"
+    requirements:
+      - "Use only the fresh revision-9 candidate."
+      - "No retry."
+      - "If install fails before transaction creation, stop INSTALL_PREBUILT_FAILED."
+      - "If install returns a typed approval-required/AWAITING_APPROVAL state, stop RUNTIME_SERVICE_APPROVAL_REQUIRED without changing System Settings, resuming, rolling back, or recovering."
+      - "Success requires transaction schema=5, status=PENDING, phase=APP_SWAPPED."
+  post_install_gate:
+    requirements:
+      - "Installed runtime manifest runtime_revision exactly 4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b."
+      - "runtime.env byte identity retained; do not disclose contents."
+      - "Exactly one accepted tunnel listener."
+      - "healthz HTTP 200."
+      - "readyz HTTP 200."
+  commit_cutover:
+    authority: "0/1"
+    command: "./install.sh --commit-cutover"
+    requirements:
+      - "Invoke exactly once only after post-install gate PASS."
+      - "Require exit 0, COMMITTED, and transaction directory absent."
+      - "No retry."
+    failure_terminal: CUTOVER_COMMIT_FAILED
+  forbidden:
+    - resume
+    - rollback
+    - recovery
+    - extra_restart
+    - stop_start
+    - kill_or_signal
+    - launchctl_experiment
+    - tunnel_mutation
+    - plugin_reinstall
+    - tcc_mutation
+
+installed_guard_probe:
+  authority: "0/1"
+  execution: "Runtime-independent local MCP stdio probe against the INSTALLED Agent Runtime server after committed cutover."
   requirements:
-    - "Local HEAD remains 4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b."
-    - "Worktree remains clean."
-    - "No cutover transaction exists."
-    - "Installed app remains unchanged at runtime_revision 18cdb515fe037c9b6cb81ce6529d85ae734e195a."
-    - "No lifecycle mutation occurs."
+    - "List tools and require exact eleven public names including screen_capture."
+    - "Invoke installed screen_capture exactly once with default request."
+    - "This is a denial probe, not a visual capture."
+    - "Require isError=true."
+    - "Require exact error code VISUAL_PERCEPTION_BLOCKED."
+    - "Require retryable=false."
+    - "Require zero ImageContent."
+    - "Require no native ScreenCaptureKit helper consequence and no screen pixels."
+    - "Do not use ChatGPT custom-app screen_capture or model vision."
+  failure_terminal: INSTALLED_VISUAL_GUARD_UNPROVEN
+
+guard_postconditions:
+  repository_ssot:
+    visual_perception: BLOCKED
+    production_invocation: DENY
+    error_code: VISUAL_PERCEPTION_BLOCKED
+  production_surface:
+    tool_count: 11
+    screen_capture_exposed: true
+    screen_capture_usable_for_pixels: false
 
 authority_counters:
-  repo_observer: "0/1"
-  terminal_exec: "0/3"
-  signing_discovery: "0/1"
-  package: "0/1"
+  remote_authority_refresh: "0/1"
   source_edits: "0/0"
   source_commit: "0/0"
   source_push: "0/0"
-  tests: "0/0"
+  focused_tests: "0/0"
   canonical_verify: "0/0"
-  install_prebuilt: "0/0"
-  commit_cutover: "0/0"
-  screen_capture: "0/0"
+  production_classifier: "0/1"
+  signing_identity_discovery: "0/1"
+  package: "0/1"
+  install_prebuilt: "0/1"
+  commit_cutover: "0/1"
+  installed_guard_probe: "0/1"
   retries: 0
 
 forbidden_actions:
-  - "Do not mutate Keychain, import/create/install certificates, or change keychain search lists."
-  - "Do not disclose raw signing output, signing identity literal, or fingerprint."
-  - "Do not modify source, tests, docs, task artifacts, or local Git HEAD."
-  - "Do not install-prebuilt, commit-cutover, resume, rollback, recover, restart, stop, signal, or mutate Runtime lifecycle."
-  - "Do not invoke screen_capture."
-  - "Do not mutate TCC/System Settings."
-  - "Do not reuse either failed candidate."
+  - "Do not use the default keychain search list for signing discovery."
+  - "Do not mutate Keychain in any way."
+  - "Do not disclose raw security output, identity literal, or fingerprint."
+  - "Do not modify source or local HEAD."
+  - "Do not rerun tests or ./verify."
+  - "Do not reuse prior failed candidates."
+  - "Do not invoke a real visual capture."
+  - "Do not mutate Screen Recording/TCC/System Settings."
+  - "Do not add OCR, base64/text fallback, Accessibility, browser DOM, file-upload side channels, click/type/scroll, or visual control."
   - "Do not modify main, tags, releases, sibling repositories, SSH, Photos, browser secrets, or unrelated host state."
 
 terminal_states:
   success: NEEDS_REVIEW
-  capability_unavailable: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
   source_closure_failed: SOURCE_CLOSURE_FAILED
-  no_signing_authority: PACKAGING_AUTHORITY_UNAVAILABLE
+  packaging_authority_unavailable: PACKAGING_AUTHORITY_UNAVAILABLE
   ambiguous_signing_identity: SIGNING_IDENTITY_AMBIGUOUS
   packaging_failed: PACKAGING_FAILED
-  candidate_validation_failed: CANDIDATE_VALIDATION_FAILED
+  install_failed: INSTALL_PREBUILT_FAILED
+  approval_required: RUNTIME_SERVICE_APPROVAL_REQUIRED
+  cutover_failed: CUTOVER_COMMIT_FAILED
+  installed_guard_unproven: INSTALLED_VISUAL_GUARD_UNPROVEN
+  capability_failure: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
 
 reporting:
   executor_output:
     - "Return one bounded Vietnamese result packet only."
-    - "Include exact planning HEAD, eleven-tool preflight result, local source closure, inherited canonical verification, classifier result, signing valid_identity_count and exactly_one_fingerprint_bound boolean only, package invocation count/result, candidate SHA-256, handoff SHA-256, source revision/tree, strict codesign/provenance/immutable/TeamIdentifier results, local post-package closure, transaction absence, and forbidden-effect counters."
+    - "Include exact planning HEAD, unchanged local source HEAD, remote authority closure, inherited canonical verification identity, production classifier result, explicit-login-keychain valid identity count and fingerprint-binding boolean only, package result and candidate/handoff hashes, install transaction state, post-install gate, cutover result, exact eleven-tool installed probe, screen_capture denial result, and all authority/forbidden counters."
     - "Do not create report.yaml."
-    - "Do not disclose raw security output, identity literal/fingerprint, runtime.env contents, credentials, tokens, tunnel IDs, cookies, Keychain/SSH data, screenshots, screen content, or unrelated host state."
+    - "Do not disclose raw security output, signing identity literal/fingerprint, runtime.env contents, credentials, tokens, tunnel IDs, cookies, Keychain/SSH data, screenshots, screen content, or unrelated host state."
   architect_review: required
 
 git_authority:
