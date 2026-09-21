@@ -1,0 +1,47 @@
+protocol_version: 3
+
+task_id: TASK-0134
+task_revision: 1
+review_revision: 1
+state: REWORK
+
+reviewed_report:
+  path: .agent/tasks/TASK-0134/report-r1.yaml
+  commit: "051473e14a21318ac4cfc6fb0b49a9d0bb62a8dd"
+
+architect_judgment:
+  task_architecture_defect: false
+  repo_commit_defect_proven: false
+  repo_stage_core_design_defect_proven: false
+  narrow_implementation_defect_proven: true
+  root_cause: CHECK_IGNORE_PATHSPEC_TRANSPORT_DEFECT
+  contract_change_required: false
+  public_surface_change_required: false
+
+decision:
+  revision: 2
+  reuse_branch: task-0134-r1
+  reuse_pr: 5
+  new_branch: false
+  new_pr: false
+  allowed_revision_2_delta_paths:
+    - agent_runtime/repo_stage.py
+    - tests/test_repo_stage.py
+  frozen_paths:
+    - agent_runtime/repo_commit.py
+    - agent_runtime/contracts.py
+    - agent_runtime/server.py
+    - agent_runtime/repo_diff.py
+    - agent_runtime/repo_publish.py
+
+required_fix:
+  - "Keep GIT_LITERAL_PATHSPECS=1 in the shared Git environment."
+  - "Change _is_ignored to invoke git check-ignore --stdin -z."
+  - "Pass exactly validated UTF-8 path bytes plus one NUL via stdin."
+  - "Do not pass candidate path as argv/pathspec."
+  - "Interpret return code 0 as ignored and 1 as not ignored."
+  - "Any other exit remains UNAVAILABLE / GIT_UNAVAILABLE."
+  - "Add regression proof that filenames with pathspec-looking syntax remain data, not pathspec syntax."
+
+next_action:
+  intent: "Patch only the ignore-state probe transport, run new PR CI, and stop for Architect review."
