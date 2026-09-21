@@ -822,7 +822,20 @@ def _require_absent(root_fd: int, path: str) -> None:
 
 
 def _is_ignored(repo: Path, path: str, deadline: float) -> bool:
-    result = _run_git(repo, ["check-ignore", "-q", "--", path], deadline=deadline)
+    try:
+        stdin = path.encode("utf-8", errors="strict") + b"\x00"
+    except UnicodeEncodeError as exc:
+        raise _fail(
+            ContractErrorCode.INVALID_ARGUMENT,
+            "INVALID_PATH",
+            "candidate path must be valid UTF-8",
+        ) from exc
+    result = _run_git(
+        repo,
+        ["check-ignore", "--stdin", "-z"],
+        deadline=deadline,
+        stdin=stdin,
+    )
     if result.returncode == 0:
         return True
     if result.returncode == 1:
