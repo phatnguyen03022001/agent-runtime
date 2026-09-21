@@ -751,11 +751,45 @@ def _read_present(root_fd: int, path: str) -> tuple[bytes, str, tuple[int, int]]
 
 def _require_absent(root_fd: int, path: str) -> None:
     components = _validate_path(path)
-    parent_fd = -1
+    current_fd = os.dup(root_fd)
     try:
-        parent_fd, final = open_parent_at(root_fd, components)
+        for component in components[:-1]:
+            try:
+                observed = os.stat(component, dir_fd=current_fd, follow_symlinks=False)
+            except FileNotFoundError:
+                return
+            if stat.S_ISLNK(observed.st_mode):
+                raise _fail(
+                    ContractErrorCode.PRECONDITION_FAILED,
+                    "SYMLINK_DISALLOWED",
+                    "delete path may not traverse a symlink",
+                )
+            if not stat.S_ISDIR(observed.st_mode):
+                raise _fail(
+                    ContractErrorCode.PRECONDITION_FAILED,
+                    "NOT_REGULAR_FILE",
+                    "delete path parent is not a directory",
+                )
+            try:
+                next_fd = os.open(
+                    component,
+                    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+                    dir_fd=current_fd,
+                )
+            except FileNotFoundError:
+                return
+            except OSError as exc:
+                raise _fail(
+                    ContractErrorCode.PRECONDITION_FAILED,
+                    "SYMLINK_DISALLOWED",
+                    "delete path parent could not be safely resolved",
+                ) from exc
+            os.close(current_fd)
+            current_fd = next_fd
+
+        final = components[-1]
         try:
-            observed = os.stat(final, dir_fd=parent_fd, follow_symlinks=False)
+            observed = os.stat(final, dir_fd=current_fd, follow_symlinks=False)
         except FileNotFoundError:
             return
         if stat.S_ISLNK(observed.st_mode):
@@ -769,15 +803,8 @@ def _require_absent(root_fd: int, path: str) -> None:
             "TARGET_ALREADY_ABSENT",
             "delete operation requires the worktree path to be absent",
         )
-    except FsSafetyError as exc:
-        raise _fail(
-            ContractErrorCode.PRECONDITION_FAILED,
-            "SYMLINK_DISALLOWED" if exc.reason == "SYMLINK_DISALLOWED" else "TARGET_NOT_FOUND",
-            "delete path parent could not be safely resolved",
-        ) from exc
     finally:
-        if parent_fd >= 0:
-            os.close(parent_fd)
+        os.close(current_fd)
 
 
 def _is_ignored(repo: Path, path: str, deadline: float) -> bool:
@@ -986,8 +1013,8 @@ def stage_repository(
     deadline = time.monotonic() + CALL_DEADLINE_SECONDS
     state = _open_repository(cwd, branch, expected_head_sha, deadline)
     try:
-        _require_candidate_state(state, selected_paths, expected_head_sha, deadline)
         prepared = _prepare_all(state, validated_items, deadline)
+        _require_candidate_state(state, selected_paths, expected_head_sha, deadline)
 
         _require_candidate_state(state, selected_paths, expected_head_sha, deadline)
         rechecked = _prepare_all(state, validated_items, deadline)
