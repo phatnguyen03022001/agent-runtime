@@ -1,0 +1,46 @@
+protocol_version: 3
+
+task_id: TASK-0130
+task_revision: 2
+review_revision: 2
+state: REWORK
+
+reviewed_report:
+  path: .agent/tasks/TASK-0130/report-r2.yaml
+  commit: "811e7f8234b93a51f19e5896594f3ec5b85750e8"
+
+architect_judgment:
+  executor_fault: false
+  publication_architecture_proven: true
+  ephemeral_branch_created: true
+  pull_request_created: true
+  pull_request_ci_executed: true
+  intended_portability_fix_effective: true
+  intended_idle_reaper_test_fix_effective: true
+  production_defect_proven: false
+  remaining_failure_is_test_contract_staleness: true
+
+root_cause:
+  classification: STALE_SOURCE_TEXT_CONTRACT_TEST
+  detail: >-
+    tests/test_candidate_cutover.py encodes PINNED_ARGS as a required implementation form.
+    The accepted portability design intentionally removes empty-array expansion while preserving
+    strict 3-argument and 7-argument install contracts. The test must assert those observable argv
+    semantics rather than the obsolete PINNED_ARGS implementation detail.
+
+decision:
+  reuse_existing_branch: task-0130-r2
+  reuse_existing_pr: 1
+  new_branch: false
+  new_pr: false
+  allowed_additional_path:
+    - tests/test_candidate_cutover.py
+  merge_method_after_green_ci: squash
+  rationale: >-
+    One test-only follow-up commit on the existing ephemeral PR keeps GitHub clean. Squash merge
+    will publish one final main commit and repository auto-delete-head-branches will remove the
+    ephemeral branch after merge.
+
+next_action:
+  task_revision: 3
+  intent: "Update only the stale candidate-cutover source-text assertion, rerun PR CI automatically, then stop for Architect review."
