@@ -206,10 +206,12 @@ wait_until_stopped() {
 serve() {
   local tunnel_client="${1:-}"
   local env_file="${2:-$ENV_FILE}"
+  local require_git_identity=0
   [[ "$SOURCE_ROOT" != "$INSTALLED_RUNTIME_ROOT" || "$env_file" == "$CANONICAL_ENV_FILE" ]] \
     || fail "Installed Runtime configuration must use the canonical per-user file."
   [[ -f "$env_file" && ! -L "$env_file" ]] || fail "Missing or invalid canonical Runtime configuration; run ./install.sh first."
   if [[ "$SOURCE_ROOT" == "$INSTALLED_RUNTIME_ROOT" ]]; then
+    require_git_identity=1
     /usr/bin/python3 - "$env_file" <<'PY'
 import os
 import stat
@@ -232,7 +234,7 @@ PY
   [[ -x "$RUNTIME_PYTHON" && -f "$ROOT/agent_runtime/server.py" ]] \
     || fail "Installed Runtime payload is incomplete."
 
-  exec /usr/bin/python3 - "$env_file" "$tunnel_client" "$RUNTIME_PYTHON" "$RUNTIME_PATH" "$ROOT" <<'PY'
+  exec /usr/bin/python3 - "$env_file" "$tunnel_client" "$RUNTIME_PYTHON" "$RUNTIME_PATH" "$ROOT" "$require_git_identity" <<'PY'
 import os
 import re
 import subprocess
@@ -244,6 +246,7 @@ tunnel_client = sys.argv[2]
 runtime_python = sys.argv[3]
 runtime_path = sys.argv[4]
 runtime_root = sys.argv[5]
+require_git_identity = sys.argv[6] == "1"
 
 def fail(message):
     print("START ERROR: " + message, file=sys.stderr)
@@ -258,9 +261,8 @@ required = {
     "CONTROL_PLANE_API_KEY",
     "CONTROL_PLANE_TUNNEL_ID",
     "AGENT_RUNTIME_WORKSPACE_ROOT",
-    "AGENT_RUNTIME_GIT_NAME",
-    "AGENT_RUNTIME_GIT_EMAIL",
 }
+git_identity_keys = ("AGENT_RUNTIME_GIT_NAME", "AGENT_RUNTIME_GIT_EMAIL")
 optional = {"AGENT_RUNTIME_MAX_ACTIVE_SESSIONS", "AGENT_RUNTIME_MAX_PARALLELISM"}
 values = {}
 for number, line in enumerate(lines, start=1):
@@ -270,12 +272,15 @@ for number, line in enumerate(lines, start=1):
     if match is None:
         fail("Malformed Runtime configuration entry at line " + str(number) + ".")
     key, value = match.groups()
-    if key in required or key in optional:
+    if key in required or key in optional or key in git_identity_keys:
         if key in values:
             fail("Duplicate " + key + " entry in Runtime configuration.")
         values[key] = value
 
 missing = sorted(key for key in required if not values.get(key, ""))
+identity_required = require_git_identity or any(key in values for key in git_identity_keys)
+if identity_required:
+    missing.extend(key for key in git_identity_keys if not values.get(key, ""))
 if missing:
     fail("Missing non-empty Runtime configuration value for " + ", ".join(missing) + ".")
 workspace = Path(values["AGENT_RUNTIME_WORKSPACE_ROOT"])
@@ -287,14 +292,15 @@ if parallelism is not None and (re.fullmatch(r"[1-9][0-9]*", parallelism) is Non
 session_limit = values.get("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS")
 if session_limit is not None and (re.fullmatch(r"[1-9][0-9]*", session_limit) is None or not 1 <= int(session_limit) <= 6):
     fail("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS must be an integer from 1 through 6.")
-for key in ("AGENT_RUNTIME_GIT_NAME", "AGENT_RUNTIME_GIT_EMAIL"):
-    value = values[key]
-    try:
-        raw = value.encode("utf-8", errors="strict")
-    except UnicodeEncodeError:
-        fail("Runtime Git identity is malformed.")
-    if len(raw) > 256 or any(ch in value for ch in ("\x00", "\r", "\n")):
-        fail("Runtime Git identity is malformed.")
+if identity_required:
+    for key in git_identity_keys:
+        value = values[key]
+        try:
+            raw = value.encode("utf-8", errors="strict")
+        except UnicodeEncodeError:
+            fail("Runtime Git identity is malformed.")
+        if len(raw) > 256 or any(ch in value for ch in ("\x00", "\r", "\n")):
+            fail("Runtime Git identity is malformed.")
 
 runtime_env = {
     "PATH": runtime_path,
@@ -302,14 +308,15 @@ runtime_env = {
     "CONTROL_PLANE_API_KEY": values["CONTROL_PLANE_API_KEY"],
     "CONTROL_PLANE_TUNNEL_ID": values["CONTROL_PLANE_TUNNEL_ID"],
     "AGENT_RUNTIME_WORKSPACE_ROOT": values["AGENT_RUNTIME_WORKSPACE_ROOT"],
-    "AGENT_RUNTIME_GIT_NAME": values["AGENT_RUNTIME_GIT_NAME"],
-    "AGENT_RUNTIME_GIT_EMAIL": values["AGENT_RUNTIME_GIT_EMAIL"],
     "PYTHONPATH": runtime_root,
     # The signed installed payload is immutable at runtime; do not create
     # bytecode resources inside the app bundle.
     "PYTHONDONTWRITEBYTECODE": "1",
     "OPEN_WEB_UI": "false",
 }
+if identity_required:
+    for key in git_identity_keys:
+        runtime_env[key] = values[key]
 if values.get("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS") is not None:
     runtime_env["AGENT_RUNTIME_MAX_ACTIVE_SESSIONS"] = values["AGENT_RUNTIME_MAX_ACTIVE_SESSIONS"]
 if values.get("AGENT_RUNTIME_MAX_PARALLELISM") is not None:
