@@ -1,0 +1,369 @@
+protocol_version: 3
+
+task_id: TASK-0131
+task_revision: 1
+state: APPROVED
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  governance_branch: control
+  source_branch: main
+  ephemeral_branch: task-0131-r1
+
+execution_surface:
+  id: CHATGPT_GITHUB
+  controller: CHATGPT
+  transport: GITHUB
+  model: GPT-5.6 Sol
+  effort: HIGH
+
+governance_identity:
+  control: SELF_GOVERNANCE_HEAD
+  rule: >-
+    The immutable governance_head is supplied externally in the launch packet.
+    Governance history must never be synchronized into the source branch.
+
+delivery_authority:
+  source_base: "cea5a83b2cdd8475b92b2065f2c125bb7b83358e"
+  source_base_tree: "17e05bb59648c0f7ca685983398cc752a59c5d06"
+  source_expected_branch: main
+  allowed_source_paths:
+    - agent_runtime/tool_contract.py
+    - agent_runtime/fs_read.py
+    - agent_runtime/server.py
+    - tests/test_tool_contract.py
+    - tests/test_fs_read_batch.py
+    - tests/test_fs_read_batch_mcp.py
+    - tests/test_mcp_contracts.py
+
+existing_blob_preconditions:
+  agent_runtime/fs_read.py: "1e310a9edbc65dcb007ba8b23cdca274d887e2fb"
+  agent_runtime/server.py: "4de69e7f953e0fb07bb4dee0df60f932252f86bd"
+  tests/test_fs_read_batch.py: "68e6be83a5b54feeca24ed5851f9247a7a8b3d8a"
+  tests/test_fs_read_batch_mcp.py: "8ce947357cad6360c279ccc369037d6086323acc"
+  tests/test_mcp_contracts.py: "b96c7419fd7108f8631c17b8978f328a07d58951"
+
+required_absent_paths:
+  - agent_runtime/tool_contract.py
+  - tests/test_tool_contract.py
+
+objective: >-
+  Implement the minimal ToolContract Kernel v1, deterministic ReceiptV1 canonicalization,
+  and one internal reference adoption for fs_read_batch. Preserve every existing public
+  fs_read_batch request/result/error contract and preserve the exact eleven-tool public MCP surface.
+  Do not migrate the other ten tools and do not implement Wave 1 capabilities.
+
+architecture:
+  principles:
+    - "contract kernel != tool implementation"
+    - "success payload remains tool-specific"
+    - "existing public TypedToolErrorEnvelope remains unchanged"
+    - "kernel is internal metadata/composition infrastructure, not a policy engine"
+    - "ReceiptV1 binds subject identity + semantic parameters + complete observed state"
+    - "no new runtime dependency"
+
+kernel:
+  path: agent_runtime/tool_contract.py
+  required_public_symbols:
+    - ToolClass
+    - NetworkAuthority
+    - MutationAuthority
+    - Authority
+    - ContractErrorCode
+    - ContractError
+    - ReceiptV1
+    - ToolAnnotations
+    - ToolContract
+    - canonical_structured_bytes
+    - frame_bytes
+    - make_receipt_v1
+  ToolClass:
+    exact_values:
+      - read
+      - write
+      - process
+      - repo
+      - host
+  NetworkAuthority:
+    exact_values:
+      - none
+      - bounded
+  MutationAuthority:
+    exact_values:
+      - none
+      - bounded
+      - destructive
+  Authority:
+    immutable: true
+    exact_fields:
+      workspace_bound: bool
+      network: NetworkAuthority
+      mutation: MutationAuthority
+  ContractErrorCode:
+    exact_values:
+      - INVALID_ARGUMENT
+      - OUTSIDE_WORKSPACE
+      - PRECONDITION_FAILED
+      - STATE_CHANGED
+      - CONFLICT
+      - LIMIT_EXCEEDED
+      - TIMEOUT
+      - PERMISSION_DENIED
+      - NOT_FOUND
+      - UNAVAILABLE
+      - INTERNAL_ERROR
+  ContractError:
+    immutable: true
+    exact_fields:
+      code: ContractErrorCode
+      reason_code: stable_nonempty_string
+      retryable: bool
+    note: "This is kernel metadata, not a replacement for current public tool error envelopes."
+  ReceiptV1:
+    immutable: true
+    exact_fields:
+      schema_version: 1
+      kind: stable_nonempty_string
+      digest: lowercase_sha256_hex
+  ToolAnnotations:
+    immutable: true
+    exact_fields:
+      read_only: bool
+      destructive: bool
+      idempotent: bool
+      open_world: bool
+  ToolContract:
+    immutable: true
+    required_fields:
+      name: stable_nonempty_string
+      tool_class: ToolClass
+      authority: Authority
+      annotations: ToolAnnotations
+      preconditions: canonical_structured_value
+      bounds: canonical_structured_value
+      postconditions: canonical_structured_value
+
+structured_canonicalization:
+  accepted_in_memory_types:
+    - dict_with_string_keys
+    - list
+    - string
+    - integer
+    - boolean
+    - null
+  rejected:
+    - float
+    - NaN
+    - Infinity
+    - bytes_inside_structured_values
+    - tuple
+    - set
+    - datetime_or_timestamp_objects
+    - enum_objects
+    - arbitrary_objects
+    - non_string_object_keys
+    - invalid_utf8_or_unpaired_surrogate_strings
+  rules:
+    - "boolean must remain distinct from integer semantics despite Python bool subclassing int"
+    - "object keys sort deterministically"
+    - "dict insertion order does not affect canonical bytes"
+    - "ordered lists preserve order"
+    - "serializer never guesses set semantics"
+    - "set-like values must be normalized explicitly by callers before canonicalization"
+    - "UTF-8 encoding is deterministic"
+    - "no whitespace-dependent encoding"
+    - "duplicate JSON keys must never be introduced by this module"
+  representation: >-
+    Use one documented deterministic UTF-8 structured representation. JSON is acceptable only if
+    emitted with deterministic sorted object keys, compact separators, no NaN/Infinity, and strict
+    rejection of unsupported values before serialization.
+
+receipt_v1:
+  namespace_utf8: "agent-runtime.receipt.v1"
+  frame_definition: "uint64_be(byte_length(payload)) || payload"
+  digest_definition: >-
+    lowerhex(SHA256(frame(namespace) || frame(kind) || frame(canonical(subject))
+    || frame(canonical(semantic_parameters)) || frame(observed_state_bytes)))
+  make_receipt_v1:
+    required_inputs:
+      kind: stable_nonempty_string
+      subject: canonical_structured_value
+      semantic_parameters: canonical_structured_value
+      observed_state_bytes: exact_bytes
+    requirements:
+      - "observed_state_bytes must be bytes, not text or an arbitrary buffer object"
+      - "digest must hash complete provided observed_state_bytes without truncation"
+      - "no timestamp, random value, process identity, host path, or prose is added implicitly"
+      - "same semantic inputs produce exactly the same digest"
+      - "changing namespace semantics, kind, subject, semantic parameters, or observed bytes changes digest"
+      - "frame_bytes rejects payload lengths outside uint64 range"
+      - "ReceiptV1 schema_version is exactly 1"
+
+fs_read_reference_adoption:
+  contract_location: agent_runtime/fs_read.py
+  constant_name: FS_READ_BATCH_CONTRACT
+  requirements:
+    - "Define exactly one immutable ToolContract constant for fs_read_batch."
+    - "tool_class=read"
+    - "authority.workspace_bound=true"
+    - "authority.network=none"
+    - "authority.mutation=none"
+    - "annotations read_only=true, destructive=false, idempotent=true, open_world=false"
+    - "Preconditions/bounds/postconditions must describe only behavior enforced by current source."
+    - "Use existing fs_read constants as the source for numeric bounds; do not duplicate magic numbers where imports/constants suffice."
+    - "Represent max items=20 from the current request contract."
+    - "Represent ITEM_OUTPUT_LIMIT_BYTES=128KiB, BATCH_OUTPUT_LIMIT_BYTES=256KiB, ITEM_SCAN_LIMIT_BYTES=1MiB, BATCH_SCAN_LIMIT_BYTES=4MiB."
+    - "Represent current cwd-relative descendant path requirement, no empty/dot/dot-dot components, no symlink traversal, regular-file only, strict UTF-8 output, ordered results, and per-item filesystem failures."
+    - "Do not claim atomic snapshots, inode stability across the entire batch, network isolation beyond the actual no-network implementation, or any guarantee not enforced today."
+    - "Do not add ReceiptV1 to fs_read_batch public output."
+
+server_adoption:
+  path: agent_runtime/server.py
+  requirements:
+    - "Use FS_READ_BATCH_CONTRACT.annotations as the source of all four fs_read_batch MCP annotation booleans."
+    - "A tiny adapter from ToolAnnotations to existing _tool(...) keyword arguments is allowed."
+    - "Do not generalize or migrate annotation registration for other tools in this task unless required to avoid duplication in the fs_read_batch call site."
+    - "fs_read_batch function signature, docstring semantics, delegate, result type, request schema, result schema, and error behavior must remain unchanged."
+
+public_contract_invariants:
+  tool_count: 11
+  exact_order:
+    - terminal_exec
+    - terminal_start
+    - terminal_poll
+    - terminal_control
+    - terminal_resize
+    - capacity_observer
+    - fs_read_batch
+    - repo_observer
+    - repo_fast_forward
+    - repo_publish
+    - screen_capture
+  fs_read_batch:
+    request_schema_change: forbidden
+    result_schema_change: forbidden
+    public_error_change: forbidden
+    runtime_behavior_change: forbidden
+  screen_capture:
+    must_remain: VISUAL_PERCEPTION_BLOCKED
+  other_tools:
+    migration: forbidden
+
+tests:
+  new_file: tests/test_tool_contract.py
+  required_kernel_proofs:
+    - "Exact enum value sets are frozen."
+    - "Immutable metadata objects reject invalid or empty stable-string fields."
+    - "ReceiptV1 rejects invalid schema/digest/kind states."
+    - "canonical_structured_bytes is identical across dict insertion orders."
+    - "Canonical object-key sorting is recursive."
+    - "Ordered lists remain order-sensitive."
+    - "bool and int serialize with their correct distinct structured semantics."
+    - "float, bytes, tuple, set, non-string keys, unsupported objects, and invalid surrogate strings are rejected."
+    - "frame_bytes uses 8-byte unsigned big-endian byte length and prevents concatenation ambiguity."
+    - "make_receipt_v1 is deterministic for equivalent structured values."
+    - "Changing kind changes digest."
+    - "Changing subject changes digest."
+    - "Changing semantic parameters changes digest."
+    - "Changing observed_state_bytes changes digest."
+  fs_read_proofs:
+    - "FS_READ_BATCH_CONTRACT exactly matches current read/no-network/no-mutation authority."
+    - "All four MCP annotations for fs_read_batch still resolve to true/false/true/false."
+    - "Numeric metadata bounds are bound to current source constants and max-items request contract."
+    - "Existing fs_read_batch behavior tests remain unchanged except minimal contract assertions if needed."
+    - "Public request/result/error schemas remain byte/structure-equivalent to the accepted pre-task contract."
+    - "Exact eleven-tool surface/order remains unchanged."
+    - "screen_capture guard tests remain green."
+
+authoring:
+  normal_path: GITHUB_NATIVE_EPHEMERAL_PR
+  candidate:
+    - "Fetch exact source_base tree and all existing authorized blobs."
+    - "Construct complete contents only for allowed source paths."
+    - "Use GitHub create_tree with inline content entries; do not use create_blob."
+    - "Create one candidate commit with sole parent source_base."
+    - "Before branch creation compare source_base...candidate and require only allowed changed paths."
+  branch:
+    name: task-0131-r1
+    rules:
+      - "Create exactly one remote ephemeral branch at the candidate commit."
+      - "Do not create local branch/worktree."
+  pull_request:
+    base: main
+    head: task-0131-r1
+    draft: false
+    title: "feat: add ToolContract Kernel v1"
+    rules:
+      - "Create exactly one PR."
+      - "Do not merge in Executor task."
+      - "Do not request reviewers automatically."
+  verification:
+    - "Require Agent Runtime Verify event=pull_request for the exact PR/head."
+    - "Require canonical-verify job success."
+    - "Fetch final job logs."
+    - "Require canonical suite failures=0."
+    - "Report test count; it must be greater than the accepted 454-test baseline because new kernel tests are added."
+    - "Do not rerun a failed workflow in revision 1."
+
+architect_merge_boundary:
+  executor_merge_authority: false
+  required_terminal: NEEDS_REVIEW
+  architect_expected_merge:
+    method: squash
+    expected_head_sha: candidate_or_final_pr_head
+  architect_post_merge:
+    - "Verify final main commit."
+    - "Require push-to-main Agent Runtime Verify PASS."
+    - "Require ephemeral branch auto-deleted."
+    - "Persist ACCEPT/REWORK on control."
+
+cleanliness:
+  required:
+    - "No local Mac mutation."
+    - "No local branch/worktree/temp file."
+    - "At most one remote task branch and one PR."
+    - "Ephemeral branch must auto-delete after Architect merge."
+    - "No tag/release/artifact publication."
+
+forbidden:
+  - direct_main_update_ref
+  - direct_main_contents_mutation
+  - dev_mutation
+  - control_mutation_from_executor
+  - local_source_authoring
+  - Agent_Runtime
+  - Desktop_Commander
+  - Codex
+  - create_blob
+  - second_branch
+  - second_pr
+  - workflow_mutation
+  - branch_protection_or_ruleset_mutation
+  - package_install_restart_cutover
+  - screen_capture_invocation
+  - Wave1_fs_list_fs_search_repo_diff_fs_patch
+  - Wave2_fs_write_repo_commit
+  - legacy_full_surface_migration
+
+failure_policy:
+  - "If any pinned source/ref/blob precondition differs, stop SOURCE_CLOSURE_FAILED."
+  - "If GitHub authoring/branch/PR mutation is platform-blocked, stop PLATFORM_BLOCK and report exactly what remote artifact exists."
+  - "If PR CI fails, stop VERIFICATION_FAILED; leave the single PR/branch intact for Architect review and do not patch again in revision 1."
+  - "Never switch mutation surface solely to obtain a different platform safety judgment."
+
+terminal_states:
+  success: NEEDS_REVIEW
+  source_closure_failed: SOURCE_CLOSURE_FAILED
+  platform_block: PLATFORM_BLOCK
+  verification_failed: VERIFICATION_FAILED
+
+reporting:
+  - "Return one bounded Vietnamese result packet."
+  - "Include governance_head, source_base/tree, exact changed paths, candidate tree/commit, branch, PR number/URL, contract-kernel summary, receipt summary, fs_read adoption proof, workflow run/job IDs, canonical test count/result, current main/control/dev refs, and ephemeral branch existence."
+  - "Do not create report/review files; Architect owns governance persistence."
+
+successor:
+  if_accepted: TASK-0132
+  intent: "Wave 1 native capabilities: fs_list, fs_search, repo_diff, fs_patch built on ToolContract Kernel v1."
+
+execution_ready: true
