@@ -1,0 +1,42 @@
+protocol_version: 3
+
+task_id: TASK-0127
+task_revision: 1
+review_revision: 1
+state: REWORK
+
+reviewed_report:
+  path: .agent/tasks/TASK-0127/report-r1.yaml
+  commit: "37d2bf01445cda3202bff04df57a111013226288"
+
+architect_judgment:
+  executor_fault: false
+  local_mutation_occurred: false
+  remote_mutation_occurred: false
+  source_defect_proven: false
+  contract_defect_proven: true
+
+root_cause:
+  classification: SELF_REFERENTIAL_GOVERNANCE_IDENTITY_CONTRACT
+  explanation: >-
+    The canonical task literalized the pre-task control SHA inside a commit that itself advanced control.
+    A task file cannot contain the hash of the commit that contains that exact file content. The executor
+    correctly stopped when the observed control ref differed from the stale literal.
+
+architect_decision:
+  task_revision: 2
+  governance_identity_rule: >-
+    The task must never literalize its own containing commit SHA. The exact governance_head is supplied
+    externally in the launch packet and is the immutable authority identity used to fetch the task.
+    Inside the canonical task, remote control identity is expressed as SELF_GOVERNANCE_HEAD and verified
+    by requiring the live control ref to equal the supplied governance_head at execution preflight.
+  source_identity_rule: >-
+    source_base remains a literal immutable commit SHA and source branch remains an assertion only.
+  no_retry_needed: true
+  codex_required: false
+  local_state_expected_unchanged: true
+
+next_action:
+  task: TASK-0127
+  revision: 2
+  intent: "Repeat only the local metadata rebind with corrected governance self-identity semantics."
