@@ -1,0 +1,266 @@
+protocol_version: 3
+
+task_id: TASK-0128
+task_revision: 1
+state: APPROVED
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  governance_branch: control
+  source_branch: main
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  primary_transport: AGENT_RUNTIME
+  bootstrap_authoring_transport: REMOTE_DESKTOP_COMMANDER_TYPED_FILESYSTEM
+  model: GPT-5.6 Sol
+  effort: HIGH
+
+governance_identity:
+  control: SELF_GOVERNANCE_HEAD
+  rule: >-
+    The immutable governance_head is supplied by the launch packet and used to fetch this task.
+    The task never literalizes the SHA of its own containing commit.
+
+delivery_authority:
+  source_base: "b619d3d8856df3a0ef12ccb833b49afe9c68a867"
+  source_expected_branch: main
+  allowed_source_paths:
+    - agent_runtime/tool_contract.py
+    - agent_runtime/fs_read.py
+    - agent_runtime/server.py
+    - tests/test_tool_contract.py
+    - tests/test_fs_read_batch.py
+    - tests/test_fs_read_batch_mcp.py
+    - tests/test_mcp_contracts.py
+    - README.md
+
+objective: >-
+  Implement the minimal ToolContract Kernel v1 foundation and adopt it internally for fs_read_batch
+  as the single reference read capability. Do not change fs_read_batch public request/result/error
+  schemas or behavior. Do not migrate the other ten existing public tools. Do not add any new public
+  MCP capability in this task.
+
+delivery_model:
+  - "Resolve governance authority from the supplied control governance_head."
+  - "Do not synchronize the local source checkout to governance_head."
+  - "Require local source checkout main@source_base, upstream origin/main, clean, ahead/behind 0/0."
+  - "Require remote main == source_base before source mutation."
+  - "Governance commits advance control only; source commits advance main only."
+  - "Mixed source+governance commits are forbidden."
+
+kernel_v1:
+  module: agent_runtime/tool_contract.py
+  minimum_types:
+    ToolClass:
+      values: [read, write, process, repo, host]
+    NetworkAuthority:
+      values: [none, bounded]
+    MutationAuthority:
+      values: [none, bounded, destructive]
+    Authority:
+      fields:
+        workspace_bound: bool
+        network: NetworkAuthority
+        mutation: MutationAuthority
+    ContractErrorCode:
+      values:
+        - INVALID_ARGUMENT
+        - OUTSIDE_WORKSPACE
+        - PRECONDITION_FAILED
+        - STATE_CHANGED
+        - CONFLICT
+        - LIMIT_EXCEEDED
+        - TIMEOUT
+        - PERMISSION_DENIED
+        - NOT_FOUND
+        - UNAVAILABLE
+        - INTERNAL_ERROR
+    ContractError:
+      fields:
+        code: ContractErrorCode
+        reason_code: stable_nonempty_string
+        retryable: bool
+    ReceiptV1:
+      fields:
+        schema_version: 1
+        kind: stable_nonempty_string
+        digest: lowercase_sha256_hex
+    ToolContract:
+      required_semantics:
+        - name
+        - tool_class
+        - authority
+        - preconditions
+        - bounds
+        - postconditions
+
+kernel_rules:
+  - "Keep the kernel internal and small; it is metadata/composition infrastructure, not a policy engine."
+  - "Do not introduce a generic success envelope."
+  - "Do not replace existing public TypedToolErrorEnvelope in this task."
+  - "Do not rewrite existing tool implementations around generic abstractions."
+  - "No new runtime dependency."
+  - "Canonical structured values may contain only object, array, string, integer, boolean, or null."
+  - "Reject float, NaN/Infinity, bytes inside structured canonical values, arbitrary platform objects, timestamps, and prose-dependent serialization."
+  - "Object keys must be strings and canonical serialization must sort keys deterministically."
+  - "Ordered arrays preserve order."
+  - "Set-like values must be normalized explicitly by the caller/helper before canonical serialization; the serializer must not guess array semantics."
+  - "Canonical serialization must be deterministic and independent of Python dict insertion order or whitespace."
+  - "Duplicate JSON/object keys are outside the in-memory object model and must never be introduced by a parser in this module."
+
+receipt_v1:
+  namespace: "agent-runtime.receipt.v1"
+  digest_definition: >-
+    lowerhex(SHA256(frame(namespace) || frame(kind) || frame(canonical(subject))
+    || frame(canonical(semantic_parameters)) || frame(observed_state_bytes)))
+  frame: "uint64_be(byte_length(payload)) || payload"
+  requirements:
+    - "subject identity is mandatory structured canonical data"
+    - "semantic_parameters is mandatory structured canonical data"
+    - "observed_state_bytes is mandatory complete bytes selected by the tool contract"
+    - "digest must bind subject identity + semantic parameters + observed state"
+    - "never hash a truncated response representation when complete observed state is required"
+    - "never include timestamps or human prose in the digest preimage"
+    - "provide a tested helper that returns ReceiptV1"
+    - "same semantic input/state yields identical digest across dict insertion order"
+    - "changing subject, parameters, kind, namespace semantics, or observed state changes digest"
+
+reference_adoption:
+  tool: fs_read_batch
+  requirements:
+    - "Define one internal immutable ToolContract constant for fs_read_batch."
+    - "Authority must truthfully represent workspace_bound=true, network=none, mutation=none, class=read."
+    - "Encode current fs_read_batch preconditions/bounds/postconditions as stable structured metadata; do not invent capabilities not enforced today."
+    - "Use the contract metadata as the source for fs_read_batch MCP annotations, directly or through one minimal adapter in server.py."
+    - "Existing fs_read_batch public input/output/error schema must remain identical."
+    - "Do not add ReceiptV1 to the fs_read_batch public response in this task."
+    - "Do not alter fs_read scanning/path/error behavior."
+
+public_surface:
+  expected_count: 11
+  expected_order:
+    - terminal_exec
+    - terminal_start
+    - terminal_poll
+    - terminal_control
+    - terminal_resize
+    - capacity_observer
+    - fs_read_batch
+    - repo_observer
+    - repo_fast_forward
+    - repo_publish
+    - screen_capture
+  rules:
+    - "No public tool addition/removal/reorder."
+    - "screen_capture remains VISUAL_PERCEPTION_BLOCKED exactly as accepted."
+
+authoring:
+  desktop_commander_allowed:
+    - write_file
+    - edit_block
+    - read_file
+    - read_multiple_files
+    - get_file_info
+  desktop_commander_forbidden:
+    - start_process
+    - interact_with_process
+    - read_process_output
+    - shell/process execution
+    - configuration mutation
+  terminal_exec_allowed_for:
+    - focused tests
+    - git diff --check
+    - canonical verify
+    - exact local git staging/commit only
+  terminal_exec_for_source_authoring: false
+  codex_allowed: false
+
+tests:
+  required:
+    - "Kernel enums/models reject invalid/extra/ambiguous values."
+    - "Canonical serialization is deterministic across dict insertion order."
+    - "Floats and unsupported objects are rejected."
+    - "Length framing prevents ambiguous concatenation."
+    - "Receipt digest changes when kind, subject, semantic parameters, or observed bytes change."
+    - "Receipt digest is stable for equivalent canonical structured data."
+    - "fs_read_batch contract metadata exactly represents current read-only/no-network authority and current bounds."
+    - "fs_read_batch MCP annotations remain readOnly=true, destructive=false, idempotent=true, openWorld=false."
+    - "fs_read_batch input/result/error schemas and existing behavior remain unchanged."
+    - "Exact public surface remains eleven tools."
+    - "screen_capture guard regression remains green."
+
+verification:
+  focused: >-
+    PYTHONPATH="$PWD" ./.venv/bin/python -m unittest -v
+    tests.test_tool_contract
+    tests.test_fs_read_batch
+    tests.test_fs_read_batch_mcp
+    tests.test_mcp_contracts
+  before_canonical:
+    - "Run git diff --check."
+    - "Require all changed paths are inside allowed_source_paths."
+    - "Inspect final source diff."
+  canonical:
+    command: "PYTHON=.venv/bin/python PYTHONDONTWRITEBYTECODE=1 ./verify"
+    happy_path_invocations: 1
+    rule: "Do not rerun a passing canonical verify on unchanged bytes."
+
+publication:
+  source_commit:
+    count: 1
+    branch: main
+    parent: "b619d3d8856df3a0ef12ccb833b49afe9c68a867"
+    rules:
+      - "Commit only after canonical verification PASS."
+      - "Commit source/test/docs changes only; no .agent governance files."
+      - "No amend, reset, rebase, stash, merge commit, or force operation."
+  repo_publish:
+    authority: "0/1"
+    branch: main
+    expected_remote_head: "b619d3d8856df3a0ef12ccb833b49afe9c68a867"
+    rules:
+      - "Use repo_publish; do not use terminal git push."
+      - "Final local HEAD = origin/main = implementation commit."
+      - "Worktree clean and ahead/behind 0/0."
+  control_mutation_from_executor: false
+
+forbidden:
+  - repo_fast_forward
+  - source_sync_to_control
+  - governance_file_mutation_from_executor
+  - new_public_tools
+  - legacy_full_surface_migration
+  - Wave1_fs_list_fs_search_repo_diff_fs_patch
+  - Wave2_fs_write_repo_commit
+  - package_install_restart_cutover
+  - screen_capture_invocation
+  - TCC_Keychain_tunnel_mutation
+  - dev_ref_mutation
+  - control_ref_mutation_from_executor
+  - Codex
+
+failure_policy:
+  - "Platform block before Runtime execution is not an implementation failure."
+  - "Do not retry blocked source authoring through terminal, alternate encoding, Codex, or another process surface."
+  - "Typed authoring failure must be reported with exact partial file state; cleanup only task-owned partial new files."
+  - "No blind retries of mutation."
+
+terminal_states:
+  success: NEEDS_REVIEW
+  source_closure_failed: SOURCE_CLOSURE_FAILED
+  platform_block: PLATFORM_BLOCK
+  verification_failed: VERIFICATION_FAILED
+  publication_failed: PUBLICATION_FAILED
+
+reporting:
+  - "Return one bounded Vietnamese result packet."
+  - "Include governance HEAD, source-base preflight, changed paths, kernel/receipt summary, fs_read reference-adoption proof, focused tests, canonical verify count/result, implementation commit, repo_publish result, and final main/control/dev identities."
+  - "Do not create report/review files; Architect writes governance artifacts on control."
+
+successor:
+  if_accepted: TASK-0129
+  intent: "Wave 1 native coding capabilities built on ToolContract Kernel v1."
+
+execution_ready: true
