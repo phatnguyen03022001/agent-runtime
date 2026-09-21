@@ -1,0 +1,433 @@
+protocol_version: 3
+
+task_id: TASK-0136
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: successor_task
+  task_id: TASK-0135
+  gap_id: ""
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  transport: AGENT_RUNTIME
+  model: GPT-5.6 Sol
+  effort: HIGH
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+execution_skills:
+  required:
+    - executor
+    - verification
+  recommended:
+    - simplicity
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0135/review-r2.yaml@3207b315f453e6a32a1cbe7e1b6ae3a76475ff90"
+    role: "Accepted exact-CAS publication and native MAIN_ONLY mutation chain."
+    precedence: 1
+  - source: "agent_runtime/tool_contract.py@3207b315f453e6a32a1cbe7e1b6ae3a76475ff90"
+    role: "ToolContract Kernel v1 semantic-contract authority."
+    precedence: 2
+  - source: "agent_runtime/contracts.py@3207b315f453e6a32a1cbe7e1b6ae3a76475ff90"
+    role: "Current Pydantic request/result schema authority."
+    precedence: 3
+  - source: "agent_runtime/server.py@3207b315f453e6a32a1cbe7e1b6ae3a76475ff90"
+    role: "Current MCP registration, ordering, server metadata, and public surface authority."
+    precedence: 4
+
+structure_authority:
+  status: RESOLVED
+  source: existing_agent_runtime_structure
+  rationale: >-
+    This task adds one deterministic metadata/binding layer around the existing ToolContract
+    and MCP/Pydantic schema authorities. It must not create a plugin system, dynamic loader,
+    host-discovery framework, or second semantic/schema authority.
+
+executor_fit:
+  status: FIT
+  rationale: >-
+    Runtime version identity, public capability inventory/discovery, and deterministic schema
+    export are one coherent self-description outcome. runtime doctor remains a separate
+    consumer task after this registry is accepted.
+
+objective: >-
+  Establish one Runtime version SSOT, one deterministic CapabilityDescriptor registry covering
+  every public MCP capability, one read-only Runtime self-description capability, and one
+  deterministic generated machine-readable schema export while preserving ToolContract Kernel
+  v1 and existing capability behavior.
+
+architecture:
+  layers:
+    pydantic_models: "request/result schema SSOT"
+    tool_contract: "semantic contract SSOT"
+    registry: "deterministic binding/inventory layer"
+    discovery: "read-only projection of Runtime identity and capability descriptors"
+    schema_export: "generated deterministic projection of registry + ToolContract + actual MCP schemas"
+  prohibition: >-
+    No layer may duplicate or independently redefine request/result schema semantics or
+    ToolContract authority semantics.
+
+runtime_version:
+  current_value: "0.2.0"
+  bump_in_this_task: false
+  requirement: >-
+    Introduce exactly one authoritative Runtime version source and make MCP server metadata,
+    discovery, schema export, tests, and package-version projection derive from or mechanically
+    validate against it.
+  packaging_projection:
+    field: CFBundleShortVersionString
+    rule: >-
+      It may remain a materialized projection in packaging metadata only when generation or
+      deterministic validation proves equality with the Runtime version SSOT. It must not be
+      an independent version decision.
+  out_of_scope:
+    - release/tag version policy
+    - CFBundleVersion policy
+    - package/install/cutover execution
+
+tool_contract_kernel:
+  version: 1
+  immutable_shape:
+    - name
+    - tool_class
+    - authority
+    - annotations
+    - preconditions
+    - bounds
+    - postconditions
+  rule: >-
+    Do not add lifecycle, availability, schema versions, Runtime version, registry identity,
+    or export concerns to ToolContract Kernel v1.
+  adoption_requirement: >-
+    Every public MCP capability in the final registry must bind to exactly one accurate
+    ToolContract v1 semantic contract. Existing ToolContract instances remain authoritative.
+    For current public capabilities that do not yet have a ToolContract instance, add only the
+    minimum accurate ToolContract v1 declaration required for registry completeness without
+    changing capability behavior.
+
+capability_registry:
+  public_surface_after_task:
+    tool_count: 19
+    compatibility_rule: "The accepted existing 18 tools remain in exact relative and prefix order."
+    appended_tool: runtime_capabilities
+  descriptor_schema_version: 1
+  tool_contract_version: 1
+  request_schema_version_default: 1
+  result_schema_version_default: 1
+  lifecycle_values:
+    - stable
+    - experimental
+    - deprecated
+  final_lifecycle_policy:
+    existing_accepted_18: stable
+    runtime_capabilities: stable
+  descriptor_fields:
+    - schema_version
+    - runtime_version
+    - tool_contract_kernel_version
+    - name
+    - tool_contract_version
+    - lifecycle
+    - authority
+    - annotations
+    - request_schema_version
+    - result_schema_version
+    - bounds
+    - supported
+    - available
+    - unavailable_reason_code
+  schema_version_nullability:
+    request_schema_version: "integer for every registered MCP input schema"
+    result_schema_version: "integer when MCP output_schema exists; null only when the accepted capability has no MCP output schema"
+  deterministic_order: "registry order equals public MCP order"
+  static_inventory_only: true
+  no_dynamic_registration: true
+
+availability_semantics:
+  supported: >-
+    True when this Runtime binary/source knows and exposes the capability contract.
+  available: >-
+    True when the capability is enabled by current Runtime policy/build. This field is not
+    per-invocation readiness and must not inspect target cwd, repository state, package state,
+    Git identity readiness, TCC state, or general host health.
+  doctor_boundary: >-
+    TASK-0137 owns environment/readiness diagnosis. TASK-0136 discovery must not grow into doctor.
+  ordinary_public_capabilities:
+    supported: true
+    available: true
+    unavailable_reason_code: null
+  screen_capture:
+    supported: true
+    available: false
+    unavailable_reason_code: VISUAL_PERCEPTION_BLOCKED
+  invariant: "available=false requires a non-empty unavailable_reason_code; available=true requires null."
+
+discovery:
+  public_tool:
+    name: runtime_capabilities
+    position: "append after the accepted existing 18-tool prefix"
+    class: read
+    mutation: none
+    network: none
+    open_world: false
+  request: "no public arguments"
+  result:
+    schema_version: 1
+    fields:
+      - schema_version
+      - runtime_version
+      - tool_contract_kernel_version
+      - capabilities
+  behavior:
+    - "Return registry-backed descriptors only."
+    - "Do not scan plugins, skills, filesystem siblings, installed apps, Git repositories, network endpoints, TCC, or host services."
+    - "Do not execute capability probes."
+    - "Do not mutate repository, Runtime, package, service, or host state."
+    - "Output ordering is deterministic and equals registry/public MCP ordering."
+
+schema_export:
+  interface: "python -m agent_runtime.schema_export"
+  side_effects: none
+  output: "one canonical UTF-8 JSON bundle on stdout"
+  output_newline: "exactly one trailing LF is permitted after canonical JSON bytes"
+  envelope_fields:
+    - schema_version
+    - runtime_version
+    - tool_contract_kernel_version
+    - capabilities
+    - bundle_sha256
+  schema_version: 1
+  capability_entry:
+    fields:
+      - descriptor
+      - tool_contract
+      - request_schema
+      - result_schema
+  generation_rules:
+    - "Descriptor comes from the canonical registry."
+    - "ToolContract projection comes from the bound ToolContract v1 instance."
+    - "request_schema and result_schema come from the actual registered MCP tool schemas; do not hand-maintain copies."
+    - "result_schema is null only where the registered MCP tool output_schema is absent."
+    - "Capability entry order equals registry/public MCP order."
+    - "Object serialization uses the existing deterministic canonical structured encoding semantics."
+    - "No timestamp, absolute path, hostname, PID, random ID, environment-specific value, or mutable host state may enter the bundle."
+  digest:
+    algorithm: SHA-256
+    field: bundle_sha256
+    material: "canonical structured bytes of the complete bundle excluding bundle_sha256"
+    encoding: lowercase_hex
+  determinism:
+    - "Two exports from unchanged source/runtime metadata are byte-for-byte identical."
+    - "Independent digest recomputation matches bundle_sha256."
+
+scope:
+  expected_files_are_restrictive: false
+  allowed_components:
+    - agent_runtime/version.py
+    - agent_runtime/capability_registry.py
+    - agent_runtime/schema_export.py
+    - agent_runtime/tool_contract.py
+    - agent_runtime/contracts.py
+    - agent_runtime/server.py
+    - "existing capability modules only where a missing ToolContract v1 declaration is required"
+    - macos/AppBundle/Info.plist
+    - macos/package_app.sh
+    - tests
+    - README.md
+    - .agent/tasks/TASK-0136/report-r1.yaml
+  required_changes:
+    - "Create the single Runtime version SSOT while preserving current version value 0.2.0."
+    - "Create the deterministic registry and complete ToolContract binding coverage for all final public capabilities."
+    - "Add runtime_capabilities as public read-only tool 19 while preserving the existing 18-tool prefix order and behavior."
+    - "Add deterministic schema export generated from canonical sources rather than hand-maintained schema copies."
+    - "Make public inventory identity derive from the registry and prove exact registration alignment."
+    - "Document discovery/export/version semantics only where current README would otherwise become inaccurate."
+
+invariants:
+  - "ToolContract Kernel v1 dataclass shape and semantics remain unchanged."
+  - "Existing capability request/result public APIs remain unchanged."
+  - "Existing 18 public capabilities retain exact behavior and relative/prefix ordering."
+  - "runtime_capabilities is the only new public MCP capability in this task."
+  - "screen_capture remains governance-blocked before native capture."
+  - "repo_publish exact expected-old CAS semantics remain unchanged."
+  - "repo_stage, repo_diff ReceiptV1, and repo_commit semantics remain unchanged."
+  - "No committed hand-maintained JSON schema catalogue becomes a second SSOT."
+  - "No network access is required for discovery or schema export."
+  - "No host readiness probing is introduced."
+  - "No install, restart, package publication, cutover, freeze, or service mutation occurs."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exactly one authoritative Runtime version source exists with current value 0.2.0."
+    evidence_required: >-
+      Tests prove MCP server_info.version, runtime_capabilities.runtime_version, schema export
+      runtime_version, and package version projection all match the SSOT; no executable source
+      path independently defines a conflicting Runtime semantic version.
+  - id: AC-2
+    requirement: "The final public MCP surface is exactly 19 tools: the accepted prior 18 in exact prefix order plus runtime_capabilities."
+    evidence_required: "Client-level MCP listing and registry-order tests prove exact identity/order and unchanged prior schemas/annotations."
+  - id: AC-3
+    requirement: "Every final public capability binds to exactly one ToolContract v1 and registry semantic metadata is derived from that contract."
+    evidence_required: >-
+      Registry/contract tests prove exact name coverage, no duplicates, ToolContract Kernel
+      version 1, authority/annotations/bounds equality, and no behavior changes from adding
+      missing contract declarations.
+  - id: AC-4
+    requirement: "CapabilityDescriptor v1 exposes the exact approved fields and supported != available semantics."
+    evidence_required: >-
+      Closed Pydantic result-schema tests prove exact descriptor fields and lifecycle enum;
+      screen_capture is supported=true, available=false, unavailable_reason_code=
+      VISUAL_PERCEPTION_BLOCKED; ordinary public capabilities are supported/available true
+      with null reason.
+  - id: AC-5
+    requirement: "runtime_capabilities is pure deterministic Runtime self-description, not readiness/host discovery."
+    evidence_required: >-
+      Focused tests prove no arguments, no network, no subprocess/capability probing, no
+      repository/host/package mutation, deterministic order, and byte/structure stability
+      across repeated calls.
+  - id: AC-6
+    requirement: "Generated schema export is derived from registry + ToolContract + actual registered MCP schemas."
+    evidence_required: >-
+      Tests prove exported capability names/order exactly equal registry and MCP listing;
+      exported request/result schemas exactly equal registered schemas; ToolContract
+      projections exactly equal bound contracts; no hand-maintained duplicate schema source
+      is used.
+  - id: AC-7
+    requirement: "Schema export is deterministic and self-verifying."
+    evidence_required: >-
+      Two unchanged exports are byte-for-byte equal; independent SHA-256 recomputation over
+      the bundle excluding bundle_sha256 equals the emitted lowercase bundle_sha256; output
+      contains no environment-specific or nondeterministic data.
+  - id: AC-8
+    requirement: "Existing accepted capability contracts remain green."
+    evidence_required: >-
+      Focused regressions cover repo_publish exact CAS, native stage/diff/commit chain,
+      ToolContract Kernel v1, client conformance, and screen_capture governance block.
+  - id: AC-9
+    requirement: "Canonical local ./verify completes with zero failures."
+    evidence_required: "Observed local verifier result and exact totals are recorded in the Executor report."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Run focused registry/version/discovery/schema-export tests and impacted MCP contract tests."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Run deterministic schema export twice and compare exact bytes/digest."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Run focused regressions for prior accepted repository mutation and governance contracts."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Run git diff --check."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Run canonical local ./verify."
+      required: true
+    - id: CHECK-6
+      command_or_check: "Inspect exact resulting diff before staging."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: "GitHub Actions workflow_dispatch remains optional independent evidence only."
+    expected_signal: "Not required when canonical local verification is clean."
+
+executor_flow:
+  - "Fresh-resolve canonical GitHub main and require exact handoff base."
+  - "Require local target repo identity, branch main, exact HEAD/tracking base, and clean worktree/index."
+  - "Mutate only TASK-0136-authorized paths."
+  - "Run focused acceptance proofs."
+  - "Run canonical local ./verify and require zero failures."
+  - "Inspect exact final diff."
+  - "Stage through native repo_stage."
+  - "Obtain repo_diff(staged) ReceiptV1."
+  - "Commit through native repo_commit."
+  - "Publish implementation directly to main through exact-CAS repo_publish."
+  - "Fresh-prove canonical remote main."
+  - "Persist .agent/tasks/TASK-0136/report-r1.yaml through the governed native mutation chain."
+  - "Fresh-prove canonical remote main and stop for independent Architect review."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+forbidden_changes:
+  - "Create or use control, dev, staging, task-*, or PR delivery branches."
+  - "Create a pull request."
+  - "Enable automatic push or pull_request GitHub Actions."
+  - "Dispatch GitHub Actions merely for ceremony."
+  - "Change the current Runtime semantic version value from 0.2.0."
+  - "Add lifecycle/availability/schema/version fields to ToolContract Kernel v1."
+  - "Hand-maintain request/result JSON schemas separately from registered MCP/Pydantic schemas."
+  - "Implement runtime doctor --json (TASK-0137)."
+  - "Implement package/install/cutover/freeze cleanup (TASK-0138)."
+  - "Add plugin scanning, skill scanning, host discovery, arbitrary dynamic extension loading, worktrees, fan-out, workers, scheduler, orchestration, SQLite, policy DSL, or a model/agent loop."
+  - "Probe TCC, request Screen Recording permission, invoke native screen capture, read Keychain/SSH/browser cookies/Photos, or expose credentials."
+  - "Change repo_publish, repo_stage, repo_diff, or repo_commit semantics."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+failure_policy:
+  - "Fail closed on task/base/local/remote identity drift."
+  - "Refresh mutable state at every repository consequence boundary."
+  - "Do not automatically retry publication."
+  - "Do not switch execution surface solely to obtain a different platform safety judgment."
+  - "If deterministic export cannot be derived from actual registered schemas without duplicating schema authority, stop for Architect judgment rather than introducing a second SSOT."
+  - "Do not fall forward into TASK-0137 readiness probing to satisfy availability metadata."
+
+reporting:
+  path: .agent/tasks/TASK-0136/report-r1.yaml
+  owner: EXECUTOR
+  state_on_success: NEEDS_REVIEW
+  required_evidence:
+    - "exact execution base and tree"
+    - "exact changed paths"
+    - "Runtime version SSOT identity and all proven projections"
+    - "final 19-tool public ordering"
+    - "registry exact capability inventory and descriptor semantics"
+    - "ToolContract coverage/alignment proof"
+    - "runtime_capabilities discovery proof"
+    - "schema export exact command, bundle_sha256, and repeated-byte determinism proof"
+    - "registered MCP request/result schema equality proof"
+    - "focused regression totals"
+    - "canonical ./verify totals"
+    - "staged repo_diff ReceiptV1"
+    - "repo_commit commit SHA and receipt"
+    - "implementation publication result and fresh remote main identity"
+    - "final report publication identity and local hygiene"
+
+successor:
+  if_accepted: TASK-0137
+  intent: "Read-only runtime doctor --json over the accepted version/registry/discovery foundation."
+
+blocking_decisions: []
+execution_ready: true
