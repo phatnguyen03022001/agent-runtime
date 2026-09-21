@@ -56,7 +56,7 @@ from .contracts import (
 )
 from .errors import RuntimeStateError, RuntimeValidationError
 from .executor import execute_terminal, shutdown_terminal_executions
-from .fs_read import read_files_batch
+from .fs_read import FS_READ_BATCH_CONTRACT, read_files_batch
 from .protection import ProtectedRuntimeDenied
 from .repo_fast_forward import RepoFastForwardFailure, fast_forward_repository
 from .repo_observer import RepoObserverFailure, observe_repository
@@ -312,7 +312,12 @@ def capacity_observer() -> CapacityObserverResult:
     return cast(CapacityObserverResult, _call_runtime_tool(observe_capacity))
 
 
-@_tool(read_only=True, destructive=False, idempotent=True, open_world=False)
+@_tool(
+    read_only=FS_READ_BATCH_CONTRACT.annotations.read_only,
+    destructive=FS_READ_BATCH_CONTRACT.annotations.destructive,
+    idempotent=FS_READ_BATCH_CONTRACT.annotations.idempotent,
+    open_world=FS_READ_BATCH_CONTRACT.annotations.open_world,
+)
 def fs_read_batch(cwd: AbsoluteCwd, items: FsReadItems) -> FsReadBatchResult:
     """Read bounded ordered UTF-8 file ranges below one validated cwd."""
 
