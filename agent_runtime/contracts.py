@@ -689,3 +689,25 @@ class RuntimeCapabilitiesResult(_ClosedResult):
     runtime_version: RuntimeVersion
     tool_contract_kernel_version: Literal[1]
     capabilities: list[CapabilityDescriptor]
+
+
+DoctorCheckStatus = Literal["pass", "warn", "fail", "not_applicable"]
+DoctorStatus = Literal["healthy", "degraded", "unhealthy"]
+DoctorCheckId = Annotated[StrictStr, Field(min_length=1, max_length=64)]
+DoctorReasonCode = Annotated[StrictStr, Field(min_length=1, max_length=128)]
+DoctorMessage = Annotated[StrictStr, Field(max_length=256)]
+
+
+class DoctorCheck(_ClosedResult):
+    id: DoctorCheckId
+    status: DoctorCheckStatus
+    reason_code: DoctorReasonCode
+    message: DoctorMessage
+    evidence: dict[str, object]
+
+
+class DoctorReport(_ClosedResult):
+    schema_version: Literal[1]
+    runtime_version: RuntimeVersion
+    status: DoctorStatus
+    checks: list[DoctorCheck]

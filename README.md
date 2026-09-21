@@ -202,6 +202,22 @@ the exact ToolContract projection, and the actual registered MCP request/result
 schemas. `bundle_sha256` is SHA-256 over the canonical bundle body before the
 digest field is added.
 
+Run the bounded read-only Runtime doctor with:
+
+```bash
+python -m agent_runtime.doctor --json
+```
+
+The doctor emits one deterministic `DoctorReport` v1 object derived from the
+accepted Runtime identity, nineteen-capability registry and schema export,
+workspace/config, fixed Git readiness, canonical installed package/service,
+cutover transaction, and governance/protection evidence. `healthy` exits 0;
+`degraded` and `unhealthy` exit 1; invalid invocation or internal serialization
+failure exits 2. Human mode (`python -m agent_runtime.doctor`) renders the same
+report object and does not run additional probes. Doctor never repairs state,
+performs network access, invokes screen capture, widens permissions, or reads
+control-plane credentials or private user data.
+
 Capacity Observer v2 reports an advisory healthy-host ceiling up to x6. The
 effective healthy ceiling is `min(AGENT_RUNTIME_MAX_PARALLELISM, 6)`: the
 operator range remains `1` through `10`, the default remains `2`, and operator
