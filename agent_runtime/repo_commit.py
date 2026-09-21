@@ -959,7 +959,7 @@ def commit_repository(
             semantic_parameters={
                 "parent_sha": expected_head_sha,
                 "expected_diff_receipt_digest": expected_digest,
-                "commit_message_sha256": hashlib.sha256(message_bytes).hexdigest(),
+                "sha256_of_exact_commit_message_bytes": hashlib.sha256(message_bytes).hexdigest(),
             },
             observed_state_bytes=commit_object.stdout,
         )
