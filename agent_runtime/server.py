@@ -24,11 +24,28 @@ from .capacity import observe_capacity
 from .contracts import (
     AbsoluteCwd,
     Argv,
+    CapabilityErrorEnvelope,
+    CapabilityErrorPayload,
+    CapabilityFailure,
     CapacityObserverResult,
     ControlAction,
     Cursor,
     FsReadBatchResult,
     FsReadItems,
+    FsListMaxEntries,
+    FsListPath,
+    FsListResult,
+    FsPatchEdits,
+    FsPatchExpectedSha256,
+    FsPatchPath,
+    FsPatchResult,
+    FsSearchMaxResults,
+    FsSearchMode,
+    FsSearchQuery,
+    FsSearchResult,
+    FsSearchRootPath,
+    RepoDiffResult,
+    RepoDiffScope,
     RepoFastForwardBranch,
     RepoFastForwardResult,
     RepoFastForwardSha,
@@ -57,7 +74,11 @@ from .contracts import (
 from .errors import RuntimeStateError, RuntimeValidationError
 from .executor import execute_terminal, shutdown_terminal_executions
 from .fs_read import FS_READ_BATCH_CONTRACT, read_files_batch
+from .fs_list import FS_LIST_CONTRACT, list_directory
+from .fs_patch import FS_PATCH_CONTRACT, patch_file
+from .fs_search import FS_SEARCH_CONTRACT, search_files
 from .protection import ProtectedRuntimeDenied
+from .repo_diff import REPO_DIFF_CONTRACT, diff_repository
 from .repo_fast_forward import RepoFastForwardFailure, fast_forward_repository
 from .repo_observer import RepoObserverFailure, observe_repository
 from .repo_publish import RepoPublishFailure, publish_repository
@@ -78,7 +99,11 @@ PUBLIC_TOOL_NAMES = (
     "terminal_resize",
     "capacity_observer",
     "fs_read_batch",
+    "fs_list",
+    "fs_search",
+    "fs_patch",
     "repo_observer",
+    "repo_diff",
     "repo_fast_forward",
     "repo_publish",
     "screen_capture",
@@ -96,6 +121,9 @@ SERVER_INSTRUCTIONS = (
     "capacity_observer provides read-only advisory capacity information. "
     "fs_read_batch performs read-only ordered cwd-relative UTF-8 file reads for at most 20 items "
     "with fixed output and scan-work ceilings and per-item filesystem failures. "
+    "fs_list and fs_search provide bounded no-follow filesystem discovery; fs_patch performs "
+    "expected-SHA exact text edits with atomic replacement, and repo_diff returns bounded local-only "
+    "tracked diffs with full-state receipts. "
     "repo_observer performs bounded local-only Git repository observation with no fetch, network use, "
     "or repository mutation; it reports local tracking refs, typed changes, diff summary, operation state, "
     "and policy-safe worktree topology. "
@@ -127,6 +155,24 @@ def _call_runtime_tool(delegate: Callable[..., Any], *args: Any) -> Any:
         return delegate(*args)
     except _EXPECTED_TOOL_ERRORS as exc:
         raise ToolError(str(exc)) from None
+
+
+def _capability_error_result(exc: CapabilityFailure) -> CallToolResult:
+    from mcp.types import TextContent
+
+    envelope = CapabilityErrorEnvelope(
+        error=CapabilityErrorPayload(
+            code=exc.code,
+            reason_code=exc.reason_code,
+            message=exc.message,
+            retryable=exc.retryable,
+        )
+    )
+    return CallToolResult(
+        content=[TextContent(type="text", text=exc.message)],
+        structuredContent=envelope.model_dump(),
+        isError=True,
+    )
 
 
 def _tool_annotations_supported() -> bool:
@@ -324,6 +370,67 @@ def fs_read_batch(cwd: AbsoluteCwd, items: FsReadItems) -> FsReadBatchResult:
     return cast(FsReadBatchResult, _call_runtime_tool(read_files_batch, cwd, items))
 
 
+@_tool(
+    read_only=FS_LIST_CONTRACT.annotations.read_only,
+    destructive=FS_LIST_CONTRACT.annotations.destructive,
+    idempotent=FS_LIST_CONTRACT.annotations.idempotent,
+    open_world=FS_LIST_CONTRACT.annotations.open_world,
+)
+def fs_list(
+    cwd: AbsoluteCwd,
+    path: FsListPath = ".",
+    max_entries: FsListMaxEntries = 200,
+) -> FsListResult:
+    """List one directory non-recursively with deterministic no-follow metadata."""
+
+    try:
+        return list_directory(cwd, path, max_entries)
+    except CapabilityFailure as exc:
+        return cast(FsListResult, _capability_error_result(exc))
+
+
+@_tool(
+    read_only=FS_SEARCH_CONTRACT.annotations.read_only,
+    destructive=FS_SEARCH_CONTRACT.annotations.destructive,
+    idempotent=FS_SEARCH_CONTRACT.annotations.idempotent,
+    open_world=FS_SEARCH_CONTRACT.annotations.open_world,
+)
+def fs_search(
+    cwd: AbsoluteCwd,
+    query: FsSearchQuery,
+    mode: FsSearchMode,
+    root_path: FsSearchRootPath = ".",
+    case_sensitive: bool = True,
+    max_results: FsSearchMaxResults = 100,
+) -> FsSearchResult:
+    """Search regular files with literal bounded deterministic semantics."""
+
+    try:
+        return search_files(cwd, query, mode, root_path, case_sensitive, max_results)
+    except CapabilityFailure as exc:
+        return cast(FsSearchResult, _capability_error_result(exc))
+
+
+@_tool(
+    read_only=FS_PATCH_CONTRACT.annotations.read_only,
+    destructive=FS_PATCH_CONTRACT.annotations.destructive,
+    idempotent=FS_PATCH_CONTRACT.annotations.idempotent,
+    open_world=FS_PATCH_CONTRACT.annotations.open_world,
+)
+def fs_patch(
+    cwd: AbsoluteCwd,
+    path: FsPatchPath,
+    expected_sha256: FsPatchExpectedSha256,
+    edits: FsPatchEdits,
+) -> FsPatchResult:
+    """Apply exact UTF-8 text edits under expected-state and atomic-write guards."""
+
+    try:
+        return patch_file(cwd, path, expected_sha256, edits)
+    except CapabilityFailure as exc:
+        return cast(FsPatchResult, _capability_error_result(exc))
+
+
 @_tool(read_only=True, destructive=False, idempotent=True, open_world=False)
 def repo_observer(
     cwd: AbsoluteCwd,
@@ -349,6 +456,24 @@ def repo_observer(
             isError=True,
         )
         return cast(RepoObserverResult, error_result)
+
+
+@_tool(
+    read_only=REPO_DIFF_CONTRACT.annotations.read_only,
+    destructive=REPO_DIFF_CONTRACT.annotations.destructive,
+    idempotent=REPO_DIFF_CONTRACT.annotations.idempotent,
+    open_world=REPO_DIFF_CONTRACT.annotations.open_world,
+)
+def repo_diff(
+    cwd: AbsoluteCwd,
+    scope: RepoDiffScope = "worktree",
+) -> RepoDiffResult:
+    """Return one bounded local tracked diff with a full-state receipt."""
+
+    try:
+        return diff_repository(cwd, scope)
+    except CapabilityFailure as exc:
+        return cast(RepoDiffResult, _capability_error_result(exc))
 
 
 @_tool(read_only=False, destructive=True, idempotent=True, open_world=True)
