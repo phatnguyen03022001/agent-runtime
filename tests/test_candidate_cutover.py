@@ -2151,7 +2151,9 @@ class CandidateCutoverTests(unittest.TestCase):
         self.assertIn('"$6" == "--expected-handoff-sha256"', branch)
         self.assertIn('is_lower_sha256 "$5"', branch)
         self.assertIn('is_lower_sha256 "$7"', branch)
-        self.assertIn('"${PINNED_ARGS[@]}"', branch)
+        self.assertIn('--expected-candidate-sha256 "$5"', branch)
+        self.assertIn('--expected-handoff-sha256 "$7"', branch)
+        self.assertNotIn("PINNED_ARGS", branch)
         self.assertNotIn("--skip-trust", branch)
         self.assertNotIn("--no-verify", branch)
 

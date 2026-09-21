@@ -416,7 +416,7 @@ esac
             env["CONTROL_PLANE_API_KEY"] = api_key
         if tunnel_id is not None:
             env["CONTROL_PLANE_TUNNEL_ID"] = tunnel_id
-        return subprocess.run([str(repo / "install.sh"), *args], cwd=repo, env=env, text=True, capture_output=True, check=False)
+        return subprocess.run(["/bin/bash", str(repo / "install.sh"), *args], cwd=repo, env=env, text=True, capture_output=True, check=False)
 
     def _env(self, repo: Path, tunnel_id: str | None = None, api_key: str = "test-key") -> Path:
         path = repo / ".env"
