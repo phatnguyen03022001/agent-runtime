@@ -1,0 +1,535 @@
+protocol_version: 3
+
+task_id: TASK-0141
+task_revision: 1
+state: APPROVED
+title: "Installation, Documentation & Operational UX Hardening"
+
+origin:
+  type: successor_task
+  task_id: TASK-0140
+  task_revision: 2
+  accepted_review: ".agent/tasks/TASK-0140/review-r2.yaml@79857acd5f39600aa3a988bf6455bd9934de55a4"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+  canonical_branch: main
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  transport: AGENT_RUNTIME
+  model: GPT-5.6 Sol
+  effort: HIGH
+
+execution_base:
+  mode: exact_planning_commit
+  capture: after_task_authoring_commit
+  require_exact_match: true
+  rule: >-
+    The Executor launch must provide the exact published TASK-0141 planning commit
+    and tree. Fresh-resolve canonical GitHub main before any mutation and fail closed
+    on unexpected canonical drift.
+
+program_context:
+  predecessor:
+    task: TASK-0140
+    revision: 2
+    review: .agent/tasks/TASK-0140/review-r2.yaml
+    review_commit: "79857acd5f39600aa3a988bf6455bd9934de55a4"
+    state: ACCEPTED
+    qualification_result: PASS
+  frozen_runtime:
+    version: "0.2.0"
+    public_tool_count: 19
+    tool_contract_kernel_version: 1
+    schema_bundle_sha256: "6bcfe8cdbb19393cdaeb0ef13271a6448b6bc0a28f479c8d4c0f6b7246b2aba5"
+    schema_export_sha256: "495eefab431e5311189e15d07f6ffe2ab9c6635c2c5a8a6b41b0a1f944fef36b"
+    schema_export_length_bytes: 59981
+  transport:
+    default: OPENAI_SECURE_MCP_TUNNEL
+    cloudflare: NOT_ADMITTED
+    rule: >-
+      TASK-0139 rejected Cloudflare for v1. TASK-0141 must not revive, document,
+      configure, test, or leave speculative Cloudflare product surface.
+  verification:
+    canonical_command: ./verify
+    accepted_harness:
+      fast_lane_workers: 4
+      unknown_default: SERIAL_HOST_SENSITIVE
+    rule: >-
+      Use the accepted canonical verification harness unchanged unless a direct
+      TASK-0141 regression proves the harness itself is wrong.
+  post_acceptance_program_state:
+    target: V1_FREEZE_THEN_MAINTENANCE_MODE
+
+objective: >-
+  Make the already-qualified Agent Runtime operable by a new human or AI agent
+  without historical task knowledge. Productize the existing install, configuration,
+  lifecycle, doctor, recovery, update and uninstall surfaces with a strict read-only
+  prerequisite preflight, an installed-authority doctor entrypoint, concise current
+  documentation, deterministic reason-code routing and black-box operator acceptance.
+  Preserve the frozen Runtime architecture and public MCP contract.
+
+architecture_freeze:
+  rule: >-
+    TASK-0141 is operational productization only. It may improve operator-facing
+    script surfaces and documentation but must not redesign Runtime architecture.
+  must_not_change:
+    - "Runtime version 0.2.0"
+    - "19-tool public MCP surface, order, schemas or annotations"
+    - "ToolContract Kernel semantics"
+    - "capability registry architecture"
+    - "terminal/process/session architecture"
+    - "filesystem capability semantics"
+    - "repository mutation/CAS semantics"
+    - "screen_capture governance state"
+    - "doctor JSON schema/version or check inventory"
+    - "ServiceManagement ownership architecture"
+    - "transactional package/cutover architecture"
+    - "OpenAI Secure MCP Tunnel default transport"
+    - "protected port 127.0.0.1:8080 ownership semantics"
+    - "requirements.txt or requirements.lock"
+    - "accepted verification-lane architecture"
+  explicit_non_goals:
+    - "No new MCP tool or capability."
+    - "No Cloudflare transport or documentation."
+    - "No generic installer framework or package manager."
+    - "No Homebrew formula."
+    - "No auto-update daemon."
+    - "No new telemetry or observability service."
+    - "No TCC automation or permission broadening."
+    - "No automatic System Settings navigation."
+    - "No Keychain enumeration, export, or automatic signing-identity selection."
+    - "No public network listener."
+    - "No new background service."
+    - "No migration from unittest/verification harness."
+    - "No historical-task knowledge in the final operator workflow."
+
+external_authority:
+  openai_secure_mcp_tunnel:
+    url: "https://developers.openai.com/api/docs/guides/secure-mcp-tunnels"
+    use: >-
+      Documentation authority for the current default private OpenAI tunnel path.
+      Runtime remains private; tunnel-client owns the outbound HTTPS transport.
+  apple_command_line_tools:
+    url: "https://developer.apple.com/documentation/xcode/installing-the-command-line-tools"
+    use: >-
+      Documentation authority for developer-tool prerequisites and human/system
+      installation boundaries. TASK-0141 may detect missing prerequisites but must
+      not silently install or reconfigure them.
+
+scope:
+
+  preflight:
+    objective: >-
+      Add one deterministic prerequisite/configuration preflight that runs before
+      any install mutation and can be used independently by humans or agents.
+    preferred_cli:
+      human: "./install.sh --check"
+      json: "./install.sh --check --json"
+    cli_rule: >-
+      Equivalent minimal syntax is acceptable only if it remains discoverable from
+      ./install.sh --help and preserves one canonical preflight implementation.
+    strict_read_only:
+      forbidden_effects:
+        - "create, modify or delete .venv"
+        - "install Python packages"
+        - "create or modify checkout .env"
+        - "create or modify canonical runtime.env"
+        - "create build/ candidates"
+        - "sign or package an app"
+        - "create or modify cutover transaction state"
+        - "register/unregister ServiceManagement jobs"
+        - "start/stop/restart Runtime"
+        - "change desired-state markers"
+        - "modify Git refs/index/worktree"
+        - "modify TCC, Login Items, Keychain, System Settings or host developer-tool selection"
+      allowed:
+        - "bounded read-only filesystem/process/config inspection"
+        - "version and executable availability checks"
+        - "read-only Git identity/repository observation"
+        - "bounded read-only tunnel-client prerequisite/config validation when credentials already exist"
+    required_checks:
+      - "supported macOS/architecture according to current package authority"
+      - "canonical repository root and exact origin identity"
+      - "required Git/system commands"
+      - "canonical packaging Python requirement"
+      - "Xcode/Swift toolchain requirements used by current packaging"
+      - "official tunnel-client executable and current accepted identity/fingerprint rules"
+      - "workspace derivation and configured workspace validity"
+      - "checkout/canonical configuration presence and syntax without printing values"
+      - "Runtime Git identity readiness without printing identity values"
+      - "Runtime capacity/session settings and bounds"
+      - "legacy tunnel profile absence"
+      - "existing installed app / ServiceManagement / cutover state relevant to installation"
+      - "signing prerequisite as a human/operator requirement without Keychain enumeration"
+    result_model:
+      requirements:
+        - "deterministic overall status"
+        - "stable check identifiers"
+        - "reason_code per non-pass condition"
+        - "human-action classification where required"
+        - "no secret or Git identity values"
+      note: >-
+        This is an operator preflight contract, not a new MCP/public Runtime contract.
+
+  installed_authority_doctor:
+    objective: >-
+      Provide one public operator entrypoint that diagnoses the installed package
+      using package-owned Runtime bytes plus canonical runtime.env rather than
+      ambient checkout Python/config state.
+    preferred_cli:
+      human: "./start.sh doctor"
+      json: "./start.sh doctor --json"
+    requirements:
+      - "reuse python -m agent_runtime.doctor; do not create a second diagnostic engine"
+      - "load canonical runtime.env using existing safe parsing rules"
+      - "execute the installed package-owned Runtime Python/doctor"
+      - "preserve DoctorReport schema_version=1 and the existing ten-check inventory"
+      - "preserve existing reason_codes and status composition"
+      - "set PYTHONDONTWRITEBYTECODE=1 for installed package execution"
+      - "never print CONTROL_PLANE_API_KEY, complete tunnel ID, Git name/email or other credential values"
+      - "APP_NOT_INSTALLED or missing canonical config must fail deterministically"
+    source_doctor_rule: >-
+      Direct python -m agent_runtime.doctor remains a development/source diagnostic.
+      The product/operator path is the installed-authority wrapper.
+
+  configuration_productization:
+    requirements:
+      - "Keep one checkout .env.example; do not create a second configuration system."
+      - "Clearly separate Runtime-independent settings from OpenAI transport settings."
+      - "Make Runtime Git identity requirements discoverable without adding invalid active empty entries."
+      - "Document canonical runtime.env ownership, mode 0600 and initialization rules."
+      - "Document that canonical runtime.env is retained by uninstall unless current implementation explicitly says otherwise."
+      - "No Cloudflare variables, examples or comments."
+      - "No secret values in repository, fixtures, reports or logs."
+
+  documentation:
+    information_architecture:
+      README.md:
+        owns:
+          - "product identity"
+          - "supported/qualified platform wording"
+          - "short Quick Start"
+          - "OpenAI tunnel as default"
+          - "links to detailed operator docs"
+        must_not_own:
+          - "full package/cutover internals"
+          - "long recovery state-machine prose"
+          - "historical TASK references"
+      docs/INSTALL.md:
+        owns:
+          - "fresh macOS prerequisites"
+          - "preflight"
+          - "configuration"
+          - "installation"
+          - "human approval boundary"
+          - "first start"
+          - "OpenAI connection"
+          - "installed-authority doctor"
+          - "cutover commit/rollback decision"
+      docs/OPERATIONS.md:
+        owns:
+          - "start/stop/restart/status/session-limit"
+          - "doctor"
+          - "update"
+          - "installed paths"
+          - "normal desired-state semantics"
+          - "OpenAI tunnel health/readiness"
+      docs/RECOVERY.md:
+        owns:
+          - "reason_code to safe action matrix"
+          - "AWAITING_APPROVAL/PENDING/PARTIAL handling"
+          - "rollback and recover-partial flows"
+          - "foreign/ambiguous port ownership fail-closed behavior"
+          - "package/config/service failure recovery"
+          - "uninstall recovery"
+      docs/AGENT.md:
+        owns:
+          - "deterministic AI-agent procedure"
+          - "machine-readable command sequence"
+          - "reason_code routing"
+          - "HUMAN_ACTION_REQUIRED boundaries"
+          - "secret-redaction rules"
+          - "stop/escalation rules"
+      THREAT_MODEL.md:
+        owns:
+          - "current security boundary and explicit non-goals"
+        requirements:
+          - "remove historical task-number authority from user-facing security contract"
+    global_rules:
+      - "No normative instruction may disagree across README/docs/scripts."
+      - "README should point to detailed docs instead of duplicating them."
+      - "User-facing docs must not require .agent/tasks, task revisions, checkpoint SHAs or historical chat."
+      - "Internal --serve must not be presented as a normal operator command."
+      - "Document only OpenAI transport because Cloudflare is NOT_ADMITTED."
+
+  recovery_reason_routing:
+    rule: >-
+      Every material non-OK reason_code currently emitted by the canonical doctor
+      must have exactly one documented safe next-action class.
+    minimum_codes:
+      - WORKSPACE_UNAVAILABLE
+      - WORKSPACE_INVALID
+      - RUNTIME_LIMIT_CONFIG_INVALID
+      - GIT_UNAVAILABLE
+      - GIT_IDENTITY_UNAVAILABLE
+      - APP_NOT_INSTALLED
+      - INSTALLED_PACKAGE_INVALID
+      - SERVICE_APPROVAL_REQUIRED
+      - SERVICE_NOT_REGISTERED
+      - SERVICE_STATUS_INVALID
+      - CUTOVER_TRANSACTION_PRESENT
+      - CUTOVER_STATE_INVALID
+      - RUNTIME_IDENTITY_MISMATCH
+      - CAPABILITY_REGISTRY_MISMATCH
+      - SCHEMA_EXPORT_INVALID
+      - TOOL_CONTRACT_SCHEMA_MISMATCH
+      - GOVERNANCE_PROTECTION_INVALID
+      - INTERNAL_SERIALIZATION_FAILURE
+    action_classes:
+      SAFE_AUTOMATED:
+        meaning: "Documented bounded action the agent may execute without new operator judgment."
+      HUMAN_ACTION_REQUIRED:
+        meaning: "Requires user/platform approval, credentials, signing authority or commit-vs-rollback judgment."
+      STOP_AND_ESCALATE:
+        meaning: "Ambiguous/unsafe ownership or corrupted authority; no blind repair."
+    examples:
+      SERVICE_APPROVAL_REQUIRED: HUMAN_ACTION_REQUIRED
+      CUTOVER_STATE_INVALID: STOP_AND_ESCALATE
+      INSTALLED_PACKAGE_INVALID: STOP_AND_ESCALATE
+      GIT_IDENTITY_UNAVAILABLE: HUMAN_ACTION_REQUIRED
+
+black_box_acceptance:
+  authority: >-
+    Productization is accepted by operator journeys, not by the mere presence of docs.
+  forbidden_knowledge:
+    - ".agent/tasks contents"
+    - "historical task IDs/revisions"
+    - "architect/executor chat"
+    - "checkpoint hashes not exposed by current product commands"
+    - "old ServiceManagement migration recipes"
+    - "internal source implementation details"
+  human_journey:
+    allowed_inputs:
+      - README.md
+      - docs/*
+      - .env.example
+      - command --help output
+    must_be_able_to:
+      - "run read-only preflight"
+      - "understand each blocking prerequisite"
+      - "configure without leaking secrets"
+      - "install through the canonical existing install path"
+      - "recognize HUMAN_ACTION_REQUIRED"
+      - "start and inspect status"
+      - "connect through the documented OpenAI tunnel path"
+      - "run installed-authority doctor"
+      - "understand update/cutover commit/rollback"
+      - "recover from documented reason codes"
+      - "understand uninstall semantics"
+  agent_journey:
+    allowed_inputs:
+      - README.md
+      - docs/*
+      - .env.example
+      - runtime_capabilities when MCP is already reachable
+      - "./install.sh --check --json"
+      - "./start.sh doctor --json"
+    required_sequence: >-
+      preflight -> classify blocker -> HUMAN_ACTION_REQUIRED when necessary ->
+      install/start -> doctor -> reason_code -> documented safe action -> recheck.
+    must_not:
+      - "read .agent/tasks"
+      - "guess hidden config keys"
+      - "inspect secrets"
+      - "blindly kill/reinstall on ambiguous ownership"
+      - "treat screen_capture governance denial as a permission problem"
+  test_method:
+    deterministic:
+      - "use disposable HOME/workspace/config fixtures for preflight mutation-proof tests"
+      - "prove before/after filesystem state is identical for --check"
+      - "prove JSON output is deterministic and secret-safe"
+      - "prove every documented doctor reason_code maps to one action class"
+      - "prove README/docs contain no historical TASK dependency"
+      - "reuse existing install/cutover/uninstall deterministic fixtures rather than duplicating lifecycle architecture"
+    real_host_bounded:
+      - "run read-only preflight against the canonical host"
+      - "run installed-authority doctor against the existing installed product"
+      - "confirm current OpenAI tunnel product path remains documented and healthy enough for ordinary safe use"
+      - "do not uninstall/reinstall, restart services, toggle approvals, or force cutover merely to satisfy documentation acceptance"
+
+implementation_boundary:
+  expected_paths:
+    - README.md
+    - .env.example
+    - docs/INSTALL.md
+    - docs/OPERATIONS.md
+    - docs/RECOVERY.md
+    - docs/AGENT.md
+    - THREAT_MODEL.md
+    - install.sh
+    - start.sh
+    - tests/*
+  conditional_path:
+    - agent_runtime/doctor.py
+  conditional_rule: >-
+    doctor.py may change only if a focused test proves the installed-authority
+    wrapper cannot be implemented while preserving DoctorReport schema/version and
+    check inventory. Any proposed doctor architecture or schema change requires
+    Architect REWORK instead.
+  forbidden_paths_unless_test_only_assertion_requires_reading:
+    - agent_runtime/server.py
+    - agent_runtime/capability_registry.py
+    - agent_runtime/contracts.py
+    - agent_runtime/repo_*.py
+    - agent_runtime/session.py
+    - agent_runtime/terminal_session.py
+    - macos/candidate_cutover.py
+    - macos/package_app.sh
+    - macos/ServiceManagementController.swift
+    - requirements.txt
+    - requirements.lock
+
+security_and_privacy:
+  - "Do not print, snapshot or persist secret values."
+  - "Do not enumerate or export Keychain identities."
+  - "Do not request Full Disk Access, Accessibility, Screen Recording or other TCC permission."
+  - "Do not open System Settings automatically."
+  - "Do not broaden Local Network or inbound-listener exposure."
+  - "Background Activity approval remains operator/platform state."
+  - "screen_capture remains VISUAL_PERCEPTION_BLOCKED and docs must describe it as governance, not missing permission."
+  - "OpenAI tunnel remains outbound-only/private according to the accepted architecture."
+
+verification:
+  preflight:
+    - "Fresh-resolve exact launch base/tree."
+    - "Require branch main, local HEAD=origin/main, ahead/behind 0/0, clean worktree/index."
+    - "Require remote branches=[main], open PRs=0."
+    - "Require TASK-0140 review-r2 state ACCEPTED."
+    - "Require TASK-0139 Cloudflare outcome NOT_ADMITTED."
+  focused:
+    - "preflight read-only/no-mutation tests"
+    - "preflight human and JSON output tests"
+    - "installed-authority doctor wrapper tests"
+    - "reason_code documentation coverage"
+    - "secret-redaction tests"
+    - "docs/CLI consistency tests"
+    - "no historical TASK dependency in user-facing docs"
+  identity:
+    - "Runtime version remains 0.2.0."
+    - "19-tool ordered public surface unchanged."
+    - "schema bundle/export hashes and length unchanged."
+    - "ToolContract Kernel unchanged."
+    - "OpenAI default transport identity unchanged."
+  canonical:
+    command: ./verify
+    required: true
+    authority: FINAL
+  final_hygiene:
+    - "No task-owned build/temp state."
+    - "No production dependency changes."
+    - "No ServiceManagement/cutover mutation caused by tests."
+    - "No Cloudflare residue."
+    - "No secret value in tracked diff/report."
+    - "main-only / zero-PR topology preserved."
+
+acceptance_criteria:
+  AC_1:
+    name: "Frozen architecture"
+    requirement: >-
+      Runtime 0.2.0, 19-tool public contract, ToolContract, schema identity,
+      ServiceManagement/cutover architecture and OpenAI default transport are unchanged.
+  AC_2:
+    name: "Read-only install preflight"
+    requirement: >-
+      Human and JSON preflight modes detect current prerequisites/config blockers
+      before install mutation and leave repository/user Runtime state byte-for-byte
+      unchanged.
+  AC_3:
+    name: "Installed-authority doctor"
+    requirement: >-
+      Operator doctor entrypoint uses installed package bytes plus canonical runtime.env,
+      preserves DoctorReport v1/ten checks/reason semantics, and leaks no secrets.
+  AC_4:
+    name: "Documentation information architecture"
+    requirement: >-
+      README is concise; INSTALL/OPERATIONS/RECOVERY/AGENT/THREAT_MODEL each own one
+      non-duplicated authority boundary and match executable behavior.
+  AC_5:
+    name: "Deterministic recovery routing"
+    requirement: >-
+      Every material doctor non-OK reason_code maps to exactly one safe action class,
+      with explicit HUMAN_ACTION_REQUIRED and STOP_AND_ESCALATE boundaries.
+  AC_6:
+    name: "Human black-box journey"
+    requirement: >-
+      A tester using only product docs/templates/help can understand and execute the
+      supported install/start/connect/diagnose/update/recovery/uninstall journey
+      without historical governance knowledge.
+  AC_7:
+    name: "Agent black-box journey"
+    requirement: >-
+      An AI agent using only product docs plus machine-readable preflight/doctor
+      outputs can route safe actions deterministically and stops for human judgment
+      when required.
+  AC_8:
+    name: "OpenAI-only product truth"
+    requirement: >-
+      User-facing productization documents exactly the admitted OpenAI Secure MCP
+      Tunnel path. No Cloudflare configuration, code or speculative docs are added.
+  AC_9:
+    name: "Security/privacy unchanged"
+    requirement: >-
+      No new permission, secret, Keychain, TCC, inbound-network or lifecycle authority
+      is introduced.
+  AC_10:
+    name: "Regression and closure"
+    requirement: >-
+      Focused productization tests and canonical ./verify pass on the exact final tree;
+      final repository is clean, main-only and zero-PR.
+
+execution_rules:
+  - "Use KISS and reuse existing parser/config/install/cutover/doctor semantics."
+  - "Do not duplicate existing lifecycle logic in docs or helper code."
+  - "Do not change architecture to make documentation easier."
+  - "If existing executable behavior contradicts the frozen architecture, STOP and return REWORK evidence instead of redesigning it."
+  - "If a deeper product defect outside the authorized operational surface is discovered, STOP for Architect judgment."
+  - "Do not perform destructive live-host acceptance merely to prove docs."
+  - "Use exact current official external documentation only for acquisition/UI wording that is platform/vendor controlled."
+
+publication:
+  topology: MAIN_ONLY
+  branch: main
+  pull_request: false
+  github_actions: false
+  required_chain: >-
+    Prefer native Agent Runtime repo_stage -> repo_diff ReceiptV1 -> repo_commit ->
+    repo_publish exact expected-old CAS. If that governed mutation surface is
+    unavailable, stop rather than silently substitute a weaker write path unless
+    Architect explicitly authorizes the fallback.
+  report:
+    path: .agent/tasks/TASK-0141/report-r1.yaml
+    state_on_completion: NEEDS_REVIEW
+    required_evidence:
+      - "execution base SHA/tree"
+      - "exact changed paths"
+      - "preflight mutation-proof evidence"
+      - "installed-authority doctor evidence"
+      - "docs/reason-code coverage"
+      - "black-box human/agent acceptance evidence"
+      - "frozen identity/schema proof"
+      - "canonical ./verify result"
+      - "staged ReceiptV1 / commit / publication proof"
+      - "final clean main-only zero-PR closure"
+
+terminal_outcomes:
+  allowed:
+    - NEEDS_REVIEW
+    - REWORK
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+  NEEDS_REVIEW_requires: >-
+    Every acceptance criterion is satisfied, canonical verification is green,
+    artifacts are published through the governed chain, and final repository closure
+    is clean/coherent.
