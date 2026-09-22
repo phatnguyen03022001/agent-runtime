@@ -1,0 +1,342 @@
+protocol_version: 3
+
+task_id: TASK-0140
+task_revision: 2
+report_revision: 2
+state: NEEDS_REVIEW
+owner: EXECUTOR
+
+outcome: PASS
+summary: >-
+  TASK-0140 revision 2 resumed qualification after accepted TASK-0140-MAINT
+  using evidence-preserving delta qualification. The F-0140-001 repair is freshly
+  proven across terminal_exec and fs_list, all nineteen public tools traverse the
+  common sanitizer, expected error semantics remain preserved, MCP/schema identity
+  is unchanged, bounded x6 capacity behavior remains correct, and canonical ./verify
+  passes 658 tests. No new HIGH correctness or security finding was reproduced.
+  Revision-1 proofs not materially affected by the maintenance diff are explicitly
+  carried forward below. No production, dependency, install, cutover, service,
+  transport, or Cloudflare mutation was performed.
+
+execution:
+  execution_surface: CHATGPT_LOCAL
+  transport: AGENT_RUNTIME
+  canonical_branch: main
+  execution_base:
+    commit: "a939c3cb6b3eb610ec7363fc6a0b626ad3ea0479"
+    tree: "07d153e0ca3f95b2d4458c28e61b83d61438ffa5"
+  qualification_source:
+    commit: "a939c3cb6b3eb610ec7363fc6a0b626ad3ea0479"
+    tree: "07d153e0ca3f95b2d4458c28e61b83d61438ffa5"
+  preflight:
+    fresh_origin_main: "a939c3cb6b3eb610ec7363fc6a0b626ad3ea0479"
+    local_head: "a939c3cb6b3eb610ec7363fc6a0b626ad3ea0479"
+    local_tree: "07d153e0ca3f95b2d4458c28e61b83d61438ffa5"
+    ahead_behind: "0/0"
+    worktree_index: CLEAN
+    remote_branches: [main]
+    open_prs: 0
+    exact_launch_base_tree_match: true
+  maintenance_prerequisite:
+    task: TASK-0140-MAINT
+    implementation_commit: "82c7d03836147f208bf69b69659fe86566696602"
+    implementation_tree: "1519adef4c533d8fc7e427d9ec25cedd51577dc8"
+    accepted_review_commit: "db1fee478763eec7c2f491a27fb5c7b0df5e4854"
+    accepted_review_state: ACCEPTED
+  transport_prerequisite:
+    task: TASK-0139
+    accepted_review_state: ACCEPTED
+    admission_outcome: NOT_ADMITTED
+    qualification_scope: OPENAI_ONLY
+    cloudflare: OUT_OF_SCOPE
+
+maintenance_delta_analysis:
+  implementation_parent: "be54d15f4a9b28d361515b80222fab8900b80dca"
+  implementation_changed_paths:
+    - agent_runtime/server.py
+    - verify
+    - verify_tests.py
+    - tests/test_task0140_qualification.py
+    - tests/test_verify_harness.py
+    - tests/test_surface_and_scripts.py
+  post_implementation_to_execution_base_changed_paths:
+    - .agent/tasks/TASK-0140-MAINT/report-r1.yaml
+    - .agent/tasks/TASK-0140-MAINT/review-r1.yaml
+    - .agent/tasks/TASK-0140/task.yaml
+  production_change_after_maintenance_implementation: false
+  dependency_change_after_maintenance_implementation: false
+  install_cutover_transport_change_after_maintenance_implementation: false
+  rationale: >-
+    The accepted maintenance implementation changed the common MCP registration
+    sanitizer boundary plus the verification harness/tests. Subsequent commits before
+    revision-2 execution changed governance artifacts only. Therefore error/MCP/schema
+    predicates and a bounded capacity smoke were freshly proven, while unrelated
+    expensive lifecycle/CAS/external-tool evidence was eligible for explicit
+    carry-forward subject to canonical regression.
+
+frozen_identity:
+  runtime_version: "0.2.0"
+  public_tool_count: 19
+  tool_contract_kernel_version: 1
+  schema_bundle_sha256: "6bcfe8cdbb19393cdaeb0ef13271a6448b6bc0a28f479c8d4c0f6b7246b2aba5"
+  schema_export_bytes_sha256: "495eefab431e5311189e15d07f6ffe2ab9c6635c2c5a8a6b41b0a1f944fef36b"
+  schema_export_bytes_length: 59981
+  recomputed_after_canonical_verify: true
+  exact_match_to_frozen_identity: true
+
+fresh_revision_2_proofs:
+  R2-F1:
+    name: Canonical identity
+    status: PASS
+    evidence:
+      - "Capability registry tests freshly proved runtime 0.2.0, exactly nineteen public tools in canonical order, deterministic runtime_capabilities, and ToolContract Kernel version 1."
+      - "Post-verify schema recomputation matched bundle SHA-256 6bcfe8cdbb19393cdaeb0ef13271a6448b6bc0a28f479c8d4c0f6b7246b2aba5."
+      - "Post-verify export bytes matched SHA-256 495eefab431e5311189e15d07f6ffe2ab9c6635c2c5a8a6b41b0a1f944fef36b and length 59981."
+      - "Canonical ./verify exited 0 on the exact qualification source."
+  R2-F2:
+    name: F-0140-001 closure / G10
+    status: PASS
+    finding: F-0140-001
+    evidence:
+      terminal_exec_secret_sentinel:
+        client_response_contains_sentinel: false
+        mcp_sdk_server_log_contains_sentinel: false
+        bounded_generic_failure_observable: true
+      fs_list_secret_sentinel:
+        client_response_contains_sentinel: false
+        mcp_sdk_server_log_contains_sentinel: false
+        bounded_generic_failure_observable: true
+      all_registered_public_tools_common_sanitizer: "19/19"
+      focused_test:
+        command: >-
+          .venv/bin/python -m unittest -v tests.test_task0140_qualification
+          tests.test_capability_registry
+          tests.test_mcp_client_conformance.MCPClientConformanceTests.test_public_client_negotiates_metadata_and_exact_tool_contract
+          tests.test_mcp_client_conformance.MCPClientConformanceTests.test_expected_domain_failure_uses_deliberate_tool_error_path
+          tests.test_mcp_client_conformance.MCPClientConformanceTests.test_unexpected_exception_is_sanitized_and_does_not_leak_sentinel
+          tests.test_mcp_client_conformance.MCPClientConformanceTests.test_invalid_schema_is_rejected_before_delegate_executes
+        tests_run: 12
+        failures: 0
+        errors: 0
+        duration_seconds: 0.043
+  R2-F3:
+    name: Expected error semantics
+    status: PASS
+    evidence:
+      common_sanitizer_identity_preservation:
+        ToolError: PASS
+        RuntimeValidationError: PASS
+        RuntimeStateError: PASS
+        ProtectedRuntimeDenied: PASS
+        CapabilityFailure: PASS
+        method: >-
+          A focused in-process proof wrapped delegates that raised one instance of
+          each preserved exception type and asserted the common sanitizer re-raised
+          the exact same object.
+      deliberate_tool_error_path: PASS
+      invalid_input_rejected_before_delegate: PASS
+      capability_failure_typed_envelope:
+        command: >-
+          .venv/bin/python -m unittest -v
+          tests.test_fs_write_mcp.FsWriteMCPTests.test_create_expected_sha_semantics_return_capability_envelope
+        tests_run: 1
+        result: PASS
+        duration_seconds: 0.014
+  R2-F4:
+    name: MCP contract and conformance regression
+    status: PASS
+    evidence:
+      representative_safe_client_negotiation_and_contract: PASS
+      representative_expected_domain_error: PASS
+      representative_unexpected_error_sanitization: PASS
+      representative_malformed_input_validation: PASS
+      runtime_capabilities_deterministic_probe_free: PASS
+      public_tool_order_and_annotations_exact: PASS
+      registered_schema_export_identity_exact: true
+  R2-F5:
+    name: Capacity smoke after common-wrapper change
+    status: PASS
+    command: >-
+      .venv/bin/python -m unittest -v
+      tests.test_task0059_transport.SharedMCPTransportTests.test_shared_stdio_holds_six_heavy_rejects_seventh_and_keeps_cheap_calls_live
+    tests_run: 1
+    duration_seconds: 0.577
+    evidence:
+      six_heavy_simultaneously_admitted: true
+      peak_heavy_count: 6
+      seventh_rejected_before_spawn: true
+      cheap_capacity_observer_responsive: true
+      cheap_fs_read_batch_responsive: true
+      final_active_heavy_count: 0
+      cleanup_quiescent: true
+  R2-F6:
+    name: No architecture drift
+    status: PASS
+    evidence:
+      new_public_tools: 0
+      runtime_version_changed: false
+      tool_contract_changed: false
+      schema_or_annotation_changed: false
+      transport_changed: false
+      install_or_cutover_redesigned: false
+      cloudflare_resurrected: false
+      new_runtime_dependency: false
+      production_paths_changed_during_revision_2: 0
+      test_paths_changed_during_revision_2: 0
+  R2-F7:
+    name: Verification harness
+    status: PASS
+    evidence:
+      accepted_canonical_harness_used: true
+      verify_modified_by_revision_2: false
+      fast_parallel_workers: 4
+      host_sensitive_unknown_serialized: true
+      canonical_verify_final_authority: true
+
+canonical_verify:
+  command: ./verify
+  authority: FINAL
+  exit_code: 0
+  result: PASS
+  modules: "53/53"
+  tests: 658
+  failures: 0
+  errors: 0
+  fast_parallel_lane:
+    workers: 4
+    tests: 254
+    duration_seconds: 17.959
+  serial_host_sensitive_lane:
+    workers: 1
+    tests: 404
+    duration_seconds: 158.208
+  total_duration_seconds: 176.169
+
+revision_1_carry_forward:
+  source_report: .agent/tasks/TASK-0140/report-r1.yaml
+  G4_terminal_churn_and_retention:
+    disposition: CARRY_FORWARD
+    status: PASS
+    reasoning: >-
+      The maintenance diff did not modify terminal session retention, cursor,
+      bounded-output, reaper, or churn internals. Fresh capacity/error proofs exposed
+      no lifecycle drift and canonical regression is green, so repeating the prior
+      160-cycle stress program would add cost without touching the changed predicate.
+  G5_owned_resource_cleanup:
+    disposition: CARRY_FORWARD_WITH_FRESH_SMOKE
+    status: PASS
+    reasoning: >-
+      Process/session/PTY ownership and cleanup implementations did not change.
+      Revision 2 additionally observed exact cleanup to zero active heavy operations
+      in the required capacity smoke, and canonical lifecycle suites passed.
+  G6_long_running_cancellation_failure:
+    disposition: PARTIAL_CARRY_FORWARD
+    status: PASS
+    reasoning: >-
+      Long-running lifecycle/cancellation internals were untouched, so revision-1
+      lifecycle evidence carries forward. Error behavior at the changed common
+      wrapper boundary was freshly proven by R2-F3 and canonical regression.
+  G7_filesystem_confinement_boundedness:
+    disposition: PARTIAL_CARRY_FORWARD
+    status: PASS
+    reasoning: >-
+      Filesystem confinement and boundedness internals were not modified. Because the
+      common wrapper encloses filesystem tools, representative validation, typed error
+      behavior, fs_list secret sanitization, schema identity, and canonical filesystem
+      regressions were freshly proven.
+  G8_repository_CAS_receipt_red_team:
+    disposition: CARRY_FORWARD
+    status: PASS
+    reasoning: >-
+      Repository CAS/receipt implementations were not modified by maintenance or
+      revision-2 authoring. The expensive race matrix is therefore carried forward;
+      canonical ./verify still ran the repository regression modules successfully.
+  G9_protected_runtime_governance:
+    disposition: PARTIAL_CARRY_FORWARD
+    status: PASS
+    reasoning: >-
+      Broad protected-runtime red-team evidence carries because protection internals
+      were untouched. ProtectedRuntimeDenied identity across the new sanitizer was
+      freshly proven, and canonical test_protected_runtime passed all twenty tests.
+  G11_screen_capture_governance:
+    disposition: CARRY_FORWARD
+    status: PASS
+    reasoning: >-
+      Screen-capture implementation/governance was unchanged. Frozen public schema and
+      runtime_capabilities identity remain exact and canonical screen-capture tests pass.
+  G12_external_MCP_tools:
+    disposition: CARRY_FORWARD
+    status: PASS
+    reasoning: >-
+      Revision-1 Inspector/scanner evidence targeted the same now byte-identical public
+      metadata/schema surface. Fresh R2-F4 found no MCP-surface discrepancy, so external
+      tools were not reinstalled or rerun.
+  G13_installed_macOS_OpenAI_continuity:
+    disposition: CARRY_FORWARD
+    status: PASS
+    reasoning: >-
+      Revision 2 performed no install, cutover, service-management, package, or
+      transport command and changed no related source. The accepted installed
+      OpenAI-only continuity evidence therefore remains applicable; no new cutover was
+      created merely to re-prove it.
+  G14_no_product_mutation:
+    disposition: FRESH_FINAL_HYGIENE
+    status: PASS
+    reasoning: >-
+      Revision 2 made no production/test/dependency/install/cutover/transport changes.
+      Before report creation the repository remained clean at the exact execution base,
+      build/ contained no task-owned ephemeral state, and the only planned durable
+      mutation is this report artifact.
+
+findings:
+  F-0140-001:
+    prior_severity: HIGH
+    prior_dimension: secret_error_sanitization
+    status: CLOSED
+    closure_basis: >-
+      Both canonical sentinels are absent from client serialization and MCP SDK/server
+      logs while a bounded generic failure remains observable; all nineteen public
+      tools are registered through the common sanitizer.
+  new_unresolved_high_findings: []
+
+mutation_hygiene:
+  production_files_changed: 0
+  test_files_changed: 0
+  requirements_txt_changed: false
+  requirements_lock_changed: false
+  install_or_cutover_changed: false
+  service_management_changed: false
+  transport_changed: false
+  cloudflare_touched: false
+  external_tools_installed: false
+  runtime_venv_mutated_for_qualification: false
+  task_owned_ephemeral_root: build/.task-0140-r2/
+  task_owned_ephemeral_state_present_before_report: false
+  durable_path:
+    - .agent/tasks/TASK-0140/report-r2.yaml
+
+publication:
+  branch: main
+  pull_request: forbidden
+  github_actions: forbidden
+  method: repo_stage_then_repo_diff_then_repo_commit_then_repo_publish
+  expected_remote_head_before_publication: "a939c3cb6b3eb610ec7363fc6a0b626ad3ea0479"
+  report_publication_receipts: COMPLETION_PACKET_AFTER_REPORT_SEAL
+  rationale: >-
+    The report commit and publish receipts are produced only after these report bytes
+    are sealed and therefore cannot be embedded self-referentially. The Executor
+    completion packet records the native stage/diff/commit/publish receipts and the
+    fresh post-publication local/remote hygiene proof.
+
+final_judgment:
+  result: PASS
+  rationale: >-
+    F-0140-001 is closed; every mandatory revision-2 fresh gate passed; each reused
+    revision-1 proof has explicit non-invalidation reasoning; canonical ./verify is
+    green; and the frozen Runtime/public contract remains coherent without new HIGH
+    findings.
+
+successor_gate:
+  task: TASK-0141
+  state: BLOCKED
+  release_condition: "TASK-0140 revision 2 must be independently reviewed and ACCEPTED."
