@@ -1,7 +1,7 @@
 protocol_version: 3
 
 task_id: TASK-0138
-task_revision: 5
+task_revision: 6
 state: APPROVED
 
 origin:
@@ -252,6 +252,92 @@ revision_5:
     regression authority. If the install is platform-blocked before process execution, return
     OPERATOR_TRANSITION_REQUIRED without retrying through another ChatGPT tool surface.
 
+revision_6:
+  supersedes_revision_5_execution_authority: true
+  objective_changed: false
+  architecture_changed: false
+  production_bytes_changed_by_revision: false
+  revision_5_published_implementation:
+    commit: "0d1cb036620b0e223939dc595e69b4c127fa3959"
+    tree: "1d7ddfba925eeeac2b902c1fca50d1e1771b434f"
+    repository_state: CLEAN
+    remote_main: "0d1cb036620b0e223939dc595e69b4c127fa3959"
+  revision_5_cutover_fix:
+    paths:
+      - macos/candidate_cutover.py
+      - tests/test_candidate_cutover.py
+    targeted_proofs: "3/3 PASS"
+    status: PRESERVE
+  canonical_verify_history:
+    first_r5_run:
+      tests_run: 646
+      failures: 1
+      errors: 1
+      skipped: 1
+      consequence: ZERO
+    second_r5_run:
+      result: RESULT_UNAVAILABLE
+      consequence: ZERO
+    operator_r5_run:
+      tests_run: 646
+      failures: 1
+      errors: 0
+      skipped: 1
+      consequence: ZERO
+      failing_test: "tests.test_terminal_session.TerminalSessionTests.test_poll_retention_and_response_are_bounded_and_cursor_expiry_is_truthful"
+  independent_architect_evidence:
+    screen_capture_timeout_test: PASS
+    terminal_retention_test: PASS
+    terminal_retention_stress: "20/20 PASS"
+    production_paths_related_to_failures_changed_by_r5: false
+  corrective_classification: TEST_DETERMINISM
+  corrective_boundary:
+    implementation_paths:
+      - tests/test_terminal_session.py
+      - tests/test_screen_capture.py
+    production_paths: []
+    terminal_retention_semantics: >-
+      Remove correctness dependence on a fixed sleep before asserting retention overflow.
+      Synchronize on the observable public condition being tested with a bounded deadline.
+      Preserve all cursor-expiry, dropped-byte, poll-output-bound, and next-cursor assertions.
+    screen_capture_timeout_semantics: >-
+      Preserve the real subprocess timeout/reaping proof while making helper-start observation
+      deterministic enough that the test does not assume the helper created its PID file within
+      an arbitrary fixed scheduler window. Do not weaken DEADLINE_EXCEEDED or process-reaping
+      assertions.
+    forbidden:
+      - "Do not change agent_runtime/session.py."
+      - "Do not change agent_runtime/screen_capture.py."
+      - "Do not change macos/candidate_cutover.py or its accepted revision-5 behavior."
+      - "Do not merely increase a fixed sleep and call that deterministic."
+      - "Do not skip, xfail, quarantine, or delete either test."
+      - "Do not loosen production bounds, timeouts, retention size, or cursor semantics."
+  proof_strategy:
+    targeted:
+      - "Run the terminal retention test repeatedly enough to prove the new condition-based synchronization is stable."
+      - "Run the screen-capture real-timeout test repeatedly enough to prove helper-start/reaping synchronization is stable."
+      - "Run the complete tests.test_terminal_session and tests.test_screen_capture modules once after targeted stress is green."
+    canonical: >-
+      After the test-only corrective commit is published, run exactly one canonical ./install.sh
+      flow. Its internal ./verify is the sole full-suite authority. Do not run standalone ./verify
+      first. If full verification fails, stop before package/install/cutover and return exact
+      evidence without retrying the installer.
+  implementation_parent_authority: >-
+    The revision-6 test-hardening commit must be the sole direct child of the exact revision-6
+    execution base supplied in the launch packet.
+  publication: >-
+    Use native repo_stage, native repo_diff staged ReceiptV1, native repo_commit, and native
+    repo_publish exact expected-old CAS. Runtime Git identity is now present in canonical
+    runtime.env but the currently installed predecessor may still not propagate it; if native
+    repo_commit alone returns GIT_IDENTITY_UNAVAILABLE, one forward local commit using existing
+    Git identity configuration is authorized for this revision-6 test-only commit only.
+    Do not stage or push via shell, mutate Git config, amend, reset, rebase, merge, or rewrite.
+  final_install: >-
+    Bind AGENT_RUNTIME_PACKAGING_PYTHON explicitly to the validated repository .venv/bin/python
+    for the one canonical installer flow. If ChatGPT process orchestration is platform-blocked,
+    use an explicit operator transition with durable log/exit receipt rather than retrying
+    through alternate ChatGPT tool surfaces.
+
 authority_sources:
   - source: ".agent/tasks/TASK-0137/review-r3.yaml@fe774afd0adbe1cb7aa665a5c3057774bf92f254"
     role: "Accepted runtime doctor and open final-freeze Git-identity propagation gap."
@@ -335,7 +421,7 @@ scope:
     - tests/test_candidate_cutover.py
     - tests/test_doctor.py
     - README.md
-    - .agent/tasks/TASK-0138/report-r5.yaml
+    - .agent/tasks/TASK-0138/report-r6.yaml
   scope_exception: >-
     Any required production change outside this set requires Architect judgment before mutation.
 
@@ -352,18 +438,19 @@ required_behavior:
 
 verification_strategy:
   focused_first:
-    - "Run only targeted CandidateCutoverTests for changed-generation refresh, delayed launchd disappearance, and any new bounded synchronization regression."
-    - "Require the existing unchanged-generation non-destructive refresh proof to remain green."
-    - "Do not run the entire CandidateCutoverTests class merely for ceremony."
-    - "Use native repo_diff exact diff/ReceiptV1 to prove the corrective scope is candidate_cutover.py plus its regression test only."
-  diff_check: "native repo_diff exact diff/ReceiptV1; separate git diff --check is optional when platform execution is unavailable"
+    - "Revision 6 is test-only: change only tests/test_terminal_session.py and tests/test_screen_capture.py."
+    - "Stress the terminal retention test using condition-based synchronization; do not rely on a fixed correctness sleep."
+    - "Stress the screen-capture real-timeout/reaping test with explicit helper-start synchronization while preserving real timeout semantics."
+    - "Run the complete tests.test_terminal_session and tests.test_screen_capture modules once after targeted stress is green."
+    - "Use native repo_diff exact diff/ReceiptV1 to prove no production path changed."
+  diff_check: "native repo_diff exact diff/ReceiptV1"
   canonical_verify:
     mechanism: "./install.sh internal canonical verify"
     invocation_policy: >-
-      Revision 5 authorizes exactly one new canonical ./install.sh flow after the cutover
-      synchronization correction is published. Its internal ./verify is the full repository
-      regression authority and executes before package/install/cutover consequence.
-      Do not run a redundant standalone full ./verify first.
+      Revision 6 authorizes exactly one canonical ./install.sh flow after the test-determinism
+      correction is published. Its internal ./verify is the sole full repository regression
+      authority and executes before package/install/cutover consequence.
+      Do not run a standalone full ./verify first.
     requirement: "zero failures/errors with exact totals durably captured"
   github_actions:
     required: false
@@ -515,19 +602,19 @@ acceptance_criteria:
   - id: AC-10
     requirement: "Final Executor report is persisted through the now-working native mutation chain."
     evidence_required: >-
-      report-r5 staged by native repo_stage, staged ReceiptV1, committed by native repo_commit,
+      report-r6 staged by native repo_stage, staged ReceiptV1, committed by native repo_commit,
       published by native repo_publish exact CAS, and final local/remote main proof.
 
 executor_flow:
   - "Fresh-resolve exact canonical main execution base and require clean local main."
   - "Fresh-require current 19-tool Agent Runtime surface."
-  - "Preserve all published revision-4 implementation bytes except the revision-5 cutover synchronization correction."
-  - "Implement only macos/candidate_cutover.py and tests/test_candidate_cutover.py."
-  - "Run only the targeted split-v1 refresh synchronization proofs required by revision 5."
-  - "Use native repo_diff to prove exact two-path corrective scope."
-  - "Stage corrective implementation through native repo_stage and obtain repo_diff(staged) ReceiptV1."
-  - "Attempt native repo_commit once; if and only if it returns GIT_IDENTITY_UNAVAILABLE, use the revision-5 one-additional-forward-commit exception bound to the exact revision-5 execution base."
-  - "Publish the corrective implementation through native repo_publish exact CAS and fresh-prove remote main."
+  - "Preserve all published production implementation bytes from revision 5."
+  - "Implement only revision-6 deterministic test hardening in tests/test_terminal_session.py and tests/test_screen_capture.py."
+  - "Run targeted stress for both known timing-sensitive tests, then run their complete test modules once."
+  - "Use native repo_diff to prove exact test-only corrective scope."
+  - "Stage the test-only correction through native repo_stage and obtain repo_diff(staged) ReceiptV1."
+  - "Attempt native repo_commit once; if and only if it returns GIT_IDENTITY_UNAVAILABLE, use the revision-6 one-forward-local-commit exception bound to the exact revision-6 execution base."
+  - "Publish the revision-6 correction through native repo_publish exact CAS and fresh-prove remote main."
   - "Require clean published implementation checkout."
   - "Run exactly one canonical ./install.sh with validated repo .venv packaging Python, existing signing Authority, and the already-migrated canonical runtime.env; capture its internal ./verify totals."
   - "Validate PENDING / APP_SWAPPED candidate and live Runtime gates."
@@ -536,7 +623,7 @@ executor_flow:
   - "Fresh-prove transaction absent and final installed identity/health/codesign/closure."
   - "Capture candidate/provenance hashes, then delete repository build/ transient artifacts."
   - "Run final bounded repository/host audit."
-  - "Create report-r5 with complete freeze evidence."
+  - "Create report-r6 with complete freeze evidence."
   - "Stage report through native repo_stage, obtain ReceiptV1, commit through native repo_commit, publish through native repo_publish."
   - "Fresh-prove local HEAD = origin/main, ahead/behind 0/0, worktree/index clean, then stop for independent Architect review."
 
@@ -566,7 +653,7 @@ failure_policy:
   - "If live Runtime reconnect is required after cutover and the current context cannot reacquire the same 19-tool surface, preserve transaction state and return a continuation packet rather than bypassing native proof."
 
 reporting:
-  path: .agent/tasks/TASK-0138/report-r5.yaml
+  path: .agent/tasks/TASK-0138/report-r6.yaml
   owner: EXECUTOR
   state_on_success: NEEDS_REVIEW
   required_evidence:
