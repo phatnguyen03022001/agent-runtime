@@ -1,7 +1,7 @@
 protocol_version: 3
 
 task_id: TASK-0138
-task_revision: 7
+task_revision: 8
 state: APPROVED
 
 origin:
@@ -465,6 +465,78 @@ revision_7:
       Prefer operator-run installer with durable log and exit-code receipt so ChatGPT transport
       loss cannot make verifier outcome unobservable.
 
+revision_8:
+  supersedes_revision_7_execution_authority: true
+  objective_changed: false
+  architecture_changed: false
+  implementation_changed: false
+  doctor_contract_changed: false
+  current_candidate:
+    implementation_commit: "bf98ec4e9bcda97dfdc0ca52b8e0537dae14a1cc"
+    implementation_tree: "1a473378a12504f7c4b1a598f96ced1813c72744"
+    canonical_verify:
+      tests_run: 649
+      failures: 0
+      errors: 0
+      skipped: 1
+      result: PASS
+    transaction:
+      schema: 5
+      status: PENDING
+      phase: APP_SWAPPED
+    live_runtime:
+      version: "0.2.0"
+      tool_count: 19
+      healthz: 200
+      readyz: 200
+      strict_codesign: PASS
+      screen_capture: VISUAL_PERCEPTION_BLOCKED
+    native_repo_commit_disposable_fixture: PASS
+  authority_correction:
+    reason: >-
+      Revision 7 required doctor healthy / exit 0 before commit-cutover while the accepted
+      doctor contract intentionally reports any recognized present cutover transaction as
+      CUTOVER_TRANSACTION_PRESENT / warn, composing overall status degraded / exit 1.
+      A valid PENDING / APP_SWAPPED transaction therefore cannot satisfy both predicates
+      simultaneously.
+    smallest_correct_resolution: >-
+      Preserve doctor semantics. During the pre-commit pending gate only, accept doctor
+      degraded / exit 1 iff the sole non-pass check is cutover_identity with reason_code
+      CUTOVER_TRANSACTION_PRESENT and evidence proves schema 5 / PENDING / APP_SWAPPED.
+      Every other doctor check must pass. After commit-cutover, final doctor must be
+      healthy / exit 0 with cutover_identity pass and transaction absent.
+    forbidden:
+      - "Do not modify agent_runtime/doctor.py."
+      - "Do not modify tests/test_doctor.py."
+      - "Do not reinterpret any other warning or failure as acceptable."
+      - "Do not commit cutover if doctor contains any second warning or any fail."
+      - "Do not weaken final doctor healthy / exit 0 requirement."
+  pending_doctor_gate:
+    accepted_status: degraded
+    accepted_exit_code: 1
+    required_single_warning:
+      check_id: cutover_identity
+      status: warn
+      reason_code: CUTOVER_TRANSACTION_PRESENT
+      transaction_schema: 5
+      transaction_status: PENDING
+      transaction_phase: APP_SWAPPED
+    all_other_checks: pass
+    classification: EXPECTED_TRANSITIONAL_DEGRADED
+  commit_cutover_authority: >-
+    If and only if every other pending-cutover gate remains PASS and the doctor result matches
+    pending_doctor_gate exactly, execute canonical ./install.sh --commit-cutover exactly once.
+  post_commit_gate:
+    transaction: ABSENT
+    doctor_status: healthy
+    doctor_exit_code: 0
+    cutover_identity: pass
+    all_checks: pass
+    requirement: mandatory
+  continuation_scope:
+    repository_implementation_mutation: none
+    host_action: "commit the already-validated pending schema-5 cutover, then final audit/cleanup/report"
+
 authority_sources:
   - source: ".agent/tasks/TASK-0137/review-r3.yaml@fe774afd0adbe1cb7aa665a5c3057774bf92f254"
     role: "Accepted runtime doctor and open final-freeze Git-identity propagation gap."
@@ -548,7 +620,7 @@ scope:
     - tests/test_candidate_cutover.py
     - tests/test_doctor.py
     - README.md
-    - .agent/tasks/TASK-0138/report-r7.yaml
+    - .agent/tasks/TASK-0138/report-r8.yaml
   scope_exception: >-
     Any required production change outside this set requires Architect judgment before mutation.
 
@@ -634,7 +706,7 @@ final_package_install:
     - "schema-5 transaction is PENDING / APP_SWAPPED"
     - "runtime.env contains both Git identity keys without exposing their values"
     - "live native repo_commit succeeds on a bounded disposable Git fixture"
-    - "installed doctor executed through the live Runtime environment returns healthy / exit 0"
+    - "installed doctor matches revision-8 pending_doctor_gate exactly: degraded / exit 1 solely because cutover_identity warns CUTOVER_TRANSACTION_PRESENT for schema 5 / PENDING / APP_SWAPPED; every other doctor check passes"
     - "screen_capture remains governance-blocked"
   commit_cutover: >-
     Only after every pending-cutover gate passes, execute canonical ./install.sh --commit-cutover
@@ -729,7 +801,7 @@ acceptance_criteria:
   - id: AC-10
     requirement: "Final Executor report is persisted through the now-working native mutation chain."
     evidence_required: >-
-      report-r7 staged by native repo_stage, staged ReceiptV1, committed by native repo_commit,
+      report-r8 staged by native repo_stage, staged ReceiptV1, committed by native repo_commit,
       published by native repo_publish exact CAS, and final local/remote main proof.
 
 executor_flow:
@@ -745,12 +817,12 @@ executor_flow:
   - "Require clean published implementation checkout."
   - "Run exactly one canonical ./install.sh with validated repo .venv packaging Python, existing signing Authority, and the already-migrated canonical runtime.env; capture its internal ./verify totals."
   - "Validate PENDING / APP_SWAPPED candidate and live Runtime gates."
-  - "Prove native repo_commit on a disposable fixture and installed doctor healthy through live Runtime environment."
+  - "Prove native repo_commit on a disposable fixture and require installed doctor to match revision-8 pending_doctor_gate exactly before commit-cutover."
   - "Commit cutover canonically."
   - "Fresh-prove transaction absent and final installed identity/health/codesign/closure."
   - "Capture candidate/provenance hashes, then delete repository build/ transient artifacts."
   - "Run final bounded repository/host audit."
-  - "Create report-r7 with complete freeze evidence."
+  - "Create report-r8 with complete freeze evidence."
   - "Stage report through native repo_stage, obtain ReceiptV1, commit through native repo_commit, publish through native repo_publish."
   - "Fresh-prove local HEAD = origin/main, ahead/behind 0/0, worktree/index clean, then stop for independent Architect review."
 
@@ -780,7 +852,7 @@ failure_policy:
   - "If live Runtime reconnect is required after cutover and the current context cannot reacquire the same 19-tool surface, preserve transaction state and return a continuation packet rather than bypassing native proof."
 
 reporting:
-  path: .agent/tasks/TASK-0138/report-r7.yaml
+  path: .agent/tasks/TASK-0138/report-r8.yaml
   owner: EXECUTOR
   state_on_success: NEEDS_REVIEW
   required_evidence:
