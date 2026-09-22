@@ -23,6 +23,8 @@ execution:
   transport: AGENT_RUNTIME
   qualification_transport_scope: OPENAI_ONLY
   recovery_state: LOCAL_QUALIFICATION_CHECKPOINT
+  closure_recovery_state: REPORT_PUBLICATION_CHECKPOINT
+  prior_report_commit: "26b88dbfef0dbb4c2ecb4e26cf0d47051f361bef"
   original_execution_base: "16c730b49447820e9f91917906b2c45cffd48e0f"
   original_execution_base_tree: "dc7a9d1567907343ba8eb5c4886ea271c705a0df"
   evidence_checkpoint_commit: "cad66cf09ab760153ccf8fa81ba47e5c2fda1f39"
@@ -201,7 +203,7 @@ finding:
     direct_runs:
       - "1 test; FAILED (failures=1); sentinel absent from MCP response but present in captured MCP server logs"
       - "recovery rerun reproduced the same failure"
-    canonical_verify: "650 tests in 186.247s; FAILED (failures=1, skipped=1); sole failure is the durable G10 reproducer"
+    canonical_verify: "650 tests in 191.018s; FAILED (failures=1, errors=0, skipped=1); sole failure is the durable G10 reproducer"
     corroboration: >-
       Existing unexpected-exception test output visibly includes controlled
       TASK0039_UNEXPECTED_SECRET_SENTINEL and TASK0040_UNEXPECTED_SECRET_SENTINEL
@@ -402,11 +404,90 @@ real_host:
     their empty __pycache__ directory, and re-proved strict deep codesign plus zero
     installed .pyc entries. No product source/config/service byte was changed.
 
+verification_parallelization:
+  max_concurrency: 6
+  strategy: >-
+    Independent pure/unit/disposable-fixture groups were sharded across at most six
+    Runtime PTY workers. Suites sharing terminal/session globals, repository mutation
+    state, package/cutover transaction state or OpenAI tunnel/lifecycle identity were
+    serialized. Canonical ./verify remained unmodified and serial.
+  parallel_groups:
+    - id: P1
+      scope: "fs read/list/search"
+      tests_run: 32
+      duration_seconds: 0.154
+      result: PASS
+      skipped: 1
+    - id: P2
+      scope: "fs patch/write"
+      tests_run: 40
+      duration_seconds: 0.027
+      result: PASS
+    - id: P3
+      scope: "protected runtime + screen capture MCP"
+      tests_run: 27
+      duration_seconds: 1.236
+      result: PASS
+    - id: P4
+      scope: "schema export + MCP contracts + capability registry"
+      tests_run: 22
+      duration_seconds: 0.970
+      result: PASS
+    - id: P5
+      scope: "repo publish + fast-forward plus intended stage/commit coverage"
+      reported_unittest_items: 32
+      real_tests_passed: 31
+      duration_seconds: 17.469
+      result: PASS_WITH_EXECUTOR_LOADER_ERROR
+      loader_error: "retired tests/test_repo_stage_commit.py path did not exist"
+      disposition: >-
+        No Runtime test failed. Only the missing intended coverage was rerun serially
+        against current canonical filenames; 46 repo stage/commit/diff tests passed.
+    - id: P6
+      scope: "doctor"
+      tests_run: 15
+      duration_seconds: 0.971
+      result: PASS
+  serialized_groups:
+    - scope: "task0057 admission + pressure concurrency"
+      tests_run: 7
+      duration_seconds: 1.992
+      result: PASS
+      reason: "shared heavy-admission/session globals"
+    - scope: "terminal session"
+      tests_run: 25
+      duration_seconds: 7.211
+      result: PASS
+      reason: "shared terminal/session globals and process lifecycle"
+    - scope: "repo stage/commit/diff correction"
+      tests_run: 46
+      duration_seconds: 23.659
+      result: PASS
+      reason: "serial failure-triage rerun and repository mutation fixtures"
+    - scope: "candidate cutover deterministic fixtures"
+      tests_run: 99
+      duration_seconds: 69.376
+      result: PASS
+      reason: "package/cutover transaction and lifecycle state"
+    - scope: "OpenAI tunnel identity"
+      tests_run: 15
+      duration_seconds: 29.133
+      result: PASS
+      reason: "tunnel/lifecycle/port-ownership contract"
+  verify_overlap_recovery: >-
+    A stale task-owned ./verify from an earlier continuation was discovered while a
+    first post-shard verify attempt was running. Direct PID signaling was correctly
+    denied by protected-runtime policy. The known new session was interrupted through
+    terminal_control; both process groups then exited. The final authority run below
+    started only after no matching verify/unittest process remained and was allowed to
+    complete naturally.
+
 canonical_verify:
   command: ./verify
+  authority: POST_SHARD_NATURAL_COMPLETION
   exit_code: 1
   tests_run: 650
-  duration_seconds: 186.247
+  duration_seconds: 191.018
   failures: 1
   errors: 0
   skipped: 1
