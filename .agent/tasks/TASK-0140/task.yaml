@@ -1,22 +1,19 @@
 protocol_version: 3
 
 task_id: TASK-0140
-task_revision: 1
+task_revision: 2
 state: APPROVED
+title: "Runtime Qualification — Stress, Red Team & Platform Resilience"
 
 origin:
-  type: successor_task
-  task_id: TASK-0139
-  gap_id: RUNTIME_QUALIFICATION_STRESS_RED_TEAM_PLATFORM_RESILIENCE
+  type: qualification_resume_after_corrective_maintenance
+  prior_revision: 1
+  prior_outcome: FAIL
+  finding: F-0140-001
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
-
-target:
-  repository: phatnguyen03022001/agent-runtime
-  branch:
-    name: main
-    role: canonical
+  canonical_branch: main
 
 execution_surface:
   id: CHATGPT_LOCAL
@@ -26,699 +23,353 @@ execution_surface:
   effort: HIGH
 
 execution_base:
-  mode: handoff_snapshot
-  capture: after_final_planning_commit
+  mode: exact_planning_commit
+  capture: after_revision_2_authoring_commit
   require_exact_match: true
-
-program_context:
-  frozen_runtime:
-    source_task: TASK-0138
-    source_review: .agent/tasks/TASK-0138/review-r8.yaml
-    runtime_version: "0.2.0"
-    public_tool_count: 19
-    tool_contract_kernel_version: 1
-    rule: >-
-      Runtime core correctness, the 19-tool public contract, ToolContract semantics,
-      package/cutover ownership, doctor contract, protected-runtime behavior, and
-      OpenAI Secure MCP Tunnel default path are frozen inputs. TASK-0140 qualifies
-      them; it does not redesign them.
-  predecessor:
-    task: TASK-0139
-    review: .agent/tasks/TASK-0139/review-r1.yaml
-    state: ACCEPTED
-    cloudflare_outcome: NOT_ADMITTED
-    transport_scope_for_this_task: OPENAI_ONLY
-    rule: >-
-      Cloudflare is out of scope. Do not create, revive, install, configure, test,
-      or rescue a Cloudflare transport path in TASK-0140.
-  ordered_successor: TASK-0141
-  later_productization: "Installation, Documentation & Operational UX Hardening"
-  post_program_state: MAINTENANCE_MODE
-
-skill_library:
-  repository: phatnguyen03022001/agent-skills
-  revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
-
-execution_skills:
-  required:
-    - executor
-    - verification
-  recommended:
-    - simplicity
-
-authority_sources:
-  - source: ".agent/tasks/TASK-0139/review-r1.yaml@79060d37eee5646d709831ffc9c2ac1b0915fc86"
-    role: "Accepted predecessor; locks TASK-0140 to OpenAI-only Runtime."
-    precedence: 1
-  - source: ".agent/tasks/TASK-0138/review-r8.yaml"
-    role: "Accepted Runtime freeze evidence."
-    precedence: 2
-  - source: "agent_runtime/capability_registry.py"
-    role: "Canonical 19-tool order, ToolContracts, availability, reason codes, and hard bounds."
-    precedence: 3
-  - source: "agent_runtime/server.py"
-    role: "Canonical MCP server metadata, registration, validation, error and dispatch semantics."
-    precedence: 4
-  - source: "agent_runtime/schema_export.py"
-    role: "Deterministic public-contract identity oracle."
-    precedence: 5
-  - source: "agent_runtime/terminal_session.py"
-    role: "Terminal/session lifecycle, retention and cleanup authority."
-    precedence: 6
-  - source: "agent_runtime/protected_runtime.py"
-    role: "Protected Runtime process/lifecycle command guard authority."
-    precedence: 7
-  - source: "agent_runtime/repo_*.py"
-    role: "Repository expected-state, receipt, commit and publication CAS authority."
-    precedence: 8
-  - source: "agent_runtime/doctor.py"
-    role: "Read-only installed/live Runtime diagnostic authority."
-    precedence: 9
-  - source: "start.sh and macos/"
-    role: "Frozen OpenAI/default lifecycle, ServiceManagement, package and cutover authority."
-    precedence: 10
-
-external_qualification_tools:
   rule: >-
-    External tools belong only to the development/qualification plane. They must
-    never become Runtime production dependencies, modify requirements.txt or
-    requirements.lock, create repository package-manager state, alter the installed
-    Runtime, or become authority over Runtime-specific invariants.
-  inspector:
-    role: "Independent black-box MCP stdio smoke/debug client."
-    status: USE_IF_BOUNDED_AVAILABLE
-    required_attempt: true
-    constraints:
-      - "Use an exact version; never invoke an unpinned latest package."
-      - "Record exact version and package integrity/provenance metadata when available."
-      - "Prefer ephemeral npx/package cache outside the repository; no package.json, node_modules, lockfile or global install."
-      - "Exercise initialize, tools/list, and representative safe tools/call over stdio."
-      - "Do not replace deterministic Runtime contract/unit tests with Inspector."
-    authority_note: >-
-      Current official MCP documentation describes Inspector as the reference
-      developer tool and its CLI as supporting stdio, initialize, tools/list and
-      tools/call with machine-readable output.
-  cisco_mcp_scanner:
-    role: "Independent adversarial MCP metadata/tool-surface scanner."
-    status: USE_IF_BOUNDED_AVAILABLE
-    required_attempt: true
-    constraints:
-      - "Use an exact version in an isolated ephemeral environment; do not modify Runtime dependency files."
-      - "Use stdio mode against a disposable Runtime server process."
-      - "Default to local YARA/readiness/static analyzers only."
-      - "Do not send Runtime metadata, tool descriptions, files, secrets or prompts to external LLM/API services."
-      - "Treat findings as signals requiring deterministic reproduction/triage, not automatic FAIL verdicts."
-  hypothesis:
-    role: "Targeted property-based testing for pure bounded input/state functions."
-    status: CONDITIONAL
-    trigger: >-
-      Use only when a concrete pure boundary domain remains materially underexplored
-      by deterministic tests, such as path normalization, cursor/range arithmetic,
-      config bounds, SHA/expected-state parsing or reason-code mapping.
-    constraints:
-      - "Qualification/dev-only isolated exact version."
-      - "Deterministic/derandomized bounded profile; record examples/settings."
-      - "Do not property-fuzz live lifecycle, destructive host operations, ServiceManagement or production repositories."
-      - "Do not add Hypothesis to Runtime production requirements."
-  semgrep:
-    role: "Targeted executable static guardrails for simple architectural/security invariants."
-    status: CONDITIONAL
-    trigger: >-
-      Use when a precise low-false-positive local rule can check a high-value invariant
-      more independently than another grep/test.
-    candidate_rules:
-      - "forbid shell=True in Runtime production Python"
-      - "forbid os.system in Runtime production Python"
-      - "forbid direct git push outside the canonical publication implementation"
-      - "forbid obvious credential/token value logging patterns"
-      - "forbid direct launchctl lifecycle mutation outside the canonical lifecycle owners"
-    constraints:
-      - "Exact version, local CLI only, no upload/cloud product requirement."
-      - "Task-local rules live under ignored build/.task-0140/ unless a later Architect explicitly adopts them."
-      - "Semgrep findings are triaged against code semantics; no automatic verdict from pattern matching alone."
-  mcp_conformance:
-    status: DEFERRED
-    reason: >-
-      Official server conformance currently requires a server URL/HTTP endpoint.
-      TASK-0140 is OpenAI-only stdio. Do not create a temporary HTTP adapter merely
-      to satisfy a qualification tool.
-  k6:
-    status: DEFERRED
-    reason: >-
-      No admitted HTTP /mcp transport exists. Do not use HTTP load tooling as a
-      substitute for Runtime terminal/session/capacity stress.
-  smart_tree:
-    status: EXCLUDED
-    reason: >-
-      Adds a second repository-understanding/editing/MCP plane without a concrete
-      qualification gap. Existing Agent Runtime fs/repo tools are sufficient.
+    The Executor launch must provide the exact published revision-2 planning commit
+    and tree. Fresh-resolve canonical GitHub main before any qualification action and
+    fail closed on unexpected canonical drift.
+
+identity:
+  task_identity_preserved: true
+  qualification_name: "Runtime Qualification — Stress, Red Team & Platform Resilience"
+  runtime_version: "0.2.0"
+  public_tool_count: 19
+  tool_contract_kernel_version: 1
+  schema_bundle_sha256: "6bcfe8cdbb19393cdaeb0ef13271a6448b6bc0a28f479c8d4c0f6b7246b2aba5"
+  schema_export_bytes_sha256: "495eefab431e5311189e15d07f6ffe2ab9c6635c2c5a8a6b41b0a1f944fef36b"
+  schema_export_bytes_length: 59981
+
+revision_1_binding:
+  task_revision: 1
+  report: .agent/tasks/TASK-0140/report-r1.yaml
+  report_state: NEEDS_REVIEW
+  final_r1_evidence_base: "be54d15f4a9b28d361515b80222fab8900b80dca"
+  outcome: FAIL
+  sole_production_finding:
+    id: F-0140-001
+    dimension: secret_error_sanitization
+    severity: HIGH
+    rule: >-
+      Revision 2 exists to resume qualification after this sole revision-1
+      production defect was repaired. Revision-1 PASS evidence may be reused only
+      under the delta-evidence rules below.
+
+maintenance_binding:
+  task: TASK-0140-MAINT
+  implementation:
+    commit: "82c7d03836147f208bf69b69659fe86566696602"
+    tree: "1519adef4c533d8fc7e427d9ec25cedd51577dc8"
+    parent: "be54d15f4a9b28d361515b80222fab8900b80dca"
+  report:
+    path: .agent/tasks/TASK-0140-MAINT/report-r1.yaml
+    commit: "45792942b8f1e48a6af99f25dc97c667c384c073"
+    tree: "5e81ad83de5e36238fef4ce42d5fe38f9a4a14d1"
+  accepted_review:
+    path: .agent/tasks/TASK-0140-MAINT/review-r1.yaml
+    commit: "db1fee478763eec7c2f491a27fb5c7b0df5e4854"
+    tree: "ae83875e0bb8391acab7261dfe66f59c3f00fe93"
+    state: ACCEPTED
+  exact_post_maintenance_source:
+    repository_commit_before_r2_authoring: "db1fee478763eec7c2f491a27fb5c7b0df5e4854"
+    repository_tree_before_r2_authoring: "ae83875e0bb8391acab7261dfe66f59c3f00fe93"
+    production_implementation_commit: "82c7d03836147f208bf69b69659fe86566696602"
+    production_implementation_tree: "1519adef4c533d8fc7e427d9ec25cedd51577dc8"
+  accepted_effect: >-
+    F-0140-001 is repaired at the common _tool registration boundary; Runtime
+    architecture and the frozen public contract remain unchanged; the accepted
+    verification harness is now canonical.
+
+transport_binding:
+  predecessor_task: TASK-0139
+  accepted_review: ".agent/tasks/TASK-0139/review-r1.yaml@79060d37eee5646d709831ffc9c2ac1b0915fc86"
+  outcome: NOT_ADMITTED
+  qualification_scope: OPENAI_ONLY
+  cloudflare: OUT_OF_SCOPE
+  rule: >-
+    Do not create, revive, install, configure, test or rescue a Cloudflare transport
+    path in TASK-0140 revision 2.
 
 objective: >-
-  Independently qualify the frozen Agent Runtime under sustained bounded load,
-  lifecycle churn, adversarial inputs, security abuse attempts, repository CAS races,
-  failure injection in disposable fixtures, and bounded real-host macOS acceptance.
-  Produce durable evidence that the current OpenAI-only Runtime preserves its exact
-  public contract, hard limits, cleanup semantics, governance protections and
-  installed-service health without modifying Runtime production behavior.
+  Resume independent qualification of the frozen Agent Runtime after the accepted
+  F-0140-001 repair. Use evidence-preserving delta qualification: freshly prove all
+  predicates touched or plausibly affected by the maintenance change, carry forward
+  only revision-1 PASS evidence that remains logically valid, and finish with one
+  explicit PASS, FAIL or BLOCKED outcome without repairing production defects.
+
+execution_strategy:
+  mode: EVIDENCE_PRESERVING_DELTA
+  rules:
+    - >-
+      Do not blindly rerun expensive revision-1 experiments merely to reproduce
+      already-valid evidence.
+    - >-
+      Carry forward revision-1 evidence only when the invariant was PASS, the
+      maintenance diff cannot materially invalidate the proof, and the exact prior
+      evidence remains applicable to the same frozen contract.
+    - >-
+      If the maintenance implementation materially touches a carried-forward
+      predicate, rerun that predicate.
+    - >-
+      Any uncertainty about whether an invariant is materially affected resolves in
+      favor of a fresh bounded proof, not assumption.
+    - >-
+      Canonical ./verify on the exact final revision-2 tree is always required and is
+      the final regression authority.
+
+mandatory_fresh_proof:
+  - id: R2-F1
+    name: "Canonical identity"
+    requirements:
+      - "Runtime version remains 0.2.0."
+      - "Exactly 19 public tools remain registered in canonical order."
+      - "ToolContract Kernel remains version 1."
+      - "Schema bundle/export identity matches the frozen hashes and length exactly."
+      - "runtime_capabilities matches the frozen capability identity."
+      - "Canonical ./verify exits 0 on the exact final revision-2 tree."
+
+  - id: R2-F2
+    name: "F-0140-001 closure / G10"
+    requirements:
+      - "Run the terminal_exec unexpected-exception sentinel regression."
+      - "Run the fs_list unexpected-exception sentinel regression."
+      - "Sentinel must be absent from client response serialization."
+      - "Sentinel must be absent from MCP SDK/server logs."
+      - "A bounded generic unexpected-runtime failure remains observable."
+      - "All 19 registered public tools must traverse the common sanitizer."
+
+  - id: R2-F3
+    name: "Expected error semantics"
+    requirements:
+      - "RuntimeValidationError behavior remains unchanged."
+      - "RuntimeStateError behavior remains unchanged."
+      - "ProtectedRuntimeDenied behavior remains unchanged."
+      - "CapabilityFailure typed result/error paths remain unchanged."
+      - "Existing ToolError behavior remains unchanged."
+    rule: >-
+      Use focused deterministic tests or representative in-process MCP calls. Do not
+      broaden scope into a new error architecture.
+
+  - id: R2-F4
+    name: "MCP contract and conformance regression"
+    requirements:
+      - "Representative safe tools/call succeeds."
+      - "Representative malformed/invalid input preserves validation behavior."
+      - "Representative result/error representation remains contract-compatible."
+      - "runtime_capabilities remains deterministic and coherent."
+      - "Registered schemas/annotations remain byte-identical to the frozen identity."
+
+  - id: R2-F5
+    name: "Capacity smoke after common-wrapper change"
+    requirements:
+      - "Prove six heavy operations are simultaneously admitted."
+      - "The seventh heavy request fails before seventh process/session ownership or spawn."
+      - "At least one representative cheap call remains responsive while saturated."
+      - "Cleanup returns task-owned heavy/session state to quiescence."
+    scope_rule: >-
+      This is a bounded smoke replay. Do not repeat the full revision-1 churn/stress
+      program unless the smoke reveals drift.
+
+  - id: R2-F6
+    name: "No architecture drift"
+    requirements:
+      - "No new public tools."
+      - "No Runtime version change."
+      - "No ToolContract/schema/annotation drift."
+      - "No transport change."
+      - "No install/cutover redesign."
+      - "No Cloudflare resurrection."
+      - "No new Runtime dependency."
+
+  - id: R2-F7
+    name: "Verification harness"
+    requirements:
+      - "Use the accepted canonical ./verify."
+      - "The implemented parallel fast lane may be used exactly as accepted."
+      - "Host-sensitive/unknown tests remain serialized by the canonical harness."
+      - "Canonical ./verify remains the final PASS authority."
+
+revision_1_carry_forward:
+  source_report: .agent/tasks/TASK-0140/report-r1.yaml
+  general_rule: >-
+    These are candidate carry-forwards, not automatic truth. The Executor must record
+    explicit reasoning in report-r2 showing why the maintenance diff cannot invalidate
+    each reused proof. If that reasoning fails, rerun the affected gate.
+  candidates:
+    G4_terminal_churn_and_retention:
+      prior_status: PASS
+      default_disposition: CARRY_FORWARD
+      rationale: >-
+        Maintenance changed the common MCP registration wrapper and verification
+        harness, not terminal session retention, cursor, output or reaper internals.
+        The 160-cycle stress need not be repeated unless fresh capacity/error proof
+        exposes lifecycle drift.
+    G5_owned_resource_cleanup:
+      prior_status: PASS
+      default_disposition: CARRY_FORWARD
+      rationale: >-
+        No process/session/PTY ownership or cleanup implementation changed.
+    G6_long_running_cancellation_failure:
+      prior_status: PASS
+      default_disposition: PARTIAL_CARRY_FORWARD
+      rationale: >-
+        Lifecycle and cancellation evidence may carry forward; expected typed error
+        semantics at the new wrapper boundary must be freshly proven by R2-F3.
+    G7_filesystem_confinement_boundedness:
+      prior_status: PASS
+      default_disposition: PARTIAL_CARRY_FORWARD
+      rationale: >-
+        Filesystem confinement/bounds internals did not change. Fresh representative
+        validation/result semantics are still required by R2-F3/R2-F4 because the
+        common wrapper now encloses fs tools.
+    G8_repository_CAS_receipt_red_team:
+      prior_status: PASS
+      default_disposition: CARRY_FORWARD
+      rationale: >-
+        Repository CAS/receipt implementations did not change; canonical regression
+        still covers them. Do not rerun the full race matrix unless fresh regression
+        identifies drift.
+    G9_protected_runtime_governance:
+      prior_status: PASS
+      default_disposition: PARTIAL_CARRY_FORWARD
+      rationale: >-
+        Broad protected-runtime red-team evidence may carry; ProtectedRuntimeDenied
+        behavior across the wrapper must be freshly proven by R2-F3.
+    G11_screen_capture_governance:
+      prior_status: PASS
+      default_disposition: CARRY_FORWARD
+      rationale: >-
+        Screen-capture implementation and governance state did not change; frozen
+        runtime_capabilities/schema identity and canonical regression remain the
+        current checks.
+    G12_external_MCP_tools:
+      prior_status: PASS
+      default_disposition: CARRY_FORWARD
+      rationale: >-
+        Inspector/scanner evidence targeted the same byte-identical public
+        metadata/schema surface. Do not reinstall or rerun expensive external tools
+        unless fresh R2-F4 evidence reveals a material MCP-surface discrepancy.
+    G13_installed_macOS_OpenAI_continuity:
+      prior_status: PASS
+      default_disposition: CARRY_FORWARD
+      rationale: >-
+        Maintenance did not install, cut over, restart or mutate package/service
+        ownership. Do not create a new cutover merely to re-prove this gate.
+    G14_no_product_mutation:
+      prior_status: PASS
+      default_disposition: FRESH_FINAL_HYGIENE
+      rationale: >-
+        Revision 2 must freshly prove its own final repository/host hygiene even though
+        revision-1 evidence was PASS.
 
 qualification_outcome:
   allowed_values:
     - PASS
     - FAIL
     - BLOCKED
-  PASS: >-
-    Every mandatory gate is proven against the exact frozen Runtime and final
-    qualification tree; canonical verification is green; no unresolved high-severity
-    reproducible safety/contract defect exists.
-  FAIL: >-
-    A reproducible frozen-contract, safety, isolation, boundedness, cleanup, CAS,
-    lifecycle, secret-handling or governance violation is demonstrated.
-  BLOCKED: >-
-    A mandatory qualification gate cannot be proven because a required bounded
-    platform capability is unavailable or externally blocked, with no equivalent
-    authoritative evidence. BLOCKED is not PASS and must identify the exact missing
-    evidence.
-  no_self_repair_rule: >-
-    TASK-0140 is an independent qualification task. If it discovers a production
-    defect, do not patch Runtime core, package/lifecycle code or public contract in
-    this task. Preserve the minimal reproduction and finish FAIL for Architect review.
+  PASS_requires:
+    - "F-0140-001 is closed."
+    - "No new unresolved HIGH correctness/security finding exists."
+    - "Every mandatory revision-2 gate is freshly proven."
+    - "Every reused revision-1 gate has explicit valid carry-forward reasoning."
+    - "Canonical ./verify is green."
+    - "Final source and frozen public contract are coherent."
+  FAIL_when: >-
+    A new reproducible frozen-contract, correctness, security, boundedness, lifecycle,
+    sanitization or governance defect is demonstrated. Do not repair it in this task.
+  BLOCKED_when: >-
+    A mandatory fresh gate cannot be proven because an externally controlled platform
+    capability is unavailable and no equivalent authoritative evidence exists.
 
-qualification_architecture:
-  Q1_deterministic:
-    name: "Deterministic fixtures and frozen regression"
-    isolation: "Repository tests and disposable local fixtures only."
-    purpose:
-      - "Prove exact public contract and hard bounds."
-      - "Exercise deterministic fault injection, races and failure paths."
-      - "Reproduce any scanner/property/static finding before escalation."
-  Q2_disposable_stress:
-    name: "Disposable Runtime stress"
-    isolation: >-
-      Spawn task-owned isolated Runtime/MCP server processes and disposable temp
-      workspaces/repositories. Never use the production repository as a destructive
-      target and never mutate the installed canonical service for stress.
-    purpose:
-      - "Capacity saturation and cheap-call responsiveness."
-      - "Session/output retention churn."
-      - "Process/PTY/fd/thread cleanup."
-      - "Long-running/cancellation/error semantics."
-  Q3_real_host:
-    name: "Bounded real-host macOS acceptance"
-    isolation: >-
-      Read-only or ordinary safe Runtime calls against the installed OpenAI-only
-      generation. No destructive fault injection into the canonical service.
-    purpose:
-      - "Doctor/ServiceManagement/package ownership health."
-      - "Current live MCP identity and contract."
-      - "Representative safe long-running call and continued responsiveness."
-      - "Post-qualification installed-state continuity."
-
-frozen_invariants:
-  public_contract:
-    runtime_version: "0.2.0"
-    tool_contract_kernel_version: 1
-    public_tool_count: 19
-    schema_bundle_sha256: "6bcfe8cdbb19393cdaeb0ef13271a6448b6bc0a28f479c8d4c0f6b7246b2aba5"
-    schema_export_bytes_sha256: "495eefab431e5311189e15d07f6ffe2ab9c6635c2c5a8a6b41b0a1f944fef36b"
-    schema_export_bytes_length: 59981
-    rule: >-
-      Exact metadata/tool order/descriptions/schemas/annotations/ToolContracts,
-      runtime_capabilities and deterministic schema export remain unchanged.
-  capacity:
-    parallelism_ceiling: 6
-    max_active_sessions: 6
-    saturation_rule: >-
-      Six held heavy operations are admitted simultaneously. One seventh heavy
-      request while all six remain running must fail before spawning/owning a seventh
-      heavy process/session. Cheap/control/read calls required by existing contracts
-      remain responsive under saturation.
-  terminal_output:
-    retained_output_bytes_per_session: 65536
-    terminal_poll_output_bytes: 16384
-    completed_session_retention_bound: 16
-  screen_capture:
-    supported: true
-    available: false
-    unavailable_reason_code: VISUAL_PERCEPTION_BLOCKED
-  transport:
-    default: "OpenAI Secure MCP Tunnel / canonical stdio Runtime"
-    cloudflare: OUT_OF_SCOPE
-
-mandatory_gates:
-  - id: G1
-    name: "Canonical identity and regression"
-    requirement: >-
-      Exact Runtime version, 19-tool contract, ToolContract Kernel, schema hashes,
-      default OpenAI path and canonical ./verify remain PASS.
-  - id: G2
-    name: "Heavy-capacity hard ceiling"
-    requirement: >-
-      Prove six simultaneous held heavy operations are running immediately before
-      one seventh probe; the seventh fails before spawn/lease/session ownership.
-  - id: G3
-    name: "Cheap-call responsiveness under saturation"
-    requirement: >-
-      While six heavy operations are held, capacity_observer plus representative
-      cheap read/control operations covered by the frozen contract remain usable
-      without violating bounds. No arbitrary latency SLA is invented.
-  - id: G4
-    name: "Terminal/session churn and retention"
-    requirement: >-
-      Run at least 160 disposable session lifecycle cycles (10x the completed-session
-      retention bound), mixing natural exits and bounded explicit cleanup where safe.
-      At all times retained completed sessions remain <=16, per-session retained
-      output remains <=65536 bytes, terminal_poll returned output remains <=16384
-      bytes, and expired/evicted cursors/session IDs are truthful.
-  - id: G5
-    name: "Owned-resource cleanup"
-    requirement: >-
-      After Q2 reaches quiescence, task-owned Runtime children/process groups/PTYs
-      have zero zombies; owned sessions/heavy leases return to zero; and scoped
-      post-quiescence FD/worker-thread counts return to the isolated baseline with
-      zero unexplained delta.
-  - id: G6
-    name: "Long-running/cancellation/failure semantics"
-    requirement: >-
-      Representative bounded long-running one-shot and PTY operations preserve
-      existing result/error/cancellation semantics across natural completion,
-      interrupt/terminate, timeout and child-exit paths without orphaning owned work.
-  - id: G7
-    name: "Filesystem confinement and boundedness red team"
-    requirement: >-
-      Traversal, outside-workspace paths, symlink races/targets, invalid UTF-8/NUL,
-      oversized input/output/scan cases and serialization bounds fail closed exactly
-      as the current contract requires; no host-private path becomes readable/writable.
-  - id: G8
-    name: "Repository CAS/receipt red team"
-    requirement: >-
-      Disposable repositories prove stale HEAD, stale staged receipt, remote expected-old
-      mismatch, unstaged/untracked drift, wrong branch/upstream, symlink/binary/oversize
-      staged entries and publication races fail without unintended commit/publish.
-  - id: G9
-    name: "Protected-runtime/governance red team"
-    requirement: >-
-      Shell wrappers, compound commands, launchctl lifecycle mutations, protected
-      port 8080 mutation, direct protected PID/process-group signals, matching
-      pkill/killall and known interpreter/wrapper forms are rejected where the frozen
-      guard requires rejection. Read-only observation remains available.
-  - id: G10
-    name: "Secret/error sanitization"
-    requirement: >-
-      Inject sentinel secret-like values only into disposable fixtures and prove
-      unexpected exceptions, validation errors, audit events, scanner output and
-      qualification artifacts do not disclose the sentinel or ambient credentials.
-  - id: G11
-    name: "Screen-capture governance"
-    requirement: >-
-      screen_capture remains supported=true, available=false with
-      VISUAL_PERCEPTION_BLOCKED; blocked calls do not reach native capture or broaden
-      authority during qualification.
-  - id: G12
-    name: "Independent MCP black-box/adversarial evidence"
-    requirement: >-
-      Attempt exact-version MCP Inspector stdio initialize/tools-list/safe tools-call
-      and exact-version Cisco mcp-scanner stdio local-only scan. Any finding must be
-      triaged and, when material, reproduced deterministically. Tool unavailability
-      is recorded exactly; it is not permission to install into Runtime production
-      dependencies or weaken isolation.
-  - id: G13
-    name: "Installed macOS/OpenAI continuity"
-    requirement: >-
-      On the real host, python -m agent_runtime.doctor --json remains healthy; the
-      installed/current Runtime exposes the frozen 19-tool capability state through
-      the existing OpenAI path; a representative safe bounded long-running call and
-      ordinary read call complete; no duplicate ownership/cutover debris is introduced.
-  - id: G14
-    name: "Qualification leaves no product mutation"
-    requirement: >-
-      Final repository production, package, Runtime dependency and installed-service
-      bytes/state remain unchanged except explicitly authorized qualification tests
-      and TASK-0140 evidence/report artifacts.
-
-stress_program:
-  concurrency:
-    setup: >-
-      Use deterministic barriers so six heavy roots are proven simultaneously active
-      immediately before probing the seventh. Do not infer saturation from start-call
-      success alone.
-    seventh_probe: "Exactly one bounded seventh heavy probe per saturation observation; fail-before-spawn required."
-    cheap_calls:
-      - capacity_observer
-      - fs_read_batch
-      - terminal_poll
-      - terminal_control where a task-owned PTY session makes it safe
-    cleanup: "Prefer bounded natural completion in proof fixtures; explicit cleanup must target task-owned sessions only."
-  churn:
-    minimum_cycles: 160
-    required_mix:
-      - "short natural-exit PTY sessions"
-      - "bounded output-producing sessions"
-      - "cursor polling before and after retention eviction"
-      - "at least one idle/reaper-relevant deterministic fixture path"
-    invariant_checks:
-      - "active sessions <=6"
-      - "retained completed sessions <=16"
-      - "retained output/session <=65536 bytes"
-      - "poll response output <=16384 bytes"
-      - "no stale activity refresh that defeats eviction"
-  output_pressure:
-    rule: >-
-      Exercise below/at/above declared output and scan bounds using generated
-      disposable data. Never create unbounded files/output or consume host disk as
-      a stress mechanism.
-  sustained_operation:
-    rule: >-
-      Prefer deterministic operation counts and state assertions over wall-clock soak
-      tests. Do not invent a multi-hour endurance requirement or latency SLA.
-
-fault_injection:
-  allowed_disposable_only:
-    - "child exits before/after output"
-    - "PTY EOF / interrupt / terminate on task-owned sessions"
-    - "bounded command timeout"
-    - "spawn/read helper failure through deterministic mocks/fixtures"
-    - "stale filesystem identity/expected SHA"
-    - "stale Git HEAD/index/diff receipt/remote CAS"
-    - "candidate cutover failure/recovery simulations already supported by test fixtures"
-    - "malformed MCP requests and boundary-invalid arguments"
-  forbidden_live_faults:
-    - "kill/restart the canonical installed Runtime or OpenAI tunnel merely for stress"
-    - "force reboot/logout/sleep or disable host networking"
-    - "revoke live auth or operator credentials"
-    - "crash a live package/cutover transaction"
-    - "modify production ServiceManagement registrations"
-    - "signal unrelated or non-task-owned host processes"
-    - "use the production repository as a destructive race/CAS fixture"
-  manual_environment_events:
-    rule: >-
-      Ordinary pre-existing sleep/wake or network-switch observations may be recorded
-      if they naturally occur during execution, but TASK-0140 does not require the
-      Executor to force them and their absence is non-blocking.
-
-red_team_program:
-  protocol_and_schema:
-    - "unknown tool"
-    - "unknown top-level fields"
-    - "missing required fields"
-    - "wrong primitive/container types"
-    - "below/above numeric and byte bounds"
-    - "unexpected exception sanitization"
-    - "request/result closed-schema preservation"
-  filesystem:
-    - "absolute/outside workspace"
-    - "parent traversal"
-    - "symlink root/parent/target"
-    - "rename/identity drift"
-    - "invalid UTF-8/NUL"
-    - "large sparse/no-newline inputs"
-  terminal_and_process:
-    - "shell=True equivalent attempts through exposed argv semantics"
-    - "compound shell wrappers"
-    - "protected launchctl/kill/pkill/killall/port 8080 operations"
-    - "same-UID interpreter/wrapper limitation remains honestly documented, not silently claimed solved"
-  repository:
-    - "stale expected HEAD"
-    - "receipt mismatch"
-    - "worktree/index drift after staging"
-    - "remote CAS mismatch"
-    - "branch/upstream mismatch"
-    - "binary/symlink/oversize staged content"
-    - "publish race/no-replace semantics"
-  information_security:
-    - "secret sentinel in child stderr/exception"
-    - "credential-shaped values in logs/audit/error envelopes"
-    - "scanner output handling"
-    - "no environment/API that exposes secret values"
-  confused_deputy:
-    - "outside-workspace cwd/path attempts"
-    - "requesting authority the tool contract does not grant"
-    - "blocked screen capture invocation"
-    - "lifecycle mutation through generic terminal wrappers"
-
-platform_resilience:
-  deterministic_simulation:
-    - "ServiceManagement exact-identity parsing and wrong/missing service states"
-    - "candidate cutover crash/recovery/rollback fixtures"
-    - "package provenance and interpreter/linkage validation"
-    - "stale/legacy ownership migration boundaries"
-  real_host_read_only:
-    - "python -m agent_runtime.doctor --json"
-    - "runtime_capabilities through current live MCP transport"
-    - "read-only repository observation"
-    - "safe bounded terminal call"
-    - "current installed service/package ownership evidence already exposed through doctor/bounded observers"
-  rule: >-
-    Real-host qualification must not create a new cutover, install, uninstall,
-    restart, registration mutation or approval prompt merely to prove resilience.
-
-benchmarking:
-  rule: "Evidence only; no invented SLA and no PASS/FAIL based solely on throughput/latency."
-  record_when_measured:
-    - "operation/sample count"
-    - "min"
-    - "median"
-    - "p95 when sample count is sufficient"
-    - "max"
-    - "capacity rejection count/reason"
-  required_measurements:
-    - "heavy saturation admission/rejection observation"
-    - "cheap call responsiveness observation under saturation"
-    - "160-cycle churn total duration and cleanup state"
-    - "representative safe long-running call duration"
-  forbidden_interpretation: >-
-    A slower measurement without contract violation is not automatically a defect.
-    A timeout/bound breach, unbounded growth or semantic drift is a defect.
-
-scope:
-  production_mutation_allowed: false
-  expected_repository_paths:
-    - tests/test_task0140_qualification.py
-    - .agent/tasks/TASK-0140/report-r1.yaml
-  allowed_repository_paths:
-    - tests/test_task0140_qualification.py
-    - .agent/tasks/TASK-0140/report-r1.yaml
-  test_file_rule: >-
-    Create the new qualification test file only when durable deterministic tests add
-    value beyond existing accepted tests. Reuse existing tests first. Do not churn
-    mature test files merely to relabel existing evidence.
-  ephemeral_paths:
-    root: build/.task-0140/
-    may_contain:
-      - "generated stress fixtures"
-      - "disposable Git repositories"
-      - "external-tool configs/rules"
-      - "redacted scanner/Inspector outputs"
-      - "temporary isolated tool environments"
-    final_rule: "Remove task-owned ephemeral state before final publication."
-  dependency_rule:
-    requirements_txt_change: forbidden
-    requirements_lock_change: forbidden
-    runtime_venv_external_tool_install: forbidden
-    global_tool_install: forbidden
-
-forbidden_changes:
-  - "Modify agent_runtime production Python."
-  - "Modify Runtime version or public tool count/order."
-  - "Modify ToolContract semantics, schemas, annotations or reason codes."
-  - "Modify start.sh, install.sh, package/cutover/ServiceManagement implementation."
-  - "Modify requirements.txt or requirements.lock."
-  - "Implement or retry Cloudflare transport."
-  - "Add generic chaos, observability, transport, plugin or benchmarking framework."
-  - "Create a temporary HTTP adapter solely to run MCP Conformance."
-  - "Use k6 without an admitted HTTP transport."
-  - "Add Smart Tree or another repository-understanding plane."
-  - "Send Runtime data to third-party LLM/API scanners."
-  - "Create branch, PR, worktree, automatic GitHub Actions or alternate release topology."
-  - "Repair a defect discovered by qualification in the same task."
-  - "Force destructive real-host fault injection."
-
-acceptance_criteria:
-  - id: AC-1
-    requirement: "Frozen Runtime identity and exact 19-tool/schema/ToolContract contract remain unchanged."
-    evidence_required: "Exact pre/post schema hashes, runtime_capabilities and canonical regression evidence."
-  - id: AC-2
-    requirement: "Heavy concurrency remains exactly bounded at six with seventh fail-before-spawn."
-    evidence_required: "Barrier-based simultaneous-running proof plus post-rejection owned-resource state."
-  - id: AC-3
-    requirement: "Cheap/read/control calls remain usable under full heavy saturation."
-    evidence_required: "At least representative capacity/read/control results captured while six heavy roots are held."
-  - id: AC-4
-    requirement: "Terminal lifecycle churn and retention stay bounded."
-    evidence_required: ">=160 cycles, <=16 retained completed sessions, <=64KiB/session retained output, <=16KiB poll output and truthful eviction/cursor evidence."
-  - id: AC-5
-    requirement: "Stress leaves no task-owned process/session/fd/thread leak."
-    evidence_required: "Post-quiescence zero zombies/leases/sessions and zero unexplained scoped FD/worker-thread delta from isolated baseline."
-  - id: AC-6
-    requirement: "Filesystem, terminal/process and repository red-team attempts fail closed without authority expansion."
-    evidence_required: "Deterministic matrix with expected result/reason and zero unintended mutation."
-  - id: AC-7
-    requirement: "Repository mutation CAS/receipt/publish behavior remains race-safe."
-    evidence_required: "Disposable stale-state/race fixtures prove no unintended commit/publish."
-  - id: AC-8
-    requirement: "Secrets and unexpected failures remain sanitized."
-    evidence_required: "Sentinel-based disposable proof and redaction-safe artifact audit."
-  - id: AC-9
-    requirement: "Screen-capture and protected-runtime governance remain intact."
-    evidence_required: "Blocked screen capture reason plus protected lifecycle/process command denial matrix."
-  - id: AC-10
-    requirement: "Independent external MCP qualification is attempted without contaminating Runtime dependencies."
-    evidence_required: "Exact-version Inspector and mcp-scanner attempt/results, or exact bounded unavailability evidence, with every material finding triaged."
-  - id: AC-11
-    requirement: "Installed OpenAI-only Runtime remains healthy and unchanged after qualification."
-    evidence_required: "Doctor/live capability/read/long-call evidence and zero package/service/cutover mutation."
-  - id: AC-12
-    requirement: "Qualification finishes with one explicit PASS/FAIL/BLOCKED outcome and canonical repository hygiene."
-    evidence_required: "Gate matrix, final ./verify, final schema identity and local/remote main proof."
+no_self_repair_rule: >-
+  TASK-0140 revision 2 is qualification only. Do not modify Runtime production source,
+  package/install/cutover code, transport architecture or public contract to repair a
+  newly discovered defect. A real new defect ends qualification as FAIL for Architect
+  judgment.
 
 verification:
   preflight:
-    - "Fresh-resolve canonical GitHub main."
-    - "Require exact launch base/tree, branch main, local HEAD = origin/main, ahead/behind 0/0, clean worktree/index."
-    - "Require remote branches = main only and open PRs = 0."
-    - "Require TASK-0139 review-r1 ACCEPTED / NOT_ADMITTED."
-    - "Require TASK-0140 report absent before execution."
-  baseline:
-    - "Capture exact schema bundle/hash/export bytes hash."
-    - "Capture runtime_capabilities and declared hard bounds."
-    - "Capture doctor --json baseline without mutating installed state."
-    - "Inventory existing qualification tests and reuse them before adding a new test."
+    - "Fresh-resolve canonical GitHub main and require the exact launch base/tree."
+    - "Require branch main, local HEAD = origin/main, ahead/behind 0/0 and clean index/worktree."
+    - "Require remote branches = [main] and open PR count = 0."
+    - "Require TASK-0140-MAINT review-r1 state ACCEPTED at commit db1fee478763eec7c2f491a27fb5c7b0df5e4854."
+    - "Require TASK-0139 accepted outcome NOT_ADMITTED and OpenAI-only transport scope."
   focused:
-    - "Run existing tests covering capacity, terminal retention, protected runtime, repo CAS/publish, candidate cutover, screen capture, doctor and tunnel identity."
-    - "Run any new TASK-0140 deterministic qualification tests if created."
-  external:
-    - "Boundedly probe Node/npm/npx and exact Inspector version availability before use."
-    - "Boundedly probe isolated mcp-scanner exact version availability before use."
-    - "Use no unpinned latest, no global install and no Runtime dependency mutation."
-    - "Run conditional Hypothesis/Semgrep only when their trigger conditions are met."
+    - "Run R2-F1 through R2-F6 with the smallest deterministic/focused commands."
+    - "Use existing tests first; do not create redundant stress infrastructure."
   canonical:
     command: "./verify"
     required: true
+    authority: FINAL
     rule: >-
-      Run after final test/evidence diff stabilization and before publication. Require
-      exit 0 with zero failures/errors for PASS. If platform blocks execution and no
-      fresh complete result exists on the exact unchanged final tree, outcome cannot
-      be PASS.
-  final_identity:
-    - "Recompute schema bundle/export bytes and require exact baseline equality."
-    - "Re-run doctor/live capability evidence if Q2 or external tools could have affected host state."
-    - "Audit task-owned process/temp/tool state and remove build/.task-0140."
-    - "Inspect exact final diff."
+      PASS requires exit 0 on the exact final qualification tree. The accepted
+      harness may parallelize its fast lane internally; do not redefine ./verify
+      merely to obtain a faster result.
+  final:
+    - "Recompute exact schema/export identity."
+    - "Record fresh-vs-carried evidence gate by gate."
+    - "Remove task-owned ephemeral state."
+    - "Prove no production/dependency/install/cutover/transport mutation."
+    - "Fresh-prove local = origin/main, clean, main-only, open PRs = 0 after publication."
 
-failure_policy:
-  - "Fail closed on canonical base, contract or repository identity drift."
-  - "Never weaken a guard, bound or schema to make stress/red-team pass."
-  - "Never convert a real defect into an expected failure baseline."
-  - "Never repair a production defect inside this qualification task."
-  - "Do not chase a platform safety block by changing execution surface."
-  - "Do not retry ambiguous destructive operations."
-  - "External scanner/static findings require deterministic triage before FAIL."
-  - "External tool unavailability alone does not authorize package/repository contamination."
-  - "If a mandatory real-host gate is externally blocked without equivalent evidence, finish BLOCKED."
-  - "If a reproducible frozen invariant is violated, finish FAIL with the smallest durable reproducer."
+scope:
+  production_mutation_allowed: false
+  test_mutation_default: false
+  durable_report: .agent/tasks/TASK-0140/report-r2.yaml
+  durable_failure_reproducer:
+    allowed_only_if_new_real_defect: true
+    preferred_path: tests/test_task0140_qualification.py
+    rule: >-
+      Persist only the smallest deterministic reproducer needed to make a new FAIL
+      durable. Do not churn tests for bookkeeping or relabeling.
+  ephemeral_root: build/.task-0140-r2/
+  final_ephemeral_rule: "Remove task-owned ephemeral state before publication."
+  dependency_changes: forbidden
+  install_or_cutover_changes: forbidden
+  service_management_changes: forbidden
+  transport_changes: forbidden
+
+forbidden:
+  - "Modify agent_runtime production Python."
+  - "Modify Runtime version or the 19-tool public surface."
+  - "Modify ToolContract, schemas, annotations or reason codes."
+  - "Modify verify or verify_tests.py."
+  - "Modify install.sh, start.sh, package/cutover or ServiceManagement implementation."
+  - "Modify requirements.txt or requirements.lock."
+  - "Implement, retry or resurrect Cloudflare."
+  - "Create a temporary HTTP adapter for conformance tooling."
+  - "Install qualification tools into the Runtime venv or globally."
+  - "Create branch, PR, worktree or automatic GitHub Actions."
+  - "Repair any newly discovered production defect inside qualification."
+
+report_requirements:
+  path: .agent/tasks/TASK-0140/report-r2.yaml
+  state: NEEDS_REVIEW
+  must_record:
+    - "Exact execution base/tree and final source/tree."
+    - "Explicit PASS/FAIL/BLOCKED outcome."
+    - "F-0140-001 closure evidence."
+    - "All mandatory fresh revision-2 proofs."
+    - "Each carried-forward revision-1 gate with explicit non-invalidation reasoning."
+    - "Any gate rerun because maintenance materially touched it."
+    - "Canonical ./verify result."
+    - "Final schema/public-contract identity."
+    - "Final repository hygiene and publication receipts."
+    - "TASK-0141 remains blocked pending independent acceptance of revision 2."
 
 publication:
-  rule: >-
-    Publish only authorized qualification test evidence (if any) and report-r1.
-    Use native repo_stage -> repo_diff(staged) ReceiptV1 -> repo_commit ->
-    repo_publish exact expected-old CAS. No shell git push.
-  direct_child_rule: >-
-    The first TASK-0140 Executor publication commit must be the sole direct child of
-    the exact TASK-0140 revision-1 execution base supplied in the launch packet.
-  report_path: .agent/tasks/TASK-0140/report-r1.yaml
-  report_state: NEEDS_REVIEW
+  branch: main
+  pull_request: forbidden
+  github_actions: forbidden
+  governed_chain:
+    - repo_stage
+    - repo_diff
+    - repo_commit
+    - repo_publish
+  publish_rule: "Use exact expected-old CAS and fresh-prove publication/clean closure."
 
-reporting:
-  owner: EXECUTOR
-  required_evidence:
-    - "exact execution base/tree and final main/tree"
-    - "overall qualification outcome PASS/FAIL/BLOCKED"
-    - "Q1/Q2/Q3 gate matrix"
-    - "pre/post schema bundle and export-bytes hashes"
-    - "19-tool/runtime_capabilities identity"
-    - "focused existing-test totals"
-    - "new qualification-test totals if any"
-    - "x6 simultaneous heavy proof and exact seventh rejection evidence"
-    - "cheap-call results under saturation"
-    - ">=160 churn evidence and retention/output/cursor bounds"
-    - "post-quiescence process/session/lease/zombie/fd/thread cleanup evidence"
-    - "long-running/cancellation/timeout evidence"
-    - "filesystem red-team matrix"
-    - "repo CAS/receipt/publication race matrix"
-    - "protected-runtime/governance abuse matrix"
-    - "secret/error sanitization sentinel evidence"
-    - "screen_capture governance evidence"
-    - "Inspector exact version/provenance and result or bounded unavailability"
-    - "mcp-scanner exact version/provenance and local-only findings or bounded unavailability"
-    - "Hypothesis/Semgrep decision and evidence if used"
-    - "explicit confirmation MCP Conformance and k6 were not forced into OpenAI-only stdio scope"
-    - "doctor --json real-host result"
-    - "live OpenAI Runtime capability/read/long-call evidence"
-    - "canonical ./verify totals/exit code"
-    - "final diff and proof of zero production/dependency/service mutation"
-    - "native stage/diff/commit/publish receipts"
-    - "final local HEAD = origin/main, ahead/behind 0/0, clean worktree/index, main-only remote, zero open PRs"
-  finding_format:
-    required_fields:
-      - id
-      - dimension
-      - severity
-      - reproducible
-      - invariant
-      - evidence
-      - disposition
-    severity_values:
-      - CRITICAL
-      - HIGH
-      - MEDIUM
-      - LOW
-      - INFO
-    rule: >-
-      PASS requires no unresolved reproducible CRITICAL/HIGH finding and every
-      mandatory gate PASS. A reproducible frozen-contract/safety violation that is
-      material to a mandatory gate makes overall outcome FAIL regardless of scanner
-      labels.
-
-executor_flow:
-  - "Fresh-resolve and prove exact canonical TASK-0140 launch base."
-  - "Capture frozen schema/runtime/doctor baseline and existing test inventory."
-  - "Run Q1 focused deterministic regressions first."
-  - "Create at most one narrow TASK-0140 qualification test file if existing tests cannot durably express required new stress/red-team evidence."
-  - "Run Q2 only against task-owned isolated Runtime processes/workspaces/repos."
-  - "Prove x6 simultaneous heavy saturation, seventh fail-before-spawn and cheap-call responsiveness."
-  - "Run >=160 bounded lifecycle churn and prove retention/output/cursor/cleanup invariants."
-  - "Run filesystem, repo CAS, protected-runtime, secret and governance adversarial matrices."
-  - "Attempt exact-version MCP Inspector and local-only Cisco mcp-scanner qualification without production dependency changes."
-  - "Use Hypothesis/Semgrep only when their explicit trigger is satisfied; keep all artifacts ephemeral."
-  - "Run Q3 bounded real-host doctor/live OpenAI checks with no service mutation."
-  - "Triage all findings; do not patch production defects."
-  - "Remove task-owned ephemeral qualification state."
-  - "Run canonical ./verify and exact schema identity proof."
-  - "Classify overall PASS/FAIL/BLOCKED."
-  - "Publish only authorized test evidence if any and report-r1 through native governed mutation."
-  - "Fresh-prove canonical repository hygiene and stop for independent Architect review."
-
-git_authority:
-  create_branch: false
-  commit: true
-  push: true
-  promote_to_main: false
-  pull_request: false
-
-github_actions:
-  required: false
-  rule: >-
-    Do not dispatch automatically. A manual workflow_dispatch may be proposed only
-    after a concrete clean-environment ambiguity is documented; it is not a fallback
-    for local/platform safety blocks.
-
-successor:
-  if_accepted_pass:
-    task: TASK-0141
-    intent: "Installation, Documentation & Operational UX Hardening."
-  if_fail_or_blocked:
-    task: NONE_AUTOMATIC
-    rule: >-
-      Stop for Architect judgment. Do not author a repair/rescue successor yourself.
-
-blocking_decisions: []
-execution_ready: true
+successor_gate:
+  task: TASK-0141
+  state: BLOCKED
+  release_condition: "TASK-0140 revision 2 is independently reviewed and ACCEPTED."
