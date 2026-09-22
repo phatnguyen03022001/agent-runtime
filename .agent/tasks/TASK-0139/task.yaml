@@ -1,0 +1,577 @@
+protocol_version: 3
+
+task_id: TASK-0139
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: successor_task
+  task_id: TASK-0138
+  gap_id: OPTIONAL_TRANSPORT_AUTH_PORTABILITY
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  transport: AGENT_RUNTIME
+  model: GPT-5.6 Sol
+  effort: HIGH
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+program_context:
+  frozen_predecessor:
+    task: TASK-0138
+    review: .agent/tasks/TASK-0138/review-r8.yaml
+    state: ACCEPTED
+    runtime_version: "0.2.0"
+    public_tool_count: 19
+    rule: >-
+      TASK-0138 closed Runtime core correctness. Treat the accepted Runtime core,
+      public capability contract, OpenAI Secure MCP Tunnel default path, package
+      semantics, doctor contract, and governance boundaries as frozen inputs.
+  ordered_successor: TASK-0140
+  later_productization: TASK-0141
+  post_program_state: MAINTENANCE_MODE
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+execution_skills:
+  required:
+    - executor
+    - verification
+  recommended:
+    - simplicity
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0138/review-r8.yaml@125fd1deea379fdba923d0a4625cc82952497133"
+    role: "Accepted Runtime freeze evidence and frozen public architecture."
+    precedence: 1
+  - source: "agent_runtime/server.py@125fd1deea379fdba923d0a4625cc82952497133"
+    role: "Canonical MCP server object, server metadata, tool registration, success/error behavior, and default stdio execution authority."
+    precedence: 2
+  - source: "agent_runtime/schema_export.py@125fd1deea379fdba923d0a4625cc82952497133"
+    role: "Primary deterministic transport-parity oracle for capability contract identity."
+    precedence: 3
+  - source: "agent_runtime/capability_registry.py@125fd1deea379fdba923d0a4625cc82952497133"
+    role: "Canonical ordered capability registry, ToolContract metadata, availability, and reason-code authority."
+    precedence: 4
+  - source: "start.sh@125fd1deea379fdba923d0a4625cc82952497133"
+    role: "Frozen OpenAI Secure MCP Tunnel default lifecycle and launch path."
+    precedence: 5
+  - source: "requirements.lock@125fd1deea379fdba923d0a4625cc82952497133"
+    role: "Current locked dependency authority; PyJWT, cryptography, Starlette, Uvicorn, and MCP SDK are already present."
+    precedence: 6
+
+external_contracts:
+  verification_date: "2026-09-22"
+  execution_rule: >-
+    Re-check current official Cloudflare and MCP documentation before relying on
+    external behavior. If a material current contract conflicts with this task's
+    security or architecture invariants, classify Cloudflare NOT_ADMITTED instead
+    of redesigning Runtime core or weakening protection.
+  cloudflare_managed_oauth:
+    authority: "Cloudflare One Managed OAuth documentation"
+    required_contract:
+      - "Managed OAuth is Cloudflare Access-provided OAuth for non-browser clients; Agent Runtime must not implement an OAuth authorization server."
+      - "The origin validates the Cloudflare Access JWT received in Cf-Access-Jwt-Assertion."
+      - "JWT verification validates signature against the team-domain Access JWKS, issuer/team domain, application audience, and temporal validity."
+  cloudflare_tunnel:
+    authority: "Cloudflare Tunnel documentation"
+    required_contract:
+      - "Use a named Cloudflare Tunnel."
+      - "The public hostname routes to a local service."
+      - "Agent Runtime's local HTTP origin remains loopback-only; no public bind is required."
+  mcp_http:
+    authority: "Current MCP SDK and MCP Streamable HTTP contract"
+    required_contract:
+      - "Use the MCP SDK's Streamable HTTP implementation at /mcp."
+      - "Do not hand-roll MCP JSON-RPC framing, session semantics, capability negotiation, or protocol translation."
+      - "Preserve DNS-rebinding Host/Origin protection with exact trusted values; do not disable it merely to make reverse-proxy routing work."
+
+objective: >-
+  Evaluate Cloudflare as an OPTIONAL external transport/auth path and admit it only
+  if a thin Cloudflare-specific adapter can expose the exact same canonical Agent
+  Runtime MCP contract through Streamable HTTP /mcp behind Cloudflare Access
+  Managed OAuth and a named Cloudflare Tunnel, while leaving the existing OpenAI
+  Secure MCP Tunnel path mandatory, default, and unchanged.
+
+admission_outcome:
+  allowed_values:
+    - ADMITTED
+    - NOT_ADMITTED
+  completion_rule: >-
+    TASK-0139 must finish with exactly one admission outcome. Cloudflare is ADMITTED
+    only when every mandatory Cloudflare gate passes. Failure or inability to prove
+    any mandatory gate is NOT_ADMITTED with exact durable evidence; do not create a
+    rescue task merely to save Cloudflare.
+  openai_requirement: "PASS and unchanged in both outcomes"
+
+architecture:
+  default_openai_path:
+    status: FROZEN
+    required_shape:
+      - "OpenAI Secure MCP Tunnel"
+      - "existing default path"
+      - "canonical agent_runtime.server:mcp"
+    mutation_allowed: false
+  optional_cloudflare_candidate:
+    required_shape:
+      - "MCP client"
+      - "Cloudflare Access Managed OAuth"
+      - "named Cloudflare Tunnel"
+      - "loopback-only local HTTP origin"
+      - "thin Cloudflare-specific adapter"
+      - "same canonical agent_runtime.server:mcp object/core"
+    transport:
+      protocol: "MCP Streamable HTTP"
+      endpoint: "/mcp"
+      origin_bind: "127.0.0.1 only"
+      implementation: "current MCP SDK HTTP application/transport; no custom MCP proxy"
+    auth:
+      provider: "Cloudflare Access Managed OAuth"
+      origin_identity_header: "Cf-Access-Jwt-Assertion"
+      validation_order: "before MCP tool dispatch"
+      required_validation:
+        - "header present"
+        - "cryptographic signature valid against current team-domain Access JWKS"
+        - "issuer equals configured Cloudflare Access team domain"
+        - "audience contains the configured Access application audience"
+        - "token is not expired and all standard temporal validation used by the selected JWT verifier passes"
+      rejection_rule: >-
+        Missing, invalid, expired, wrong-issuer, or wrong-audience identity is
+        rejected before any MCP tool implementation executes.
+    transport_security:
+      rule: >-
+        Preserve MCP SDK DNS-rebinding protection. Configure only the exact
+        loopback origin and exact trusted public hostname/origin values required
+        by the deployed reverse-proxy shape. Do not disable Host/Origin validation
+        as a routing workaround.
+    adapter_boundary:
+      rule: >-
+        Cloudflare-specific logic stays outside Runtime tool implementations and
+        reuses the same canonical MCP server object. It may adapt HTTP serving,
+        Access identity validation, and adapter-local configuration only.
+      must_not_own:
+        - "tool registration"
+        - "ToolContract metadata"
+        - "request/result schema definitions"
+        - "capability availability semantics"
+        - "Runtime business logic"
+        - "repo or terminal policy"
+        - "OAuth authorization-server behavior"
+  activation_model:
+    rule: >-
+      Cloudflare remains optional and opt-in. TASK-0139 does not replace, wrap,
+      or auto-enable the OpenAI path and does not redesign package or
+      ServiceManagement lifecycle. Qualification may start the adapter explicitly.
+    concurrency_scope: >-
+      Mandatory concurrency qualification covers concurrent calls through the
+      Cloudflare candidate and requires the same per-Runtime capacity/session
+      semantics as the frozen core. Do not invent cross-process global scheduling
+      or a generic multi-transport coordinator.
+
+contract_identity:
+  rule: "Transport parity is exact contract identity, not tool-count parity."
+  primary_oracle:
+    source: "agent_runtime.schema_export"
+    requirement: >-
+      The deterministic schema bundle bytes/hash produced from the canonical
+      server/core must remain identical across the default and Cloudflare paths.
+  required_dimensions:
+    - "server name/version/description/instructions and relevant MCP server metadata"
+    - "exact ordered public capability/tool names"
+    - "tool descriptions"
+    - "request schemas"
+    - "result schemas"
+    - "tool annotations"
+    - "ToolContract authority"
+    - "ToolContract preconditions"
+    - "ToolContract bounds"
+    - "ToolContract postconditions"
+    - "capability supported/available/unavailable_reason_code values"
+    - "success result representation"
+    - "typed validation/error representation and semantics"
+    - "runtime_capabilities output"
+    - "generated deterministic schema bundle bytes and bundle_sha256"
+  parity_rule: >-
+    Any adapter-auth or HTTP-layer error is allowed only before MCP dispatch and
+    must not mutate the canonical tool contract. Once a request reaches MCP tool
+    dispatch, observable tool semantics must be the frozen canonical semantics.
+
+configuration_and_secrets:
+  repository_secrets_allowed: false
+  report_secret_values_allowed: false
+  argv_secret_values_allowed: false
+  log_secret_values_allowed: false
+  public_nonsecret_values_may_include:
+    - "public hostname"
+    - "Cloudflare Access team/domain identifier"
+    - "Access application audience identifier"
+    - "loopback HTTP port"
+  secret_values_include:
+    - "OAuth access tokens"
+    - "OAuth refresh tokens"
+    - "Cloudflare Tunnel credentials/tokens"
+    - "Cloudflare API credentials"
+    - "Cf-Access-Jwt-Assertion token values"
+  configuration_rule: >-
+    TASK-0139 may introduce only the minimum adapter-local non-secret configuration
+    needed for qualification. Do not productize install/config UX here. Full
+    operator-facing configuration and documentation belong to TASK-0141.
+  dependency_rule: >-
+    Prefer already locked dependencies. Change dependency metadata/lock only if a
+    concrete imported production dependency is genuinely required; dependency
+    convenience alone is not authority to expand scope.
+
+cloudflare_external_state:
+  allowed: true
+  rule: >-
+    Qualification may create only bounded task-scoped Cloudflare resources needed
+    to prove a named tunnel and Access Managed OAuth path, using credentials already
+    available through operator-approved mechanisms. Never persist credential
+    material in the repository or reports.
+  cleanup: >-
+    Remove task-scoped temporary Cloudflare resources after evidence capture unless
+    the operator explicitly marks a resource as retained. Do not mutate unrelated
+    zones, applications, tunnels, policies, or hostnames.
+  missing_prerequisite: >-
+    If the execution environment cannot obtain the operator-approved Cloudflare
+    account/domain/auth prerequisites needed to prove a mandatory gate, record the
+    exact missing qualification evidence and finish NOT_ADMITTED rather than
+    weakening the gates or leaving the task indefinitely blocked.
+
+mandatory_openai_gates:
+  - id: OAI-1
+    requirement: "Existing OpenAI Secure MCP Tunnel remains the mandatory default path with no production-path change."
+  - id: OAI-2
+    requirement: "Frozen Runtime version, exact 19-tool order, ToolContract Kernel v1, schema export, runtime_capabilities, reason codes, and doctor semantics remain unchanged."
+  - id: OAI-3
+    requirement: "Canonical OpenAI/stdin contract discovery and representative tool success/error behavior remain PASS."
+  - id: OAI-4
+    requirement: "No install, ServiceManagement, tunnel-client, or start.sh redesign is introduced for Cloudflare."
+
+mandatory_cloudflare_gates:
+  - id: CF-1
+    requirement: "Real Streamable HTTP endpoint is /mcp and the local origin binds only to loopback."
+  - id: CF-2
+    requirement: "Traffic reaches the loopback origin through a real named Cloudflare Tunnel."
+  - id: CF-3
+    requirement: "Cloudflare Access authentication is required; unauthenticated requests cannot reach MCP dispatch."
+  - id: CF-4
+    requirement: "Invalid, expired, wrong-issuer, and wrong-audience Access identity are rejected before MCP tool execution."
+  - id: CF-5
+    requirement: "OAuth cold connect succeeds with a conforming MCP client."
+  - id: CF-6
+    requirement: "OAuth access-token refresh succeeds without tool-contract drift."
+  - id: CF-7
+    requirement: "After refresh/grant expiry, the client performs a clean re-authentication flow rather than bypassing Access."
+  - id: CF-8
+    requirement: "Client reconnect succeeds after a bounded tunnel/transport interruption."
+  - id: CF-9
+    requirement: "A representative long-running Runtime call preserves existing cancellation/result/error behavior through the HTTP path."
+  - id: CF-10
+    requirement: "No automatic replay occurs for an ambiguous destructive request after transport interruption."
+  - id: CF-11
+    requirement: "Concurrent calls through Cloudflare preserve existing Runtime capacity/session limits and failure semantics."
+  - id: CF-12
+    requirement: "Exact canonical contract identity passes across server metadata, tools, schemas, annotations, ToolContracts, runtime_capabilities, success/error semantics, and deterministic schema bundle."
+  - id: CF-13
+    requirement: "No Cloudflare/OAuth/tunnel secret appears in repository history, reports, logs, or process argv."
+  - id: CF-14
+    requirement: "Runtime core/tool implementation semantics remain unchanged."
+
+immediate_not_admitted_conditions:
+  - "Runtime core or canonical tool-registry redesign is required."
+  - "The OpenAI default path must change."
+  - "A custom MCP protocol implementation or protocol proxy is required."
+  - "A custom OAuth authorization server is required."
+  - "A generic transport/plugin framework is required."
+  - "Host/Origin or equivalent transport security must be weakened merely to route Cloudflare."
+  - "The local origin must bind to a public/non-loopback interface."
+  - "Repository-held credentials are required."
+  - "Correctness requires automatic replay of ambiguous destructive calls."
+  - "An Enterprise-only Cloudflare feature is required solely to rescue basic correctness."
+  - "Package/ServiceManagement redesign is required solely for Cloudflare."
+  - "The canonical 19-tool contract cannot remain byte/semantics-identical."
+
+qualification:
+  baseline:
+    - "Before implementation mutation, capture exact canonical schema bundle bytes/hash and server/tool metadata from the frozen default server."
+    - "Capture current live OpenAI Runtime identity/capability evidence through AGENT_RUNTIME."
+    - "Record the exact frozen files/hashes whose mutation would violate the default path."
+  focused_adapter_tests:
+    - "Adapter starts only on loopback and serves the MCP SDK Streamable HTTP application at /mcp."
+    - "Exact Host/Origin allow-list behavior passes without disabling DNS-rebinding protection."
+    - "JWT middleware rejects missing, malformed, invalid-signature, expired, wrong-issuer, and wrong-audience assertions before MCP dispatch."
+    - "JWKS key rotation/cache behavior is bounded and fail-closed; never log token/JWK private material."
+    - "Authenticated dispatch reaches the same canonical server object."
+    - "Adapter shutdown does not change canonical terminal cleanup semantics."
+  transport_conformance:
+    - "Compare exact server metadata and exact ordered tools/list representation between canonical stdio/default server and Cloudflare Streamable HTTP."
+    - "Compare canonical deterministic schema export bytes/hash."
+    - "Compare runtime_capabilities output."
+    - "Exercise representative read success, typed validation failure, capability failure, and bounded mutation behavior."
+    - "Use disposable fixtures only for mutation/replay qualification; never use the production repository or unrelated host state as a destructive test target."
+  auth_lifecycle:
+    - "Real Managed OAuth cold connect."
+    - "Real access-token refresh under a deliberately short test lifetime where operator-controlled configuration permits."
+    - "Real clean re-authentication after refresh/grant expiry or revocation-equivalent bounded test condition."
+  resilience:
+    - "Interrupt/restart only the task-scoped Cloudflare tunnel/adapter used for qualification; prove reconnect."
+    - "Exercise a representative long-running Runtime call across the Cloudflare path."
+    - "Prove ambiguous destructive HTTP requests are not automatically replayed by adapter/client recovery logic."
+    - "Exercise concurrent Cloudflare calls at and beyond the existing Runtime capacity boundary and compare canonical reason/error semantics."
+  benchmark:
+    rule: "Measure for comparison and evidence only; do not invent an SLA."
+    required_observations:
+      - "cold connect"
+      - "warm reconnect"
+      - "tool discovery"
+      - "representative simple call latency distribution"
+      - "representative long-running call"
+      - "OAuth refresh"
+      - "tunnel restart/recovery"
+    statistics:
+      - "sample count"
+      - "min"
+      - "median"
+      - "p95 where sample count is sufficient"
+      - "max"
+    acceptance: "No arbitrary numeric threshold unless an existing Runtime contract already defines one."
+  secret_audit:
+    - "Inspect exact repository diff/history candidates for known Cloudflare credential/token forms without printing values."
+    - "Inspect task-owned logs with redaction-safe checks."
+    - "Inspect process argv for credential values using only bounded task-owned process evidence."
+  final_regression:
+    - "Run focused tests first."
+    - "Run canonical local ./verify after final diff stabilization and before any implementation publication."
+    - "Require zero failures/errors."
+    - "Recompute canonical schema bundle and require exact identity with the pre-change baseline."
+    - "Require OpenAI default-path files and semantics unchanged."
+
+scope:
+  expected_files_are_restrictive: true
+  expected_production_paths_if_admitted:
+    - agent_runtime/cloudflare_adapter.py
+  expected_test_paths_if_admitted:
+    - tests/test_cloudflare_adapter.py
+    - tests/test_transport_conformance.py
+  allowed_components_if_admitted:
+    - agent_runtime/cloudflare_adapter.py
+    - tests/test_cloudflare_adapter.py
+    - tests/test_transport_conformance.py
+    - requirements.lock
+    - .agent/tasks/TASK-0139/report-r1.yaml
+  not_admitted_repository_rule: >-
+    Remove or avoid speculative production Cloudflare code before final publication.
+    A NOT_ADMITTED outcome may publish report evidence and narrowly reusable test
+    evidence only when it does not create a dormant production path or new contract.
+  scope_exception: >-
+    A required production change outside the thin adapter boundary requires
+    immediate NOT_ADMITTED classification unless the change is a purely mechanical
+    dependency-lock consequence of one concrete adapter import. Do not expand
+    architecture through an implicit exception.
+
+forbidden_changes:
+  - "Modify Runtime tool implementations for Cloudflare."
+  - "Modify agent_runtime/capability_registry.py semantics or public order."
+  - "Modify agent_runtime/schema_export.py semantics to hide parity drift."
+  - "Modify canonical ToolContract definitions to accommodate HTTP."
+  - "Modify start.sh or the OpenAI tunnel-client path for Cloudflare."
+  - "Change Runtime version from 0.2.0 unless the existing independent version policy itself requires a change."
+  - "Add or remove MCP tools."
+  - "Create a custom MCP protocol proxy."
+  - "Create a generic transport abstraction, plugin system, provider registry, or dynamic transport loader."
+  - "Create a custom OAuth authorization server."
+  - "Disable MCP Host/Origin security or bind the HTTP origin publicly."
+  - "Persist Cloudflare/OAuth/tunnel credentials in repository, reports, logs, or argv."
+  - "Redesign install.sh, package provenance, ServiceManagement, cutover, or menu-bar lifecycle for Cloudflare."
+  - "Productize full installation/configuration/documentation UX; that belongs to TASK-0141."
+  - "Perform TASK-0140 stress/red-team/platform qualification beyond the narrow transport admission gates in this task."
+  - "Create branch, PR, worktree, automatic GitHub Actions, or alternate release topology."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "OpenAI Secure MCP Tunnel remains mandatory, default, and unchanged."
+    evidence_required: >-
+      Exact diff/path proof plus live/default contract evidence and canonical regression
+      verification show no OpenAI lifecycle, tool, schema, metadata, or error-semantic drift.
+  - id: AC-2
+    requirement: "Cloudflare admission ends with exactly ADMITTED or NOT_ADMITTED."
+    evidence_required: "Report records one outcome, exact gate matrix, and decisive evidence."
+  - id: AC-3
+    requirement: "If ADMITTED, Cloudflare uses only a thin external adapter around the same canonical MCP server/core."
+    evidence_required: >-
+      Code inspection and tests prove one adapter boundary, no duplicate registry,
+      no core-tool branches, and no custom MCP/OAuth-server implementation.
+  - id: AC-4
+    requirement: "If ADMITTED, real named-tunnel Streamable HTTP /mcp connectivity is proven with loopback-only origin."
+    evidence_required: >-
+      Bound local listener evidence, named tunnel identity without credential values,
+      authenticated tool discovery, and exact endpoint evidence.
+  - id: AC-5
+    requirement: "If ADMITTED, Access Managed OAuth and origin JWT validation fail closed."
+    evidence_required: >-
+      Cold connect, refresh, re-authentication, and pre-dispatch rejection proofs for
+      missing/invalid/expired/wrong-issuer/wrong-audience assertions.
+  - id: AC-6
+    requirement: "If ADMITTED, canonical contract identity is exact across both transports."
+    evidence_required: >-
+      Exact server metadata/tool-list comparison, deterministic schema bundle
+      equality, runtime_capabilities equality, ToolContract parity, and
+      representative success/error semantic parity.
+  - id: AC-7
+    requirement: "If ADMITTED, transport interruption does not create unsafe replay or capacity drift."
+    evidence_required: >-
+      Reconnect proof, representative long-running call evidence, disposable
+      destructive ambiguity proof with no automatic replay, and concurrent call
+      evidence preserving Runtime capacity semantics.
+  - id: AC-8
+    requirement: "No secret leakage occurs."
+    evidence_required: >-
+      Redaction-safe repository/history/log/argv audit records PASS without
+      persisting credential or token values.
+  - id: AC-9
+    requirement: "Canonical verification is green and Runtime core semantics remain frozen."
+    evidence_required: >-
+      Focused tests plus canonical local ./verify complete with zero failures/errors,
+      schema baseline remains exact, and forbidden frozen paths/semantics remain unchanged.
+  - id: AC-10
+    requirement: "If NOT_ADMITTED, rejection is clean and does not create rescue-task debt."
+    evidence_required: >-
+      Exact failing mandatory gate/reason is durably recorded; OpenAI remains PASS;
+      speculative production Cloudflare residue is absent; TASK-0140 can proceed
+      against OpenAI-only Runtime without TASK-0139 rescue work.
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Fresh-resolve canonical main and require exact execution-base identity, main-only remote, zero open PRs, and clean worktree/index before mutation."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Capture pre-change canonical schema bundle and OpenAI/default server metadata/tool contract baseline."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Run the smallest focused adapter/auth/conformance tests needed for the current candidate."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Run real Cloudflare named-tunnel + Managed OAuth qualification for every mandatory external gate if prerequisites are available."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Run redaction-safe secret audit and exact diff inspection."
+      required: true
+    - id: CHECK-6
+      command_or_check: "Run canonical local ./verify after final diff stabilization and before implementation publication; require zero failures/errors."
+      required: true
+    - id: CHECK-7
+      command_or_check: "Recompute schema bundle and exact transport-parity evidence."
+      required: true
+  github_actions:
+    required: false
+    rule: "workflow_dispatch only; do not dispatch unless a concrete clean-environment ambiguity independently requires it."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+  pull_request: false
+
+publication:
+  admitted: >-
+    Stage only authorized implementation/test/dependency paths through native
+    repo_stage, obtain native repo_diff(staged) ReceiptV1, commit through native
+    repo_commit, and publish through native repo_publish exact expected-old CAS.
+    Then persist report-r1 through the same native governed chain.
+  not_admitted: >-
+    Publish no speculative production Cloudflare path. Persist the exact report and
+    any narrowly authorized non-production evidence through native repo_stage,
+    repo_diff(staged), repo_commit, and repo_publish exact expected-old CAS.
+  direct_child_rule: >-
+    The first TASK-0139 Executor publication commit must be the sole direct child of
+    the exact TASK-0139 revision-1 execution base supplied in the launch packet.
+
+executor_flow:
+  - "Fresh-resolve canonical GitHub main and local repository state; require exact launch base, main branch, main-only remote, zero open PRs, and clean worktree/index."
+  - "Fresh-discover the current 19-tool Agent Runtime surface and require the native mutation capabilities needed by this task."
+  - "Capture immutable pre-change OpenAI/default schema/server/tool baseline."
+  - "Re-check current official Cloudflare Managed OAuth, Access JWT validation, Tunnel, and MCP Streamable HTTP requirements."
+  - "Attempt the smallest thin-adapter implementation only if no immediate NOT_ADMITTED condition exists."
+  - "Keep Cloudflare auth/HTTP logic outside Runtime tool/core modules and reuse agent_runtime.server:mcp directly."
+  - "Run focused adapter/auth/transport-conformance tests."
+  - "Run bounded real named-tunnel + Managed OAuth qualification and evidence capture."
+  - "Exercise reconnect, long-running call, destructive no-replay disposable fixture, concurrency, and comparison benchmarks."
+  - "Run secret audit and exact diff inspection."
+  - "If any mandatory Cloudflare gate fails, remove speculative production residue, classify NOT_ADMITTED, preserve OpenAI PASS, and skip rescue architecture."
+  - "If every mandatory Cloudflare gate passes, classify ADMITTED."
+  - "Run canonical local ./verify before any implementation publication and require zero failures/errors."
+  - "Re-prove exact schema/contract identity and OpenAI unchanged state."
+  - "Publish authorized implementation if ADMITTED, or clean evidence-only state if NOT_ADMITTED, directly to main through native governed mutation."
+  - "Create .agent/tasks/TASK-0139/report-r1.yaml with the complete gate matrix and exact admission outcome."
+  - "Publish report-r1 through native governed mutation."
+  - "Fresh-prove local HEAD = origin/main, ahead/behind 0/0, main-only remote, zero open PRs, and clean worktree/index; stop for independent Architect review."
+
+failure_policy:
+  - "Fail closed on repository/base/contract identity drift."
+  - "Do not weaken security, transport validation, auth, or Runtime bounds to obtain admission."
+  - "Do not retry destructive ambiguous requests automatically."
+  - "Do not invent performance thresholds."
+  - "Do not expose secrets while collecting failure evidence."
+  - "Do not switch execution surface solely to obtain a different platform safety judgment."
+  - "Do not create a follow-up rescue task for Cloudflare admission failure."
+  - "If a platform block prevents one qualification action, record the exact missing mandatory evidence and classify NOT_ADMITTED unless equivalent evidence is already independently authoritative."
+
+reporting:
+  path: .agent/tasks/TASK-0139/report-r1.yaml
+  owner: EXECUTOR
+  state_on_success: NEEDS_REVIEW
+  required_evidence:
+    - "exact execution base/tree"
+    - "exact final changed paths"
+    - "pre-change OpenAI/default schema bundle hash and server/tool metadata baseline"
+    - "current official external-contract verification summary"
+    - "admission outcome: ADMITTED or NOT_ADMITTED"
+    - "mandatory OpenAI gate matrix"
+    - "mandatory Cloudflare gate matrix"
+    - "thin-adapter/core-boundary evidence"
+    - "loopback listener and /mcp evidence"
+    - "named Cloudflare Tunnel evidence without credential values"
+    - "Managed OAuth cold-connect evidence"
+    - "Access JWT rejection matrix without token values"
+    - "OAuth refresh and clean re-auth evidence"
+    - "reconnect/tunnel interruption evidence"
+    - "representative long-running call evidence"
+    - "ambiguous destructive no-auto-replay evidence using disposable fixture"
+    - "Cloudflare concurrent-call capacity semantics evidence"
+    - "exact server metadata/tool/schema/ToolContract/runtime_capabilities parity evidence"
+    - "benchmark sample counts and distribution summary with no invented SLA"
+    - "secret audit evidence"
+    - "focused test totals"
+    - "canonical ./verify totals and exit code"
+    - "final schema bundle equality proof"
+    - "implementation/report native stage ReceiptV1, commit, and publish identities as applicable"
+    - "final local/remote main, clean/ahead-behind, main-only, and open-PR state"
+
+successor:
+  if_accepted: TASK-0140
+  intent: >-
+    Proceed to Runtime Qualification: Stress, Red Team & Platform Resilience using
+    Cloudflare only if TASK-0139 is ADMITTED; otherwise proceed with OpenAI-only
+    Runtime. TASK-0139 admission failure requires no rescue successor.
+
+blocking_decisions: []
+execution_ready: true
