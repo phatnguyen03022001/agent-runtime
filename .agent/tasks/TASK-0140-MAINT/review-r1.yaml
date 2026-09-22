@@ -1,0 +1,120 @@
+protocol_version: 3
+
+task_id: TASK-0140-MAINT
+task_revision: 1
+review_revision: 1
+state: ACCEPTED
+owner: ARCHITECT
+
+reviewed_report:
+  path: .agent/tasks/TASK-0140-MAINT/report-r1.yaml
+  commit: "45792942b8f1e48a6af99f25dc97c667c384c073"
+  tree: "5e81ad83de5e36238fef4ce42d5fe38f9a4a14d1"
+  report_revision: 1
+
+reviewed_implementation:
+  commit: "82c7d03836147f208bf69b69659fe86566696602"
+  tree: "1519adef4c533d8fc7e427d9ec25cedd51577dc8"
+  parent: "be54d15f4a9b28d361515b80222fab8900b80dca"
+  direct_child_of_base: true
+  changed_paths:
+    - agent_runtime/server.py
+    - verify
+    - verify_tests.py
+    - tests/test_task0140_qualification.py
+    - tests/test_verify_harness.py
+    - tests/test_surface_and_scripts.py
+  exact_changed_path_set: true
+
+report_publication:
+  direct_child_of_implementation: true
+  changed_paths:
+    - .agent/tasks/TASK-0140-MAINT/report-r1.yaml
+  exact_changed_path_set: true
+
+independent_architect_verification:
+  canonical_main_before_review: "45792942b8f1e48a6af99f25dc97c667c384c073"
+  canonical_main_tree_before_review: "5e81ad83de5e36238fef4ce42d5fe38f9a4a14d1"
+  repository:
+    local_head_equals_origin_main: true
+    ahead_behind: "0/0"
+    worktree_index: CLEAN
+    remote_branches:
+      - main
+    open_prs: 0
+
+  defect_repair:
+    finding: F-0140-001
+    root_cause_confirmed: >-
+      Unexpected exceptions could bypass _call_runtime_tool on public paths such as
+      fs_list, allowing original exception text to reach MCP SDK/server traceback logs.
+    repair_boundary: agent_runtime.server._tool
+    repair_mechanism: >-
+      Every Runtime-owned public registration now passes through
+      _sanitize_unexpected_tool_exception before timing and MCP registration.
+    terminal_exec_secret_sentinel: PASS
+    fs_list_secret_sentinel: PASS
+    client_response_sanitized: true
+    mcp_sdk_server_log_sanitized: true
+    common_sanitizer_all_registered_public_tools: 19
+
+  expected_error_semantics:
+    ToolError: PRESERVED
+    RuntimeValidationError: PRESERVED
+    RuntimeStateError: PRESERVED
+    ProtectedRuntimeDenied: PRESERVED
+    CapabilityFailure: PRESERVED
+    rationale: >-
+      The common sanitizer re-raises ToolError, RuntimeValidationError,
+      RuntimeStateError, ProtectedRuntimeDenied and CapabilityFailure unchanged.
+      Existing Runtime conversion/result paths remain in place and canonical regression
+      passes.
+
+  public_contract:
+    runtime_version: "0.2.0"
+    tool_contract_kernel_version: 1
+    public_tool_count: 19
+    schema_bundle_sha256: "6bcfe8cdbb19393cdaeb0ef13271a6448b6bc0a28f479c8d4c0f6b7246b2aba5"
+    schema_export_bytes_sha256: "495eefab431e5311189e15d07f6ffe2ab9c6635c2c5a8a6b41b0a1f944fef36b"
+    schema_export_bytes_length: 59981
+    schema_identity_unchanged: true
+    architecture_drift: false
+
+  verification_harness:
+    accepted: true
+    canonical_command: ./verify
+    discovery_rule: "all tests/test_*.py modules"
+    prior_tests_retained: true
+    fast_parallel_workers: 4
+    unknown_or_host_sensitive_modules_default_serial: true
+    syntax_checks_before_tests: true
+    failure_propagation_verified: true
+    canonical_verify_is_final_authority: true
+
+  canonical_verify_replay:
+    exit_code: 0
+    result: PASS
+    modules: "53/53"
+    tests: 658
+    total_duration_seconds: 176.723
+
+acceptance:
+  F_0140_001_repaired: true
+  runtime_architecture_changed: false
+  frozen_public_contract_preserved: true
+  verification_harness_accepted: true
+  corrective_prerequisite_for_TASK_0140_resume: true
+  qualification_executed_in_this_review: false
+
+successor_binding:
+  task: TASK-0140
+  next_revision: 2
+  rule: >-
+    TASK-0140-MAINT is the accepted corrective prerequisite for resuming canonical
+    TASK-0140 qualification. Revision 2 must use evidence-preserving delta
+    qualification, freshly prove every predicate materially touched by this
+    maintenance diff, and must not carry forward any evidence invalidated by it.
+
+final_judgment:
+  result: TASK_0140_MAINT_ACCEPTED
+  state: ACCEPTED
