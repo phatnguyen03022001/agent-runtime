@@ -18,7 +18,40 @@ is_lower_sha256() {
   [[ "${#1}" -eq 64 && "$1" != *[!0-9a-f]* ]]
 }
 
+show_help() {
+  cat <<'EOF'
+Usage:
+  ./install.sh --check [--json]
+  ./install.sh
+  ./install.sh --install-prebuilt <Agent Runtime.app> <candidate.json> [--expected-candidate-sha256 <64hex> --expected-handoff-sha256 <64hex>]
+  ./install.sh --resume-cutover
+  ./install.sh --commit-cutover
+  ./install.sh --rollback-cutover
+  ./install.sh --recover-partial-cutover
+  ./install.sh --recover-runtime-service [options]
+  ./install.sh --uninstall
+
+--check is a strict read-only prerequisite/configuration preflight. It does not
+install dependencies, create configuration, package/sign the app, change
+ServiceManagement state, or modify cutover/desired-state data.
+EOF
+}
+
 case "${1-}" in
+  --help|-h)
+    [[ "$#" == "1" ]] || fail "usage: ./install.sh --help"
+    show_help
+    exit 0
+    ;;
+  --check)
+    if [[ "$#" == "1" ]]; then
+      exec /usr/bin/python3 "$ROOT/macos/install_preflight.py"
+    elif [[ "$#" == "2" && "$2" == "--json" ]]; then
+      exec /usr/bin/python3 "$ROOT/macos/install_preflight.py" --json
+    else
+      fail "usage: ./install.sh --check [--json]"
+    fi
+    ;;
   --install-prebuilt)
     if [[ "$#" == "3" ]]; then
       :

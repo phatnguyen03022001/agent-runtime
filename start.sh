@@ -15,6 +15,9 @@ INSTALLED_RUNTIME_ROOT="${HOME}/Applications/Agent Runtime.app/Contents/Resource
 # same installed execution bytes. The internal --serve path is never delegated
 # because launchd supplies the package-owned script directly.
 if [[ "${1:-start}" != "--serve" \
+      && "${1:-start}" != "doctor" \
+      && "${1:-start}" != "--help" \
+      && "${1:-start}" != "-h" \
       && "$SOURCE_ROOT" != "$INSTALLED_RUNTIME_ROOT" \
       && "${AGENT_RUNTIME_USE_SOURCE_RUNTIME:-0}" != "1" \
       && -x "$INSTALLED_RUNTIME_ROOT/start.sh" ]]; then
@@ -48,6 +51,95 @@ MCP_COMMAND_NORMALIZED="command=$RUNTIME_PYTHON -m agent_runtime.server,channel=
 HEALTH_URL="http://127.0.0.1:8080"
 RUNTIME_PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 DEFAULT_SESSION_LIMIT=6
+
+doctor_error() {
+  local reason="$1"
+  local message="$2"
+  local json_mode="${3:-0}"
+  if [[ "$json_mode" == "1" ]]; then
+    printf '{"error":{"message":"%s","reason_code":"%s"}}\n' "$message" "$reason"
+  else
+    printf 'START ERROR: %s (%s)\n' "$message" "$reason" >&2
+  fi
+  exit 2
+}
+
+installed_doctor() {
+  local json_mode=0
+  local doctor_arg=""
+  if [[ "$#" == "1" && "${1:-}" == "--json" ]]; then
+    json_mode=1
+    doctor_arg="--json"
+  elif [[ "$#" != "0" ]]; then
+    fail "Usage: ./start.sh doctor [--json]"
+  fi
+
+  local doctor_root="$INSTALLED_RUNTIME_ROOT"
+  local doctor_python="$doctor_root/.venv/bin/python"
+  local doctor_env="$CANONICAL_ENV_FILE"
+  local installed_app="$HOME/Applications/Agent Runtime.app"
+  if [[ ! -e "$installed_app" && ! -L "$installed_app" ]]; then
+    doctor_error "APP_NOT_INSTALLED" "Canonical Agent Runtime app is not installed." "$json_mode"
+  fi
+  [[ -d "$installed_app" && ! -L "$installed_app" && -x "$doctor_python" && -f "$doctor_root/agent_runtime/doctor.py" ]]     || doctor_error "INSTALLED_PACKAGE_INVALID" "Installed Runtime payload is incomplete or unsafe." "$json_mode"
+  [[ -f "$doctor_env" && ! -L "$doctor_env" ]]     || doctor_error "CANONICAL_CONFIG_MISSING" "Canonical runtime.env is missing or unsafe." "$json_mode"
+
+  exec /usr/bin/python3 - "$doctor_env" "$doctor_python" "$doctor_root" "$RUNTIME_PATH" "$json_mode" "$doctor_arg" <<'PY'
+import os
+import sys
+from pathlib import Path
+
+env_file = Path(sys.argv[1])
+runtime_python = sys.argv[2]
+runtime_root = sys.argv[3]
+runtime_path = sys.argv[4]
+json_mode = sys.argv[5] == "1"
+doctor_arg = sys.argv[6]
+
+sys.path.insert(0, runtime_root)
+from macos import runtime_config
+
+def fail(reason, message):
+    if json_mode:
+        import json
+        print(json.dumps({"error": {"message": message, "reason_code": reason}}, separators=(",", ":"), sort_keys=True))
+    else:
+        print(f"START ERROR: {message} ({reason})", file=sys.stderr)
+    raise SystemExit(2)
+
+try:
+    _, _, values = runtime_config._read(env_file, require_mode=True)
+    runtime_config._validate_values(values)
+    runtime_config._validated_identity(values, required=True)
+except SystemExit:
+    fail("CANONICAL_CONFIG_INVALID", "Canonical runtime.env is malformed, unsafe, or incomplete.")
+
+doctor_env = {
+    "PATH": runtime_path,
+    "HOME": os.environ.get("HOME", str(Path.home())),
+    "PYTHONPATH": runtime_root,
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "AGENT_RUNTIME_WORKSPACE_ROOT": values["AGENT_RUNTIME_WORKSPACE_ROOT"],
+    "AGENT_RUNTIME_GIT_NAME": values["AGENT_RUNTIME_GIT_NAME"],
+    "AGENT_RUNTIME_GIT_EMAIL": values["AGENT_RUNTIME_GIT_EMAIL"],
+}
+for key in ("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS", "AGENT_RUNTIME_MAX_PARALLELISM"):
+    if key in values:
+        doctor_env[key] = values[key]
+for key in ("USER", "TMPDIR", "LANG"):
+    value = os.environ.get(key)
+    if value:
+        doctor_env[key] = value
+for key, value in os.environ.items():
+    if key.startswith("LC_") and value:
+        doctor_env[key] = value
+
+argv = [runtime_python, "-m", "agent_runtime.doctor"]
+if doctor_arg:
+    argv.append(doctor_arg)
+os.execve(runtime_python, argv, doctor_env)
+PY
+}
 
 acquire_lock() {
   mkdir -p "$STATE_DIR"
@@ -349,6 +441,17 @@ PY
 }
 
 case "$ACTION" in
+  --help|-h)
+    cat <<'EOF'
+Usage: ./start.sh [start|stop|restart|status|session-limit|doctor [--json]]
+The installed-authority doctor uses package-owned Runtime bytes plus canonical runtime.env.
+--serve is an internal ServiceManagement entrypoint and is not an operator command.
+EOF
+    ;;
+  doctor)
+    shift
+    installed_doctor "$@"
+    ;;
   --serve)
     serve "${2:-}" "${3:-$ENV_FILE}"
     ;;
@@ -403,6 +506,6 @@ case "$ACTION" in
     echo "AGENT_RUNTIME_MAX_ACTIVE_SESSIONS effective: $(effective_session_limit)"
     ;;
   *)
-    fail "Usage: ./start.sh [start|stop|restart|status|session-limit|--serve <absolute-tunnel-client> [env-file]]"
+    fail "Usage: ./start.sh [start|stop|restart|status|session-limit|doctor [--json]]"
     ;;
 esac
