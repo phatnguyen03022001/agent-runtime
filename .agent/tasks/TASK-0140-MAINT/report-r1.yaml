@@ -1,0 +1,202 @@
+protocol_version: 3
+
+task_id: TASK-0140-MAINT
+report_revision: 1
+state: NEEDS_REVIEW
+owner: EXECUTOR
+
+scope:
+  phase: PUBLICATION_ONLY
+  repository: phatnguyen03022001/agent-runtime
+  canonical_branch: main
+  architecture_change: false
+  qualification_resumed: false
+
+execution_base:
+  sha: "be54d15f4a9b28d361515b80222fab8900b80dca"
+  tree: "480f227fbc2ca6293ceb37b3a5be0385dde491d1"
+  origin_main_confirmed: true
+  local_head_confirmed: true
+  pre_stage_index_worktree: CLEAN
+
+finding:
+  id: F-0140-001
+  root_cause: >-
+    Unexpected exceptions were only converted at _call_runtime_tool. Public tools
+    such as fs_list bypass that helper, allowing the original exception message to
+    reach the MCP SDK traceback logger.
+  reproducer: tests/test_task0140_qualification.py
+
+repair:
+  production_path: agent_runtime/server.py
+  description: >-
+    _tool, the common Runtime-owned registration boundary for all public MCP tools,
+    wraps every registered function with _sanitize_unexpected_tool_exception.
+    ToolError, RuntimeValidationError, RuntimeStateError, ProtectedRuntimeDenied,
+    and CapabilityFailure retain their existing behavior. Other Exception values
+    become RuntimeError("unexpected runtime tool failure") with exception chaining
+    suppressed.
+  common_wrapper_proof: >-
+    The qualification regression verifies the sanitizer marker through the timed
+    wrapper for every one of the 19 registered public tools.
+  secret_regression_proof:
+    terminal_exec:
+      delegate: execute_terminal
+      sentinel_in_response: false
+      sentinel_in_mcp_sdk_server_log: false
+      generic_failure_observable: true
+    fs_list:
+      delegate: list_directory
+      sentinel_in_response: false
+      sentinel_in_mcp_sdk_server_log: false
+      generic_failure_observable: true
+
+implementation_changed_paths:
+  - agent_runtime/server.py
+  - verify
+  - verify_tests.py
+  - tests/test_task0140_qualification.py
+  - tests/test_verify_harness.py
+  - tests/test_surface_and_scripts.py
+
+identity_proof:
+  public_tool_count: 19
+  schema_bundle_sha256: "6bcfe8cdbb19393cdaeb0ef13271a6448b6bc0a28f479c8d4c0f6b7246b2aba5"
+  schema_export_sha256: "495eefab431e5311189e15d07f6ffe2ab9c6635c2c5a8a6b41b0a1f944fef36b"
+  schema_export_length_bytes: 59981
+  schema_bundle_byte_identical_to_base: true
+  public_schemas_unchanged: true
+
+verification:
+  pre_harness_green_baseline:
+    modules: 52
+    tests: 650
+    canonical_duration_seconds: 194.174
+  final_accepted_canonical:
+    command: ./verify
+    modules: "53/53"
+    tests: 658
+    failures: 0
+    errors: 0
+    skipped: 1
+    expected_skips_only: true
+    total_duration_seconds: 107.379
+  executor_final_observation:
+    command: ./verify
+    modules: "53/53"
+    tests: 658
+    failures: 0
+    errors: 0
+    skipped: 1
+    total_duration_seconds: 161.818
+  quick:
+    command: ./verify --quick
+    tests: 254
+    duration_seconds: 14.133
+    result: PASS
+  lanes:
+    fast_parallel_safe:
+      workers: 4
+      tests: 254
+      modules:
+        - tests.test_capability_registry
+        - tests.test_fs_list
+        - tests.test_fs_patch
+        - tests.test_fs_read_batch
+        - tests.test_fs_read_batch_adversarial
+        - tests.test_fs_search
+        - tests.test_fs_write
+        - tests.test_fs_write_mcp
+        - tests.test_package_provenance
+        - tests.test_repo_commit
+        - tests.test_repo_diff
+        - tests.test_repo_fast_forward
+        - tests.test_repo_publish
+        - tests.test_repo_publish_mcp
+        - tests.test_repo_stage
+        - tests.test_repo_stage_commit_mcp
+        - tests.test_runtime_config
+        - tests.test_runtime_label_split
+        - tests.test_schema_export
+        - tests.test_task0140_qualification
+        - tests.test_timing
+        - tests.test_tool_contract
+    serial_host_sensitive:
+      workers: 1
+      tests: 404
+      modules:
+        - tests.test_candidate_cutover
+        - tests.test_candidate_freeze
+        - tests.test_capacity_observer
+        - tests.test_doctor
+        - tests.test_fs_read_batch_mcp
+        - tests.test_image_transport
+        - tests.test_mcp_client_conformance
+        - tests.test_mcp_contracts
+        - tests.test_packaging_interpreter
+        - tests.test_pressure_concurrency
+        - tests.test_protected_runtime
+        - tests.test_repo_fast_forward_mcp
+        - tests.test_repo_observer
+        - tests.test_repo_observer_mcp
+        - tests.test_revision4_runtime_config
+        - tests.test_screen_capture
+        - tests.test_screen_capture_mcp
+        - tests.test_service_recovery
+        - tests.test_supervised_lifecycle
+        - tests.test_surface_and_scripts
+        - tests.test_task0041_boundedness
+        - tests.test_task0055_cutover
+        - tests.test_task0055_macos_contract
+        - tests.test_task0057_admission
+        - tests.test_task0059_transport
+        - tests.test_terminal_exec
+        - tests.test_terminal_session
+        - tests.test_tunnel_identity
+        - tests.test_uninstall
+        - tests.test_verify_harness
+        - tests.test_wave1_mcp
+  test_population:
+    before: 650
+    added: 8
+    after: 658
+    pre_existing_tests_retained: true
+  harness_assurance:
+    syntax_checks_before_tests: true
+    worker_failure_nonzero: true
+    serial_failure_nonzero: true
+    worker_debris_after_verification: 0
+    known_race_security_fault_regressions_active: true
+
+implementation_publication:
+  staged_receipt:
+    schema_version: 1
+    kind: repo-diff
+    digest: "879fb73c99d12231d3eb89995fd17a7c998e1f96af8d3449e5acf08750e6653d"
+  commit:
+    sha: "82c7d03836147f208bf69b69659fe86566696602"
+    tree: "1519adef4c533d8fc7e427d9ec25cedd51577dc8"
+    parent: "be54d15f4a9b28d361515b80222fab8900b80dca"
+    receipt:
+      schema_version: 1
+      kind: repo-commit
+      digest: "410cda6c41d2321f7580835f9ed306b88052c6642dc46f37927d6517f2853cf8"
+  publish:
+    method: repo_publish_exact_expected_old_cas
+    expected_remote_head: "be54d15f4a9b28d361515b80222fab8900b80dca"
+    remote_head_before: "be54d15f4a9b28d361515b80222fab8900b80dca"
+    remote_head_after: "82c7d03836147f208bf69b69659fe86566696602"
+    result: PUBLISHED
+
+report_publication:
+  path: .agent/tasks/TASK-0140-MAINT/report-r1.yaml
+  method: repo_stage_then_repo_diff_receipt_then_repo_commit_then_repo_publish
+  self_referential_receipt_required: false
+
+final_repository_closure:
+  required_after_report_publish:
+    local_head_equals_origin_main: true
+    ahead_behind: "0/0"
+    worktree_index: CLEAN
+    canonical_branch_topology: main_only
+    pull_request_created: false
