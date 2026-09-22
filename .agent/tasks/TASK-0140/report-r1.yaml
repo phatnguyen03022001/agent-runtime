@@ -1,0 +1,496 @@
+protocol_version: 3
+
+task_id: TASK-0140
+task_revision: 1
+report_revision: 1
+state: NEEDS_REVIEW
+owner: EXECUTOR
+
+outcome: FAIL
+summary: >-
+  TASK-0140 independently qualified the frozen Agent Runtime 0.2.0 OpenAI-only
+  surface. Capacity, lifecycle churn, filesystem/repository confinement, protected
+  Runtime governance, screen-capture governance, package/lifecycle fixtures and
+  bounded real-host continuity passed. Qualification found one reproducible frozen
+  secret-handling defect: unexpected tool exceptions are sanitized in the MCP
+  response but the MCP SDK server logger emits the original exception traceback,
+  including a controlled secret sentinel. Per the no-self-repair rule, production
+  Runtime code was not patched. The smallest durable reproducer is preserved for
+  independent Architect review.
+
+execution:
+  execution_surface: CHATGPT_LOCAL
+  transport: AGENT_RUNTIME
+  qualification_transport_scope: OPENAI_ONLY
+  recovery_state: LOCAL_QUALIFICATION_CHECKPOINT
+  original_execution_base: "16c730b49447820e9f91917906b2c45cffd48e0f"
+  original_execution_base_tree: "dc7a9d1567907343ba8eb5c4886ea271c705a0df"
+  evidence_checkpoint_commit: "cad66cf09ab760153ccf8fa81ba47e5c2fda1f39"
+  evidence_checkpoint_tree: "7e0309f1135fb9b8d953e954bb4ca8d5bcda3c14"
+  canonical_branch: main
+  cloudflare: OUT_OF_SCOPE
+  mcp_conformance: DEFERRED
+  k6: DEFERRED
+  smart_tree: EXCLUDED
+
+frozen_identity:
+  runtime_version: "0.2.0"
+  tool_contract_kernel_version: 1
+  public_tool_count: 19
+  pre:
+    schema_bundle_sha256: "6bcfe8cdbb19393cdaeb0ef13271a6448b6bc0a28f479c8d4c0f6b7246b2aba5"
+    schema_export_bytes_sha256: "495eefab431e5311189e15d07f6ffe2ab9c6635c2c5a8a6b41b0a1f944fef36b"
+    schema_export_bytes_length: 59981
+  post:
+    schema_bundle_sha256: "6bcfe8cdbb19393cdaeb0ef13271a6448b6bc0a28f479c8d4c0f6b7246b2aba5"
+    schema_export_bytes_sha256: "495eefab431e5311189e15d07f6ffe2ab9c6635c2c5a8a6b41b0a1f944fef36b"
+    schema_export_bytes_length: 59981
+  exact_identity_preserved: true
+  screen_capture:
+    supported: true
+    available: false
+    unavailable_reason_code: VISUAL_PERCEPTION_BLOCKED
+
+qualification_matrix:
+  Q1_deterministic:
+    status: FAIL
+    reason: >-
+      Frozen regression and red-team coverage passed except G10. The durable
+      qualification test reproducibly proves that an unexpected exception secret
+      sentinel reaches the MCP server logger traceback.
+  Q2_disposable_stress:
+    status: PASS
+    reason: >-
+      Isolated x6 saturation, seventh fail-before-PTY, cheap-call availability,
+      160-cycle lifecycle churn, output/retention bounds and exact cleanup all passed.
+  Q3_real_host:
+    status: PASS
+    reason: >-
+      Configured doctor is healthy; current live OpenAI Runtime remains 0.2.0 with
+      nineteen tools; safe read and bounded long-running terminal calls passed;
+      installed package signature/config/package/service fingerprints remained intact.
+
+mandatory_gates:
+  G1:
+    name: Canonical identity and regression
+    status: FAIL
+    evidence: >-
+      Runtime/schema identity is byte-exact and unchanged, but canonical ./verify
+      exits 1 because the TASK-0140 G10 reproducer fails. There is no schema or
+      public-contract drift.
+  G2:
+    name: Heavy-capacity hard ceiling
+    status: PASS
+    evidence: >-
+      Six disposable PTY roots were simultaneously status=running with six active
+      heavy leases immediately before the seventh probe. The seventh request returned
+      "configured maximum 6 active terminal sessions reached"; pty.openpty was proven
+      not called and lease/session ownership remained at six.
+  G3:
+    name: Cheap-call responsiveness under saturation
+    status: PASS
+    evidence: >-
+      While six heavy roots remained held, capacity observation, bounded filesystem
+      read, terminal poll and terminal resize/control all completed successfully.
+  G4:
+    name: Terminal/session churn and retention
+    status: PASS
+    evidence: >-
+      160 cycles completed: 144 natural exits and 16 explicit terminates.
+      Max retained completed sessions=16, max retained output/session=65536 bytes,
+      max terminal_poll output=16384 bytes. Overflow polling reported
+      cursor_expired=true with 24464 dropped bytes, and oldest completed-session
+      eviction returned an unknown/expired session truthfully. Deterministic idle
+      reaping also passed.
+  G5:
+    name: Owned-resource cleanup
+    status: PASS
+    evidence: >-
+      Post-quiescence state: sessions=0, heavy_leases=0, alive task-owned children=0,
+      zombies=0, fd_before=4, fd_after=4, fd_delta=0, and terminal worker-thread
+      before/after inventories were both empty.
+  G6:
+    name: Long-running/cancellation/failure semantics
+    status: PASS
+    evidence: >-
+      Existing terminal admission/session tests cover natural completion, terminate,
+      interrupt, timeout, spawn/PTY failures, idle reap and Runtime SIGTERM cleanup.
+      Q3 also completed a safe bounded 0.5-second terminal call within a 5-second
+      timeout.
+  G7:
+    name: Filesystem confinement and boundedness red team
+    status: PASS
+    evidence: >-
+      Existing fs_read_batch/fs_list/fs_search/fs_patch/fs_write and boundedness
+      suites cover traversal/outside-workspace rejection, symlink substitution,
+      invalid UTF-8/NUL, sparse/no-newline inputs, input/output/scan ceilings,
+      identity drift and serialization bounds.
+  G8:
+    name: Repository CAS/receipt red team
+    status: PASS
+    evidence: >-
+      repo_stage/repo_diff/repo_commit/repo_fast_forward/repo_publish suites cover
+      stale expected state, receipt mismatch, staged/untracked drift, wrong
+      branch/upstream, binary/symlink candidates, remote CAS mismatch, local/remote
+      publication races and no-replace semantics without unintended publication.
+  G9:
+    name: Protected-runtime/governance red team
+    status: PASS
+    evidence: >-
+      Protected-runtime tests reject compound shell wrappers, launchctl lifecycle
+      mutation, protected port 8080 mutation, direct PID/process-group signals,
+      matching pkill/killall and fragmented terminal-control shell intent while
+      preserving read-only observation. The documented same-UID interpreter
+      limitation was not misrepresented as solved.
+  G10:
+    name: Secret/error sanitization
+    status: FAIL
+    evidence: >-
+      tests/test_task0140_qualification.py injects a controlled sentinel through a
+      mocked unexpected terminal_exec exception. The MCP CallToolResult is sanitized
+      and does not contain the sentinel, but logger mcp.server.mcpserver.server emits
+      the exception traceback containing the sentinel. The failure reproduced
+      directly and again inside canonical ./verify. Existing accepted unexpected-
+      exception tests also visibly log their TASK0039/TASK0040 sentinels, corroborating
+      that response sanitization does not imply log sanitization.
+  G11:
+    name: Screen-capture governance
+    status: PASS
+    evidence: >-
+      runtime_capabilities reports supported=true, available=false and
+      VISUAL_PERCEPTION_BLOCKED. A live invocation returned the same typed reason
+      before native capture. Focused screen-capture MCP tests passed.
+  G12:
+    name: Independent MCP black-box/adversarial evidence
+    status: PASS
+    evidence: >-
+      MCP Inspector 2.7.0 passed stdio initialize, tools/list and safe
+      capacity_observer tools/call. Cisco mcp-scanner 4.8.4 completed local-only
+      stdio scanning with external API/LLM credentials explicitly removed; YARA-only
+      scanning classified all 19 tools SAFE with zero findings. Readiness HIGH labels
+      were deterministically triaged as description/metadata heuristics rather than
+      Runtime defects.
+  G13:
+    name: Installed macOS/OpenAI continuity
+    status: PASS
+    evidence: >-
+      Canonical configured doctor reports healthy with all ten checks passing.
+      Live runtime_capabilities remains 0.2.0/19 tools, read and bounded terminal calls
+      passed, strict deep codesign passed, no cutover transaction is pending, and
+      installed config/package/service fingerprints are unchanged.
+  G14:
+    name: Qualification leaves no product mutation
+    status: PASS
+    evidence: >-
+      No production Python, dependency, package, ServiceManagement, runtime.env,
+      tunnel or public-contract changes were made. build/.task-0140 was removed before
+      publication. Repository publication contains only the authorized durable
+      qualification reproducer and this TASK-0140 report.
+
+finding:
+  id: F-0140-001
+  dimension: secret_error_sanitization
+  severity: HIGH
+  reproducible: true
+  invariant: >-
+    G10 / AC-8 requires secret-like sentinels injected through disposable unexpected
+    failures not to appear in validation errors, audit events, scanner output or
+    qualification-visible logs.
+  evidence:
+    durable_reproducer: tests/test_task0140_qualification.py
+    direct_runs:
+      - "1 test; FAILED (failures=1); sentinel absent from MCP response but present in captured MCP server logs"
+      - "recovery rerun reproduced the same failure"
+    canonical_verify: "650 tests in 186.247s; FAILED (failures=1, skipped=1); sole failure is the durable G10 reproducer"
+    corroboration: >-
+      Existing unexpected-exception test output visibly includes controlled
+      TASK0039_UNEXPECTED_SECRET_SENTINEL and TASK0040_UNEXPECTED_SECRET_SENTINEL
+      in MCP SDK traceback logging.
+  disposition: >-
+    FAIL_NO_SELF_REPAIR. Preserve the smallest reproducer and stop for independent
+    Architect judgment; production Runtime is intentionally unchanged.
+
+stress_evidence:
+  x6_saturation:
+    simultaneously_running: 6
+    statuses: [running, running, running, running, running, running]
+    active_heavy_leases_before_seventh: 6
+    seventh_error: "configured maximum 6 active terminal sessions reached"
+    seventh_pty_allocated: false
+    post_cleanup_heavy_leases: 0
+  cheap_calls_while_saturated:
+    capacity_observer: PASS
+    fs_read: PASS
+    terminal_poll: PASS
+    terminal_resize_control: PASS
+  churn:
+    cycles: 160
+    natural_exits: 144
+    explicit_terminates: 16
+    duration_seconds: 4.343
+    max_retained_completed_sessions: 16
+    max_retained_output_bytes: 65536
+    max_poll_output_bytes: 16384
+    cursor_expired_observed: true
+    dropped_output_bytes_observed: 24464
+    oldest_session_evicted_truthfully: true
+    idle_reaper_path: PASS
+  cleanup:
+    sessions: 0
+    heavy_leases: 0
+    alive_children: 0
+    zombies: 0
+    fd_before: 4
+    fd_after: 4
+    fd_delta: 0
+    worker_threads_before: []
+    worker_threads_after: []
+
+focused_regression:
+  result: PASS_EXCEPT_DURABLE_G10_REPRODUCER
+  invocations:
+    - {tests: 7, result: PASS, scope: "task0057 admission + pressure concurrency"}
+    - {tests: 25, result: PASS, scope: "terminal session"}
+    - {tests: 32, result: PASS, skipped: 1, scope: "fs read/list/search"}
+    - {tests: 60, result: PASS, scope: "fs patch/write + protected runtime"}
+    - {tests: 46, result: PASS, scope: "repo stage/commit/diff"}
+    - {tests: 25, result: PASS, scope: "screen capture MCP + doctor + schema export"}
+    - {tests: 99, result: PASS, scope: "candidate cutover deterministic fixtures"}
+    - {tests: 15, result: PASS, scope: "OpenAI tunnel identity"}
+    - {tests: 13, result: PASS, scope: "MCP contracts"}
+    - {tests: 31, result: PASS, scope: "repo publish + fast-forward"}
+    - {tests: 20, result: PASS, scope: "repo stage/commit/publish/fast-forward MCP"}
+  note: >-
+    One intermediate unittest command referenced a retired filename and returned a
+    loader error; the missing repo stage/commit coverage was immediately rerun using
+    the canonical current filenames and passed. This was an Executor command typo,
+    not a Runtime failure.
+
+red_team:
+  protocol_and_schema:
+    status: PASS
+    evidence: >-
+      MCP contract and boundedness tests cover unknown top-level fields, malformed
+      types, missing/invalid fields, numeric/byte boundaries, closed schemas and
+      sanitized client error envelopes.
+  filesystem:
+    status: PASS
+    evidence: >-
+      Traversal, outside-workspace cwd, symlink target/races, invalid UTF-8/NUL,
+      large/sparse/no-newline content and hard scan/output ceilings fail closed.
+  terminal_and_process:
+    status: PASS
+    evidence: >-
+      Protected lifecycle/process wrappers and direct signal/port mutation attempts
+      are rejected before spawn/control where required.
+  repository:
+    status: PASS
+    evidence: >-
+      Stale HEAD/receipt, worktree/index drift, CAS mismatch, branch/upstream mismatch,
+      binary/symlink/oversize candidates and publication races fail closed.
+  information_security:
+    status: FAIL
+    evidence: "F-0140-001: unexpected exception traceback leaks controlled sentinel to MCP server logs."
+  confused_deputy:
+    status: PASS
+    evidence: >-
+      Outside-workspace cwd/path attempts, blocked screen capture and lifecycle
+      mutation through generic terminal wrappers remain bounded by current authority.
+
+external_qualification:
+  mcp_inspector:
+    status: PASS
+    package: "@modelcontextprotocol/inspector"
+    version: "2.7.0"
+    npm_integrity: "sha512-V1SqfR+m3NWMkEe2i3v2GMm00pZtAl/JISAHQzYnOZElEuwuLLkU8vTWBYg5HMCYTgpvuMmzb+MZz98HjdcGuw=="
+    npm_shasum: "e3f210f9d985e6a28b2cb79cae23d9e83bb47358"
+    node_version: "v26.5.0"
+    npm_npx_version: "11.17.0"
+    isolation: "npm cache under build/.task-0140; no package.json/node_modules/lockfile/global install"
+    initialize: PASS
+    tools_list: PASS
+    safe_tools_call: "capacity_observer PASS"
+    observed_server_version: "0.2.0"
+  cisco_mcp_scanner:
+    status: PASS_WITH_TRIAGED_HEURISTICS
+    package: cisco-ai-mcp-scanner
+    version: "4.8.4"
+    wheel_sha256: "cd25f68d4f22c6e40b74578a8c28e2dfc350f69ebf4122801d9d05f804e769cd"
+    sdist_sha256: "d417e19e72bc0ebc26227ec4482527e8ca202c83e2559bcf4b4a28fd94f9a8b5"
+    uv_version: "0.12.5"
+    isolation: "uvx cache under build/.task-0140; no Runtime venv/global/requirements mutation"
+    external_llm_or_api_used: false
+    yara:
+      tools_scanned: 19
+      safe: 19
+      unsafe: 0
+      findings: 0
+    readiness:
+      initial_combined_summary: "19 tools labeled HIGH"
+      triage:
+        runtime_capabilities: >-
+          Scanner says timeout unspecified/external service may hang; false positive
+          because the capability is deterministic static metadata with no external
+          probe or service.
+        terminal_exec: >-
+          Scanner says timeout unspecified; false positive because the request schema
+          exposes timeout_seconds with a hard 3600-second maximum and deterministic
+          timeout tests pass.
+        repo_publish: >-
+          Scanner says timeout unspecified; false positive because the canonical
+          ToolContract has a 30-second publication deadline and deterministic deadline/
+          CAS tests pass.
+      material_runtime_finding_reproduced: false
+    scanner_cli_observation: >-
+      Exact 4.8.4 crashes with UnboundLocalError when the optional --stdio-timeout
+      override is supplied. Retrying the same pinned version without that optional
+      override completed. This is classified as an external scanner CLI defect.
+  hypothesis:
+    status: NOT_USED
+    reason: >-
+      Trigger not met: deterministic tests already cover the pure boundary domains
+      relevant to this task, including paths, cursors/output retention, schema bounds
+      and expected-state/CAS parsing.
+  semgrep:
+    status: NOT_USED
+    reason: >-
+      Trigger not met: no underexplored precise static architectural invariant remained;
+      existing deterministic tests cover shell/process/publication/lifecycle guardrails,
+      while F-0140-001 is runtime SDK logging behavior rather than a missing static rule.
+  mcp_conformance:
+    status: DEFERRED
+    reason: "OpenAI-only stdio scope has no admitted HTTP server URL; no adapter was created."
+  k6:
+    status: DEFERRED
+    reason: "No admitted HTTP /mcp transport exists."
+  smart_tree:
+    status: EXCLUDED
+
+real_host:
+  doctor:
+    exit_code: 0
+    status: healthy
+    check_count: 10
+    non_pass_checks: 0
+    max_active_sessions: 6
+    max_parallelism: 6
+    installed_runtime_revision: "bf98ec4e9bcda97dfdc0ca52b8e0537dae14a1cc"
+    installed_runtime_tree: "1a473378a12504f7c4b1a598f96ced1813c72744"
+    cutover_transaction_present: false
+  live_openai_runtime:
+    runtime_version: "0.2.0"
+    public_tool_count: 19
+    safe_read: PASS
+    bounded_long_call:
+      result: PASS
+      sleep_seconds: 0.5
+      timeout_seconds: 5
+      output: TASK0140_Q3_LONG_OK
+    screen_capture_governance: VISUAL_PERCEPTION_BLOCKED
+  installed_continuity:
+    strict_deep_codesign: PASS
+    generated_bytecode_entries: 0
+    runtime_env_sha256: "b3d0d67471f6d620f53ad1ed9ee6db21a1e906fff643dd94050b7cd8def97029"
+    runtime_manifest_sha256: "63885f7012427761a98d107d6b137469ca99712644b6f68f7085bc6b24ce029c"
+    runtime_launchagent_sha256: "3b9d62af2ea4cc3ebb8f9b95be8c956ca567cfa5d6e59ef0482b0ffddcd2969d"
+    hashes_unchanged_from_pre_qualification: true
+  executor_probe_recovery_note: >-
+    One early read-only doctor experiment invoked the installed Python without the
+    canonical PYTHONDONTWRITEBYTECODE setting and created exactly two .pyc artifacts
+    at the probe timestamp, temporarily invalidating the sealed app signature. The
+    task immediately identified those exact task-induced files, removed only them and
+    their empty __pycache__ directory, and re-proved strict deep codesign plus zero
+    installed .pyc entries. No product source/config/service byte was changed.
+
+canonical_verify:
+  command: ./verify
+  exit_code: 1
+  tests_run: 650
+  duration_seconds: 186.247
+  failures: 1
+  errors: 0
+  skipped: 1
+  sole_failure: tests/test_task0140_qualification.py
+  classification: EXPECTED_QUALIFICATION_FAILURE_FROM_REPRODUCIBLE_G10_DEFECT
+
+acceptance_criteria:
+  AC-1: {status: PASS, evidence: "Frozen Runtime/schema/ToolContract identity unchanged."}
+  AC-2: {status: PASS, evidence: "x6 simultaneous active; seventh fail-before-PTY."}
+  AC-3: {status: PASS, evidence: "cheap/read/control calls usable at saturation."}
+  AC-4: {status: PASS, evidence: "160 cycles and all retention/output/cursor bounds proven."}
+  AC-5: {status: PASS, evidence: "zero sessions/leases/zombies and FD/thread delta zero."}
+  AC-6: {status: PASS, evidence: "filesystem, terminal/process and governance red teams fail closed."}
+  AC-7: {status: PASS, evidence: "repository CAS/receipt/publish race fixtures pass."}
+  AC-8: {status: FAIL, evidence: "F-0140-001 sentinel leaks to MCP SDK server traceback log."}
+  AC-9: {status: PASS, evidence: "screen capture and protected-runtime governance intact."}
+  AC-10: {status: PASS, evidence: "pinned Inspector and local-only Cisco scanner attempted and triaged."}
+  AC-11: {status: PASS, evidence: "installed OpenAI-only Runtime healthy and unchanged."}
+  AC-12: {status: FAIL, evidence: "Explicit FAIL outcome; canonical verify intentionally nonzero due the frozen defect."}
+
+repository_mutation:
+  production_files_changed: 0
+  requirements_txt_changed: false
+  requirements_lock_changed: false
+  runtime_venv_external_tools_installed: false
+  global_external_tools_installed: false
+  installed_runtime_mutated: false
+  service_management_mutated: false
+  authorized_durable_paths:
+    - tests/test_task0140_qualification.py
+    - .agent/tasks/TASK-0140/report-r1.yaml
+  ephemeral_root: build/.task-0140
+  ephemeral_removed_before_publication: true
+
+publication_receipts:
+  evidence_checkpoint:
+    stage:
+      path: tests/test_task0140_qualification.py
+      expected_sha256: "c7ddd546af3d80e04013e0dd38006de8985e620652aeb2e5e9449f3e4f6fdd6f"
+      staged_diff_receipt: "0b91afd1f84195d80664a0bbd25942760cd9ac5aa4dd1cf0c2a97ecfe00d63ca"
+      full_diff_bytes: 1611
+      patch_truncated: false
+    commit:
+      parent_sha: "16c730b49447820e9f91917906b2c45cffd48e0f"
+      tree_sha: "7e0309f1135fb9b8d953e954bb4ca8d5bcda3c14"
+      commit_sha: "cad66cf09ab760153ccf8fa81ba47e5c2fda1f39"
+      diff_receipt: "0b91afd1f84195d80664a0bbd25942760cd9ac5aa4dd1cf0c2a97ecfe00d63ca"
+      commit_receipt: "8565bbc9bfafac639248abed2aed34db2a0c26744360f9cd12eb1c8f9e4f040f"
+      post_commit_clean: true
+    publish:
+      status: published
+      expected_remote_head: "16c730b49447820e9f91917906b2c45cffd48e0f"
+      remote_head_before: "16c730b49447820e9f91917906b2c45cffd48e0f"
+      remote_head_after: "cad66cf09ab760153ccf8fa81ba47e5c2fda1f39"
+      published: true
+  report_closure_note: >-
+    The report-closing commit/publish receipt is necessarily produced only after
+    these report bytes are sealed; it cannot be self-referentially embedded without
+    creating another report commit. The Executor completion packet records the native
+    report stage/diff/commit/publish receipts and final remote proof.
+
+final_diff:
+  evidence_checkpoint: "adds only tests/test_task0140_qualification.py"
+  report_closure: "adds only .agent/tasks/TASK-0140/report-r1.yaml"
+  production_diff: none
+  dependency_diff: none
+  package_or_service_diff: none
+
+final_hygiene_at_report_seal:
+  evidence_checkpoint_head: "cad66cf09ab760153ccf8fa81ba47e5c2fda1f39"
+  evidence_checkpoint_origin_main: "cad66cf09ab760153ccf8fa81ba47e5c2fda1f39"
+  ahead_behind: "0/0"
+  worktree_index_before_report_write: CLEAN
+  remote_branches: [main]
+  open_prs: 0
+  task_owned_ephemeral_state_present: false
+  note: >-
+    Final post-report-publication local/remote/clean/main-only/zero-PR proof is emitted
+    in the Executor completion packet because it necessarily occurs after this file is
+    committed and published.
+
+architect_handoff:
+  required_action: >-
+    Independently review F-0140-001 and decide whether to authorize a successor repair
+    task. TASK-0140 itself intentionally performs no production repair.
+  automatic_successor: NONE
+  task_0141_authored_or_executed: false
