@@ -298,6 +298,15 @@ def _validate_operation_ledger(value: object, *, allow_legacy: bool = False) -> 
     return result
 
 
+SPLIT_RUNTIME_UNREGISTER_STATES = frozenset({"not-started", "in-flight", "observed-complete"})
+
+
+def _validate_predecessor_runtime_unregister_state(value: object) -> str:
+    if not isinstance(value, str) or value not in SPLIT_RUNTIME_UNREGISTER_STATES:
+        raise CutoverError("predecessor Runtime unregister state is invalid")
+    return value
+
+
 def _validate_transaction_phase(value: object) -> str:
     if not isinstance(value, str) or value not in TRANSACTION_PHASES:
         raise CutoverError("cutover transaction phase is invalid")
@@ -383,6 +392,8 @@ def _unregister_predecessor_runtime_for_refresh(
     modern_before: dict[str, object],
     runtime_before: dict[str, object],
     operations: dict[str, bool],
+    metadata: dict[str, object],
+    metadata_path: Path,
 ) -> None:
     main_before = modern_before.get("main_app")
     if main_before not in SERVICE_STATES:
@@ -406,12 +417,20 @@ def _unregister_predecessor_runtime_for_refresh(
         return
     if contract != "split-v1":
         raise CutoverError("predecessor ServiceManagement contract is unsupported")
+    if _validate_predecessor_runtime_unregister_state(
+        metadata.get("predecessor_runtime_unregister")
+    ) != "not-started":
+        raise CutoverError("split Runtime unregister transaction state is not startable")
+    metadata["predecessor_runtime_unregister"] = "in-flight"
+    _atomic_json(metadata_path, metadata)
     after = _service_management(target_app, "unregister-runtime")
     if after["runtime_agent"] not in ABSENT_SERVICE_STATES:
         raise CutoverError("pre-existing Runtime registration did not unregister for refresh")
     if after["main_app"] != main_before:
         raise CutoverError("split Runtime unregister changed main-app ownership unexpectedly")
     operations["runtime_unregistered"] = True
+    metadata["predecessor_runtime_unregister"] = "observed-complete"
+    _atomic_json(metadata_path, metadata)
 
 
 def _wait_for_service_absence(
@@ -912,10 +931,36 @@ def _restore_preexisting_modern_state(
         raise CutoverError("predecessor ServiceManagement contract metadata is invalid")
 
     restore_main = ledger["main_unregistered"] and main_before in REGISTERED_SERVICE_STATES
-    restore_runtime = (
-        ledger["runtime_unregistered"]
-        and runtime["classification"] in {"healthy-registered", "awaiting-approval"}
-    )
+    runtime_restorable = runtime["classification"] in {"healthy-registered", "awaiting-approval"}
+    restore_runtime = ledger["runtime_unregistered"] and runtime_restorable
+    unregister_state_value = metadata.get("predecessor_runtime_unregister")
+    if contract == "split-v1" and unregister_state_value is not None:
+        unregister_state = _validate_predecessor_runtime_unregister_state(unregister_state_value)
+        if unregister_state == "not-started":
+            restore_runtime = False
+        elif unregister_state == "observed-complete":
+            if not ledger["runtime_unregistered"]:
+                raise CutoverError("completed predecessor Runtime unregister is missing ledger evidence")
+            restore_runtime = runtime_restorable
+        else:
+            if ledger["runtime_unregistered"]:
+                raise CutoverError("in-flight predecessor Runtime unregister has premature ledger evidence")
+            state = _service_management(target_app, "status")
+            registration = state["runtime_agent"]
+            service = f"gui/{uid}/{_transaction_modern_runtime_label(metadata)}"
+            launchd_present = _modern_service_present(launchctl, service)
+            if registration in ABSENT_SERVICE_STATES:
+                if launchd_present:
+                    _wait_for_service_absence(launchctl, service)
+                restore_runtime = runtime_restorable
+            else:
+                current_classification = _classify_runtime_ownership(registration, launchd_present)
+                if (
+                    registration != runtime["registration_state"]
+                    or current_classification != runtime["classification"]
+                ):
+                    raise CutoverError("in-flight predecessor Runtime unregister state is ambiguous")
+                restore_runtime = False
     if not restore_main and not restore_runtime:
         return
 
@@ -1411,6 +1456,7 @@ def cutover_candidate(
             "modern_ownership_before": modern_before,
             "runtime_generation_changed": generation_changed,
             "predecessor_service_contract": predecessor_contract,
+            "predecessor_runtime_unregister": "not-started",
             "operations": operations,
             "runtime_config": runtime_config,
             "paths": {
@@ -1433,6 +1479,8 @@ def cutover_candidate(
                 modern_before=modern_before,
                 runtime_before=runtime_before,
                 operations=operations,
+                metadata=metadata,
+                metadata_path=transaction_dir / "metadata.json",
             )
             if predecessor_contract == "split-v1":
                 _wait_for_service_absence(launchctl, modern_runtime_service)

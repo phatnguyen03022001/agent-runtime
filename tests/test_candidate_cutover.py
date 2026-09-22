@@ -1797,6 +1797,144 @@ class CandidateCutoverTests(unittest.TestCase):
             self.assertLess(events.index("launchd-absent"), events.index("candidate-inspection"))
             self.assertLess(events.index("launchd-absent"), events.index("register-runtime"))
 
+    def test_split_v1_unregister_crash_after_consequence_restores_predecessor(self) -> None:
+        class ProcessDeath(BaseException):
+            pass
+
+        with tempfile.TemporaryDirectory() as raw:
+            predecessor_revision = "99518e694467be8525d813a4e638c4c8e0324365"
+            provenance, cutover, fx = self._fixture(raw, predecessor_revision=predecessor_revision)
+            modern_service = f"gui/501/{MODERN_RUNTIME_LABEL}"
+            fx["modern_state"].update(main_app="enabled", runtime_agent="enabled")
+            self._set_launch_program(
+                fx,
+                modern_service,
+                fx["target"] / "Contents/MacOS/AgentRuntimeRuntimeService",
+            )
+            helper = fx["candidate"] / "Contents/MacOS/AgentRuntimeRuntimeService"
+            helper.write_bytes(helper.read_bytes() + b"crash-after-unregister-consequence\n")
+            provenance.seal_candidate(fx["candidate"], fx["handoff"])
+            original_service_management = cutover._service_management
+
+            def service_management(app: Path, operation: str) -> dict[str, str]:
+                result = original_service_management(app, operation)
+                if operation == "unregister-runtime":
+                    raise ProcessDeath()
+                return result
+
+            cutover._service_management = service_management
+            with self.assertRaises(ProcessDeath):
+                self._cutover(cutover, fx)
+
+            metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
+            self.assertEqual(metadata["phase"], "PRE_SWAP")
+            self.assertEqual(metadata["predecessor_runtime_unregister"], "in-flight")
+            self.assertFalse(metadata["operations"]["runtime_unregistered"])
+            self.assertIn(fx["modern_state"]["runtime_agent"], {"not-found", "not-registered"})
+            self.assertNotIn(modern_service, set(json.loads(fx["launch_state"].read_text())))
+
+            fx["service_operations"].clear()
+            result = cutover.rollback_transaction(
+                fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501
+            )
+            self.assertEqual(result["status"], "ROLLED_BACK")
+            self.assertFalse(fx["transaction"].exists())
+            self.assertEqual(fx["modern_state"]["runtime_agent"], "enabled")
+            self.assertIn(modern_service, set(json.loads(fx["launch_state"].read_text())))
+            operations = [operation for _, operation in fx["service_operations"]]
+            self.assertIn("register-runtime", operations)
+
+    def test_split_v1_unregister_crash_before_consequence_does_not_invent_restore(self) -> None:
+        class ProcessDeath(BaseException):
+            pass
+
+        with tempfile.TemporaryDirectory() as raw:
+            predecessor_revision = "99518e694467be8525d813a4e638c4c8e0324365"
+            provenance, cutover, fx = self._fixture(raw, predecessor_revision=predecessor_revision)
+            modern_service = f"gui/501/{MODERN_RUNTIME_LABEL}"
+            fx["modern_state"].update(main_app="enabled", runtime_agent="enabled")
+            self._set_launch_program(
+                fx,
+                modern_service,
+                fx["target"] / "Contents/MacOS/AgentRuntimeRuntimeService",
+            )
+            helper = fx["candidate"] / "Contents/MacOS/AgentRuntimeRuntimeService"
+            helper.write_bytes(helper.read_bytes() + b"crash-before-unregister-consequence\n")
+            provenance.seal_candidate(fx["candidate"], fx["handoff"])
+            original_service_management = cutover._service_management
+
+            def service_management(app: Path, operation: str) -> dict[str, str]:
+                if operation == "unregister-runtime":
+                    raise ProcessDeath()
+                return original_service_management(app, operation)
+
+            cutover._service_management = service_management
+            with self.assertRaises(ProcessDeath):
+                self._cutover(cutover, fx)
+
+            metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
+            self.assertEqual(metadata["predecessor_runtime_unregister"], "in-flight")
+            self.assertFalse(metadata["operations"]["runtime_unregistered"])
+            self.assertEqual(fx["modern_state"]["runtime_agent"], "enabled")
+            self.assertIn(modern_service, set(json.loads(fx["launch_state"].read_text())))
+
+            fx["service_operations"].clear()
+            result = cutover.rollback_transaction(
+                fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501
+            )
+            self.assertEqual(result["status"], "ROLLED_BACK")
+            self.assertFalse(fx["transaction"].exists())
+            operations = [operation for _, operation in fx["service_operations"]]
+            self.assertNotIn("register-runtime", operations)
+            self.assertNotIn("unregister-runtime", operations)
+            self.assertEqual(fx["modern_state"]["runtime_agent"], "enabled")
+            self.assertIn(modern_service, set(json.loads(fx["launch_state"].read_text())))
+
+    def test_split_v1_unregister_crash_after_completion_before_swap_restores_predecessor(self) -> None:
+        class ProcessDeath(BaseException):
+            pass
+
+        with tempfile.TemporaryDirectory() as raw:
+            predecessor_revision = "99518e694467be8525d813a4e638c4c8e0324365"
+            provenance, cutover, fx = self._fixture(raw, predecessor_revision=predecessor_revision)
+            modern_service = f"gui/501/{MODERN_RUNTIME_LABEL}"
+            fx["modern_state"].update(main_app="enabled", runtime_agent="enabled")
+            self._set_launch_program(
+                fx,
+                modern_service,
+                fx["target"] / "Contents/MacOS/AgentRuntimeRuntimeService",
+            )
+            helper = fx["candidate"] / "Contents/MacOS/AgentRuntimeRuntimeService"
+            helper.write_bytes(helper.read_bytes() + b"crash-after-unregister-complete\n")
+            provenance.seal_candidate(fx["candidate"], fx["handoff"])
+            original_wait = cutover._wait_for_service_absence
+
+            def wait_then_crash(*args, **kwargs) -> None:
+                original_wait(*args, **kwargs)
+                raise ProcessDeath()
+
+            cutover._wait_for_service_absence = wait_then_crash
+            with self.assertRaises(ProcessDeath):
+                self._cutover(cutover, fx)
+
+            metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
+            self.assertEqual(metadata["phase"], "PRE_SWAP")
+            self.assertEqual(metadata["predecessor_runtime_unregister"], "observed-complete")
+            self.assertTrue(metadata["operations"]["runtime_unregistered"])
+            self.assertIn(fx["modern_state"]["runtime_agent"], {"not-found", "not-registered"})
+            self.assertNotIn(modern_service, set(json.loads(fx["launch_state"].read_text())))
+
+            fx["service_operations"].clear()
+            result = cutover.rollback_transaction(
+                fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=501
+            )
+            self.assertEqual(result["status"], "ROLLED_BACK")
+            self.assertFalse(fx["transaction"].exists())
+            self.assertEqual(fx["modern_state"]["runtime_agent"], "enabled")
+            self.assertIn(modern_service, set(json.loads(fx["launch_state"].read_text())))
+            operations = [operation for _, operation in fx["service_operations"]]
+            self.assertIn("register-runtime", operations)
+
     def test_unchanged_healthy_runtime_is_not_destructively_refreshed(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             _, cutover, fx = self._fixture(raw)
