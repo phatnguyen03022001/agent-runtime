@@ -1,7 +1,7 @@
 protocol_version: 3
 
 task_id: TASK-0138
-task_revision: 6
+task_revision: 7
 state: APPROVED
 
 origin:
@@ -338,6 +338,133 @@ revision_6:
     use an explicit operator transition with durable log/exit receipt rather than retrying
     through alternate ChatGPT tool surfaces.
 
+revision_7:
+  supersedes_revision_6_execution_authority: true
+  objective_changed: false
+  architecture_changed: false
+  revision_6_published_implementation:
+    commit: "e3c163a11999ffed86817fcad262ce7f1d0730d2"
+    tree: "2875d2b71adf00abc9098880a6ae8ba7227487da"
+    repository_state: CLEAN
+    remote_main: "e3c163a11999ffed86817fcad262ce7f1d0730d2"
+  revision_6_verification:
+    targeted_terminal_retention_stress: "20/20 PASS"
+    targeted_screen_timeout_stress: "20/20 PASS"
+    affected_modules: "37/37 PASS"
+    canonical_verify:
+      tests_run: 646
+      failures: 0
+      errors: 0
+      skipped: 1
+      result: PASS
+  abandoned_cutover_checkpoint:
+    schema: 5
+    status: PREPARED
+    phase: PRE_SWAP
+    candidate_source_revision: "e3c163a11999ffed86817fcad262ce7f1d0730d2"
+    candidate_source_tree: "2875d2b71adf00abc9098880a6ae8ba7227487da"
+    candidate_sha256: "82f8ad15d690902d8516134551c12cf3e1369dfdde817c5330aceda5f500601e"
+    installed_predecessor_revision: "99518e694467be8525d813a4e638c4c8e0324365"
+    installed_predecessor_tree: "691d338da9e36a876549d7d2d58ff148c113b1d4"
+    operation_ledger: all_false
+    recorded_runtime_before: healthy_registered_launchd_present
+    observed_runtime_registration: not-registered
+    observed_modern_launchd_service: absent
+    observed_main_app_registration: enabled
+    target_app_still_predecessor: true
+    transaction_app_swap_occurred: false
+  crash_consistency_root_cause: >-
+    The split-v1 refresh performs the external unregister-runtime consequence before the
+    transaction durably records enough state to reconstruct that consequence. If the installer
+    process dies after ServiceManagement unregister succeeds but before the in-memory operation
+    ledger is flushed, the host can be unregistered while metadata still records an all-false
+    operation ledger. Canonical rollback then lacks authority to restore the predecessor.
+  phase_a_host_recovery:
+    execution: OPERATOR_TRANSITION
+    reason: >-
+      Agent Runtime transport is unavailable because the predecessor Runtime registration and
+      launchd ownership were lost while the schema-5 transaction remained PRE_SWAP.
+    required_preflight:
+      - "transaction remains schema 5 / PREPARED / PRE_SWAP"
+      - "target app remains the exact predecessor closure and strict codesign passes"
+      - "main_app ServiceManagement state remains enabled"
+      - "runtime_agent ServiceManagement state remains not-registered"
+      - "modern Runtime launchd service remains absent"
+      - "candidate staged identity remains bound to e3c163a11999ffed86817fcad262ce7f1d0730d2 / 2875d2b71adf00abc9098880a6ae8ba7227487da"
+      - "repository main remains clean and canonical"
+    authorized_sequence:
+      - >-
+        Operator explicitly invokes the installed predecessor AgentRuntimeMenuBar
+        --service-management register-runtime exactly once.
+      - "Require resulting runtime_agent registration to be enabled."
+      - "Boundedly wait for the modern Runtime launchd service to become present."
+      - "Require tunnel healthz/readyz 200 and exact 19-tool Runtime reconnect."
+      - >-
+        Execute canonical ./install.sh --rollback-cutover exactly once to validate and close the
+        PRE_SWAP transaction envelope; do not delete transaction metadata manually.
+      - "Require transaction directory absent and predecessor identity/health restored."
+    forbidden:
+      - "Do not run a new full ./install.sh before recovery is complete."
+      - "Do not swap or install the staged candidate during recovery."
+      - "Do not manually edit transaction metadata."
+      - "Do not manually delete the transaction directory."
+      - "Do not infer transaction-owned unregister authority in recovery code for this incident."
+  corrective_boundary:
+    production_path: macos/candidate_cutover.py
+    regression_path: tests/test_candidate_cutover.py
+    semantics: >-
+      Close the split-v1 unregister crash window. Before any external ServiceManagement mutation
+      that can remove predecessor ownership, persist transaction state sufficient for rollback
+      or recovery to distinguish not-started, consequence-in-flight, and observed-complete
+      outcomes. After the external consequence, reconcile and durably finalize the recorded
+      operation before advancing toward app swap.
+    recovery_semantics: >-
+      For future process death at any split-v1 unregister boundary, canonical rollback/recovery
+      must be able to converge safely from exact persisted intent plus fresh live
+      ServiceManagement/launchd observation without guessing from an all-false ledger.
+    allowed_implementation_paths:
+      - macos/candidate_cutover.py
+      - tests/test_candidate_cutover.py
+    forbidden:
+      - "Do not weaken ownership classification."
+      - "Do not add fixed sleeps."
+      - "Do not alter public MCP APIs, Runtime version, Git identity behavior, start.sh, doctor, or package provenance."
+      - "Do not broaden recovery to unrelated historical schemas without concrete evidence."
+  required_regressions:
+    - >-
+      Simulate process death after split-v1 unregister-runtime has caused registration absence
+      but before the previous boolean ledger would have been flushed; recovery/rollback must
+      restore predecessor ownership and close safely.
+    - >-
+      Simulate process death before the external unregister consequence; recovery must not
+      invent a mutation that did not occur.
+    - >-
+      Simulate process death after unregister completion and launchd absence but before app
+      swap; predecessor restoration must be deterministic.
+    - "Preserve revision-5 delayed-launchd-disappearance synchronization proof."
+    - "Preserve unchanged-generation non-refresh behavior."
+  publication:
+    parent: >-
+      The revision-7 corrective implementation commit must be the sole direct child of the exact
+      revision-7 execution base supplied after this planning commit.
+    chain: "native repo_stage -> native repo_diff staged ReceiptV1 -> native repo_commit -> native repo_publish exact CAS"
+    fallback: >-
+      After Phase A restores the predecessor Runtime transport, native repo_commit is expected
+      to remain unavailable until final candidate installation if the predecessor does not
+      propagate Runtime Git identity. If and only if repo_commit returns
+      GIT_IDENTITY_UNAVAILABLE, one forward local implementation commit using existing Git
+      identity configuration is authorized. No shell staging/push, config mutation, amend,
+      reset, rebase, merge, or history rewrite.
+  canonical_install:
+    authority: >-
+      After revision-7 correction is published and the repository is clean, authorize exactly
+      one new canonical ./install.sh flow with validated repository packaging Python and the
+      existing installed signing Authority explicitly bound. Its internal ./verify must pass
+      before packaging/install/cutover consequence.
+    visibility: >-
+      Prefer operator-run installer with durable log and exit-code receipt so ChatGPT transport
+      loss cannot make verifier outcome unobservable.
+
 authority_sources:
   - source: ".agent/tasks/TASK-0137/review-r3.yaml@fe774afd0adbe1cb7aa665a5c3057774bf92f254"
     role: "Accepted runtime doctor and open final-freeze Git-identity propagation gap."
@@ -421,7 +548,7 @@ scope:
     - tests/test_candidate_cutover.py
     - tests/test_doctor.py
     - README.md
-    - .agent/tasks/TASK-0138/report-r6.yaml
+    - .agent/tasks/TASK-0138/report-r7.yaml
   scope_exception: >-
     Any required production change outside this set requires Architect judgment before mutation.
 
@@ -602,7 +729,7 @@ acceptance_criteria:
   - id: AC-10
     requirement: "Final Executor report is persisted through the now-working native mutation chain."
     evidence_required: >-
-      report-r6 staged by native repo_stage, staged ReceiptV1, committed by native repo_commit,
+      report-r7 staged by native repo_stage, staged ReceiptV1, committed by native repo_commit,
       published by native repo_publish exact CAS, and final local/remote main proof.
 
 executor_flow:
@@ -623,7 +750,7 @@ executor_flow:
   - "Fresh-prove transaction absent and final installed identity/health/codesign/closure."
   - "Capture candidate/provenance hashes, then delete repository build/ transient artifacts."
   - "Run final bounded repository/host audit."
-  - "Create report-r6 with complete freeze evidence."
+  - "Create report-r7 with complete freeze evidence."
   - "Stage report through native repo_stage, obtain ReceiptV1, commit through native repo_commit, publish through native repo_publish."
   - "Fresh-prove local HEAD = origin/main, ahead/behind 0/0, worktree/index clean, then stop for independent Architect review."
 
@@ -653,7 +780,7 @@ failure_policy:
   - "If live Runtime reconnect is required after cutover and the current context cannot reacquire the same 19-tool surface, preserve transaction state and return a continuation packet rather than bypassing native proof."
 
 reporting:
-  path: .agent/tasks/TASK-0138/report-r6.yaml
+  path: .agent/tasks/TASK-0138/report-r7.yaml
   owner: EXECUTOR
   state_on_success: NEEDS_REVIEW
   required_evidence:
