@@ -5,7 +5,9 @@ import json
 import os
 import subprocess
 import tempfile
+import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -181,11 +183,27 @@ class ScreenCaptureTests(unittest.TestCase):
                 encoding="utf-8",
             )
             helper.chmod(0o755)
-            with patch.object(screen_capture, "DEADLINE_SECONDS", 0.5):
-                with self.assertRaises(screen_capture.ScreenCaptureFailure) as caught:
-                    screen_capture._invoke_helper([str(helper), str(pid_file)])
+            with patch.object(screen_capture, "DEADLINE_SECONDS", 2.0):
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(screen_capture._invoke_helper, [str(helper), str(pid_file)])
+                    start_deadline = time.monotonic() + screen_capture.DEADLINE_SECONDS + 1.0
+                    pid = None
+                    while time.monotonic() < start_deadline:
+                        try:
+                            raw_pid = pid_file.read_text(encoding="utf-8")
+                        except FileNotFoundError:
+                            raw_pid = ""
+                        if raw_pid:
+                            pid = int(raw_pid)
+                            break
+                        if future.done():
+                            break
+                        time.sleep(0.01)
+                    if pid is None:
+                        self.fail("helper start was not observed before subprocess completion")
+                    with self.assertRaises(screen_capture.ScreenCaptureFailure) as caught:
+                        future.result(timeout=screen_capture.DEADLINE_SECONDS + 1.0)
             self.assertEqual(caught.exception.code, "DEADLINE_EXCEEDED")
-            pid = int(pid_file.read_text(encoding="utf-8"))
             with self.assertRaises(ProcessLookupError):
                 os.kill(pid, 0)
 

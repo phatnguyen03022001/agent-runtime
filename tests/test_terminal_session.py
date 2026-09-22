@@ -217,8 +217,13 @@ class TerminalSessionTests(unittest.TestCase):
             [sys.executable, "-u", "-c", f"import sys,time; sys.stdout.write('x'*{size}); sys.stdout.flush(); time.sleep(.5)"]
         )
         session_id = str(result["session_id"])
-        time.sleep(0.2)
-        polled = poll_terminal(session_id, cursor=0, wait_ms=0)
+        deadline = time.monotonic() + 3.0
+        while True:
+            polled = poll_terminal(session_id, cursor=0, wait_ms=100)
+            if polled["cursor_expired"]:
+                break
+            if time.monotonic() >= deadline:
+                self.fail("retention overflow condition was not observed before deadline")
         self.assertTrue(polled["cursor_expired"])
         self.assertGreater(polled["dropped_output_bytes"], 0)
         self.assertLessEqual(len(polled["output"].encode()), MAX_POLL_OUTPUT_BYTES)
