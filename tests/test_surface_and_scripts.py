@@ -66,8 +66,8 @@ class SurfaceAndScriptsTests(unittest.TestCase):
             self.assertEqual(
                 log.read_text().splitlines(),
                 [
-                    f"{repo / '.venv' / 'bin' / 'python'}|-m unittest discover -s tests -v",
-                    f"{repo / '.venv' / 'bin' / 'python'}|-m py_compile agent_runtime/module.py tests/test_module.py",
+                    f"{repo / '.venv' / 'bin' / 'python'}|-m py_compile verify_tests.py agent_runtime/module.py tests/test_module.py",
+                    f"{repo / '.venv' / 'bin' / 'python'}|{repo / 'verify_tests.py'}",
                 ],
             )
 
@@ -83,8 +83,8 @@ class SurfaceAndScriptsTests(unittest.TestCase):
             self.assertEqual(
                 log.read_text().splitlines(),
                 [
-                    f"{explicit}|-m unittest discover -s tests -v",
-                    f"{explicit}|-m py_compile agent_runtime/module.py tests/test_module.py",
+                    f"{explicit}|-m py_compile verify_tests.py agent_runtime/module.py tests/test_module.py",
+                    f"{explicit}|{repo / 'verify_tests.py'}",
                 ],
             )
 
@@ -99,8 +99,8 @@ class SurfaceAndScriptsTests(unittest.TestCase):
             self.assertEqual(
                 log.read_text().splitlines(),
                 [
-                    f"{temp / 'bin' / 'python3'}|-m unittest discover -s tests -v",
-                    f"{temp / 'bin' / 'python3'}|-m py_compile agent_runtime/module.py tests/test_module.py",
+                    f"{temp / 'bin' / 'python3'}|-m py_compile verify_tests.py agent_runtime/module.py tests/test_module.py",
+                    f"{temp / 'bin' / 'python3'}|{repo / 'verify_tests.py'}",
                 ],
             )
 
@@ -357,8 +357,10 @@ class SurfaceAndScriptsTests(unittest.TestCase):
 
     def test_verify_is_deterministic_and_does_not_start_tunnel(self) -> None:
         text = (ROOT / "verify").read_text()
-        self.assertIn("unittest discover", text)
+        self.assertIn("verify_tests.py", text)
         self.assertIn("py_compile", text)
+        self.assertLess(text.index("py_compile"), text.rindex('"$ROOT/verify_tests.py"'))
+        self.assertNotIn("unittest discover", text)
         self.assertNotIn("tunnel-client run", text)
         self.assertNotIn("CONTROL_PLANE_API_KEY", text)
 

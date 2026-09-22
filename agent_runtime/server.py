@@ -3,6 +3,7 @@ from __future__ import annotations
 import inspect
 import os
 import signal
+from functools import wraps
 from typing import Any, Callable, cast
 
 try:
@@ -165,6 +166,8 @@ _EXPECTED_TOOL_ERRORS = (
     RuntimeStateError,
     ProtectedRuntimeDenied,
 )
+_PRESERVED_TOOL_ERRORS = (ToolError, *_EXPECTED_TOOL_ERRORS, CapabilityFailure)
+_COMMON_TOOL_SANITIZER_MARKER = "__agent_runtime_common_tool_sanitizer__"
 
 
 def _call_runtime_tool(delegate: Callable[..., Any], *args: Any) -> Any:
@@ -172,6 +175,20 @@ def _call_runtime_tool(delegate: Callable[..., Any], *args: Any) -> Any:
         return delegate(*args)
     except _EXPECTED_TOOL_ERRORS as exc:
         raise ToolError(str(exc)) from None
+
+
+def _sanitize_unexpected_tool_exception(delegate: Callable[..., Any]) -> Callable[..., Any]:
+    @wraps(delegate)
+    def sanitized(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return delegate(*args, **kwargs)
+        except _PRESERVED_TOOL_ERRORS:
+            raise
+        except Exception:
+            raise RuntimeError("unexpected runtime tool failure") from None
+
+    setattr(sanitized, _COMMON_TOOL_SANITIZER_MARKER, True)
+    return sanitized
 
 
 def _capability_error_result(exc: CapabilityFailure) -> CallToolResult:
@@ -296,7 +313,8 @@ def _tool(
     )
 
     def decorator(function: Callable[..., Any]) -> Callable[..., Any]:
-        observed_function = timed_tool_wrapper(function.__name__, function)
+        sanitized_function = _sanitize_unexpected_tool_exception(function)
+        observed_function = timed_tool_wrapper(function.__name__, sanitized_function)
         registered_function: Callable[..., Any]
         if annotations is not None:
             try:
