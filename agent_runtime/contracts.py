@@ -20,6 +20,7 @@ ARGV_ITEM_MAX_BYTES = 16 * 1024
 ARGV_TOTAL_MAX_BYTES = 256 * 1024
 TERMINAL_DATA_MAX_BYTES = 64 * 1024
 SESSION_ID_MAX_CHARS = 128
+START_IDENTITY_CHARS = 32
 FS_READ_MAX_LINE = 2_147_483_647
 
 
@@ -67,6 +68,10 @@ SessionId = Annotated[
     StrictStr,
     Field(min_length=1, max_length=SESSION_ID_MAX_CHARS),
 ]
+StartIdentity = Annotated[
+    StrictStr,
+    Field(min_length=START_IDENTITY_CHARS, max_length=START_IDENTITY_CHARS, pattern=r"^[0-9a-f]{32}$"),
+]
 Cursor = Annotated[int, Field(strict=True, ge=0)]
 WaitMilliseconds = Annotated[int, Field(strict=True, ge=0, le=1000)]
 ControlAction = Literal["write", "interrupt", "terminate"]
@@ -99,7 +104,22 @@ class TerminalExecResult(_ClosedResult):
 
 class TerminalSessionResult(_ClosedResult):
     session_id: str
-    status: Literal["running", "exited"]
+    start_identity: str | None = None
+    status: Literal["starting", "running", "exited"]
+    lifecycle: Literal[
+        "STARTING",
+        "RUNNING",
+        "COMPLETED",
+        "START_FAILED_PRE_EFFECT",
+        "START_FAILED_POST_EFFECT",
+    ]
+    termination_reason: Literal[
+        "natural_exit",
+        "explicit_terminate",
+        "hard_wall_timeout",
+        "start_failed_pre_effect",
+        "start_failed_post_effect",
+    ] | None = None
     output: str
     next_cursor: int
     cursor_expired: bool
@@ -111,8 +131,12 @@ class TerminalSessionResult(_ClosedResult):
         self, handler: SerializerFunctionWrapHandler
     ) -> dict[str, object]:
         data = handler(self)
-        if self.status == "running":
+        if self.start_identity is None:
+            data.pop("start_identity", None)
+        if self.status != "exited":
             data.pop("exit_code", None)
+        if self.termination_reason is None:
+            data.pop("termination_reason", None)
         return data
 
 
@@ -676,8 +700,8 @@ class CapabilityDescriptor(_ClosedResult):
     lifecycle: CapabilityLifecycle
     authority: CapabilityAuthority
     annotations: CapabilityAnnotations
-    request_schema_version: Literal[1]
-    result_schema_version: Literal[1] | None
+    request_schema_version: Literal[1, 2]
+    result_schema_version: Literal[1, 2] | None
     bounds: dict[str, object]
     supported: bool
     available: bool

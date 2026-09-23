@@ -51,10 +51,9 @@ async def build_schema_bundle() -> dict[str, object]:
             if tool.output_schema is None
             else _canonical_schema_value(tool.output_schema)
         )
-        observed_result_version = None if result_schema is None else 1
-        if observed_result_version != binding.result_schema_version:
+        if (result_schema is None) != (binding.result_schema_version is None):
             raise RuntimeError(
-                f"{binding.contract.name} result schema version binding does not match registered MCP output schema"
+                f"{binding.contract.name} result schema availability binding does not match registered MCP output schema"
             )
         entries.append(
             {

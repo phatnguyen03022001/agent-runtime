@@ -2,7 +2,7 @@
 
 Agent Runtime is a **bounded local execution provider** for ChatGPT and other MCP clients on macOS. **MCP is the protocol**; the admitted product transport is OpenAI Secure MCP Tunnel, which keeps the Runtime private and uses outbound HTTPS rather than a public inbound listener.
 
-The qualified Runtime is version **0.2.0** with **exactly nineteen public tools**. The native app owns the installed lifecycle through **app-owned ServiceManagement**. The older LaunchAgent model is a **migration/rollback predecessor only**.
+The qualified Runtime is version **0.2.1** with **exactly nineteen public tools**. The native app owns the installed lifecycle through **app-owned ServiceManagement**. The older LaunchAgent model is a **migration/rollback predecessor only**.
 
 ## Supported product shape
 
@@ -11,7 +11,7 @@ The qualified Runtime is version **0.2.0** with **exactly nineteen public tools*
 - Package-owned Runtime bytes under `~/Applications/Agent Runtime.app`.
 - Canonical operator configuration at `~/Library/Application Support/Agent Runtime/runtime.env`, mode `0600`.
 - One protected singleton tunnel/listener on `127.0.0.1:8080`.
-- Runtime version 0.2.0, ToolContract Kernel v1, nineteen-tool public MCP contract.
+- Runtime version 0.2.1, ToolContract Kernel v1, nineteen-tool public MCP contract.
 - Runtime requires no blanket TCC permissions. Background Activity approval is operator/platform state.
 - Homebrew is optional; it is not an architecture prerequisite.
 
@@ -77,7 +77,7 @@ Detailed operator guidance:
 
 `.env.example` is the single checkout template. OpenAI transport settings are separate from Runtime settings. The installed product reads only canonical `runtime.env`; the checkout is not an installed credential dependency.
 
-`AGENT_RUNTIME_MAX_ACTIVE_SESSIONS` accepts 1 through 6. Inspect the effective value with `./start.sh session-limit`.
+`AGENT_RUNTIME_MAX_ACTIVE_SESSIONS` accepts 1 through 6. Inspect the effective value with `./start.sh session-limit`. Persistent terminal sessions have a fixed 3600-second running hard wall; client polling does not extend it. Completed terminal results are retained for up to 3600 seconds and at most 16 completed sessions.
 
 `AGENT_RUNTIME_MAX_PARALLELISM` accepts 1 through 10. Runtime admission still enforces its frozen safe ceiling. `capacity_observer` is advisory only.
 

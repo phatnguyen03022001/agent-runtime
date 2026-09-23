@@ -77,6 +77,7 @@ from .contracts import (
     RepoObserverMaxPaths,
     RepoObserverResult,
     SessionId,
+    StartIdentity,
     TerminalControlResult,
     TerminalData,
     TerminalDimension,
@@ -351,10 +352,17 @@ def terminal_exec(
     idempotent=TERMINAL_START_CONTRACT.annotations.idempotent,
     open_world=TERMINAL_START_CONTRACT.annotations.open_world,
 )
-def terminal_start(argv: Argv, cwd: AbsoluteCwd) -> TerminalSessionResult:
+def terminal_start(
+    argv: Argv,
+    cwd: AbsoluteCwd,
+    start_identity: StartIdentity | None = None,
+) -> TerminalSessionResult:
     """Start one literal argv in a bounded persistent PTY session; the process may modify the host."""
 
-    return cast(TerminalSessionResult, _call_runtime_tool(_start_terminal, argv, cwd))
+    return cast(
+        TerminalSessionResult,
+        _call_runtime_tool(_start_terminal, argv, cwd, start_identity),
+    )
 
 
 @_tool(
@@ -364,13 +372,23 @@ def terminal_start(argv: Argv, cwd: AbsoluteCwd) -> TerminalSessionResult:
     open_world=TERMINAL_POLL_CONTRACT.annotations.open_world,
 )
 def terminal_poll(
-    session_id: SessionId,
+    session_id: SessionId | None = None,
+    start_identity: StartIdentity | None = None,
     cursor: Cursor = 0,
     wait_ms: WaitMilliseconds = 0,
 ) -> TerminalSessionResult:
-    """Read bounded incremental PTY output and current session status."""
+    """Read bounded incremental PTY output by exactly one session selector."""
 
-    return cast(TerminalSessionResult, _call_runtime_tool(_poll_terminal, session_id, cursor, wait_ms))
+    return cast(
+        TerminalSessionResult,
+        _call_runtime_tool(
+            _poll_terminal,
+            session_id,
+            cursor,
+            wait_ms,
+            start_identity,
+        ),
+    )
 
 
 @_tool(

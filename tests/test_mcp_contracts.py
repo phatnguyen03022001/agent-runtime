@@ -86,6 +86,15 @@ def _integer_branch(schema: dict[str, object]) -> dict[str, object]:
     raise AssertionError(f"no integer branch in {schema!r}")
 
 
+def _string_branch(schema: dict[str, object]) -> dict[str, object]:
+    if schema.get("type") == "string":
+        return schema
+    for candidate in schema.get("anyOf", []):
+        if isinstance(candidate, dict) and candidate.get("type") == "string":
+            return candidate
+    raise AssertionError(f"no string branch in {schema!r}")
+
+
 class MCPContractTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self._env = patch.dict(
@@ -140,9 +149,17 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(start_props["argv"]["minItems"], 1)
         self.assertEqual(start_props["cwd"]["minLength"], 1)
         self.assertNotIn("pattern", start_props["cwd"])
+        start_identity = _string_branch(start_props["start_identity"])
+        self.assertEqual(start_identity["minLength"], 32)
+        self.assertEqual(start_identity["maxLength"], 32)
+        self.assertEqual(start_identity["pattern"], "^[0-9a-f]{32}$")
 
         poll_props = tools["terminal_poll"].input_schema["properties"]
-        self.assertEqual(poll_props["session_id"]["minLength"], 1)
+        self.assertEqual(_string_branch(poll_props["session_id"])["minLength"], 1)
+        poll_identity = _string_branch(poll_props["start_identity"])
+        self.assertEqual(poll_identity["minLength"], 32)
+        self.assertEqual(poll_identity["maxLength"], 32)
+        self.assertEqual(poll_identity["pattern"], "^[0-9a-f]{32}$")
         self.assertEqual(poll_props["cursor"]["minimum"], 0)
         self.assertEqual(poll_props["wait_ms"]["minimum"], 0)
         self.assertEqual(poll_props["wait_ms"]["maximum"], 1000)
@@ -293,7 +310,10 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
             },
             "terminal_start": {
                 "session_id",
+                "start_identity",
                 "status",
+                "lifecycle",
+                "termination_reason",
                 "output",
                 "next_cursor",
                 "cursor_expired",
@@ -302,7 +322,10 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
             },
             "terminal_poll": {
                 "session_id",
+                "start_identity",
                 "status",
+                "lifecycle",
+                "termination_reason",
                 "output",
                 "next_cursor",
                 "cursor_expired",

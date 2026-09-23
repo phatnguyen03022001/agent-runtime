@@ -5,6 +5,7 @@ import errno
 import fcntl
 import os
 import pty
+import re
 import secrets
 import signal
 import struct
@@ -39,7 +40,8 @@ from .tool_contract import (
 SESSION_LIMIT_ENV = "AGENT_RUNTIME_MAX_ACTIVE_SESSIONS"
 MAX_ACTIVE_SESSIONS = 6
 DEFAULT_SESSION_LIMIT = MAX_ACTIVE_SESSIONS
-IDLE_TTL_SECONDS = 600.0
+RUNNING_HARD_WALL_SECONDS = 3600.0
+COMPLETED_RETENTION_SECONDS = 3600.0
 MAX_RETAINED_OUTPUT_BYTES = 64 * 1024
 MAX_POLL_OUTPUT_BYTES = 16 * 1024
 MAX_RETAINED_COMPLETED_SESSIONS = 16
@@ -53,23 +55,38 @@ TERMINAL_START_CONTRACT = ToolContract(
     tool_class=ToolClass.PROCESS,
     authority=Authority(True, NetworkAuthority.BOUNDED, MutationAuthority.DESTRUCTIVE),
     annotations=ToolAnnotations(False, True, False, True),
-    preconditions={"cwd": "validated-workspace-descendant", "argv": "literal-nonempty-shell-false-protected-runtime-filtered"},
+    preconditions={
+        "cwd": "validated-workspace-descendant",
+        "argv": "literal-nonempty-shell-false-protected-runtime-filtered",
+        "start_identity": "optional-exactly-32-lowercase-hex",
+    },
     bounds={
         "argv_items": ARGV_MAX_ITEMS,
         "argv_item_utf8_bytes": ARGV_ITEM_MAX_BYTES,
         "argv_total_utf8_bytes": ARGV_TOTAL_MAX_BYTES,
         "active_sessions": MAX_ACTIVE_SESSIONS,
         "retained_output_bytes": MAX_RETAINED_OUTPUT_BYTES,
-        "idle_ttl_milliseconds": int(IDLE_TTL_SECONDS * 1000),
+        "running_hard_wall_milliseconds": int(RUNNING_HARD_WALL_SECONDS * 1000),
+        "completed_retention_milliseconds": int(COMPLETED_RETENTION_SECONDS * 1000),
+        "retained_completed_sessions": MAX_RETAINED_COMPLETED_SESSIONS,
     },
-    postconditions={"pty_process_group": True, "lifecycle": "managed-by-session-tools"},
+    postconditions={
+        "pty_process_group": True,
+        "lifecycle": "managed-by-session-tools",
+        "keyed_start": "reserve-before-popen-idempotent-within-runtime-incarnation",
+    },
 )
 TERMINAL_POLL_CONTRACT = ToolContract(
     name="terminal_poll",
     tool_class=ToolClass.PROCESS,
     authority=Authority(False, NetworkAuthority.NONE, MutationAuthority.BOUNDED),
     annotations=ToolAnnotations(False, False, False, False),
-    preconditions={"session_id": "known-or-retained-session", "cursor": "non-negative"},
+    preconditions={
+        "selector": "exactly-one-of-session_id-or-start_identity",
+        "session_id": "known-or-retained-session",
+        "start_identity": "known-or-retained-keyed-operation",
+        "cursor": "non-negative",
+    },
     bounds={"poll_output_bytes": MAX_POLL_OUTPUT_BYTES, "wait_milliseconds": MAX_WAIT_MS},
     postconditions={"output": "bounded-incremental", "process_control": False},
 )
@@ -115,15 +132,20 @@ def _validated_session_limit(value: int) -> int:
 @dataclass
 class _Session:
     session_id: str
-    process: subprocess.Popen[bytes]
-    master_fd: int
     cwd: str
     argv: list[str]
     last_activity: float
+    created_at: float = 0.0
+    start_identity: str | None = None
+    process: subprocess.Popen[bytes] | None = None
+    master_fd: int = -1
     base_cursor: int = 0
     output: bytearray = field(default_factory=bytearray)
     status: str = "running"
+    lifecycle: str = "RUNNING"
+    termination_reason: str | None = None
     exit_code: int | None = None
+    completed_at: float | None = None
     finalized: bool = False
     lock: threading.RLock = field(default_factory=threading.RLock)
     changed: threading.Condition = field(init=False)
@@ -144,14 +166,16 @@ class TerminalSessionManager:
         self,
         *,
         clock: Callable[[], float] = time.monotonic,
-        idle_ttl_seconds: float = IDLE_TTL_SECONDS,
+        running_hard_wall_seconds: float = RUNNING_HARD_WALL_SECONDS,
+        completed_retention_seconds: float = COMPLETED_RETENTION_SECONDS,
         reaper_interval: float = _REAPER_INTERVAL_SECONDS,
         max_active_sessions: int | None = None,
         admission: HeavyExecutionAdmission | None = None,
         start_reaper: bool = True,
     ) -> None:
         self._clock = clock
-        self._idle_ttl_seconds = float(idle_ttl_seconds)
+        self._running_hard_wall_seconds = float(running_hard_wall_seconds)
+        self._completed_retention_seconds = float(completed_retention_seconds)
         self._reaper_interval = float(reaper_interval)
         self.max_active_sessions = (
             effective_session_limit()
@@ -160,6 +184,7 @@ class TerminalSessionManager:
         )
         self._admission = heavy_execution_admission() if admission is None else admission
         self._sessions: dict[str, _Session] = {}
+        self._start_identities: dict[str, str] = {}
         self._lock = threading.RLock()
         self._stop_reaper = threading.Event()
         self._reaper_thread: threading.Thread | None = None
@@ -171,55 +196,120 @@ class TerminalSessionManager:
             )
             self._reaper_thread.start()
 
-    def start(self, argv: list[str], cwd: str) -> dict[str, Any]:
+    def start(
+        self,
+        argv: list[str],
+        cwd: str,
+        start_identity: str | None = None,
+    ) -> dict[str, Any]:
+        checked_identity = self._validated_start_identity(start_identity)
         checked_argv = _validated_argv(argv)
         _PROTECTED_GUARD.check(checked_argv, tool_name="terminal_start")
-        checked_cwd = _validated_cwd(cwd, _workspace_root())
+        checked_cwd = str(_validated_cwd(cwd, _workspace_root()))
+        exact_spec = (checked_cwd, tuple(checked_argv))
+        now = self._clock()
 
+        capacity_error: RuntimeStateError | None = None
         with self._lock:
-            active = sum(session.status == "running" for session in self._sessions.values())
-            if active >= self.max_active_sessions:
-                raise RuntimeStateError(
+            self._evict_completed_locked(now)
+            if checked_identity is not None:
+                existing_id = self._start_identities.get(checked_identity)
+                if existing_id is not None:
+                    existing = self._sessions.get(existing_id)
+                    if existing is None:
+                        self._start_identities.pop(checked_identity, None)
+                    else:
+                        existing_spec = (existing.cwd, tuple(existing.argv))
+                        if existing_spec != exact_spec:
+                            raise RuntimeStateError(
+                                "START_IDENTITY_CONFLICT: start_identity is already bound to a different cwd/argv"
+                            )
+                        return self._session_result(existing, cursor=0)
+
+            session = _Session(
+                session_id=self._new_session_id_locked(),
+                cwd=checked_cwd,
+                argv=list(checked_argv),
+                created_at=now,
+                last_activity=now,
+                start_identity=checked_identity,
+                status="starting",
+                lifecycle="STARTING",
+                timing_context=current_call_context(),
+            )
+            self._sessions[session.session_id] = session
+            if checked_identity is not None:
+                self._start_identities[checked_identity] = session.session_id
+
+            active = sum(
+                retained.status in {"starting", "running"}
+                for retained in self._sessions.values()
+            )
+            if active > self.max_active_sessions:
+                if checked_identity is None:
+                    self._remove_session_locked(session.session_id)
+                else:
+                    self._mark_pre_effect_locked(session, now)
+                    self._sessions.pop(session.session_id)
+                    self._sessions[session.session_id] = session
+                    self._evict_completed_locked(now)
+                capacity_error = RuntimeStateError(
                     f"configured maximum {self.max_active_sessions} active terminal sessions reached"
                 )
 
-            lease = self._admission.acquire()
-            master_fd = slave_fd = -1
-            try:
-                master_fd, slave_fd = pty.openpty()
-                process = subprocess.Popen(
-                    checked_argv,
-                    cwd=str(checked_cwd),
-                    env=_minimal_child_env(),
-                    stdin=slave_fd,
-                    stdout=slave_fd,
-                    stderr=slave_fd,
-                    shell=False,
-                    start_new_session=True,
-                    close_fds=True,
-                )
-            except BaseException:
-                if master_fd >= 0:
-                    os.close(master_fd)
-                if slave_fd >= 0:
-                    os.close(slave_fd)
-                lease.release()
-                raise
-            os.close(slave_fd)
+        if capacity_error is not None:
+            raise capacity_error
 
-            session = _Session(
-                session_id=secrets.token_hex(8),
-                process=process,
-                master_fd=master_fd,
-                cwd=str(checked_cwd),
-                argv=checked_argv,
-                last_activity=self._clock(),
-                timing_context=current_call_context(),
-                process_started_wall=time.time(),
-                process_started_mono=time.monotonic(),
-                heavy_lease=lease,
+        try:
+            lease = self._admission.acquire()
+        except BaseException:
+            if checked_identity is None:
+                with self._lock:
+                    self._remove_session_locked(session.session_id)
+            else:
+                self._terminalize_pre_effect(session)
+            raise
+        with session.cleanup_lock:
+            session.heavy_lease = lease
+
+        master_fd = slave_fd = -1
+        process: subprocess.Popen[bytes] | None = None
+        try:
+            master_fd, slave_fd = pty.openpty()
+            process = subprocess.Popen(
+                checked_argv,
+                cwd=checked_cwd,
+                env=_minimal_child_env(),
+                stdin=slave_fd,
+                stdout=slave_fd,
+                stderr=slave_fd,
+                shell=False,
+                start_new_session=True,
+                close_fds=True,
             )
-            self._sessions[session.session_id] = session
+        except BaseException:
+            if master_fd >= 0:
+                os.close(master_fd)
+            if slave_fd >= 0:
+                os.close(slave_fd)
+            if checked_identity is None:
+                self._release_lease(session)
+                with self._lock:
+                    self._remove_session_locked(session.session_id)
+            else:
+                self._terminalize_pre_effect(session)
+            raise
+
+        os.close(slave_fd)
+        with session.cleanup_lock:
+            session.process = process
+            session.master_fd = master_fd
+            session.process_started_wall = time.time()
+            session.process_started_mono = time.monotonic()
+            with session.changed:
+                session.status = "running"
+                session.lifecycle = "RUNNING"
+                session.changed.notify_all()
 
         try:
             threading.Thread(
@@ -235,19 +325,25 @@ class TerminalSessionManager:
                 daemon=True,
             ).start()
         except BaseException:
-            self._cleanup_process(session, "startup_failure")
-            with self._lock:
-                self._sessions.pop(session.session_id, None)
+            self._cleanup_process(session, "start_failed_post_effect")
+            if checked_identity is None:
+                with self._lock:
+                    self._remove_session_locked(session.session_id)
             raise
-        return self.poll(session.session_id, cursor=0, wait_ms=0)
+        return self.poll(session_id=session.session_id, cursor=0, wait_ms=0)
 
-    def poll(self, session_id: str, cursor: int = 0, wait_ms: int = 0) -> dict[str, Any]:
-        session = self._get_session(session_id)
+    def poll(
+        self,
+        session_id: str | None = None,
+        cursor: int = 0,
+        wait_ms: int = 0,
+        start_identity: str | None = None,
+    ) -> dict[str, Any]:
+        session = self._resolve_session(session_id=session_id, start_identity=start_identity)
         checked_cursor = self._validated_cursor(cursor)
         checked_wait_ms = self._validated_wait_ms(wait_ms)
 
         self._touch(session)
-        waited = False
         with session.changed:
             if (
                 checked_wait_ms
@@ -255,37 +351,7 @@ class TerminalSessionManager:
                 and checked_cursor == session.base_cursor + len(session.output)
             ):
                 session.changed.wait(checked_wait_ms / 1000.0)
-                waited = True
-
-        if waited:
-            self._touch(session)
-
-        with session.changed:
-            retained_end = session.base_cursor + len(session.output)
-            if checked_cursor > retained_end:
-                raise RuntimeValidationError("cursor is ahead of available session output")
-
-            cursor_expired = checked_cursor < session.base_cursor
-            dropped = max(0, session.base_cursor - checked_cursor)
-            start_cursor = max(checked_cursor, session.base_cursor)
-            start_index = start_cursor - session.base_cursor
-            raw = bytes(
-                session.output[
-                    start_index : start_index + MAX_POLL_OUTPUT_BYTES
-                ]
-            )
-            next_cursor = start_cursor + len(raw)
-            result: dict[str, Any] = {
-                "session_id": session.session_id,
-                "status": session.status,
-                "output": raw.decode("utf-8", errors="replace"),
-                "next_cursor": next_cursor,
-                "cursor_expired": cursor_expired,
-                "dropped_output_bytes": dropped,
-            }
-            if session.status != "running":
-                result["exit_code"] = session.exit_code
-            return result
+        return self._session_result(session, cursor=checked_cursor)
 
     def control(
         self,
@@ -322,8 +388,11 @@ class TerminalSessionManager:
             self._require_no_arguments(data, rows, cols)
             with session.cleanup_lock:
                 self._require_running(session)
+                process = session.process
+                if process is None:
+                    raise RuntimeStateError("terminal session is not running")
                 try:
-                    os.killpg(session.process.pid, signal.SIGINT)
+                    os.killpg(process.pid, signal.SIGINT)
                 except ProcessLookupError:
                     pass
                 self._touch(session)
@@ -331,12 +400,8 @@ class TerminalSessionManager:
 
         if action == "terminate":
             self._require_no_arguments(data, rows, cols)
-            with session.cleanup_lock:
-                self._cleanup_process(session, "explicit_terminate")
-                result = self._control_result(session)
-                with self._lock:
-                    self._sessions.pop(session.session_id, None)
-                return result
+            self._cleanup_process(session, "explicit_terminate")
+            return self._control_result(session)
 
         if action == "resize":
             if data is not None:
@@ -361,26 +426,36 @@ class TerminalSessionManager:
 
         raise RuntimeValidationError("action must be one of: write, interrupt, terminate, resize")
 
-    def reap_idle_once(self) -> list[str]:
+    def reap_once(self) -> list[str]:
         now = self._clock()
         with self._lock:
-            candidates = [
-                session_id
-                for session_id, session in self._sessions.items()
-                if now - session.last_activity >= self._idle_ttl_seconds
-            ]
-        expired: list[str] = []
-        for session_id in candidates:
-            with self._lock:
-                session = self._sessions.get(session_id)
-            if session is None:
-                continue
-            if not self._cleanup_process(session, "idle_reap"):
-                continue
-            with self._lock:
-                if self._sessions.pop(session_id, None) is not None:
-                    expired.append(session_id)
-        return expired
+            sessions = list(self._sessions.values())
+        affected: list[str] = []
+        for session in sessions:
+            if session.status in {"starting", "running"}:
+                if now - session.created_at < self._running_hard_wall_seconds:
+                    continue
+                if session.process is None:
+                    if session.start_identity is not None:
+                        self._terminalize_pre_effect(session)
+                    else:
+                        self._release_lease(session)
+                        with self._lock:
+                            self._remove_session_locked(session.session_id)
+                else:
+                    self._cleanup_process(session, "hard_wall_timeout")
+                affected.append(session.session_id)
+
+        with self._lock:
+            before = set(self._sessions)
+            self._evict_completed_locked(now)
+            removed = before - set(self._sessions)
+        affected.extend(sorted(removed))
+        return affected
+
+    def reap_idle_once(self) -> list[str]:
+        """Compatibility shim for internal callers; reaping is hard-wall/retention based."""
+        return self.reap_once()
 
     def has_session(self, session_id: str) -> bool:
         with self._lock:
@@ -394,11 +469,37 @@ class TerminalSessionManager:
         with self._lock:
             sessions = list(self._sessions.values())
         for session in sessions:
-            self._cleanup_process(session, "shutdown")
+            if session.process is not None and not session.finalized:
+                self._cleanup_process(session, "shutdown", retain=False)
+            else:
+                self._release_lease(session)
         with self._lock:
             self._sessions.clear()
+            self._start_identities.clear()
 
-    def _get_session(self, session_id: str) -> _Session:
+    def _resolve_session(
+        self,
+        *,
+        session_id: str | None,
+        start_identity: str | None,
+    ) -> _Session:
+        if (session_id is None) == (start_identity is None):
+            raise RuntimeValidationError(
+                "terminal_poll requires exactly one of session_id or start_identity"
+            )
+        if start_identity is not None:
+            checked_identity = self._validated_start_identity(start_identity)
+            if checked_identity is None:
+                raise RuntimeValidationError("START_IDENTITY_UNKNOWN")
+            with self._lock:
+                mapped = self._start_identities.get(checked_identity)
+                session = None if mapped is None else self._sessions.get(mapped)
+            if session is None:
+                raise RuntimeValidationError("START_IDENTITY_UNKNOWN")
+            return session
+        return self._get_session(session_id)
+
+    def _get_session(self, session_id: str | None) -> _Session:
         if not isinstance(session_id, str) or not session_id:
             raise RuntimeValidationError("session_id must be a non-empty string")
         with self._lock:
@@ -431,45 +532,81 @@ class TerminalSessionManager:
                 session.changed.notify_all()
 
     def _monitor(self, session: _Session) -> None:
-        session.process.wait()
+        process = session.process
+        if process is None:
+            return
+        process.wait()
         self._cleanup_process(session, "natural_exit")
 
-    def _cleanup_process(self, session: _Session, termination_state: str = "natural_exit") -> bool:
+    def _cleanup_process(
+        self,
+        session: _Session,
+        termination_state: str = "natural_exit",
+        *,
+        retain: bool = True,
+    ) -> bool:
         # Lock order: per-session cleanup_lock -> session.lock -> manager._lock.
-        # Never acquire cleanup_lock while holding session.lock or manager._lock.
         with session.cleanup_lock:
             if session.finalized:
                 return False
-            if (
-                termination_state == "idle_reap"
-                and self._clock() - session.last_activity < self._idle_ttl_seconds
-            ):
+            process = session.process
+            if process is None:
                 return False
-            try:
-                _terminate_process_group(session.process)
-                session.reader_done.wait(_READER_DRAIN_SECONDS)
-                with session.changed:
-                    session.exit_code = session.process.returncode
-                    session.status = "exited"
-                    try:
-                        os.close(session.master_fd)
-                    except OSError:
-                        pass
-                    session.finalized = True
-                    self._retain_completed_session(session)
-                    session.changed.notify_all()
-                emit_process_end(
-                    session.timing_context,
-                    tool_name="terminal_start",
-                    process_kind="persistent_pty",
-                    started_wall=session.process_started_wall,
-                    started_mono=session.process_started_mono,
-                    termination_state=termination_state,
+            _terminate_process_group(process)
+            session.reader_done.wait(_READER_DRAIN_SECONDS)
+            with session.changed:
+                session.exit_code = process.returncode
+                session.status = "exited"
+                session.lifecycle = (
+                    "START_FAILED_POST_EFFECT"
+                    if termination_state == "start_failed_post_effect"
+                    else "COMPLETED"
                 )
-                return True
-            finally:
-                if session.finalized and session.heavy_lease is not None:
-                    session.heavy_lease.release()
+                session.termination_reason = termination_state
+                session.completed_at = self._clock()
+                try:
+                    if session.master_fd >= 0:
+                        os.close(session.master_fd)
+                except OSError:
+                    pass
+                session.finalized = True
+                session.changed.notify_all()
+
+            self._release_lease(session)
+            if retain:
+                self._retain_completed_session(session)
+
+            emit_process_end(
+                session.timing_context,
+                tool_name="terminal_start",
+                process_kind="persistent_pty",
+                started_wall=session.process_started_wall,
+                started_mono=session.process_started_mono,
+                termination_state=termination_state,
+            )
+            return True
+
+    def _terminalize_pre_effect(self, session: _Session) -> None:
+        with session.cleanup_lock:
+            if session.finalized:
+                return
+            with session.changed:
+                session.status = "exited"
+                session.lifecycle = "START_FAILED_PRE_EFFECT"
+                session.termination_reason = "start_failed_pre_effect"
+                session.completed_at = self._clock()
+                session.finalized = True
+                session.changed.notify_all()
+            self._release_lease(session)
+            self._retain_completed_session(session)
+
+    @staticmethod
+    def _mark_pre_effect_locked(session: _Session, now: float) -> None:
+        session.status = "exited"
+        session.lifecycle = "START_FAILED_PRE_EFFECT"
+        session.termination_reason = "start_failed_pre_effect"
+        session.completed_at = now
+        session.finalized = True
 
     def _retain_completed_session(self, session: _Session) -> None:
         with self._lock:
@@ -477,18 +614,88 @@ class TerminalSessionManager:
                 return
             self._sessions.pop(session.session_id)
             self._sessions[session.session_id] = session
-            completed_ids = [
-                session_id
-                for session_id, retained in self._sessions.items()
-                if retained.status == "exited"
-            ]
-            excess = len(completed_ids) - MAX_RETAINED_COMPLETED_SESSIONS
-            for session_id in completed_ids[:max(0, excess)]:
-                self._sessions.pop(session_id, None)
+            self._evict_completed_locked(self._clock())
+
+    def _evict_completed_locked(self, now: float) -> None:
+        expired = [
+            session_id
+            for session_id, retained in self._sessions.items()
+            if retained.status == "exited"
+            and retained.completed_at is not None
+            and now - retained.completed_at >= self._completed_retention_seconds
+        ]
+        for session_id in expired:
+            self._remove_session_locked(session_id)
+
+        completed_ids = [
+            session_id
+            for session_id, retained in self._sessions.items()
+            if retained.status == "exited"
+        ]
+        excess = len(completed_ids) - MAX_RETAINED_COMPLETED_SESSIONS
+        for session_id in completed_ids[: max(0, excess)]:
+            self._remove_session_locked(session_id)
+
+    def _remove_session_locked(self, session_id: str) -> None:
+        session = self._sessions.pop(session_id, None)
+        if (
+            session is not None
+            and session.start_identity is not None
+            and self._start_identities.get(session.start_identity) == session_id
+        ):
+            self._start_identities.pop(session.start_identity, None)
+
+    def _release_lease(self, session: _Session) -> None:
+        lease = session.heavy_lease
+        if lease is not None:
+            lease.release()
+            session.heavy_lease = None
+
+    def _session_result(self, session: _Session, *, cursor: int) -> dict[str, Any]:
+        with session.changed:
+            retained_end = session.base_cursor + len(session.output)
+            if cursor > retained_end:
+                raise RuntimeValidationError("cursor is ahead of available session output")
+            cursor_expired = cursor < session.base_cursor
+            dropped = max(0, session.base_cursor - cursor)
+            start_cursor = max(cursor, session.base_cursor)
+            start_index = start_cursor - session.base_cursor
+            raw = bytes(session.output[start_index : start_index + MAX_POLL_OUTPUT_BYTES])
+            result: dict[str, Any] = {
+                "session_id": session.session_id,
+                "status": session.status,
+                "lifecycle": session.lifecycle,
+                "output": raw.decode("utf-8", errors="replace"),
+                "next_cursor": start_cursor + len(raw),
+                "cursor_expired": cursor_expired,
+                "dropped_output_bytes": dropped,
+            }
+            if session.start_identity is not None:
+                result["start_identity"] = session.start_identity
+            if session.status == "exited":
+                result["exit_code"] = session.exit_code
+                result["termination_reason"] = session.termination_reason
+            return result
 
     def _touch(self, session: _Session) -> None:
         with session.cleanup_lock:
             session.last_activity = self._clock()
+
+    def _new_session_id_locked(self) -> str:
+        while True:
+            candidate = secrets.token_hex(8)
+            if candidate not in self._sessions:
+                return candidate
+
+    @staticmethod
+    def _validated_start_identity(start_identity: str | None) -> str | None:
+        if start_identity is None:
+            return None
+        if not isinstance(start_identity, str) or re.fullmatch(r"[0-9a-f]{32}", start_identity) is None:
+            raise RuntimeValidationError(
+                "start_identity must be exactly 32 lowercase hexadecimal characters"
+            )
+        return start_identity
 
     @staticmethod
     def _pending_input_suffix(text: str) -> str:
@@ -531,7 +738,12 @@ class TerminalSessionManager:
     @staticmethod
     def _require_running(session: _Session) -> None:
         with session.lock:
-            if session.status != "running" or session.process.poll() is not None:
+            process = session.process
+            if (
+                session.status != "running"
+                or process is None
+                or process.poll() is not None
+            ):
                 raise RuntimeStateError("terminal session is not running")
 
     @staticmethod
@@ -547,19 +759,33 @@ class TerminalSessionManager:
 
     def _reaper_loop(self) -> None:
         while not self._stop_reaper.wait(self._reaper_interval):
-            self.reap_idle_once()
+            self.reap_once()
 
 
 _MANAGER = TerminalSessionManager()
 atexit.register(_MANAGER.shutdown)
 
 
-def start_terminal(argv: list[str], cwd: str) -> dict[str, Any]:
-    return _MANAGER.start(argv, cwd)
+def start_terminal(
+    argv: list[str],
+    cwd: str,
+    start_identity: str | None = None,
+) -> dict[str, Any]:
+    return _MANAGER.start(argv, cwd, start_identity)
 
 
-def poll_terminal(session_id: str, cursor: int = 0, wait_ms: int = 0) -> dict[str, Any]:
-    return _MANAGER.poll(session_id, cursor, wait_ms)
+def poll_terminal(
+    session_id: str | None = None,
+    cursor: int = 0,
+    wait_ms: int = 0,
+    start_identity: str | None = None,
+) -> dict[str, Any]:
+    return _MANAGER.poll(
+        session_id=session_id,
+        cursor=cursor,
+        wait_ms=wait_ms,
+        start_identity=start_identity,
+    )
 
 
 def control_terminal(

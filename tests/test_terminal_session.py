@@ -398,6 +398,244 @@ class TerminalSessionTests(unittest.TestCase):
             6,
         )
 
+    def test_concurrent_same_key_same_spec_spawns_exactly_once(self) -> None:
+        from agent_runtime.capacity import HeavyExecutionAdmission
+        from agent_runtime.session import TerminalSessionManager
+
+        manager = TerminalSessionManager(
+            max_active_sessions=6, admission=HeavyExecutionAdmission(6), start_reaper=False
+        )
+        self.addCleanup(manager.shutdown)
+        start_identity = "a" * 32
+        argv = [sys.executable, "-u", "-c", "import time; time.sleep(30)"]
+        barrier = threading.Barrier(8)
+        call_count = 0
+        call_lock = threading.Lock()
+        real_popen = subprocess.Popen
+
+        def counted_popen(*args, **kwargs):
+            nonlocal call_count
+            with call_lock:
+                call_count += 1
+            return real_popen(*args, **kwargs)
+
+        def launch() -> dict[str, object]:
+            barrier.wait()
+            return manager.start(argv, str(self.cwd), start_identity)
+
+        with patch("agent_runtime.session.subprocess.Popen", side_effect=counted_popen):
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                results = list(executor.map(lambda _index: launch(), range(8)))
+
+        self.assertEqual(call_count, 1)
+        self.assertEqual({str(result["session_id"]) for result in results}, {str(results[0]["session_id"])})
+        self.assertEqual({result["start_identity"] for result in results}, {start_identity})
+        manager.control(str(results[0]["session_id"]), "terminate")
+
+    def test_same_key_different_spec_conflicts_without_second_spawn(self) -> None:
+        from agent_runtime.capacity import HeavyExecutionAdmission
+        from agent_runtime.session import TerminalSessionManager
+
+        manager = TerminalSessionManager(
+            max_active_sessions=2, admission=HeavyExecutionAdmission(2), start_reaper=False
+        )
+        self.addCleanup(manager.shutdown)
+        start_identity = "b" * 32
+        argv = [sys.executable, "-u", "-c", "import time; time.sleep(30)"]
+        other_cwd = self.root / "other"
+        other_cwd.mkdir()
+        real_popen = subprocess.Popen
+        calls = 0
+
+        def counted_popen(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            return real_popen(*args, **kwargs)
+
+        with patch("agent_runtime.session.subprocess.Popen", side_effect=counted_popen):
+            first = manager.start(argv, str(self.cwd), start_identity)
+            with self.assertRaisesRegex(RuntimeError, "START_IDENTITY_CONFLICT"):
+                manager.start(argv + ["different"], str(self.cwd), start_identity)
+            with self.assertRaisesRegex(RuntimeError, "START_IDENTITY_CONFLICT"):
+                manager.start(argv, str(other_cwd), start_identity)
+
+        self.assertEqual(calls, 1)
+        manager.control(str(first["session_id"]), "terminate")
+
+    def test_pre_effect_failure_is_retained_and_same_key_never_respawns(self) -> None:
+        from unittest import mock
+
+        from agent_runtime.session import TerminalSessionManager
+
+        admission = mock.Mock()
+        admission.acquire.side_effect = RuntimeError("injected admission failure")
+        manager = TerminalSessionManager(admission=admission, start_reaper=False)
+        self.addCleanup(manager.shutdown)
+        start_identity = "c" * 32
+        argv = [sys.executable, "-u", "-c", "print('must-not-run')"]
+
+        with patch("agent_runtime.session.subprocess.Popen") as popen:
+            with self.assertRaisesRegex(RuntimeError, "injected admission failure"):
+                manager.start(argv, str(self.cwd), start_identity)
+            popen.assert_not_called()
+            retained = manager.poll(start_identity=start_identity)
+            retry = manager.start(argv, str(self.cwd), start_identity)
+            popen.assert_not_called()
+
+        self.assertEqual(retained["lifecycle"], "START_FAILED_PRE_EFFECT")
+        self.assertEqual(retained["termination_reason"], "start_failed_pre_effect")
+        self.assertEqual(retry["session_id"], retained["session_id"])
+
+    def test_post_effect_failure_remains_observable_and_same_key_never_respawns(self) -> None:
+        from agent_runtime.capacity import HeavyExecutionAdmission
+        from agent_runtime.session import TerminalSessionManager
+
+        manager = TerminalSessionManager(
+            admission=HeavyExecutionAdmission(1), start_reaper=False
+        )
+        self.addCleanup(manager.shutdown)
+        start_identity = "d" * 32
+        argv = [sys.executable, "-u", "-c", "import time; time.sleep(30)"]
+        real_popen = subprocess.Popen
+        popen_calls = 0
+
+        def counted_popen(*args, **kwargs):
+            nonlocal popen_calls
+            popen_calls += 1
+            return real_popen(*args, **kwargs)
+
+        with patch("agent_runtime.session.subprocess.Popen", side_effect=counted_popen), patch(
+            "agent_runtime.session.threading.Thread.start",
+            side_effect=RuntimeError("injected post-popen setup failure"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "post-popen"):
+                manager.start(argv, str(self.cwd), start_identity)
+
+        retained = manager.poll(start_identity=start_identity)
+        self.assertEqual(retained["lifecycle"], "START_FAILED_POST_EFFECT")
+        self.assertEqual(retained["termination_reason"], "start_failed_post_effect")
+        retry = manager.start(argv, str(self.cwd), start_identity)
+        self.assertEqual(retry["session_id"], retained["session_id"])
+        self.assertEqual(popen_calls, 1)
+
+    def test_lost_start_ack_reconciles_by_identity_to_exact_same_operation(self) -> None:
+        from agent_runtime.capacity import HeavyExecutionAdmission
+        from agent_runtime.session import TerminalSessionManager
+
+        manager = TerminalSessionManager(
+            admission=HeavyExecutionAdmission(1), start_reaper=False
+        )
+        self.addCleanup(manager.shutdown)
+        start_identity = "e" * 32
+        argv = [sys.executable, "-u", "-c", "import time; print('ready', flush=True); time.sleep(30)"]
+        started = manager.start(argv, str(self.cwd), start_identity)
+
+        recovered = manager.poll(start_identity=start_identity, cursor=0, wait_ms=100)
+        self.assertEqual(recovered["session_id"], started["session_id"])
+        self.assertEqual(recovered["start_identity"], start_identity)
+        self.assertIn(recovered["lifecycle"], {"RUNNING", "COMPLETED"})
+        manager.control(str(started["session_id"]), "terminate")
+
+    def test_full_capacity_reconciles_existing_key_and_rejects_new_key_without_spawn(self) -> None:
+        from agent_runtime.capacity import HeavyExecutionAdmission
+        from agent_runtime.session import TerminalSessionManager
+
+        manager = TerminalSessionManager(
+            max_active_sessions=6, admission=HeavyExecutionAdmission(6), start_reaper=False
+        )
+        self.addCleanup(manager.shutdown)
+        argv = [sys.executable, "-u", "-c", "import time; time.sleep(30)"]
+        sessions = [
+            manager.start(argv + [str(index)], str(self.cwd), f"{index:032x}")
+            for index in range(6)
+        ]
+
+        with patch("agent_runtime.session.subprocess.Popen") as popen:
+            reconciled = manager.start(argv + ["0"], str(self.cwd), f"{0:032x}")
+            with self.assertRaisesRegex(RuntimeError, "maximum"):
+                manager.start(argv + ["new"], str(self.cwd), "f" * 32)
+            popen.assert_not_called()
+
+        self.assertEqual(reconciled["session_id"], sessions[0]["session_id"])
+        rejected = manager.poll(start_identity="f" * 32)
+        self.assertEqual(rejected["lifecycle"], "START_FAILED_PRE_EFFECT")
+        for result in sessions:
+            manager.control(str(result["session_id"]), "terminate")
+
+    def test_completed_retention_is_time_bounded_and_poll_does_not_refresh_it(self) -> None:
+        from agent_runtime.capacity import HeavyExecutionAdmission
+        from agent_runtime.session import COMPLETED_RETENTION_SECONDS, TerminalSessionManager
+
+        self.assertEqual(COMPLETED_RETENTION_SECONDS, 3600.0)
+        now = [100.0]
+        manager = TerminalSessionManager(
+            clock=lambda: now[0],
+            admission=HeavyExecutionAdmission(1),
+            start_reaper=False,
+        )
+        self.addCleanup(manager.shutdown)
+        start_identity = "1" * 32
+        result = manager.start(
+            [sys.executable, "-u", "-c", "print('done', flush=True)"],
+            str(self.cwd),
+            start_identity,
+        )
+        session_id = str(result["session_id"])
+        deadline = time.monotonic() + 3.0
+        while manager.poll(start_identity=start_identity, wait_ms=100)["status"] == "running":
+            if time.monotonic() >= deadline:
+                self.fail("session did not complete")
+
+        now[0] += 3599.0
+        self.assertEqual(manager.poll(start_identity=start_identity)["session_id"], session_id)
+        now[0] += 2.0
+        manager.reap_once()
+        with self.assertRaisesRegex(ValueError, "START_IDENTITY_UNKNOWN"):
+            manager.poll(start_identity=start_identity)
+
+    def test_explicit_terminate_is_retained_and_restart_loses_identity_without_respawn(self) -> None:
+        from agent_runtime.capacity import HeavyExecutionAdmission
+        from agent_runtime.session import TerminalSessionManager
+
+        start_identity = "2" * 32
+        manager = TerminalSessionManager(
+            admission=HeavyExecutionAdmission(1), start_reaper=False
+        )
+        result = manager.start(
+            [sys.executable, "-u", "-c", "import time; time.sleep(30)"],
+            str(self.cwd),
+            start_identity,
+        )
+        manager.control(str(result["session_id"]), "terminate")
+        retained = manager.poll(start_identity=start_identity)
+        self.assertEqual(retained["termination_reason"], "explicit_terminate")
+        manager.shutdown()
+
+        replacement = TerminalSessionManager(
+            admission=HeavyExecutionAdmission(1), start_reaper=False
+        )
+        self.addCleanup(replacement.shutdown)
+        with patch("agent_runtime.session.subprocess.Popen") as popen:
+            with self.assertRaisesRegex(ValueError, "START_IDENTITY_UNKNOWN"):
+                replacement.poll(start_identity=start_identity)
+            popen.assert_not_called()
+
+    def test_start_identity_and_poll_selector_validation_fail_closed(self) -> None:
+        from agent_runtime.session import TerminalSessionManager
+
+        manager = TerminalSessionManager(start_reaper=False)
+        self.addCleanup(manager.shutdown)
+        argv = [sys.executable, "-c", "pass"]
+        for invalid in ("", "a" * 31, "a" * 33, "A" * 32, "g" * 32):
+            with self.subTest(start_identity=invalid):
+                with self.assertRaisesRegex(ValueError, "32 lowercase"):
+                    manager.start(argv, str(self.cwd), invalid)
+
+        with self.assertRaisesRegex(ValueError, "exactly one"):
+            manager.poll()
+        with self.assertRaisesRegex(ValueError, "exactly one"):
+            manager.poll(session_id="x", start_identity="3" * 32)
+
     def test_session_limit_setting_uses_positive_integer_and_safe_fallback(self) -> None:
         from agent_runtime.session import DEFAULT_SESSION_LIMIT, effective_session_limit
 
@@ -409,39 +647,53 @@ class TerminalSessionTests(unittest.TestCase):
         self.assertEqual(effective_session_limit("-2"), DEFAULT_SESSION_LIMIT)
         self.assertEqual(effective_session_limit("7"), DEFAULT_SESSION_LIMIT)
 
-    def test_idle_ttl_is_fixed_and_reaper_expires_without_a_follow_up_call(self) -> None:
-        from agent_runtime.session import IDLE_TTL_SECONDS, TerminalSessionManager
+    def test_no_polling_beyond_old_idle_ttl_does_not_kill_running_session(self) -> None:
+        from agent_runtime.capacity import HeavyExecutionAdmission
+        from agent_runtime.session import RUNNING_HARD_WALL_SECONDS, TerminalSessionManager
 
-        self.assertEqual(IDLE_TTL_SECONDS, 600.0)
-        manager = TerminalSessionManager(idle_ttl_seconds=0.05, reaper_interval=0.01)
+        self.assertEqual(RUNNING_HARD_WALL_SECONDS, 3600.0)
+        now = [100.0]
+        admission = HeavyExecutionAdmission(1)
+        manager = TerminalSessionManager(
+            clock=lambda: now[0],
+            admission=admission,
+            start_reaper=False,
+        )
         self.addCleanup(manager.shutdown)
         result = manager.start(
-            [sys.executable, "-u", "-c", "import time; time.sleep(5)"],
+            [sys.executable, "-u", "-c", "import time; time.sleep(30)"],
             str(self.cwd),
         )
         session_id = str(result["session_id"])
-        deadline = time.monotonic() + 2.0
-        while manager.has_session(session_id) and time.monotonic() < deadline:
-            time.sleep(0.01)
-        self.assertFalse(manager.has_session(session_id))
-        with self.assertRaisesRegex(ValueError, "unknown|expired"):
-            manager.poll(session_id)
 
-    def test_controlled_time_idle_reap_terminates_process_group(self) -> None:
+        now[0] += 601.0
+        self.assertEqual(manager.reap_once(), [])
+        self.assertEqual(manager.poll(session_id, cursor=0, wait_ms=0)["status"], "running")
+        self.assertEqual(admission.active, 1)
+
+    def test_controlled_time_hard_wall_terminates_and_releases_capacity(self) -> None:
+        from agent_runtime.capacity import HeavyExecutionAdmission
         from agent_runtime.session import TerminalSessionManager
 
         now = [100.0]
-        manager = TerminalSessionManager(clock=lambda: now[0], start_reaper=False)
+        admission = HeavyExecutionAdmission(1)
+        manager = TerminalSessionManager(
+            clock=lambda: now[0],
+            admission=admission,
+            start_reaper=False,
+        )
         self.addCleanup(manager.shutdown)
         result = manager.start(
-            [sys.executable, "-u", "-c", "import time; time.sleep(5)"],
+            [sys.executable, "-u", "-c", "import time; time.sleep(30)"],
             str(self.cwd),
         )
         session_id = str(result["session_id"])
-        now[0] += 601.0
-        expired = manager.reap_idle_once()
-        self.assertEqual(expired, [session_id])
-        self.assertFalse(manager.has_session(session_id))
+        now[0] += 3601.0
+        self.assertIn(session_id, manager.reap_once())
+        retained = manager.poll(session_id, cursor=0, wait_ms=0)
+        self.assertEqual(retained["status"], "exited")
+        self.assertEqual(retained["termination_reason"], "hard_wall_timeout")
+        self.assertEqual(admission.active, 0)
 
     def test_control_write_and_finalization_have_one_lifecycle_order(self) -> None:
         import agent_runtime.session as session
@@ -526,64 +778,30 @@ class TerminalSessionTests(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(write_after_close, [False])
 
-    def test_idle_reaper_revalidates_after_concurrent_poll_refresh(self) -> None:
-        import agent_runtime.session as session
-        from unittest import mock
+    def test_polling_does_not_extend_running_hard_wall(self) -> None:
+        from agent_runtime.capacity import HeavyExecutionAdmission
 
         now = [100.0]
+        admission = HeavyExecutionAdmission(1)
         manager = TerminalSessionManager(
-            clock=lambda: now[0], idle_ttl_seconds=10.0, start_reaper=False
+            clock=lambda: now[0],
+            admission=admission,
+            start_reaper=False,
         )
-        process = mock.Mock()
-        process.poll.return_value = None
-        process.returncode = 0
-        fixture = session._Session(
-            session_id="idle-refresh-race",
-            process=process,
-            master_fd=123,
-            cwd=str(self.cwd),
-            argv=["/bin/zsh"],
-            last_activity=0.0,
+        self.addCleanup(manager.shutdown)
+        result = manager.start(
+            [sys.executable, "-u", "-c", "import time; time.sleep(30)"],
+            str(self.cwd),
         )
-        fixture.reader_done.set()
-        manager._sessions[fixture.session_id] = fixture
+        session_id = str(result["session_id"])
 
-        stale_candidate_selected = threading.Event()
-        allow_reap_claim = threading.Event()
-        expired: list[str] = []
-        errors: list[BaseException] = []
-        original_cleanup = manager._cleanup_process
-
-        def coordinated_cleanup(candidate, termination_state="natural_exit"):
-            if termination_state == "idle_reap":
-                stale_candidate_selected.set()
-                if not allow_reap_claim.wait(timeout=2.0):
-                    raise AssertionError("idle reap claim release was not signaled")
-            return original_cleanup(candidate, termination_state)
-
-        def run_reaper() -> None:
-            try:
-                expired.extend(manager.reap_idle_once())
-            except BaseException as exc:
-                errors.append(exc)
-
-        with mock.patch.object(manager, "_cleanup_process", side_effect=coordinated_cleanup), mock.patch.object(
-            session, "_terminate_process_group"
-        ), mock.patch.object(session.os, "close"), mock.patch.object(session, "emit_process_end"):
-            reaper_thread = threading.Thread(target=run_reaper)
-            reaper_thread.start()
-            self.assertTrue(stale_candidate_selected.wait(timeout=1.0))
-
-            refreshed = manager.poll(fixture.session_id, cursor=0, wait_ms=0)
-            self.assertEqual(refreshed["status"], "running")
-            self.assertEqual(fixture.last_activity, now[0])
-            allow_reap_claim.set()
-            reaper_thread.join(timeout=2.0)
-
-        self.assertFalse(reaper_thread.is_alive(), "idle reaper deadlocked")
-        self.assertEqual(errors, [])
-        self.assertEqual(expired, [])
-        self.assertTrue(manager.has_session(fixture.session_id))
+        now[0] += 3500.0
+        self.assertEqual(manager.poll(session_id, cursor=0, wait_ms=0)["status"], "running")
+        now[0] += 101.0
+        self.assertIn(session_id, manager.reap_once())
+        final = manager.poll(session_id, cursor=0, wait_ms=0)
+        self.assertEqual(final["termination_reason"], "hard_wall_timeout")
+        self.assertEqual(admission.active, 0)
 
     def test_waiting_poll_does_not_block_explicit_terminate_or_deadlock(self) -> None:
         import agent_runtime.session as session
@@ -851,7 +1069,7 @@ server._main()
         self.assertEqual(process_events[0]["runtime_call_id"], context.runtime_call_id)
         self.assertEqual(process_events[0]["termination_state"], "explicit_terminate")
 
-    def test_idle_reap_and_shutdown_emit_bounded_persistent_process_events(self) -> None:
+    def test_hard_wall_and_shutdown_emit_bounded_persistent_process_events(self) -> None:
         output = io.StringIO()
         now = [100.0]
         manager = TerminalSessionManager(clock=lambda: now[0], start_reaper=False)
@@ -861,14 +1079,14 @@ server._main()
         try:
             with patch("agent_runtime.timing.sys.stderr", output):
                 managed = manager.start(
-                    [sys.executable, "-u", "-c", "import time; time.sleep(5)"],
+                    [sys.executable, "-u", "-c", "import time; time.sleep(30)"],
                     str(self.cwd),
                 )
-                now[0] += 601.0
-                self.assertEqual(manager.reap_idle_once(), [str(managed["session_id"])])
+                now[0] += 3601.0
+                self.assertIn(str(managed["session_id"]), manager.reap_once())
 
                 manager.start(
-                    [sys.executable, "-u", "-c", "import time; time.sleep(5)"],
+                    [sys.executable, "-u", "-c", "import time; time.sleep(30)"],
                     str(self.cwd),
                 )
                 manager.shutdown()
@@ -881,7 +1099,7 @@ server._main()
         self.assertEqual({event["runtime_call_id"] for event in process_events}, {context.runtime_call_id})
         self.assertEqual(
             {event["termination_state"] for event in process_events},
-            {"idle_reap", "shutdown"},
+            {"hard_wall_timeout", "shutdown"},
         )
 
 
