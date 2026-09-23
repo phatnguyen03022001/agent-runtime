@@ -1,0 +1,145 @@
+protocol_version: 3
+
+task_id: TASK-0142
+task_revision: 1
+review_revision: 1
+state: ACCEPTED
+owner: ARCHITECT
+
+reviewed_report:
+  path: .agent/tasks/TASK-0142/report-r1.yaml
+  commit: "c0553065c711ea1840df8cd2de47e688afdd62ff"
+  tree: "b2e29f4c7f49c9782ed6dd09a3f0336572d87084"
+  report_revision: 1
+  report_state: REPORTED
+  reported_outcome: NEEDS_REVIEW
+
+execution_base:
+  commit: "f08cef677527c417712a35649cb4f73a9e2b68a8"
+  tree: "1c7c620a77c46e2236c2d66d258d4a1b99a8b838"
+
+accepted_implementation:
+  candidate: "375fa76ae3c864659b6b229e10520d6de1e80180"
+  candidate_tree: "dbd2b065419af65437d888d9214709101c7e256e"
+  runtime_activation_revision: "375fa76ae3c864659b6b229e10520d6de1e80180"
+  lineage:
+    - "1389b77f0a3c0e2d9ef4414fe9af8d9a38f4d6bf"
+    - "6aa0911c2c3f5174fcbcc69d807d4e5d59f1433e"
+    - "087b24a4ced3dd11df2fce5a461edd5afc1519f4"
+    - "375fa76ae3c864659b6b229e10520d6de1e80180"
+
+independent_architect_verification:
+  canonical_lineage:
+    result: PASS
+    report_parent: "375fa76ae3c864659b6b229e10520d6de1e80180"
+    report_only_diff:
+      - .agent/tasks/TASK-0142/report-r1.yaml
+  runtime_identity:
+    runtime_version: "0.2.1"
+    public_tool_count: 19
+    tool_contract_kernel_version: 1
+    terminal_start_request_schema_version: 2
+    terminal_start_result_schema_version: 2
+    terminal_poll_request_schema_version: 2
+    terminal_poll_result_schema_version: 2
+    schema_bundle_sha256: "a49fa2ff78ab32991ff00f70e4238c8a0eecc3aae8dbc50db95eb397a5583928"
+    schema_export_sha256: "e3684512e70e1dc6b2862667f1fca3401ddf11e3b580a5a792c6363f3c293028"
+    schema_export_bytes: 61734
+  canonical_verify:
+    command: ./verify
+    result: PASS
+    modules: "54/54"
+    tests: 679
+    fast_parallel_safe_tests: 254
+    serial_host_sensitive_tests: 425
+    evidence_source: "independently observed completed canonical verification job on exact candidate"
+  focused_verification:
+    result: PASS
+    tests: 120
+    scope: >-
+      recoverable terminal session concurrency, reserve-before-Popen, lost-ACK
+      recovery, startup failure semantics, hard-wall lifetime, completed retention,
+      capacity, output bounds, restart boundary, MCP contracts and schema identity
+  changed_path_scope:
+    result: PASS
+    exact_candidate_paths:
+      - README.md
+      - agent_runtime/capability_registry.py
+      - agent_runtime/contracts.py
+      - agent_runtime/schema_export.py
+      - agent_runtime/server.py
+      - agent_runtime/session.py
+      - agent_runtime/version.py
+      - macos/AppBundle/Info.plist
+      - tests/test_capability_registry.py
+      - tests/test_mcp_client_conformance.py
+      - tests/test_mcp_contracts.py
+      - tests/test_protected_runtime.py
+      - tests/test_surface_and_scripts.py
+      - tests/test_task0041_boundedness.py
+      - tests/test_task0057_admission.py
+      - tests/test_terminal_session.py
+    diff_check: PASS
+  live_runtime_boundary:
+    installed_runtime_cut_over: false
+    runtime_env_mutated: false
+    service_management_mutated: false
+    secure_tunnel_mutated: false
+    tcc_mutated: false
+    keychain_mutated: false
+
+acceptance:
+  AC_1_reserve_before_popen_atomicity: PASS
+  AC_2_lost_start_ack_recovery: PASS
+  AC_3_pre_effect_post_effect_startup_distinction: PASS
+  AC_4_client_activity_decoupled_from_process_lifetime: PASS
+  AC_5_completed_result_retention: PASS
+  AC_6_capacity_bounded: PASS
+  AC_7_truthful_bounded_output: PASS
+  AC_8_explicit_restart_boundary: PASS
+  AC_9_backward_compatible_19_tool_contract_evolution: PASS
+  AC_10_regression_and_activation_evidence: PASS
+
+findings:
+  blocking: []
+  non_blocking:
+    - id: NB-0142-001
+      description: >-
+        During execution, multiple Executor sessions encountered plugin/runtime
+        continuity changes and canonical-main advancement. Each successor stopped on
+        unexpected drift rather than overwriting state. Architect independently
+        admitted the coherent TASK-0142 lineage and final report-only child.
+      disposition: ACCEPTED_RECOVERY_BEHAVIOR
+    - id: NB-0142-002
+      description: >-
+        One early focused test invocation used Xcode Python 3.9 and failed before the
+        actual tests because dataclass(slots=True) requires the canonical newer Python.
+        Canonical .venv Python 3.13 focused verification and ./verify both pass; the
+        interpreter mismatch is not an implementation defect.
+      disposition: NON_BLOCKING_TOOLING_MISMATCH
+
+program_state:
+  task_0142: ACCEPTED
+  runtime_source_capability: READY_FOR_FOUNDATION_CUTOVER
+  runtime_activation_revision: "375fa76ae3c864659b6b229e10520d6de1e80180"
+  live_runtime: UNCHANGED_NOT_CUT_OVER
+  next_program_task:
+    repository: phatnguyen03022001/agent-foundation
+    task: TASK-0012
+    purpose: "Pin exact accepted Runtime activation revision and execute end-to-end survival integration / chaos proof before Foundation activation."
+
+publication:
+  repository: phatnguyen03022001/agent-runtime
+  branch: main
+  pull_request: false
+  github_actions: false
+  method: >-
+    Architect review published as a direct child of the accepted report after fresh
+    canonical GitHub verification. No Runtime installation or cutover is performed by
+    this review.
+
+final_judgment:
+  result: TASK_0142_ACCEPTED
+  state: ACCEPTED
+  runtime_activation_revision: "375fa76ae3c864659b6b229e10520d6de1e80180"
+  next_transition: FOUNDATION_TASK_0012_END_TO_END_SURVIVAL_PROOF
