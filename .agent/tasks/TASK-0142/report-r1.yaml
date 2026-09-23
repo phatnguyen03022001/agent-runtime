@@ -1,0 +1,217 @@
+protocol_version: 3
+
+task_id: TASK-0142
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0142/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  authorized_base_head: "f08cef677527c417712a35649cb4f73a9e2b68a8"
+  final_execution_head: "375fa76ae3c864659b6b229e10520d6de1e80180"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "ed8d9fb35bb8b052530ca879e68a227d77e4a8a6"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - repository_content_write
+    - local_execution_transport
+    - canonical_verification
+    - governed_main_publication
+  available:
+    - repository_content_write
+    - local_execution_transport
+    - canonical_verification
+    - governed_main_publication
+  missing: []
+  passed: true
+
+authority_evidence:
+  execution_base:
+    commit: "f08cef677527c417712a35649cb4f73a9e2b68a8"
+    tree: "1c7c620a77c46e2236c2d66d258d4a1b99a8b838"
+  recovered_checkpoint: "6aa0911c2c3f5174fcbcc69d807d4e5d59f1433e"
+  foundation_task_0011:
+    repository: phatnguyen03022001/agent-foundation
+    task_revision: 1
+    accepted_review_revision: "22fc4d881d5a0ee71b3af2b3acadb4ce8258bbc1"
+    state: ACCEPTED
+
+implementation:
+  candidate: "375fa76ae3c864659b6b229e10520d6de1e80180"
+  candidate_tree: "dbd2b065419af65437d888d9214709101c7e256e"
+  runtime_activation_revision: "375fa76ae3c864659b6b229e10520d6de1e80180"
+  lineage:
+    - "1389b77f0a3c0e2d9ef4414fe9af8d9a38f4d6bf"
+    - "6aa0911c2c3f5174fcbcc69d807d4e5d59f1433e"
+    - "087b24a4ced3dd11df2fce5a461edd5afc1519f4"
+    - "375fa76ae3c864659b6b229e10520d6de1e80180"
+  changed_paths:
+    - README.md
+    - agent_runtime/capability_registry.py
+    - agent_runtime/contracts.py
+    - agent_runtime/schema_export.py
+    - agent_runtime/server.py
+    - agent_runtime/session.py
+    - agent_runtime/version.py
+    - macos/AppBundle/Info.plist
+    - tests/test_capability_registry.py
+    - tests/test_mcp_client_conformance.py
+    - tests/test_mcp_contracts.py
+    - tests/test_protected_runtime.py
+    - tests/test_surface_and_scripts.py
+    - tests/test_task0041_boundedness.py
+    - tests/test_task0057_admission.py
+    - tests/test_terminal_session.py
+  production_dependencies_changed: false
+  live_runtime_changed: false
+
+runtime_identity:
+  runtime_version: "0.2.1"
+  public_tool_count: 19
+  public_tool_order:
+    - terminal_exec
+    - terminal_start
+    - terminal_poll
+    - terminal_control
+    - terminal_resize
+    - capacity_observer
+    - fs_read_batch
+    - fs_list
+    - fs_search
+    - fs_patch
+    - fs_write
+    - repo_observer
+    - repo_diff
+    - repo_stage
+    - repo_commit
+    - repo_fast_forward
+    - repo_publish
+    - screen_capture
+    - runtime_capabilities
+  tool_contract_kernel_version: 1
+  terminal_start:
+    request_schema_version: 2
+    result_schema_version: 2
+  terminal_poll:
+    request_schema_version: 2
+    result_schema_version: 2
+  schema_bundle_sha256: "a49fa2ff78ab32991ff00f70e4238c8a0eecc3aae8dbc50db95eb397a5583928"
+  schema_export_sha256: "e3684512e70e1dc6b2862667f1fca3401ddf11e3b580a5a792c6363f3c293028"
+  schema_export_bytes: 61734
+
+semantic_proof:
+  reserve_before_popen: "Focused failure-injection and concurrency coverage proves keyed identity, exact validated start specification, and session_id are reserved before Popen; same-key same-spec races spawn once and same-key different-spec collisions spawn no second process."
+  lost_start_ack: "Focused recovery coverage discards the first keyed start result and reconciles by start_identity to the same retained operation/session without a duplicate spawn."
+  startup_failure_distinction: "Focused tests retain START_FAILED_PRE_EFFECT when Popen did not occur and START_FAILED_POST_EFFECT after Popen-side effects; neither state releases the key for an implicit respawn in the same Runtime incarnation."
+  lifetime_and_retention: "Deterministic clock tests prove client inactivity beyond the old 600-second idle threshold does not kill healthy work below the 3600-second hard wall, polling does not extend the hard wall, and completed results remain bounded by 3600 seconds and the 16-result count ceiling without poll-based refresh."
+  capacity: "Focused saturation tests preserve the six-session/heavy ceiling, release admission on terminal completion, reconcile an existing key at full capacity, and reject new keyed work before Popen when capacity is unavailable."
+  output: "Overflow recovery tests preserve the 65536-byte retained and 16384-byte poll bounds with truthful cursor_expired and dropped_output_bytes evidence."
+  restart_boundary: "Shutdown tests terminate owned keyed work and clear the in-memory registry; a new manager cannot observe the prior start_identity and never respawns it."
+  compatibility: "Legacy unkeyed terminal_start and session_id polling remain supported; the public surface remains exactly 19 tools in the existing order and only terminal_start/poll request/result schemas advance to version 2."
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: PASS
+  evidence: "Final candidate 375fa76ae3c864659b6b229e10520d6de1e80180: ./verify exit 0; 54/54 modules, 679 tests, 254 fast-parallel-safe and 425 serial-host-sensitive, total duration 177.702 seconds."
+
+focused_verification:
+  command: ".venv/bin/python -m unittest tests.test_terminal_session tests.test_protected_runtime tests.test_task0041_boundedness tests.test_mcp_contracts tests.test_mcp_client_conformance tests.test_capability_registry tests.test_schema_export tests.test_surface_and_scripts tests.test_task0057_admission"
+  result: PASS
+  tests: 120
+  duration_seconds: 14.213
+  diff_check: PASS
+
+publication_evidence:
+  topology: MAIN_ONLY
+  pull_requests: 0
+  method: repo_publish_exact_expected_old_cas
+  implementation_sequence:
+    - "f08cef677527c417712a35649cb4f73a9e2b68a8 -> 1389b77f0a3c0e2d9ef4414fe9af8d9a38f4d6bf"
+    - "1389b77f0a3c0e2d9ef4414fe9af8d9a38f4d6bf -> 6aa0911c2c3f5174fcbcc69d807d4e5d59f1433e"
+    - "6aa0911c2c3f5174fcbcc69d807d4e5d59f1433e -> 087b24a4ced3dd11df2fce5a461edd5afc1519f4"
+    - "087b24a4ced3dd11df2fce5a461edd5afc1519f4 -> 375fa76ae3c864659b6b229e10520d6de1e80180"
+  implementation_remote_main: "375fa76ae3c864659b6b229e10520d6de1e80180"
+  implementation_publication_result: PASS
+
+pushed: true
+
+local_hygiene:
+  result: PASS
+  run_root: ".agent-runtime-task0142-publish"
+  cleanup_performed: true
+  retained: []
+  evidence: "The task-owned temporary publication checkout was removed after exact candidate publication. Canonical working copy was clean and synchronized to implementation main. No session/start registry persistence file, dependency mutation, or live Runtime cutover was introduced."
+
+acceptance_evidence:
+  - criterion_id: AC_1
+    status: PASS
+    evidence: "Reserve-before-Popen and concurrent same-key same-spec/different-spec focused tests pass with one-Popen/collision semantics."
+  - criterion_id: AC_2
+    status: PASS
+    evidence: "Lost terminal_start acknowledgement is reconciled by start_identity to the exact same operation/session with zero duplicate spawn."
+  - criterion_id: AC_3
+    status: PASS
+    evidence: "START_FAILED_PRE_EFFECT and START_FAILED_POST_EFFECT failure injection is retained and same-key replay never silently respawns."
+  - criterion_id: AC_4
+    status: PASS
+    evidence: "Deterministic lifetime tests prove >600s client inactivity is harmless below the independent 3600s hard wall and polling cannot extend the wall."
+  - criterion_id: AC_5
+    status: PASS
+    evidence: "Natural exit, explicit termination, hard-wall timeout and startup failures retain bounded terminal results; time/count eviction and no poll refresh are covered."
+  - criterion_id: AC_6
+    status: PASS
+    evidence: "Six-slot capacity stays bounded; completed work releases admission; existing-key lookup succeeds under saturation while new keyed work is rejected before spawn."
+  - criterion_id: AC_7
+    status: PASS
+    evidence: "Overflow/cursor coverage preserves 64KiB retained and 16KiB poll limits with truthful dropped-output evidence."
+  - criterion_id: AC_8
+    status: PASS
+    evidence: "Graceful shutdown clears in-memory identity after terminating owned work; brand-new manager lookup returns unknown without respawn."
+  - criterion_id: AC_9
+    status: PASS
+    evidence: "Runtime is 0.2.1; exact public tool count/order is 19; legacy unkeyed/session_id paths remain supported; only terminal_start/poll schemas are v2."
+  - criterion_id: AC_10
+    status: PASS
+    evidence: "Focused suite is 120/120 PASS; canonical ./verify is 54/54 modules and 679 tests PASS; exact schema identity and runtime_activation_revision are recorded."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Exact execution base/tree and Foundation TASK-0011 accepted semantic input were resolved."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "Exact candidate changed-path set is bounded to 16 task-authorized production/test/documentation surfaces and git diff --check passes."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "Focused TASK-0142 concurrency, failure, lifetime, retention, capacity, output, restart and schema regressions pass 120/120."
+  - check_id: CHECK-4
+    result: PASS
+    evidence: "Source identity recomputation matches Runtime 0.2.1, 19 tools, terminal_start/poll v2, bundle/export hashes and 61734-byte export."
+  - check_id: CHECK-5
+    result: PASS
+    evidence: "Canonical ./verify exits 0 with 54/54 modules and 679 tests."
+  - check_id: CHECK-6
+    result: PASS
+    evidence: "Implementation lineage is published to main through exact expected-old repo_publish CAS and canonical local main is synchronized cleanly."
+
+live_runtime:
+  state: UNCHANGED_NOT_CUT_OVER
+  installed_candidate_activation: false
+  runtime_env_mutated: false
+  service_management_mutated: false
+  secure_tunnel_mutated: false
+  tcc_mutated: false
+  keychain_mutated: false
+
+result: NEEDS_REVIEW
