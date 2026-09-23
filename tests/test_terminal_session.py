@@ -462,6 +462,101 @@ class TerminalSessionTests(unittest.TestCase):
         self.assertEqual(calls, 1)
         manager.control(str(first["session_id"]), "terminate")
 
+    def test_concurrent_same_key_different_spec_collision_spawns_once(self) -> None:
+        from agent_runtime.capacity import HeavyExecutionAdmission
+        from agent_runtime.session import TerminalSessionManager
+
+        manager = TerminalSessionManager(
+            max_active_sessions=2, admission=HeavyExecutionAdmission(2), start_reaper=False
+        )
+        self.addCleanup(manager.shutdown)
+        start_identity = "9" * 32
+        barrier = threading.Barrier(2)
+        real_popen = subprocess.Popen
+        popen_calls = 0
+        call_lock = threading.Lock()
+
+        def counted_popen(*args, **kwargs):
+            nonlocal popen_calls
+            with call_lock:
+                popen_calls += 1
+            return real_popen(*args, **kwargs)
+
+        def launch(label: str):
+            barrier.wait()
+            try:
+                return ("ok", manager.start(
+                    [sys.executable, "-u", "-c", "import time; time.sleep(30)", label],
+                    str(self.cwd),
+                    start_identity,
+                ))
+            except BaseException as exc:
+                return ("error", exc)
+
+        with patch("agent_runtime.session.subprocess.Popen", side_effect=counted_popen):
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                outcomes = list(executor.map(launch, ("left", "right")))
+
+        successes = [value for kind, value in outcomes if kind == "ok"]
+        failures = [value for kind, value in outcomes if kind == "error"]
+        self.assertEqual(len(successes), 1)
+        self.assertEqual(len(failures), 1)
+        self.assertRegex(str(failures[0]), "START_IDENTITY_CONFLICT")
+        self.assertEqual(popen_calls, 1)
+        manager.control(str(successes[0]["session_id"]), "terminate")
+
+    def test_keyed_failure_immediately_before_popen_is_pre_effect_and_retained(self) -> None:
+        import agent_runtime.session as session
+
+        from agent_runtime.capacity import HeavyExecutionAdmission
+
+        manager = TerminalSessionManager(
+            admission=HeavyExecutionAdmission(1), start_reaper=False
+        )
+        self.addCleanup(manager.shutdown)
+        start_identity = "8" * 32
+        argv = [sys.executable, "-c", "print('must-not-run')"]
+
+        with patch.object(session.pty, "openpty", side_effect=OSError("injected pre-popen failure")), patch.object(
+            session.subprocess, "Popen"
+        ) as popen:
+            with self.assertRaisesRegex(OSError, "pre-popen"):
+                manager.start(argv, str(self.cwd), start_identity)
+            popen.assert_not_called()
+
+        retained = manager.poll(start_identity=start_identity)
+        self.assertEqual(retained["lifecycle"], "START_FAILED_PRE_EFFECT")
+        self.assertEqual(retained["termination_reason"], "start_failed_pre_effect")
+
+    def test_keyed_overflow_before_recovery_poll_reports_truthful_cursor_loss(self) -> None:
+        from agent_runtime.capacity import HeavyExecutionAdmission
+        from agent_runtime.session import MAX_POLL_OUTPUT_BYTES, MAX_RETAINED_OUTPUT_BYTES
+
+        manager = TerminalSessionManager(
+            admission=HeavyExecutionAdmission(1), start_reaper=False
+        )
+        self.addCleanup(manager.shutdown)
+        start_identity = "7" * 32
+        size = MAX_RETAINED_OUTPUT_BYTES + MAX_POLL_OUTPUT_BYTES + 8192
+        started = manager.start(
+            [
+                sys.executable,
+                "-u",
+                "-c",
+                f"import sys,time; sys.stdout.write('x'*{size}); sys.stdout.flush(); time.sleep(1)",
+            ],
+            str(self.cwd),
+            start_identity,
+        )
+
+        time.sleep(0.25)
+        recovered = manager.poll(start_identity=start_identity, cursor=0, wait_ms=0)
+        self.assertEqual(recovered["session_id"], started["session_id"])
+        self.assertTrue(recovered["cursor_expired"])
+        self.assertGreater(recovered["dropped_output_bytes"], 0)
+        self.assertLessEqual(len(recovered["output"].encode()), MAX_POLL_OUTPUT_BYTES)
+        manager.control(str(started["session_id"]), "terminate")
+
     def test_pre_effect_failure_is_retained_and_same_key_never_respawns(self) -> None:
         from unittest import mock
 

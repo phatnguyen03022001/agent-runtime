@@ -212,7 +212,13 @@ class MCPInputBoundednessTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(start_props["argv"]["items"]["maxLength"], ARGV_ITEM_LIMIT)
 
         poll_props = tools["terminal_poll"].input_schema["properties"]
-        self.assertEqual(poll_props["session_id"]["maxLength"], 128)
+        self.assertEqual(_string_branch(poll_props["session_id"])["maxLength"], 128)
+        start_identity = _string_branch(start_props["start_identity"])
+        poll_identity = _string_branch(poll_props["start_identity"])
+        for identity in (start_identity, poll_identity):
+            self.assertEqual(identity["minLength"], 32)
+            self.assertEqual(identity["maxLength"], 32)
+            self.assertEqual(identity["pattern"], "^[0-9a-f]{32}$")
 
         control_props = tools["terminal_control"].input_schema["properties"]
         self.assertEqual(control_props["session_id"]["maxLength"], 128)
@@ -238,6 +244,7 @@ class MCPInputBoundednessTests(unittest.IsolatedAsyncioTestCase):
         session_result = {
             "session_id": "fake-session",
             "status": "running",
+            "lifecycle": "RUNNING",
             "output": "",
             "next_cursor": 0,
             "cursor_expired": False,
@@ -341,6 +348,7 @@ class MCPInputBoundednessTests(unittest.IsolatedAsyncioTestCase):
         poll_result = {
             "session_id": "session",
             "status": "running",
+            "lifecycle": "RUNNING",
             "output": "",
             "next_cursor": 0,
             "cursor_expired": False,
