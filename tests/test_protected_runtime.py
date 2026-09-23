@@ -495,13 +495,16 @@ class ProtectedRuntimeGuardTests(unittest.TestCase):
 
         manager = session.TerminalSessionManager(start_reaper=False)
         try:
+            start_identity = "5" * 32
             with mock.patch.object(session, "_PROTECTED_GUARD") as start_guard, mock.patch.object(
                 session.subprocess, "Popen"
             ) as popen:
                 start_guard.check.side_effect = ProtectedRuntimeDenied("canonical_process_signal")
                 with self.assertRaises(ProtectedRuntimeDenied):
-                    manager.start(["kill", "410"], os.getcwd())
+                    manager.start(["kill", "410"], os.getcwd(), start_identity)
                 popen.assert_not_called()
+            with self.assertRaisesRegex(ValueError, "START_IDENTITY_UNKNOWN"):
+                manager.poll(start_identity=start_identity)
         finally:
             manager.shutdown()
 

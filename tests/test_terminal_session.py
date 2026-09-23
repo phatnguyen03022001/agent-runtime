@@ -715,6 +715,35 @@ class TerminalSessionTests(unittest.TestCase):
                 replacement.poll(start_identity=start_identity)
             popen.assert_not_called()
 
+    def test_graceful_shutdown_terminates_running_keyed_session_and_clears_identity(self) -> None:
+        from agent_runtime.capacity import HeavyExecutionAdmission
+        from agent_runtime.session import TerminalSessionManager
+
+        start_identity = "6" * 32
+        manager = TerminalSessionManager(
+            admission=HeavyExecutionAdmission(1), start_reaper=False
+        )
+        started = manager.start(
+            [sys.executable, "-u", "-c", "import time; time.sleep(30)"],
+            str(self.cwd),
+            start_identity,
+        )
+        session = manager._get_session(str(started["session_id"]))
+        process = session.process
+        self.assertIsNotNone(process)
+        self.assertIsNone(process.poll())
+
+        manager.shutdown()
+
+        self.assertIsNotNone(process.poll())
+        self.assertFalse(manager.has_session(str(started["session_id"])))
+        replacement = TerminalSessionManager(
+            admission=HeavyExecutionAdmission(1), start_reaper=False
+        )
+        self.addCleanup(replacement.shutdown)
+        with self.assertRaisesRegex(ValueError, "START_IDENTITY_UNKNOWN"):
+            replacement.poll(start_identity=start_identity)
+
     def test_start_identity_and_poll_selector_validation_fail_closed(self) -> None:
         from agent_runtime.session import TerminalSessionManager
 
