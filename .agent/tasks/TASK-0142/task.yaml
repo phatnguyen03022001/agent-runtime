@@ -1,0 +1,552 @@
+protocol_version: 3
+
+task_id: TASK-0142
+task_revision: 1
+state: APPROVED
+title: "Recoverable Long Sessions"
+
+origin:
+  type: explicit_operator_authority
+  reason: >-
+    Reopen Agent Runtime maintenance mode for a correctness and MCP-compatibility
+    defect exposed by long-horizon ChatGPT Executor interruption: a persistent
+    terminal process can be spawned while its acknowledgement/session_id is lost,
+    leaving the caller unable to reconcile whether the side effect occurred.
+  foundation_contract:
+    task: TASK-0011
+    revision: 1
+    accepted_review: ".agent/tasks/TASK-0011/review.yaml@22fc4d881d5a0ee71b3af2b3acadb4ce8258bbc1"
+    repository: phatnguyen03022001/agent-foundation
+    accepted_revision: "22fc4d881d5a0ee71b3af2b3acadb4ce8258bbc1"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+  canonical_branch: main
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  transport: AGENT_RUNTIME
+  model: GPT-5.6 Sol
+  effort: HIGH
+
+execution_base:
+  mode: exact_planning_commit
+  capture: after_task_authoring_commit
+  require_exact_match: true
+  rule: >-
+    Executor launch must provide the exact published TASK-0142 planning commit and
+    tree. Fresh-resolve canonical GitHub main before mutation and fail closed on
+    unexpected canonical drift.
+
+program_context:
+  predecessor_runtime:
+    task: TASK-0141
+    review: .agent/tasks/TASK-0141/review-r1.yaml
+    accepted_revision: "d59e8f40f70c86b1a5103348361b7740db51bf84"
+    state: ACCEPTED
+    program_state: V1_FREEZE_MAINTENANCE_MODE
+  maintenance_reopen:
+    reasons:
+      - correctness_defect
+      - MCP_compatibility
+      - explicit_new_operator_authority
+    scope: RECOVERABLE_PERSISTENT_TERMINAL_ONLY
+  foundation_survival_contract:
+    repository: phatnguyen03022001/agent-foundation
+    revision: "22fc4d881d5a0ee71b3af2b3acadb4ce8258bbc1"
+    semantics:
+      - "caller-known execution slice identity exists before consequence-bearing dispatch"
+      - "lost mutating response means OUTCOME_UNKNOWN, not failure or safe retry"
+      - "unknown outcome requires consequence-specific reconciliation before retry"
+      - "survivability/recoverability outranks round-trip minimization"
+      - "current unkeyed terminal_start is not lost-ACK recoverable"
+  current_runtime:
+    version: "0.2.0"
+    public_tool_count: 19
+    tool_contract_kernel_version: 1
+    terminal_exec_max_timeout_seconds: 3600
+    max_active_sessions: 6
+    client_idle_ttl_seconds: 600
+    max_retained_output_bytes: 65536
+    max_poll_output_bytes: 16384
+    max_retained_completed_sessions: 16
+    session_registry: IN_MEMORY
+  target_runtime:
+    version: "0.2.1"
+    public_tool_count: 19
+    tool_contract_kernel_version: 1
+    running_hard_wall_seconds: 3600
+    completed_retention_seconds: 3600
+    max_retained_completed_sessions: 16
+    max_retained_output_bytes: 65536
+    max_poll_output_bytes: 16384
+    note: >-
+      These are Runtime engineering bounds, not claims about ChatGPT timeouts.
+      The 3600-second running wall reuses the existing terminal_exec hard maximum;
+      completed retention is independently bounded by both time and count.
+
+objective: >-
+  Make existing persistent terminal sessions recoverable across client/chat disconnect
+  and lost terminal_start acknowledgement within one Runtime incarnation, without a
+  database, daemon, generic job framework, new public tool, or cross-restart process
+  supervisor. Add caller-known keyed start identity reserved atomically with the exact
+  validated start specification before Popen, idempotent same-key reconciliation,
+  collision fail-closed semantics, independent running hard-wall lifetime, bounded
+  completed-result retention, truthful output-loss/termination evidence, and bounded
+  capacity behavior while preserving legacy unkeyed calls.
+
+architecture_change_authority:
+  authorized:
+    - "terminal_start request schema evolution for optional caller-provided start_identity"
+    - "terminal_poll request schema evolution for exactly-one-of session_id/start_identity lookup"
+    - "terminal session result schema evolution needed for keyed lifecycle/termination evidence"
+    - "TerminalSessionManager internal lifecycle/reservation semantics"
+    - "capability registry support for mixed per-tool request/result schema versions"
+    - "schema export identity changes caused only by the authorized terminal schema evolution"
+    - "Runtime patch version 0.2.0 -> 0.2.1"
+    - "documentation needed to describe the new recoverable-session contract"
+  forbidden:
+    - "new public MCP tool name"
+    - "change public tool order or tool count"
+    - "generic jobs API or MCP Tasks adoption"
+    - "database, Redis, persistent registry, queue, scheduler, daemon or process supervisor"
+    - "cross-Runtime-restart session resurrection"
+    - "change repository/filesystem capability semantics"
+    - "change screen_capture governance"
+    - "change ServiceManagement/cutover architecture"
+    - "change OpenAI Secure MCP Tunnel transport"
+    - "change requirements.txt or requirements.lock"
+    - "install, cut over, restart or mutate the live installed Runtime"
+
+semantic_contract:
+
+  start_identity:
+    purpose: >-
+      Caller-known correlation identity for one async execution intent. It is
+      operational correlation only and grants no task/repository/security authority.
+    shape:
+      format: "exactly 32 lowercase hexadecimal characters"
+      relation_to_foundation: >-
+        Foundation Task C is expected to pass its execution_slice_id directly as
+        start_identity after cutover.
+    validation:
+      - "validate before reservation"
+      - "never derive identity from argv/cwd equality"
+      - "identity is not authentication, authorization or a secret"
+
+  exact_start_spec:
+    fields:
+      - "canonical validated resolved cwd"
+      - "exact validated literal argv sequence"
+    rule: >-
+      The immutable exact start specification is bound to start_identity atomically
+      at reservation time. Same identity with a different validated cwd or argv is a
+      collision and fails closed before any additional process spawn.
+
+  reserve_before_popen:
+    mandatory_invariant: >-
+      A keyed terminal_start MUST NOT execute Popen unless start_identity plus the
+      exact validated start specification and a unique session_id have already been
+      reserved atomically inside the current TerminalSessionManager incarnation.
+    conceptual_order:
+      - "validate start_identity"
+      - "validate/canonicalize cwd and argv"
+      - "under manager lock: lookup or reserve {start_identity, exact spec, session_id, lifecycle}"
+      - "for a new reservation only: perform bounded capacity admission"
+      - "mark STARTING"
+      - "Popen"
+      - "attach process/session resources to the pre-existing reservation"
+      - "transition RUNNING or a truthful terminal startup-failure state"
+    concurrency:
+      same_key_same_spec_starting: >-
+        Return/observe the same reserved operation with lifecycle STARTING, or wait
+        only a very short existing bounded synchronization interval before returning
+        STARTING. Do not couple the duplicate RPC lifetime to completion of Popen.
+      same_key_same_spec_running_or_completed: >-
+        Return the existing session/current retained result with zero additional spawn.
+      same_key_different_spec: >-
+        Fail closed as identity/spec conflict with zero additional spawn.
+    capacity_order: >-
+      Existing-key lookup/collision resolution occurs before new capacity rejection.
+      A caller must be able to recover an already-running keyed session even while all
+      active/heavy slots are occupied.
+
+  startup_failure_semantics:
+    pre_effect:
+      definition: "reservation exists but Popen is proven never to have occurred"
+      behavior:
+        - "terminalize the keyed reservation as START_FAILED_PRE_EFFECT"
+        - "retain it under normal completed-result retention"
+        - "zero process side effect"
+        - "same key does not silently spawn later; a new caller intent/new identity is required for a new execution attempt"
+    post_effect:
+      definition: "Popen occurred but later startup/session attachment/reader/monitor setup failed"
+      behavior:
+        - "start_identity MUST remain observable in the current Runtime incarnation"
+        - "cleanup owned process group when required"
+        - "terminalize as START_FAILED_POST_EFFECT"
+        - "retain bounded result"
+        - "same key MUST NOT spawn a second process"
+    rule: >-
+      No post-Popen failure may release the identity back to an absent state inside
+      the same Runtime incarnation.
+
+  public_start:
+    legacy:
+      call: "terminal_start(argv, cwd)"
+      behavior: >-
+        Remains accepted for backward compatibility and remains non-idempotent.
+        Legacy omission of start_identity does not gain lost-ACK recovery.
+    keyed:
+      call: "terminal_start(argv, cwd, start_identity=<32hex>)"
+      behavior: >-
+        Conditional idempotency applies only to keyed mode. Because legacy mode remains
+        non-idempotent, the tool's global MCP idempotent annotation stays conservative
+        rather than claiming unconditional idempotency.
+
+  public_poll:
+    legacy: "terminal_poll(session_id=<id>, cursor=..., wait_ms=...)"
+    keyed: "terminal_poll(start_identity=<32hex>, cursor=..., wait_ms=...)"
+    selector_rule: "exactly one of session_id or start_identity"
+    non_spawning_rule: >-
+      terminal_poll by start_identity is observation/reconciliation only and can never
+      create or restart work.
+    unknown_identity: >-
+      START_IDENTITY_UNKNOWN means the identity is not observable in the current
+      Runtime incarnation/retention set. It is NOT proof that the process never ran.
+
+  public_result:
+    required_semantics:
+      - "expose current lifecycle sufficiently to distinguish STARTING, RUNNING and terminal retained state"
+      - "return session_id for a reserved keyed operation even while STARTING"
+      - "include start_identity only when keyed"
+      - "preserve bounded output/cursor semantics"
+      - "terminal retained state exposes an attributable termination_reason"
+    termination_reasons_minimum:
+      - natural_exit
+      - explicit_terminate
+      - hard_wall_timeout
+      - start_failed_pre_effect
+      - start_failed_post_effect
+    compatibility_rule: >-
+      Legacy unkeyed successful starts continue to exhibit the existing running/exited
+      behavior. New lifecycle/result fields may be additive for legacy observations;
+      STARTING/start-failure lifecycle is principally a keyed-mode contract.
+
+  lifetime:
+    running:
+      bound_seconds: 3600
+      starts_from: "key reservation/session creation time for keyed sessions; session creation time for legacy sessions"
+      rule: >-
+        Client poll/control activity does not extend the hard wall. Absence of client
+        polling is not permission to kill a healthy process before this bound.
+      expiry:
+        - "terminate owned process group"
+        - "release HeavyExecutionAdmission lease"
+        - "retain terminal result"
+        - "termination_reason=hard_wall_timeout"
+    completed:
+      retention_seconds: 3600
+      count_bound: 16
+      starts_from: completed_at
+      rule: >-
+        Completed-result retention is independent of client activity and is evicted
+        when either time or count bound requires it. Polling a completed result does
+        not extend retention indefinitely.
+    explicit_terminate:
+      rule: >-
+        Preserve the terminal result under the same completed retention instead of
+        immediately making the session unobservable.
+    client_activity:
+      rule: >-
+        last poll/control may remain telemetry but MUST NOT be the running-process
+        kill criterion.
+
+  output:
+    retained_bytes: 65536
+    poll_bytes: 16384
+    rule: >-
+      Preserve cursor_expired and dropped_output_bytes truthfully. Runtime console
+      output is bounded transient transport evidence, not durable build/test proof.
+      Do not increase output bounds in this task.
+
+  capacity:
+    active_session_ceiling: 6
+    requirements:
+      - "existing HeavyExecutionAdmission remains authoritative"
+      - "new keyed reservation cannot bypass new-work admission"
+      - "duplicate/reconciliation lookup of an existing key must work under full capacity"
+      - "abandoned running jobs remain bounded by the hard wall"
+      - "completed sessions release heavy execution capacity before retention"
+
+  runtime_restart:
+    rule: >-
+      Session and start_identity registry remains in-memory. Graceful Runtime shutdown
+      terminates owned running process groups and clears the registry. After restart,
+      a prior start_identity is not observable and returns START_IDENTITY_UNKNOWN.
+      No automatic respawn or cross-restart idempotency is claimed.
+    crash_boundary: >-
+      Hard Runtime/host crash remains an external unknown-outcome boundary. This task
+      does not promise impossible child cleanup or persisted identity across process
+      death.
+
+schema_and_versioning:
+  runtime_version:
+    from: "0.2.0"
+    to: "0.2.1"
+  public_tool_names:
+    count: 19
+    order: UNCHANGED
+  tool_contract_kernel_version: 1
+  per_capability_schema:
+    terminal_start:
+      request: 2
+      result: 2
+    terminal_poll:
+      request: 2
+      result: 2
+    all_unrelated_capabilities:
+      request: 1
+      result: "existing value"
+  registry_rule: >-
+    CapabilityBinding/schema-export plumbing may evolve only enough to express and
+    verify mixed per-capability schema versions. Do not globally relabel unrelated
+    tools as v2.
+  expected_identity_change:
+    - "schema bundle/export digest and length will change"
+    - "Task B report must publish exact new hashes/length"
+    - "Task B report/review must designate one exact runtime_activation_revision for Foundation Task C"
+
+implementation_boundary:
+  expected_paths:
+    - agent_runtime/session.py
+    - agent_runtime/server.py
+    - agent_runtime/contracts.py
+    - agent_runtime/capability_registry.py
+    - agent_runtime/schema_export.py
+    - agent_runtime/version.py
+    - tests/test_terminal_session.py
+    - tests/test_mcp_contracts.py
+    - tests/test_mcp_client_conformance.py
+    - tests/test_capability_registry.py
+    - tests/test_schema_export.py
+    - README.md
+  conditional_paths:
+    - tests/test_task0057_admission.py
+    - tests/test_surface_and_scripts.py
+    - macos/package_provenance.py
+    - tests/test_package_provenance.py
+    - docs/OPERATIONS.md
+    - docs/AGENT.md
+  conditional_rule: >-
+    Conditional paths may change only when directly required by version/schema
+    identity or user-facing contract consistency. Keep the diff minimal.
+  forbidden_production_paths:
+    - agent_runtime/repo_publish.py
+    - agent_runtime/repo_fast_forward.py
+    - agent_runtime/fs_patch.py
+    - agent_runtime/fs_write.py
+    - agent_runtime/screen_capture.py
+    - macos/ServiceManagementController.swift
+    - requirements.txt
+    - requirements.lock
+
+security_and_authority:
+  - "start_identity is correlation only; it never bypasses workspace/protected-runtime/argv/cwd validation."
+  - "Existing literal argv, shell=False, workspace-descendant, protected Runtime filtering and minimal child environment remain mandatory."
+  - "Do not persist argv/cwd/start identities to disk solely for recovery."
+  - "No new secret, credential, TCC, Keychain, network listener or lifecycle authority."
+  - "Repository/task authority remains outside Runtime."
+  - "No installed Runtime/service/runtime.env mutation in this task."
+
+acceptance_criteria:
+  AC_1:
+    name: "Reserve-before-Popen atomicity"
+    requirement: >-
+      Keyed start_identity plus exact validated cwd/argv and session_id are reserved
+      atomically before any Popen. Concurrent same-key/same-spec starts cause at most
+      one Popen; same-key/different-spec causes zero additional Popen and fails closed.
+  AC_2:
+    name: "Lost-start-ACK recovery"
+    requirement: >-
+      If keyed Popen/session creation succeeds but terminal_start response is lost,
+      successor terminal_poll(start_identity) observes the exact same operation/session
+      without spawning a duplicate.
+  AC_3:
+    name: "Pre-effect/post-effect startup distinction"
+    requirement: >-
+      Failures proven before Popen are retained as START_FAILED_PRE_EFFECT; failures
+      after Popen remain identity-observable as START_FAILED_POST_EFFECT and never
+      release the key to an absent/re-spawnable state in the same Runtime incarnation.
+  AC_4:
+    name: "Client activity decoupled from process lifetime"
+    requirement: >-
+      A healthy running process is not reaped merely because no client polls for more
+      than the old 600-second idle TTL. The independent 3600-second hard wall bounds
+      running work and cannot be extended by polling.
+  AC_5:
+    name: "Completed-result retention"
+    requirement: >-
+      Natural exit, explicit terminate, hard-wall termination and keyed startup failure
+      remain observable for bounded retention from completed_at, subject to both
+      3600-second time and 16-result count bounds. Polling cannot extend retention.
+  AC_6:
+    name: "Capacity remains bounded"
+    requirement: >-
+      Active/heavy ceiling remains six; abandoned jobs cannot occupy slots past the
+      hard wall; completed sessions release heavy capacity; existing-key reconciliation
+      succeeds even when new-work capacity is full.
+  AC_7:
+    name: "Truthful bounded output"
+    requirement: >-
+      Existing 64KiB retained / 16KiB poll bounds and cursor_expired /
+      dropped_output_bytes semantics remain truthful across keyed recovery. Output loss
+      never becomes a fabricated PASS.
+  AC_8:
+    name: "Explicit restart boundary"
+    requirement: >-
+      Runtime registry remains in-memory; graceful shutdown kills owned running work and
+      clears identity; post-restart keyed lookup returns START_IDENTITY_UNKNOWN and
+      never respawns automatically.
+  AC_9:
+    name: "Backward-compatible 19-tool contract evolution"
+    requirement: >-
+      Public tool count/order remains 19; legacy unkeyed start and session_id poll stay
+      supported; only terminal_start/poll schema versions advance to v2; Runtime version
+      is 0.2.1; unrelated capability schemas/semantics remain unchanged.
+  AC_10:
+    name: "Regression and activation evidence"
+    requirement: >-
+      Focused failure-injection/concurrency/capacity/schema tests and canonical ./verify
+      pass on the exact candidate; report publishes exact new schema identity and one
+      runtime_activation_revision for later Foundation Task C.
+
+failure_injection:
+  mandatory:
+    - "same-key same-spec concurrent calls race before reservation"
+    - "same-key different-spec concurrent collision"
+    - "failure after reservation before capacity admission"
+    - "capacity rejection before Popen"
+    - "failure immediately before Popen"
+    - "Popen succeeds then exception before normal response serialization"
+    - "Popen succeeds then reader/monitor/session-attachment setup fails"
+    - "lost terminal_start acknowledgement simulated by discarding first call result then polling start_identity"
+    - "client inactivity exceeds 600 seconds while running but remains below hard wall"
+    - "running age crosses 3600-second hard wall"
+    - "polling repeatedly does not extend hard wall"
+    - "natural completion while client absent"
+    - "explicit terminate followed by successor poll"
+    - "completed age crosses 3600-second retention"
+    - "completed-result count exceeds 16"
+    - "polling completed result does not refresh retention"
+    - "output exceeds 64KiB before successor poll"
+    - "all six active/heavy slots occupied then duplicate existing-key lookup"
+    - "all six active/heavy slots occupied then new keyed start"
+    - "graceful Runtime shutdown with running keyed session"
+    - "post-restart/brand-new manager lookup of prior start_identity"
+
+negative_tests:
+  mandatory:
+    - "missing/empty/non-32hex/uppercase/oversized start_identity"
+    - "terminal_poll with both session_id and start_identity"
+    - "terminal_poll with neither selector"
+    - "unknown start_identity must never spawn"
+    - "same identity + different cwd"
+    - "same identity + different argv"
+    - "legacy unkeyed terminal_start remains globally non-idempotent"
+    - "new keyed path cannot bypass workspace/protection validation"
+    - "capacity failure cannot leave an unbounded STARTING reservation"
+    - "post-Popen failure cannot delete key and permit second Popen"
+    - "client poll cannot extend hard wall"
+    - "completed poll cannot extend retention"
+    - "no session/start registry file appears in workspace or user config"
+    - "no Runtime restart persistence claim"
+
+verification:
+  preflight:
+    - "Fresh-resolve exact TASK-0142 launch base/tree."
+    - "Require branch main, local HEAD=origin/main, ahead/behind 0/0, clean worktree/index."
+    - "Require remote branches=[main], open PRs=0."
+    - "Require TASK-0141 review-r1 ACCEPTED at d59e8f40f70c86b1a5103348361b7740db51bf84."
+    - "Fresh-resolve agent-foundation TASK-0011 accepted review at 22fc4d881d5a0ee71b3af2b3acadb4ce8258bbc1."
+  focused:
+    - "terminal keyed reservation/idempotency/concurrency tests"
+    - "pre-effect/post-effect startup failure injection"
+    - "lost-ACK reconciliation tests"
+    - "running hard-wall and completed-retention tests with deterministic fake clocks"
+    - "capacity saturation/reclamation tests"
+    - "output overflow/cursor tests"
+    - "runtime restart/shutdown boundary tests"
+    - "MCP schema/registry/client-conformance tests"
+  identity:
+    - "Runtime version == 0.2.1."
+    - "Public tool count/order == current exact 19 names."
+    - "ToolContract Kernel version == 1."
+    - "terminal_start/poll request/result schema versions == 2."
+    - "All unrelated capability schema versions remain unchanged."
+    - "Record exact new schema bundle/export hashes and export byte length."
+  canonical:
+    command: ./verify
+    required: true
+    authority: FINAL
+  final_hygiene:
+    - "No live installed Runtime/service/runtime.env/cutover mutation."
+    - "No session/start registry persistence files."
+    - "No production dependency changes."
+    - "No task-owned temp/build/cache residue."
+    - "No secret value in diff/report."
+    - "main-only / zero-PR topology preserved."
+
+execution_rules:
+  - "KISS: extend the existing TerminalSessionManager; do not create a second job subsystem."
+  - "Reserve keyed identity/spec before Popen; this invariant is non-negotiable."
+  - "Keep duplicate same-key STARTING observation non-blocking or only minimally bounded; never wait an RPC on long process startup/completion."
+  - "Existing-key lookup precedes new-work capacity rejection."
+  - "Do not treat START_IDENTITY_UNKNOWN as proof that no side effect happened."
+  - "Do not make poll/control frequency a correctness heartbeat."
+  - "Do not persist the in-memory identity registry."
+  - "Do not deploy or cut over the Runtime in this task."
+  - "If implementation requires a new public tool, durable registry, daemon/supervisor, or authority broadening, STOP for Architect REWORK."
+
+publication:
+  topology: MAIN_ONLY
+  branch: main
+  pull_request: false
+  github_actions: false
+  required_chain: >-
+    Use native Agent Runtime repo_stage -> repo_diff ReceiptV1 -> repo_commit ->
+    repo_publish exact expected-old CAS. If the governed mutation surface is
+    unavailable, stop rather than silently substitute a weaker publication path
+    unless Architect explicitly authorizes it.
+  report:
+    path: .agent/tasks/TASK-0142/report-r1.yaml
+    state_on_completion: NEEDS_REVIEW
+    required_evidence:
+      - "exact execution base SHA/tree"
+      - "exact changed paths"
+      - "Foundation TASK-0011 exact accepted semantic input"
+      - "reserve-before-Popen proof"
+      - "one-Popen concurrent same-key proof"
+      - "lost-start-ACK recovery proof"
+      - "pre-effect/post-effect failure distinction"
+      - "running hard-wall / completed-retention proof"
+      - "capacity boundedness/reclamation proof"
+      - "output-loss truthfulness proof"
+      - "restart-boundary proof"
+      - "legacy compatibility and exact 19-tool surface proof"
+      - "new Runtime/schema identity"
+      - "canonical ./verify result"
+      - "runtime_activation_revision"
+      - "native publication receipts and final clean closure"
+
+terminal_outcomes:
+  allowed:
+    - NEEDS_REVIEW
+    - REWORK
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+  NEEDS_REVIEW_requires: >-
+    Every acceptance criterion is satisfied, canonical ./verify is green, exact
+    candidate and report are published through the governed main-only chain, the
+    repository is clean/coherent, and report identifies one exact
+    runtime_activation_revision for Foundation Task C.
