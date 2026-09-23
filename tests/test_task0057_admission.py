@@ -235,8 +235,10 @@ class HeavyExecutionAdmissionTests(unittest.TestCase):
         expiring = idle.start(
             [sys.executable, "-u", "-c", "import time; time.sleep(10)"], str(self.cwd)
         )
-        now[0] += 601.0
-        self.assertEqual(idle.reap_idle_once(), [str(expiring["session_id"])])
+        now[0] += 3601.0
+        self.assertIn(str(expiring["session_id"]), idle.reap_once())
+        retained = idle.poll(str(expiring["session_id"]))
+        self.assertEqual(retained["termination_reason"], "hard_wall_timeout")
         self.assertEqual(self.admission.active, 0)
 
     def test_terminal_exec_materializes_output_only_after_delayed_reader_drain(self) -> None:
