@@ -88,12 +88,13 @@ EXPECTED_OUTPUT_FIELDS = {
     "fs_list": {
         "schema_version", "path", "entries", "name", "kind", "size_bytes",
         "truncated", "scanned_entries", "skipped_invalid_names",
+        "next_cursor", "continuation_receipt", "digest",
     },
     "fs_search": {
         "schema_version", "results", "path", "line_number", "line_text",
         "line_truncated", "file_sha256", "truncated", "limit_reason",
         "files_scanned", "bytes_scanned", "skipped_invalid_utf8", "skipped_nul",
-        "skipped_symlinks",
+        "skipped_symlinks", "next_cursor", "continuation_receipt", "kind", "digest",
     },
     "fs_patch": {
         "schema_version", "path", "sha256_before", "sha256_after",
@@ -117,11 +118,13 @@ EXPECTED_OUTPUT_FIELDS = {
         "outside_workspace_count", "total_count", "total_exact", "locked",
         "prunable", "fetched", "network_used", "deadline_seconds",
         "changes_truncated", "worktrees_truncated", "diff_truncated",
-        "total_changes", "total_changes_exact",
+        "total_changes", "total_changes_exact", "truncated", "next_cursor",
+        "continuation_receipt", "kind", "digest",
     },
     "repo_diff": {
         "schema_version", "scope", "head_sha", "patch", "patch_truncated",
-        "full_diff_bytes", "diff_receipt", "kind", "digest", "network_used",
+        "truncated", "full_diff_bytes", "diff_receipt", "kind", "digest",
+        "next_cursor", "continuation_receipt", "network_used",
     },
     "repo_stage": {
         "schema_version", "branch", "head_sha", "staged_paths", "staged_diff_receipt",
@@ -297,7 +300,11 @@ class MCPClientConformanceTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn("pattern", fs_props["cwd"])
 
             repo_props = tools["repo_observer"].input_schema["properties"]
-            self.assertEqual(set(repo_props), {"cwd", "max_paths"})
+            self.assertEqual(
+                set(repo_props),
+                {"cwd", "max_paths", "cursor", "continuation_receipt"},
+            )
+            self.assertEqual(_string_branch(repo_props["cursor"])["maxLength"], 1024)
             self.assertEqual(repo_props["max_paths"]["minimum"], 1)
             self.assertEqual(repo_props["max_paths"]["maximum"], 1000)
             self.assertEqual(repo_props["max_paths"]["default"], 200)

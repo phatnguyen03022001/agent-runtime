@@ -199,7 +199,11 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("pattern", fs_props["cwd"])
 
         repo_props = tools["repo_observer"].input_schema["properties"]
-        self.assertEqual(set(repo_props), {"cwd", "max_paths"})
+        self.assertEqual(
+            set(repo_props),
+            {"cwd", "max_paths", "cursor", "continuation_receipt"},
+        )
+        self.assertEqual(_string_branch(repo_props["cursor"])["maxLength"], 1024)
         self.assertEqual(repo_props["max_paths"]["minimum"], 1)
         self.assertEqual(repo_props["max_paths"]["maximum"], 1000)
         self.assertEqual(repo_props["max_paths"]["default"], 200)
@@ -411,7 +415,8 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
                 "outside_workspace_count", "total_count", "total_exact", "locked",
                 "prunable", "fetched", "network_used", "deadline_seconds",
                 "changes_truncated", "worktrees_truncated", "diff_truncated",
-                "total_changes", "total_changes_exact",
+                "total_changes", "total_changes_exact", "truncated", "next_cursor",
+                "continuation_receipt", "kind", "digest",
             },
             "repo_stage": {
                 "schema_version", "branch", "head_sha", "staged_paths",

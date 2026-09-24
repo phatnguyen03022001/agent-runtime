@@ -6,18 +6,23 @@ import subprocess
 import time
 from pathlib import Path
 
-from .contracts import CapabilityFailure, ReceiptV1Result, RepoDiffResult
+from .contracts import CapabilityFailure, ContinuationReceiptResult, ReceiptV1Result, RepoDiffResult
 from .errors import RuntimeValidationError
 from .executor import _validated_cwd, _workspace_root
 from .tool_contract import (
     Authority,
+    CONTINUATION_CURSOR_MAX_CHARS,
+    CONTINUATION_TTL_SECONDS,
+    ContinuationFailure,
     ContractErrorCode,
     MutationAuthority,
     NetworkAuthority,
     ToolAnnotations,
     ToolClass,
     ToolContract,
+    make_continuation_cursor,
     make_receipt_v1,
+    parse_continuation_cursor,
 )
 
 GIT_EXECUTABLE = "/usr/bin/git"
@@ -51,12 +56,15 @@ REPO_DIFF_CONTRACT = ToolContract(
         "complete_raw_diff_bytes": FULL_DIFF_MAX_BYTES,
         "returned_patch_bytes": RETURNED_PATCH_MAX_BYTES,
         "deadline_milliseconds": 5000,
+        "continuation_cursor_chars": CONTINUATION_CURSOR_MAX_CHARS,
+        "continuation_ttl_seconds": CONTINUATION_TTL_SECONDS,
     },
     postconditions={
         "network_used": False,
         "untracked_files": "excluded",
         "receipt_kind": "repo-diff",
         "receipt_observed_state": "complete-raw-diff-bytes",
+        "continuation_consistency": "full-raw-diff-revalidated",
     },
 )
 
@@ -244,13 +252,26 @@ def _require_success(
     return stdout
 
 
-def _truncate_patch(raw: bytes) -> tuple[str, bool]:
+def _patch_page(raw: bytes, offset: int) -> tuple[str, int, bool]:
     text = raw.decode("utf-8", errors="replace")
     encoded = text.encode("utf-8", errors="strict")
-    if len(encoded) <= RETURNED_PATCH_MAX_BYTES:
-        return text, False
-    prefix = encoded[:RETURNED_PATCH_MAX_BYTES]
-    return prefix.decode("utf-8", errors="ignore"), True
+    if offset > len(encoded):
+        raise CapabilityFailure(
+            ContractErrorCode.INVALID_ARGUMENT,
+            "CONTINUATION_POSITION_INVALID",
+            "continuation cursor position is outside the current diff",
+        )
+    if offset < len(encoded) and offset > 0 and encoded[offset] & 0xC0 == 0x80:
+        raise CapabilityFailure(
+            ContractErrorCode.INVALID_ARGUMENT,
+            "CONTINUATION_POSITION_INVALID",
+            "continuation cursor position is not on a UTF-8 boundary",
+        )
+    chunk = encoded[offset : offset + RETURNED_PATCH_MAX_BYTES]
+    page = chunk.decode("utf-8", errors="ignore")
+    consumed = len(page.encode("utf-8", errors="strict"))
+    next_offset = offset + consumed
+    return page, next_offset, next_offset < len(encoded)
 
 
 def _validated_repository(cwd: str, *, deadline: float) -> tuple[Path, str]:
@@ -319,7 +340,12 @@ def _validated_repository(cwd: str, *, deadline: float) -> tuple[Path, str]:
     return checked, head
 
 
-def diff_repository(cwd: str, scope: str = "worktree") -> RepoDiffResult:
+def diff_repository(
+    cwd: str,
+    scope: str = "worktree",
+    cursor: str | None = None,
+    continuation_receipt: ContinuationReceiptResult | None = None,
+) -> RepoDiffResult:
     """Return a bounded local-only tracked diff plus a full-state ReceiptV1."""
 
     if scope not in {"worktree", "staged"}:
@@ -328,6 +354,36 @@ def diff_repository(cwd: str, scope: str = "worktree") -> RepoDiffResult:
             "INVALID_SCOPE",
             "scope must be 'worktree' or 'staged'",
         )
+    if (cursor is None) != (continuation_receipt is None):
+        raise CapabilityFailure(
+            ContractErrorCode.INVALID_ARGUMENT,
+            "CONTINUATION_PAIR_REQUIRED",
+            "cursor and continuation_receipt must be provided together",
+        )
+    semantic_parameters = {"scope": scope}
+    offset = 0
+    if continuation_receipt is not None:
+        if continuation_receipt.kind != "repo-diff":
+            raise CapabilityFailure(
+                ContractErrorCode.INVALID_ARGUMENT,
+                "CONTINUATION_RECEIPT_KIND_MISMATCH",
+                "continuation receipt belongs to another tool",
+            )
+        try:
+            offset = parse_continuation_cursor(
+                cursor or "",
+                tool="repo_diff",
+                semantic_parameters=semantic_parameters,
+                receipt_digest=continuation_receipt.digest,
+            )
+        except ContinuationFailure as exc:
+            raise CapabilityFailure(
+                ContractErrorCode.PRECONDITION_FAILED
+                if exc.reason_code == "CONTINUATION_EXPIRED"
+                else ContractErrorCode.INVALID_ARGUMENT,
+                exc.reason_code,
+                exc.message,
+            ) from None
     deadline = time.monotonic() + CALL_DEADLINE_SECONDS
     repo_root, head_sha = _validated_repository(cwd, deadline=deadline)
 
@@ -364,21 +420,45 @@ def diff_repository(cwd: str, scope: str = "worktree") -> RepoDiffResult:
             "repository_root": str(repo_root),
             "head_sha": head_sha,
         },
-        semantic_parameters={"scope": scope},
+        semantic_parameters=semantic_parameters,
         observed_state_bytes=raw_diff,
     )
-    patch, patch_truncated = _truncate_patch(raw_diff)
-    return RepoDiffResult(
+    if continuation_receipt is not None and receipt.digest != continuation_receipt.digest:
+        raise CapabilityFailure(
+            ContractErrorCode.STATE_CHANGED,
+            "CONTINUATION_STATE_CHANGED",
+            "repository diff state changed since the continuation receipt was issued",
+        )
+    patch, next_offset, patch_truncated = _patch_page(raw_diff, offset)
+    receipt_result = ContinuationReceiptResult(
         schema_version=1,
+        kind="repo-diff",
+        digest=receipt.digest,
+    )
+    next_cursor = (
+        make_continuation_cursor(
+            tool="repo_diff",
+            position=next_offset,
+            semantic_parameters=semantic_parameters,
+            receipt_digest=receipt.digest,
+        )
+        if patch_truncated
+        else None
+    )
+    return RepoDiffResult(
+        schema_version=2,
         scope=scope,
         head_sha=head_sha,
         patch=patch,
         patch_truncated=patch_truncated,
+        truncated=patch_truncated,
         full_diff_bytes=len(raw_diff),
         diff_receipt=ReceiptV1Result(
             schema_version=receipt.schema_version,
             kind="repo-diff",
             digest=receipt.digest,
         ),
+        next_cursor=next_cursor,
+        continuation_receipt=receipt_result,
         network_used=False,
     )

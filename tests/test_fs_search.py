@@ -133,7 +133,7 @@ class FsSearchTests(unittest.TestCase):
 
     def test_serialized_output_bound_is_enforced(self) -> None:
         (self.root / "a.txt").write_text("needle\n")
-        with patch("agent_runtime.fs_search.MAX_SERIALIZED_RESULT_BYTES", 256):
+        with patch("agent_runtime.fs_search.MAX_SERIALIZED_RESULT_BYTES", 1024):
             result = search_files(str(self.root), "needle", "content")
         self.assertTrue(result.truncated)
         self.assertEqual(result.limit_reason, "max_output")

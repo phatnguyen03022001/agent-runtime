@@ -121,6 +121,10 @@ class CapabilityRegistryTests(unittest.IsolatedAsyncioTestCase):
                 "terminal_exec": 2,
                 "terminal_start": 3,
                 "terminal_poll": 4,
+                "fs_list": 2,
+                "fs_search": 2,
+                "repo_observer": 2,
+                "repo_diff": 2,
             }.get(descriptor.name, 1)
             self.assertEqual(descriptor.request_schema_version, expected_schema_version)
             self.assertTrue(descriptor.supported)
@@ -138,6 +142,10 @@ class CapabilityRegistryTests(unittest.IsolatedAsyncioTestCase):
                 "terminal_exec": 2,
                 "terminal_start": 3,
                 "terminal_poll": 3,
+                "fs_list": 2,
+                "fs_search": 2,
+                "repo_observer": 2,
+                "repo_diff": 2,
             }.get(descriptor.name, 1)
             self.assertEqual(descriptor.result_schema_version, expected_schema_version)
 

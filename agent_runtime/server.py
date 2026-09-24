@@ -33,6 +33,8 @@ from .contracts import (
     RuntimeCapabilitiesResult,
     ControlAction,
     Cursor,
+    ContinuationCursorToken,
+    ContinuationReceiptResult,
     PollOutputBytes,
     FsReadBatchResult,
     FsReadItems,
@@ -761,11 +763,13 @@ def fs_list(
     cwd: AbsoluteCwd,
     path: FsListPath = ".",
     max_entries: FsListMaxEntries = 200,
+    cursor: ContinuationCursorToken | None = None,
+    continuation_receipt: ContinuationReceiptResult | None = None,
 ) -> FsListResult:
     """List one directory non-recursively with deterministic no-follow metadata."""
 
     try:
-        return list_directory(cwd, path, max_entries)
+        return list_directory(cwd, path, max_entries, cursor, continuation_receipt)
     except CapabilityFailure as exc:
         return cast(FsListResult, _capability_error_result("fs_list", exc))
 
@@ -783,11 +787,22 @@ def fs_search(
     root_path: FsSearchRootPath = ".",
     case_sensitive: bool = True,
     max_results: FsSearchMaxResults = 100,
+    cursor: ContinuationCursorToken | None = None,
+    continuation_receipt: ContinuationReceiptResult | None = None,
 ) -> FsSearchResult:
     """Search regular files with literal bounded deterministic semantics."""
 
     try:
-        return search_files(cwd, query, mode, root_path, case_sensitive, max_results)
+        return search_files(
+            cwd,
+            query,
+            mode,
+            root_path,
+            case_sensitive,
+            max_results,
+            cursor,
+            continuation_receipt,
+        )
     except CapabilityFailure as exc:
         return cast(FsSearchResult, _capability_error_result("fs_search", exc))
 
@@ -842,11 +857,13 @@ def fs_write(
 def repo_observer(
     cwd: AbsoluteCwd,
     max_paths: RepoObserverMaxPaths = 200,
+    cursor: ContinuationCursorToken | None = None,
+    continuation_receipt: ContinuationReceiptResult | None = None,
 ) -> RepoObserverResult:
     """Observe one local-only Git working tree without network access or mutation."""
 
     try:
-        return observe_repository(cwd, max_paths)
+        return observe_repository(cwd, max_paths, cursor, continuation_receipt)
     except RepoObserverFailure as exc:
         return cast(RepoObserverResult, _runtime_error_from_exception("repo_observer", exc))
 
@@ -860,11 +877,13 @@ def repo_observer(
 def repo_diff(
     cwd: AbsoluteCwd,
     scope: RepoDiffScope = "worktree",
+    cursor: ContinuationCursorToken | None = None,
+    continuation_receipt: ContinuationReceiptResult | None = None,
 ) -> RepoDiffResult:
     """Return one bounded local tracked diff with a full-state receipt."""
 
     try:
-        return diff_repository(cwd, scope)
+        return diff_repository(cwd, scope, cursor, continuation_receipt)
     except CapabilityFailure as exc:
         return cast(RepoDiffResult, _capability_error_result("repo_diff", exc))
 

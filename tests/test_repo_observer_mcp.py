@@ -68,7 +68,10 @@ class RepoObserverMCPTests(unittest.IsolatedAsyncioTestCase):
         tool = tools["repo_observer"]
         self.assertEqual(_annotation_tuple(tool), (True, False, True, False))
         self.assertFalse(tool.input_schema["additionalProperties"])
-        self.assertEqual(set(tool.input_schema["properties"]), {"cwd", "max_paths"})
+        self.assertEqual(
+            set(tool.input_schema["properties"]),
+            {"cwd", "max_paths", "cursor", "continuation_receipt"},
+        )
         max_paths = tool.input_schema["properties"]["max_paths"]
         self.assertEqual(max_paths["minimum"], 1)
         self.assertEqual(max_paths["maximum"], 1000)
@@ -99,6 +102,9 @@ class RepoObserverMCPTests(unittest.IsolatedAsyncioTestCase):
                 "worktrees",
                 "observation",
                 "truncation",
+                "truncated",
+                "next_cursor",
+                "continuation_receipt",
             },
         )
 

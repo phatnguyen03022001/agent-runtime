@@ -76,6 +76,7 @@ StartIdentity = Annotated[
 ]
 TerminalMode = Literal["pty", "pipe"]
 Cursor = Annotated[int, Field(strict=True, ge=0)]
+ContinuationCursorToken = Annotated[StrictStr, Field(min_length=1, max_length=1024)]
 WaitMilliseconds = Annotated[int, Field(strict=True, ge=0, le=30000)]
 WaitFor = Literal["output_or_state", "terminal_or_deadline"]
 TerminalPollOutput = Literal["incremental", "none"]
@@ -426,7 +427,7 @@ class RepoTruncation(_ClosedResult):
 
 
 class RepoObserverResult(_ClosedResult):
-    schema_version: Literal[1]
+    schema_version: Literal[2]
     repository: RepoRepository
     branch: RepoBranch
     tracking: RepoTracking
@@ -436,6 +437,9 @@ class RepoObserverResult(_ClosedResult):
     worktrees: RepoWorktrees
     observation: RepoObservation
     truncation: RepoTruncation
+    truncated: bool
+    next_cursor: ContinuationCursorToken | None
+    continuation_receipt: "ContinuationReceiptResult"
 
 
 class RepoFastForwardResult(_ClosedResult):
@@ -580,6 +584,12 @@ class CapabilityFailure(Exception):
         self.safe_next_action = safe_next_action
 
 
+class ContinuationReceiptResult(_ClosedResult):
+    schema_version: Literal[1]
+    kind: Literal["fs-list", "fs-search", "repo-diff", "repo-observer"]
+    digest: FsPatchExpectedSha256
+
+
 class FsListEntry(_ClosedResult):
     name: str
     path: str
@@ -588,12 +598,14 @@ class FsListEntry(_ClosedResult):
 
 
 class FsListResult(_ClosedResult):
-    schema_version: Literal[1]
+    schema_version: Literal[2]
     path: str
     entries: list[FsListEntry]
     truncated: bool
     scanned_entries: int
     skipped_invalid_names: int
+    next_cursor: ContinuationCursorToken | None
+    continuation_receipt: ContinuationReceiptResult
 
 
 class FsSearchResultItem(_ClosedResult):
@@ -605,7 +617,7 @@ class FsSearchResultItem(_ClosedResult):
 
 
 class FsSearchResult(_ClosedResult):
-    schema_version: Literal[1]
+    schema_version: Literal[2]
     results: list[FsSearchResultItem]
     truncated: bool
     limit_reason: Literal["max_files", "max_bytes", "max_results", "max_output", "deadline"] | None
@@ -614,6 +626,8 @@ class FsSearchResult(_ClosedResult):
     skipped_invalid_utf8: int
     skipped_nul: int
     skipped_symlinks: int
+    next_cursor: ContinuationCursorToken | None
+    continuation_receipt: ContinuationReceiptResult
 
 
 class FsPatchEdit(_ClosedResult):
@@ -641,13 +655,16 @@ class ReceiptV1Result(_ClosedResult):
 
 
 class RepoDiffResult(_ClosedResult):
-    schema_version: Literal[1]
+    schema_version: Literal[2]
     scope: RepoDiffScope
     head_sha: RepoFastForwardSha
     patch: str
     patch_truncated: bool
+    truncated: bool
     full_diff_bytes: int
     diff_receipt: ReceiptV1Result
+    next_cursor: ContinuationCursorToken | None
+    continuation_receipt: ContinuationReceiptResult
     network_used: Literal[False]
 
 

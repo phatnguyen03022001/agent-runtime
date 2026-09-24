@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import selectors
 import stat
@@ -9,9 +10,26 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from .tool_contract import Authority, MutationAuthority, NetworkAuthority, ToolAnnotations, ToolClass, ToolContract
+from .tool_contract import (
+    Authority,
+    CONTINUATION_CURSOR_MAX_CHARS,
+    CONTINUATION_TTL_SECONDS,
+    ContinuationFailure,
+    ContractErrorCode,
+    MutationAuthority,
+    NetworkAuthority,
+    ToolAnnotations,
+    ToolClass,
+    ToolContract,
+    canonical_structured_bytes,
+    frame_bytes,
+    make_continuation_cursor,
+    make_receipt_v1,
+    parse_continuation_cursor,
+)
 
 from .contracts import (
+    ContinuationReceiptResult,
     RepoBranch,
     RepoChange,
     RepoDiffSummary,
@@ -55,8 +73,15 @@ REPO_OBSERVER_CONTRACT = ToolContract(
         "diff_bytes": _DIFF_MAX_BYTES,
         "worktree_bytes": _WORKTREE_MAX_BYTES,
         "deadline_milliseconds": int(CALL_DEADLINE_SECONDS * 1000),
+        "continuation_cursor_chars": CONTINUATION_CURSOR_MAX_CHARS,
+        "continuation_ttl_seconds": CONTINUATION_TTL_SECONDS,
     },
-    postconditions={"fetched": False, "network_used": False, "repository_mutation": False},
+    postconditions={
+        "fetched": False,
+        "network_used": False,
+        "repository_mutation": False,
+        "continuation_consistency": "local-observation-revalidated",
+    },
 )
 
 class RepoObserverFailure(Exception):
@@ -66,11 +91,15 @@ class RepoObserverFailure(Exception):
         message: str,
         *,
         retryable: bool = False,
+        contract_code: ContractErrorCode | None = None,
+        reason_code: str | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
         self.message = message[:256]
         self.retryable = retryable
+        self.contract_code = contract_code
+        self.reason_code = reason_code or code
 
 
 @dataclass(frozen=True, slots=True)
@@ -470,7 +499,7 @@ def _decode_path(value: bytes) -> str:
     return os.fsdecode(value)
 
 
-def _status_parser(state: _StatusState, max_paths: int) -> Callable[[bytes], None]:
+def _status_parser(state: _StatusState, max_paths: int, offset: int = 0) -> Callable[[bytes], None]:
     def parse(record: bytes) -> None:
         if state.awaiting_original_for is not None:
             if state.awaiting_original_for >= 0:
@@ -576,7 +605,8 @@ def _status_parser(state: _StatusState, max_paths: int) -> Callable[[bytes], Non
 
         retained_index = -1
         assert state.retained is not None
-        if len(state.retained) < max_paths:
+        change_index = state.total_changes - 1
+        if offset <= change_index < offset + max_paths:
             state.retained.append(payload)
             retained_index = len(state.retained) - 1
         if record.startswith(b"2 "):
@@ -798,12 +828,53 @@ def _operation_state(
     )
 
 
-def observe_repository(cwd: str, max_paths: int = MAX_PATHS_DEFAULT) -> RepoObserverResult:
+def observe_repository(
+    cwd: str,
+    max_paths: int = MAX_PATHS_DEFAULT,
+    cursor: str | None = None,
+    continuation_receipt: ContinuationReceiptResult | None = None,
+) -> RepoObserverResult:
     if type(max_paths) is not int or not (1 <= max_paths <= MAX_PATHS_LIMIT):
         raise RepoObserverFailure(
             "INVALID_ARGUMENT",
             f"max_paths must be an integer from 1 to {MAX_PATHS_LIMIT}",
         )
+    if (cursor is None) != (continuation_receipt is None):
+        raise RepoObserverFailure(
+            "INVALID_ARGUMENT",
+            "cursor and continuation_receipt must be provided together",
+            contract_code=ContractErrorCode.INVALID_ARGUMENT,
+            reason_code="CONTINUATION_PAIR_REQUIRED",
+        )
+
+    semantic_parameters = {"max_paths": max_paths}
+    offset = 0
+    if continuation_receipt is not None:
+        if continuation_receipt.kind != "repo-observer":
+            raise RepoObserverFailure(
+                "INVALID_ARGUMENT",
+                "continuation receipt belongs to another tool",
+                contract_code=ContractErrorCode.INVALID_ARGUMENT,
+                reason_code="CONTINUATION_RECEIPT_KIND_MISMATCH",
+            )
+        try:
+            offset = parse_continuation_cursor(
+                cursor or "",
+                tool="repo_observer",
+                semantic_parameters=semantic_parameters,
+                receipt_digest=continuation_receipt.digest,
+            )
+        except ContinuationFailure as exc:
+            raise RepoObserverFailure(
+                "INVALID_ARGUMENT",
+                exc.message,
+                contract_code=(
+                    ContractErrorCode.PRECONDITION_FAILED
+                    if exc.reason_code == "CONTINUATION_EXPIRED"
+                    else ContractErrorCode.INVALID_ARGUMENT
+                ),
+                reason_code=exc.reason_code,
+            ) from None
 
     deadline = time.monotonic() + CALL_DEADLINE_SECONDS
     workspace_root = _workspace_root()
@@ -848,6 +919,14 @@ def observe_repository(cwd: str, max_paths: int = MAX_PATHS_DEFAULT) -> RepoObse
         ) from exc
     shallow = root_lines[1].strip() == "true"
 
+    def hashed_parser(hasher, parser):
+        def consume(record: bytes) -> None:
+            hasher.update(frame_bytes(record))
+            parser(record)
+
+        return consume
+
+    status_hasher = hashlib.sha256()
     status_state = _StatusState()
     status_result = _run_git_records(
         repo_root,
@@ -862,7 +941,7 @@ def observe_repository(cwd: str, max_paths: int = MAX_PATHS_DEFAULT) -> RepoObse
         remaining_time=_remaining(deadline),
         max_stdout_bytes=_STATUS_MAX_BYTES,
         delimiter=b"\0",
-        on_record=_status_parser(status_state, max_paths),
+        on_record=hashed_parser(status_hasher, _status_parser(status_state, max_paths, offset)),
     )
     if not status_result.output_truncated:
         _require_git_success(status_result, not_repo_ok=True)
@@ -873,6 +952,7 @@ def observe_repository(cwd: str, max_paths: int = MAX_PATHS_DEFAULT) -> RepoObse
         deadline=deadline,
     )
 
+    staged_hasher = hashlib.sha256()
     staged_diff = _DiffState()
     staged_result = _run_git_records(
         repo_root,
@@ -889,12 +969,13 @@ def observe_repository(cwd: str, max_paths: int = MAX_PATHS_DEFAULT) -> RepoObse
         remaining_time=_remaining(deadline),
         max_stdout_bytes=_DIFF_MAX_BYTES,
         delimiter=b"\0",
-        on_record=_diff_parser(staged_diff),
+        on_record=hashed_parser(staged_hasher, _diff_parser(staged_diff)),
         diff_probe=True,
     )
     if not staged_result.output_truncated:
         _require_git_success(staged_result)
 
+    unstaged_hasher = hashlib.sha256()
     unstaged_diff = _DiffState()
     unstaged_result = _run_git_records(
         repo_root,
@@ -910,7 +991,7 @@ def observe_repository(cwd: str, max_paths: int = MAX_PATHS_DEFAULT) -> RepoObse
         remaining_time=_remaining(deadline),
         max_stdout_bytes=_DIFF_MAX_BYTES,
         delimiter=b"\0",
-        on_record=_diff_parser(unstaged_diff),
+        on_record=hashed_parser(unstaged_hasher, _diff_parser(unstaged_diff)),
         diff_probe=True,
     )
     if not unstaged_result.output_truncated:
@@ -922,6 +1003,7 @@ def observe_repository(cwd: str, max_paths: int = MAX_PATHS_DEFAULT) -> RepoObse
         deadline=deadline,
     )
 
+    worktree_hasher = hashlib.sha256()
     worktree_state = _WorktreeState()
     worktree_result = _run_git_records(
         repo_root,
@@ -929,7 +1011,10 @@ def observe_repository(cwd: str, max_paths: int = MAX_PATHS_DEFAULT) -> RepoObse
         remaining_time=_remaining(deadline),
         max_stdout_bytes=_WORKTREE_MAX_BYTES,
         delimiter=b"\0",
-        on_record=_worktree_parser(worktree_state, workspace_root),
+        on_record=hashed_parser(
+            worktree_hasher,
+            _worktree_parser(worktree_state, workspace_root),
+        ),
     )
     if not worktree_result.output_truncated:
         _require_git_success(worktree_result)
@@ -954,56 +1039,131 @@ def observe_repository(cwd: str, max_paths: int = MAX_PATHS_DEFAULT) -> RepoObse
 
     retained = status_state.retained or []
     changes = [RepoChange(**payload) for payload in retained]
-    changes_truncated = status_result.output_truncated or status_state.total_changes > len(changes)
     total_changes = status_state.total_changes if status_exact else None
+    if total_changes is not None and offset > total_changes:
+        raise RepoObserverFailure(
+            "INVALID_ARGUMENT",
+            "continuation cursor position is outside the current change collection",
+            contract_code=ContractErrorCode.INVALID_ARGUMENT,
+            reason_code="CONTINUATION_POSITION_INVALID",
+        )
+    more_changes = total_changes is not None and offset + len(changes) < total_changes
+    changes_truncated = (
+        status_result.output_truncated or offset > 0 or more_changes
+    )
 
     worktrees_exact = not worktree_result.output_truncated
     worktrees_truncated = worktree_result.output_truncated or worktree_state.retained_truncated
 
-    return RepoObserverResult(
+    repository_result = RepoRepository(
+        root=str(repo_root),
+        cwd=str(checked_cwd),
+        bare=False,
+        shallow=shallow,
+        inside_workspace_root=True,
+        cwd_inside_repo=True,
+        cwd_is_repo_root=checked_cwd == repo_root,
+    )
+    branch_result = RepoBranch(
+        head_sha=status_state.head_sha,
+        name=status_state.branch_name,
+        detached=status_state.detached,
+    )
+    diff_summary_result = RepoDiffSummary(
+        staged_files=staged_diff.files if not staged_result.output_truncated else None,
+        unstaged_files=unstaged_diff.files if not unstaged_result.output_truncated else None,
+        untracked_files=status_state.untracked_files if status_exact else None,
+        conflicted_files=status_state.conflicted_files if status_exact else None,
+        additions=additions,
+        deletions=deletions,
+        exact=diff_exact,
+    )
+    worktrees_result = RepoWorktrees(
+        entries=worktree_state.entries or [],
+        outside_workspace_count=worktree_state.outside_workspace_count,
+        total_count=worktree_state.total_count if worktrees_exact else None,
+        total_exact=worktrees_exact,
+    )
+    observation_result = RepoObservation(
+        fetched=False,
+        network_used=False,
+        deadline_seconds=CALL_DEADLINE_SECONDS,
+    )
+    truncation_result = RepoTruncation(
+        changes_truncated=changes_truncated,
+        worktrees_truncated=worktrees_truncated,
+        diff_truncated=diff_truncated,
+        total_changes=total_changes,
+        total_changes_exact=status_exact,
+    )
+
+    receipt = make_receipt_v1(
+        kind="repo-observer",
+        subject={"repository_root": str(repo_root), "cwd": str(checked_cwd)},
+        semantic_parameters=semantic_parameters,
+        observed_state_bytes=canonical_structured_bytes(
+            {
+                "repository": repository_result.model_dump(),
+                "branch": branch_result.model_dump(),
+                "tracking": tracking_state.model_dump(),
+                "status_digest": status_hasher.hexdigest(),
+                "status_total_changes": total_changes,
+                "staged_diff_digest": staged_hasher.hexdigest(),
+                "unstaged_diff_digest": unstaged_hasher.hexdigest(),
+                "diff_summary": diff_summary_result.model_dump(),
+                "operation_state": operation_state.model_dump(),
+                "worktree_digest": worktree_hasher.hexdigest(),
+                "worktrees": worktrees_result.model_dump(),
+                "status_output_truncated": status_result.output_truncated,
+                "staged_output_truncated": staged_result.output_truncated,
+                "unstaged_output_truncated": unstaged_result.output_truncated,
+                "worktree_output_truncated": worktree_result.output_truncated,
+            }
+        ),
+    )
+    if continuation_receipt is not None and receipt.digest != continuation_receipt.digest:
+        raise RepoObserverFailure(
+            "LOCAL_STATE_CHANGED",
+            "repository observation changed since the continuation receipt was issued",
+            contract_code=ContractErrorCode.STATE_CHANGED,
+            reason_code="CONTINUATION_STATE_CHANGED",
+        )
+
+    exact_resumable_identity = (
+        status_exact
+        and not staged_result.output_truncated
+        and not unstaged_result.output_truncated
+        and not worktree_result.output_truncated
+    )
+    receipt_result = ContinuationReceiptResult(
         schema_version=1,
-        repository=RepoRepository(
-            root=str(repo_root),
-            cwd=str(checked_cwd),
-            bare=False,
-            shallow=shallow,
-            inside_workspace_root=True,
-            cwd_inside_repo=True,
-            cwd_is_repo_root=checked_cwd == repo_root,
-        ),
-        branch=RepoBranch(
-            head_sha=status_state.head_sha,
-            name=status_state.branch_name,
-            detached=status_state.detached,
-        ),
+        kind="repo-observer",
+        digest=receipt.digest,
+    )
+    next_cursor = (
+        make_continuation_cursor(
+            tool="repo_observer",
+            position=offset + len(changes),
+            semantic_parameters=semantic_parameters,
+            receipt_digest=receipt.digest,
+        )
+        if more_changes and exact_resumable_identity
+        else None
+    )
+    top_level_truncated = changes_truncated or worktrees_truncated or diff_truncated
+
+    return RepoObserverResult(
+        schema_version=2,
+        repository=repository_result,
+        branch=branch_result,
         tracking=tracking_state,
         changes=changes,
-        diff_summary=RepoDiffSummary(
-            staged_files=staged_diff.files if not staged_result.output_truncated else None,
-            unstaged_files=unstaged_diff.files if not unstaged_result.output_truncated else None,
-            untracked_files=status_state.untracked_files if status_exact else None,
-            conflicted_files=status_state.conflicted_files if status_exact else None,
-            additions=additions,
-            deletions=deletions,
-            exact=diff_exact,
-        ),
+        diff_summary=diff_summary_result,
         operation_state=operation_state,
-        worktrees=RepoWorktrees(
-            entries=worktree_state.entries or [],
-            outside_workspace_count=worktree_state.outside_workspace_count,
-            total_count=worktree_state.total_count if worktrees_exact else None,
-            total_exact=worktrees_exact,
-        ),
-        observation=RepoObservation(
-            fetched=False,
-            network_used=False,
-            deadline_seconds=CALL_DEADLINE_SECONDS,
-        ),
-        truncation=RepoTruncation(
-            changes_truncated=changes_truncated,
-            worktrees_truncated=worktrees_truncated,
-            diff_truncated=diff_truncated,
-            total_changes=total_changes,
-            total_changes_exact=status_exact,
-        ),
+        worktrees=worktrees_result,
+        observation=observation_result,
+        truncation=truncation_result,
+        truncated=top_level_truncated,
+        next_cursor=next_cursor,
+        continuation_receipt=receipt_result,
     )

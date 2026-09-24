@@ -3,17 +3,24 @@ from __future__ import annotations
 import os
 import stat
 
-from .contracts import CapabilityFailure, FsListEntry, FsListResult
+from .contracts import CapabilityFailure, ContinuationReceiptResult, FsListEntry, FsListResult
 from .errors import RuntimeValidationError
 from .fs_safety import FsSafetyError, normalized_path, open_directory_at, open_validated_cwd, split_descendant
 from .tool_contract import (
     Authority,
+    CONTINUATION_CURSOR_MAX_CHARS,
+    CONTINUATION_TTL_SECONDS,
+    ContinuationFailure,
     ContractErrorCode,
     MutationAuthority,
     NetworkAuthority,
     ToolAnnotations,
     ToolClass,
     ToolContract,
+    canonical_structured_bytes,
+    make_continuation_cursor,
+    make_receipt_v1,
+    parse_continuation_cursor,
 )
 
 DEFAULT_MAX_ENTRIES = 200
@@ -44,11 +51,14 @@ FS_LIST_CONTRACT = ToolContract(
     bounds={
         "max_entries": MAX_ENTRIES,
         "directory_scan_entries": DIRECTORY_SCAN_LIMIT,
+        "continuation_cursor_chars": CONTINUATION_CURSOR_MAX_CHARS,
+        "continuation_ttl_seconds": CONTINUATION_TTL_SECONDS,
     },
     postconditions={
         "recursive": False,
         "ordering": "ascending-utf8-name",
         "entry_metadata": "nofollow",
+        "continuation_consistency": "complete-directory-revalidated",
     },
 )
 
@@ -110,7 +120,13 @@ def _kind(observed: os.stat_result) -> tuple[str, int | None]:
     return "other", None
 
 
-def list_directory(cwd: str, path: str = ".", max_entries: int = DEFAULT_MAX_ENTRIES) -> FsListResult:
+def list_directory(
+    cwd: str,
+    path: str = ".",
+    max_entries: int = DEFAULT_MAX_ENTRIES,
+    cursor: str | None = None,
+    continuation_receipt: ContinuationReceiptResult | None = None,
+) -> FsListResult:
     """List one directory without recursion or symlink traversal."""
 
     try:
@@ -127,6 +143,35 @@ def list_directory(cwd: str, path: str = ".", max_entries: int = DEFAULT_MAX_ENT
             "INVALID_MAX_ENTRIES",
             "max_entries must be an integer from 1 through 1000",
         )
+    if (cursor is None) != (continuation_receipt is None):
+        raise CapabilityFailure(
+            ContractErrorCode.INVALID_ARGUMENT,
+            "CONTINUATION_PAIR_REQUIRED",
+            "cursor and continuation_receipt must be provided together",
+        )
+    normalized = normalized_path(components)
+    semantic_parameters = {"path": normalized, "max_entries": max_entries}
+    offset = 0
+    if continuation_receipt is not None:
+        if continuation_receipt.kind != "fs-list":
+            raise CapabilityFailure(
+                ContractErrorCode.INVALID_ARGUMENT,
+                "CONTINUATION_RECEIPT_KIND_MISMATCH",
+                "continuation receipt belongs to another tool",
+            )
+        try:
+            offset = parse_continuation_cursor(
+                cursor or "",
+                tool="fs_list",
+                semantic_parameters=semantic_parameters,
+                receipt_digest=continuation_receipt.digest,
+            )
+        except ContinuationFailure as exc:
+            raise CapabilityFailure(
+                ContractErrorCode.PRECONDITION_FAILED if exc.reason_code == "CONTINUATION_EXPIRED" else ContractErrorCode.INVALID_ARGUMENT,
+                exc.reason_code,
+                exc.message,
+            ) from None
 
     try:
         _checked_cwd, cwd_fd = open_validated_cwd(cwd)
@@ -188,14 +233,56 @@ def list_directory(cwd: str, path: str = ".", max_entries: int = DEFAULT_MAX_ENT
             os.close(directory_fd)
 
         retained.sort(key=lambda item: item.name)
-        truncated = len(retained) > max_entries
-        return FsListResult(
+        receipt = make_receipt_v1(
+            kind="fs-list",
+            subject={"cwd": str(_checked_cwd), "path": normalized},
+            semantic_parameters=semantic_parameters,
+            observed_state_bytes=canonical_structured_bytes(
+                {
+                    "entries": [item.model_dump() for item in retained],
+                    "scanned_entries": scanned,
+                    "skipped_invalid_names": skipped_invalid_names,
+                }
+            ),
+        )
+        if continuation_receipt is not None and receipt.digest != continuation_receipt.digest:
+            raise CapabilityFailure(
+                ContractErrorCode.STATE_CHANGED,
+                "CONTINUATION_STATE_CHANGED",
+                "directory state changed since the continuation receipt was issued",
+            )
+        if offset > len(retained):
+            raise CapabilityFailure(
+                ContractErrorCode.INVALID_ARGUMENT,
+                "CONTINUATION_POSITION_INVALID",
+                "continuation cursor position is outside the observed directory",
+            )
+        end = min(len(retained), offset + max_entries)
+        truncated = end < len(retained)
+        receipt_result = ContinuationReceiptResult(
             schema_version=1,
-            path=normalized_path(components),
-            entries=retained[:max_entries],
+            kind="fs-list",
+            digest=receipt.digest,
+        )
+        next_cursor = (
+            make_continuation_cursor(
+                tool="fs_list",
+                position=end,
+                semantic_parameters=semantic_parameters,
+                receipt_digest=receipt.digest,
+            )
+            if truncated
+            else None
+        )
+        return FsListResult(
+            schema_version=2,
+            path=normalized,
+            entries=retained[offset:end],
             truncated=truncated,
             scanned_entries=scanned,
             skipped_invalid_names=skipped_invalid_names,
+            next_cursor=next_cursor,
+            continuation_receipt=receipt_result,
         )
     finally:
         os.close(cwd_fd)
