@@ -2,7 +2,7 @@
 
 Agent Runtime is a **bounded local execution provider** for ChatGPT and other MCP clients on macOS. **MCP is the protocol**; the admitted product transport is OpenAI Secure MCP Tunnel, which keeps the Runtime private and uses outbound HTTPS rather than a public inbound listener.
 
-The qualified Runtime is version **0.2.2** with **exactly nineteen public tools**. The native app owns the installed lifecycle through **app-owned ServiceManagement**. The older LaunchAgent model is a **migration/rollback predecessor only**.
+The qualified Runtime source is version **0.3.0** with **exactly nineteen public tools**. The native app owns the installed lifecycle through **app-owned ServiceManagement**. The older LaunchAgent model is a **migration/rollback predecessor only**.
 
 ## Supported product shape
 
@@ -11,7 +11,7 @@ The qualified Runtime is version **0.2.2** with **exactly nineteen public tools*
 - Package-owned Runtime bytes under `~/Applications/Agent Runtime.app`.
 - Canonical operator configuration at `~/Library/Application Support/Agent Runtime/runtime.env`, mode `0600`.
 - One protected singleton tunnel/listener on `127.0.0.1:8080`.
-- Runtime version 0.2.2, ToolContract Kernel v2, nineteen-tool public MCP contract.
+- Runtime source version 0.3.0, ToolContract Kernel v2, nineteen-tool public MCP contract.
 - Runtime requires no blanket TCC permissions. Background Activity approval is operator/platform state.
 - Homebrew is optional; it is not an architecture prerequisite.
 
