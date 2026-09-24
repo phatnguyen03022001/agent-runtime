@@ -171,7 +171,7 @@ class TimingToolTests(unittest.TestCase):
         self.assertIn(timing_middleware, server.mcp.middleware)
         self.assertEqual(
             list(inspect.signature(server.terminal_exec).parameters),
-            ["argv", "cwd", "timeout_seconds"],
+            ["argv", "cwd", "start_identity", "timeout_seconds"],
         )
         self.assertEqual(
             [parameter.name for parameter in inspect.signature(server.terminal_control).parameters.values()],

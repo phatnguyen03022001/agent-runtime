@@ -573,8 +573,8 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_invalid_boundary_values_are_rejected_before_tool_bodies_run(self) -> None:
         cases = (
-            ("terminal_exec", "execute_terminal", {"argv": ["/usr/bin/true"], "cwd": str(ROOT), "timeout_seconds": 0}),
-            ("terminal_exec", "execute_terminal", {"argv": ["/usr/bin/true"], "cwd": str(ROOT), "timeout_seconds": 3600.1}),
+            ("terminal_exec", "execute_terminal", {"argv": ["/usr/bin/true"], "cwd": str(ROOT), "start_identity": "3" * 32, "timeout_seconds": 0}),
+            ("terminal_exec", "execute_terminal", {"argv": ["/usr/bin/true"], "cwd": str(ROOT), "start_identity": "4" * 32, "timeout_seconds": 3600.1}),
             ("terminal_poll", "_poll_terminal", {"session_id": "session", "cursor": -1, "wait_ms": 0}),
             ("terminal_poll", "_poll_terminal", {"session_id": "session", "cursor": 0, "wait_ms": -1}),
             ("terminal_poll", "_poll_terminal", {"session_id": "session", "cursor": 0, "wait_ms": 30001}),

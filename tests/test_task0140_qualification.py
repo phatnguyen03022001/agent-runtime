@@ -45,6 +45,7 @@ class Task0140QualificationTests(unittest.IsolatedAsyncioTestCase):
                 arguments={
                     "argv": ["/usr/bin/true"],
                     "cwd": str(ROOT),
+                    "start_identity": "3" * 32,
                     "timeout_seconds": 5,
                 },
                 delegate_name="execute_terminal",

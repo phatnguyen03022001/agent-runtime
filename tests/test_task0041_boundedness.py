@@ -326,7 +326,7 @@ class MCPInputBoundednessTests(unittest.IsolatedAsyncioTestCase):
         cases = (
             (
                 "terminal_exec",
-                {"argv": ["x" * (ARGV_ITEM_LIMIT + 1)], "cwd": str(ROOT)},
+                {"argv": ["x" * (ARGV_ITEM_LIMIT + 1)], "cwd": str(ROOT), "start_identity": "3" * 32},
             ),
             (
                 "terminal_control",
@@ -334,7 +334,7 @@ class MCPInputBoundednessTests(unittest.IsolatedAsyncioTestCase):
             ),
             (
                 "terminal_exec",
-                {"argv": ["/usr/bin/true"], "cwd": str(ROOT), "unknown_task0041": "x" * 100_000},
+                {"argv": ["/usr/bin/true"], "cwd": str(ROOT), "start_identity": "4" * 32, "unknown_task0041": "x" * 100_000},
             ),
         )
         async with Client(server.mcp) as client:

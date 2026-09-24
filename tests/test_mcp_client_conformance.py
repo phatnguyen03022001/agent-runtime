@@ -488,6 +488,7 @@ class MCPClientConformanceTests(unittest.IsolatedAsyncioTestCase):
                     {
                         "argv": ["/usr/bin/true"],
                         "cwd": str(ROOT),
+                        "start_identity": "3" * 32,
                         "timeout_seconds": 0,
                     },
                 )
