@@ -1,0 +1,92 @@
+protocol_version: 3
+
+task_id: TASK-0147
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0147/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  authorized_base_head: "ec74c015fc3a7ff4af15a425b8ffd8f72b6e6805"
+  final_execution_head: "ac63db9d2052540020dbd8b2db7e39eddcee8b16"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - repository_content_write
+    - canonical_verification
+    - live_runtime_read_only_observation
+    - installed_runtime_doctor
+    - git_commit
+    - non_force_git_publication
+    - remote_ref_reconciliation
+  available:
+    - repository_content_write
+    - canonical_verification
+    - live_runtime_read_only_observation
+    - installed_runtime_doctor
+    - git_commit
+    - non_force_git_publication
+    - remote_ref_reconciliation
+  missing: []
+  passed: true
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: PASS
+  evidence: "Exact final source candidate ac63db9d2052540020dbd8b2db7e39eddcee8b16, tree c1283b846f92973d7f43f22ca840dfdc99fa9918, passed canonical ./verify with lifecycle COMPLETED, termination_reason=natural_exit and exit_code=0: 57/57 modules and 723 tests, including 254 FAST_PARALLEL_SAFE and 469 SERIAL_HOST_SENSITIVE tests. Final focused continuation/schema/receipt/Git coverage passed before publication; the main focused suite completed 103 tests with one existing skip, and later compatibility-only repairs passed their targeted suites. Source identity remains Runtime 0.3.0, ToolContract Kernel 2, nineteen public tools, with fs_list/fs_search/repo_diff/repo_observer request/result schemas 2/2. Candidate was published non-force and reconciled as local HEAD=origin/main with ahead/behind 0/0 and a clean worktree. Read-only live Runtime observation remains Runtime 0.3.0, Kernel 2, nineteen tools, with the four target tools still at installed schemas 1/1; canonical installed doctor is healthy with all ten checks passing and binds installed runtime_revision 89111218720ddb2f12961f9375549733edd23ada, tree 00cdfce957326c011b5ed5a377074fa071821f55, with transaction_present=false."
+
+pushed: true
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "Source capability registry exports fs_list, fs_search, repo_diff and repo_observer at request/result schemas 2/2 while Runtime version remains 0.3.0, ToolContract Kernel remains 2 and public tool inventory remains 19. The shared stateless continuation codec binds tool identity, cursor format version, unsigned page position, canonical semantic-parameter digest, ReceiptV1 digest, issued time and expiry; cursors are ASCII, bounded to 1024 characters and expire after exactly 300 seconds. Resume requires both cursor and continuation_receipt; pair omission, malformed cursor, wrong tool/version, semantic-parameter mismatch, receipt mismatch/tampering and expiry have stable structured reason codes. Default first-page calls omit both continuation fields and preserve pre-existing result fields."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "Focused deterministic tests exercise multi-page fs_list, fs_search, repo_diff and repo_observer continuation with no duplicate or missing entries/bytes under unchanged state. fs_list revalidates the complete sorted bounded directory observation; fs_search replays deterministic traversal through the issued boundary; repo_diff pages the complete raw-diff identity on valid UTF-8 boundaries; repo_observer pages exact local change state only. Directory/search/Git mutations between pages are rejected with structured STATE_CHANGED/CONTINUATION_STATE_CHANGED where prior issued state is invalidated. Tests also cover malformed/tampered/expired cursor evidence, receipt tampering, parameter mismatch, cursor bound and hard-bound terminal truncation without manufactured continuation."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "fs_search ToolContract and README explicitly declare continuation_consistency=revalidated. Resume recomputes deterministic traversal state through the prior result boundary and compares a ReceiptV1-bound digest before continuing; no point-in-time snapshot is claimed. Implementation adds no global cache, TTL cache, persistent cursor store, database, daemon, scheduler, snapshot service or background continuation work. Focused mutation proof inserts an ordering-changing prefix after page one and requires STATE_CHANGED rather than silently continuing."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "repo_diff preserves its existing full raw-diff ReceiptV1 and exposes the same digest through continuation_receipt while keeping diff_receipt and repo_commit authorization semantics unchanged; repo_commit regression coverage is included in the focused suite and canonical verifier. repo_observer remains network=NONE, mutation=NONE, fetched=false and network_used=false. Existing scan/state/output ceilings remain in ToolContract bounds, with 1024-character/300-second continuation bounds added rather than replacing prior limits. No dependency, package/install, runtime.env, ServiceManagement, TCC, screen-capture or later-roadmap implementation changed."
+  - criterion_id: AC-5
+    status: EVIDENCE_INDEXED
+    evidence: "Initial focused continuation/schema/Git suite passed 103 tests with one existing skip and git diff --check passed before the first candidate. Canonical verification then truthfully exposed three stale compatibility assertions in succession: repo_fast_forward MCP/README expectations on ef54887cd865ead764a089c2a6282a0b56050811, TASK-0041 repo_observer input bounds on be3328112cec6d7dfdf3ad64c6d280e398ec6191, and timing signature expectation on 051fbe47c49c31c0214b1431c4c2e3ba5866a79b. Each was repaired in-scope without amend/squash, targeted tests passed, and the exact successor candidate ac63db9d2052540020dbd8b2db7e39eddcee8b16 then passed canonical ./verify 57/57 modules and 723 tests. Fresh remote main still equaled the authorized base immediately before non-force publication; the exact verified final candidate was pushed and reconciled cleanly. Installed Runtime remains the accepted 0.3.0 activation at revision 89111218720ddb2f12961f9375549733edd23ada with no cutover transaction. This report is prepared as the sole report-only child; its validator result, report commit identity and post-publication lineage are completed after these bytes exist and therefore are not self-attested here."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Fresh execution-start resolution proved branch=main, local HEAD=origin/main=remote main=ec74c015fc3a7ff4af15a425b8ffd8f72b6e6805, ahead/behind=0/0, clean worktree/index, remote branches exactly {main}, open PRs=0, TASK-0147 revision 1 and accepted Cutover A closure. Live current-phase capabilities were available before mutation."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "Before mutation, fresh source/live inspection proved fs_list, fs_search, repo_diff and repo_observer were each request/result schema 1/1 and had no existing continuation surface. ReceiptV1/tool-contract machinery and per-tool bounded implementations were inspected and reused rather than layering a second token/receipt system."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "Implementation uses one ReceiptV1-adjacent stateless cursor codec plus tool-local revalidation. Focused tests cover the shared 1024-character/300-second contract, pair validation, deterministic multi-page behavior, no gaps/duplicates, tool/version/parameter/receipt binding, malformed/tampered/expired tokens, mutation STATE_CHANGED semantics, fs_search revalidation, UTF-8 repo_diff pages, repo_observer hard-bound no-cursor behavior, schema export/MCP conformance and repo_commit compatibility."
+  - check_id: CHECK-4
+    result: PASS
+    evidence: "The final implementation tree is c1283b846f92973d7f43f22ca840dfdc99fa9918 at candidate ac63db9d2052540020dbd8b2db7e39eddcee8b16. The candidate range from authorized base contains the primary implementation commit ef54887cd865ead764a089c2a6282a0b56050811 followed only by three compatibility-test/doc successor repairs discovered by canonical verification; no history was amended, squashed or force-pushed. The base-to-final diff is confined to README.md, the eight authorized agent_runtime owners, directly affected tests and one allowed new focused test file. git diff --check passed and the final candidate worktree was clean."
+  - check_id: CHECK-5
+    result: PASS
+    evidence: "Canonical ./verify on exact final candidate ac63db9d2052540020dbd8b2db7e39eddcee8b16 completed naturally with exit_code=0: 57/57 modules, 723 tests, 254 fast-lane and 469 serial-lane tests. Earlier verify failures were stale compatibility assertions, were not published, were repaired in-scope, and each source/test write produced a new candidate that was re-verified."
+  - check_id: CHECK-6
+    result: PASS
+    evidence: "After final verification, fresh fetch/ls-remote proved remote main still equaled exact execution base ec74c015fc3a7ff4af15a425b8ffd8f72b6e6805, remote branches exactly {main}, open PRs=0 and local candidate ahead 4/behind 0. A non-force git push advanced main through the verified candidate chain to ac63db9d2052540020dbd8b2db7e39eddcee8b16. Fresh fetch then proved local HEAD=origin/main=candidate, ahead/behind=0/0 and clean worktree."
+  - check_id: CHECK-7
+    result: EVIDENCE_INDEXED
+    evidence: "Read-only live Runtime observation after candidate publication reports Runtime 0.3.0, ToolContract Kernel 2, nineteen public tools and installed target schemas still 1/1, proving no TASK-0147 cutover. ./start.sh doctor --json completed exit_code=0 with status=healthy and all ten checks PASS; installed_package_identity binds runtime_revision=89111218720ddb2f12961f9375549733edd23ada and tree=00cdfce957326c011b5ed5a377074fa071821f55, while cutover_identity reports transaction_present=false. This report is the only authorized post-candidate repository mutation. Exact validator PASS, report-only commit/publication and final remote/local lineage reconciliation occur after report bytes are finalized and before Executor returns NEEDS_REVIEW."
+
+result: NEEDS_REVIEW
