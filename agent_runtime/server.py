@@ -86,6 +86,7 @@ from .contracts import (
     TimeoutSeconds,
     TypedToolErrorEnvelope,
     TypedToolErrorPayload,
+    WaitFor,
     WaitMilliseconds,
 )
 from .errors import RuntimeStateError, RuntimeValidationError
@@ -376,6 +377,7 @@ def terminal_poll(
     start_identity: StartIdentity | None = None,
     cursor: Cursor = 0,
     wait_ms: WaitMilliseconds = 0,
+    wait_for: WaitFor = "output_or_state",
 ) -> TerminalSessionResult:
     """Read bounded incremental PTY output by exactly one session selector."""
 
@@ -387,6 +389,7 @@ def terminal_poll(
             cursor,
             wait_ms,
             start_identity,
+            wait_for,
         ),
     )
 

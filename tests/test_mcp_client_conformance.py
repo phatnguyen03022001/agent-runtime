@@ -263,7 +263,9 @@ class MCPClientConformanceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(poll_identity["pattern"], "^[0-9a-f]{32}$")
             self.assertEqual(poll_props["cursor"]["minimum"], 0)
             self.assertEqual(poll_props["wait_ms"]["minimum"], 0)
-            self.assertEqual(poll_props["wait_ms"]["maximum"], 1000)
+            self.assertEqual(poll_props["wait_ms"]["maximum"], 30000)
+            self.assertEqual(poll_props["wait_for"]["enum"], ["output_or_state", "terminal_or_deadline"])
+            self.assertEqual(poll_props["wait_for"]["default"], "output_or_state")
 
             control_props = tools["terminal_control"].input_schema["properties"]
             self.assertEqual(control_props["session_id"]["minLength"], 1)

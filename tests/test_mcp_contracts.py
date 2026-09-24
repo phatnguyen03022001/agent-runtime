@@ -162,7 +162,9 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(poll_identity["pattern"], "^[0-9a-f]{32}$")
         self.assertEqual(poll_props["cursor"]["minimum"], 0)
         self.assertEqual(poll_props["wait_ms"]["minimum"], 0)
-        self.assertEqual(poll_props["wait_ms"]["maximum"], 1000)
+        self.assertEqual(poll_props["wait_ms"]["maximum"], 30000)
+        self.assertEqual(poll_props["wait_for"]["enum"], ["output_or_state", "terminal_or_deadline"])
+        self.assertEqual(poll_props["wait_for"]["default"], "output_or_state")
 
         control_props = tools["terminal_control"].input_schema["properties"]
         self.assertEqual(control_props["session_id"]["minLength"], 1)
@@ -542,7 +544,8 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
             ("terminal_exec", "execute_terminal", {"argv": ["/usr/bin/true"], "cwd": str(ROOT), "timeout_seconds": 3600.1}),
             ("terminal_poll", "_poll_terminal", {"session_id": "session", "cursor": -1, "wait_ms": 0}),
             ("terminal_poll", "_poll_terminal", {"session_id": "session", "cursor": 0, "wait_ms": -1}),
-            ("terminal_poll", "_poll_terminal", {"session_id": "session", "cursor": 0, "wait_ms": 1001}),
+            ("terminal_poll", "_poll_terminal", {"session_id": "session", "cursor": 0, "wait_ms": 30001}),
+            ("terminal_poll", "_poll_terminal", {"session_id": "session", "cursor": 0, "wait_ms": 0, "wait_for": "invalid"}),
             ("terminal_control", "_control_terminal", {"session_id": "session", "action": "invalid"}),
             ("terminal_resize", "_control_terminal", {"session_id": "session", "rows": 0, "cols": 24}),
             ("terminal_resize", "_control_terminal", {"session_id": "session", "rows": 65536, "cols": 24}),

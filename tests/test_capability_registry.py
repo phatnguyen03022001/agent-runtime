@@ -117,7 +117,7 @@ class CapabilityRegistryTests(unittest.IsolatedAsyncioTestCase):
                 ),
             )
             self.assertEqual(descriptor.bounds, contract.bounds)
-            expected_schema_version = 2 if descriptor.name in {"terminal_start", "terminal_poll"} else 1
+            expected_schema_version = {"terminal_start": 2, "terminal_poll": 3}.get(descriptor.name, 1)
             self.assertEqual(descriptor.request_schema_version, expected_schema_version)
             self.assertTrue(descriptor.supported)
 
@@ -177,12 +177,12 @@ class CapabilityRegistryTests(unittest.IsolatedAsyncioTestCase):
         )
 
     def test_runtime_version_has_one_python_ssot_and_validated_package_projection(self) -> None:
-        self.assertEqual(RUNTIME_VERSION, "0.2.1")
+        self.assertEqual(RUNTIME_VERSION, "0.2.2")
         self.assertEqual(server.mcp.version, RUNTIME_VERSION)
         literal_sources = [
             path.name
             for path in sorted((ROOT / "agent_runtime").glob("*.py"))
-            if '"0.2.1"' in path.read_text(encoding="utf-8")
+            if '"0.2.2"' in path.read_text(encoding="utf-8")
         ]
         self.assertEqual(literal_sources, ["version.py"])
 

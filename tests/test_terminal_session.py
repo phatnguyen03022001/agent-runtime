@@ -192,10 +192,114 @@ class TerminalSessionTests(unittest.TestCase):
         empty = poll_terminal(session_id, cursor=second["next_cursor"], wait_ms=0)
         self.assertEqual(empty["output"], "")
 
-        for invalid in (-1, 1001, True, 1.5):
+        self.assertEqual(TerminalSessionManager._validated_wait_ms(30000), 30000)
+        for invalid in (-1, 30001, True, 1.5):
             with self.subTest(wait_ms=invalid):
                 with self.assertRaises(ValueError):
                     poll_terminal(session_id, cursor=0, wait_ms=invalid)  # type: ignore[arg-type]
+
+    def test_poll_rejects_unknown_wait_for(self) -> None:
+        result = self.start([sys.executable, "-u", "-c", "import time; time.sleep(1)"])
+        with self.assertRaisesRegex(ValueError, "wait_for"):
+            poll_terminal(
+                str(result["session_id"]),
+                cursor=int(result["next_cursor"]),
+                wait_ms=0,
+                wait_for="unknown",
+            )
+
+    def test_poll_default_output_or_state_returns_on_new_output(self) -> None:
+        result = self.start(
+            [
+                sys.executable,
+                "-u",
+                "-c",
+                "import time; time.sleep(.1); print('wake', flush=True); time.sleep(.6)",
+            ]
+        )
+        started = time.monotonic()
+        polled = poll_terminal(
+            str(result["session_id"]),
+            cursor=int(result["next_cursor"]),
+            wait_ms=1000,
+        )
+        elapsed = time.monotonic() - started
+        self.assertIn("wake", polled["output"])
+        self.assertEqual(polled["status"], "running")
+        self.assertLess(elapsed, 0.6)
+
+    def test_terminal_or_deadline_ignores_noisy_output_until_deadline(self) -> None:
+        result = self.start(
+            [
+                sys.executable,
+                "-u",
+                "-c",
+                (
+                    "import time; "
+                    "[(print(i, flush=True), time.sleep(.02)) for i in range(20)]; "
+                    "time.sleep(.5)"
+                ),
+            ]
+        )
+        started = time.monotonic()
+        polled = poll_terminal(
+            str(result["session_id"]),
+            cursor=int(result["next_cursor"]),
+            wait_ms=180,
+            wait_for="terminal_or_deadline",
+        )
+        elapsed = time.monotonic() - started
+        self.assertGreaterEqual(elapsed, 0.12)
+        self.assertEqual(polled["status"], "running")
+        self.assertTrue(polled["output"])
+
+    def test_terminal_or_deadline_returns_promptly_on_terminal_state(self) -> None:
+        result = self.start(
+            [sys.executable, "-u", "-c", "import time; time.sleep(.12)"]
+        )
+        started = time.monotonic()
+        polled = poll_terminal(
+            str(result["session_id"]),
+            cursor=int(result["next_cursor"]),
+            wait_ms=1000,
+            wait_for="terminal_or_deadline",
+        )
+        elapsed = time.monotonic() - started
+        self.assertEqual(polled["status"], "exited")
+        self.assertEqual(polled["termination_reason"], "natural_exit")
+        self.assertEqual(polled["exit_code"], 0)
+        self.assertLess(elapsed, 0.8)
+
+    def test_terminal_or_deadline_returns_on_deadline_while_running(self) -> None:
+        result = self.start(
+            [sys.executable, "-u", "-c", "import time; time.sleep(1)"]
+        )
+        started = time.monotonic()
+        polled = poll_terminal(
+            str(result["session_id"]),
+            cursor=int(result["next_cursor"]),
+            wait_ms=120,
+            wait_for="terminal_or_deadline",
+        )
+        elapsed = time.monotonic() - started
+        self.assertGreaterEqual(elapsed, 0.08)
+        self.assertLess(elapsed, 0.6)
+        self.assertEqual(polled["status"], "running")
+
+    def test_wait_zero_is_immediate_in_terminal_or_deadline_mode(self) -> None:
+        result = self.start(
+            [sys.executable, "-u", "-c", "import time; time.sleep(1)"]
+        )
+        started = time.monotonic()
+        polled = poll_terminal(
+            str(result["session_id"]),
+            cursor=int(result["next_cursor"]),
+            wait_ms=0,
+            wait_for="terminal_or_deadline",
+        )
+        elapsed = time.monotonic() - started
+        self.assertLess(elapsed, 0.2)
+        self.assertEqual(polled["status"], "running")
 
     def poll_until_from(self, session_id: str, cursor: int, predicate, timeout: float = 3.0):
         output = ""

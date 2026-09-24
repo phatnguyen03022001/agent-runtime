@@ -45,7 +45,7 @@ COMPLETED_RETENTION_SECONDS = 3600.0
 MAX_RETAINED_OUTPUT_BYTES = 64 * 1024
 MAX_POLL_OUTPUT_BYTES = 16 * 1024
 MAX_RETAINED_COMPLETED_SESSIONS = 16
-MAX_WAIT_MS = 1000
+MAX_WAIT_MS = 30000
 _READ_CHUNK_BYTES = 8192
 _READER_DRAIN_SECONDS = 0.2
 _REAPER_INTERVAL_SECONDS = 1.0
@@ -86,9 +86,14 @@ TERMINAL_POLL_CONTRACT = ToolContract(
         "session_id": "known-or-retained-session",
         "start_identity": "known-or-retained-keyed-operation",
         "cursor": "non-negative",
+        "wait_for": "output_or_state-or-terminal_or_deadline",
     },
     bounds={"poll_output_bytes": MAX_POLL_OUTPUT_BYTES, "wait_milliseconds": MAX_WAIT_MS},
-    postconditions={"output": "bounded-incremental", "process_control": False},
+    postconditions={
+        "output": "bounded-incremental",
+        "process_control": False,
+        "wait_return": "output-or-state-or-terminal-deadline-by-mode",
+    },
 )
 TERMINAL_CONTROL_CONTRACT = ToolContract(
     name="terminal_control",
@@ -338,19 +343,29 @@ class TerminalSessionManager:
         cursor: int = 0,
         wait_ms: int = 0,
         start_identity: str | None = None,
+        wait_for: str = "output_or_state",
     ) -> dict[str, Any]:
         session = self._resolve_session(session_id=session_id, start_identity=start_identity)
         checked_cursor = self._validated_cursor(cursor)
         checked_wait_ms = self._validated_wait_ms(wait_ms)
+        checked_wait_for = self._validated_wait_for(wait_for)
 
         self._touch(session)
-        with session.changed:
-            if (
-                checked_wait_ms
-                and session.status == "running"
-                and checked_cursor == session.base_cursor + len(session.output)
-            ):
-                session.changed.wait(checked_wait_ms / 1000.0)
+        if checked_wait_ms:
+            deadline = time.monotonic() + checked_wait_ms / 1000.0
+            with session.changed:
+                if checked_wait_for == "output_or_state":
+                    if (
+                        session.status == "running"
+                        and checked_cursor == session.base_cursor + len(session.output)
+                    ):
+                        session.changed.wait(max(0.0, deadline - time.monotonic()))
+                else:
+                    while session.status != "exited":
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            break
+                        session.changed.wait(remaining)
         return self._session_result(session, cursor=checked_cursor)
 
     def control(
@@ -722,6 +737,17 @@ class TerminalSessionManager:
         return wait_ms
 
     @staticmethod
+    def _validated_wait_for(wait_for: str) -> str:
+        if not isinstance(wait_for, str) or wait_for not in {
+            "output_or_state",
+            "terminal_or_deadline",
+        }:
+            raise RuntimeValidationError(
+                "wait_for must be output_or_state or terminal_or_deadline"
+            )
+        return wait_for
+
+    @staticmethod
     def _require_no_dimensions(rows: int | None, cols: int | None) -> None:
         if rows is not None or cols is not None:
             raise RuntimeValidationError("write action does not accept rows or cols")
@@ -779,12 +805,14 @@ def poll_terminal(
     cursor: int = 0,
     wait_ms: int = 0,
     start_identity: str | None = None,
+    wait_for: str = "output_or_state",
 ) -> dict[str, Any]:
     return _MANAGER.poll(
         session_id=session_id,
         cursor=cursor,
         wait_ms=wait_ms,
         start_identity=start_identity,
+        wait_for=wait_for,
     )
 
 

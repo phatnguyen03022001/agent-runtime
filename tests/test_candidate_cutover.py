@@ -825,6 +825,7 @@ class CandidateCutoverTests(unittest.TestCase):
             "18cdb515fe037c9b6cb81ce6529d85ae734e195a",
             "4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b",
             "99518e694467be8525d813a4e638c4c8e0324365",
+            "bf98ec4e9bcda97dfdc0ca52b8e0537dae14a1cc",
         )
         for revision in revisions:
             with self.subTest(revision=revision):
@@ -839,6 +840,7 @@ class CandidateCutoverTests(unittest.TestCase):
             "b0dec3e556ff914fb9ca041c6b52f53c04ee3fd2",
             "4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b",
             "99518e694467be8525d813a4e638c4c8e0324365",
+            "bf98ec4e9bcda97dfdc0ca52b8e0537dae14a1cc",
             exact_revision,
         )
         for revision in revisions:

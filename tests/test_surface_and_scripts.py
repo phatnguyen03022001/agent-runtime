@@ -254,7 +254,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         )
         self.assertEqual(
             [arg.arg for arg in functions["terminal_poll"].args.args],
-            ["session_id", "start_identity", "cursor", "wait_ms"],
+            ["session_id", "start_identity", "cursor", "wait_ms", "wait_for"],
         )
         self.assertEqual(
             [arg.arg for arg in functions["terminal_control"].args.args],

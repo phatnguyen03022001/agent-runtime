@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-RUNTIME_VERSION = "0.2.1"
+RUNTIME_VERSION = "0.2.2"
 
 __all__ = ["RUNTIME_VERSION"]
 

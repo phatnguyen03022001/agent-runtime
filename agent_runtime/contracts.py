@@ -73,7 +73,8 @@ StartIdentity = Annotated[
     Field(min_length=START_IDENTITY_CHARS, max_length=START_IDENTITY_CHARS, pattern=r"^[0-9a-f]{32}$"),
 ]
 Cursor = Annotated[int, Field(strict=True, ge=0)]
-WaitMilliseconds = Annotated[int, Field(strict=True, ge=0, le=1000)]
+WaitMilliseconds = Annotated[int, Field(strict=True, ge=0, le=30000)]
+WaitFor = Literal["output_or_state", "terminal_or_deadline"]
 ControlAction = Literal["write", "interrupt", "terminate"]
 TerminalWriteData = Annotated[
     StrictStr,
@@ -700,7 +701,7 @@ class CapabilityDescriptor(_ClosedResult):
     lifecycle: CapabilityLifecycle
     authority: CapabilityAuthority
     annotations: CapabilityAnnotations
-    request_schema_version: Literal[1, 2]
+    request_schema_version: Literal[1, 2, 3]
     result_schema_version: Literal[1, 2] | None
     bounds: dict[str, object]
     supported: bool
