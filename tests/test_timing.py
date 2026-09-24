@@ -183,7 +183,7 @@ class TimingToolTests(unittest.TestCase):
         )
         self.assertEqual(
             [parameter.name for parameter in inspect.signature(server.repo_observer).parameters.values()],
-            ["cwd", "max_paths"],
+            ["cwd", "max_paths", "cursor", "continuation_receipt"],
         )
         self.assertEqual(
             [parameter.name for parameter in inspect.signature(server.repo_stage).parameters.values()],
