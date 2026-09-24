@@ -369,6 +369,7 @@ class ProtectedRuntimeGuardTests(unittest.TestCase):
         manager = session.TerminalSessionManager(start_reaper=False)
         fake_session = mock.Mock()
         fake_session.master_fd = 123
+        fake_session.mode = "pty"
         fake_session.cleanup_lock = __import__("threading").RLock()
         with mock.patch.object(manager, "_get_session", return_value=fake_session), mock.patch.object(
             session, "_PROTECTED_GUARD"
@@ -485,8 +486,8 @@ class ProtectedRuntimeGuardTests(unittest.TestCase):
         import agent_runtime.executor as executor
         import agent_runtime.session as session
 
-        with mock.patch.object(executor, "_PROTECTED_GUARD") as exec_guard, mock.patch.object(
-            executor.subprocess, "Popen"
+        with mock.patch.object(session, "_PROTECTED_GUARD") as exec_guard, mock.patch.object(
+            session.subprocess, "Popen"
         ) as popen:
             exec_guard.check.side_effect = ProtectedRuntimeDenied("canonical_process_signal")
             with self.assertRaises(ProtectedRuntimeDenied):
