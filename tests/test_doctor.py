@@ -135,9 +135,46 @@ class DoctorContractTests(unittest.TestCase):
         self.assertEqual(registry.status, "pass")
         self.assertEqual(schema.status, "pass")
         self.assertEqual(governance.status, "pass")
-        self.assertEqual(len(CAPABILITY_NAMES), 19)
+        self.assertEqual(len(CAPABILITY_NAMES), 20)
+        descriptors = {
+            entry["descriptor"]["name"]: entry["descriptor"]
+            for entry in bundle["capabilities"]
+        }
+        self.assertEqual(
+            (
+                descriptors["fs_read_batch"]["request_schema_version"],
+                descriptors["fs_read_batch"]["result_schema_version"],
+            ),
+            (1, 2),
+        )
+        self.assertEqual(
+            (
+                descriptors["fs_manage"]["request_schema_version"],
+                descriptors["fs_manage"]["result_schema_version"],
+            ),
+            (1, 1),
+        )
         self.assertEqual(registry.evidence["screen_capture"], "VISUAL_PERCEPTION_BLOCKED")
         self.assertEqual(governance.evidence["screen_capture"], "VISUAL_PERCEPTION_BLOCKED")
+
+    def test_schema_check_rejects_task0148_schema_version_regression(self) -> None:
+        bundle = doctor._schema_bundle()
+        self.assertIsNotNone(bundle)
+        for name, field, stale_value in (
+            ("fs_read_batch", "result_schema_version", 1),
+            ("fs_manage", "request_schema_version", 2),
+        ):
+            with self.subTest(name=name, field=field):
+                stale = json.loads(json.dumps(bundle))
+                descriptor = next(
+                    entry["descriptor"]
+                    for entry in stale["capabilities"]
+                    if entry["descriptor"]["name"] == name
+                )
+                descriptor[field] = stale_value
+                check = doctor._tool_contract_schema_check(stale)
+                self.assertEqual(check.status, "fail")
+                self.assertEqual(check.reason_code, "TOOL_CONTRACT_SCHEMA_MISMATCH")
 
 class DoctorLocalStateTests(unittest.TestCase):
     def test_workspace_and_limit_checks_fail_closed_on_invalid_values(self) -> None:
