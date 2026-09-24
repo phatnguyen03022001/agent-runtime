@@ -29,7 +29,7 @@ class SchemaExportTests(unittest.TestCase):
         tools = asyncio.run(server.mcp.list_tools())
         self.assertEqual(bundle["schema_version"], 1)
         self.assertEqual(bundle["runtime_version"], RUNTIME_VERSION)
-        self.assertEqual(bundle["tool_contract_kernel_version"], 1)
+        self.assertEqual(bundle["tool_contract_kernel_version"], 2)
         entries = bundle["capabilities"]
         self.assertEqual(tuple(entry["descriptor"]["name"] for entry in entries), CAPABILITY_NAMES)
         self.assertEqual(len(entries), len(tools))

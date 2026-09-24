@@ -39,9 +39,11 @@ from agent_runtime.tool_contract import (
     Authority,
     ContractError,
     ContractErrorCode,
+    EffectState,
     MutationAuthority,
     NetworkAuthority,
     ReceiptV1,
+    SafeNextAction,
     ToolAnnotations,
     ToolClass,
     ToolContract,
@@ -56,6 +58,11 @@ class ToolContractKernelTests(unittest.TestCase):
         self.assertEqual({item.value for item in ToolClass}, {"read", "write", "process", "repo", "host"})
         self.assertEqual({item.value for item in NetworkAuthority}, {"none", "bounded"})
         self.assertEqual({item.value for item in MutationAuthority}, {"none", "bounded", "destructive"})
+        self.assertEqual({item.value for item in EffectState}, {"absent", "present", "unknown"})
+        self.assertEqual(
+            {item.value for item in SafeNextAction},
+            {"fix_request", "retry", "wait", "reconcile", "unsupported", "report_defect"},
+        )
         self.assertEqual(
             {item.value for item in ContractErrorCode},
             {
@@ -76,7 +83,14 @@ class ToolContractKernelTests(unittest.TestCase):
     def test_metadata_is_frozen_and_type_validated(self) -> None:
         authority = Authority(True, NetworkAuthority.NONE, MutationAuthority.NONE)
         annotations = ToolAnnotations(True, False, True, False)
-        error = ContractError(ContractErrorCode.NOT_FOUND, "not_found", False)
+        error = ContractError(
+            ContractErrorCode.NOT_FOUND,
+            "not_found",
+            False,
+            EffectState.ABSENT,
+            False,
+            SafeNextAction.FIX_REQUEST,
+        )
         contract = ToolContract(
             name="x",
             tool_class=ToolClass.READ,
@@ -99,11 +113,25 @@ class ToolContractKernelTests(unittest.TestCase):
         with self.assertRaises(TypeError):
             ToolAnnotations(1, False, True, False)  # type: ignore[arg-type]
         with self.assertRaises(TypeError):
-            ContractError("NOT_FOUND", "not_found", False)  # type: ignore[arg-type]
+            ContractError(
+                "NOT_FOUND",  # type: ignore[arg-type]
+                "not_found",
+                False,
+                EffectState.ABSENT,
+                False,
+                SafeNextAction.FIX_REQUEST,
+            )
 
     def test_stable_nonempty_strings_reject_empty_values(self) -> None:
         with self.assertRaises(ValueError):
-            ContractError(ContractErrorCode.INTERNAL_ERROR, "", False)
+            ContractError(
+                ContractErrorCode.INTERNAL_ERROR,
+                "",
+                False,
+                EffectState.ABSENT,
+                False,
+                SafeNextAction.REPORT_DEFECT,
+            )
         with self.assertRaises(ValueError):
             ToolContract(
                 name="",

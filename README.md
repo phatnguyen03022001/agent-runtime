@@ -11,7 +11,7 @@ The qualified Runtime is version **0.2.2** with **exactly nineteen public tools*
 - Package-owned Runtime bytes under `~/Applications/Agent Runtime.app`.
 - Canonical operator configuration at `~/Library/Application Support/Agent Runtime/runtime.env`, mode `0600`.
 - One protected singleton tunnel/listener on `127.0.0.1:8080`.
-- Runtime version 0.2.2, ToolContract Kernel v1, nineteen-tool public MCP contract.
+- Runtime version 0.2.2, ToolContract Kernel v2, nineteen-tool public MCP contract.
 - Runtime requires no blanket TCC permissions. Background Activity approval is operator/platform state.
 - Homebrew is optional; it is not an architecture prerequisite.
 

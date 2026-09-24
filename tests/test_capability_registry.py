@@ -170,7 +170,7 @@ class CapabilityRegistryTests(unittest.IsolatedAsyncioTestCase):
         payload = first.structured_content
         self.assertEqual(payload["schema_version"], 1)
         self.assertEqual(payload["runtime_version"], RUNTIME_VERSION)
-        self.assertEqual(payload["tool_contract_kernel_version"], 1)
+        self.assertEqual(payload["tool_contract_kernel_version"], 2)
         self.assertEqual(
             tuple(item["name"] for item in payload["capabilities"]),
             EXPECTED_NAMES,

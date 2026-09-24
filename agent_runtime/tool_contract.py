@@ -13,6 +13,8 @@ __all__ = [
     "MutationAuthority",
     "Authority",
     "ContractErrorCode",
+    "EffectState",
+    "SafeNextAction",
     "ContractError",
     "ReceiptV1",
     "ToolAnnotations",
@@ -59,6 +61,21 @@ class ContractErrorCode(str, Enum):
     NOT_FOUND = "NOT_FOUND"
     UNAVAILABLE = "UNAVAILABLE"
     INTERNAL_ERROR = "INTERNAL_ERROR"
+
+
+class EffectState(str, Enum):
+    ABSENT = "absent"
+    PRESENT = "present"
+    UNKNOWN = "unknown"
+
+
+class SafeNextAction(str, Enum):
+    FIX_REQUEST = "fix_request"
+    RETRY = "retry"
+    WAIT = "wait"
+    RECONCILE = "reconcile"
+    UNSUPPORTED = "unsupported"
+    REPORT_DEFECT = "report_defect"
 
 
 def _validate_utf8_string(value: object, field: str, *, nonempty: bool) -> str:
@@ -139,6 +156,9 @@ class ContractError:
     code: ContractErrorCode
     reason_code: str
     retryable: bool
+    effect_state: EffectState
+    reconciliation_required: bool
+    safe_next_action: SafeNextAction
 
     def __post_init__(self) -> None:
         if not isinstance(self.code, ContractErrorCode):
@@ -146,6 +166,18 @@ class ContractError:
         _validate_utf8_string(self.reason_code, "reason_code", nonempty=True)
         if type(self.retryable) is not bool:
             raise TypeError("retryable must be bool")
+        if not isinstance(self.effect_state, EffectState):
+            raise TypeError("effect_state must be EffectState")
+        if type(self.reconciliation_required) is not bool:
+            raise TypeError("reconciliation_required must be bool")
+        if not isinstance(self.safe_next_action, SafeNextAction):
+            raise TypeError("safe_next_action must be SafeNextAction")
+        if self.effect_state is EffectState.UNKNOWN and not self.reconciliation_required:
+            raise ValueError("unknown effect_state requires reconciliation")
+        if self.reconciliation_required and self.retryable:
+            raise ValueError("reconciliation-required failures are not directly retryable")
+        if self.reconciliation_required != (self.safe_next_action is SafeNextAction.RECONCILE):
+            raise ValueError("reconciliation_required must match safe_next_action=reconcile")
 
 
 @dataclass(frozen=True, slots=True)

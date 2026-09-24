@@ -18,7 +18,12 @@ from typing import Any, Callable
 
 from .capacity import HeavyExecutionAdmission, HeavyExecutionLease, heavy_execution_admission
 from .contracts import ARGV_ITEM_MAX_BYTES, ARGV_MAX_ITEMS, ARGV_TOTAL_MAX_BYTES, TERMINAL_DATA_MAX_BYTES
-from .errors import RuntimeStateError, RuntimeValidationError
+from .errors import (
+    RuntimeCapacityError,
+    RuntimeStateError,
+    RuntimeValidationError,
+    annotate_failure,
+)
 from .executor import (
     _minimal_child_env,
     _terminate_process_group,
@@ -32,6 +37,9 @@ from .tool_contract import (
     Authority,
     MutationAuthority,
     NetworkAuthority,
+    ContractErrorCode,
+    EffectState,
+    SafeNextAction,
     ToolAnnotations,
     ToolClass,
     ToolContract,
@@ -214,7 +222,7 @@ class TerminalSessionManager:
         exact_spec = (checked_cwd, tuple(checked_argv))
         now = self._clock()
 
-        capacity_error: RuntimeStateError | None = None
+        capacity_error: RuntimeCapacityError | None = None
         with self._lock:
             self._evict_completed_locked(now)
             if checked_identity is not None:
@@ -227,7 +235,8 @@ class TerminalSessionManager:
                         existing_spec = (existing.cwd, tuple(existing.argv))
                         if existing_spec != exact_spec:
                             raise RuntimeStateError(
-                                "START_IDENTITY_CONFLICT: start_identity is already bound to a different cwd/argv"
+                                "START_IDENTITY_CONFLICT: start_identity is already bound to a different cwd/argv",
+                                reason_code="START_IDENTITY_CONFLICT",
                             )
                         return self._session_result(existing, cursor=0)
 
@@ -258,7 +267,7 @@ class TerminalSessionManager:
                     self._sessions.pop(session.session_id)
                     self._sessions[session.session_id] = session
                     self._evict_completed_locked(now)
-                capacity_error = RuntimeStateError(
+                capacity_error = RuntimeCapacityError(
                     f"configured maximum {self.max_active_sessions} active terminal sessions reached"
                 )
 
@@ -267,12 +276,25 @@ class TerminalSessionManager:
 
         try:
             lease = self._admission.acquire()
-        except BaseException:
+        except BaseException as exc:
             if checked_identity is None:
                 with self._lock:
                     self._remove_session_locked(session.session_id)
             else:
                 self._terminalize_pre_effect(session)
+            if isinstance(exc, (RuntimeStateError, RuntimeValidationError)):
+                raise
+            if isinstance(exc, Exception):
+                annotate_failure(
+                    exc,
+                    code=ContractErrorCode.INTERNAL_ERROR,
+                    reason_code="ADMISSION_FAILED_PRE_EFFECT",
+                    message="terminal admission failed before process dispatch",
+                    retryable=False,
+                    effect_state=EffectState.ABSENT,
+                    reconciliation_required=False,
+                    safe_next_action=SafeNextAction.REPORT_DEFECT,
+                )
             raise
         with session.cleanup_lock:
             session.heavy_lease = lease
@@ -292,7 +314,7 @@ class TerminalSessionManager:
                 start_new_session=True,
                 close_fds=True,
             )
-        except BaseException:
+        except BaseException as exc:
             if master_fd >= 0:
                 os.close(master_fd)
             if slave_fd >= 0:
@@ -303,6 +325,17 @@ class TerminalSessionManager:
                     self._remove_session_locked(session.session_id)
             else:
                 self._terminalize_pre_effect(session)
+            if isinstance(exc, Exception):
+                annotate_failure(
+                    exc,
+                    code=ContractErrorCode.PRECONDITION_FAILED,
+                    reason_code="PROCESS_START_FAILED_PRE_EFFECT",
+                    message="terminal process failed before dispatch",
+                    retryable=False,
+                    effect_state=EffectState.ABSENT,
+                    reconciliation_required=False,
+                    safe_next_action=SafeNextAction.FIX_REQUEST,
+                )
             raise
 
         os.close(slave_fd)
@@ -329,11 +362,22 @@ class TerminalSessionManager:
                 name=f"terminal-monitor-{session.session_id}",
                 daemon=True,
             ).start()
-        except BaseException:
+        except BaseException as exc:
             self._cleanup_process(session, "start_failed_post_effect")
             if checked_identity is None:
                 with self._lock:
                     self._remove_session_locked(session.session_id)
+            if isinstance(exc, Exception):
+                annotate_failure(
+                    exc,
+                    code=ContractErrorCode.INTERNAL_ERROR,
+                    reason_code="PROCESS_START_FAILED_POST_EFFECT",
+                    message="terminal process dispatch occurred but start completion was not established",
+                    retryable=False,
+                    effect_state=EffectState.UNKNOWN,
+                    reconciliation_required=True,
+                    safe_next_action=SafeNextAction.RECONCILE,
+                )
             raise
         return self.poll(session_id=session.session_id, cursor=0, wait_ms=0)
 
@@ -505,12 +549,20 @@ class TerminalSessionManager:
         if start_identity is not None:
             checked_identity = self._validated_start_identity(start_identity)
             if checked_identity is None:
-                raise RuntimeValidationError("START_IDENTITY_UNKNOWN")
+                raise RuntimeValidationError(
+                    "START_IDENTITY_UNKNOWN",
+                    code=ContractErrorCode.NOT_FOUND,
+                    reason_code="START_IDENTITY_UNKNOWN",
+                )
             with self._lock:
                 mapped = self._start_identities.get(checked_identity)
                 session = None if mapped is None else self._sessions.get(mapped)
             if session is None:
-                raise RuntimeValidationError("START_IDENTITY_UNKNOWN")
+                raise RuntimeValidationError(
+                    "START_IDENTITY_UNKNOWN",
+                    code=ContractErrorCode.NOT_FOUND,
+                    reason_code="START_IDENTITY_UNKNOWN",
+                )
             return session
         return self._get_session(session_id)
 
@@ -520,7 +572,11 @@ class TerminalSessionManager:
         with self._lock:
             session = self._sessions.get(session_id)
         if session is None:
-            raise RuntimeValidationError("unknown or expired session_id")
+            raise RuntimeValidationError(
+                "unknown or expired session_id",
+                code=ContractErrorCode.NOT_FOUND,
+                reason_code="SESSION_UNKNOWN_OR_EXPIRED",
+            )
         return session
 
     def _reader(self, session: _Session) -> None:

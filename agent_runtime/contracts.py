@@ -11,9 +11,10 @@ from pydantic import (
     SerializerFunctionWrapHandler,
     StrictStr,
     model_serializer,
+    model_validator,
 )
 
-from .tool_contract import ContractErrorCode
+from .tool_contract import ContractError, ContractErrorCode, EffectState, SafeNextAction
 
 ARGV_MAX_ITEMS = 128
 ARGV_ITEM_MAX_BYTES = 16 * 1024
@@ -282,14 +283,45 @@ TypedToolErrorCode = Literal[
 RepoChangeStatus = Literal["M", "T", "A", "D", "R", "C", "U", "?", "!"]
 
 
-class TypedToolErrorPayload(_ClosedResult):
-    code: TypedToolErrorCode
-    message: Annotated[StrictStr, Field(max_length=256)]
+FailureReasonCode = Annotated[StrictStr, Field(min_length=1, max_length=128)]
+FailureMessage = Annotated[StrictStr, Field(min_length=1, max_length=256)]
+FailureEffectState = Literal["absent", "present", "unknown"]
+FailureSafeNextAction = Literal[
+    "fix_request",
+    "retry",
+    "wait",
+    "reconcile",
+    "unsupported",
+    "report_defect",
+]
+
+
+class RuntimeToolErrorPayload(_ClosedResult):
+    code: ContractErrorCode
+    reason_code: FailureReasonCode
+    message: FailureMessage
     retryable: bool
+    effect_state: FailureEffectState
+    reconciliation_required: bool
+    safe_next_action: FailureSafeNextAction
+
+    @model_validator(mode="after")
+    def _validate_failure_semantics(self) -> "RuntimeToolErrorPayload":
+        if self.effect_state == "unknown" and not self.reconciliation_required:
+            raise ValueError("unknown effect_state requires reconciliation")
+        if self.reconciliation_required and self.retryable:
+            raise ValueError("reconciliation-required failures are not directly retryable")
+        if self.reconciliation_required != (self.safe_next_action == "reconcile"):
+            raise ValueError("reconciliation_required must match safe_next_action=reconcile")
+        return self
 
 
-class TypedToolErrorEnvelope(_ClosedResult):
-    error: TypedToolErrorPayload
+class RuntimeToolErrorEnvelope(_ClosedResult):
+    error: RuntimeToolErrorPayload
+
+
+TypedToolErrorPayload = RuntimeToolErrorPayload
+TypedToolErrorEnvelope = RuntimeToolErrorEnvelope
 
 
 class RepoRepository(_ClosedResult):
@@ -456,8 +488,8 @@ class ScreenCaptureMetadata(_ClosedResult):
     capture_api: Literal["ScreenCaptureKit"]
     deadline_seconds: float
 
-CapabilityReasonCode = Annotated[StrictStr, Field(min_length=1, max_length=128)]
-CapabilityMessage = Annotated[StrictStr, Field(max_length=256)]
+CapabilityReasonCode = FailureReasonCode
+CapabilityMessage = FailureMessage
 FsListPath = Annotated[StrictStr, Field(min_length=1, max_length=4096)]
 FsListMaxEntries = Annotated[int, Field(strict=True, ge=1, le=1000)]
 FsSearchQuery = Annotated[StrictStr, Field(min_length=1, max_length=4096)]
@@ -472,15 +504,13 @@ FsPatchExpectedSha256 = Annotated[
 RepoDiffScope = Literal["worktree", "staged"]
 
 
-class CapabilityErrorPayload(_ClosedResult):
-    code: ContractErrorCode
-    reason_code: CapabilityReasonCode
-    message: CapabilityMessage
-    retryable: bool
+CapabilityErrorPayload = RuntimeToolErrorPayload
+CapabilityErrorEnvelope = RuntimeToolErrorEnvelope
 
 
-class CapabilityErrorEnvelope(_ClosedResult):
-    error: CapabilityErrorPayload
+def sanitize_failure_message(message: object, *, fallback: str = "runtime failure") -> str:
+    clean = " ".join(str(message).split())[:256]
+    return clean or fallback
 
 
 class CapabilityFailure(Exception):
@@ -491,18 +521,44 @@ class CapabilityFailure(Exception):
         message: str,
         *,
         retryable: bool = False,
+        effect_state: EffectState | None = None,
+        reconciliation_required: bool | None = None,
+        safe_next_action: SafeNextAction | None = None,
     ) -> None:
         if not isinstance(code, ContractErrorCode):
             raise TypeError("code must be ContractErrorCode")
         if not isinstance(reason_code, str) or not reason_code or len(reason_code) > 128:
             raise ValueError("reason_code must be a stable non-empty string up to 128 characters")
-        if not isinstance(message, str) or len(message) > 256:
-            raise ValueError("message must be a string up to 256 characters")
-        super().__init__(message)
+        if type(retryable) is not bool:
+            raise TypeError("retryable must be bool")
+        provided = (
+            effect_state is not None,
+            reconciliation_required is not None,
+            safe_next_action is not None,
+        )
+        if any(provided) and not all(provided):
+            raise ValueError("effect semantics must be supplied together")
+        if all(provided):
+            assert effect_state is not None
+            assert reconciliation_required is not None
+            assert safe_next_action is not None
+            ContractError(
+                code=code,
+                reason_code=reason_code,
+                retryable=retryable,
+                effect_state=effect_state,
+                reconciliation_required=reconciliation_required,
+                safe_next_action=safe_next_action,
+            )
+        clean_message = sanitize_failure_message(message)
+        super().__init__(clean_message)
         self.code = code
         self.reason_code = reason_code
-        self.message = message
+        self.message = clean_message
         self.retryable = retryable
+        self.effect_state = effect_state
+        self.reconciliation_required = reconciliation_required
+        self.safe_next_action = safe_next_action
 
 
 class FsListEntry(_ClosedResult):
@@ -695,7 +751,7 @@ class CapabilityAnnotations(_ClosedResult):
 class CapabilityDescriptor(_ClosedResult):
     schema_version: Literal[1]
     runtime_version: RuntimeVersion
-    tool_contract_kernel_version: Literal[1]
+    tool_contract_kernel_version: Literal[2]
     name: Annotated[StrictStr, Field(min_length=1, max_length=128)]
     tool_contract_version: Literal[1]
     lifecycle: CapabilityLifecycle
@@ -712,7 +768,7 @@ class CapabilityDescriptor(_ClosedResult):
 class RuntimeCapabilitiesResult(_ClosedResult):
     schema_version: Literal[1]
     runtime_version: RuntimeVersion
-    tool_contract_kernel_version: Literal[1]
+    tool_contract_kernel_version: Literal[2]
     capabilities: list[CapabilityDescriptor]
 
 

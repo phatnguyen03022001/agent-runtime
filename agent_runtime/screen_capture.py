@@ -75,22 +75,10 @@ def _metadata_text(metadata: ScreenCaptureMetadata) -> str:
 
 
 def capture_failure_result(failure: ScreenCaptureFailure) -> CallToolResult:
-    return CallToolResult(
-        content=[
-            TextContent(
-                type="text",
-                text=_bounded_json_text(
-                    {
-                        "code": failure.code,
-                        "message": failure.message,
-                        "retryable": failure.retryable,
-                    },
-                    overflow_message="screen capture error exceeded bounds",
-                ),
-            )
-        ],
-        isError=True,
-    )
+    # Compatibility helper: keep one public failure/effect translator.
+    from .server import _runtime_error_from_exception
+
+    return _runtime_error_from_exception("screen_capture", failure)
 
 def _fixed_helper_path() -> Path:
     source = Path(__file__).resolve()

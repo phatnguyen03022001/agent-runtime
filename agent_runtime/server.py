@@ -12,7 +12,7 @@ except ImportError:
     from mcp.server.mcpserver import MCPServer
 
 from mcp.server.mcpserver.exceptions import ToolError
-from pydantic import ConfigDict
+from pydantic import ConfigDict, ValidationError
 
 try:
     from mcp.types import ToolAnnotations as _ToolAnnotations
@@ -25,8 +25,6 @@ from .capacity import CAPACITY_OBSERVER_CONTRACT, observe_capacity
 from .contracts import (
     AbsoluteCwd,
     Argv,
-    CapabilityErrorEnvelope,
-    CapabilityErrorPayload,
     CapabilityFailure,
     CapacityObserverResult,
     RuntimeCapabilitiesResult,
@@ -84,8 +82,8 @@ from .contracts import (
     TerminalExecResult,
     TerminalSessionResult,
     TimeoutSeconds,
-    TypedToolErrorEnvelope,
-    TypedToolErrorPayload,
+    RuntimeToolErrorEnvelope,
+    RuntimeToolErrorPayload,
     WaitFor,
     WaitMilliseconds,
 )
@@ -103,7 +101,7 @@ from .repo_commit import REPO_COMMIT_CONTRACT, commit_repository
 from .repo_fast_forward import REPO_FAST_FORWARD_CONTRACT, RepoFastForwardFailure, fast_forward_repository
 from .repo_observer import REPO_OBSERVER_CONTRACT, RepoObserverFailure, observe_repository
 from .repo_publish import REPO_PUBLISH_CONTRACT, RepoPublishFailure, publish_repository
-from .screen_capture import SCREEN_CAPTURE_CONTRACT, ScreenCaptureFailure, capture_failure_result, capture_screen
+from .screen_capture import SCREEN_CAPTURE_CONTRACT, ScreenCaptureFailure, capture_screen
 from .session import (
     TERMINAL_CONTROL_CONTRACT,
     TERMINAL_POLL_CONTRACT,
@@ -121,6 +119,7 @@ from .capability_registry import (
     runtime_capabilities_result,
 )
 from .version import RUNTIME_VERSION
+from .tool_contract import ContractErrorCode, EffectState, SafeNextAction
 
 PUBLIC_TOOL_NAMES = CAPABILITY_NAMES
 SERVER_DESCRIPTION = "Bounded local command execution and advisory capacity MCP server; terminal tools may modify the host."
@@ -156,7 +155,35 @@ SERVER_INSTRUCTIONS = (
     "runtime_capabilities returns deterministic static Runtime identity and capability metadata only; "
     "it performs no readiness, host, repository, package, permission, or network probes."
 )
-mcp = MCPServer(
+class RuntimeMCPServer(MCPServer):
+    async def call_tool(
+        self,
+        name: str,
+        arguments: dict[str, Any],
+        context: Any | None = None,
+    ) -> Any:
+        try:
+            return await super().call_tool(name, arguments, context)
+        except ToolError as exc:
+            if isinstance(exc.__cause__, ValidationError):
+                return _runtime_error_result(
+                    tool_name=name,
+                    code=ContractErrorCode.INVALID_ARGUMENT,
+                    reason_code="INVALID_REQUEST_SCHEMA",
+                    message="tool arguments failed schema validation",
+                    retryable=False,
+                    effect_state=EffectState.ABSENT,
+                    reconciliation_required=False,
+                    safe_next_action=SafeNextAction.FIX_REQUEST,
+                )
+            if type(exc).__name__ == "UnexpectedToolError":
+                return _unexpected_error_result(name)
+            raise
+        except Exception:
+            return _unexpected_error_result(name)
+
+
+mcp = RuntimeMCPServer(
     name="Agent Runtime",
     version=RUNTIME_VERSION,
     description=SERVER_DESCRIPTION,
@@ -171,12 +198,233 @@ _EXPECTED_TOOL_ERRORS = (
 _PRESERVED_TOOL_ERRORS = (ToolError, *_EXPECTED_TOOL_ERRORS, CapabilityFailure)
 _COMMON_TOOL_SANITIZER_MARKER = "__agent_runtime_common_tool_sanitizer__"
 
+# Explicit effect boundary inventory for the complete public surface. "possible"
+# means an unexpected failure can occur after consequence-bearing dispatch.
+_PUBLIC_TOOL_EFFECT_RISK = {
+    "terminal_exec": "possible",
+    "terminal_start": "possible",
+    "terminal_poll": "absent",
+    "terminal_control": "possible",
+    "terminal_resize": "possible",
+    "capacity_observer": "absent",
+    "fs_read_batch": "absent",
+    "fs_list": "absent",
+    "fs_search": "absent",
+    "fs_patch": "possible",
+    "fs_write": "possible",
+    "repo_observer": "absent",
+    "repo_diff": "absent",
+    "repo_stage": "possible",
+    "repo_commit": "possible",
+    "repo_fast_forward": "possible",
+    "repo_publish": "possible",
+    "screen_capture": "absent",
+    "runtime_capabilities": "absent",
+}
 
-def _call_runtime_tool(delegate: Callable[..., Any], *args: Any) -> Any:
+_TYPED_CODE_TO_CONTRACT = {
+    "INVALID_ARGUMENT": ContractErrorCode.INVALID_ARGUMENT,
+    "OUTSIDE_WORKSPACE": ContractErrorCode.OUTSIDE_WORKSPACE,
+    "NOT_GIT_REPOSITORY": ContractErrorCode.PRECONDITION_FAILED,
+    "NOT_REPOSITORY_ROOT": ContractErrorCode.PRECONDITION_FAILED,
+    "DIRTY_WORKTREE": ContractErrorCode.PRECONDITION_FAILED,
+    "OPERATION_IN_PROGRESS": ContractErrorCode.PRECONDITION_FAILED,
+    "DETACHED_HEAD": ContractErrorCode.PRECONDITION_FAILED,
+    "BRANCH_MISMATCH": ContractErrorCode.PRECONDITION_FAILED,
+    "UPSTREAM_MISMATCH": ContractErrorCode.PRECONDITION_FAILED,
+    "LOCAL_HEAD_MISMATCH": ContractErrorCode.PRECONDITION_FAILED,
+    "REMOTE_HEAD_MISMATCH": ContractErrorCode.PRECONDITION_FAILED,
+    "NON_FAST_FORWARD": ContractErrorCode.PRECONDITION_FAILED,
+    "LOCAL_STATE_CHANGED": ContractErrorCode.STATE_CHANGED,
+    "FETCH_FAILED": ContractErrorCode.UNAVAILABLE,
+    "OUTPUT_LIMIT": ContractErrorCode.LIMIT_EXCEEDED,
+    "DEADLINE_EXCEEDED": ContractErrorCode.TIMEOUT,
+    "TRANSIENT_FAILURE": ContractErrorCode.UNAVAILABLE,
+    "FAST_FORWARD_FAILED": ContractErrorCode.UNAVAILABLE,
+    "PUBLICATION_LINEAGE_MISMATCH": ContractErrorCode.PRECONDITION_FAILED,
+    "PUSH_FAILED": ContractErrorCode.UNAVAILABLE,
+    "PUBLICATION_AMBIGUOUS": ContractErrorCode.UNAVAILABLE,
+    "SCREEN_CAPTURE_PERMISSION_REQUIRED": ContractErrorCode.PERMISSION_DENIED,
+    "CAPTURE_TARGET_NOT_FOUND": ContractErrorCode.NOT_FOUND,
+    "CAPTURE_TARGET_AMBIGUOUS": ContractErrorCode.PRECONDITION_FAILED,
+    "CAPTURE_PAYLOAD_TOO_LARGE": ContractErrorCode.LIMIT_EXCEEDED,
+    "CAPTURE_PROTOCOL_ERROR": ContractErrorCode.UNAVAILABLE,
+    "CAPTURE_HELPER_UNAVAILABLE": ContractErrorCode.UNAVAILABLE,
+    "VISUAL_PERCEPTION_BLOCKED": ContractErrorCode.UNAVAILABLE,
+    "INTERNAL_ERROR": ContractErrorCode.INTERNAL_ERROR,
+}
+
+
+def _bounded_message(message: object, *, fallback: str = "runtime failure") -> str:
+    clean = " ".join(str(message).split())[:256]
+    return clean or fallback
+
+
+def _default_failure_semantics(
+    *,
+    tool_name: str,
+    code: ContractErrorCode,
+    reason_code: str,
+    retryable: bool,
+) -> tuple[bool, EffectState, bool, SafeNextAction]:
+    if reason_code == "VISUAL_PERCEPTION_BLOCKED":
+        return False, EffectState.ABSENT, False, SafeNextAction.UNSUPPORTED
+    if reason_code == "PUBLICATION_AMBIGUOUS":
+        return False, EffectState.UNKNOWN, True, SafeNextAction.RECONCILE
+
+    if code in {
+        ContractErrorCode.INVALID_ARGUMENT,
+        ContractErrorCode.OUTSIDE_WORKSPACE,
+        ContractErrorCode.PRECONDITION_FAILED,
+        ContractErrorCode.STATE_CHANGED,
+        ContractErrorCode.CONFLICT,
+        ContractErrorCode.PERMISSION_DENIED,
+        ContractErrorCode.NOT_FOUND,
+    }:
+        return False, EffectState.ABSENT, False, SafeNextAction.FIX_REQUEST
+
+    if code is ContractErrorCode.LIMIT_EXCEEDED:
+        action = SafeNextAction.WAIT if retryable else SafeNextAction.FIX_REQUEST
+        return retryable, EffectState.ABSENT, False, action
+
+    effect_risk = _PUBLIC_TOOL_EFFECT_RISK.get(tool_name, "possible")
+    if code in {ContractErrorCode.TIMEOUT, ContractErrorCode.UNAVAILABLE}:
+        if effect_risk == "absent":
+            action = SafeNextAction.RETRY if retryable else SafeNextAction.REPORT_DEFECT
+            return retryable, EffectState.ABSENT, False, action
+        return False, EffectState.UNKNOWN, True, SafeNextAction.RECONCILE
+
+    if code is ContractErrorCode.INTERNAL_ERROR:
+        if effect_risk == "absent":
+            return False, EffectState.ABSENT, False, SafeNextAction.REPORT_DEFECT
+        return False, EffectState.UNKNOWN, True, SafeNextAction.RECONCILE
+
+    if effect_risk == "absent":
+        return retryable, EffectState.ABSENT, False, (
+            SafeNextAction.RETRY if retryable else SafeNextAction.REPORT_DEFECT
+        )
+    return False, EffectState.UNKNOWN, True, SafeNextAction.RECONCILE
+
+
+def _runtime_error_result(
+    *,
+    tool_name: str,
+    code: ContractErrorCode,
+    reason_code: str,
+    message: object,
+    retryable: bool,
+    effect_state: EffectState | None = None,
+    reconciliation_required: bool | None = None,
+    safe_next_action: SafeNextAction | None = None,
+) -> CallToolResult:
+    from mcp.types import TextContent
+
+    explicit = (
+        effect_state is not None,
+        reconciliation_required is not None,
+        safe_next_action is not None,
+    )
+    if any(explicit) and not all(explicit):
+        raise RuntimeError("incomplete internal failure semantics")
+    if all(explicit):
+        assert effect_state is not None
+        assert reconciliation_required is not None
+        assert safe_next_action is not None
+        resolved = (retryable, effect_state, reconciliation_required, safe_next_action)
+    else:
+        resolved = _default_failure_semantics(
+            tool_name=tool_name,
+            code=code,
+            reason_code=reason_code,
+            retryable=retryable,
+        )
+
+    resolved_retryable, resolved_effect, resolved_reconcile, resolved_action = resolved
+    clean_message = _bounded_message(message)
+    envelope = RuntimeToolErrorEnvelope(
+        error=RuntimeToolErrorPayload(
+            code=code,
+            reason_code=reason_code,
+            message=clean_message,
+            retryable=resolved_retryable,
+            effect_state=resolved_effect.value,
+            reconciliation_required=resolved_reconcile,
+            safe_next_action=resolved_action.value,
+        )
+    )
+    return CallToolResult(
+        content=[TextContent(type="text", text=clean_message)],
+        structuredContent=envelope.model_dump(mode="json"),
+        isError=True,
+    )
+
+
+def _unexpected_error_result(tool_name: str) -> CallToolResult:
+    return _runtime_error_result(
+        tool_name=tool_name,
+        code=ContractErrorCode.INTERNAL_ERROR,
+        reason_code="UNEXPECTED_INTERNAL_ERROR",
+        message=f"Error executing tool {tool_name}",
+        retryable=False,
+    )
+
+
+def _runtime_error_from_exception(tool_name: str, exc: Exception) -> CallToolResult:
+    if isinstance(exc, ProtectedRuntimeDenied):
+        return _runtime_error_result(
+            tool_name=tool_name,
+            code=ContractErrorCode.PERMISSION_DENIED,
+            reason_code="PROTECTED_RUNTIME_DENIED",
+            message=str(exc),
+            retryable=False,
+            effect_state=EffectState.ABSENT,
+            reconciliation_required=False,
+            safe_next_action=SafeNextAction.FIX_REQUEST,
+        )
+
+    raw_code = getattr(exc, "code", ContractErrorCode.INTERNAL_ERROR)
+    if isinstance(raw_code, ContractErrorCode):
+        code = raw_code
+        reason_code = str(getattr(exc, "reason_code", raw_code.value))
+    else:
+        reason_code = str(raw_code)
+        code = _TYPED_CODE_TO_CONTRACT.get(reason_code, ContractErrorCode.INTERNAL_ERROR)
+
+    effect_state = getattr(exc, "effect_state", None)
+    reconciliation_required = getattr(exc, "reconciliation_required", None)
+    safe_next_action = getattr(exc, "safe_next_action", None)
+    return _runtime_error_result(
+        tool_name=tool_name,
+        code=code,
+        reason_code=reason_code,
+        message=getattr(exc, "message", str(exc)),
+        retryable=bool(getattr(exc, "retryable", False)),
+        effect_state=effect_state,
+        reconciliation_required=reconciliation_required,
+        safe_next_action=safe_next_action,
+    )
+
+
+def _call_runtime_tool(tool_name: str, delegate: Callable[..., Any], *args: Any) -> Any:
     try:
         return delegate(*args)
-    except _EXPECTED_TOOL_ERRORS as exc:
-        raise ToolError(str(exc)) from None
+    except (*_EXPECTED_TOOL_ERRORS, CapabilityFailure) as exc:
+        return _runtime_error_from_exception(tool_name, exc)
+    except Exception as exc:
+        if all(
+            hasattr(exc, field)
+            for field in (
+                "code",
+                "reason_code",
+                "message",
+                "retryable",
+                "effect_state",
+                "reconciliation_required",
+                "safe_next_action",
+            )
+        ):
+            return _runtime_error_from_exception(tool_name, exc)
+        raise
 
 
 def _sanitize_unexpected_tool_exception(delegate: Callable[..., Any]) -> Callable[..., Any]:
@@ -193,22 +441,8 @@ def _sanitize_unexpected_tool_exception(delegate: Callable[..., Any]) -> Callabl
     return sanitized
 
 
-def _capability_error_result(exc: CapabilityFailure) -> CallToolResult:
-    from mcp.types import TextContent
-
-    envelope = CapabilityErrorEnvelope(
-        error=CapabilityErrorPayload(
-            code=exc.code,
-            reason_code=exc.reason_code,
-            message=exc.message,
-            retryable=exc.retryable,
-        )
-    )
-    return CallToolResult(
-        content=[TextContent(type="text", text=exc.message)],
-        structuredContent=envelope.model_dump(),
-        isError=True,
-    )
+def _capability_error_result(tool_name: str, exc: CapabilityFailure) -> CallToolResult:
+    return _runtime_error_from_exception(tool_name, exc)
 
 
 def _tool_annotations_supported() -> bool:
@@ -344,7 +578,7 @@ def terminal_exec(
 ) -> TerminalExecResult:
     """Run one literal local argv; this capability may modify the host."""
 
-    return cast(TerminalExecResult, _call_runtime_tool(execute_terminal, argv, cwd, timeout_seconds))
+    return cast(TerminalExecResult, _call_runtime_tool("terminal_exec", execute_terminal, argv, cwd, timeout_seconds))
 
 
 @_tool(
@@ -362,7 +596,7 @@ def terminal_start(
 
     return cast(
         TerminalSessionResult,
-        _call_runtime_tool(_start_terminal, argv, cwd, start_identity),
+        _call_runtime_tool("terminal_start", _start_terminal, argv, cwd, start_identity),
     )
 
 
@@ -384,6 +618,7 @@ def terminal_poll(
     return cast(
         TerminalSessionResult,
         _call_runtime_tool(
+            "terminal_poll",
             _poll_terminal,
             session_id,
             cursor,
@@ -409,7 +644,7 @@ def terminal_control(
 
     return cast(
         TerminalControlResult,
-        _call_runtime_tool(_control_terminal, session_id, action, data, None, None),
+        _call_runtime_tool("terminal_control", _control_terminal, session_id, action, data, None, None),
     )
 
 
@@ -428,7 +663,7 @@ def terminal_resize(
 
     return cast(
         TerminalControlResult,
-        _call_runtime_tool(_control_terminal, session_id, "resize", None, rows, cols),
+        _call_runtime_tool("terminal_resize", _control_terminal, session_id, "resize", None, rows, cols),
     )
 
 
@@ -441,7 +676,7 @@ def terminal_resize(
 def capacity_observer() -> CapacityObserverResult:
     """Report a bounded read-only advisory machine-capacity ceiling."""
 
-    return cast(CapacityObserverResult, _call_runtime_tool(observe_capacity))
+    return cast(CapacityObserverResult, _call_runtime_tool("capacity_observer", observe_capacity))
 
 
 @_tool(
@@ -453,7 +688,7 @@ def capacity_observer() -> CapacityObserverResult:
 def fs_read_batch(cwd: AbsoluteCwd, items: FsReadItems) -> FsReadBatchResult:
     """Read bounded ordered UTF-8 file ranges below one validated cwd."""
 
-    return cast(FsReadBatchResult, _call_runtime_tool(read_files_batch, cwd, items))
+    return cast(FsReadBatchResult, _call_runtime_tool("fs_read_batch", read_files_batch, cwd, items))
 
 
 @_tool(
@@ -472,7 +707,7 @@ def fs_list(
     try:
         return list_directory(cwd, path, max_entries)
     except CapabilityFailure as exc:
-        return cast(FsListResult, _capability_error_result(exc))
+        return cast(FsListResult, _capability_error_result("fs_list", exc))
 
 
 @_tool(
@@ -494,7 +729,7 @@ def fs_search(
     try:
         return search_files(cwd, query, mode, root_path, case_sensitive, max_results)
     except CapabilityFailure as exc:
-        return cast(FsSearchResult, _capability_error_result(exc))
+        return cast(FsSearchResult, _capability_error_result("fs_search", exc))
 
 
 @_tool(
@@ -514,7 +749,7 @@ def fs_patch(
     try:
         return patch_file(cwd, path, expected_sha256, edits)
     except CapabilityFailure as exc:
-        return cast(FsPatchResult, _capability_error_result(exc))
+        return cast(FsPatchResult, _capability_error_result("fs_patch", exc))
 
 
 @_tool(
@@ -535,7 +770,7 @@ def fs_write(
     try:
         return write_file(cwd, path, operation, content, expected_sha256)
     except CapabilityFailure as exc:
-        return cast(FsWriteResult, _capability_error_result(exc))
+        return cast(FsWriteResult, _capability_error_result("fs_write", exc))
 
 
 @_tool(
@@ -553,21 +788,7 @@ def repo_observer(
     try:
         return observe_repository(cwd, max_paths)
     except RepoObserverFailure as exc:
-        from mcp.types import CallToolResult, TextContent
-
-        envelope = TypedToolErrorEnvelope(
-            error=TypedToolErrorPayload(
-                code=exc.code,
-                message=exc.message,
-                retryable=exc.retryable,
-            )
-        )
-        error_result = CallToolResult(
-            content=[TextContent(type="text", text=exc.message)],
-            structuredContent=envelope.model_dump(),
-            isError=True,
-        )
-        return cast(RepoObserverResult, error_result)
+        return cast(RepoObserverResult, _runtime_error_from_exception("repo_observer", exc))
 
 
 @_tool(
@@ -585,7 +806,7 @@ def repo_diff(
     try:
         return diff_repository(cwd, scope)
     except CapabilityFailure as exc:
-        return cast(RepoDiffResult, _capability_error_result(exc))
+        return cast(RepoDiffResult, _capability_error_result("repo_diff", exc))
 
 
 @_tool(
@@ -605,7 +826,7 @@ def repo_stage(
     try:
         return stage_repository(cwd, branch, expected_head_sha, items)
     except CapabilityFailure as exc:
-        return cast(RepoStageResult, _capability_error_result(exc))
+        return cast(RepoStageResult, _capability_error_result("repo_stage", exc))
 
 
 @_tool(
@@ -632,7 +853,7 @@ def repo_commit(
             message,
         )
     except CapabilityFailure as exc:
-        return cast(RepoCommitResult, _capability_error_result(exc))
+        return cast(RepoCommitResult, _capability_error_result("repo_commit", exc))
 
 
 @_tool(
@@ -657,21 +878,10 @@ def repo_fast_forward(
             expected_remote_head,
         )
     except RepoFastForwardFailure as exc:
-        from mcp.types import CallToolResult, TextContent
-
-        envelope = TypedToolErrorEnvelope(
-            error=TypedToolErrorPayload(
-                code=exc.code,
-                message=exc.message,
-                retryable=exc.retryable,
-            )
+        return cast(
+            RepoFastForwardResult,
+            _runtime_error_from_exception("repo_fast_forward", exc),
         )
-        error_result = CallToolResult(
-            content=[TextContent(type="text", text=exc.message)],
-            structuredContent=envelope.model_dump(),
-            isError=True,
-        )
-        return cast(RepoFastForwardResult, error_result)
 
 
 @_tool(
@@ -691,21 +901,10 @@ def repo_publish(
     try:
         return publish_repository(cwd, branch, expected_remote_head, commit)
     except RepoPublishFailure as exc:
-        from mcp.types import CallToolResult, TextContent
-
-        envelope = TypedToolErrorEnvelope(
-            error=TypedToolErrorPayload(
-                code=exc.code,
-                message=exc.message,
-                retryable=exc.retryable,
-            )
+        return cast(
+            RepoPublishResult,
+            _runtime_error_from_exception("repo_publish", exc),
         )
-        error_result = CallToolResult(
-            content=[TextContent(type="text", text=exc.message)],
-            structuredContent=envelope.model_dump(),
-            isError=True,
-        )
-        return cast(RepoPublishResult, error_result)
 
 
 @_tool(
@@ -726,12 +925,13 @@ def screen_capture(
 ) -> CallToolResult:
     """Return a production governance denial before capture_screen or the native helper can execute."""
 
-    return capture_failure_result(
+    return _runtime_error_from_exception(
+        "screen_capture",
         ScreenCaptureFailure(
             "VISUAL_PERCEPTION_BLOCKED",
             "visual perception is governance-blocked in production",
             retryable=False,
-        )
+        ),
     )
 
 
