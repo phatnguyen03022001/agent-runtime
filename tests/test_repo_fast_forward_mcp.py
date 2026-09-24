@@ -144,7 +144,7 @@ class RepoFastForwardMCPTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(_annotation_tuple(observer), (True, False, True, False))
         self.assertEqual(
             set(observer.input_schema["properties"]),
-            {"cwd", "max_paths"},
+            {"cwd", "max_paths", "cursor", "continuation_receipt"},
         )
         self.assertIn("local-only", observer.description.lower())
 
