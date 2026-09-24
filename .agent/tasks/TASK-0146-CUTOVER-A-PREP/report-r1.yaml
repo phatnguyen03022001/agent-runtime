@@ -1,0 +1,95 @@
+protocol_version: 3
+
+task_id: TASK-0146-CUTOVER-A-PREP
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0146-CUTOVER-A-PREP/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  authorized_base_head: "669f5bcbbebd66b62a1c12294fb5f4551114a206"
+  final_execution_head: "89111218720ddb2f12961f9375549733edd23ada"
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  authorized_revision: "22fc4d881d5a0ee71b3af2b3acadb4ce8258bbc1"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - repository_content_write
+    - canonical_verification
+    - repository_native_package_build
+    - package_metadata_inspection
+    - pinned_foundation_report_validation
+    - git_commit
+    - non_force_git_publication
+    - remote_ref_reconciliation
+    - live_runtime_read_only_observation
+  available:
+    - repository_content_write
+    - canonical_verification
+    - repository_native_package_build
+    - package_metadata_inspection
+    - pinned_foundation_report_validation
+    - git_commit
+    - non_force_git_publication
+    - remote_ref_reconciliation
+    - live_runtime_read_only_observation
+  missing: []
+  passed: true
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: PASS
+  evidence: "Exact implementation candidate 89111218720ddb2f12961f9375549733edd23ada, tree 00cdfce957326c011b5ed5a377074fa071821f55, passed canonical ./verify with lifecycle COMPLETED, natural_exit, exit_code=0, 56/56 modules and 717 tests (254 fast-lane, 463 serial-lane). On the same exact clean candidate, repository-native macos/package_app.sh completed exit_code=0 using the existing explicit Apple Development signing identity and canonical UV CPython 3.13.5 arm64/cp313 interpreter. Built candidate SHA-256 is 6b68b1632582b953b86456e8bc3d916101983c923122d55ad129ede8b2c1c344. Built Info.plist and packaged agent_runtime/version.py both report 0.3.0; codesign --verify --deep --strict passed. Candidate handoff and runtime manifest bind source/runtime revision 89111218720ddb2f12961f9375549733edd23ada, tree 00cdfce957326c011b5ed5a377074fa071821f55 and requirements.lock SHA-256 80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e."
+pushed: true
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "Execution-base-to-candidate diff changes exactly README.md, agent_runtime/version.py, macos/AppBundle/Info.plist and tests/test_capability_registry.py. RUNTIME_VERSION is 0.3.0; canonical CFBundleShortVersionString is 0.3.0; the existing one-Python-SSOT/package-projection test now asserts 0.3.0 and canonical ./verify passes."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "macos/package_app.sh completed successfully from exact clean candidate 89111218720ddb2f12961f9375549733edd23ada without source mutation. It published build/candidates/6b68b1632582b953b86456e8bc3d916101983c923122d55ad129ede8b2c1c344/Agent Runtime.app and Agent Runtime.candidate.json. Built app CFBundleShortVersionString=0.3.0 and packaged payload version.py reports 0.3.0."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "Candidate handoff schema 2 records source_revision=89111218720ddb2f12961f9375549733edd23ada, source_tree=00cdfce957326c011b5ed5a377074fa071821f55, requirements_lock_sha256=80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e and candidate_sha256=6b68b1632582b953b86456e8bc3d916101983c923122d55ad129ede8b2c1c344. Runtime manifest schema 1 records the same revision/tree/lock identity and payload_sha256=b22ea3e525a0324e9886197e90f36977b852997a61f35a54472f5e7414ba78e4. Existing immutable staging, hash-locked dependency installation, signing and provenance validation completed successfully."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "No behavior/schema owner changed outside the four authorized release-metadata/test/doc files. Source runtime_capabilities_result reports Runtime 0.3.0, ToolContract Kernel 2, 19 capabilities, terminal_exec 2/2, terminal_start 3/3 and terminal_poll 4/3. Canonical ./verify passes 56/56 modules and 717 tests. macos/package_app.sh, macos/package_provenance.py, requirements.lock, TASK-0144/TASK-0145/TASK-0146 evidence and docs/RECOVERY.md are unchanged."
+  - criterion_id: AC-5
+    status: EVIDENCE_INDEXED
+    evidence: "Exact verified candidate 89111218720ddb2f12961f9375549733edd23ada was published non-force after fresh remote main reconciliation from execution base 669f5bcbbebd66b62a1c12294fb5f4551114a206, then fresh-resolved as origin/main with local HEAD synchronized and clean. A read-only live Runtime capability observation before report publication still reports installed Runtime 0.2.2, ToolContract Kernel 1 and 19 capabilities. Final report publication and post-publication live/remote reconciliation are performed after this report commit exists and therefore are not self-embedded."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "At execution start remote branches were exactly {main}, remote main=669f5bcbbebd66b62a1c12294fb5f4551114a206, open PR list was empty, local HEAD=origin/main=remote main, ahead/behind=0/0 and worktree/index clean. TASK-0146-CUTOVER-A-PREP revision 1 passed the pinned Foundation task validator. Accepted TASK-0146 functional predecessor remains ac9fc1e454ec876198fba9c46ad480fc8edb3bf8."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "Tracked 0.2.2 literals were inspected before mutation. Historical task/report/review records and installed-live statements were preserved. Only source release identity in version.py, canonical bundle projection, directly coupled existing capability-registry test literals, and the two contradictory README source-release claims were changed."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "One coherent candidate commit 89111218720ddb2f12961f9375549733edd23ada was created directly from execution base. Its tree is 00cdfce957326c011b5ed5a377074fa071821f55 and exact diff contains only the four authorized files. Worktree was clean before verification."
+  - check_id: CHECK-4
+    result: PASS
+    evidence: "Canonical ./verify ran once on exact candidate 89111218720ddb2f12961f9375549733edd23ada and completed exit_code=0: 56/56 modules, 717 tests, zero reported failures."
+  - check_id: CHECK-5
+    result: PASS
+    evidence: "First package invocation failed pre-build with exit_code=2 because python3.13 was not on the Runtime process PATH; no source changed. Canonical interpreter resolution then identified existing /Users/tienphat/.local/share/uv/python/cpython-3.13.5-macos-aarch64-none/bin/python3.13 as CPython 3.13.5/cp313/darwin/arm64 with the required libpython3.13.dylib. A platform safety block prevented one terminal_start dispatch before effect when the human-readable signing label was supplied; the same existing certificate was then addressed by its explicit hash. The repository-native package build completed exit_code=0 and all required 0.3.0/provenance/codesign predicates passed without source mutation or install."
+  - check_id: CHECK-6
+    result: PASS
+    evidence: "Immediately before publication remote main still equaled execution base 669f5bcbbebd66b62a1c12294fb5f4551114a206. repo_publish published exact verified candidate 89111218720ddb2f12961f9375549733edd23ada non-force, and fresh ls-remote/fetch/repo observation proved origin/main=local HEAD=candidate with ahead/behind 0/0 and clean worktree."
+  - check_id: CHECK-7
+    result: EVIDENCE_INDEXED
+    evidence: "This report is prepared as the sole report-only child of candidate 89111218720ddb2f12961f9375549733edd23ada. Its pinned Foundation validation, commit/publication, exact parent/diff/remote-main reconciliation and final read-only installed Runtime observation occur after report bytes are finalized and are completed before Executor returns NEEDS_REVIEW."
+
+result: NEEDS_REVIEW
