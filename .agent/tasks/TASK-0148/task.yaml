@@ -1,7 +1,7 @@
 protocol_version: 3
 
 task_id: TASK-0148
-task_revision: 1
+task_revision: 2
 state: APPROVED
 title: "Filesystem CAS Closure + Bounded Management"
 
@@ -65,6 +65,9 @@ authority_sources:
   - source: "Current fs_read_batch, fs_patch, fs_write and fs_safety implementations at the exact execution base"
     role: "existing workspace, nofollow, expected-state, immediate-revalidation, atomic-write and structured failure/effect mechanisms to reuse"
     precedence: 3
+  - source: "TASK-0148 revision-1 BLOCKED checkpoint 53cad80758753e127fc2bf197e1125417500949e, tree 8d7e70272d16e14ab929026323d22b746eeffecc"
+    role: "immutable local implementation checkpoint: focused verification 183/183 PASS; canonical verify exposed only stale doctor inventory/schema authority; checkpoint is recovery input, not publishable acceptance evidence"
+    precedence: 4
 
 structure_authority:
   status: RESOLVED
@@ -90,7 +93,10 @@ scope:
     - "Use existing structured TASK-0144 error/effect contract for invalid requests, expected-state mismatch, local state drift, destination conflict, protected-runtime denial, EXDEV, permission failures and post-effect ambiguity. No English-string parsing for control flow."
     - "Add deterministic security/correctness tests covering fs_read full-file SHA/size/returned_bytes/eof/truncated metadata; read->patch CAS success and SHA mismatch; source replacement between observation and mutation; destination race/no-overwrite; symlink escape; outside-workspace and protected-runtime rejection; EXDEV; non-empty-directory delete; recursive-delete absence; dangerous chmod bits; mkdir pre-existing path and bounded parents; immediate revalidation; and operation atomicity/effect classification."
     - "Update capability registry, MCP/schema conformance, runtime_capabilities source projection and only directly affected source documentation. Do not package/install/restart/reload Runtime in TASK-0148."
-    - "After focused PASS, commit one coherent implementation candidate, run canonical ./verify on that exact clean candidate, fresh-reconcile remote main, publish exact verified candidate non-force, publish report-r1.yaml as the sole report-only child, and stop NEEDS_REVIEW."
+    - "Revision-2 recovery authority: preserve exact clean local checkpoint 53cad80758753e127fc2bf197e1125417500949e (tree 8d7e70272d16e14ab929026323d22b746eeffecc, parent d8463dab88f44b3e47a1be63cac337c26b1d3ddb) as immutable recovery evidence. Do not reset or restart implementation. After fresh-resolving this revision-2 task-authoring base, transplant/reparent the exact checkpoint patch onto the revision-2 base in a linear unpublished local lineage; verify the transplanted implementation bytes match the checkpoint before any new source edit."
+    - "Close only the canonical-verifier compatibility gap in agent_runtime/doctor.py and tests/test_doctor.py: replace stale accepted nineteen-tool inventory/schema assumptions with the revision-2 source authority of exactly twenty tools, fs_read_batch request/result 1/2 and fs_manage request/result 1/1. Preserve all other doctor checks, installed-package semantics, health semantics and screen_capture governance."
+    - "The checkpoint's focused 183/183 PASS may be reused only if the transplanted implementation delta excluding task.yaml is byte-equivalent to checkpoint 53cad807... and the only subsequent production-source edit is agent_runtime/doctor.py. Run focused doctor/schema compatibility tests after the doctor correction. Any other implementation change invalidates that reuse and requires rerunning the full TASK-0148 focused suite."
+    - "After the doctor correction, commit a successor candidate, run canonical ./verify on that exact clean successor, fresh-reconcile remote main, publish only the exact verified successor non-force, publish report-r1.yaml as the sole report-only child, and stop NEEDS_REVIEW."
 
   allowed_existing_files_or_components:
     - "agent_runtime/fs_read.py"
@@ -100,9 +106,11 @@ scope:
     - "agent_runtime/contracts.py"
     - "agent_runtime/server.py"
     - "agent_runtime/capability_registry.py"
+    - "agent_runtime/doctor.py only for the stale TASK-0148 inventory/schema compatibility closure"
     - "agent_runtime/tool_contract.py only for direct capability contract projection compatibility if required"
     - "new agent_runtime/fs_manage.py"
     - "directly affected fs_read/fs_manage/security/MCP/schema tests"
+    - "tests/test_doctor.py only for the stale TASK-0148 inventory/schema compatibility closure"
     - "README.md and directly affected filesystem contract docs"
     - ".agent/tasks/TASK-0148/report-r1.yaml"
 
@@ -133,6 +141,8 @@ invariants:
   - "No dependency addition, filesystem transaction framework, persistent mutation journal, daemon, cache, database or background worker."
   - "No GAP-03, GAP-09, GAP-10, GAP-11, GAP-12 or GAP-13 implementation and no TASK-0149+ authoring/execution by Executor."
   - "CUTOVER B remains later; TASK-0148 itself authorizes no package build/install, Runtime restart, plugin/schema reload or live activation."
+  - "Revision-1 checkpoint 53cad80758753e127fc2bf197e1125417500949e is recovery input only. It must not be published because its canonical ./verify failed. Revision 2 must produce and canonically verify a successor candidate."
+  - "Outside the exact checkpoint transplant, the only newly authorized production-source delta beyond revision 1 is agent_runtime/doctor.py; tests/test_doctor.py is the only newly authorized test owner. No other scope expansion is granted."
 
 forbidden_changes:
   - "Any new public tool other than fs_manage, or any removal/rename of existing tools."
@@ -203,13 +213,13 @@ acceptance_criteria:
 verification:
   executor_checks:
     - id: CHECK-1
-      command_or_check: "Fresh-resolve GitHub/local main. Require exact task-authoring base, branches exactly {main}, open PRs=0, ahead/behind=0/0, clean worktree/index, TASK-0148 revision 1, accepted TASK-0147 review and current-phase capabilities before mutation."
+      command_or_check: "Fresh-resolve GitHub remote main at the exact TASK-0148 revision-2 task-authoring base, branches exactly {main}, open PRs=0, and accepted TASK-0147 review. Separately require local recovery checkpoint HEAD=53cad80758753e127fc2bf197e1125417500949e, tree=8d7e70272d16e14ab929026323d22b746eeffecc, parent=d8463dab88f44b3e47a1be63cac337c26b1d3ddb and clean worktree/index before recovery. If checkpoint identity differs, stop BLOCKED."
       required: true
     - id: CHECK-2
-      command_or_check: "Fresh-inspect fs_read_batch, fs_patch, fs_write, fs_safety, protection, contracts, registry and schemas. Confirm fs_read_batch is source request/result 1/1 and fs_manage does not exist. If these predicates changed, stop BLOCKED rather than layering another contract."
+      command_or_check: "Transplant/reparent the exact checkpoint patch onto the revision-2 base without restarting implementation or altering checkpoint implementation bytes. Prove the resulting pre-doctor delta matches checkpoint 53cad807... except for task-authority lineage, then fresh-inspect fs_read_batch/fs_manage/source registry: require source Runtime 0.3.0, Kernel 2, tools 20, fs_read_batch 1/2 and fs_manage 1/1."
       required: true
     - id: CHECK-3
-      command_or_check: "Implement fs_read metadata closure and one fs_manage capability by reusing descriptor-relative/CAS primitives. Run focused correctness/security/adversarial tests covering AC-1 through AC-4 before candidate commit."
+      command_or_check: "Apply only the revision-2 doctor compatibility closure in agent_runtime/doctor.py and tests/test_doctor.py. Run focused doctor/schema tests. Reuse checkpoint 183/183 focused evidence only under the byte-equivalence/no-other-source-change predicate; otherwise rerun full TASK-0148 focused correctness/security/adversarial coverage for AC-1 through AC-4."
       required: true
     - id: CHECK-4
       command_or_check: "Commit one coherent implementation candidate after focused PASS. Require clean candidate, git diff --check, exact candidate SHA/tree, one new fs_manage module, bounded direct tests and no later-gap/package surface."
@@ -232,7 +242,8 @@ report_requirements:
   path: .agent/tasks/TASK-0148/report-r1.yaml
   record:
     - "state=REPORTED and result=NEEDS_REVIEW"
-    - "exact task/base/candidate/tree/report lineage"
+    - "exact revision-2 task/base, recovered checkpoint 53cad80758753e127fc2bf197e1125417500949e/tree 8d7e70272d16e14ab929026323d22b746eeffecc, successor candidate/tree and report lineage"
+    - "checkpoint transplant/reparent byte-equivalence proof and doctor-only revision-2 delta proof"
     - "fs_read_batch source request/result schema 1/2 and exact metadata semantics"
     - "read->fs_patch CAS proof and changed-file rejection proof"
     - "fs_manage 1/1 four-operation request/result contract and source tool inventory 20"
