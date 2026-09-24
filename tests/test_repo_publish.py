@@ -99,7 +99,8 @@ class RepoPublishTests(unittest.TestCase):
     def _assert_failure(self, code: str, callback) -> RepoPublishFailure:
         with self.assertRaises(RepoPublishFailure) as raised:
             callback()
-        self.assertEqual(raised.exception.code, code)
+        reason_code = getattr(raised.exception, "reason_code", raised.exception.code)
+        self.assertEqual(reason_code, code)
         self.assertLessEqual(len(raised.exception.message), 256)
         self.assertNotIn(str(self.remote), raised.exception.message)
         return raised.exception

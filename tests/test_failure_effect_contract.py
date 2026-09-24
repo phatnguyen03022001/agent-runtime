@@ -252,6 +252,64 @@ class FailureEffectBoundaryTests(unittest.TestCase):
         )
         self.assertEqual(target.read_text(encoding="utf-8"), "one\n")
 
+    def test_atomic_patch_failure_before_effect_reports_absent(self) -> None:
+        target = self.cwd / "sample.txt"
+        target.write_text("one\n", encoding="utf-8")
+        digest = hashlib.sha256(target.read_bytes()).hexdigest()
+        with patch("agent_runtime.fs_patch.os.replace", side_effect=OSError("synthetic replace failure")):
+            with self.assertRaises(Exception) as raised:
+                patch_file(
+                    str(self.cwd),
+                    "sample.txt",
+                    digest,
+                    [FsPatchEdit(old_text="one", new_text="two")],
+                )
+        result = server._runtime_error_from_exception("fs_patch", raised.exception)
+        _assert_error(
+            self,
+            result,
+            code="INTERNAL_ERROR",
+            reason_code="ATOMIC_REPLACE_FAILED",
+            retryable=False,
+            effect_state="absent",
+            reconciliation_required=False,
+            safe_next_action="report_defect",
+        )
+        self.assertEqual(target.read_text(encoding="utf-8"), "one\n")
+
+    def test_patch_parent_fsync_failure_after_replace_reports_present(self) -> None:
+        target = self.cwd / "sample.txt"
+        target.write_text("one\n", encoding="utf-8")
+        digest = hashlib.sha256(target.read_bytes()).hexdigest()
+        fsync_calls = 0
+
+        def fail_second_fsync(_fd: int) -> None:
+            nonlocal fsync_calls
+            fsync_calls += 1
+            if fsync_calls == 2:
+                raise OSError("synthetic parent fsync failure")
+
+        with patch("agent_runtime.fs_patch.os.fsync", side_effect=fail_second_fsync):
+            with self.assertRaises(Exception) as raised:
+                patch_file(
+                    str(self.cwd),
+                    "sample.txt",
+                    digest,
+                    [FsPatchEdit(old_text="one", new_text="two")],
+                )
+        result = server._runtime_error_from_exception("fs_patch", raised.exception)
+        _assert_error(
+            self,
+            result,
+            code="INTERNAL_ERROR",
+            reason_code="PARENT_FSYNC_FAILED",
+            retryable=False,
+            effect_state="present",
+            reconciliation_required=True,
+            safe_next_action="reconcile",
+        )
+        self.assertEqual(target.read_text(encoding="utf-8"), "two\n")
+
     def test_expected_git_head_mismatch_is_absent_before_index_mutation(self) -> None:
         repo = self.workspace / "repo"
         remote = self.workspace / "origin.git"
@@ -370,6 +428,24 @@ class FailureEffectBoundaryTests(unittest.TestCase):
         )
         retained = manager.poll(start_identity=identity)
         self.assertEqual(retained["lifecycle"], "START_FAILED_POST_EFFECT")
+
+    def test_repo_push_failure_after_unchanged_remote_allows_retry(self) -> None:
+        failure = RepoPublishFailure(
+            "PUSH_FAILED",
+            "push failed and fresh observation proved the remote head remained unchanged",
+            retryable=True,
+        )
+        result = server._runtime_error_from_exception("repo_publish", failure)
+        _assert_error(
+            self,
+            result,
+            code="UNAVAILABLE",
+            reason_code="PUSH_FAILED",
+            retryable=True,
+            effect_state="absent",
+            reconciliation_required=False,
+            safe_next_action="retry",
+        )
 
     def test_repo_publication_ambiguity_never_advertises_blind_retry(self) -> None:
         failure = RepoPublishFailure(

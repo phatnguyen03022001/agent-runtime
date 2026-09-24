@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -106,17 +105,16 @@ class ScreenCaptureMCPTests(unittest.IsolatedAsyncioTestCase):
     async def test_screen_capture_is_blocked_before_argument_validation(self) -> None:
         result = await server.mcp.call_tool("screen_capture", {"target": "window"})
         self.assertTrue(result.is_error)
-        self.assertIsNone(result.structured_content)
+        error = result.structured_content["error"]
         self.assertEqual(len(result.content), 1)
         self.assertIsInstance(result.content[0], TextContent)
-        text = result.content[0].text
-        error = json.loads(text)
-        self.assertEqual(text, json.dumps(error, ensure_ascii=False, separators=(",", ":"), sort_keys=True))
-        self.assertEqual(set(error), {"code", "message", "retryable"})
-        self.assertEqual(error["code"], "VISUAL_PERCEPTION_BLOCKED")
+        self.assertEqual(error["code"], "UNAVAILABLE")
+        self.assertEqual(error["reason_code"], "VISUAL_PERCEPTION_BLOCKED")
         self.assertFalse(error["retryable"])
+        self.assertEqual(error["effect_state"], "absent")
+        self.assertFalse(error["reconciliation_required"])
+        self.assertEqual(error["safe_next_action"], "unsupported")
         self.assertLessEqual(len(error["message"]), 256)
-        self.assertLessEqual(len(text.encode("utf-8")), screen_capture_feature.MAX_HEADER_BYTES)
 
     async def test_production_guard_skips_capture_delegate_and_native_helper(self) -> None:
         with patch.object(server, "capture_screen", side_effect=AssertionError("capture delegate invoked")) as capture:
@@ -128,14 +126,16 @@ class ScreenCaptureMCPTests(unittest.IsolatedAsyncioTestCase):
                 result = await server.mcp.call_tool("screen_capture", {})
 
         self.assertTrue(result.is_error)
-        self.assertIsNone(result.structured_content)
         images = [block for block in result.content if isinstance(block, ImageContent)]
         texts = [block for block in result.content if isinstance(block, TextContent)]
         self.assertEqual(images, [])
         self.assertEqual(len(texts), 1)
-        error = json.loads(texts[0].text)
-        self.assertEqual(error["code"], "VISUAL_PERCEPTION_BLOCKED")
+        error = result.structured_content["error"]
+        self.assertEqual(error["code"], "UNAVAILABLE")
+        self.assertEqual(error["reason_code"], "VISUAL_PERCEPTION_BLOCKED")
         self.assertFalse(error["retryable"])
+        self.assertEqual(error["effect_state"], "absent")
+        self.assertEqual(error["safe_next_action"], "unsupported")
         capture.assert_not_called()
         helper.assert_not_called()
 

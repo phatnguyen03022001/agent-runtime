@@ -19,8 +19,10 @@ from .fs_safety import (
 from .tool_contract import (
     Authority,
     ContractErrorCode,
+    EffectState,
     MutationAuthority,
     NetworkAuthority,
+    SafeNextAction,
     ToolAnnotations,
     ToolClass,
     ToolContract,
@@ -440,6 +442,9 @@ def patch_file(
                 ContractErrorCode.INTERNAL_ERROR,
                 "ATOMIC_REPLACE_FAILED",
                 "atomic target replacement failed",
+                effect_state=EffectState.ABSENT,
+                reconciliation_required=False,
+                safe_next_action=SafeNextAction.REPORT_DEFECT,
             ) from exc
         temp_name = None
         try:
@@ -449,6 +454,9 @@ def patch_file(
                 ContractErrorCode.INTERNAL_ERROR,
                 "PARENT_FSYNC_FAILED",
                 "parent directory could not be fsynced after replacement",
+                effect_state=EffectState.PRESENT,
+                reconciliation_required=True,
+                safe_next_action=SafeNextAction.RECONCILE,
             ) from exc
 
         return FsPatchResult(

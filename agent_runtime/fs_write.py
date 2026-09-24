@@ -24,8 +24,10 @@ from .fs_safety import (
 from .tool_contract import (
     Authority,
     ContractErrorCode,
+    EffectState,
     MutationAuthority,
     NetworkAuthority,
+    SafeNextAction,
     ToolAnnotations,
     ToolClass,
     ToolContract,
@@ -95,8 +97,37 @@ def _failure(
     message: str,
     *,
     retryable: bool = False,
+    effect_state: EffectState = EffectState.ABSENT,
+    reconciliation_required: bool = False,
+    safe_next_action: SafeNextAction | None = None,
 ) -> CapabilityFailure:
-    return CapabilityFailure(code, reason, message, retryable=retryable)
+    if safe_next_action is None:
+        if code is ContractErrorCode.LIMIT_EXCEEDED and retryable:
+            safe_next_action = SafeNextAction.WAIT
+        elif retryable and code in {ContractErrorCode.TIMEOUT, ContractErrorCode.UNAVAILABLE}:
+            safe_next_action = SafeNextAction.RETRY
+        elif code in {
+            ContractErrorCode.INVALID_ARGUMENT,
+            ContractErrorCode.OUTSIDE_WORKSPACE,
+            ContractErrorCode.PRECONDITION_FAILED,
+            ContractErrorCode.STATE_CHANGED,
+            ContractErrorCode.CONFLICT,
+            ContractErrorCode.PERMISSION_DENIED,
+            ContractErrorCode.NOT_FOUND,
+            ContractErrorCode.LIMIT_EXCEEDED,
+        }:
+            safe_next_action = SafeNextAction.FIX_REQUEST
+        else:
+            safe_next_action = SafeNextAction.REPORT_DEFECT
+    return CapabilityFailure(
+        code,
+        reason,
+        message,
+        retryable=retryable,
+        effect_state=effect_state,
+        reconciliation_required=reconciliation_required,
+        safe_next_action=safe_next_action,
+    )
 
 
 def _runtime_failure(exc: RuntimeValidationError) -> CapabilityFailure:
@@ -408,6 +439,9 @@ def _fsync_parent(parent_fd: int) -> None:
             ContractErrorCode.INTERNAL_ERROR,
             "ATOMIC_WRITE_FAILED",
             "parent directory could not be fsynced",
+            effect_state=EffectState.PRESENT,
+            reconciliation_required=True,
+            safe_next_action=SafeNextAction.RECONCILE,
         ) from exc
 
 
@@ -567,6 +601,9 @@ def _create(
                 ContractErrorCode.INTERNAL_ERROR,
                 "CREATE_CLEANUP_AMBIGUOUS",
                 message,
+                effect_state=EffectState.PRESENT,
+                reconciliation_required=True,
+                safe_next_action=SafeNextAction.RECONCILE,
             )
 
         _fsync_parent(parent_fd)

@@ -211,7 +211,7 @@ class RepoPublishMCPTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(set(result.structured_content), {"error"})
         self.assertEqual(
             set(result.structured_content["error"]),
-            {"code", "message", "retryable"},
+            {"code", "reason_code", "message", "retryable", "effect_state", "reconciliation_required", "safe_next_action"},
         )
         self.assertEqual(result.structured_content["error"]["code"], "OUTSIDE_WORKSPACE")
         self.assertLessEqual(len(result.structured_content["error"]["message"]), 256)

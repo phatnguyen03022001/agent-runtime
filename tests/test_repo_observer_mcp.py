@@ -119,7 +119,7 @@ class RepoObserverMCPTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.is_error, result)
         self.assertEqual(set(result.structured_content), {"error"})
         error = result.structured_content["error"]
-        self.assertEqual(set(error), {"code", "message", "retryable"})
+        self.assertEqual(set(error), {"code", "reason_code", "message", "retryable", "effect_state", "reconciliation_required", "safe_next_action"})
         self.assertEqual(error["code"], "OUTSIDE_WORKSPACE")
         self.assertIs(error["retryable"], False)
 

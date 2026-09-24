@@ -16,6 +16,7 @@ from .protection import _PROTECTED_GUARD
 from .timing import current_call_context, emit_process_end
 from .tool_contract import (
     Authority,
+    ContractErrorCode,
     MutationAuthority,
     NetworkAuthority,
     ToolAnnotations,
@@ -157,10 +158,16 @@ def _workspace_root() -> Path:
 
 def _validated_cwd_with_identity(raw_cwd: str, root: Path) -> tuple[Path, tuple[int, int]]:
     if not isinstance(raw_cwd, str) or not raw_cwd:
-        raise RuntimeValidationError("cwd must be a non-empty absolute path")
+        raise RuntimeValidationError(
+            "cwd must be a non-empty absolute path",
+            reason_code="INVALID_CWD",
+        )
     path = Path(raw_cwd)
     if not path.is_absolute():
-        raise RuntimeValidationError("cwd must be an absolute path")
+        raise RuntimeValidationError(
+            "cwd must be an absolute path",
+            reason_code="INVALID_CWD",
+        )
     try:
         resolved = path.resolve(strict=True)
         observed = resolved.stat()
@@ -171,7 +178,11 @@ def _validated_cwd_with_identity(raw_cwd: str, root: Path) -> tuple[Path, tuple[
     try:
         resolved.relative_to(root)
     except ValueError as exc:
-        raise RuntimeValidationError("cwd resolves outside AGENT_RUNTIME_WORKSPACE_ROOT") from exc
+        raise RuntimeValidationError(
+            "cwd resolves outside AGENT_RUNTIME_WORKSPACE_ROOT",
+            code=ContractErrorCode.OUTSIDE_WORKSPACE,
+            reason_code="OUTSIDE_WORKSPACE",
+        ) from exc
     return resolved, (observed.st_dev, observed.st_ino)
 
 

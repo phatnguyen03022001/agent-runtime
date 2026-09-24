@@ -165,7 +165,10 @@ class RuntimeMCPServer(MCPServer):
         try:
             return await super().call_tool(name, arguments, context)
         except ToolError as exc:
-            if isinstance(exc.__cause__, ValidationError):
+            failure = _failure_exception_from_chain(exc)
+            if failure is not None:
+                return _runtime_error_from_exception(name, failure)
+            if _validation_error_in_chain(exc):
                 return _runtime_error_result(
                     tool_name=name,
                     code=ContractErrorCode.INVALID_ARGUMENT,
@@ -198,8 +201,8 @@ _EXPECTED_TOOL_ERRORS = (
 _PRESERVED_TOOL_ERRORS = (ToolError, *_EXPECTED_TOOL_ERRORS, CapabilityFailure)
 _COMMON_TOOL_SANITIZER_MARKER = "__agent_runtime_common_tool_sanitizer__"
 
-# Explicit effect boundary inventory for the complete public surface. "possible"
-# means an unexpected failure can occur after consequence-bearing dispatch.
+# Exact consequence-bearing boundary inventory for the complete public surface.
+# "possible" means an unexpected failure can occur after effect-capable dispatch.
 _PUBLIC_TOOL_EFFECT_RISK = {
     "terminal_exec": "possible",
     "terminal_start": "possible",
@@ -221,6 +224,8 @@ _PUBLIC_TOOL_EFFECT_RISK = {
     "screen_capture": "absent",
     "runtime_capabilities": "absent",
 }
+if set(_PUBLIC_TOOL_EFFECT_RISK) != set(PUBLIC_TOOL_NAMES):
+    raise RuntimeError("public effect-boundary inventory is incomplete")
 
 _TYPED_CODE_TO_CONTRACT = {
     "INVALID_ARGUMENT": ContractErrorCode.INVALID_ARGUMENT,
@@ -269,7 +274,13 @@ def _default_failure_semantics(
 ) -> tuple[bool, EffectState, bool, SafeNextAction]:
     if reason_code == "VISUAL_PERCEPTION_BLOCKED":
         return False, EffectState.ABSENT, False, SafeNextAction.UNSUPPORTED
-    if reason_code == "PUBLICATION_AMBIGUOUS":
+    if tool_name == "repo_publish" and reason_code == "PUBLICATION_AMBIGUOUS":
+        return False, EffectState.UNKNOWN, True, SafeNextAction.RECONCILE
+    if tool_name == "repo_publish" and reason_code == "PUSH_FAILED":
+        # repo_publish emits PUSH_FAILED only after fresh observation proves the
+        # bound remote head remained unchanged after the single push attempt.
+        return True, EffectState.ABSENT, False, SafeNextAction.RETRY
+    if tool_name == "repo_fast_forward" and reason_code == "FAST_FORWARD_FAILED":
         return False, EffectState.UNKNOWN, True, SafeNextAction.RECONCILE
 
     if code in {
@@ -382,13 +393,18 @@ def _runtime_error_from_exception(tool_name: str, exc: Exception) -> CallToolRes
             safe_next_action=SafeNextAction.FIX_REQUEST,
         )
 
-    raw_code = getattr(exc, "code", ContractErrorCode.INTERNAL_ERROR)
-    if isinstance(raw_code, ContractErrorCode):
-        code = raw_code
-        reason_code = str(getattr(exc, "reason_code", raw_code.value))
+    explicit_contract_code = getattr(exc, "contract_code", None)
+    if isinstance(explicit_contract_code, ContractErrorCode):
+        code = explicit_contract_code
+        reason_code = str(getattr(exc, "reason_code", code.value))
     else:
-        reason_code = str(raw_code)
-        code = _TYPED_CODE_TO_CONTRACT.get(reason_code, ContractErrorCode.INTERNAL_ERROR)
+        raw_code = getattr(exc, "code", ContractErrorCode.INTERNAL_ERROR)
+        if isinstance(raw_code, ContractErrorCode):
+            code = raw_code
+            reason_code = str(getattr(exc, "reason_code", raw_code.value))
+        else:
+            reason_code = str(raw_code)
+            code = _TYPED_CODE_TO_CONTRACT.get(reason_code, ContractErrorCode.INTERNAL_ERROR)
 
     effect_state = getattr(exc, "effect_state", None)
     reconciliation_required = getattr(exc, "reconciliation_required", None)
@@ -405,26 +421,47 @@ def _runtime_error_from_exception(tool_name: str, exc: Exception) -> CallToolRes
     )
 
 
-def _call_runtime_tool(tool_name: str, delegate: Callable[..., Any], *args: Any) -> Any:
-    try:
-        return delegate(*args)
-    except (*_EXPECTED_TOOL_ERRORS, CapabilityFailure) as exc:
-        return _runtime_error_from_exception(tool_name, exc)
-    except Exception as exc:
-        if all(
-            hasattr(exc, field)
-            for field in (
-                "code",
-                "reason_code",
-                "message",
-                "retryable",
-                "effect_state",
-                "reconciliation_required",
-                "safe_next_action",
-            )
-        ):
-            return _runtime_error_from_exception(tool_name, exc)
-        raise
+_FAILURE_SEMANTIC_FIELDS = (
+    "reason_code",
+    "message",
+    "retryable",
+    "effect_state",
+    "reconciliation_required",
+    "safe_next_action",
+)
+
+
+def _has_failure_semantics(exc: BaseException) -> bool:
+    return isinstance(exc, ProtectedRuntimeDenied) or (
+        (hasattr(exc, "contract_code") or hasattr(exc, "code"))
+        and all(hasattr(exc, field) for field in _FAILURE_SEMANTIC_FIELDS)
+    )
+
+
+def _failure_exception_from_chain(exc: BaseException) -> Exception | None:
+    current: BaseException | None = exc
+    for _ in range(4):
+        if current is None:
+            break
+        if isinstance(current, Exception) and _has_failure_semantics(current):
+            return current
+        current = current.__cause__
+    return None
+
+
+def _validation_error_in_chain(exc: BaseException) -> bool:
+    current: BaseException | None = exc
+    for _ in range(4):
+        if current is None:
+            break
+        if isinstance(current, ValidationError):
+            return True
+        current = current.__cause__
+    return False
+
+
+def _call_runtime_tool(_tool_name: str, delegate: Callable[..., Any], *args: Any) -> Any:
+    return delegate(*args)
 
 
 def _sanitize_unexpected_tool_exception(delegate: Callable[..., Any]) -> Callable[..., Any]:
@@ -434,7 +471,9 @@ def _sanitize_unexpected_tool_exception(delegate: Callable[..., Any]) -> Callabl
             return delegate(*args, **kwargs)
         except _PRESERVED_TOOL_ERRORS:
             raise
-        except Exception:
+        except Exception as exc:
+            if _has_failure_semantics(exc):
+                raise
             raise RuntimeError("unexpected runtime tool failure") from None
 
     setattr(sanitized, _COMMON_TOOL_SANITIZER_MARKER, True)

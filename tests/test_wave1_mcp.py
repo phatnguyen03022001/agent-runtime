@@ -155,7 +155,7 @@ class Wave1MCPTests(unittest.IsolatedAsyncioTestCase):
         error = structured["error"]
         self.assertEqual(
             set(error),
-            {"code", "reason_code", "message", "retryable"},
+            {"code", "reason_code", "message", "retryable", "effect_state", "reconciliation_required", "safe_next_action"},
         )
         self.assertEqual(error["code"], "OUTSIDE_WORKSPACE")
         self.assertEqual(error["reason_code"], "CWD_OUTSIDE_WORKSPACE")
@@ -201,11 +201,10 @@ class Wave1MCPTests(unittest.IsolatedAsyncioTestCase):
         ):
             result = await server.mcp.call_tool("screen_capture", {})
         self.assertTrue(getattr(result, "is_error", False), result)
-        text = "\n".join(
-            getattr(block, "text", "")
-            for block in getattr(result, "content", [])
-        )
-        self.assertIn("VISUAL_PERCEPTION_BLOCKED", text)
+        error = result.structured_content["error"]
+        self.assertEqual(error["reason_code"], "VISUAL_PERCEPTION_BLOCKED")
+        self.assertEqual(error["effect_state"], "absent")
+        self.assertEqual(error["safe_next_action"], "unsupported")
 
 
 if __name__ == "__main__":

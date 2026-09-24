@@ -233,8 +233,15 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
         )
         for name, arguments in cases:
             with self.subTest(tool=name):
-                with self.assertRaisesRegex(Exception, "cwd must be an absolute path"):
-                    await server.mcp.call_tool(name, arguments)
+                result = await server.mcp.call_tool(name, arguments)
+                self.assertTrue(result.is_error)
+                error = result.structured_content["error"]
+                self.assertEqual(error["code"], "INVALID_ARGUMENT")
+                self.assertEqual(error["reason_code"], "INVALID_CWD")
+                self.assertFalse(error["retryable"])
+                self.assertEqual(error["effect_state"], "absent")
+                self.assertFalse(error["reconciliation_required"])
+                self.assertEqual(error["safe_next_action"], "fix_request")
 
     async def test_task0078_outside_workspace_cwd_remains_rejected(self) -> None:
         cases = (
@@ -244,8 +251,15 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
         )
         for name, arguments in cases:
             with self.subTest(tool=name):
-                with self.assertRaisesRegex(Exception, "outside AGENT_RUNTIME_WORKSPACE_ROOT"):
-                    await server.mcp.call_tool(name, arguments)
+                result = await server.mcp.call_tool(name, arguments)
+                self.assertTrue(result.is_error)
+                error = result.structured_content["error"]
+                self.assertEqual(error["code"], "OUTSIDE_WORKSPACE")
+                self.assertEqual(error["reason_code"], "OUTSIDE_WORKSPACE")
+                self.assertFalse(error["retryable"])
+                self.assertEqual(error["effect_state"], "absent")
+                self.assertFalse(error["reconciliation_required"])
+                self.assertEqual(error["safe_next_action"], "fix_request")
 
     async def test_task0078_resize_contract_is_truthfully_safe_and_bounded(self) -> None:
         tools = await self._tools()
