@@ -1,0 +1,236 @@
+protocol_version: 3
+
+task_id: TASK-0146-CUTOVER-A-COMPAT
+task_revision: 1
+state: APPROVED
+title: "Recognize Installed Split-v1 Predecessor"
+
+origin:
+  type: explicit_operator_authority
+  task_id: TASK-0146-CUTOVER-A-COMPAT
+  gap_id: CUTOVER-A-COMPAT
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+  canonical_branch: main
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "22fc4d881d5a0ee71b3af2b3acadb4ce8258bbc1"
+
+architect_analysis_skills: [architect, simplicity, verification, reliability]
+execution_skills:
+  required: [executor, verification]
+  recommended: [reliability, simplicity]
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "Operator authorization for TASK-0146-CUTOVER-A-COMPAT, 2026-09-24"
+    role: "exact corrective objective, compatibility boundary, accepted package authority, invariants, verification, Git rules and stop boundary"
+    precedence: 1
+  - source: ".agent/tasks/TASK-0146-CUTOVER-A-PREP/review.yaml at 5c75ac3afc8ae7d098d69961fa98deeb20a40f91"
+    role: "accepted Runtime 0.3.0 package/source authority and source/live split"
+    precedence: 2
+  - source: ".agent/tasks/TASK-0146-CUTOVER-A-PREP/report-r1.yaml at 0dbd48f109e750d1cd86a06b0feb76b28cb05247"
+    role: "accepted exact candidate/package provenance: source 89111218720ddb2f12961f9375549733edd23ada, tree 00cdfce957326c011b5ed5a377074fa071821f55, package sha256 6b68b1632582b953b86456e8bc3d916101983c923122d55ad129ede8b2c1c344, requirements.lock sha256 80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e"
+    precedence: 3
+  - source: "macos/candidate_cutover.py and tests/test_candidate_cutover.py at 5c75ac3afc8ae7d098d69961fa98deeb20a40f91"
+    role: "current explicit revision-membership compatibility mechanism and fail-closed regression surface"
+    precedence: 4
+
+live_runtime_authority:
+  installed_version: "0.2.2"
+  installed_revision: "90a87fca8755ddc673e749bb5bf3e4489045a9b8"
+  installed_kernel: 1
+  source_kernel: 2
+  public_tools: 19
+  rule: "This task is checkout-side compatibility correction only. Installed Runtime must remain unchanged; no install, restart, plugin reload, ServiceManagement mutation or Cutover A is authorized."
+
+structure_authority:
+  status: NOT_APPLICABLE
+  source: "Existing explicit predecessor ServiceManagement revision allowlists in macos/candidate_cutover.py"
+  rationale: "The reproduced defect is one omitted proven split-v1 revision. The smallest correct fix is one explicit allowlist admission plus deterministic regression proof; no new abstraction or generalized detector is authorized."
+
+objective: "Make installed predecessor revision 90a87fca8755ddc673e749bb5bf3e4489045a9b8 classify as split-v1 under the existing explicit ServiceManagement compatibility mechanism so a later separately authorized Cutover A can use the already-accepted Runtime 0.3.0 package, while preserving fail-closed handling for unknown revisions and all existing cutover safety semantics."
+
+scope:
+  expected_files_are_restrictive: true
+  required_changes:
+    - "Add exact revision 90a87fca8755ddc673e749bb5bf3e4489045a9b8 to SPLIT_SERVICE_MANAGEMENT_REVISIONS in macos/candidate_cutover.py. Do not replace or supplement explicit revision membership with heuristic detection."
+    - "Update tests/test_candidate_cutover.py only as needed to prove the exact installed revision classifies as split-v1 and that Runtime refresh for this revision uses the existing split-v1 predecessor path: unregister-runtime is invoked against the predecessor and aggregate unregister is not."
+    - "Preserve deterministic proof that an unknown predecessor revision remains unsupported, fails before any non-status ServiceManagement mutation, and creates no transaction."
+    - "Preserve recognition of all existing known split-v1 predecessor revisions and preserve predecessor manifest ownership/revision validation, transaction safety, rollback semantics and candidate pinned validation."
+    - "Run deterministic focused candidate-cutover proof, commit one coherent implementation candidate, run canonical ./verify on that exact clean candidate, publish non-force after fresh remote reconciliation, publish canonical report-r1.yaml as the sole report-only child, and stop NEEDS_REVIEW."
+  allowed_existing_files_or_components:
+    - "macos/candidate_cutover.py"
+    - "tests/test_candidate_cutover.py"
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0146-CUTOVER-A-COMPAT/report-r1.yaml"
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "No unlisted new files are authorized."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+invariants:
+  - "Accepted Runtime 0.3.0 activation source remains 89111218720ddb2f12961f9375549733edd23ada with source tree 00cdfce957326c011b5ed5a377074fa071821f55."
+  - "Accepted candidate package identity remains SHA-256 6b68b1632582b953b86456e8bc3d916101983c923122d55ad129ede8b2c1c344 with requirements.lock SHA-256 80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e. Do not rebuild, replace or re-authorize it."
+  - "Installed Runtime remains 0.2.2 at runtime_activation_revision 90a87fca8755ddc673e749bb5bf3e4489045a9b8 with ToolContract Kernel 1 throughout execution."
+  - "Source ToolContract Kernel remains exactly 2 and public tool inventory remains exactly 19."
+  - "TASK-0144 failure/effect behavior, TASK-0145 execution lifecycle and TASK-0146 terminal result behavior remain unchanged."
+  - "Known compatible split-v1 revisions remain accepted; unknown or unproven revisions remain unknown and fail closed."
+  - "Compatibility remains explicitly admitted by exact revision membership; version strings, dates, Git ancestry, executable presence and current launchd state are not compatibility authority."
+  - "Predecessor manifest validation, ownership validation, revision-format validation, transaction schema/safety, rollback semantics and candidate pinned validation remain unchanged."
+  - "No live ServiceManagement operation, install, Runtime restart, plugin reload or Cutover A execution occurs in this task."
+  - "After independent Architect ACCEPTED, Cutover A must reuse the same already-accepted package and successful activation must retain runtime_activation_revision=89111218720ddb2f12961f9375549733edd23ada."
+
+forbidden_changes:
+  - "Any implementation edit outside macos/candidate_cutover.py and tests/test_candidate_cutover.py, plus this task's later report-r1.yaml."
+  - "Any edit to agent_runtime/**, terminal schemas, capability registry, Runtime version metadata, Info.plist version, requirements.lock, macos/package_app.sh, macos/package_provenance.py, ServiceManagement Swift implementation, install procedure semantics, transaction schema or rollback architecture."
+  - "Any replacement of the explicit predecessor revision allowlists with heuristic, ancestry-based, version-based, executable-based, launchd-state-based or other generalized detection."
+  - "Any Runtime 0.3.0 package rebuild, package replacement, new package authority, install, restart, plugin reload, ServiceManagement live mutation or Cutover A execution."
+  - "Any TASK-0147 authoring or execution, later roadmap gap implementation, speculative migration framework, refactor, dependency change or public contract expansion."
+  - "Any branch creation, PR, force push, amend, squash, tag, release publication, repository metadata mutation or blind publication retry."
+  - "Any broad documentation change. If execution discovers an existing statement materially false because of this exact compatibility admission, stop BLOCKED for Architect revision rather than expanding scope."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+assurance_alignment:
+  standards_revision: "22fc4d881d5a0ee71b3af2b3acadb4ce8258bbc1"
+  standards_requirement_ids: [COR-1.2, COR-1.3, COR-2.1, COR-3.1, REL-2.5, REL-2.6, CMP-1.1, CMP-2.3, ASR-1.1, ASR-2.2]
+  obligations:
+    - id: COR-1.2
+      applicability: APPLICABLE
+      task_proof: "Positive deterministic proof must show exact revision 90a87fca8755ddc673e749bb5bf3e4489045a9b8 classifies as split-v1 and the supported refresh path completes the predecessor split contract."
+    - id: COR-1.3
+      applicability: APPLICABLE
+      task_proof: "Negative deterministic proof must show an unknown revision remains unsupported, causes no non-status ServiceManagement effect and creates no transaction."
+    - id: COR-2.1
+      applicability: APPLICABLE
+      task_proof: "Boundary proof must preserve all existing known split-v1 recognition plus manifest ownership/revision-format and state-transition invariants."
+    - id: COR-3.1
+      applicability: APPLICABLE
+      task_proof: "Abnormal or unproven predecessor identity must remain contained by existing fail-closed, transaction and rollback behavior; canonical verification must preserve those regressions."
+    - id: REL-2.5
+      applicability: APPLICABLE
+      task_proof: "ServiceManagement dependency failure/unavailability behavior remains within the existing explicit fail-closed bounds; this task admits only one proven predecessor identity and changes no failure-handling mechanism."
+    - id: REL-2.6
+      applicability: APPLICABLE
+      task_proof: "Existing repeatable cutover recovery/rollback paths for supported predecessors remain unchanged and covered by the canonical candidate-cutover/canonical verification suite; no new recovery path is introduced."
+    - id: CMP-1.1
+      applicability: APPLICABLE
+      task_proof: "The explicitly supported installed predecessor revision is added to the existing split-v1 compatibility set and directly tested against that stated contract."
+    - id: CMP-2.3
+      applicability: APPLICABLE
+      task_proof: "The supported predecessor-to-Runtime-0.3.0 transition semantics remain explicit: this predecessor follows split-v1 unregister-runtime semantics before the separately authorized activation."
+    - id: ASR-1.1
+      applicability: APPLICABLE
+      task_proof: "All material claims bind exact task/base/candidate identities, the accepted package/source identities and direct source/test/verifier evidence."
+    - id: ASR-2.2
+      applicability: APPLICABLE
+      task_proof: "Positive and negative compatibility proofs use deterministic temporary fixtures/tests on the identified candidate and are repeatable without live service mutation."
+  rule: "These are task evidence obligations only. No maturity score or level claim is authorized."
+  documents_revision: "22fc4d881d5a0ee71b3af2b3acadb4ce8258bbc1"
+  document_domains:
+    BEHAVIOR: "predecessor classification and supported/unsupported transition semantics"
+    INTERFACES: "checkout-side candidate-cutover compatibility contract"
+    QUALITY: "fail-closed preservation and deterministic compatibility proof"
+    DELIVERY: "Cutover A prerequisite correction while preserving the already-accepted package authority"
+  documents_rule: "Use domains only as semantic ownership. Do not perform broad documentation work or claim Agent Documents V1 adoption/DOCS_READY."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact installed predecessor revision 90a87fca8755ddc673e749bb5bf3e4489045a9b8 is explicitly admitted by the existing split-v1 revision allowlist and _predecessor_service_contract returns split-v1 for its valid manifest."
+    evidence_required: "Exact candidate diff plus deterministic focused test asserting the runtime manifest revision and split-v1 classification for 90a87fca8755ddc673e749bb5bf3e4489045a9b8."
+  - id: AC-2
+    requirement: "Runtime refresh using predecessor 90a87fca8755ddc673e749bb5bf3e4489045a9b8 follows the existing split-v1 predecessor path."
+    evidence_required: "Deterministic fixture test shows predecessor operations include unregister-runtime, exclude aggregate unregister and do not register-runtime on the predecessor before candidate activation semantics."
+  - id: AC-3
+    requirement: "Fail-closed and existing compatibility safety remain intact."
+    evidence_required: "Unknown revision test still fails before non-status ServiceManagement mutation with no transaction; existing known split-v1 recognition remains PASS; canonical suite preserves manifest/ownership/revision validation, transaction safety, rollback and pinned-candidate checks."
+  - id: AC-4
+    requirement: "Implementation is the smallest bounded compatibility correction and changes no accepted Runtime/package/public contract behavior outside this exact predecessor admission."
+    evidence_required: "Execution-base-to-candidate diff changes only macos/candidate_cutover.py and tests/test_candidate_cutover.py; explicit allowlist remains the mechanism; source Kernel=2/public tools=19; canonical ./verify PASS on exact candidate."
+  - id: AC-5
+    requirement: "Exact verified candidate and canonical report are published non-force on main while live Runtime and accepted Cutover-A package authority remain unchanged."
+    evidence_required: "Fresh remote reconciliation for candidate/report-only child; read-only final observation shows installed Runtime 0.2.2, revision 90a87fca8755ddc673e749bb5bf3e4489045a9b8, Kernel 1; report records accepted package SHA-256 6b68b1632582b953b86456e8bc3d916101983c923122d55ad129ede8b2c1c344 unchanged and no rebuild/install/cutover occurred."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Fresh-resolve GitHub before mutation. Require remote branches exactly {main}, open PRs=0, local HEAD=origin/main=remote main=the exact task-authoring execution base, ahead/behind=0/0, clean worktree/index, TASK-0146-CUTOVER-A-COMPAT revision 1, and accepted TASK-0146-CUTOVER-A-PREP review/package authority exactly as pinned by this task."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Fresh-inspect macos/candidate_cutover.py and tests/test_candidate_cutover.py before editing. Confirm predecessor classification is exact revision membership, 90a87fca8755ddc673e749bb5bf3e4489045a9b8 is absent from SPLIT_SERVICE_MANAGEMENT_REVISIONS at the execution base, and existing unknown/no-mutation plus split-refresh tests are present. If these predicates changed, stop BLOCKED."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Apply only the smallest explicit allowlist admission and directly coupled regression-test updates. Run deterministic focused candidate-cutover tests proving AC-1 through AC-3 with temporary fixtures only. No live ServiceManagement operation is permitted."
+      required: true
+    - id: CHECK-4
+      command_or_check: "After focused PASS, commit one coherent implementation candidate. Require clean worktree, capture exact candidate SHA/tree, run git diff --check, and prove execution-base-to-candidate changed files are exactly macos/candidate_cutover.py and tests/test_candidate_cutover.py."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Run canonical ./verify on that exact clean implementation candidate. Require exit_code=0 and canonical modules/tests/postconditions PASS. Any source write after this verification creates a new candidate and requires repeating authoritative verification."
+      required: true
+    - id: CHECK-6
+      command_or_check: "Fresh-resolve remote main after verification and require it still equals the task execution base. Publish the exact verified candidate non-force, then fresh-reconcile remote main to the exact candidate. Reconcile ambiguous publication before any retry."
+      required: true
+    - id: CHECK-7
+      command_or_check: "Create .agent/tasks/TASK-0146-CUTOVER-A-COMPAT/report-r1.yaml as the sole report-only child, validate it with the pinned Foundation report validator, commit/publish non-force, fresh-reconcile exact parent/diff/remote main, read-only confirm installed Runtime remains 0.2.2 at revision 90a87fca8755ddc673e749bb5bf3e4489045a9b8 with Kernel 1/public tools 19, and stop NEEDS_REVIEW. Do not rebuild or execute the accepted package."
+      required: true
+  authoritative_verification:
+    required: true
+    mechanism: "Deterministic focused candidate-cutover compatibility tests plus canonical ./verify on the exact implementation candidate"
+    expected_signal: "90a87fca8755ddc673e749bb5bf3e4489045a9b8 -> split-v1; refresh uses predecessor unregister-runtime and not aggregate unregister; unknown revision still fails before service mutation with no transaction; existing compatibility/safety regressions PASS; canonical ./verify PASS."
+
+report_requirements:
+  path: .agent/tasks/TASK-0146-CUTOVER-A-COMPAT/report-r1.yaml
+  canonical_contract: "Foundation skills/contracts/IMPLEMENTATION_REPORT.md at 22fc4d881d5a0ee71b3af2b3acadb4ce8258bbc1"
+  record:
+    - "state=REPORTED and result=NEEDS_REVIEW"
+    - "exact task execution base, implementation candidate SHA/tree and exact two-file implementation diff"
+    - "focused positive/negative predecessor compatibility evidence and canonical ./verify identity/result on exact candidate"
+    - "proof 90a87fca8755ddc673e749bb5bf3e4489045a9b8 classifies split-v1 and refresh uses predecessor unregister-runtime, not aggregate unregister"
+    - "proof unknown revision fails before ServiceManagement mutation with no transaction and existing known split-v1 revisions remain recognized"
+    - "accepted activation source 89111218720ddb2f12961f9375549733edd23ada, source tree 00cdfce957326c011b5ed5a377074fa071821f55, package SHA-256 6b68b1632582b953b86456e8bc3d916101983c923122d55ad129ede8b2c1c344 and requirements.lock SHA-256 80820ea3355dbdb76183347eaf8c0e32c47e43744520462ee52a4a199052ba2e remain authority and were not rebuilt"
+    - "source Kernel=2/public tools=19 unchanged; installed Runtime 0.2.2/revision 90a87fca8755ddc673e749bb5bf3e4489045a9b8/Kernel 1/public tools 19 unchanged"
+    - "candidate publication and report-only publication reconciliation; explicit statement that no install/restart/plugin reload/ServiceManagement live mutation/Cutover A occurred"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
