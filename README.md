@@ -87,6 +87,8 @@ Canonical `runtime.env` is retained by default during uninstall. Its credentials
 
 The Runtime exposes exactly nineteen public tools: `terminal_exec`, `terminal_start`, `terminal_poll`, `terminal_control`, `terminal_resize`, `capacity_observer`, `fs_read_batch`, `fs_list`, `fs_search`, `fs_patch`, `fs_write`, `repo_observer`, `repo_diff`, `repo_stage`, `repo_commit`, `repo_fast_forward`, `repo_publish`, `screen_capture`, and `runtime_capabilities`.
 
+Checkout source keeps PTY and pipe launches in one keyed process lifecycle. `terminal_start` defaults to PTY and can select separate stdout/stderr pipes; `terminal_exec` is a bounded synchronous facade over that pipe lifecycle. These are source contracts only: installed Runtime 0.2.2 remains unchanged pending a separately authorized Cutover A. See [source execution recovery](docs/RECOVERY.md#source-execution-recovery) before repeating a mutation after an unknown result.
+
 `repo_observer` provides typed local-only read-only Git observation. `repo_fast_forward` provides expected-state-guarded fixed-origin synchronization. `repo_publish` provides expected-state-guarded fixed-origin publication; repository/task authority remains outside Runtime.
 
 `screen_capture` remains contract-visible but governance-blocked as `VISUAL_PERCEPTION_BLOCKED`. It does not request Screen Recording permission. The dormant media contract retains deterministic `cg_global_points` metadata semantics for any separately authorized future implementation.

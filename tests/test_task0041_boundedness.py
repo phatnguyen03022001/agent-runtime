@@ -245,6 +245,7 @@ class MCPInputBoundednessTests(unittest.IsolatedAsyncioTestCase):
             "session_id": "fake-session",
             "status": "running",
             "lifecycle": "RUNNING",
+            "mode": "pty",
             "output": "",
             "next_cursor": 0,
             "cursor_expired": False,
@@ -254,11 +255,12 @@ class MCPInputBoundednessTests(unittest.IsolatedAsyncioTestCase):
             (
                 "terminal_exec",
                 "execute_terminal",
-                {"argv": ["/usr/bin/true"], "cwd": str(ROOT)},
+                {"argv": ["/usr/bin/true"], "cwd": str(ROOT), "start_identity": "0" * 32},
                 {
                     "cwd": str(ROOT), "argv": ["/usr/bin/true"], "exit_code": 0,
                     "timed_out": False, "stdout": "", "stderr": "",
                     "stdout_truncated": False, "stderr_truncated": False,
+                    "start_identity": "0" * 32, "session_id": "session",
                 },
             ),
             ("terminal_start", "_start_terminal", {"argv": ["/usr/bin/true"], "cwd": str(ROOT)}, session_result),
@@ -287,6 +289,8 @@ class MCPInputBoundednessTests(unittest.IsolatedAsyncioTestCase):
             "stderr": "",
             "stdout_truncated": False,
             "stderr_truncated": False,
+            "start_identity": "0" * 32,
+            "session_id": "session",
         }
         accepted = (
             ["x"] * 127,
@@ -308,13 +312,13 @@ class MCPInputBoundednessTests(unittest.IsolatedAsyncioTestCase):
             for argv in accepted:
                 with self.subTest(kind="accepted", count=len(argv), bytes=sum(len(v.encode()) for v in argv)):
                     with patch.object(server, "execute_terminal", return_value=valid_result) as delegate:
-                        result = await client.call_tool("terminal_exec", {"argv": argv, "cwd": str(ROOT)})
+                        result = await client.call_tool("terminal_exec", {"argv": argv, "cwd": str(ROOT), "start_identity": f"{accepted.index(argv):032x}"})
                         self.assertFalse(result.is_error, result)
                         delegate.assert_called_once()
             for argv in rejected:
                 with self.subTest(kind="rejected", count=len(argv), bytes=sum(len(v.encode()) for v in argv)):
                     with patch.object(server, "execute_terminal", return_value=valid_result) as delegate:
-                        result = await client.call_tool("terminal_exec", {"argv": argv, "cwd": str(ROOT)})
+                        result = await client.call_tool("terminal_exec", {"argv": argv, "cwd": str(ROOT), "start_identity": f"{rejected.index(argv):032x}"})
                         self.assertTrue(result.is_error, result)
                         delegate.assert_not_called()
 
@@ -349,6 +353,7 @@ class MCPInputBoundednessTests(unittest.IsolatedAsyncioTestCase):
             "session_id": "session",
             "status": "running",
             "lifecycle": "RUNNING",
+            "mode": "pty",
             "output": "",
             "next_cursor": 0,
             "cursor_expired": False,

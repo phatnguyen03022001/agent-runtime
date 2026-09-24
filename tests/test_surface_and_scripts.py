@@ -194,7 +194,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
                 ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch", "fs_list", "fs_search", "fs_patch", "fs_write", "repo_observer", "repo_diff", "repo_stage", "repo_commit", "repo_fast_forward", "repo_publish", "screen_capture", "runtime_capabilities"),
             )
             expected = {
-                "terminal_exec": (False, True, False, True),
+                "terminal_exec": (False, True, True, True),
                 "terminal_start": (False, True, False, True),
                 "terminal_poll": (False, False, False, False),
                 "terminal_control": (False, True, False, True),
@@ -246,11 +246,11 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         }
         self.assertEqual(
             [arg.arg for arg in functions["terminal_exec"].args.args],
-            ["argv", "cwd", "timeout_seconds"],
+            ["argv", "cwd", "start_identity", "timeout_seconds"],
         )
         self.assertEqual(
             [arg.arg for arg in functions["terminal_start"].args.args],
-            ["argv", "cwd", "start_identity"],
+            ["argv", "cwd", "start_identity", "mode"],
         )
         self.assertEqual(
             [arg.arg for arg in functions["terminal_poll"].args.args],

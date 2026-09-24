@@ -34,7 +34,7 @@ EXPECTED_TOOLS = (
     "runtime_capabilities",
 )
 EXPECTED_ANNOTATIONS = {
-    "terminal_exec": (False, True, False, True),
+    "terminal_exec": (False, True, True, True),
     "terminal_start": (False, True, False, True),
     "terminal_poll": (False, False, False, False),
     "terminal_control": (False, True, False, True),
@@ -141,9 +141,15 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(exec_props["argv"]["items"]["type"], "string")
         self.assertEqual(exec_props["cwd"]["minLength"], 1)
         self.assertNotIn("pattern", exec_props["cwd"])
-        self.assertEqual(exec_props["timeout_seconds"]["exclusiveMinimum"], 0)
+        self.assertEqual(exec_props["timeout_seconds"]["minimum"], 1)
+        self.assertNotIn("exclusiveMinimum", exec_props["timeout_seconds"])
         self.assertEqual(exec_props["timeout_seconds"]["maximum"], 3600)
         self.assertEqual(exec_props["timeout_seconds"]["default"], 300)
+        exec_identity = exec_props["start_identity"]
+        self.assertEqual(exec_identity["minLength"], 32)
+        self.assertEqual(exec_identity["maxLength"], 32)
+        self.assertEqual(exec_identity["pattern"], "^[0-9a-f]{32}$")
+        self.assertIn("start_identity", tools["terminal_exec"].input_schema["required"])
 
         start_props = tools["terminal_start"].input_schema["properties"]
         self.assertEqual(start_props["argv"]["minItems"], 1)
@@ -153,6 +159,8 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(start_identity["minLength"], 32)
         self.assertEqual(start_identity["maxLength"], 32)
         self.assertEqual(start_identity["pattern"], "^[0-9a-f]{32}$")
+        self.assertEqual(start_props["mode"]["enum"], ["pty", "pipe"])
+        self.assertEqual(start_props["mode"]["default"], "pty")
 
         poll_props = tools["terminal_poll"].input_schema["properties"]
         self.assertEqual(_string_branch(poll_props["session_id"])["minLength"], 1)
@@ -227,7 +235,7 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_task0078_relative_cwd_reaches_runtime_fail_closed_validation(self) -> None:
         cases = (
-            ("terminal_exec", {"argv": ["/usr/bin/true"], "cwd": "relative"}),
+            ("terminal_exec", {"argv": ["/usr/bin/true"], "cwd": "relative", "start_identity": "0" * 32}),
             ("terminal_start", {"argv": ["/usr/bin/true"], "cwd": "relative"}),
             ("fs_read_batch", {"cwd": "relative", "items": [{"path": "README.md"}]}),
         )
@@ -245,7 +253,7 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_task0078_outside_workspace_cwd_remains_rejected(self) -> None:
         cases = (
-            ("terminal_exec", {"argv": ["/usr/bin/true"], "cwd": "/"}),
+            ("terminal_exec", {"argv": ["/usr/bin/true"], "cwd": "/", "start_identity": "0" * 32}),
             ("terminal_start", {"argv": ["/usr/bin/true"], "cwd": "/"}),
             ("fs_read_batch", {"cwd": "/", "items": [{"path": "README.md"}]}),
         )
@@ -323,14 +331,20 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
                 "stderr",
                 "stdout_truncated",
                 "stderr_truncated",
+                "start_identity",
+                "session_id",
             },
             "terminal_start": {
                 "session_id",
                 "start_identity",
+                "mode",
                 "status",
                 "lifecycle",
                 "termination_reason",
                 "output",
+                "output_chunks",
+                "stream",
+                "text",
                 "next_cursor",
                 "cursor_expired",
                 "dropped_output_bytes",
@@ -339,10 +353,14 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
             "terminal_poll": {
                 "session_id",
                 "start_identity",
+                "mode",
                 "status",
                 "lifecycle",
                 "termination_reason",
                 "output",
+                "output_chunks",
+                "stream",
+                "text",
                 "next_cursor",
                 "cursor_expired",
                 "dropped_output_bytes",
@@ -471,6 +489,7 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
             {
                 "argv": ["/usr/bin/printf", "contract-ok"],
                 "cwd": str(ROOT),
+                "start_identity": "0" * 32,
                 "timeout_seconds": 5,
             },
         )

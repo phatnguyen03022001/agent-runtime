@@ -117,7 +117,11 @@ class CapabilityRegistryTests(unittest.IsolatedAsyncioTestCase):
                 ),
             )
             self.assertEqual(descriptor.bounds, contract.bounds)
-            expected_schema_version = {"terminal_start": 2, "terminal_poll": 3}.get(descriptor.name, 1)
+            expected_schema_version = {
+                "terminal_exec": 2,
+                "terminal_start": 3,
+                "terminal_poll": 3,
+            }.get(descriptor.name, 1)
             self.assertEqual(descriptor.request_schema_version, expected_schema_version)
             self.assertTrue(descriptor.supported)
 
@@ -130,7 +134,11 @@ class CapabilityRegistryTests(unittest.IsolatedAsyncioTestCase):
                 continue
             self.assertTrue(descriptor.available)
             self.assertIsNone(descriptor.unavailable_reason_code)
-            expected_schema_version = 2 if descriptor.name in {"terminal_start", "terminal_poll"} else 1
+            expected_schema_version = {
+                "terminal_exec": 2,
+                "terminal_start": 3,
+                "terminal_poll": 3,
+            }.get(descriptor.name, 1)
             self.assertEqual(descriptor.result_schema_version, expected_schema_version)
 
     async def test_registered_mcp_surface_is_registry_order_and_contract_annotated(self) -> None:

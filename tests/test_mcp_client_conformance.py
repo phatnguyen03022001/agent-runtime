@@ -37,7 +37,7 @@ EXPECTED_TOOLS = (
     "runtime_capabilities",
 )
 EXPECTED_ANNOTATIONS = {
-    "terminal_exec": (False, True, False, True),
+    "terminal_exec": (False, True, True, True),
     "terminal_start": (False, True, False, True),
     "terminal_poll": (False, False, False, False),
     "terminal_control": (False, True, False, True),
@@ -61,14 +61,15 @@ EXPECTED_OUTPUT_FIELDS = {
     "terminal_exec": {
         "cwd", "argv", "exit_code", "timed_out", "stdout", "stderr",
         "stdout_truncated", "stderr_truncated",
+        "start_identity", "session_id",
     },
     "terminal_start": {
         "session_id", "start_identity", "status", "lifecycle", "termination_reason",
-        "output", "next_cursor", "cursor_expired", "dropped_output_bytes", "exit_code",
+        "mode", "output", "output_chunks", "stream", "text", "next_cursor", "cursor_expired", "dropped_output_bytes", "exit_code",
     },
     "terminal_poll": {
         "session_id", "start_identity", "status", "lifecycle", "termination_reason",
-        "output", "next_cursor", "cursor_expired", "dropped_output_bytes", "exit_code",
+        "mode", "output", "output_chunks", "stream", "text", "next_cursor", "cursor_expired", "dropped_output_bytes", "exit_code",
     },
     "terminal_control": {"session_id", "status", "exit_code"},
     "terminal_resize": {"session_id", "status", "exit_code"},
@@ -242,9 +243,11 @@ class MCPClientConformanceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(exec_props["argv"]["items"]["type"], "string")
             self.assertEqual(exec_props["cwd"]["minLength"], 1)
             self.assertNotIn("pattern", exec_props["cwd"])
-            self.assertEqual(exec_props["timeout_seconds"]["exclusiveMinimum"], 0)
+            self.assertEqual(exec_props["timeout_seconds"]["minimum"], 1)
             self.assertEqual(exec_props["timeout_seconds"]["maximum"], 3600)
             self.assertEqual(exec_props["timeout_seconds"]["default"], 300)
+            self.assertIn("start_identity", exec_props)
+            self.assertIn("start_identity", tools["terminal_exec"].input_schema["required"])
 
             start_props = tools["terminal_start"].input_schema["properties"]
             self.assertEqual(start_props["argv"]["minItems"], 1)
@@ -254,6 +257,8 @@ class MCPClientConformanceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(start_identity["minLength"], 32)
             self.assertEqual(start_identity["maxLength"], 32)
             self.assertEqual(start_identity["pattern"], "^[0-9a-f]{32}$")
+            self.assertEqual(start_props["mode"]["enum"], ["pty", "pipe"])
+            self.assertEqual(start_props["mode"]["default"], "pty")
 
             poll_props = tools["terminal_poll"].input_schema["properties"]
             self.assertEqual(_string_branch(poll_props["session_id"])["minLength"], 1)
@@ -364,6 +369,7 @@ class MCPClientConformanceTests(unittest.IsolatedAsyncioTestCase):
                 {
                     "argv": ["/usr/bin/printf", "client-contract-ok"],
                     "cwd": str(ROOT),
+                    "start_identity": "1" * 32,
                     "timeout_seconds": 5,
                 },
             )
@@ -460,6 +466,7 @@ class MCPClientConformanceTests(unittest.IsolatedAsyncioTestCase):
                     {
                         "argv": ["/usr/bin/true"],
                         "cwd": str(ROOT),
+                        "start_identity": "2" * 32,
                         "timeout_seconds": 5,
                     },
                 )

@@ -69,3 +69,9 @@ Normal removal:
 ```
 
 If uninstall refuses because ownership or transaction state is ambiguous, preserve the state and stop. Do not manually purge app/service/config paths. Canonical `runtime.env` is retained by default.
+
+## Source execution recovery
+
+The checkout source uses one process-local lifecycle for PTY and pipe sessions. A keyed start or `terminal_exec` call is reserved before process dispatch; while its result is retained, the same key and exact execution specification identify the original operation. A conflicting specification fails before another process can start.
+
+Keyed results are retained for up to 3600 seconds and at most 16 completed sessions. After eviction or a Runtime restart, an unknown key cannot prove that a prior process or mutation never ran. Reconcile the external consequence before repeating a mutation; do not treat a lost response or unknown key as retry permission. These source contracts are not active in the installed Runtime 0.2.2 until a separately authorized Cutover A.

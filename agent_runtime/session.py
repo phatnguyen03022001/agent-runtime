@@ -54,6 +54,8 @@ MAX_RETAINED_OUTPUT_BYTES = 64 * 1024
 MAX_POLL_OUTPUT_BYTES = 16 * 1024
 MAX_RETAINED_COMPLETED_SESSIONS = 16
 MAX_WAIT_MS = 30000
+MAX_EXEC_TIMEOUT_SECONDS = 3600.0
+DEFAULT_EXEC_TIMEOUT_SECONDS = 300.0
 _READ_CHUNK_BYTES = 8192
 _READER_DRAIN_SECONDS = 0.2
 _REAPER_INTERVAL_SECONDS = 1.0
@@ -66,7 +68,8 @@ TERMINAL_START_CONTRACT = ToolContract(
     preconditions={
         "cwd": "validated-workspace-descendant",
         "argv": "literal-nonempty-shell-false-protected-runtime-filtered",
-        "start_identity": "optional-exactly-32-lowercase-hex",
+        "mode": "pty-default-or-pipe",
+        "start_identity": "optional-for-pty-required-for-pipe-exactly-32-lowercase-hex",
     },
     bounds={
         "argv_items": ARGV_MAX_ITEMS,
@@ -79,9 +82,11 @@ TERMINAL_START_CONTRACT = ToolContract(
         "retained_completed_sessions": MAX_RETAINED_COMPLETED_SESSIONS,
     },
     postconditions={
-        "pty_process_group": True,
-        "lifecycle": "managed-by-session-tools",
+        "process_group": True,
+        "lifecycle": "shared-managed-execution-core",
         "keyed_start": "reserve-before-popen-idempotent-within-runtime-incarnation",
+        "pipe_stdin": "closed",
+        "pipe_output": "separate-streams",
     },
 )
 TERMINAL_POLL_CONTRACT = ToolContract(
@@ -150,10 +155,19 @@ class _Session:
     last_activity: float
     created_at: float = 0.0
     start_identity: str | None = None
+    mode: str = "pty"
+    entry_surface: str = "terminal_start"
+    timeout_seconds: float | None = None
     process: subprocess.Popen[bytes] | None = None
     master_fd: int = -1
     base_cursor: int = 0
     output: bytearray = field(default_factory=bytearray)
+    output_chunks: list[tuple[str, bytes]] = field(default_factory=list)
+    retained_output_bytes: int = 0
+    stdout_capture: _BoundedPipeCapture | None = None
+    stderr_capture: _BoundedPipeCapture | None = None
+    readers_remaining: int = 0
+    deadline_mono: float | None = None
     status: str = "running"
     lifecycle: str = "RUNNING"
     termination_reason: str | None = None
@@ -172,6 +186,25 @@ class _Session:
 
     def __post_init__(self) -> None:
         self.changed = threading.Condition(self.lock)
+
+
+class _BoundedPipeCapture:
+    """Keep one pipe stream bounded while the shared poll cursor keeps order."""
+
+    def __init__(self, limit: int) -> None:
+        self.limit = limit
+        self.data = bytearray()
+        self.truncated = False
+
+    def consume(self, chunk: bytes) -> None:
+        remaining = self.limit - len(self.data)
+        if remaining > 0:
+            self.data.extend(chunk[:remaining])
+        if len(chunk) > remaining:
+            self.truncated = True
+
+    def text(self) -> str:
+        return bytes(self.data).decode("utf-8", errors="replace")
 
 
 class TerminalSessionManager:
@@ -214,12 +247,29 @@ class TerminalSessionManager:
         argv: list[str],
         cwd: str,
         start_identity: str | None = None,
+        mode: str = "pty",
+        *,
+        entry_surface: str = "terminal_start",
+        timeout_seconds: float | None = None,
     ) -> dict[str, Any]:
         checked_identity = self._validated_start_identity(start_identity)
+        if not isinstance(mode, str) or mode not in {"pty", "pipe"}:
+            raise RuntimeValidationError("mode must be pty or pipe")
+        if mode == "pipe" and checked_identity is None:
+            raise RuntimeValidationError("pipe mode requires start_identity")
+        if entry_surface not in {"terminal_start", "terminal_exec"}:
+            raise RuntimeValidationError("unsupported terminal entry surface")
+        checked_timeout = (
+            self._validated_exec_timeout(timeout_seconds)
+            if entry_surface == "terminal_exec"
+            else None
+        )
+        if entry_surface == "terminal_exec" and checked_identity is None:
+            raise RuntimeValidationError("terminal_exec requires start_identity")
         checked_argv = _validated_argv(argv)
-        _PROTECTED_GUARD.check(checked_argv, tool_name="terminal_start")
+        _PROTECTED_GUARD.check(checked_argv, tool_name=entry_surface)
         checked_cwd = str(_validated_cwd(cwd, _workspace_root()))
-        exact_spec = (checked_cwd, tuple(checked_argv))
+        exact_spec = (checked_cwd, tuple(checked_argv), mode, entry_surface, checked_timeout)
         now = self._clock()
 
         capacity_error: RuntimeCapacityError | None = None
@@ -232,10 +282,16 @@ class TerminalSessionManager:
                     if existing is None:
                         self._start_identities.pop(checked_identity, None)
                     else:
-                        existing_spec = (existing.cwd, tuple(existing.argv))
+                        existing_spec = (
+                            existing.cwd,
+                            tuple(existing.argv),
+                            existing.mode,
+                            existing.entry_surface,
+                            existing.timeout_seconds,
+                        )
                         if existing_spec != exact_spec:
                             raise RuntimeStateError(
-                                "START_IDENTITY_CONFLICT: start_identity is already bound to a different cwd/argv",
+                                "START_IDENTITY_CONFLICT: start_identity is already bound to a different execution specification",
                                 reason_code="START_IDENTITY_CONFLICT",
                             )
                         return self._session_result(existing, cursor=0)
@@ -247,6 +303,9 @@ class TerminalSessionManager:
                 created_at=now,
                 last_activity=now,
                 start_identity=checked_identity,
+                mode=mode,
+                entry_surface=entry_surface,
+                timeout_seconds=checked_timeout,
                 status="starting",
                 lifecycle="STARTING",
                 timing_context=current_call_context(),
@@ -302,18 +361,31 @@ class TerminalSessionManager:
         master_fd = slave_fd = -1
         process: subprocess.Popen[bytes] | None = None
         try:
-            master_fd, slave_fd = pty.openpty()
-            process = subprocess.Popen(
-                checked_argv,
-                cwd=checked_cwd,
-                env=_minimal_child_env(),
-                stdin=slave_fd,
-                stdout=slave_fd,
-                stderr=slave_fd,
-                shell=False,
-                start_new_session=True,
-                close_fds=True,
-            )
+            if mode == "pty":
+                master_fd, slave_fd = pty.openpty()
+                process = subprocess.Popen(
+                    checked_argv,
+                    cwd=checked_cwd,
+                    env=_minimal_child_env(),
+                    stdin=slave_fd,
+                    stdout=slave_fd,
+                    stderr=slave_fd,
+                    shell=False,
+                    start_new_session=True,
+                    close_fds=True,
+                )
+            else:
+                process = subprocess.Popen(
+                    checked_argv,
+                    cwd=checked_cwd,
+                    env=_minimal_child_env(),
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    shell=False,
+                    start_new_session=True,
+                    close_fds=True,
+                )
         except BaseException as exc:
             if master_fd >= 0:
                 os.close(master_fd)
@@ -338,24 +410,63 @@ class TerminalSessionManager:
                 )
             raise
 
-        os.close(slave_fd)
         with session.cleanup_lock:
             session.process = process
             session.master_fd = master_fd
             session.process_started_wall = time.time()
             session.process_started_mono = time.monotonic()
+            session.deadline_mono = (
+                session.process_started_mono + checked_timeout
+                if checked_timeout is not None
+                else None
+            )
             with session.changed:
                 session.status = "running"
                 session.lifecycle = "RUNNING"
                 session.changed.notify_all()
+        if slave_fd >= 0:
+            try:
+                os.close(slave_fd)
+            except OSError as exc:
+                self._cleanup_process(session, "start_failed_post_effect")
+                annotate_failure(
+                    exc,
+                    code=ContractErrorCode.INTERNAL_ERROR,
+                    reason_code="PROCESS_START_FAILED_POST_EFFECT",
+                    message="terminal process dispatched but PTY setup did not complete",
+                    retryable=False,
+                    effect_state=EffectState.UNKNOWN,
+                    reconciliation_required=True,
+                    safe_next_action=SafeNextAction.RECONCILE,
+                )
+                raise
 
         try:
-            threading.Thread(
-                target=self._reader,
-                args=(session,),
-                name=f"terminal-reader-{session.session_id}",
-                daemon=True,
-            ).start()
+            if mode == "pty":
+                session.readers_remaining = 1
+                threading.Thread(
+                    target=self._reader,
+                    args=(session,),
+                    name=f"terminal-reader-{session.session_id}",
+                    daemon=True,
+                ).start()
+            else:
+                assert process is not None and process.stdout is not None and process.stderr is not None
+                session.stdout_capture = _BoundedPipeCapture(MAX_RETAINED_OUTPUT_BYTES)
+                session.stderr_capture = _BoundedPipeCapture(MAX_RETAINED_OUTPUT_BYTES)
+                session.readers_remaining = 2
+                threading.Thread(
+                    target=self._pipe_reader,
+                    args=(session, "stdout", process.stdout),
+                    name=f"terminal-stdout-reader-{session.session_id}",
+                    daemon=True,
+                ).start()
+                threading.Thread(
+                    target=self._pipe_reader,
+                    args=(session, "stderr", process.stderr),
+                    name=f"terminal-stderr-reader-{session.session_id}",
+                    daemon=True,
+                ).start()
             threading.Thread(
                 target=self._monitor,
                 args=(session,),
@@ -381,6 +492,75 @@ class TerminalSessionManager:
             raise
         return self.poll(session_id=session.session_id, cursor=0, wait_ms=0)
 
+    def execute(
+        self,
+        argv: list[str],
+        cwd: str,
+        start_identity: str,
+        timeout_seconds: float = DEFAULT_EXEC_TIMEOUT_SECONDS,
+    ) -> dict[str, Any]:
+        """Synchronous terminal_exec facade over the shared pipe lifecycle."""
+
+        checked_timeout = self._validated_exec_timeout(timeout_seconds)
+        self.start(
+            argv,
+            cwd,
+            start_identity,
+            "pipe",
+            entry_surface="terminal_exec",
+            timeout_seconds=checked_timeout,
+        )
+        session = self._resolve_session(session_id=None, start_identity=start_identity)
+        with session.changed:
+            while session.status != "exited":
+                deadline = session.deadline_mono
+                remaining = None if deadline is None else deadline - time.monotonic()
+                if remaining is not None and remaining <= 0:
+                    break
+                session.changed.wait(remaining)
+        if session.status != "exited":
+            self._cleanup_process(session, "timeout")
+        if session.lifecycle == "START_FAILED_POST_EFFECT":
+            error = RuntimeStateError(
+                "terminal_exec dispatch occurred but completion is unknown",
+                reason_code="PROCESS_START_FAILED_POST_EFFECT",
+            )
+            annotate_failure(
+                error,
+                code=ContractErrorCode.INTERNAL_ERROR,
+                reason_code="PROCESS_START_FAILED_POST_EFFECT",
+                message="terminal_exec dispatch occurred but completion is unknown",
+                retryable=False,
+                effect_state=EffectState.UNKNOWN,
+                reconciliation_required=True,
+                safe_next_action=SafeNextAction.RECONCILE,
+            )
+            raise error
+        if session.lifecycle == "START_FAILED_PRE_EFFECT":
+            raise RuntimeStateError(
+                "terminal_exec failed before process dispatch",
+                reason_code="PROCESS_START_FAILED_PRE_EFFECT",
+            )
+        if session.stdout_capture is None or session.stderr_capture is None:
+            raise RuntimeStateError("terminal_exec pipe captures are unavailable")
+        if session.exit_code is None:
+            raise RuntimeStateError(
+                "terminal_exec process completion has no exit code",
+                reason_code="PROCESS_COMPLETION_UNKNOWN",
+            )
+        return {
+            "cwd": session.cwd,
+            "argv": list(session.argv),
+            "exit_code": session.exit_code,
+            "timed_out": session.termination_reason == "timeout",
+            "stdout": session.stdout_capture.text(),
+            "stderr": session.stderr_capture.text(),
+            "stdout_truncated": session.stdout_capture.truncated,
+            "stderr_truncated": session.stderr_capture.truncated,
+            "start_identity": session.start_identity,
+            "session_id": session.session_id,
+        }
+
     def poll(
         self,
         session_id: str | None = None,
@@ -401,7 +581,7 @@ class TerminalSessionManager:
                 if checked_wait_for == "output_or_state":
                     if (
                         session.status == "running"
-                        and checked_cursor == session.base_cursor + len(session.output)
+                        and checked_cursor == session.base_cursor + self._retained_output_length(session)
                     ):
                         session.changed.wait(max(0.0, deadline - time.monotonic()))
                 else:
@@ -425,6 +605,11 @@ class TerminalSessionManager:
             self._require_no_dimensions(rows, cols)
             if not isinstance(data, str):
                 raise RuntimeValidationError("write action requires UTF-8 string data")
+            if session.mode != "pty":
+                raise RuntimeValidationError(
+                    "pipe sessions do not accept input",
+                    reason_code="PIPE_WRITE_UNSUPPORTED",
+                )
             with session.cleanup_lock:
                 buffered = (
                     session.protected_input_buffer
@@ -465,6 +650,11 @@ class TerminalSessionManager:
         if action == "resize":
             if data is not None:
                 raise RuntimeValidationError("resize action does not accept data")
+            if session.mode != "pty":
+                raise RuntimeValidationError(
+                    "terminal_resize is supported only for PTY sessions",
+                    reason_code="PTY_REQUIRED",
+                )
             if (
                 isinstance(rows, bool)
                 or isinstance(cols, bool)
@@ -598,15 +788,72 @@ class TerminalSessionManager:
                         session.base_cursor += overflow
                     session.changed.notify_all()
         finally:
-            session.reader_done.set()
-            with session.changed:
-                session.changed.notify_all()
+            self._reader_finished(session)
+
+    def _pipe_reader(self, session: _Session, stream_name: str, stream: Any) -> None:
+        capture = session.stdout_capture if stream_name == "stdout" else session.stderr_capture
+        try:
+            while True:
+                chunk = os.read(stream.fileno(), _READ_CHUNK_BYTES)
+                if not chunk:
+                    return
+                with session.changed:
+                    if capture is not None:
+                        capture.consume(chunk)
+                    self._append_pipe_output_locked(session, stream_name, chunk)
+                    session.changed.notify_all()
+        finally:
+            try:
+                stream.close()
+            except (OSError, ValueError):
+                pass
+            self._reader_finished(session)
+
+    @staticmethod
+    def _append_pipe_output_locked(session: _Session, stream_name: str, chunk: bytes) -> None:
+        if not chunk:
+            return
+        session.output_chunks.append((stream_name, chunk))
+        session.retained_output_bytes += len(chunk)
+        overflow = session.retained_output_bytes - MAX_RETAINED_OUTPUT_BYTES
+        while overflow > 0 and session.output_chunks:
+            first_stream, first_chunk = session.output_chunks[0]
+            if len(first_chunk) <= overflow:
+                session.output_chunks.pop(0)
+                dropped = len(first_chunk)
+            else:
+                session.output_chunks[0] = (first_stream, first_chunk[overflow:])
+                dropped = overflow
+            session.base_cursor += dropped
+            session.retained_output_bytes -= dropped
+            overflow -= dropped
+
+    @staticmethod
+    def _retained_output_length(session: _Session) -> int:
+        return session.retained_output_bytes if session.mode == "pipe" else len(session.output)
+
+    @staticmethod
+    def _reader_finished(session: _Session) -> None:
+        with session.changed:
+            if session.readers_remaining > 0:
+                session.readers_remaining -= 1
+            if session.readers_remaining == 0:
+                session.reader_done.set()
+            session.changed.notify_all()
 
     def _monitor(self, session: _Session) -> None:
         process = session.process
         if process is None:
             return
-        process.wait()
+        try:
+            deadline = session.deadline_mono
+            if deadline is None:
+                process.wait()
+            else:
+                process.wait(timeout=max(0.0, deadline - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            self._cleanup_process(session, "timeout")
+            return
         self._cleanup_process(session, "natural_exit")
 
     def _cleanup_process(
@@ -625,6 +872,14 @@ class TerminalSessionManager:
                 return False
             _terminate_process_group(process)
             session.reader_done.wait(_READER_DRAIN_SECONDS)
+            if not session.reader_done.is_set() and session.mode == "pipe":
+                for stream in (process.stdout, process.stderr):
+                    if stream is not None:
+                        try:
+                            stream.close()
+                        except (OSError, ValueError):
+                            pass
+                session.reader_done.wait(_READER_DRAIN_SECONDS)
             with session.changed:
                 session.exit_code = process.returncode
                 session.status = "exited"
@@ -636,7 +891,7 @@ class TerminalSessionManager:
                 session.termination_reason = termination_state
                 session.completed_at = self._clock()
                 try:
-                    if session.master_fd >= 0:
+                    if session.mode == "pty" and session.master_fd >= 0:
                         os.close(session.master_fd)
                 except OSError:
                     pass
@@ -649,11 +904,23 @@ class TerminalSessionManager:
 
             emit_process_end(
                 session.timing_context,
-                tool_name="terminal_start",
-                process_kind="persistent_pty",
+                tool_name=session.entry_surface,
+                process_kind=(
+                    "persistent_pty"
+                    if session.mode == "pty" and session.entry_surface == "terminal_start"
+                    else "persistent_pipe"
+                    if session.entry_surface == "terminal_start"
+                    else "one_shot"
+                ),
                 started_wall=session.process_started_wall,
                 started_mono=session.process_started_mono,
-                termination_state=termination_state,
+                termination_state=(
+                    "completed"
+                    if session.entry_surface == "terminal_exec" and termination_state == "natural_exit"
+                    else "timed_out"
+                    if termination_state == "timeout"
+                    else termination_state
+                ),
             )
             return True
 
@@ -724,29 +991,66 @@ class TerminalSessionManager:
 
     def _session_result(self, session: _Session, *, cursor: int) -> dict[str, Any]:
         with session.changed:
-            retained_end = session.base_cursor + len(session.output)
+            retained_output_length = self._retained_output_length(session)
+            retained_end = session.base_cursor + retained_output_length
             if cursor > retained_end:
                 raise RuntimeValidationError("cursor is ahead of available session output")
             cursor_expired = cursor < session.base_cursor
             dropped = max(0, session.base_cursor - cursor)
             start_cursor = max(cursor, session.base_cursor)
             start_index = start_cursor - session.base_cursor
-            raw = bytes(session.output[start_index : start_index + MAX_POLL_OUTPUT_BYTES])
             result: dict[str, Any] = {
                 "session_id": session.session_id,
                 "status": session.status,
                 "lifecycle": session.lifecycle,
-                "output": raw.decode("utf-8", errors="replace"),
-                "next_cursor": start_cursor + len(raw),
+                "mode": session.mode,
                 "cursor_expired": cursor_expired,
                 "dropped_output_bytes": dropped,
             }
+            if session.mode == "pty":
+                raw = bytes(session.output[start_index : start_index + MAX_POLL_OUTPUT_BYTES])
+                result["output"] = raw.decode("utf-8", errors="replace")
+                result["next_cursor"] = start_cursor + len(raw)
+            else:
+                remaining = MAX_POLL_OUTPUT_BYTES
+                next_cursor = start_cursor
+                chunks: list[dict[str, str]] = []
+                offset = session.base_cursor
+                for stream_name, data in session.output_chunks:
+                    chunk_start = offset
+                    chunk_end = offset + len(data)
+                    offset = chunk_end
+                    if chunk_end <= start_cursor or remaining <= 0:
+                        continue
+                    take_start = max(start_cursor, chunk_start)
+                    take_end = min(chunk_end, take_start + remaining)
+                    piece = data[take_start - chunk_start : take_end - chunk_start]
+                    if piece:
+                        chunks.append(
+                            {"stream": stream_name, "text": piece.decode("utf-8", errors="replace")}
+                        )
+                        remaining -= len(piece)
+                        next_cursor = take_end
+                result["output"] = ""
+                result["output_chunks"] = chunks
+                result["next_cursor"] = next_cursor
             if session.start_identity is not None:
                 result["start_identity"] = session.start_identity
             if session.status == "exited":
                 result["exit_code"] = session.exit_code
                 result["termination_reason"] = session.termination_reason
             return result
+
+    @staticmethod
+    def _validated_exec_timeout(timeout_seconds: float) -> float:
+        if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)):
+            raise RuntimeValidationError("timeout_seconds must be numeric")
+        timeout = float(timeout_seconds)
+        if timeout <= 0 or timeout > MAX_EXEC_TIMEOUT_SECONDS:
+            raise RuntimeValidationError(
+                f"timeout_seconds must be greater than 0 and at most {MAX_EXEC_TIMEOUT_SECONDS:g}"
+            )
+        return timeout
 
     def _touch(self, session: _Session) -> None:
         with session.cleanup_lock:
@@ -852,8 +1156,18 @@ def start_terminal(
     argv: list[str],
     cwd: str,
     start_identity: str | None = None,
+    mode: str = "pty",
 ) -> dict[str, Any]:
-    return _MANAGER.start(argv, cwd, start_identity)
+    return _MANAGER.start(argv, cwd, start_identity, mode)
+
+
+def execute_terminal(
+    argv: list[str],
+    cwd: str,
+    start_identity: str,
+    timeout_seconds: float = DEFAULT_EXEC_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
+    return _MANAGER.execute(argv, cwd, start_identity, timeout_seconds)
 
 
 def poll_terminal(

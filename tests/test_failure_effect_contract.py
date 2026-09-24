@@ -97,6 +97,7 @@ class FailureEffectMCPTests(unittest.IsolatedAsyncioTestCase):
                     {
                         "argv": ["/usr/bin/true"],
                         "cwd": str(self.workspace),
+                        "start_identity": "0" * 32,
                         "timeout_seconds": 0,
                     },
                 )
@@ -125,6 +126,7 @@ class FailureEffectMCPTests(unittest.IsolatedAsyncioTestCase):
                     {
                         "argv": ["/usr/bin/true"],
                         "cwd": str(self.workspace),
+                        "start_identity": "1" * 32,
                         "timeout_seconds": 1,
                     },
                 )
@@ -196,6 +198,7 @@ class FailureEffectMCPTests(unittest.IsolatedAsyncioTestCase):
                     {
                         "argv": ["/usr/bin/true"],
                         "cwd": str(self.workspace),
+                        "start_identity": "2" * 32,
                         "timeout_seconds": 1,
                     },
                 )

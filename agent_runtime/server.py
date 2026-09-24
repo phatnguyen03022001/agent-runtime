@@ -83,6 +83,7 @@ from .contracts import (
     TerminalData,
     TerminalDimension,
     TerminalExecResult,
+    TerminalMode,
     TerminalSessionResult,
     TimeoutSeconds,
     RuntimeToolErrorEnvelope,
@@ -91,7 +92,7 @@ from .contracts import (
     WaitMilliseconds,
 )
 from .errors import RuntimeStateError, RuntimeValidationError
-from .executor import TERMINAL_EXEC_CONTRACT, execute_terminal, shutdown_terminal_executions
+from .executor import TERMINAL_EXEC_CONTRACT, execute_terminal
 from .fs_read import FS_READ_BATCH_CONTRACT, read_files_batch
 from .fs_list import FS_LIST_CONTRACT, list_directory
 from .fs_patch import FS_PATCH_CONTRACT, patch_file
@@ -129,8 +130,9 @@ SERVER_DESCRIPTION = "Bounded local command execution and advisory capacity MCP 
 SERVER_INSTRUCTIONS = (
     "Execute literal argv with shell=False and no implicit shell. "
     "Use an absolute cwd under the configured workspace root. "
-    "terminal_exec is one-shot; terminal_start begins a PTY lifecycle managed with "
-    "terminal_poll, destructive terminal_control, and bounded non-destructive terminal_resize. "
+    "terminal_exec is a caller-keyed synchronous pipe facade; terminal_start begins a PTY or "
+    "keyed pipe lifecycle managed with terminal_poll. terminal_control can interrupt or terminate "
+    "either mode, pipe input is rejected, and terminal_resize is PTY-only. "
     "Terminal execution uses the operator account's normal permissions "
     "and may modify the host. Protected Runtime filtering is defense-in-depth for recognized argv, shell, "
     "and wrapper lifecycle intent; it is not a sandbox, filesystem confinement, privilege isolation, "
@@ -618,11 +620,17 @@ def _tool(
 def terminal_exec(
     argv: Argv,
     cwd: AbsoluteCwd,
+    start_identity: StartIdentity,
     timeout_seconds: TimeoutSeconds = 300.0,
 ) -> TerminalExecResult:
-    """Run one literal local argv; this capability may modify the host."""
+    """Run or join keyed local argv through shared pipes; the process may modify the host."""
 
-    return cast(TerminalExecResult, _call_runtime_tool("terminal_exec", execute_terminal, argv, cwd, timeout_seconds))
+    return cast(
+        TerminalExecResult,
+        _call_runtime_tool(
+            "terminal_exec", execute_terminal, argv, cwd, timeout_seconds, start_identity
+        ),
+    )
 
 
 @_tool(
@@ -635,12 +643,13 @@ def terminal_start(
     argv: Argv,
     cwd: AbsoluteCwd,
     start_identity: StartIdentity | None = None,
+    mode: TerminalMode = "pty",
 ) -> TerminalSessionResult:
-    """Start one literal argv in a bounded persistent PTY session; the process may modify the host."""
+    """Start a keyed PTY or pipe process; it may modify the host."""
 
     return cast(
         TerminalSessionResult,
-        _call_runtime_tool("terminal_start", _start_terminal, argv, cwd, start_identity),
+        _call_runtime_tool("terminal_start", _start_terminal, argv, cwd, start_identity, mode),
     )
 
 
@@ -657,7 +666,7 @@ def terminal_poll(
     wait_ms: WaitMilliseconds = 0,
     wait_for: WaitFor = "output_or_state",
 ) -> TerminalSessionResult:
-    """Read bounded incremental PTY output by exactly one session selector."""
+    """Read bounded incremental PTY or separately identified pipe output."""
 
     return cast(
         TerminalSessionResult,
@@ -684,7 +693,7 @@ def terminal_control(
     action: ControlAction,
     data: TerminalData = None,
 ) -> TerminalControlResult:
-    """Write, interrupt, or terminate one persistent PTY session whose process may modify the host."""
+    """Write to a PTY or interrupt/terminate a process that may modify the host."""
 
     return cast(
         TerminalControlResult,
@@ -1004,7 +1013,6 @@ def _handle_termination_signal(signum: int, _frame: Any) -> None:
     """Clean up Runtime-owned terminal roots before default signal exit."""
 
     try:
-        shutdown_terminal_executions()
         shutdown_terminal_sessions()
     finally:
         signal.signal(signum, signal.SIG_DFL)

@@ -34,7 +34,7 @@ EXPECTED_TOOLS = (
     "runtime_capabilities",
 )
 EXPECTED_ANNOTATIONS = {
-    "terminal_exec": (False, True, False, True),
+    "terminal_exec": (False, True, True, True),
     "terminal_start": (False, True, False, True),
     "terminal_poll": (False, False, False, False),
     "terminal_control": (False, True, False, True),

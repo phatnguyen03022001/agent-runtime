@@ -64,7 +64,7 @@ AbsoluteCwd = Annotated[
     StrictStr,
     Field(min_length=1),
 ]
-TimeoutSeconds = Annotated[float, Field(strict=True, gt=0, le=3600)]
+TimeoutSeconds = Annotated[float, Field(strict=True, ge=1, le=3600)]
 SessionId = Annotated[
     StrictStr,
     Field(min_length=1, max_length=SESSION_ID_MAX_CHARS),
@@ -73,6 +73,7 @@ StartIdentity = Annotated[
     StrictStr,
     Field(min_length=START_IDENTITY_CHARS, max_length=START_IDENTITY_CHARS, pattern=r"^[0-9a-f]{32}$"),
 ]
+TerminalMode = Literal["pty", "pipe"]
 Cursor = Annotated[int, Field(strict=True, ge=0)]
 WaitMilliseconds = Annotated[int, Field(strict=True, ge=0, le=30000)]
 WaitFor = Literal["output_or_state", "terminal_or_deadline"]
@@ -102,11 +103,19 @@ class TerminalExecResult(_ClosedResult):
     stderr: str
     stdout_truncated: bool
     stderr_truncated: bool
+    start_identity: str
+    session_id: str
+
+
+class TerminalOutputChunk(_ClosedResult):
+    stream: Literal["stdout", "stderr"]
+    text: str
 
 
 class TerminalSessionResult(_ClosedResult):
     session_id: str
     start_identity: str | None = None
+    mode: TerminalMode
     status: Literal["starting", "running", "exited"]
     lifecycle: Literal[
         "STARTING",
@@ -119,10 +128,12 @@ class TerminalSessionResult(_ClosedResult):
         "natural_exit",
         "explicit_terminate",
         "hard_wall_timeout",
+        "timeout",
         "start_failed_pre_effect",
         "start_failed_post_effect",
     ] | None = None
     output: str
+    output_chunks: list[TerminalOutputChunk] | None = None
     next_cursor: int
     cursor_expired: bool
     dropped_output_bytes: int
@@ -135,6 +146,8 @@ class TerminalSessionResult(_ClosedResult):
         data = handler(self)
         if self.start_identity is None:
             data.pop("start_identity", None)
+        if self.mode == "pty":
+            data.pop("output_chunks", None)
         if self.status != "exited":
             data.pop("exit_code", None)
         if self.termination_reason is None:
@@ -758,7 +771,7 @@ class CapabilityDescriptor(_ClosedResult):
     authority: CapabilityAuthority
     annotations: CapabilityAnnotations
     request_schema_version: Literal[1, 2, 3]
-    result_schema_version: Literal[1, 2] | None
+    result_schema_version: Literal[1, 2, 3] | None
     bounds: dict[str, object]
     supported: bool
     available: bool
