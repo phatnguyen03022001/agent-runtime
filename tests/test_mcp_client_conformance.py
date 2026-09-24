@@ -29,6 +29,7 @@ EXPECTED_TOOLS = (
     "fs_write",
     "fs_manage",
     "repo_observer",
+    "repo_remote_observer",
     "repo_diff",
     "repo_stage",
     "repo_commit",
@@ -51,6 +52,7 @@ EXPECTED_ANNOTATIONS = {
     "fs_write": (False, True, False, False),
     "fs_manage": (False, True, False, False),
     "repo_observer": (True, False, True, False),
+    "repo_remote_observer": (True, False, True, True),
     "repo_diff": (True, False, True, False),
     "repo_stage": (False, True, False, False),
     "repo_commit": (False, True, False, False),
@@ -127,6 +129,12 @@ EXPECTED_OUTPUT_FIELDS = {
         "changes_truncated", "worktrees_truncated", "diff_truncated",
         "total_changes", "total_changes_exact", "truncated", "next_cursor",
         "continuation_receipt", "kind", "digest",
+    },
+    "repo_remote_observer": {
+        "schema_version", "repository_root", "local_branch", "local_head", "remote",
+        "remote_branch_head", "remote_branch_exists", "remote_branches", "name", "sha",
+        "branch_count", "fetched", "network_used", "local_refs_mutated", "ahead", "behind",
+        "deadline_seconds",
     },
     "repo_diff": {
         "schema_version", "scope", "head_sha", "patch", "patch_truncated",

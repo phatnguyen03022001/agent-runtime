@@ -32,6 +32,7 @@ EXPECTED_NAMES = (
     "fs_write",
     "fs_manage",
     "repo_observer",
+    "repo_remote_observer",
     "repo_diff",
     "repo_stage",
     "repo_commit",
@@ -83,10 +84,10 @@ class CapabilityRegistryTests(unittest.IsolatedAsyncioTestCase):
             ),
         )
 
-    def test_registry_is_exact_ordered_unique_20_tool_inventory(self) -> None:
+    def test_registry_is_exact_ordered_unique_21_tool_inventory(self) -> None:
         self.assertEqual(CAPABILITY_NAMES, EXPECTED_NAMES)
-        self.assertEqual(len(CAPABILITY_REGISTRY), 20)
-        self.assertEqual(len({id(binding.contract) for binding in CAPABILITY_REGISTRY}), 20)
+        self.assertEqual(len(CAPABILITY_REGISTRY), 21)
+        self.assertEqual(len({id(binding.contract) for binding in CAPABILITY_REGISTRY}), 21)
         self.assertTrue(all(isinstance(binding.contract, ToolContract) for binding in CAPABILITY_REGISTRY))
 
     def test_descriptor_schema_and_contract_projection_are_exact(self) -> None:

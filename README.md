@@ -2,7 +2,7 @@
 
 Agent Runtime is a **bounded local execution provider** for ChatGPT and other MCP clients on macOS. **MCP is the protocol**; the admitted product transport is OpenAI Secure MCP Tunnel, which keeps the Runtime private and uses outbound HTTPS rather than a public inbound listener.
 
-The qualified Runtime source is version **0.3.0** with **exactly twenty public tools**. The native app owns the installed lifecycle through **app-owned ServiceManagement**. The older LaunchAgent model is a **migration/rollback predecessor only**.
+The qualified Runtime source is version **0.3.0** with **exactly twenty-one public tools**. The native app owns the installed lifecycle through **app-owned ServiceManagement**. The older LaunchAgent model is a **migration/rollback predecessor only**.
 
 ## Supported product shape
 
@@ -11,7 +11,7 @@ The qualified Runtime source is version **0.3.0** with **exactly twenty public t
 - Package-owned Runtime bytes under `~/Applications/Agent Runtime.app`.
 - Canonical operator configuration at `~/Library/Application Support/Agent Runtime/runtime.env`, mode `0600`.
 - One protected singleton tunnel/listener on `127.0.0.1:8080`.
-- Runtime source version 0.3.0, ToolContract Kernel v2, nineteen-tool public MCP contract.
+- Runtime source version 0.3.0, ToolContract Kernel v2, twenty-one-tool source MCP contract; the installed Runtime remains on its accepted nineteen-tool live surface until a separately authorized cutover.
 - Runtime requires no blanket TCC permissions. Background Activity approval is operator/platform state.
 - Homebrew is optional; it is not an architecture prerequisite.
 
@@ -85,7 +85,7 @@ Canonical `runtime.env` is retained by default during uninstall. Its credentials
 
 ## Public tool surface
 
-The Runtime exposes exactly twenty public tools: `terminal_exec`, `terminal_start`, `terminal_poll`, `terminal_control`, `terminal_resize`, `capacity_observer`, `fs_read_batch`, `fs_list`, `fs_search`, `fs_patch`, `fs_write`, `fs_manage`, `repo_observer`, `repo_diff`, `repo_stage`, `repo_commit`, `repo_fast_forward`, `repo_publish`, `screen_capture`, and `runtime_capabilities`.
+The Runtime exposes exactly twenty-one source public tools: `terminal_exec`, `terminal_start`, `terminal_poll`, `terminal_control`, `terminal_resize`, `capacity_observer`, `fs_read_batch`, `fs_list`, `fs_search`, `fs_patch`, `fs_write`, `fs_manage`, `repo_observer`, `repo_remote_observer`, `repo_diff`, `repo_stage`, `repo_commit`, `repo_fast_forward`, `repo_publish`, `screen_capture`, and `runtime_capabilities`. The installed Runtime intentionally remains on its accepted nineteen-tool surface until a separately authorized cutover.
 
 Checkout source keeps PTY and pipe launches in one keyed process lifecycle. `terminal_start` defaults to PTY and can select separate stdout/stderr pipes; `terminal_exec` is a bounded synchronous facade over that pipe lifecycle. Source changes do not activate themselves: the installed Runtime 0.3.0 remains at its accepted activation until a separately authorized cutover. See [source execution recovery](docs/RECOVERY.md#source-execution-recovery) before repeating a mutation after an unknown result.
 
@@ -97,7 +97,7 @@ Source `fs_read_batch` keeps request schema v1 and uses result schema v2. Succes
 
 Source request/result schemas for `fs_list`, `fs_search`, `repo_diff`, and `repo_observer` are v2/v2. Initial calls omit both `cursor` and `continuation_receipt`; resume calls provide both. Successful results retain existing fields and add `truncated`, `next_cursor`, and a closed ReceiptV1-shaped `continuation_receipt`. Cursors are opaque, stateless, ASCII, bounded to 1024 characters, expire after 300 seconds, bind the tool, semantic request parameters, page position, and observed-state receipt, and are evidence only—not authorization. `fs_list` revalidates the complete bounded directory observation; `fs_search` explicitly uses `continuation_consistency=revalidated` with no snapshot/cache/store; `repo_diff` reuses the full raw-diff ReceiptV1 and pages on valid UTF-8 boundaries; `repo_observer` revalidates one exact local observation and does not manufacture a resumable cursor when an existing hard observation bound prevents exact state identity.
 
-`repo_observer` remains typed local-only read-only Git observation with `fetched=false` and `network_used=false`. `repo_fast_forward` provides expected-state-guarded fixed-origin synchronization. `repo_publish` provides expected-state-guarded fixed-origin publication; repository/task authority remains outside Runtime.
+`repo_observer` remains typed local-only read-only Git observation with `fetched=false` and `network_used=false`. `repo_remote_observer` is a separate bounded read-only network authority: it enumerates exact `origin` branch refs without fetch or local mutation, reports current-branch absence as success, and keeps `ahead`/`behind` null because no commit graph is fetched. `repo_fast_forward` provides expected-state-guarded fixed-origin synchronization. `repo_publish` provides expected-state-guarded fixed-origin publication; repository/task authority remains outside Runtime.
 
 `screen_capture` remains contract-visible but governance-blocked as `VISUAL_PERCEPTION_BLOCKED`. It does not request Screen Recording permission. The dormant media contract retains deterministic `cg_global_points` metadata semantics for any separately authorized future implementation.
 

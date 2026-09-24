@@ -61,7 +61,7 @@ class Task0140QualificationTests(unittest.IsolatedAsyncioTestCase):
 
     def test_every_registered_public_tool_uses_common_sanitizer(self) -> None:
         manager = server.mcp._tool_manager
-        self.assertEqual(len(server.PUBLIC_TOOL_NAMES), 20)
+        self.assertEqual(len(server.PUBLIC_TOOL_NAMES), 21)
         for name in server.PUBLIC_TOOL_NAMES:
             with self.subTest(tool=name):
                 registered = manager.get_tool(name)

@@ -86,6 +86,7 @@ from .contracts import (
     ScreenCaptureWindowId,
     RepoObserverMaxPaths,
     RepoObserverResult,
+    RepoRemoteObserverResult,
     SessionId,
     StartIdentity,
     TerminalControlResult,
@@ -116,6 +117,7 @@ from .repo_stage import REPO_STAGE_CONTRACT, stage_repository
 from .repo_commit import REPO_COMMIT_CONTRACT, commit_repository
 from .repo_fast_forward import REPO_FAST_FORWARD_CONTRACT, RepoFastForwardFailure, fast_forward_repository
 from .repo_observer import REPO_OBSERVER_CONTRACT, RepoObserverFailure, observe_repository
+from .repo_remote_observer import REPO_REMOTE_OBSERVER_CONTRACT, RepoRemoteObserverFailure, observe_remote_repository
 from .repo_publish import REPO_PUBLISH_CONTRACT, RepoPublishFailure, publish_repository
 from .screen_capture import SCREEN_CAPTURE_CONTRACT, ScreenCaptureFailure, capture_screen
 from .session import (
@@ -162,6 +164,8 @@ SERVER_INSTRUCTIONS = (
     "repo_observer performs bounded local-only Git repository observation with no fetch, network use, "
     "or repository mutation; it reports local tracking refs, typed changes, diff summary, operation state, "
     "and policy-safe worktree topology. "
+    "repo_remote_observer performs bounded read-only fresh fixed-origin branch observation with no fetch or local mutation; "
+    "it reports exact origin branch refs only when the complete topology fits the hard limits and leaves ahead/behind unknown. "
     "repo_fast_forward performs expected-state-guarded fixed-origin synchronization from fixed origin only; it fresh-fetches "
     "one bound branch and permits only an exact fast-forward of the current clean branch. "
     "repo_publish performs expected-state-guarded fixed-origin publication of exactly the current clean branch HEAD "
@@ -237,6 +241,7 @@ _PUBLIC_TOOL_EFFECT_RISK = {
     "fs_write": "possible",
     "fs_manage": "possible",
     "repo_observer": "absent",
+    "repo_remote_observer": "absent",
     "repo_diff": "absent",
     "repo_stage": "possible",
     "repo_commit": "possible",
@@ -912,6 +917,23 @@ def repo_observer(
         return observe_repository(cwd, max_paths, cursor, continuation_receipt)
     except RepoObserverFailure as exc:
         return cast(RepoObserverResult, _runtime_error_from_exception("repo_observer", exc))
+
+
+@_tool(
+    read_only=REPO_REMOTE_OBSERVER_CONTRACT.annotations.read_only,
+    destructive=REPO_REMOTE_OBSERVER_CONTRACT.annotations.destructive,
+    idempotent=REPO_REMOTE_OBSERVER_CONTRACT.annotations.idempotent,
+    open_world=REPO_REMOTE_OBSERVER_CONTRACT.annotations.open_world,
+)
+def repo_remote_observer(
+    cwd: AbsoluteCwd,
+) -> RepoRemoteObserverResult:
+    """Observe fresh fixed-origin branch refs without fetch or local mutation."""
+
+    try:
+        return observe_remote_repository(cwd)
+    except RepoRemoteObserverFailure as exc:
+        return cast(RepoRemoteObserverResult, _runtime_error_from_exception("repo_remote_observer", exc))
 
 
 @_tool(

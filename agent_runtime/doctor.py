@@ -115,10 +115,10 @@ def _capability_registry_check() -> DoctorCheck:
     names = tuple(item.name for item in descriptors)
     screen = next((item for item in descriptors if item.name == "screen_capture"), None)
     valid = (
-        len(names) == 20
+        len(names) == 21
         and names == CAPABILITY_NAMES
         and names == server.PUBLIC_TOOL_NAMES
-        and len(set(names)) == 20
+        and len(set(names)) == 21
         and screen is not None
         and screen.supported
         and not screen.available
@@ -136,7 +136,7 @@ def _capability_registry_check() -> DoctorCheck:
         "capability_registry",
         "pass",
         "OK",
-        "Capability registry matches the accepted twenty-tool surface.",
+        "Capability registry matches the accepted twenty-one-tool source surface.",
         {"tool_count": len(names), "screen_capture": "VISUAL_PERCEPTION_BLOCKED"},
     )
 
@@ -150,7 +150,7 @@ def _tool_contract_schema_check(bundle: dict[str, object] | None) -> DoctorCheck
             "Canonical schema export could not be validated.",
         )
     entries = bundle.get("capabilities")
-    if not isinstance(entries, list) or len(entries) != 20:
+    if not isinstance(entries, list) or len(entries) != 21:
         return _check(
             "tool_contract_schema",
             "fail",
@@ -186,6 +186,7 @@ def _tool_contract_schema_check(bundle: dict[str, object] | None) -> DoctorCheck
         and resultless == ("screen_capture",)
         and schema_versions.get("fs_read_batch") == (1, 2)
         and schema_versions.get("fs_manage") == (1, 1)
+        and schema_versions.get("repo_remote_observer") == (1, 1)
         and isinstance(digest, str)
         and _HEX64.fullmatch(digest) is not None
     )
@@ -570,7 +571,7 @@ def _governance_protection_check() -> DoctorCheck:
     screen = next((item for item in descriptors if item.name == "screen_capture"), None)
     guard = protection._PROTECTED_GUARD
     valid = (
-        len(CAPABILITY_NAMES) == 20
+        len(CAPABILITY_NAMES) == 21
         and screen is not None
         and screen.supported
         and not screen.available

@@ -161,6 +161,7 @@ class TimingToolTests(unittest.TestCase):
             "fs_write",
             "fs_manage",
             "repo_observer",
+            "repo_remote_observer",
             "repo_diff",
             "repo_stage",
             "repo_commit",
@@ -185,6 +186,10 @@ class TimingToolTests(unittest.TestCase):
         self.assertEqual(
             [parameter.name for parameter in inspect.signature(server.repo_observer).parameters.values()],
             ["cwd", "max_paths", "cursor", "continuation_receipt"],
+        )
+        self.assertEqual(
+            [parameter.name for parameter in inspect.signature(server.repo_remote_observer).parameters.values()],
+            ["cwd"],
         )
         self.assertEqual(
             [parameter.name for parameter in inspect.signature(server.repo_stage).parameters.values()],

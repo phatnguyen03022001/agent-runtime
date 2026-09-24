@@ -21,6 +21,7 @@ from .repo_commit import REPO_COMMIT_CONTRACT
 from .repo_diff import REPO_DIFF_CONTRACT
 from .repo_fast_forward import REPO_FAST_FORWARD_CONTRACT
 from .repo_observer import REPO_OBSERVER_CONTRACT
+from .repo_remote_observer import REPO_REMOTE_OBSERVER_CONTRACT
 from .repo_publish import REPO_PUBLISH_CONTRACT
 from .repo_stage import REPO_STAGE_CONTRACT
 from .screen_capture import SCREEN_CAPTURE_CONTRACT
@@ -61,7 +62,7 @@ RUNTIME_CAPABILITIES_CONTRACT = ToolContract(
         open_world=False,
     ),
     preconditions={"arguments": "none", "inventory": "static-runtime-registry"},
-    bounds={"capabilities": 20},
+    bounds={"capabilities": 21},
     postconditions={
         "network_used": False,
         "host_probes": False,
@@ -107,6 +108,7 @@ CAPABILITY_REGISTRY = (
     CapabilityBinding(FS_WRITE_CONTRACT),
     CapabilityBinding(FS_MANAGE_CONTRACT),
     CapabilityBinding(REPO_OBSERVER_CONTRACT, request_schema_version=2, result_schema_version=2),
+    CapabilityBinding(REPO_REMOTE_OBSERVER_CONTRACT),
     CapabilityBinding(REPO_DIFF_CONTRACT, request_schema_version=2, result_schema_version=2),
     CapabilityBinding(REPO_STAGE_CONTRACT),
     CapabilityBinding(REPO_COMMIT_CONTRACT),

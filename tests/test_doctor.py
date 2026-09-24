@@ -135,7 +135,7 @@ class DoctorContractTests(unittest.TestCase):
         self.assertEqual(registry.status, "pass")
         self.assertEqual(schema.status, "pass")
         self.assertEqual(governance.status, "pass")
-        self.assertEqual(len(CAPABILITY_NAMES), 20)
+        self.assertEqual(len(CAPABILITY_NAMES), 21)
         descriptors = {
             entry["descriptor"]["name"]: entry["descriptor"]
             for entry in bundle["capabilities"]

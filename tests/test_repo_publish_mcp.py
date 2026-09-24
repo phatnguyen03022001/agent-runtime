@@ -26,6 +26,7 @@ EXPECTED_TOOLS = (
     "fs_write",
     "fs_manage",
     "repo_observer",
+    "repo_remote_observer",
     "repo_diff",
     "repo_stage",
     "repo_commit",
@@ -48,6 +49,7 @@ EXPECTED_ANNOTATIONS = {
     "fs_write": (False, True, False, False),
     "fs_manage": (False, True, False, False),
     "repo_observer": (True, False, True, False),
+    "repo_remote_observer": (True, False, True, True),
     "repo_diff": (True, False, True, False),
     "repo_stage": (False, True, False, False),
     "repo_commit": (False, True, False, False),
@@ -169,7 +171,8 @@ class RepoPublishMCPTests(unittest.IsolatedAsyncioTestCase):
             legacy_order,
         )
         self.assertEqual(tuple(tools)[7:12], ("fs_list", "fs_search", "fs_patch", "fs_write", "fs_manage"))
-        self.assertEqual(tuple(tools)[13], "repo_diff")
+        self.assertEqual(tuple(tools)[13], "repo_remote_observer")
+        self.assertEqual(tuple(tools)[14], "repo_diff")
         for name, tool in tools.items():
             self.assertEqual(_annotation_tuple(tool), EXPECTED_ANNOTATIONS[name])
         self.assertIn("repo_publish", ALLOWED_TOOL_NAMES)
@@ -220,7 +223,7 @@ class RepoPublishMCPTests(unittest.IsolatedAsyncioTestCase):
 
     def test_readme_documents_exact_eleven_tool_surface_and_publication_boundary(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("exactly twenty public tools", readme)
+        self.assertIn("exactly twenty-one public tools", readme)
         self.assertIn("repo_publish", readme)
         self.assertIn("expected-state-guarded fixed-origin publication", readme)
         self.assertIn("repository/task authority remains", readme)

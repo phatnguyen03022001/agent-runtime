@@ -474,6 +474,29 @@ class RepoObserverResult(_ClosedResult):
     continuation_receipt: "ContinuationReceiptResult"
 
 
+class RepoRemoteRef(_ClosedResult):
+    name: str
+    sha: RepoFastForwardSha
+
+
+class RepoRemoteObserverResult(_ClosedResult):
+    schema_version: Literal[1]
+    repository_root: str
+    local_branch: str
+    local_head: RepoFastForwardSha
+    remote: Literal["origin"]
+    remote_branch_head: RepoFastForwardSha | None
+    remote_branch_exists: bool
+    remote_branches: list[RepoRemoteRef]
+    branch_count: int
+    fetched: Literal[False]
+    network_used: Literal[True]
+    local_refs_mutated: Literal[False]
+    ahead: None
+    behind: None
+    deadline_seconds: float
+
+
 class RepoFastForwardResult(_ClosedResult):
     schema_version: Literal[1]
     status: Literal["fast_forwarded", "already_at_target"]

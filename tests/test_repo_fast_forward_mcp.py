@@ -26,6 +26,7 @@ EXPECTED_TOOLS = (
     "fs_write",
     "fs_manage",
     "repo_observer",
+    "repo_remote_observer",
     "repo_diff",
     "repo_stage",
     "repo_commit",
@@ -194,7 +195,7 @@ class RepoFastForwardMCPTests(unittest.IsolatedAsyncioTestCase):
 
     def test_readme_documents_exact_eleven_tool_surface_and_typed_git_roles(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("exactly twenty public tools", readme)
+        self.assertIn("exactly twenty-one public tools", readme)
         self.assertIn("repo_observer", readme)
         self.assertIn("typed local-only read-only Git observation", readme)
         self.assertIn("repo_fast_forward", readme)
