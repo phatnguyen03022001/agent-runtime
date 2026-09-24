@@ -30,7 +30,7 @@ def annotate_failure(
         reconciliation_required=reconciliation_required,
         safe_next_action=safe_next_action,
     )
-    exc.code = code  # type: ignore[attr-defined]
+    exc.contract_code = code  # type: ignore[attr-defined]
     exc.reason_code = reason_code  # type: ignore[attr-defined]
     exc.message = sanitize_failure_message(message)  # type: ignore[attr-defined]
     exc.retryable = retryable  # type: ignore[attr-defined]

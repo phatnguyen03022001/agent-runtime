@@ -16,7 +16,7 @@ from .contracts import (
     RepoStagePathResult,
     RepoStageResult,
 )
-from .errors import RuntimeValidationError
+from .errors import RuntimeValidationError, annotate_failure
 from .fs_safety import (
     FsSafetyError,
     file_identity,
@@ -29,8 +29,10 @@ from .repo_diff import diff_repository
 from .tool_contract import (
     Authority,
     ContractErrorCode,
+    EffectState,
     MutationAuthority,
     NetworkAuthority,
+    SafeNextAction,
     ToolAnnotations,
     ToolClass,
     ToolContract,
@@ -142,6 +144,23 @@ def _fail(
     retryable: bool = False,
 ) -> CapabilityFailure:
     return CapabilityFailure(code, reason, message, retryable=retryable)
+
+
+def _reconcile_failure(
+    exc: CapabilityFailure,
+    effect_state: EffectState,
+) -> CapabilityFailure:
+    annotate_failure(
+        exc,
+        code=exc.code,
+        reason_code=exc.reason_code,
+        message=exc.message,
+        retryable=False,
+        effect_state=effect_state,
+        reconciliation_required=True,
+        safe_next_action=SafeNextAction.RECONCILE,
+    )
+    return exc
 
 
 def _remaining(deadline: float) -> float:
@@ -1072,49 +1091,80 @@ def stage_repository(
             )
 
         payload = _index_info_payload(final_check, blob_shas)
-        updated = _run_git(
-            state.root,
-            ["update-index", "-z", "--index-info"],
-            deadline=deadline,
-            stdin=payload,
-        )
+        try:
+            updated = _run_git(
+                state.root,
+                ["update-index", "-z", "--index-info"],
+                deadline=deadline,
+                stdin=payload,
+            )
+        except CapabilityFailure as exc:
+            raise _reconcile_failure(exc, EffectState.UNKNOWN) from exc
         if updated.returncode != 0:
-            raise _fail(
-                ContractErrorCode.INTERNAL_ERROR,
-                "INDEX_UPDATE_FAILED",
-                "Git index update failed",
+            raise _reconcile_failure(
+                _fail(
+                    ContractErrorCode.INTERNAL_ERROR,
+                    "INDEX_UPDATE_FAILED",
+                    "Git index update failed",
+                ),
+                EffectState.UNKNOWN,
             )
 
-        current_head = _text(
-            _run_git(state.root, ["rev-parse", "--verify", "HEAD^{commit}"], deadline=deadline),
-            "HEAD_MISMATCH",
-        )
+        try:
+            current_head = _text(
+                _run_git(state.root, ["rev-parse", "--verify", "HEAD^{commit}"], deadline=deadline),
+                "HEAD_MISMATCH",
+            )
+        except CapabilityFailure as exc:
+            raise _reconcile_failure(exc, EffectState.UNKNOWN) from exc
         if current_head != expected_head_sha:
-            raise _fail(
-                ContractErrorCode.STATE_CHANGED,
-                "LOCAL_STATE_CHANGED",
-                "HEAD changed after index mutation",
+            raise _reconcile_failure(
+                _fail(
+                    ContractErrorCode.STATE_CHANGED,
+                    "LOCAL_STATE_CHANGED",
+                    "HEAD changed after index mutation",
+                ),
+                EffectState.UNKNOWN,
             )
-        if _staged_paths(state.root, deadline) != selected_paths:
-            raise _fail(
-                ContractErrorCode.STATE_CHANGED,
-                "LOCAL_STATE_CHANGED",
-                "staged path set does not equal the authorized candidate",
+        try:
+            staged_paths = _staged_paths(state.root, deadline)
+        except CapabilityFailure as exc:
+            raise _reconcile_failure(exc, EffectState.UNKNOWN) from exc
+        if staged_paths != selected_paths:
+            raise _reconcile_failure(
+                _fail(
+                    ContractErrorCode.STATE_CHANGED,
+                    "LOCAL_STATE_CHANGED",
+                    "staged path set does not equal the authorized candidate",
+                ),
+                EffectState.UNKNOWN,
             )
 
-        staged = diff_repository(str(state.root), "staged")
+        try:
+            staged = diff_repository(str(state.root), "staged")
+        except CapabilityFailure as exc:
+            raise _reconcile_failure(exc, EffectState.UNKNOWN) from exc
         if staged.full_diff_bytes == 0:
-            raise _fail(
-                ContractErrorCode.PRECONDITION_FAILED,
-                "INDEX_UPDATE_FAILED",
-                "authorized candidate produced an empty staged diff",
+            raise _reconcile_failure(
+                _fail(
+                    ContractErrorCode.PRECONDITION_FAILED,
+                    "INDEX_UPDATE_FAILED",
+                    "authorized candidate produced an empty staged diff",
+                ),
+                EffectState.UNKNOWN,
             )
-        clean = _post_stage_clean(state.root, deadline)
+        try:
+            clean = _post_stage_clean(state.root, deadline)
+        except CapabilityFailure as exc:
+            raise _reconcile_failure(exc, EffectState.PRESENT) from exc
         if not clean:
-            raise _fail(
-                ContractErrorCode.STATE_CHANGED,
-                "LOCAL_STATE_CHANGED",
-                "worktree changed after index mutation",
+            raise _reconcile_failure(
+                _fail(
+                    ContractErrorCode.STATE_CHANGED,
+                    "LOCAL_STATE_CHANGED",
+                    "worktree changed after index mutation",
+                ),
+                EffectState.PRESENT,
             )
 
         path_results: list[RepoStagePathResult] = []

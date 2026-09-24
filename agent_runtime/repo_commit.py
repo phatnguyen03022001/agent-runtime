@@ -14,14 +14,16 @@ from .contracts import (
     RepoCommitReceiptResult,
     RepoCommitResult,
 )
-from .errors import RuntimeValidationError
+from .errors import RuntimeValidationError, annotate_failure
 from .fs_safety import FsSafetyError, open_validated_cwd
 from .repo_diff import diff_repository
 from .tool_contract import (
     Authority,
     ContractErrorCode,
+    EffectState,
     MutationAuthority,
     NetworkAuthority,
+    SafeNextAction,
     ToolAnnotations,
     ToolClass,
     ToolContract,
@@ -118,6 +120,23 @@ def _fail(
     retryable: bool = False,
 ) -> CapabilityFailure:
     return CapabilityFailure(code, reason, message, retryable=retryable)
+
+
+def _reconcile_failure(
+    exc: CapabilityFailure,
+    effect_state: EffectState,
+) -> CapabilityFailure:
+    annotate_failure(
+        exc,
+        code=exc.code,
+        reason_code=exc.reason_code,
+        message=exc.message,
+        retryable=False,
+        effect_state=effect_state,
+        reconciliation_required=True,
+        safe_next_action=SafeNextAction.RECONCILE,
+    )
+    return exc
 
 
 def _remaining(deadline: float) -> float:
@@ -888,11 +907,14 @@ def commit_repository(
                 "index tree changed before branch compare-and-swap",
             )
 
-        updated = _run_git(
-            state.root,
-            ["update-ref", f"refs/heads/{branch}", commit_sha, expected_head_sha],
-            deadline=deadline,
-        )
+        try:
+            updated = _run_git(
+                state.root,
+                ["update-ref", f"refs/heads/{branch}", commit_sha, expected_head_sha],
+                deadline=deadline,
+            )
+        except CapabilityFailure as exc:
+            raise _reconcile_failure(exc, EffectState.UNKNOWN) from exc
         if updated.returncode != 0:
             current_head_result = _run_git(
                 state.root,
@@ -916,52 +938,83 @@ def commit_repository(
                 "branch compare-and-swap update failed",
             )
 
-        final_head = _text(
-            _run_git(state.root, ["rev-parse", "--verify", "HEAD^{commit}"], deadline=deadline),
-            "POST_COMMIT_STATE_INVALID",
-        )
+        try:
+            final_head = _text(
+                _run_git(state.root, ["rev-parse", "--verify", "HEAD^{commit}"], deadline=deadline),
+                "POST_COMMIT_STATE_INVALID",
+            )
+        except CapabilityFailure as exc:
+            raise _reconcile_failure(exc, EffectState.PRESENT) from exc
         if final_head != commit_sha:
-            raise _fail(
-                ContractErrorCode.INTERNAL_ERROR,
-                "POST_COMMIT_STATE_INVALID",
-                "HEAD does not equal committed object after update-ref",
+            raise _reconcile_failure(
+                _fail(
+                    ContractErrorCode.INTERNAL_ERROR,
+                    "POST_COMMIT_STATE_INVALID",
+                    "HEAD does not equal committed object after update-ref",
+                ),
+                EffectState.PRESENT,
             )
-        final_branch = _text(
-            _run_git(state.root, ["symbolic-ref", "--quiet", "--short", "HEAD"], deadline=deadline),
-            "POST_COMMIT_STATE_INVALID",
-        )
+        try:
+            final_branch = _text(
+                _run_git(state.root, ["symbolic-ref", "--quiet", "--short", "HEAD"], deadline=deadline),
+                "POST_COMMIT_STATE_INVALID",
+            )
+        except CapabilityFailure as exc:
+            raise _reconcile_failure(exc, EffectState.PRESENT) from exc
         if final_branch != branch:
-            raise _fail(
-                ContractErrorCode.INTERNAL_ERROR,
-                "POST_COMMIT_STATE_INVALID",
-                "current branch changed after commit",
+            raise _reconcile_failure(
+                _fail(
+                    ContractErrorCode.INTERNAL_ERROR,
+                    "POST_COMMIT_STATE_INVALID",
+                    "current branch changed after commit",
+                ),
+                EffectState.PRESENT,
             )
-        if _write_tree(state.root, deadline) != tree_sha:
-            raise _fail(
-                ContractErrorCode.INTERNAL_ERROR,
-                "POST_COMMIT_STATE_INVALID",
-                "index tree no longer equals committed tree",
+        try:
+            current_tree_after = _write_tree(state.root, deadline)
+        except CapabilityFailure as exc:
+            raise _reconcile_failure(exc, EffectState.PRESENT) from exc
+        if current_tree_after != tree_sha:
+            raise _reconcile_failure(
+                _fail(
+                    ContractErrorCode.INTERNAL_ERROR,
+                    "POST_COMMIT_STATE_INVALID",
+                    "index tree no longer equals committed tree",
+                ),
+                EffectState.PRESENT,
             )
-        _require_clean_worktree(state.root, deadline)
-        staged_after = diff_repository(str(state.root), "staged")
+        try:
+            _require_clean_worktree(state.root, deadline)
+            staged_after = diff_repository(str(state.root), "staged")
+        except CapabilityFailure as exc:
+            raise _reconcile_failure(exc, EffectState.PRESENT) from exc
         if staged_after.full_diff_bytes != 0:
-            raise _fail(
-                ContractErrorCode.INTERNAL_ERROR,
-                "POST_COMMIT_STATE_INVALID",
-                "staged changes remain after commit",
+            raise _reconcile_failure(
+                _fail(
+                    ContractErrorCode.INTERNAL_ERROR,
+                    "POST_COMMIT_STATE_INVALID",
+                    "staged changes remain after commit",
+                ),
+                EffectState.PRESENT,
             )
 
-        commit_object = _run_git(
-            state.root,
-            ["cat-file", "commit", commit_sha],
-            deadline=deadline,
-            stdout_limit=MAX_METADATA_BYTES,
-        )
+        try:
+            commit_object = _run_git(
+                state.root,
+                ["cat-file", "commit", commit_sha],
+                deadline=deadline,
+                stdout_limit=MAX_METADATA_BYTES,
+            )
+        except CapabilityFailure as exc:
+            raise _reconcile_failure(exc, EffectState.PRESENT) from exc
         if commit_object.returncode != 0:
-            raise _fail(
-                ContractErrorCode.INTERNAL_ERROR,
-                "POST_COMMIT_STATE_INVALID",
-                "committed object could not be re-read",
+            raise _reconcile_failure(
+                _fail(
+                    ContractErrorCode.INTERNAL_ERROR,
+                    "POST_COMMIT_STATE_INVALID",
+                    "committed object could not be re-read",
+                ),
+                EffectState.PRESENT,
             )
         receipt = make_receipt_v1(
             kind="repo-commit",

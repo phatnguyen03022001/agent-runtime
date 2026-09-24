@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 
 from .contracts import RepoPublishResult, TypedToolErrorCode
+from .errors import annotate_failure
 from .repo_fast_forward import (
     CALL_DEADLINE_SECONDS,
     _BRANCH_MAX_CHARS,
@@ -18,7 +19,17 @@ from .repo_fast_forward import (
     _validate_sha,
     _workspace_root,
 )
-from .tool_contract import Authority, MutationAuthority, NetworkAuthority, ToolAnnotations, ToolClass, ToolContract
+from .tool_contract import (
+    Authority,
+    ContractErrorCode,
+    EffectState,
+    MutationAuthority,
+    NetworkAuthority,
+    SafeNextAction,
+    ToolAnnotations,
+    ToolClass,
+    ToolContract,
+)
 
 _POST_PUSH_RESERVE_SECONDS = 5.0
 
@@ -371,23 +382,53 @@ def _publish_repository(
             deadline_seconds=CALL_DEADLINE_SECONDS,
         )
     if remote_after != expected_remote_head:
-        raise RepoPublishFailure(
+        failure = RepoPublishFailure(
             "REMOTE_HEAD_MISMATCH",
             "fixed origin branch changed to an unexpected commit during publication",
+        )
+        raise annotate_failure(
+            failure,
+            code=ContractErrorCode.PRECONDITION_FAILED,
+            reason_code="REMOTE_HEAD_MISMATCH",
+            message=failure.message,
+            retryable=False,
+            effect_state=EffectState.UNKNOWN,
+            reconciliation_required=True,
+            safe_next_action=SafeNextAction.RECONCILE,
         )
     if push_error is not None or (
         push_result is not None
         and (push_result.returncode != 0 or push_result.output_truncated)
     ):
-        raise RepoPublishFailure(
+        failure = RepoPublishFailure(
             "PUSH_FAILED",
             "fixed-origin publication failed and the remote head remained unchanged",
             retryable=True,
         )
-    raise RepoPublishFailure(
+        raise annotate_failure(
+            failure,
+            code=ContractErrorCode.UNAVAILABLE,
+            reason_code="PUSH_FAILED",
+            message=failure.message,
+            retryable=True,
+            effect_state=EffectState.ABSENT,
+            reconciliation_required=False,
+            safe_next_action=SafeNextAction.RETRY,
+        )
+    failure = RepoPublishFailure(
         "PUBLICATION_AMBIGUOUS",
         "push reported success but remote publication was not proven; re-observe before retry",
         retryable=True,
+    )
+    raise annotate_failure(
+        failure,
+        code=ContractErrorCode.UNAVAILABLE,
+        reason_code="PUBLICATION_AMBIGUOUS",
+        message=failure.message,
+        retryable=False,
+        effect_state=EffectState.UNKNOWN,
+        reconciliation_required=True,
+        safe_next_action=SafeNextAction.RECONCILE,
     )
 
 
