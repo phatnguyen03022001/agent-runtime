@@ -1,0 +1,261 @@
+protocol_version: 3
+
+task_id: TASK-0150
+task_revision: 1
+state: APPROVED
+title: "Capability / Capacity Surface Convergence"
+
+origin:
+  type: explicit_operator_authority
+  task_id: TASK-0150
+  gap_id: "GAP-09 + GAP-10 + GAP-11"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+  canonical_branch: main
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+architect_analysis_skills:
+  - architect
+  - optimization
+  - reliability
+  - reuse-first
+  - verification
+
+execution_skills:
+  required:
+    - executor
+    - verification
+  recommended:
+    - optimization
+    - reliability
+    - reuse-first
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  preferred_transport: AGENT_RUNTIME
+
+authority_sources:
+  - source: "Accepted 13-gap research roadmap: TASK-0150 — Capability / Capacity Surface Convergence"
+    role: "operator-approved GAP-09/GAP-10/GAP-11 semantics: useful point-in-time capacity, summary/filter capability discovery, stable non-advertisement of unavailable screen_capture"
+    precedence: 1
+  - source: ".agent/tasks/TASK-0149/review.yaml at caf409446397e968179f8e3adc2191e065d56a48"
+    role: "accepted predecessor and final pre-convergence source inventory: Runtime 0.3.0, Kernel 2, twenty-one known/source-public capabilities including screen_capture"
+    precedence: 2
+  - source: "Current capacity.py, session.py, capability_registry.py, contracts.py, server.py and doctor.py at exact execution base"
+    role: "existing admission counters, session manager, registry metadata, MCP registration and diagnostic ownership to converge without a new scheduler/service"
+    precedence: 3
+  - source: ".agent/tasks/TASK-0148/review.yaml follow-up INSTALLED_DOCTOR_SELF_CONTAINMENT"
+    role: "must remain open for TASK-0151 before Cutover B; TASK-0150 must not package-fix or erase it"
+    precedence: 4
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing capacity/session/capability-registry composition boundaries"
+  rationale: "All owned gaps are surface convergence. Reuse HeavyExecutionAdmission, TerminalSessionManager and the existing registry. A small lock-safe active-session observation helper is allowed; no scheduler, reservation service, dynamic tool registry, daemon or capability database is justified."
+
+objective: "Close GAP-09, GAP-10 and GAP-11 by making capacity observation operationally truthful, making capability discovery context-efficient and filterable, and converging the stable advertised MCP surface so unavailable screen_capture remains discoverable as a known descriptor but no longer consumes tools/list or normal tool-choice context."
+
+scope:
+  required_changes:
+    - "Evolve capacity_observer result schema from 1 to 2; request schema remains 1. Preserve the accepted v1 host-signal fields capacity_parallelism_ceiling, reason_codes and signals, and add point-in-time operational fields active_heavy, available_heavy, active_sessions, recommended_additional_parallelism, observed_at and reservation_guaranteed=false."
+    - "active_heavy is the exact lock-protected HeavyExecutionAdmission active count observed for the Runtime process. available_heavy is max(0, hard_execution_limit - active_heavy) using the same effective admission ceiling that actually gates heavy process roots."
+    - "Expose a minimal lock-protected active terminal-session count from the existing TerminalSessionManager for sessions whose status is starting or running. Do not create a second session registry. Avoid a capacity.py -> session.py circular import; compose the observations at server/session boundary or an equivalently small callback/helper boundary."
+    - "recommended_additional_parallelism is explicitly additional, never total. Compute it conservatively from the current v1 capacity_parallelism_ceiling and actual heavy admission state: max(0, min(available_heavy, capacity_parallelism_ceiling - active_heavy)). It is advisory only and may become stale immediately under concurrency."
+    - "observed_at is a bounded UTC RFC3339 timestamp captured for this point-in-time observation. reservation_guaranteed is literal false. No returned capacity field creates or reserves admission capacity."
+    - "Add deterministic concurrent acquire/release tests proving active_heavy/available_heavy/recommended_additional_parallelism remain non-negative, recommendation never exceeds available_heavy, counts return to baseline after release, active_sessions tracks only starting/running manager state, and the observer never promises a reservation."
+    - "Evolve runtime_capabilities request/result from 1/1 to 2/2. Request supports detail='summary'|'full' with summary as the default and an optional bounded exact names filter for full descriptor retrieval. Unknown names, duplicate names, an empty names list, or names supplied with detail='summary' fail closed as INVALID_ARGUMENT; omission of names with detail='full' returns all known capability descriptors in registry order."
+    - "runtime_capabilities detail='summary' returns no full descriptor array. It returns schema_version=2, detail='summary', runtime_version, runtime_revision, tool_contract_kernel_version, advertised_tool_count, capability_count, available_count, unavailable_count, and execution={heavy_ceiling, active_session_ceiling, terminal_poll_max_wait_ms, running_hard_wall_ms}."
+    - "runtime_revision must be truthful and must not be synthesized from a mutable branch/ref or network call. In a source/development process where no immutable activated/package revision is available through existing process/package identity, null is allowed. TASK-0151 final activation must bind the installed summary to its exact activation revision without changing this public v2 shape."
+    - "Summary execution limits are process/config identity only: heavy_ceiling is the effective hard_execution_limit, active_session_ceiling is the configured TerminalSessionManager limit, terminal_poll_max_wait_ms is the accepted MAX_WAIT_MS bound, and running_hard_wall_ms is the accepted terminal running hard wall. runtime_capabilities must not call capacity_observer, inspect repositories, access network, invoke screen capture, or perform readiness/permission probes."
+    - "Canonical compact JSON serialization of the unfiltered summary must remain <=1024 UTF-8 bytes. The accepted research target of roughly 500-700 bytes is advisory, not an exact contract."
+    - "runtime_capabilities detail='full' returns the same top-level identity/count/execution summary plus a capabilities array of exact capability descriptors. names filters only that descriptor array, preserves registry order regardless of caller order, and does not change the global top-level inventory counts."
+    - "Evolve CapabilityDescriptor schema from 1 to 2 by adding advertised:boolean. Known capability count remains exactly 21 after TASK-0150. Every normal supported available capability is advertised=true. screen_capture remains supported=true, available=false, unavailable_reason_code='VISUAL_PERCEPTION_BLOCKED', retains its descriptor and existing source implementation, and becomes advertised=false."
+    - "The stable MCP tools/list advertised surface after TASK-0150 is exactly 20 tools: current twenty-one known capabilities minus screen_capture. screen_capture must not be registered with the MCP tool manager and direct MCP calls by name must not reach native capture. Do not delete its implementation, descriptor, packaging helper, governance reason or full-discovery visibility."
+    - "Advertisement is versioned/static for this source line. Do not hide or re-advertise tools dynamically based on transient permission, host readiness or runtime state; do not emit list-changed flapping behavior. Re-advertisement of screen_capture requires a future separately authorized source/activation change."
+    - "PUBLIC_TOOL_NAMES, MCP registration, effect-boundary inventory, timing/tool metadata, schema export, client conformance, doctor and docs must distinguish known capabilities from advertised tools. Doctor must prove capability_count=21, advertised_tool_count=20 and the hidden screen_capture descriptor exactness without expecting screen_capture in tools/list."
+    - "Update server instructions/readme/docs so normal public inventory names exactly the twenty advertised tools while full runtime_capabilities documentation explains hidden known capability discovery. Remove wording that says screen_capture is exposed as an MCP tool."
+    - "Preserve source Runtime version 0.3.0 and ToolContract Kernel 2. Do not package/install/restart/reload/cutover Runtime in TASK-0150. The installed Runtime remains the accepted nineteen-tool Runtime 0.3.0 line until TASK-0151 / Cutover B."
+    - "Preserve TASK-0148 follow-up INSTALLED_DOCTOR_SELF_CONTAINMENT unchanged for TASK-0151. Do not fix installed packaging/self-containment in TASK-0150."
+    - "After focused PASS, commit one coherent implementation candidate, run canonical ./verify on that exact clean candidate, fresh-reconcile remote main, publish exact verified candidate non-force, publish report-r1.yaml as sole report-only child, and stop NEEDS_REVIEW."
+
+  allowed_existing_files_or_components:
+    - "agent_runtime/capacity.py"
+    - "agent_runtime/session.py only for minimal lock-safe active-session observation"
+    - "agent_runtime/contracts.py"
+    - "agent_runtime/capability_registry.py"
+    - "agent_runtime/server.py"
+    - "agent_runtime/doctor.py"
+    - "agent_runtime/timing.py only for advertised-tool metadata convergence if required"
+    - "agent_runtime/screen_capture.py read-only semantics should remain unchanged; edit only if mechanically required to keep hidden descriptor/source implementation exact without MCP registration"
+    - "directly affected capacity/capability/doctor/screen-capture/MCP/schema/client-conformance tests"
+    - "README.md and directly affected capability/operations docs"
+    - ".agent/tasks/TASK-0150/report-r1.yaml"
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0150/report-r1.yaml"
+  unlisted_new_files:
+    allowed: true
+    max: 1
+    within:
+      - "tests"
+    purpose: "At most one focused convergence test file if existing test owners cannot express the combined advertisement/discovery proof clearly."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+invariants:
+  - "TASK-0144 structured failure/effect semantics remain authoritative."
+  - "TASK-0145/0146 execution lifecycle and poll behavior remain unchanged."
+  - "TASK-0147 continuation contracts, TASK-0148 filesystem contracts and TASK-0149 repo_remote_observer remain unchanged."
+  - "capacity_observer is observation only; no scheduler, queue, token reservation, lease reservation or admission mutation is introduced."
+  - "HeavyExecutionAdmission remains the single process-local heavy admission owner."
+  - "Known capability inventory remains exactly 21; advertised MCP tools become exactly 20; screen_capture is the sole known-but-unadvertised capability."
+  - "screen_capture remains supported=true, available=false, advertised=false and VISUAL_PERCEPTION_BLOCKED; no Screen Recording/TCC request or native capture becomes reachable through MCP."
+  - "runtime_capabilities is deterministic for a fixed process/config/registry identity and performs no network, repository, capture, host-capacity or permission probe."
+  - "Source Runtime remains 0.3.0 and ToolContract Kernel remains 2."
+  - "Installed Runtime remains 0.3.0 at activation revision 89111218720ddb2f12961f9375549733edd23ada on its pre-Cutover-B live surface; no TASK-0150 activation."
+  - "No GAP-12 or GAP-13 implementation."
+  - "TASK-0151 is not authored or executed by Executor."
+  - "INSTALLED_DOCTOR_SELF_CONTAINMENT remains an open TASK-0151 prerequisite."
+
+forbidden_changes:
+  - "Any new public capability, deletion of a known capability descriptor, or advertised-tool change other than screen_capture true->false."
+  - "Dynamic tools/list changes based on permission/readiness/availability."
+  - "Any capacity reservation/scheduler/service/background worker or persistent capacity state."
+  - "Any runtime_capabilities host-capacity, repository, network, TCC, screen-capture or readiness probe."
+  - "Any Runtime version or Kernel bump, dependency/package/install/cutover/runtime.env/ServiceManagement/TCC/System Settings/permission mutation."
+  - "Any installed-doctor packaging fix in TASK-0150."
+  - "Any later-roadmap implementation, branch creation, PR, force push, amend, squash, tag or release."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: revised_contract_required
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+assurance_alignment:
+  standards_revision: "0da0d5864fe5e458af564f3c6ba9959cefd99639"
+  standards_requirement_ids:
+    - COR-1.2
+    - COR-1.3
+    - COR-2.1
+    - COR-3.1
+    - OBS-2.2
+    - OBS-2.3
+    - EFF-1.1
+    - EFF-2.2
+    - EFF-2.3
+    - CMP-1.1
+    - CMP-2.3
+    - CMP-3.1
+  rule: "Use as evidence obligations for truthful observation, context efficiency, stable advertisement, backward-safe additive capacity semantics and exact capability compatibility; no maturity score."
+  documents_revision: "c34d34d1842975fa895fc0e3d5273e5826b32205"
+  document_domains:
+    BEHAVIOR: "capacity point-in-time semantics, summary/full discovery and stable hidden capability behavior"
+    ARCHITECTURE: "single admission owner, session observation composition and known-vs-advertised registry split"
+    INTERFACES: "capacity_observer result v2, runtime_capabilities request/result v2 and CapabilityDescriptor v2"
+    QUALITY: "concurrency counters, summary byte budget, filter exactness, stable tools/list and no-probe/no-reservation proofs"
+    DELIVERY: "source/live split retained until TASK-0151 Cutover B"
+  documents_rule: "Update only directly affected target docs; no new documentation subsystem."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "capacity_observer v2 truthfully combines host-advisory capacity with current Runtime operational state without becoming an admission reservation."
+    evidence_required: "Schema/result tests prove preserved v1 fields plus active_heavy, available_heavy, active_sessions, recommended_additional_parallelism, observed_at and reservation_guaranteed=false; concurrent acquire/release/session tests prove counts/formula invariants and no reservation side effect."
+  - id: AC-2
+    requirement: "runtime_capabilities v2 default summary is compact, deterministic and sufficient for ordinary discovery."
+    evidence_required: "Default call returns summary schema with exact identity/count/execution fields, no capabilities array, <=1024 canonical UTF-8 JSON bytes, no forbidden probes, and request/result schema 2/2."
+  - id: AC-3
+    requirement: "Full/filtered capability discovery remains exact while preserving global inventory truth."
+    evidence_required: "detail=full returns exact CapabilityDescriptor v2 records; names filter returns only requested known descriptors in registry order; invalid/duplicate/empty/summary+names requests fail before body; global counts remain 21 known / 20 advertised / 20 available / 1 unavailable."
+  - id: AC-4
+    requirement: "screen_capture remains known but is stably absent from the advertised MCP surface."
+    evidence_required: "Full discovery contains screen_capture with supported=true, available=false, advertised=false, VISUAL_PERCEPTION_BLOCKED; repeated tools/list calls contain exactly 20 stable tools and never screen_capture; MCP screen_capture invocation cannot reach capture implementation/native helper; no dynamic list changes."
+  - id: AC-5
+    requirement: "Exact source candidate is canonically verified and published with no live cutover."
+    evidence_required: "Focused PASS, git diff --check, canonical ./verify exit_code=0 on exact candidate, source Runtime 0.3.0/Kernel 2/21 known capabilities/20 advertised tools, non-force publication reconciliation, installed Runtime unchanged, report-only child and NEEDS_REVIEW."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Fresh-resolve GitHub/local main. Require exact task-authoring base, branches={main}, open PRs=0, ahead/behind=0/0, clean worktree/index, TASK-0150 revision 1, accepted TASK-0149 review and current-phase capabilities."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Fresh-inspect capacity/session/registry/contracts/server/doctor. Require source Runtime 0.3.0, Kernel 2, known/advertised source surface currently 21 including screen_capture, capacity_observer result v1 and runtime_capabilities request/result v1 before implementation. Stop BLOCKED if those predicates changed."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Implement capacity result v2, runtime_capabilities v2 summary/full/filter, CapabilityDescriptor v2 advertised flag and static twenty-tool advertisement. Run focused concurrency/schema/byte-budget/filter/doctor/MCP/client-conformance/security regressions covering AC-1 through AC-4."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Commit one coherent implementation candidate after focused PASS. Require clean candidate, git diff --check, exact candidate SHA/tree, no package/later-gap surface and preserved INSTALLED_DOCTOR_SELF_CONTAINMENT follow-up."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Run canonical ./verify on exact clean candidate through a recoverable carrier. Require exit_code=0 and canonical modules/tests/postconditions PASS. Any source/test write afterward creates a new candidate requiring full authoritative re-verification."
+      required: true
+    - id: CHECK-6
+      command_or_check: "Fresh-resolve remote main after final verification; require it still equals task execution base, publish exact verified candidate non-force, and reconcile ambiguous publication before retry."
+      required: true
+    - id: CHECK-7
+      command_or_check: "Create .agent/tasks/TASK-0150/report-r1.yaml as sole report-only child, validate/publish non-force, fresh-reconcile final main/local clean state, read-only confirm installed Runtime remains unchanged, and stop NEEDS_REVIEW."
+      required: true
+
+  authoritative_verification:
+    required: true
+    mechanism: "Focused capacity concurrency + capability summary/filter/advertisement/schema regressions plus canonical ./verify on exact source candidate"
+    expected_signal: "capacity_observer 1/2 truthful operational fields with no reservation; runtime_capabilities 2/2 compact summary and exact full filter; 21 known capabilities, 20 advertised tools, hidden screen_capture exact; canonical verify PASS."
+
+report_requirements:
+  path: .agent/tasks/TASK-0150/report-r1.yaml
+  record:
+    - "state=REPORTED and result=NEEDS_REVIEW"
+    - "exact task/base/candidate/tree/report lineage"
+    - "capacity_observer request/result schema 1/2 and exact operational field/formula proof"
+    - "concurrent active_heavy/available_heavy/active_sessions/recommended_additional_parallelism and reservation_guaranteed=false proof"
+    - "runtime_capabilities request/result 2/2 default summary fields and serialized byte-size proof"
+    - "runtime_revision source/development truth semantics and no mutable-ref/network synthesis"
+    - "detail=full and names filter exactness plus invalid-filter proof"
+    - "CapabilityDescriptor v2 advertised field and global counts 21 known/20 advertised/20 available/1 unavailable"
+    - "screen_capture retained full descriptor, advertised=false and absent/stable across repeated tools/list calls"
+    - "doctor/schema/MCP/client-conformance convergence and no forbidden probe/reservation"
+    - "focused and canonical exact-candidate verification"
+    - "installed Runtime unchanged with no TASK-0150 package/install/restart/reload/cutover"
+    - "INSTALLED_DOCTOR_SELF_CONTAINMENT remains reserved for TASK-0151"
+    - "candidate publication and sole report-only child reconciliation"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
