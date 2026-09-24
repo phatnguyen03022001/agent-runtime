@@ -1,17 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0145
-task_revision: 1
+task_revision: 2
 state: APPROVED
-title: "Unified Recoverable Execution Core"
+title: "Unified Recoverable Execution Core — report contract correction"
 
 origin:
-  type: explicit_operator_authority
+  type: architect_revision_after_review
   task_id: TASK-0145
   gap_id: GAP-01
-  predecessor: TASK-0144
-  gaps: [GAP-01, GAP-02]
-  roadmap_authority: NONE
+  review_commit: "dc3b4048021b20ecf8481a11933d99bb1cd7ac74"
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -25,7 +23,7 @@ target:
 
 execution_base:
   mode: handoff_snapshot
-  capture: after_task_authoring_commit
+  capture: after_task_revision_2_authoring_commit
   require_exact_match: true
 
 skill_library:
@@ -33,163 +31,115 @@ skill_library:
   revision: "22fc4d881d5a0ee71b3af2b3acadb4ce8258bbc1"
 
 architect_analysis_skills: [architect]
-
 execution_skills:
   required: [executor, verification]
-  recommended: [reliability]
-
+  recommended: []
 external_skills:
   architect_analysis: []
   execution_required: []
   execution_recommended: []
-
 execution_surface:
   id: CODEX_LOCAL
   controller: CODEX
   preferred_transport: NATIVE
 
 authority_sources:
-  - source: "Current operator TASK-0145 through TASK-0151 handoff, 2026-09-24"
+  - source: "Operator TASK-0145 through TASK-0151 handoff, 2026-09-24"
     role: "operator objective and sequence"
     precedence: 1
-  - source: ".agent/tasks/TASK-0144/review-r1.yaml at e23c1640be493241c6cf7a6089bcbd20e3ad2016"
-    role: "accepted predecessor and source/live split"
+  - source: ".agent/tasks/TASK-0145/review.yaml at dc3b4048021b20ecf8481a11933d99bb1cd7ac74"
+    role: "exact r1 revision requirement"
     precedence: 2
-  - source: "Pasted 13-gap research report"
-    role: "advisory design evidence only"
+  - source: ".agent/tasks/TASK-0145/task.yaml revision 1 at 15da7e78625f3135e61e0982026c6e6a4ac383f3"
+    role: "original implementation authority and acceptance predicates"
     precedence: 3
 
 structure_authority:
-  status: RESOLVED
-  source: "Operator handoff and accepted TASK-0144 review"
-  rationale: "GAP-01 and GAP-02 are one coherent outcome: one process lifecycle with PTY and pipe I/O. Splitting them would temporarily create a third lifecycle."
+  status: NOT_APPLICABLE
+  source: "TASK-0145 revision 1 and review-r1"
+  rationale: "This revision only corrects Executor report serialization; no product or source structure change is authorized."
 
-live_runtime_authority:
-  installed_version: "0.2.2"
-  installed_revision: "90a87fca8755ddc673e749bb5bf3e4489045a9b8"
-  installed_kernel: 1
-  source_kernel: 2
-  rule: "Source development only. No build, install, restart, plugin reload, or cutover."
-
-objective: "Close GAP-01 and GAP-02 by making keyed PTY sessions, keyed pipe sessions, and terminal_exec use one recoverable in-process execution lifecycle, while preserving accepted process safety and installed Runtime 0.2.2 unchanged."
+objective: "Publish a contract-conforming Executor-owned report revision 2 for the unchanged TASK-0145 implementation candidate, preserving exact r1 evidence and enabling renewed Architect review."
 
 scope:
   required_changes:
-    - "Converge launch, admission, process ownership, I/O readers, hard wall, timeout, termination, reaping, retention, timing, and lease release in one internal lifecycle core with PTY and pipe backends. Remove the independent terminal_exec process registry/engine."
-    - "terminal_start request v3 accepts mode=pty|pipe, default pty. Existing PTY calls and merged-output behavior remain compatible. Pipe mode requires caller-provided start_identity, closes stdin, and keeps stdout and stderr separately identifiable."
-    - "terminal_exec request v2 requires caller-provided start_identity and remains a bounded synchronous facade over the same pipe core. Its result v2 keeps existing cwd/argv/exit_code/timed_out/stdout/stderr/truncation meanings and adds start_identity plus session_id."
-    - "Use one identity namespace. Bind start_identity before Popen to an exact validated specification including canonical cwd, argv, mode, entry surface, and normalized timeout when applicable. Same identity/specification reuses one operation; any mismatch fails before a new effect."
-    - "A duplicate terminal_exec call while the first operation is running joins the original bounded wait and never resets its deadline or launches again. Callers may observe/reconcile via terminal_poll(start_identity). After terminal completion, a same-spec call returns the retained original result."
-    - "terminal_start and terminal_poll result v3 identify mode. For pipe, output is an empty compatibility field and output_chunks contains ordered {stream: stdout|stderr, text: string} entries under the existing single raw-byte cursor. For PTY, output retains merged PTY text and output_chunks is omitted. Existing next_cursor/cursor_expired/dropped_output_bytes meanings and 16 KiB poll bound remain."
-    - "terminal_control permits interrupt/terminate for running pipe sessions but rejects pipe write before effect; terminal_resize remains PTY-only. Existing PTY controls remain unchanged."
-    - "Represent pre-effect capacity/validation/start failure as absent; post-Popen ambiguous failure as unknown with reconciliation_required=true, using TASK-0144 typed errors and the keyed pollable lifecycle state. A lost response never becomes retry permission merely because the caller did not see it."
-    - "Keep process-local key retention bounded by the existing completed-session age/count rules. Document that an unknown key after eviction or Runtime restart cannot prove absence and requires external consequence reconciliation before any repeated mutation."
-    - "Update source contract/schema projections, focused tests, and source-facing documentation for the new contracts. Keep installed-product instructions truthful until Cutover A."
-    - "Commit a coherent candidate after focused PASS, run canonical ./verify on the exact candidate through a recoverable carrier, publish non-force after fresh remote reconciliation, then publish report-r1 as a report-only child and stop NEEDS_REVIEW."
+    - "Create .agent/tasks/TASK-0145/report-r2.yaml from the truthful r1 evidence using the pinned Foundation Implementation Report contract and canonical report shape. Set state=REPORTED and result=NEEDS_REVIEW."
+    - "Populate canonical task_source, execution, skill_library, capability_preflight, authoritative_verification, pushed, acceptance_evidence, and executor_checks fields; preserve exact original code candidate SHA/tree, verifier identity/results, schema inventory, source/live split, and any material intermediate failures."
+    - "Use this revision's task-authoring commit as authorized_base_head and final_execution_head if no further implementation commit occurs; identify the original verified implementation candidate separately and prove all commits since it changed only .agent governance artifacts. Do not imply the verifier ran on the metadata-only task-authoring commit."
+    - "Validate report-r2 with the pinned Foundation validator, commit it as a report-only child of this revision's task-authoring base, publish non-force after fresh remote reconciliation, and stop NEEDS_REVIEW."
   allowed_existing_files_or_components:
-    - "agent_runtime execution/session/server/contracts/capability/schema/timing components and a small internal transport module only if needed"
-    - "directly affected focused tests and contract/schema projections"
-    - "README.md, docs/AGENT.md, docs/OPERATIONS.md, docs/RECOVERY.md only where source/live truth or recovery procedure needs correction"
-    - ".agent/tasks/TASK-0145 task/report artifacts"
+    - ".agent/tasks/TASK-0145/report-r2.yaml only"
 
 invariants:
-  - "No new public tool; advertised inventory remains 19 and ToolContract Kernel remains 2 in source."
-  - "Literal argv with shell=false, workspace cwd check, protected-command guard, minimal child environment, and host-authority limits remain intact on both backends."
-  - "A caller-known key is reserved before process dispatch. No duplicate process effect for the same retained key/specification, including concurrent callers and lost ACK."
-  - "One process group has one owner, one terminalization, one attributable process-end event, and exactly one admission-lease release across exit, timeout, control, start failure, shutdown, and race paths."
-  - "A leader exit does not leave an uncontrolled descendant group or pipe reader; cleanup and output draining are bounded and truthful."
-  - "Existing configured session ceiling 1..6, running hard wall 3600s, completed retention 3600s/16 results, retained session output 64 KiB, poll output 16 KiB, terminal_exec timeout 1..3600s with default 300s, and 30s terminal_poll max wait remain unchanged."
-  - "terminal_exec keeps separate bounded stdout/stderr and their truncation flags. PTY output remains merged and may have terminal-specific echo/newline behavior."
-  - "No claim of recovery across Runtime restart or after key eviction. No blind mutation retry after an unknown outcome."
-  - "Public success and failure contracts outside the terminal tool family remain unchanged."
-  - "No source mutation concurrently with authoritative long verification."
+  - "No implementation source, test, documentation, installed product, schema, or live Runtime changes."
+  - "Original verified implementation candidate remains 2851b52ae72da8b109820d98405887b6a1146b37 with tree 1b94c7d85a64c4ba7e77e22c9ced10774e178900."
+  - "Original canonical ./verify PASS may be reused only after exact immutable verifier identity and source-unchanged diff are proven; do not claim a fresh verifier run."
+  - "Report-r1 and review-r1 remain immutable historical evidence."
+  - "Installed Runtime stays 0.2.2/Kernel 1; source remains Kernel 2; no cutover."
 
 forbidden_changes:
-  - "GAP-03 and GAP-05 through GAP-13 implementation"
-  - "terminal_poll output=none|incremental or caller max_output_bytes (TASK-0146)"
-  - "new daemon, database, scheduler, persistent process registry, MCP Tasks integration, or cross-restart ownership"
-  - "live Runtime package/install/service/plugin/configuration or macOS permission changes"
-  - "new branch, PR, force push, amend, squash, or blind publication retry"
+  - "Any code or test mutation, build, install, restart, plugin reload, cutover, branch creation, PR, force push, amend, squash, or blind retry."
+  - "Self-acceptance or Architect review edits."
 
 gap_policy:
-  local_auto_fix: true
+  local_auto_fix: false
   scope_expansion: forbidden
   architecture_change: forbidden
-  spec_change: revised_contract_required
-  dependency_change: revised_contract_required
-  public_contract_change: revised_contract_required
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
   blocking_gap_behavior: BLOCKED
 
 assurance_alignment:
   standards_revision: "22fc4d881d5a0ee71b3af2b3acadb4ce8258bbc1"
   standards_requirement_ids: [COR-1.2, COR-1.3, COR-2.1, COR-3.1, REL-2.2, REL-2.3, REL-3.2, CMP-1.1, CMP-2.3]
-  rule: "These identify applicable proof obligations; this task makes no maturity-level claim. Reproducible tests must prove runtime behavior on the exact candidate."
   documents_revision: "22fc4d881d5a0ee71b3af2b3acadb4ce8258bbc1"
   document_domains:
-    BEHAVIOR: "keyed lifecycle, state transitions, timeout, failure, and retry semantics"
-    ARCHITECTURE: "one core and two I/O backends"
-    INTERFACES: "terminal schema and mode/stream contracts"
-    QUALITY: "bounds, races, containment, and evidence"
-    DELIVERY: "source/live split and deferred Cutover A"
-  documents_rule: "Use the existing target documentation layout; do not imply full Agent Documents V1 catalog adoption or claim DOCS_READY."
+    BEHAVIOR: "preserve keyed lifecycle evidence"
+    ARCHITECTURE: "preserve one-core evidence"
+    INTERFACES: "preserve exact terminal schema evidence"
+    QUALITY: "preserve verification and fault-injection evidence"
+    DELIVERY: "correct report contract while retaining source/live split"
+  documents_rule: "Do not claim full Agent Documents V1 adoption or DOCS_READY."
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "One internal lifecycle owns PTY and pipe execution; the legacy independent terminal_exec process engine is gone."
-    evidence_required: "Source inspection plus focused process-ownership tests across both backends."
+    requirement: "Report revision 2 conforms to pinned canonical Implementation Report structure and passes pinned validator."
+    evidence_required: "Exact report bytes and validator PASS."
   - id: AC-2
-    requirement: "Keyed pipe start and keyed terminal_exec never double-dispatch within the retained Runtime incarnation; conflicts fail before effect."
-    evidence_required: "Deterministic concurrent same/different-spec, lost-ACK, fast-completion, and reserve-before-Popen tests."
+    requirement: "Report truthfully indexes the original verified implementation candidate and all material TASK-0145 execution evidence without changing source."
+    evidence_required: "Exact original candidate SHA/tree, original verifier signal, Git diff of source from candidate through report base, and r1 evidence comparison."
   - id: AC-3
-    requirement: "The public terminal contracts evolve exactly as authorized, retain PTY compatibility, and preserve separate pipe streams and terminal_exec stdout/stderr semantics."
-    evidence_required: "Schema/export/MCP conformance plus byte-bound, stream, UTF-8, cursor-expiry, and PTY regression tests."
-  - id: AC-4
-    requirement: "Timeout, cancellation, descendant cleanup, shutdown, hard wall, completion retention, admission limits, process-end timing, and lease release remain bounded and truthful under races."
-    evidence_required: "Barrier/fake-clock/fake-subprocess tests and representative real subprocess/process-group tests; no multi-second sleep as the sole oracle."
-  - id: AC-5
-    requirement: "Pre-effect vs post-effect/unknown failures follow TASK-0144 effect semantics and cannot authorize blind retry; key eviction/restart limitations are explicit."
-    evidence_required: "Fault-injection tests at dispatch/reader/cleanup boundaries plus source-facing recovery documentation."
-  - id: AC-6
-    requirement: "Exact source candidate passes focused tests and canonical ./verify; non-force publication and report-only child are remotely proven. Installed Runtime remains unchanged."
-    evidence_required: "Candidate SHA/tree, focused results, structured full verifier completion, fresh remote identity, report, and source/live provenance."
+    requirement: "Report-only child is published non-force and installed Runtime remains unchanged."
+    evidence_required: "Exact parent/diff, fresh remote SHA, and source/live provenance."
 
 verification:
   executor_checks:
     - id: CHECK-1
-      command_or_check: "Fresh-resolve GitHub main and accepted TASK-0144 review; require the exact task-authoring base and clean/safely synchronized local main before mutation."
+      command_or_check: "Fresh-resolve remote main, r1 report/review and this revision's exact task-authoring base; require clean local main before mutation."
       required: true
     - id: CHECK-2
-      command_or_check: "Confirm task revision 1, execution-ready authority, applicable standards/document domains, and current-phase capability preflight."
+      command_or_check: "Prove original verifier PASS and no implementation-source change since candidate 2851b52; preserve old failures truthfully."
       required: true
     - id: CHECK-3
-      command_or_check: "Run focused lifecycle/key/pipe/PTY/schema/error tests on the coherent candidate; commit it immediately after PASS."
+      command_or_check: "Run pinned Foundation report validator on report-r2; require PASS."
       required: true
     - id: CHECK-4
-      command_or_check: "Run ./verify on that exact candidate using a recoverable carrier with structured exit_code=0 and verifier postconditions PASS; no concurrent source writes."
-      required: true
-    - id: CHECK-5
-      command_or_check: "Fresh-resolve remote main, publish the exact verified candidate non-force, and reconcile any ambiguous publication before retry."
-      required: true
-    - id: CHECK-6
-      command_or_check: "Publish .agent/tasks/TASK-0145/report-r1.yaml as a report-only child, fresh-reconcile remote/local main, and stop NEEDS_REVIEW."
+      command_or_check: "Publish exact report-only child non-force and fresh-reconcile remote/local main."
       required: true
   authoritative_verification:
     required: true
-    mechanism: "./verify on the exact implementation candidate through a recoverable local carrier"
-    expected_signal: "Exact candidate, structured terminal completion, exit_code=0, canonical verifier modules/tests/postconditions PASS."
+    mechanism: "reuse immutable ./verify PASS on original exact implementation candidate plus prove zero source diff through revision 2 base"
+    expected_signal: "Original candidate 2851b52 verified 56/56 modules, 714 tests, exit_code 0; no source changes since."
 
 report_requirements:
-  path: .agent/tasks/TASK-0145/report-r1.yaml
+  path: .agent/tasks/TASK-0145/report-r2.yaml
   record:
-    - execution_base
-    - implementation_candidate_and_tree
-    - terminal_schema_versions_and_inventory
-    - key_binding_and_no_duplicate_spawn_evidence
-    - pipe_stream_and_pty_compatibility_evidence
-    - process_group_cleanup_and_lease_release_evidence
-    - focused_tests_and_canonical_verify
-    - publication_identity
-    - live_runtime_unchanged
+    - canonical_report_contract_fields
+    - original_candidate_and_tree
+    - original_verifier_identity_and_results
+    - source_unchanged_proof
+    - source_live_split
 
 git_authority:
   create_branch: false
