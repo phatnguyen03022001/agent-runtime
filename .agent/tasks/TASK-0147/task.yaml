@@ -1,0 +1,246 @@
+protocol_version: 3
+
+task_id: TASK-0147
+task_revision: 1
+state: APPROVED
+title: "Bounded Continuation / Receipt Contract"
+
+origin:
+  type: explicit_operator_authority
+  task_id: TASK-0147
+  gap_id: "GAP-07 + GAP-05-COLLECTION"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+  canonical_branch: main
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+architect_analysis_skills:
+  - architect
+  - reuse-first
+  - reliability
+  - verification
+
+execution_skills:
+  required:
+    - executor
+    - verification
+  recommended:
+    - reliability
+    - reuse-first
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  preferred_transport: AGENT_RUNTIME
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0146/task.yaml authority_sources and accepted 13-gap roadmap"
+    role: "operator-approved sequence placing TASK-0147 after Cutover A and assigning GAP-07 plus collection-side GAP-05"
+    precedence: 1
+  - source: ".agent/tasks/TASK-0146-CUTOVER-A-CLOSURE/review.yaml at ae6beec11f0d27eaa6fbac24747bdc24b5640d77"
+    role: "accepted Cutover A closure; Runtime 0.3.0 activation is complete before TASK-0147 source work"
+    precedence: 2
+  - source: "Current ReceiptV1 and read-only collection implementations at the exact execution base"
+    role: "existing reusable receipt, bounded-output, structured-failure and tool-specific implementation authority"
+    precedence: 3
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing tool_contract ReceiptV1 plus fs_list/fs_search/repo_diff/repo_observer components"
+  rationale: "Continuation is a bounded extension of four existing read-only collection surfaces. Reuse ReceiptV1 and one small stateless cursor codec adjacent to existing tool-contract machinery; no new service, datastore, snapshot subsystem, workflow framework or generic result framework is justified."
+
+objective: "Close GAP-07 and the collection-side remainder of GAP-05 by adding one bounded, stateless, receipt-bound continuation convention to fs_list, fs_search, repo_diff and repo_observer so callers can retrieve truncated results without model-heavy repeated full calls, while remaining truthful under parameter drift and local state mutation and preserving the installed Runtime until a later cutover."
+
+scope:
+  required_changes:
+    - "Extend exactly fs_list, fs_search, repo_diff and repo_observer with the common continuation contract. Initial requests omit both cursor and continuation_receipt. Resume requests provide both; providing only one is INVALID_ARGUMENT."
+    - "The common successful result shape includes truncated, next_cursor and continuation_receipt. next_cursor is null when no resumable page remains. continuation_receipt is a closed ReceiptV1 projection and remains evidence/state binding only, never authorization."
+    - "Use a stateless opaque continuation cursor with one tool-specific/versioned payload, bounded to at most 1024 ASCII characters. The cursor must bind the tool identity, cursor format version, page position, original semantic request parameters, relevant ReceiptV1 digest and expiry. Use deterministic integrity checking sufficient to reject accidental/tampered token bytes, but do not introduce secrets, HMAC keys, credential state or authorization semantics."
+    - "Continuation cursors expire after a bounded 300-second TTL. Expiry, malformed cursor, wrong tool/version, receipt tampering, cursor/receipt mismatch, or semantic parameter mismatch fails closed with existing structured TASK-0144 error/effect semantics and stable reason codes; no English-string parsing."
+    - "Reuse make_receipt_v1 and canonical structured/framing machinery. Add only the smallest shared cursor/continuation helper needed to prevent four divergent encodings. Do not broaden ReceiptV1 into a generic workflow token or change repo_commit receipt authorization semantics."
+    - "fs_list continuation must bind the normalized cwd-relative directory, semantic parameters and complete deterministic sorted directory observation within existing scan bounds. Resume only when the recomputed receipt matches; an invalidating directory change returns STATE_CHANGED. Pages must have no duplicate or missing entries."
+    - "fs_search continuation_consistency is revalidated, not point-in-time snapshot. Resume deterministically revalidates traversed state through the prior boundary and rejects any mutation that invalidates already-issued traversal/results with STATE_CHANGED. Do not silently continue across an invalidated prefix. Do not retain snapshots. A later-state change beyond the validated boundary may be observed only when it does not invalidate prior ordering/results."
+    - "repo_diff must reuse the existing full raw-diff ReceiptV1 as the continuation state identity. Continuation pages expose the bounded patch without duplicate/missing bytes or corrupted valid UTF-8 boundaries; any raw diff/head/scope state change that invalidates the receipt returns STATE_CHANGED. Preserve diff_receipt and repo_commit semantics."
+    - "repo_observer continuation remains local-only with network=NONE and mutation=NONE, binds to a deterministic local observation ReceiptV1 and pages only exact resumable collection state. Existing nested truncation/exactness fields remain truthful. If an existing hard observation bound prevents an exact resumable state identity, do not manufacture a cursor; preserve truthful terminal truncation or existing bounded failure semantics."
+    - "Preserve existing hard scan/state/output limits. Pagination may expose additional pages only through bounded revalidated calls; it must not create unbounded in-memory retention, background work, persistent cursor state, snapshot retention, or a way to bypass existing per-observation safety ceilings."
+    - "Bump source request/result schema versions for fs_list, fs_search, repo_diff and repo_observer from 1/1 to 2/2. Preserve omitted-continuation default behavior for existing callers and preserve all pre-existing result fields. For repo_diff/repo_observer add the common top-level truncated field without deleting or weakening existing patch_truncated/nested truncation truth."
+    - "Update capability registry/schema export/MCP conformance and directly affected source documentation. Source ToolContract Kernel remains 2, public tool inventory remains 19, Runtime source version remains 0.3.0, and no installed Runtime/plugin cutover occurs in this task."
+    - "Add focused deterministic tests for multi-page no-duplicate/no-gap behavior, deterministic pagination, cursor/receipt pairing, semantic parameter mismatch, malformed/tampered/expired cursor, receipt tampering, local file/directory/Git mutation between pages, STATE_CHANGED behavior, fs_search revalidated semantics, UTF-8/page boundaries, cursor/result byte bounds, schema/export compatibility, default first-page behavior and absence of unbounded snapshot retention."
+    - "After focused PASS, commit one coherent source candidate, run canonical ./verify on that exact clean candidate, fresh-reconcile remote main, publish the exact verified candidate non-force, then publish report-r1.yaml as the sole report-only child and stop NEEDS_REVIEW."
+
+  allowed_existing_files_or_components:
+    - "agent_runtime/tool_contract.py continuation/ReceiptV1-adjacent helpers"
+    - "agent_runtime/contracts.py continuation request/result types and the four affected result contracts"
+    - "agent_runtime/fs_list.py"
+    - "agent_runtime/fs_search.py"
+    - "agent_runtime/repo_diff.py"
+    - "agent_runtime/repo_observer.py"
+    - "agent_runtime/server.py"
+    - "agent_runtime/capability_registry.py"
+    - "directly affected focused tests and MCP/schema fixtures"
+    - "README.md and directly affected docs describing the four collection contracts"
+    - ".agent/tasks/TASK-0147/report-r1.yaml"
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0147/report-r1.yaml"
+  unlisted_new_files:
+    allowed: true
+    max: 1
+    within:
+      - "agent_runtime"
+      - "tests"
+    purpose: "At most one small shared continuation helper or one directly coupled focused test file if adapting existing owners would materially reduce clarity. Prefer existing files."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: true
+
+invariants:
+  - "TASK-0144 structured failure/effect semantics remain authoritative; continuation decisions never parse English error text."
+  - "TASK-0145 unified execution lifecycle and TASK-0146 terminal_poll behavior remain unchanged."
+  - "Installed Runtime remains 0.3.0 at runtime_activation_revision 89111218720ddb2f12961f9375549733edd23ada throughout TASK-0147; no install/restart/plugin reload/cutover."
+  - "Source Runtime version remains 0.3.0, ToolContract Kernel remains 2, and public tool inventory remains exactly 19."
+  - "Only fs_list, fs_search, repo_diff and repo_observer source request/result schema versions change in this task, each from 1/1 to 2/2."
+  - "Continuation cursor/receipt is never authorization and cannot expand workspace, filesystem, Git, network or mutation authority."
+  - "ReceiptV1 namespace/hash semantics remain compatible. repo_diff ReceiptV1 and repo_commit exact staged-state authorization semantics remain unchanged."
+  - "fs_search does not claim strict snapshot semantics; continuation_consistency remains explicitly revalidated."
+  - "repo_observer remains local-only, fetched=false, network_used=false and repository mutation=false."
+  - "No global cache, TTL cache, persistent cursor store, database, daemon, scheduler, snapshot service, workflow engine or generic repository-provider abstraction."
+  - "No GAP-03, GAP-06, GAP-08, GAP-09, GAP-10, GAP-11, GAP-12 or GAP-13 implementation."
+  - "TASK-0148 and later roadmap tasks are not authored or executed by Executor."
+
+forbidden_changes:
+  - "Any new public tool or public tool removal."
+  - "ToolContract Kernel version change, Runtime version bump, dependency change, package/install/cutover logic change, runtime.env change, ServiceManagement change, TCC/System Settings/Screen Recording change."
+  - "Any persistent continuation/snapshot/cache subsystem or secret/HMAC/key management for continuation cursors."
+  - "Any change that makes continuation receipt/cursor sufficient authority for repo_commit, fs_write, fs_patch or another mutating tool."
+  - "Any network access added to fs_list, fs_search, repo_diff or repo_observer."
+  - "Any implementation of later roadmap gaps or broad unrelated refactor."
+  - "Any branch creation, PR, force push, amend, squash, tag or release publication."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: revised_contract_required
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+assurance_alignment:
+  standards_revision: "0da0d5864fe5e458af564f3c6ba9959cefd99639"
+  standards_requirement_ids:
+    - COR-1.2
+    - COR-1.3
+    - COR-2.1
+    - COR-3.1
+    - DAT-1.1
+    - DAT-2.3
+    - DAT-2.4
+    - DAT-3.1
+    - EFF-1.1
+    - EFF-2.3
+    - CMP-1.1
+    - CMP-2.3
+  rule: "Use these as evidence obligations for deterministic correctness, state binding, boundedness, effect truth and compatibility; no maturity score."
+  documents_revision: "c34d34d1842975fa895fc0e3d5273e5826b32205"
+  document_domains:
+    BEHAVIOR: "pagination/resume, expiry and state-change behavior"
+    INTERFACES: "four request/result schema v2 contracts and common continuation fields"
+    DATA: "opaque cursor payload, ReceiptV1 binding and revalidated observed-state semantics"
+    QUALITY: "no-duplicate/no-gap, mutation, tamper, expiry and bound proofs"
+  documents_rule: "Update only directly affected target docs; do not create a new documentation subsystem."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "All four target tools implement one compatible request-side cursor+continuation_receipt pairing and result-side truncated/next_cursor/continuation_receipt contract with bounded stateless tokens."
+    evidence_required: "Focused unit/schema/MCP tests prove 2/2 schemas, pair validation, <=1024-character cursor bound, 300-second expiry, tool/version binding, parameter binding and default first-page compatibility."
+  - id: AC-2
+    requirement: "Continuation produces deterministic complete pages without duplicates or gaps under unchanged state and fails closed when prior state is invalidated."
+    evidence_required: "Multi-page fixtures for fs_list, fs_search, repo_diff and repo_observer plus parameter mismatch, tamper, expiry and mutation-between-pages tests; invalidating mutation emits structured STATE_CHANGED where specified."
+  - id: AC-3
+    requirement: "fs_search is truthfully revalidated rather than snapshot-backed."
+    evidence_required: "Tests re-run deterministic traversal through the prior boundary, prove invalidating prefix mutation returns STATE_CHANGED, prove no snapshot/cache/store retention, and document continuation_consistency=revalidated."
+  - id: AC-4
+    requirement: "Existing receipt, Git, authority and boundedness semantics remain intact."
+    evidence_required: "repo_diff continuation reuses full raw-diff receipt; repo_commit ReceiptV1 regressions PASS; repo_observer remains network/mutation free; existing hard scan/output bounds and structured failure/effect tests remain PASS."
+  - id: AC-5
+    requirement: "Exact source candidate is canonically verified and published while installed Runtime stays unchanged."
+    evidence_required: "Focused PASS, git diff --check, canonical ./verify exit_code=0 on exact candidate, fresh non-force publication reconciliation, source Kernel=2/tools=19/version=0.3.0, read-only installed observation still Runtime 0.3.0 activation revision 89111218720ddb2f12961f9375549733edd23ada, canonical report-only child and NEEDS_REVIEW."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Fresh-resolve GitHub and local main. Require exact task-authoring base, branches exactly {main}, open PRs=0, ahead/behind=0/0, clean worktree/index, TASK-0147 revision 1, accepted Cutover A closure review, and current-phase capabilities before mutation."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Fresh-inspect the four tool/result implementations, ReceiptV1/tool_contract machinery, capability registry and current schemas. If any target tool is no longer 1/1 or continuation already exists, stop BLOCKED rather than layering a second contract."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Implement the smallest shared stateless continuation codec plus tool-local revalidation semantics. Run focused tests covering AC-1 through AC-4, including adversarial cursor/receipt/parameter/state cases."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Commit one coherent implementation candidate only after focused PASS. Require clean candidate, git diff --check, exact candidate SHA/tree and no forbidden/later-gap surface."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Run canonical ./verify on that exact candidate through a recoverable carrier. Require structured exit_code=0 and canonical modules/tests/postconditions PASS. Any source write after verification creates a new candidate requiring re-verification."
+      required: true
+    - id: CHECK-6
+      command_or_check: "Fresh-resolve remote main after verification; require it still equals the task execution base, publish the exact candidate non-force, and reconcile ambiguous publication before retry."
+      required: true
+    - id: CHECK-7
+      command_or_check: "Create .agent/tasks/TASK-0147/report-r1.yaml as the sole report-only child, validate exact report semantics, publish non-force, fresh-reconcile final main/lineage/clean state, read-only confirm installed Runtime remains the accepted 0.3.0 activation, and stop NEEDS_REVIEW."
+      required: true
+  authoritative_verification:
+    required: true
+    mechanism: "Focused continuation/receipt/schema/adversarial tests plus canonical ./verify on the exact source candidate"
+    expected_signal: "Four tool schemas at source 2/2; deterministic bounded continuation with no duplicates/gaps; tamper/expiry/parameter mismatch rejected; invalidating mutation truthfully STATE_CHANGED; ReceiptV1/Git/authority invariants preserved; canonical verify PASS."
+
+report_requirements:
+  path: .agent/tasks/TASK-0147/report-r1.yaml
+  record:
+    - "state=REPORTED and result=NEEDS_REVIEW"
+    - "exact task/base/candidate/tree/report lineage"
+    - "source schema versions for fs_list/fs_search/repo_diff/repo_observer and unchanged Kernel/tool inventory/version"
+    - "common cursor+receipt/result contract and cursor bound/expiry evidence"
+    - "per-tool multi-page no-duplicate/no-gap evidence"
+    - "parameter mismatch, malformed/tampered/expired cursor and receipt tampering evidence"
+    - "mutation-between-pages and structured STATE_CHANGED evidence"
+    - "fs_search continuation_consistency=revalidated evidence and absence of snapshot/cache/store"
+    - "repo_diff ReceiptV1/repo_commit compatibility and repo_observer network/mutation invariants"
+    - "focused and canonical exact-candidate verification"
+    - "installed Runtime remains 0.3.0 at activation revision 89111218720ddb2f12961f9375549733edd23ada and no cutover occurred"
+    - "candidate publication and sole report-only child reconciliation"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
