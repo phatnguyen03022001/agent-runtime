@@ -120,7 +120,7 @@ class CapabilityRegistryTests(unittest.IsolatedAsyncioTestCase):
             expected_schema_version = {
                 "terminal_exec": 2,
                 "terminal_start": 3,
-                "terminal_poll": 3,
+                "terminal_poll": 4,
             }.get(descriptor.name, 1)
             self.assertEqual(descriptor.request_schema_version, expected_schema_version)
             self.assertTrue(descriptor.supported)

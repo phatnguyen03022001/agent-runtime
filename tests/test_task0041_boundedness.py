@@ -213,6 +213,10 @@ class MCPInputBoundednessTests(unittest.IsolatedAsyncioTestCase):
 
         poll_props = tools["terminal_poll"].input_schema["properties"]
         self.assertEqual(_string_branch(poll_props["session_id"])["maxLength"], 128)
+        self.assertEqual(poll_props["output"]["enum"], ["incremental", "none"])
+        self.assertEqual(poll_props["output"]["default"], "incremental")
+        self.assertEqual(poll_props["max_output_bytes"]["minimum"], 0)
+        self.assertEqual(poll_props["max_output_bytes"]["maximum"], 16 * 1024)
         start_identity = _string_branch(start_props["start_identity"])
         poll_identity = _string_branch(poll_props["start_identity"])
         for identity in (start_identity, poll_identity):

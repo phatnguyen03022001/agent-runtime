@@ -198,6 +198,175 @@ class TerminalSessionTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     poll_terminal(session_id, cursor=0, wait_ms=invalid)  # type: ignore[arg-type]
 
+    def test_poll_budget_does_not_advance_inside_a_utf8_codepoint(self) -> None:
+        result = self.start(
+            [
+                sys.executable,
+                "-u",
+                "-c",
+                "import os,time; time.sleep(.2); os.write(1, 'αβ'.encode()); time.sleep(1)",
+            ]
+        )
+        session_id = str(result["session_id"])
+
+        partial = poll_terminal(
+            session_id, cursor=0, wait_ms=1000, max_output_bytes=1
+        )
+        self.assertEqual(partial["output"], "")
+        self.assertEqual(partial["next_cursor"], 0)
+
+        first = poll_terminal(session_id, cursor=0, max_output_bytes=2)
+        self.assertEqual(first["output"], "α")
+        self.assertEqual(first["next_cursor"], 2)
+
+        partial = poll_terminal(
+            session_id, cursor=2, max_output_bytes=1
+        )
+        self.assertEqual(partial["output"], "")
+        self.assertEqual(partial["next_cursor"], 2)
+
+        second = poll_terminal(session_id, cursor=2, max_output_bytes=2)
+        self.assertEqual(second["output"], "β")
+        self.assertEqual(second["next_cursor"], 4)
+
+    def test_pipe_poll_budget_keeps_utf8_chunks_intact_across_stream_events(self) -> None:
+        from agent_runtime.session import TerminalSessionManager
+
+        manager = TerminalSessionManager(start_reaper=False)
+        self.addCleanup(manager.shutdown)
+        code = (
+            "import os,time; "
+            "time.sleep(.1); os.write(1,bytes([0xe2])); time.sleep(.05); "
+            "os.write(2,b'X'); time.sleep(.05); os.write(1,bytes([0x82,0xac]) )"
+        )
+        started = manager.start(
+            [sys.executable, "-u", "-c", code],
+            str(self.cwd),
+            "e" * 32,
+            mode="pipe",
+        )
+        session_id = str(started["session_id"])
+
+        status = manager.poll(
+            session_id,
+            cursor=0,
+            wait_ms=1000,
+            wait_for="terminal_or_deadline",
+            output="none",
+        )
+        self.assertEqual(status["status"], "exited")
+        self.assertEqual(status["output"], "")
+        self.assertEqual(status["output_chunks"], [])
+        self.assertEqual(status["next_cursor"], 0)
+
+        too_small = manager.poll(
+            session_id, cursor=0, output="incremental", max_output_bytes=3
+        )
+        self.assertEqual(too_small["output_chunks"], [])
+        self.assertEqual(too_small["next_cursor"], 0)
+
+        complete = manager.poll(
+            session_id, cursor=0, output="incremental", max_output_bytes=4
+        )
+        self.assertEqual(complete["next_cursor"], 4)
+        self.assertEqual(
+            "".join(chunk["text"] for chunk in complete["output_chunks"] if chunk["stream"] == "stdout"),
+            "€",
+        )
+        self.assertEqual(
+            "".join(chunk["text"] for chunk in complete["output_chunks"] if chunk["stream"] == "stderr"),
+            "X",
+        )
+        self.assertTrue(all(chunk["text"].encode("utf-8").decode("utf-8") == chunk["text"] for chunk in complete["output_chunks"]))
+
+    def test_status_only_poll_preserves_pipe_lifecycle_and_large_output(self) -> None:
+        from agent_runtime.session import MAX_POLL_OUTPUT_BYTES, TerminalSessionManager
+
+        manager = TerminalSessionManager(start_reaper=False)
+        self.addCleanup(manager.shutdown)
+        code = """
+import os,time
+time.sleep(.1)
+for fd,payload in ((1,b'O'*20000),(2,b'E'*20000)):
+    view=memoryview(payload)
+    while view:
+        view=view[os.write(fd,view):]
+time.sleep(.4)
+"""
+        started = manager.start(
+            [sys.executable, "-u", "-c", code],
+            str(self.cwd),
+            "f" * 32,
+            mode="pipe",
+        )
+        session_id = str(started["session_id"])
+
+        running = manager.poll(
+            session_id,
+            cursor=0,
+            wait_ms=1000,
+            wait_for="output_or_state",
+            output="none",
+        )
+        self.assertEqual(running["status"], "running")
+        self.assertEqual(running["output"], "")
+        self.assertEqual(running["output_chunks"], [])
+        self.assertEqual(running["next_cursor"], 0)
+
+        exited = manager.poll(
+            session_id,
+            cursor=0,
+            wait_ms=1000,
+            wait_for="terminal_or_deadline",
+            output="none",
+        )
+        self.assertEqual(exited["status"], "exited")
+        self.assertEqual(exited["lifecycle"], "COMPLETED")
+        self.assertEqual(exited["mode"], "pipe")
+        self.assertEqual(exited["exit_code"], 0)
+        self.assertEqual(exited["termination_reason"], "natural_exit")
+        self.assertEqual(exited["output"], "")
+        self.assertEqual(exited["output_chunks"], [])
+        self.assertEqual(exited["next_cursor"], 0)
+        with self.assertRaisesRegex(ValueError, "cursor is ahead"):
+            manager.poll(session_id, cursor=50000, output="none")
+
+        default = manager.poll(session_id, cursor=0)
+        explicit = manager.poll(
+            session_id,
+            cursor=0,
+            output="incremental",
+            max_output_bytes=MAX_POLL_OUTPUT_BYTES,
+        )
+        self.assertEqual(default, explicit)
+        self.assertEqual(default["next_cursor"], MAX_POLL_OUTPUT_BYTES)
+        self.assertEqual(
+            sum(len(chunk["text"].encode("utf-8")) for chunk in default["output_chunks"]),
+            MAX_POLL_OUTPUT_BYTES,
+        )
+        status_size = len(json.dumps(exited, separators=(",", ":")).encode("utf-8"))
+        incremental_size = len(json.dumps(default, separators=(",", ":")).encode("utf-8"))
+        self.assertLess(status_size * 10, incremental_size)
+
+        cursor = 0
+        stdout: list[str] = []
+        stderr: list[str] = []
+        while cursor < 40000:
+            polled = manager.poll(
+                session_id,
+                cursor=cursor,
+                max_output_bytes=12000,
+            )
+            self.assertLessEqual(polled["next_cursor"] - cursor, 12000)
+            self.assertGreater(polled["next_cursor"], cursor)
+            for chunk in polled["output_chunks"]:
+                (stdout if chunk["stream"] == "stdout" else stderr).append(chunk["text"])
+            cursor = polled["next_cursor"]
+
+        self.assertEqual(cursor, 40000)
+        self.assertEqual("".join(stdout), "O" * 20000)
+        self.assertEqual("".join(stderr), "E" * 20000)
+
     def test_poll_rejects_unknown_wait_for(self) -> None:
         result = self.start([sys.executable, "-u", "-c", "import time; time.sleep(1)"])
         with self.assertRaisesRegex(ValueError, "wait_for"):
@@ -323,15 +492,24 @@ class TerminalSessionTests(unittest.TestCase):
         session_id = str(result["session_id"])
         deadline = time.monotonic() + 3.0
         while True:
-            polled = poll_terminal(session_id, cursor=0, wait_ms=100)
+            polled = poll_terminal(
+                session_id, cursor=0, wait_ms=100, output="none"
+            )
             if polled["cursor_expired"]:
                 break
             if time.monotonic() >= deadline:
                 self.fail("retention overflow condition was not observed before deadline")
         self.assertTrue(polled["cursor_expired"])
         self.assertGreater(polled["dropped_output_bytes"], 0)
-        self.assertLessEqual(len(polled["output"].encode()), MAX_POLL_OUTPUT_BYTES)
-        self.assertLess(polled["next_cursor"], size)
+        self.assertEqual(polled["output"], "")
+        self.assertEqual(
+            polled["next_cursor"], polled["dropped_output_bytes"]
+        )
+        recovered = poll_terminal(session_id, cursor=polled["next_cursor"])
+        self.assertLessEqual(
+            recovered["next_cursor"] - polled["next_cursor"], MAX_POLL_OUTPUT_BYTES
+        )
+        self.assertGreater(recovered["next_cursor"], polled["next_cursor"])
 
     def test_natural_exit_reports_exit_code_and_closes_pty(self) -> None:
         result = self.start([sys.executable, "-u", "-c", "print('done')"])

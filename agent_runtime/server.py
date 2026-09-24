@@ -33,6 +33,7 @@ from .contracts import (
     RuntimeCapabilitiesResult,
     ControlAction,
     Cursor,
+    PollOutputBytes,
     FsReadBatchResult,
     FsReadItems,
     FsListMaxEntries,
@@ -84,7 +85,9 @@ from .contracts import (
     TerminalDimension,
     TerminalExecResult,
     TerminalMode,
+    TerminalPollOutput,
     TerminalSessionResult,
+    TERMINAL_POLL_MAX_OUTPUT_BYTES,
     TimeoutSeconds,
     RuntimeToolErrorEnvelope,
     RuntimeToolErrorPayload,
@@ -665,8 +668,10 @@ def terminal_poll(
     cursor: Cursor = 0,
     wait_ms: WaitMilliseconds = 0,
     wait_for: WaitFor = "output_or_state",
+    output: TerminalPollOutput = "incremental",
+    max_output_bytes: PollOutputBytes = TERMINAL_POLL_MAX_OUTPUT_BYTES,
 ) -> TerminalSessionResult:
-    """Read bounded incremental PTY or separately identified pipe output."""
+    """Read bounded incremental output or status without consuming output."""
 
     return cast(
         TerminalSessionResult,
@@ -678,6 +683,8 @@ def terminal_poll(
             wait_ms,
             start_identity,
             wait_for,
+            output,
+            max_output_bytes,
         ),
     )
 

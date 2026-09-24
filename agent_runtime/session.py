@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import atexit
+import codecs
 import errno
 import fcntl
 import os
@@ -17,7 +18,13 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from .capacity import HeavyExecutionAdmission, HeavyExecutionLease, heavy_execution_admission
-from .contracts import ARGV_ITEM_MAX_BYTES, ARGV_MAX_ITEMS, ARGV_TOTAL_MAX_BYTES, TERMINAL_DATA_MAX_BYTES
+from .contracts import (
+    ARGV_ITEM_MAX_BYTES,
+    ARGV_MAX_ITEMS,
+    ARGV_TOTAL_MAX_BYTES,
+    TERMINAL_DATA_MAX_BYTES,
+    TERMINAL_POLL_MAX_OUTPUT_BYTES,
+)
 from .errors import (
     RuntimeCapacityError,
     RuntimeStateError,
@@ -51,7 +58,7 @@ DEFAULT_SESSION_LIMIT = MAX_ACTIVE_SESSIONS
 RUNNING_HARD_WALL_SECONDS = 3600.0
 COMPLETED_RETENTION_SECONDS = 3600.0
 MAX_RETAINED_OUTPUT_BYTES = 64 * 1024
-MAX_POLL_OUTPUT_BYTES = 16 * 1024
+MAX_POLL_OUTPUT_BYTES = TERMINAL_POLL_MAX_OUTPUT_BYTES
 MAX_RETAINED_COMPLETED_SESSIONS = 16
 MAX_WAIT_MS = 30000
 MAX_EXEC_TIMEOUT_SECONDS = 3600.0
@@ -59,6 +66,17 @@ DEFAULT_EXEC_TIMEOUT_SECONDS = 300.0
 _READ_CHUNK_BYTES = 8192
 _READER_DRAIN_SECONDS = 0.2
 _REAPER_INTERVAL_SECONDS = 1.0
+
+def _complete_utf8_prefix_length(data: bytes, *, final: bool) -> int:
+    """Return the longest prefix that does not end inside a valid code point."""
+
+    if final:
+        return len(data)
+    decoder = codecs.getincrementaldecoder("utf-8")("replace")
+    decoder.decode(data, final=False)
+    pending, _ = decoder.getstate()
+    return len(data) - len(pending)
+
 
 TERMINAL_START_CONTRACT = ToolContract(
     name="terminal_start",
@@ -100,10 +118,16 @@ TERMINAL_POLL_CONTRACT = ToolContract(
         "start_identity": "known-or-retained-keyed-operation",
         "cursor": "non-negative",
         "wait_for": "output_or_state-or-terminal_or_deadline",
+        "output": "incremental-or-none-default-incremental",
+        "max_output_bytes": "raw-byte-budget-0-through-hard-poll-limit",
     },
-    bounds={"poll_output_bytes": MAX_POLL_OUTPUT_BYTES, "wait_milliseconds": MAX_WAIT_MS},
+    bounds={
+        "poll_output_bytes": MAX_POLL_OUTPUT_BYTES,
+        "max_output_bytes": MAX_POLL_OUTPUT_BYTES,
+        "wait_milliseconds": MAX_WAIT_MS,
+    },
     postconditions={
-        "output": "bounded-incremental",
+        "output": "bounded-incremental-or-status-only-without-cursor-consumption",
         "process_control": False,
         "wait_return": "output-or-state-or-terminal-deadline-by-mode",
     },
@@ -569,11 +593,15 @@ class TerminalSessionManager:
         wait_ms: int = 0,
         start_identity: str | None = None,
         wait_for: str = "output_or_state",
+        output: str = "incremental",
+        max_output_bytes: int = MAX_POLL_OUTPUT_BYTES,
     ) -> dict[str, Any]:
         session = self._resolve_session(session_id=session_id, start_identity=start_identity)
         checked_cursor = self._validated_cursor(cursor)
         checked_wait_ms = self._validated_wait_ms(wait_ms)
         checked_wait_for = self._validated_wait_for(wait_for)
+        checked_output = self._validated_poll_output(output)
+        checked_output_budget = self._validated_poll_output_budget(max_output_bytes)
 
         self._touch(session)
         if checked_wait_ms:
@@ -591,7 +619,12 @@ class TerminalSessionManager:
                         if remaining <= 0:
                             break
                         session.changed.wait(remaining)
-        return self._session_result(session, cursor=checked_cursor)
+        return self._session_result(
+            session,
+            cursor=checked_cursor,
+            output=checked_output,
+            max_output_bytes=checked_output_budget,
+        )
 
     def control(
         self,
@@ -1056,7 +1089,14 @@ class TerminalSessionManager:
             lease.release()
             session.heavy_lease = None
 
-    def _session_result(self, session: _Session, *, cursor: int) -> dict[str, Any]:
+    def _session_result(
+        self,
+        session: _Session,
+        *,
+        cursor: int,
+        output: str = "incremental",
+        max_output_bytes: int = MAX_POLL_OUTPUT_BYTES,
+    ) -> dict[str, Any]:
         with session.changed:
             retained_output_length = self._retained_output_length(session)
             retained_end = session.base_cursor + retained_output_length
@@ -1074,30 +1114,26 @@ class TerminalSessionManager:
                 "cursor_expired": cursor_expired,
                 "dropped_output_bytes": dropped,
             }
-            if session.mode == "pty":
-                raw = bytes(session.output[start_index : start_index + MAX_POLL_OUTPUT_BYTES])
-                result["output"] = raw.decode("utf-8", errors="replace")
-                result["next_cursor"] = start_cursor + len(raw)
+            if output == "none":
+                result["output"] = ""
+                if session.mode == "pipe":
+                    result["output_chunks"] = []
+                result["next_cursor"] = start_cursor
+            elif session.mode == "pty":
+                available = bytes(session.output[start_index:])
+                raw = available[:max_output_bytes]
+                final = session.status == "exited" and len(raw) == len(available)
+                emitted_bytes = _complete_utf8_prefix_length(raw, final=final)
+                emitted = raw[:emitted_bytes]
+                result["output"] = emitted.decode("utf-8", errors="replace")
+                result["next_cursor"] = start_cursor + emitted_bytes
             else:
-                remaining = MAX_POLL_OUTPUT_BYTES
-                next_cursor = start_cursor
-                chunks: list[dict[str, str]] = []
-                offset = session.base_cursor
-                for stream_name, data in session.output_chunks:
-                    chunk_start = offset
-                    chunk_end = offset + len(data)
-                    offset = chunk_end
-                    if chunk_end <= start_cursor or remaining <= 0:
-                        continue
-                    take_start = max(start_cursor, chunk_start)
-                    take_end = min(chunk_end, take_start + remaining)
-                    piece = data[take_start - chunk_start : take_end - chunk_start]
-                    if piece:
-                        chunks.append(
-                            {"stream": stream_name, "text": piece.decode("utf-8", errors="replace")}
-                        )
-                        remaining -= len(piece)
-                        next_cursor = take_end
+                next_cursor, chunks = self._pipe_output_chunks(
+                    session,
+                    start_cursor=start_cursor,
+                    retained_end=retained_end,
+                    max_output_bytes=max_output_bytes,
+                )
                 result["output"] = ""
                 result["output_chunks"] = chunks
                 result["next_cursor"] = next_cursor
@@ -1107,6 +1143,89 @@ class TerminalSessionManager:
                 result["exit_code"] = session.exit_code
                 result["termination_reason"] = session.termination_reason
             return result
+
+    @staticmethod
+    def _pipe_output_chunks(
+        session: _Session,
+        *,
+        start_cursor: int,
+        retained_end: int,
+        max_output_bytes: int,
+    ) -> tuple[int, list[dict[str, str]]]:
+        budget_end = min(retained_end, start_cursor + max_output_bytes)
+        if budget_end <= start_cursor:
+            return start_cursor, []
+
+        decoders = {
+            name: codecs.getincrementaldecoder("utf-8")("replace")
+            for name in ("stdout", "stderr")
+        }
+        safe_end = start_cursor
+        offset = session.base_cursor
+        for stream_name, data in session.output_chunks:
+            chunk_start = offset
+            chunk_end = chunk_start + len(data)
+            offset = chunk_end
+            if chunk_end <= start_cursor or chunk_start >= budget_end:
+                continue
+            take_start = max(start_cursor, chunk_start)
+            take_end = min(budget_end, chunk_end)
+            piece = data[take_start - chunk_start : take_end - chunk_start]
+            if not piece:
+                continue
+            decoders[stream_name].decode(piece, final=False)
+            if all(not decoder.getstate()[0] for decoder in decoders.values()):
+                safe_end = take_end
+
+        include_eof = session.status == "exited" and budget_end == retained_end
+        if include_eof:
+            # Any unfinished trailing sequence is invalid at EOF and keeps the
+            # established replacement-decoding behavior.
+            safe_end = retained_end
+
+        output_decoders = {
+            name: codecs.getincrementaldecoder("utf-8")("replace")
+            for name in ("stdout", "stderr")
+        }
+        emitted_by_event: dict[int, tuple[str, str]] = {}
+        last_event_by_stream: dict[str, int] = {}
+        offset = session.base_cursor
+        event_index = 0
+        for stream_name, data in session.output_chunks:
+            chunk_start = offset
+            chunk_end = chunk_start + len(data)
+            offset = chunk_end
+            if chunk_end <= start_cursor or chunk_start >= safe_end:
+                continue
+            current_event = event_index
+            event_index += 1
+            take_start = max(start_cursor, chunk_start)
+            take_end = min(safe_end, chunk_end)
+            piece = data[take_start - chunk_start : take_end - chunk_start]
+            if not piece:
+                continue
+            last_event_by_stream[stream_name] = current_event
+            text = output_decoders[stream_name].decode(piece, final=False)
+            if text:
+                emitted_by_event[current_event] = (stream_name, text)
+
+        if include_eof:
+            for stream_name, decoder in output_decoders.items():
+                tail = decoder.decode(b"", final=True)
+                if tail:
+                    current_event = last_event_by_stream.get(stream_name)
+                    if current_event is not None:
+                        prior = emitted_by_event.get(current_event)
+                        emitted_by_event[current_event] = (
+                            stream_name,
+                            (prior[1] if prior is not None else "") + tail,
+                        )
+
+        output_chunks = [
+            {"stream": stream_name, "text": text}
+            for _event, (stream_name, text) in sorted(emitted_by_event.items())
+        ]
+        return safe_end, output_chunks
 
     @staticmethod
     def _post_effect_error(message: str, reason_code: str) -> RuntimeStateError:
@@ -1190,6 +1309,25 @@ class TerminalSessionManager:
         return wait_for
 
     @staticmethod
+    def _validated_poll_output(output: str) -> str:
+        if not isinstance(output, str) or output not in {"incremental", "none"}:
+            raise RuntimeValidationError("output must be incremental or none")
+        return output
+
+    @staticmethod
+    def _validated_poll_output_budget(max_output_bytes: int) -> int:
+        if (
+            isinstance(max_output_bytes, bool)
+            or not isinstance(max_output_bytes, int)
+            or max_output_bytes < 0
+            or max_output_bytes > MAX_POLL_OUTPUT_BYTES
+        ):
+            raise RuntimeValidationError(
+                f"max_output_bytes must be an integer from 0 to {MAX_POLL_OUTPUT_BYTES}"
+            )
+        return max_output_bytes
+
+    @staticmethod
     def _require_no_dimensions(rows: int | None, cols: int | None) -> None:
         if rows is not None or cols is not None:
             raise RuntimeValidationError("write action does not accept rows or cols")
@@ -1258,6 +1396,8 @@ def poll_terminal(
     wait_ms: int = 0,
     start_identity: str | None = None,
     wait_for: str = "output_or_state",
+    output: str = "incremental",
+    max_output_bytes: int = MAX_POLL_OUTPUT_BYTES,
 ) -> dict[str, Any]:
     return _MANAGER.poll(
         session_id=session_id,
@@ -1265,6 +1405,8 @@ def poll_terminal(
         wait_ms=wait_ms,
         start_identity=start_identity,
         wait_for=wait_for,
+        output=output,
+        max_output_bytes=max_output_bytes,
     )
 
 

@@ -20,6 +20,7 @@ ARGV_MAX_ITEMS = 128
 ARGV_ITEM_MAX_BYTES = 16 * 1024
 ARGV_TOTAL_MAX_BYTES = 256 * 1024
 TERMINAL_DATA_MAX_BYTES = 64 * 1024
+TERMINAL_POLL_MAX_OUTPUT_BYTES = 16 * 1024
 SESSION_ID_MAX_CHARS = 128
 START_IDENTITY_CHARS = 32
 FS_READ_MAX_LINE = 2_147_483_647
@@ -77,6 +78,11 @@ TerminalMode = Literal["pty", "pipe"]
 Cursor = Annotated[int, Field(strict=True, ge=0)]
 WaitMilliseconds = Annotated[int, Field(strict=True, ge=0, le=30000)]
 WaitFor = Literal["output_or_state", "terminal_or_deadline"]
+TerminalPollOutput = Literal["incremental", "none"]
+PollOutputBytes = Annotated[
+    int,
+    Field(strict=True, ge=0, le=TERMINAL_POLL_MAX_OUTPUT_BYTES),
+]
 ControlAction = Literal["write", "interrupt", "terminate"]
 TerminalWriteData = Annotated[
     StrictStr,
@@ -770,7 +776,7 @@ class CapabilityDescriptor(_ClosedResult):
     lifecycle: CapabilityLifecycle
     authority: CapabilityAuthority
     annotations: CapabilityAnnotations
-    request_schema_version: Literal[1, 2, 3]
+    request_schema_version: Literal[1, 2, 3, 4]
     result_schema_version: Literal[1, 2, 3] | None
     bounds: dict[str, object]
     supported: bool
