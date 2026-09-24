@@ -240,7 +240,11 @@ class MCPInputBoundednessTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(_integer_branch(item["properties"]["end_line"])["maximum"], MAX_LINE)
 
         repo_props = tools["repo_observer"].input_schema["properties"]
-        self.assertEqual(set(repo_props), {"cwd", "max_paths"})
+        self.assertEqual(
+            set(repo_props),
+            {"cwd", "max_paths", "cursor", "continuation_receipt"},
+        )
+        self.assertEqual(_string_branch(repo_props["cursor"])["maxLength"], 1024)
         self.assertEqual(repo_props["max_paths"]["minimum"], 1)
         self.assertEqual(repo_props["max_paths"]["maximum"], 1000)
 
