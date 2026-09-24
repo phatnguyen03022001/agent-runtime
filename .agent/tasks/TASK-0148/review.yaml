@@ -1,0 +1,60 @@
+protocol_version: 3
+
+task_id: TASK-0148
+task_revision: 3
+review_revision: 2
+state: ACCEPTED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0148/report-r2.yaml
+  commit: "7bb77c96e490002805c66fdeeb0296bc98d21380"
+  report_revision: 2
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  skill_rules: PASS
+  scope: PASS
+  structure_policy: PASS
+  git_authority: PASS
+  acceptance_criteria: PASS
+  verifier_evidence: PASS
+
+execution_deviation_adjudication:
+  - id: DEV-INSTALLED-DOCTOR-SELF-CONTAINMENT
+    disposition: ACCEPTED_WITH_FOLLOW_UP
+    rationale: "Direct invocation of the installed bundle's own Contents/Resources/runtime/start.sh doctor --json exits 1 with ModuleNotFoundError: macos because the installed runtime payload does not contain the checkout-side macos.runtime_config module referenced by the operator doctor bootstrap. This is a real pre-existing packaging/self-containment defect, but it does not contradict TASK-0148 acceptance: the task's implementation candidate is unchanged and canonically verified; fresh direct live Runtime evidence independently proves the installed pre-TASK-0148 nineteen-tool surface; canonical checkout ./start.sh doctor --json remains the documented operator entrypoint and successfully validates the installed package identity, ServiceManagement state and cutover transaction. TASK-0148 authorized no package mutation. The defect must be closed before final Cutover B rather than retroactively expanding TASK-0148."
+
+follow_up_tasks:
+  - task_id: TASK-0151
+    origin:
+      type: accepted_packaging_self_containment_gap
+      task_id: TASK-0148
+      gap_id: INSTALLED_DOCTOR_SELF_CONTAINMENT
+    requirement: "Before Cutover B/final activation, make the installed-authority doctor self-contained in the packaged Runtime or replace the package-side dependency with an equally bounded package-owned mechanism; prove direct installed-bundle start.sh doctor --json succeeds without checkout modules, while preserving canonical config validation and installed-package identity semantics."
+
+acceptance_basis:
+  - "Fresh GitHub resolution proves exact report-r2 commit 7bb77c96e490002805c66fdeeb0296bc98d21380 is the direct single child of TASK-0148 revision-3 base 4fff5db0deea17c80bfa37ed04ed2d2767c03d2a and adds only .agent/tasks/TASK-0148/report-r2.yaml."
+  - "Fresh canonical topology is main-only with zero open pull requests, and local HEAD/origin/main/remote main reconcile exactly to report-r2 with ahead/behind 0/0 and a clean worktree/index."
+  - "Exact TASK-0148 implementation candidate remains 6ba77396391dbc7b8557686fb92683fe98dd5682 with tree 7ee20b30f6d560d4762e2abf1d605b200d7f5f31. Immutable authoritative verification remains 58/58 modules, 741 tests PASS and focused 206/206 PASS; revision 3 correctly did not rerun unchanged-candidate verification."
+  - "Fresh live acceptance evidence proves installed Runtime 0.3.0, ToolContract Kernel 2 and exactly nineteen live public tools; fs_read_batch is live at request/result 1/1 and succeeds, while fs_manage is absent. This is the expected pre-TASK-0148 installed surface."
+  - "Canonical checkout ./start.sh doctor --json is healthy and independently binds installed runtime_revision 89111218720ddb2f12961f9375549733edd23ada, installed tree 00cdfce957326c011b5ed5a377074fa071821f55, ServiceManagement main_app=enabled/runtime_agent=enabled and transaction_present=false."
+  - "Revision 3 introduces no source, test, documentation, package, dependency, configuration, ServiceManagement, TCC, plugin/schema or cutover mutation; report-r2 is the sole repository-content delta."
+  - "The direct installed-bundle doctor self-containment failure is accepted only as follow-up evidence because TASK-0148 neither changed nor activated package contents and all material GAP-06/GAP-08 acceptance predicates are independently proven. It is not waived for final activation."
+
+promotion_readiness:
+  eligible_for_candidate_capture: true
+  candidate_commit: "6ba77396391dbc7b8557686fb92683fe98dd5682"
+  reason: "TASK-0148 GAP-06/GAP-08 source work and post-publication closure are accepted. Installed Runtime intentionally remains on the pre-TASK-0148 nineteen-tool surface until later final activation. The installed-doctor self-containment defect is a separately tracked packaging follow-up that must close before Cutover B."
+
+notes:
+  - "TASK-0148 is terminally ACCEPTED for exact report-r2 commit 7bb77c96e490002805c66fdeeb0296bc98d21380 and exact implementation candidate 6ba77396391dbc7b8557686fb92683fe98dd5682."
+  - "No acceptance claim is made that the installed bundle's own start.sh doctor currently works standalone; independent Architect replay reproduces exit 1 / ModuleNotFoundError: macos."
+  - "The next roadmap implementation task remains TASK-0149 — Fresh Remote Repository Observation. The packaging follow-up is carried to TASK-0151/final activation and must not be lost."
