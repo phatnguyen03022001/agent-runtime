@@ -1,0 +1,246 @@
+protocol_version: 3
+
+task_id: TASK-0146-CUTOVER-A-PREP
+task_revision: 1
+state: APPROVED
+title: "Runtime 0.3.0 Release Metadata Closure"
+
+origin:
+  type: explicit_operator_authority
+  task_id: TASK-0146-CUTOVER-A-PREP
+  gap_id: CUTOVER-A-RELEASE-METADATA
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+  canonical_branch: main
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "22fc4d881d5a0ee71b3af2b3acadb4ce8258bbc1"
+
+architect_analysis_skills: [architect, simplicity, verification]
+execution_skills:
+  required: [executor, verification]
+  recommended: []
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "Operator authorization for TASK-0146-CUTOVER-A-PREP, 2026-09-24"
+    role: "exact corrective objective, invariants, verification, Git rules and stop boundary"
+    precedence: 1
+  - source: ".agent/tasks/TASK-0146/review.yaml at 678d6e7623599bec48b3a67ad6fbb3d1ccad7a14"
+    role: "accepted TASK-0146 lineage and source/live split"
+    precedence: 2
+  - source: ".agent/tasks/TASK-0146/report-r1.yaml at ae4c31dbb17c91144644ebf727df146d5e0e3a14"
+    role: "accepted exact-candidate verification evidence"
+    precedence: 3
+  - source: "TASK-0146 implementation candidate ac9fc1e454ec876198fba9c46ad480fc8edb3bf8"
+    role: "functional predecessor; not Runtime 0.3.0 release authority"
+    precedence: 4
+
+accepted_predecessor:
+  canonical_main_before_task_authoring: "678d6e7623599bec48b3a67ad6fbb3d1ccad7a14"
+  functional_candidate: "ac9fc1e454ec876198fba9c46ad480fc8edb3bf8"
+  functional_candidate_tree: "4c9486b0bc8a56072874660ddacdf59c925b3a77"
+  accepted_verification: "56/56 modules; 717 tests; PASS"
+  rule: "ac9fc1e454ec876198fba9c46ad480fc8edb3bf8 remains the accepted TASK-0146 functional predecessor and MUST NOT be described as Runtime 0.3.0."
+
+live_runtime_authority:
+  installed_version: "0.2.2"
+  installed_revision: "90a87fca8755ddc673e749bb5bf3e4489045a9b8"
+  installed_kernel: 1
+  source_kernel: 2
+  rule: "This task is source/package verification only. It authorizes no install, activation, restart, plugin reload or live cutover."
+
+structure_authority:
+  status: NOT_APPLICABLE
+  source: "Existing Runtime release/version SSOT and repository-native packaging contract"
+  rationale: "This is a direct release-metadata correction in existing files. No new abstraction, component, dependency or runtime behavior is authorized."
+
+objective: "Create the smallest reviewable successor candidate whose only semantic change from the accepted TASK-0146 source is Runtime release identity 0.2.2 -> 0.3.0, close the directly coupled source/package metadata needed for package_app.sh to truthfully build Runtime 0.3.0, verify that exact candidate and package, publish candidate and report, leave the installed Runtime unchanged, and stop NEEDS_REVIEW before Cutover A."
+
+scope:
+  expected_files_are_restrictive: true
+  required_changes:
+    - "Change agent_runtime/version.py RUNTIME_VERSION from 0.2.2 to 0.3.0 and make no other runtime-code change."
+    - "Change only macos/AppBundle/Info.plist CFBundleShortVersionString from 0.2.2 to 0.3.0. Preserve CFBundleVersion and every unrelated bundle key/value."
+    - "Update the existing tests/test_capability_registry.py Runtime-version SSOT/package-projection assertions from the 0.2.2 literal to 0.3.0 without broadening or weakening the test."
+    - "Update only README.md source-facing qualified/supported Runtime release-identity claims that would otherwise contradict source Runtime 0.3.0. Preserve statements that truthfully describe the still-installed Runtime as 0.2.2 pending Cutover A."
+    - "Commit one coherent 0.3.0 source candidate, then run canonical ./verify and the repository-native package build against that exact clean candidate. Package build is verification only."
+    - "From the exact built candidate, prove CFBundleShortVersionString=0.3.0, packaged Runtime version.py reports 0.3.0, candidate handoff/runtime manifest bind the exact source candidate revision/tree and locked construction inputs, and package_app.sh's existing version-consistency/codesign/provenance checks pass without source modification."
+    - "Publish the exact verified candidate non-force after fresh remote reconciliation, then create and publish report-r1.yaml as the sole report-only child and stop NEEDS_REVIEW."
+  allowed_existing_files_or_components:
+    - "agent_runtime/version.py"
+    - "macos/AppBundle/Info.plist"
+    - "tests/test_capability_registry.py"
+    - "README.md"
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0146-CUTOVER-A-PREP/report-r1.yaml"
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "No unlisted new files are authorized."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+invariants:
+  - "TASK-0144 failure/effect behavior remains unchanged."
+  - "TASK-0145 execution lifecycle remains unchanged."
+  - "TASK-0146 terminal_poll behavior remains unchanged."
+  - "Source ToolContract Kernel remains exactly 2."
+  - "Public tool inventory remains exactly 19."
+  - "terminal_exec remains request/result 2/2; terminal_start remains 3/3; terminal_poll remains request/result 4/3."
+  - "No new tool, no schema evolution, no dependency change and no runtime behavior change."
+  - "macos/package_app.sh and macos/package_provenance.py remain byte-for-byte unchanged."
+  - "Historical .agent/tasks/** evidence remains immutable except for this task's new report artifact."
+  - "docs/RECOVERY.md and other truthful installed-Runtime 0.2.2 statements remain unchanged."
+  - "Installed Runtime remains 0.2.2 at runtime_activation_revision 90a87fca8755ddc673e749bb5bf3e4489045a9b8 with ToolContract Kernel 1 throughout execution."
+  - "No package installation, Runtime restart, plugin reload, service mutation or live cutover."
+  - "The final implementation candidate, not ac9fc1e454ec876198fba9c46ad480fc8edb3bf8, becomes source authority for the later Cutover A only after independent Architect ACCEPT."
+
+forbidden_changes:
+  - "Any edit outside agent_runtime/version.py, macos/AppBundle/Info.plist, tests/test_capability_registry.py, README.md, and this task's report-r1.yaml."
+  - "Any change to runtime behavior, lifecycle, failure/effect semantics, terminal_poll semantics, public schemas, capability registry semantics, tool inventory or ToolContract Kernel."
+  - "Any change to dependencies, requirements.lock, package_app.sh, package_provenance.py, installer/cutover scripts, signing policy, CFBundleVersion or app ownership metadata."
+  - "Any rewrite of historical TASK-0144/TASK-0145/TASK-0146 task/report/review evidence."
+  - "Any install, activation, restart, plugin reload, service mutation, runtime.env mutation, TCC/System Settings change or Cutover A execution."
+  - "Any branch creation, PR, force push, amend, squash, tag, release publication, repository metadata mutation or blind publication retry."
+  - "Any claim that ac9fc1e454ec876198fba9c46ad480fc8edb3bf8 itself is Runtime 0.3.0."
+  - "Any new abstraction, helper, release subsystem, version framework or duplicate version SSOT."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+assurance_alignment:
+  standards_revision: "22fc4d881d5a0ee71b3af2b3acadb4ce8258bbc1"
+  standards_requirement_ids: [COR-1.2, CMP-1.1, CMP-2.3, OPS-2.2, ASR-1.1, ASR-2.2, SUP-1.1, SUP-2.2, SUP-2.3]
+  obligations:
+    - id: COR-1.2
+      applicability: APPLICABLE
+      task_proof: "Expected release-metadata path succeeds: source SSOT and canonical bundle projection both identify 0.3.0 and repository-native packaging constructs a 0.3.0 package."
+    - id: CMP-1.1
+      applicability: APPLICABLE
+      task_proof: "Supported source/package interface remains truthful: package_app.sh consumes the existing version SSOT/projection contract while Kernel, tool inventory and public schemas remain unchanged."
+    - id: CMP-2.3
+      applicability: APPLICABLE
+      task_proof: "The supported release-identity transition is explicitly 0.2.2 -> 0.3.0 for source/package authority, while installed 0.2.2 remains unchanged until separately authorized Cutover A."
+    - id: OPS-2.2
+      applicability: APPLICABLE
+      task_proof: "Execute the existing repository-native package_app.sh procedure on the exact clean candidate and require it to reach a valid signed/provenance-checked 0.3.0 candidate state."
+    - id: ASR-1.1
+      applicability: APPLICABLE
+      task_proof: "Bind all material claims to exact candidate SHA/tree, canonical verifier result, package candidate identity and source/live observations."
+    - id: ASR-2.2
+      applicability: APPLICABLE
+      task_proof: "Record repeatable setup, command/check identity and explicit oracles for canonical verification and package metadata/provenance verification."
+    - id: SUP-1.1
+      applicability: APPLICABLE
+      task_proof: "Attribute package construction to exact source revision/tree, requirements.lock and existing signing/toolchain inputs; no construction input change is authorized."
+    - id: SUP-2.2
+      applicability: APPLICABLE
+      task_proof: "Record immutable source revision/tree, requirements.lock digest and package handoff/manifest identities emitted by existing provenance tooling."
+    - id: SUP-2.3
+      applicability: APPLICABLE
+      task_proof: "Require existing hash-locked dependency installation, immutable source staging, codesign verification and candidate/provenance validation to pass without modifying those mechanisms."
+  rule: "These are evidence obligations only; no maturity score or level claim is authorized."
+  documents_revision: "22fc4d881d5a0ee71b3af2b3acadb4ce8258bbc1"
+  document_domains:
+    DELIVERY: "release identity, packaging/version transition, and accepted Cutover A predecessor state"
+    QUALITY: "exact-candidate verification, source/package provenance, and unchanged behavior/schema proof"
+  documents_rule: "Use domains only as semantic ownership. Do not claim Agent Documents V1 adoption or DOCS_READY."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact implementation candidate declares Runtime 0.3.0 in the Python SSOT and canonical app CFBundleShortVersionString, with the existing version-consistency test updated and no second source SSOT introduced."
+    evidence_required: "Exact candidate diff plus passing canonical test/verifier evidence showing RUNTIME_VERSION=0.3.0 and plist projection equality."
+  - id: AC-2
+    requirement: "Repository-native package_app.sh constructs a package from the exact clean candidate without source modification, and built package metadata/payload identify Runtime 0.3.0."
+    evidence_required: "package_app.sh PASS; candidate_app/candidate_handoff/candidate_sha256 captured; built Info.plist=0.3.0; packaged version.py=0.3.0."
+  - id: AC-3
+    requirement: "Built package provenance binds the exact implementation candidate and existing locked construction inputs."
+    evidence_required: "Candidate handoff and runtime-manifest source revision/tree match exact candidate SHA/tree; requirements.lock identity and existing codesign/provenance validation PASS."
+  - id: AC-4
+    requirement: "TASK-0144/TASK-0145/TASK-0146 behavior and public contract remain unchanged outside authorized release metadata."
+    evidence_required: "Exact execution-base-to-candidate changed-file/diff inspection restricted to the four authorized files; Kernel=2, inventory=19, terminal_exec=2/2, terminal_start=3/3, terminal_poll=4/3; canonical ./verify PASS."
+  - id: AC-5
+    requirement: "Exact verified 0.3.0 source candidate and report are published non-force on canonical main while installed Runtime remains 0.2.2/90a87fca8755ddc673e749bb5bf3e4489045a9b8/Kernel 1."
+    evidence_required: "Fresh remote reconciliation for candidate and report-only child, plus read-only installed Runtime/provenance observation before completion."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Fresh-resolve GitHub. Require remote branches exactly {main}, no open PRs, local main=origin/main=remote main=the exact task-authoring execution base, ahead/behind 0/0, clean worktree/index, and TASK-0146-CUTOVER-A-PREP revision 1. Resolve accepted TASK-0146 review/current lineage and functional predecessor ac9fc1e454ec876198fba9c46ad480fc8edb3bf8."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Before mutation, inspect tracked live 0.2.2 release literals and confirm the only authorized source-facing corrections are agent_runtime/version.py, macos/AppBundle/Info.plist CFBundleShortVersionString, tests/test_capability_registry.py coupled assertions, and contradictory source-release claims in README.md. Preserve historical and installed-live 0.2.2 evidence."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Apply only the authorized metadata/test/doc edits and commit one coherent implementation candidate. Require clean worktree, capture exact candidate SHA/tree, and prove the execution-base-to-candidate diff changes only the four authorized files. Do not run a redundant focused-before-full suite; focused checks are diagnostic only if canonical verification fails or if they prove a distinct package predicate."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Run canonical ./verify on the exact clean implementation candidate. Require exit_code=0 and canonical modules/tests/postconditions PASS. No source writes may occur after this verification without creating a new candidate and re-running required evidence."
+      required: true
+    - id: CHECK-5
+      command_or_check: "With the same exact clean candidate and existing explicit non-ad-hoc signing identity, run macos/package_app.sh as verification only. Require its version-consistency, immutable staging, dependency hash, codesign and provenance checks PASS. Capture candidate_app, candidate_handoff and candidate_sha256; prove built Info.plist CFBundleShortVersionString=0.3.0, packaged agent_runtime/version.py reports 0.3.0, and handoff/runtime manifest bind the exact candidate revision/tree and locked construction inputs. Do not install or activate the package."
+      required: true
+    - id: CHECK-6
+      command_or_check: "After verifier/package PASS, fresh-resolve remote main and require it still equals the task execution base. Publish the exact verified candidate non-force, then fresh-reconcile remote main to that SHA. On ambiguous publication result, reconcile before any retry."
+      required: true
+    - id: CHECK-7
+      command_or_check: "Create .agent/tasks/TASK-0146-CUTOVER-A-PREP/report-r1.yaml as the sole report-only child, validate it with the pinned Foundation report validator, commit/publish non-force, fresh-reconcile exact parent/diff/remote main, read-only confirm installed Runtime remains 0.2.2 at revision 90a87fca8755ddc673e749bb5bf3e4489045a9b8 with Kernel 1, and stop NEEDS_REVIEW."
+      required: true
+  authoritative_verification:
+    required: true
+    mechanism: "Canonical ./verify plus repository-native macos/package_app.sh package verification on the same exact clean implementation candidate"
+    expected_signal: "Canonical verifier PASS; package build PASS; source/plist/built package Runtime version=0.3.0; package provenance binds exact candidate; behavior/schema invariants unchanged; installed Runtime remains 0.2.2."
+
+report_requirements:
+  path: .agent/tasks/TASK-0146-CUTOVER-A-PREP/report-r1.yaml
+  canonical_contract: "Foundation skills/contracts/IMPLEMENTATION_REPORT.md at 22fc4d881d5a0ee71b3af2b3acadb4ce8258bbc1"
+  record:
+    - "state=REPORTED and result=NEEDS_REVIEW"
+    - "exact task execution base, implementation candidate SHA/tree and functional predecessor ac9fc1e454ec876198fba9c46ad480fc8edb3bf8"
+    - "canonical ./verify identity/result on exact candidate"
+    - "package_app.sh result and built candidate_app/candidate_handoff/candidate_sha256 evidence"
+    - "source, plist, built package and packaged payload Runtime 0.3.0 evidence"
+    - "package handoff/runtime-manifest revision/tree and locked-construction-input provenance"
+    - "exact four-file implementation diff and Kernel/tool/schema invariants"
+    - "installed Runtime 0.2.2/revision 90a87fca8755ddc673e749bb5bf3e4489045a9b8/Kernel 1 unchanged"
+    - "candidate publication and report-only publication reconciliation"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
