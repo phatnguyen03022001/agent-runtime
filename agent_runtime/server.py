@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import logging
 import os
 import signal
 from functools import wraps
@@ -20,6 +21,8 @@ except ImportError:
     _ToolAnnotations = None
 
 from mcp.types import CallToolResult
+
+_MCP_SERVER_LOGGER = logging.getLogger("mcp.server.mcpserver.server")
 
 from .capacity import CAPACITY_OBSERVER_CONTRACT, observe_capacity
 from .contracts import (
@@ -180,9 +183,11 @@ class RuntimeMCPServer(MCPServer):
                     safe_next_action=SafeNextAction.FIX_REQUEST,
                 )
             if type(exc).__name__ == "UnexpectedToolError":
+                _MCP_SERVER_LOGGER.error("unexpected runtime tool failure")
                 return _unexpected_error_result(name)
             raise
         except Exception:
+            _MCP_SERVER_LOGGER.error("unexpected runtime tool failure")
             return _unexpected_error_result(name)
 
 
