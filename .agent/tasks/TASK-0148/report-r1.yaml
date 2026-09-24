@@ -1,0 +1,105 @@
+protocol_version: 3
+
+task_id: TASK-0148
+task_revision: 2
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0148/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  authorized_base_head: "9f80217de181f9dcad085564d34e05a493e075ec"
+  final_execution_head: "6ba77396391dbc7b8557686fb92683fe98dd5682"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+execution_skills_used:
+  required:
+    - executor
+    - verification
+    - security-review
+  recommended:
+    - reuse-first
+    - simplicity
+  external: []
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - repository_content_write
+    - canonical_verification
+    - live_runtime_read_only_observation
+    - installed_runtime_doctor
+    - git_commit
+    - non_force_git_publication
+    - remote_ref_reconciliation
+  available:
+    - repository_content_write
+    - canonical_verification
+    - live_runtime_read_only_observation
+    - installed_runtime_doctor
+    - git_commit
+    - non_force_git_publication
+    - remote_ref_reconciliation
+  missing: []
+  passed: true
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: PASS
+  evidence: "Exact final source candidate 6ba77396391dbc7b8557686fb92683fe98dd5682, tree 7ee20b30f6d560d4762e2abf1d605b200d7f5f31, passed canonical ./verify with exit_code=0: 58/58 modules and 741 tests, including 257 FAST_PARALLEL_SAFE and 484 SERIAL_HOST_SENSITIVE tests. Full TASK-0148 focused coverage after the final compatibility-only test repair passed 206/206 tests. Source identity is Runtime 0.3.0, ToolContract Kernel 2, exactly 20 public tools, fs_read_batch request/result 1/2 and fs_manage request/result 1/1. The exact verified candidate was published non-force and reconciled to remote main before this report."
+
+pushed: true
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "fs_read_batch keeps request schema v1 and exports result schema v2. Successful items preserve existing ordered range fields and add exact opened size_bytes, returned_bytes, eof, truncated and full raw-file lowercase sha256 when the complete file fits existing scan ceilings. When a selected range succeeds but whole-file hashing cannot complete within those ceilings, the range remains successful with sha256=null rather than weakening limits or emitting a range hash. Existing 20-item, output, UTF-8, per-item partial-error and scan-bound semantics remain covered."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "Deterministic CAS proof reads an eligible file through fs_read_batch, uses the returned full-file sha256 directly as fs_patch expected_sha256 and succeeds without an extra unaccounted read. A subsequent file mutation makes the previously returned SHA stale; fs_patch rejects the mismatch and leaves the changed file unpatched."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "fs_manage is one request/result schema 1/1 capability with exactly mkdir, move, delete and chmod. It is workspace-bound, network=NONE and mutation=BOUNDED; all paths are normalized cwd-relative descendants with descriptor-relative no-symlink handling and explicit protected-Runtime rejection. Success results record operation plus verified before/after path state and effect truth. Source public inventory is exactly 20 while Runtime version remains 0.3.0 and ToolContract Kernel remains 2."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "Focused security/correctness coverage proves expected-state and immediate identity revalidation, source replacement rejection, atomic no-overwrite destination-race handling, EXDEV pre-effect failure with no copy-delete fallback, outside-workspace/protected-runtime/symlink rejection, empty-directory-only deletion with no recursive delete, ordinary-bit regular-file chmod only, and mkdir existing-target/parents bound behavior. Relevant post-effect ambiguity follows TASK-0144 reconciliation semantics rather than blind retry."
+  - criterion_id: AC-5
+    status: PARTIAL
+    evidence: "Revision-2 recovery preserved checkpoint 53cad80758753e127fc2bf197e1125417500949e, tree 8d7e70272d16e14ab929026323d22b746eeffecc, parent d8463dab88f44b3e47a1be63cac337c26b1d3ddb. Its patch was reparented onto revision-2 base 9f80217de181f9dcad085564d34e05a493e075ec as 26f8c152bda1dd7442c50366d377b3905106530a with identical old/new patch SHA-256 c798710e54637810f4e3ed441cb3bba60dd9cea42d3691d8b85ba6b4e0dabf3. The revision-2 production-source delta beyond that transplant is only agent_runtime/doctor.py; tests/test_doctor.py closes its contract proof, while one directly affected existing fs_read adversarial assertion was updated after canonical verification exposed stale result-v1 equality. The final full focused suite passed 206/206, git diff --check passed, and exact final candidate 6ba77396391dbc7b8557686fb92683fe98dd5682 passed canonical ./verify 58/58 modules and 741 tests before non-force publication. Pre-task accepted live evidence binds installed Runtime 0.3.0 to activation revision 89111218720ddb2f12961f9375549733edd23ada on the nineteen-tool pre-TASK-0148 surface; this task performed no package build/install/restart/reload/cutover. Final live/local closure could not be freshly re-observed after publication because all device-routed Remote Desktop Commander RPCs began timing out, Agent Runtime MCP was unavailable in this session, and SentinelX reported no connected host."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Fresh recovery gate proved remote main=9f80217de181f9dcad085564d34e05a493e075ec, remote branches exactly {main}, open PRs=0 and TASK-0148 revision 2. The existing local recovery checkpoint was exactly HEAD=53cad80758753e127fc2bf197e1125417500949e, tree=8d7e70272d16e14ab929026323d22b746eeffecc, parent=d8463dab88f44b3e47a1be63cac337c26b1d3ddb, branch=main and clean before recovery."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "Remote revision-2 base is one task-authoring commit after d8463dab88f44b3e47a1be63cac337c26b1d3ddb and changes only .agent/tasks/TASK-0148/task.yaml. Rebase/transplant produced 26f8c152bda1dd7442c50366d377b3905106530a directly on 9f80217de181f9dcad085564d34e05a493e075ec. Excluding task.yaml, old checkpoint and transplanted patch digests are both c798710e54637810f4e3ed441cb3bba60dd9cea42d3691d8b85ba6b4e0dabf3 with identical changed-file lists. Fresh source projection then reported Runtime 0.3.0, Kernel 2, tools 20, fs_read_batch 1/2 and fs_manage 1/1."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "The newly authorized production-source compatibility correction changes only agent_runtime/doctor.py: stale 19-tool registry/schema/governance assumptions became exact 20-tool authority and schema validation now pins fs_read_batch 1/2 plus fs_manage 1/1 while preserving screen_capture governance and other doctor semantics. tests/test_doctor.py verifies the current versions and rejects regressions; doctor/schema focused tests passed 35/35. Canonical verification of candidate 7e1bd2c12f0f5523a164e7e58cf3cde30dc476b6 then exposed one stale exact-result-v1 assertion in the already-authorized fs_read adversarial test. That test-only compatibility repair invalidated focused-evidence reuse, so the full TASK-0148 focused suite was rerun and passed 206/206."
+  - check_id: CHECK-4
+    result: PASS
+    evidence: "Final implementation candidate is 6ba77396391dbc7b8557686fb92683fe98dd5682 with tree 7ee20b30f6d560d4762e2abf1d605b200d7f5f31. Revision-2 lineage is base 9f80217de181f9dcad085564d34e05a493e075ec -> exact checkpoint transplant 26f8c152bda1dd7442c50366d377b3905106530a -> doctor compatibility 7e1bd2c12f0f5523a164e7e58cf3cde30dc476b6 -> adversarial test compatibility 6ba77396391dbc7b8557686fb92683fe98dd5682. No amend, squash, branch, PR or force push occurred; git diff --check passed and the final candidate worktree was clean."
+  - check_id: CHECK-5
+    result: PASS
+    evidence: "Canonical ./verify on exact clean final candidate 6ba77396391dbc7b8557686fb92683fe98dd5682 completed with exit_code=0: 58/58 modules, 741 tests, 257 fast-lane and 484 serial-lane tests. No source/test write occurred after this verified candidate was created."
+  - check_id: CHECK-6
+    result: PASS
+    evidence: "Immediately before publication, fresh GitHub resolution proved remote main still equaled exact revision-2 base 9f80217de181f9dcad085564d34e05a493e075ec, branches exactly {main} and open PRs=0. A non-force push advanced main to exact verified candidate 6ba77396391dbc7b8557686fb92683fe98dd5682; fresh GitHub compare then resolved remote main identically to that candidate."
+  - check_id: CHECK-7
+    result: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    evidence: "Candidate publication is remotely reconciled, but final local/live closure capability became unavailable before the report phase could complete normally. Repeated device-routed Remote Desktop Commander ping/start/read RPCs timed out after publication while account-side quota remained available; Agent Runtime MCP is not exposed in this session and SentinelX reports no connected host. Therefore a fresh installed-Runtime confirmation and final canonical-local fast-forward to the report commit cannot be truthfully proven. This report is persisted remotely as the sole report-only child so the verified/published candidate and exact blocker are durable."
+
+blockers:
+  - "Final local/live closure capability unavailable after verified candidate publication: no currently available authorized host surface can freshly confirm installed Runtime state or reconcile the canonical local checkout to the report commit."
+
+result: CURRENT_PHASE_CAPABILITY_UNAVAILABLE
