@@ -1,0 +1,203 @@
+protocol_version: 3
+
+task_id: TASK-0143
+task_revision: 1
+state: APPROVED
+
+origin:
+  type: explicit_operator_authority
+  task_id: TASK-0143
+  gap_id: ""
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "a8c346fc30712e9866a8453b80da50fd8487079f"
+
+architect_analysis_skills: []
+
+execution_skills:
+  required:
+    - executor
+  recommended: []
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "Operator/Architect TASK-0143 execution packet"
+    role: "canonical task authority"
+    precedence: 1
+  - source: ".agent/tasks/TASK-0142/review-r1.yaml@cfba693e21aad1aba4cd1b97110dc0843c4e13ec"
+    role: "accepted predecessor authority"
+    precedence: 2
+
+structure_authority:
+  status: RESOLVED
+  source: "Operator/Architect TASK-0143 execution packet"
+  rationale: "Bounded maintenance of existing predecessor classification, terminal polling contract, Runtime identity, existing packaging/cutover path, tests, and task evidence only."
+
+objective: "Close the remaining Runtime execution-survival gaps in one Runtime 0.2.2 maintenance release and one installed-package cutover: admit the exact coherent bf98ec4e9bcda97dfdc0ca52b8e0537dae14a1cc predecessor through the existing split-v1 ServiceManagement contract, add an optional terminal_poll wait_for mode that can wait for terminal state or a monotonic deadline without returning on noisy output, raise max wait_ms to 30000, verify the exact candidate, package it, activate it transactionally through an independent SentinelX control plane, and prove the installed long-poll behavior without changing unrelated Runtime architecture."
+
+scope:
+  required_changes:
+    - "Add only bf98ec4e9bcda97dfdc0ca52b8e0537dae14a1cc to the existing SPLIT_SERVICE_MANAGEMENT_REVISIONS contract; preserve aggregate-v1, existing split-v1, and unknown fail-closed behavior."
+    - "Evolve terminal_poll with optional wait_for enum output_or_state|terminal_or_deadline, defaulting to output_or_state."
+    - "Preserve output_or_state compatibility: return on observable output, state change, or deadline."
+    - "Implement terminal_or_deadline with monotonic deadline accounting so routine PTY/stdout/stderr output cannot cause early return; do not busy-spin or fixed-sleep poll."
+    - "Raise terminal_poll MAX_WAIT_MS from 1000 to 30000 while keeping wait_ms=0 immediate and rejecting wait_ms>30000."
+    - "Keep terminal_start request/result schemas at 2/2; advance only terminal_poll request schema to 3 while keeping its result schema at 2 unless a result change is proven necessary."
+    - "Set Runtime and app bundle short version to 0.2.2 and regenerate/recompute canonical schema identities using existing tooling."
+    - "Add deterministic focused regression coverage for exact predecessor classification/cutover routing, wait_for validation/defaults, noisy-output non-early-return, terminal/deadline wakeups, 30000 boundary, immediate observation, and unchanged retention/output/lifetime/start_identity/tool-surface behavior."
+    - "Create an early coherent implementation commit after focused tests pass; any later fix must be a child commit, never amend/reset a coherent checkpoint."
+    - "Run canonical ./verify on the exact candidate through SentinelX background execution, with bounded external evidence and no concurrent source mutation."
+    - "Publish the exact verified implementation candidate non-force to main after fresh remote reconciliation."
+    - "Build, package, seal, hand off, and pinned-validate exactly that published implementation candidate using the existing canonical provenance workflow."
+    - "Perform install-prebuilt/cutover/service activation/post-cutover doctor only through SentinelX or another independently surviving authorized host control plane; Agent Runtime must not self-replace."
+    - "Require the installed old package to be coherent, exact predecessor bf98ec4e9bcda97dfdc0ca52b8e0537dae14a1cc, newly classified split-v1, with no pending cutover transaction or material active persistent terminal child."
+    - "Use only the existing transactional ./install.sh --install-prebuilt path with exact expected candidate and handoff SHA-256 values."
+    - "Prove post-cutover RUNNING, doctor healthy 10/10, clean cutover transaction, exact TASK-0143 implementation provenance, Runtime 0.2.2, 19 tools, terminal_start 2/2, terminal_poll 3/2, wait_for enum, and max_wait_ms=30000."
+    - "Run installed Runtime noisy-output long-poll smoke with caller-known start_identity and prove terminal_or_deadline does not return solely on routine output; also prove omitted wait_for retains output_or_state compatibility."
+    - "Run canonical ./verify again as a keyed persistent installed Runtime process using terminal_or_deadline wait_ms=30000; record structured terminal truth, verifier postconditions, duration, poll count, output-triggered early returns, cursor_expired, and dropped_output_bytes."
+    - "Create and publish .agent/tasks/TASK-0143/report-r1.yaml as a report-only child with exact execution/candidate/activation/package/schema/cutover/live-proof evidence and terminal result NEEDS_REVIEW."
+  allowed_existing_files_or_components:
+    - "ServiceManagement predecessor classification and existing split-v1 cutover tests."
+    - "agent_runtime terminal session/poll implementation, MCP request contracts, capability registry/schema export, version identity, and directly affected tests/docs."
+    - "macos/AppBundle/Info.plist and existing canonical package/provenance/install/cutover scripts only as required for 0.2.2 packaging and activation."
+    - ".agent/tasks/TASK-0143 task/report artifacts."
+    - "/Users/tienphat/Developer/.agent-runtime-task0143-evidence external bounded evidence root."
+
+invariants:
+  - "Exactly one installed Runtime cutover is authorized for this task; do not split source corrections into separate activations."
+  - "The known installed predecessor is bf98ec4e9bcda97dfdc0ca52b8e0537dae14a1cc with git_tree 1a473378a12504f7c4b1a598f96ced1813c72744; admission is exact and explicit only."
+  - "Unknown predecessor revisions remain unknown and canonical cutover fails closed; signature alone or blob similarity must not grant runtime trust."
+  - "Do not globally switch predecessor classification to blob-based trust and do not introduce a new ServiceManagement contract generation."
+  - "Public MCP tool count and order remain exactly 19 and ToolContract Kernel remains 1."
+  - "Runtime target version is exactly 0.2.2."
+  - "terminal_start schemas remain request=2,result=2; terminal_poll target is request=3,result=2 unless implementation proves a result schema change is genuinely required, which requires Architect judgment before widening scope."
+  - "wait_for is a closed enum with compatibility default output_or_state; wait_ms=0 is immediate in either mode."
+  - "terminal_or_deadline may wake internally on existing conditions but must loop until terminal state or monotonic deadline and must not busy-spin or sleep-poll."
+  - "MAX_WAIT_MS is exactly 30000; 194 seconds is guidance only and never a correctness assumption."
+  - "Runtime process truth remains structured lifecycle, exit_code, termination_reason, cursor_expired, and dropped_output_bytes; verifier/log text is not process truth."
+  - "exit_code=0 means command success only; verifier PASS additionally requires the correct exact candidate and canonical verifier postconditions."
+  - "Hard running wall stays 3600s; completed retention stays 3600s; completed count stays 16; retained output stays 64 KiB; poll output stays 16 KiB; active session ceiling stays 6."
+  - "start_identity semantics, reserve-before-Popen recovery, output/cursor bounds, and cross-Runtime-restart non-resurrection remain unchanged from accepted TASK-0142."
+  - "No long coherent work may exist only in an uncommitted worktree; checkpoint task authority first, implementation after focused PASS, and child fixes as needed."
+  - "Canonical ./verify before cutover must run via SentinelX background=true; do not rely on the pre-cutover Agent Runtime for the authoritative long verifier."
+  - "No source mutation may run concurrently with the authoritative background verifier."
+  - "Self-cutover operations install-prebuilt, cutover, service restart/activation, and post-cutover doctor require SentinelX or another independently surviving authorized control plane."
+  - "If no independent control plane exists, stop CURRENT_PHASE_CAPABILITY_UNAVAILABLE rather than self-cut over."
+  - "Every consequence-bearing lost response is OUTCOME_UNKNOWN and requires fresh reconciliation before any retry."
+  - "Package provenance must bind the exact published implementation candidate, not a report/review/later main commit or dirty tree."
+  - "runtime.env, workspace, session limit, parallelism, tunnel identity, TCC, and Keychain must remain unchanged."
+  - "Do not kill material user work; configured persistent session ceiling is not evidence of active processes."
+  - "If the current ChatGPT plugin cache remains pre-cutover after local activation proof, stop OPERATOR_TRANSITION_REQUIRED with exactly one reload/reconnect instruction and do not reinstall."
+  - "Repository remains main-only with no PR, force push, branch creation, or blind publication retry."
+
+forbidden_changes:
+  - "database, Redis, persistent job store, daemon, generic workflow engine, MCP Tasks framework, new Runtime listener, or cross-Runtime-restart process resurrection"
+  - "new public MCP tool, changed tool order, or unrelated capability schema bump"
+  - "new ServiceManagement contract generation or weakened unknown-predecessor fail-closed behavior"
+  - "manual runtime-manifest.json or installed Info.plist edits, rsync/cp into installed app, ad-hoc codesign, delete-installed-package-first flow, or forced ServiceManagement state"
+  - "hard running wall, completed retention, completed result count, retained output, poll output, or active session ceiling changes"
+  - "requirements/dependency changes not strictly required by this task"
+  - "source mutation while authoritative background verification is running"
+  - "amend, squash, force push, or reset-away of coherent TASK-0143 checkpoints"
+  - "package from report/review commit, dirty tree, or arbitrary current main"
+  - "Agent Runtime as sole transport for replacing/restarting Agent Runtime itself"
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: forbidden
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "The exact bf98 predecessor is explicitly classified split-v1 through SPLIT_SERVICE_MANAGEMENT_REVISIONS; canonical split-v1 refresh routing is used; arbitrary unknown remains unknown/fail-closed; aggregate-v1 and existing split-v1 behavior are unchanged."
+    evidence_required: "Focused deterministic classification/routing regressions plus pre-cutover new-candidate classification of the installed bf98 predecessor."
+  - id: AC-2
+    requirement: "terminal_poll accepts optional wait_for output_or_state|terminal_or_deadline, defaults to output_or_state, has max wait_ms 30000, preserves immediate wait_ms=0, and rejects invalid enum or wait_ms>30000."
+    evidence_required: "Focused request-contract, MCP conformance, boundary, and compatibility tests."
+  - id: AC-3
+    requirement: "terminal_or_deadline never returns solely because noisy output arrives; it returns only on terminal state or monotonic deadline, without busy-spin/fixed-sleep polling."
+    evidence_required: "Deterministic synchronization/fake-clock tests plus installed noisy-output smoke with output_triggered_early_returns=0."
+  - id: AC-4
+    requirement: "Runtime identity is 0.2.2 with exactly 19 tools, ToolContract Kernel 1, terminal_start 2/2, terminal_poll 3/2, unchanged unrelated schemas, and recomputed canonical schema bundle/export identity."
+    evidence_required: "Focused schema/registry/export tests and exact recorded schema hashes/length."
+  - id: AC-5
+    requirement: "Exact implementation candidate is durably checkpointed after focused PASS, canonical ./verify completes through SentinelX background execution on that exact SHA with structured exit_code=0 and valid canonical verifier summary/postconditions, then candidate is published non-force after fresh remote reconciliation."
+    evidence_required: "Candidate SHA/tree, focused counts, SentinelX background job terminal result, compact verifier summary, log path, and remote publication reconciliation."
+  - id: AC-6
+    requirement: "Exactly the published implementation candidate is built, packaged, sealed, handed off, pinned-validated, and activated once through the existing transactional install-prebuilt path using SentinelX; old bf98 predecessor takes the canonical split-v1 refresh path."
+    evidence_required: "candidate_sha256, handoff_sha256, runtime_revision, git_tree, version, schema identity, pinned validation PASS, cutover result, and clean transaction state."
+  - id: AC-7
+    requirement: "Post-cutover Runtime is RUNNING and doctor --json is healthy with 10/10 PASS, including runtime identity, capability registry, tool contract schema, installed package identity, service registration, cutover identity, and governance protection; installed provenance names the exact implementation candidate."
+    evidence_required: "SentinelX post-cutover status/doctor structured output and provenance evidence."
+  - id: AC-8
+    requirement: "Installed Runtime noisy-output smoke proves same start_identity/session, no duplicate spawn, natural_exit, exit_code=0, truthful bounded output, terminal_or_deadline non-output-trigger behavior, and omitted-wait_for legacy output_or_state behavior."
+    evidence_required: "Structured start/poll/final results with elapsed timing and reconciliation evidence."
+  - id: AC-9
+    requirement: "Real installed keyed ./verify uses terminal_or_deadline wait_ms=30000 and ends natural_exit with exit_code=0; canonical verifier postconditions pass; poll count is bounded by long-poll timing rather than log frequency."
+    evidence_required: "Fresh start_identity, terminal truth, compact canonical verifier summary, duration, poll_calls, output_triggered_early_returns=0, cursor_expired, and dropped_output_bytes."
+  - id: AC-10
+    requirement: "runtime.env, workspace, session limit, parallelism, tunnel identity, TCC, and Keychain remain unchanged; repository is clean/synced; report-r1 is a report-only published child and runtime_activation_revision equals the implementation candidate."
+    evidence_required: "Before/after bounded identity checks, final repo/remote reconciliation, report commit identity, and plugin READY or OPERATOR_TRANSITION_REQUIRED state."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Fresh-resolve canonical main, require remote branches={main}, open PRs=0, accepted predecessor review cfba693e21aad1aba4cd1b97110dc0843c4e13ec, then require clean/synced local main before source mutation."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Validate this TASK-0143 task artifact with the pinned protocol-v3 validator before implementation mutation; commit and publish task authority first, then fresh-resolve exact execution base."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Run focused predecessor, terminal-poll, schema/conformance, retention/output/lifetime/start_identity/surface tests; commit coherent source candidate immediately on PASS."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Run ./verify via SentinelX background=true on exact candidate, wait for terminal job result, require structured exit_code=0 and canonical verifier summary/postconditions PASS; do not mutate source concurrently."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Fresh-resolve and publish exact candidate non-force; package/seal/handoff/pinned-validate exactly that published SHA."
+      required: true
+    - id: CHECK-6
+      command_or_check: "Through SentinelX only, perform pre-cutover gate, canonical install-prebuilt cutover, service activation, doctor 10/10, transaction cleanup, and installed provenance validation."
+      required: true
+    - id: CHECK-7
+      command_or_check: "Run installed noisy-output compatibility/long-poll smoke and real keyed ./verify long-poll proof; validate structured process truth separately from verifier postconditions."
+      required: true
+    - id: CHECK-8
+      command_or_check: "Author/validate/publish report-r1 as report-only child, fresh-reconcile remote/local main, and stop NEEDS_REVIEW."
+      required: true
+  authoritative_verification:
+    required: true
+    mechanism: "./verify on the exact implementation candidate via SentinelX background carrier, plus post-cutover keyed ./verify through installed Runtime"
+    expected_signal: "Exact candidate; background job terminal completion; structured exit_code=0; canonical verifier modules/postconditions PASS; installed keyed run natural_exit with exit_code=0 and independently validated verifier summary."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
