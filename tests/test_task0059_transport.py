@@ -129,6 +129,7 @@ class SharedMCPTransportTests(unittest.IsolatedAsyncioTestCase):
                                     str(release),
                                 ],
                                 "cwd": str(workspace),
+                                "start_identity": f"{terminal_index + 1:032x}",
                                 "timeout_seconds": 10,
                             },
                         )
@@ -190,6 +191,7 @@ class SharedMCPTransportTests(unittest.IsolatedAsyncioTestCase):
                                     str(spawned),
                                 ],
                                 "cwd": str(workspace),
+                                "start_identity": f"{index + 1:032x}",
                                 "timeout_seconds": 10,
                             },
                         )
@@ -234,11 +236,17 @@ class SharedMCPTransportTests(unittest.IsolatedAsyncioTestCase):
                                 str(workspace / "seventh-spawned"),
                             ],
                             "cwd": str(workspace),
+                            "start_identity": f"{7:032x}",
                             "timeout_seconds": 10,
                         },
                     )
                     self.assertTrue(seventh.is_error)
-                    self.assertIn("capacity", _result_text(seventh).lower())
+                    error = seventh.structured_content["error"]
+                    self.assertEqual(error["code"], "LIMIT_EXCEEDED")
+                    self.assertEqual(error["reason_code"], "CAPACITY_EXHAUSTED")
+                    self.assertEqual(error["effect_state"], "absent")
+                    self.assertFalse(error["reconciliation_required"])
+                    self.assertEqual(error["safe_next_action"], "wait")
                     self.assertFalse((workspace / "seventh-spawned").exists())
                     active, peak = map(int, spawned.read_text().split(","))
                     self.assertEqual(active, 6)
