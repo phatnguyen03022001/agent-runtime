@@ -1,0 +1,218 @@
+protocol_version: 3
+
+task_id: TASK-0144
+task_revision: 1
+state: APPROVED
+title: "Unified Failure / Effect Contract"
+
+origin:
+  type: explicit_operator_authority
+  task_id: TASK-0144
+  gap_id: GAP-04
+  roadmap_artifact_sha256: "c86fb828a11850ef0db0e4918c2ba02eefed30024119348838f264f4de839b77"
+  roadmap_authority: NONE
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+  canonical_branch: main
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  preferred_transport: AGENT_RUNTIME
+  long_verification_carrier: SENTINELX_BACKGROUND
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+live_runtime_authority:
+  runtime_version: "0.2.2"
+  runtime_activation_revision: "90a87fca8755ddc673e749bb5bf3e4489045a9b8"
+  activation_tree: "5c19b1a6d9f568162d5bb7ee36a2dccc3dde604b"
+  rule: "TASK-0144 is source-development only. Source main may diverge from the installed activation revision. No live Runtime cutover is authorized."
+
+authority_sources:
+  - source: "Operator/Architect TASK-0144 execution packet"
+    role: "canonical task authority"
+    precedence: 1
+  - source: "Accepted TASK-0144 research roadmap artifact sha256:c86fb828a11850ef0db0e4918c2ba02eefed30024119348838f264f4de839b77"
+    role: "advisory research only"
+    precedence: 2
+
+structure_authority:
+  status: RESOLVED
+  source: "Operator/Architect TASK-0144 execution packet"
+  rationale: "Evolve the existing typed Runtime failure contract minimally; do not create a parallel error subsystem or widen later roadmap scope."
+
+objective: >-
+  Close GAP-04 only by evolving the existing Runtime typed failure contract into one stable,
+  machine-readable failure/effect contract shared by public Runtime tools, while preserving MCP
+  protocol-level tool-error semantics, success-response behavior, TASK-0143 execution invariants,
+  and the currently installed Runtime activation.
+
+scope:
+  required_changes:
+    - "Inspect and reuse ContractErrorCode, ContractError, CapabilityFailure, RuntimeValidationError, RuntimeStateError, TypedToolErrorEnvelope, TypedToolErrorPayload, server sanitization/error translation, and ToolContract Kernel."
+    - "Define stable structured failure fields equivalent to code, reason_code, message, retryable, effect_state, reconciliation_required, and safe_next_action."
+    - "Use effect_state closed values absent|present|unknown."
+    - "Use safe_next_action closed values fix_request|retry|wait|reconcile|unsupported|report_defect."
+    - "Classify invalid requests as no-effect, non-retryable, fix_request failures."
+    - "Classify authority/precondition conflicts without converting expected state conflicts into internal errors."
+    - "Classify capacity rejection as pre-dispatch effect_state=absent, retryable=true, safe_next_action=wait and prove admission occurs before consequence-bearing dispatch."
+    - "Preserve TASK-0142 pre-effect start-failure semantics as effect_state=absent without silently making the identity respawnable."
+    - "Classify any possible post-effect/lost-outcome failure as effect_state=unknown, reconciliation_required=true, safe_next_action=reconcile; retryable must never override reconciliation."
+    - "Represent known effect presence as effect_state=present without equating that fact to higher-level verification success."
+    - "Classify capability/governance unavailability as absent, non-reconciling, safe_next_action=unsupported."
+    - "Classify unexpected internal failures from an explicit execution boundary: absent/report_defect only when no consequence-bearing effect was possible; otherwise unknown/reconcile."
+    - "Preserve MCP failure semantics using the strongest supported mcp==2.2.0 mechanism: CallToolResult isError=true plus structuredContent. Never encode a covered failure as a normal successful result."
+    - "Keep message bounded, sanitized, diagnostic, and unnecessary for machine action selection."
+    - "Inventory current public failure producers across all 19 public tools and prove the shared contract covers their public failure paths."
+    - "Add deterministic focused tests for required classifications, serialization/schema exactness, message sanitization/bounds, and MCP 2.2.0 transport compatibility."
+    - "Commit a coherent implementation candidate immediately after focused PASS; later corrections must be child commits."
+    - "Run canonical ./verify on the exact candidate using recoverable Runtime or SentinelX background carrier and require structured completion with exit_code=0 plus verifier postconditions PASS."
+    - "Publish the exact verified candidate non-force after fresh remote reconciliation."
+    - "Create and publish .agent/tasks/TASK-0144/report-r1.yaml as a report-only child and stop NEEDS_REVIEW."
+  allowed_existing_files_or_components:
+    - "agent_runtime/tool_contract.py"
+    - "agent_runtime/contracts.py"
+    - "agent_runtime/errors.py"
+    - "agent_runtime/server.py"
+    - "Existing public tool modules only where required to supply explicit effect-boundary classification."
+    - "Directly affected tests, schema projections, generated contract metadata, and documentation."
+    - ".agent/tasks/TASK-0144 task/report artifacts"
+
+invariants:
+  - "TASK-0144 owns GAP-04 only."
+  - "No live Runtime build, package, install, restart, plugin reload, cutover, or runtime.env change is authorized."
+  - "Installed live Runtime remains 0.2.2 at activation revision 90a87fca8755ddc673e749bb5bf3e4489045a9b8."
+  - "Success responses remain semantically unchanged unless a directly coupled error-schema projection requires metadata evolution."
+  - "Public tool count/order and TASK-0143 execution behavior remain unchanged."
+  - "start_identity reserve-before-Popen semantics, running hard wall, completed retention, output cursor behavior, terminal_or_deadline behavior, and MAX_WAIT_MS=30000 remain unchanged."
+  - "No covered machine decision depends on parsing English message text."
+  - "Exception occurrence alone never implies effect_state=absent."
+  - "Timeout or lost response alone never implies retry is safe."
+  - "When absence or presence cannot be proven from an explicit boundary, effect_state=unknown."
+  - "retryable cannot override reconciliation_required."
+  - "Expected state conflicts are not internal defects."
+  - "Governance/capability denial is not an internal defect."
+  - "MCP failure semantics require isError=true together with structured machine-readable content under pinned mcp==2.2.0."
+  - "Do not introduce a private wire protocol."
+  - "Use the smallest closed vocabulary needed for current Runtime failure classes; do not proliferate dozens of new codes."
+  - "ToolContract Kernel may advance from 1 to 2 only if genuinely required by the semantic contract; if advanced, document only the exact delta and update projections/tests consistently."
+  - "No source mutation may run concurrently with authoritative long verification."
+  - "Consequence-bearing publication with lost response is OUTCOME_UNKNOWN and requires fresh remote observation before retry."
+  - "No amend, reset-away, squash, branch creation, PR, force push, or blind publication retry."
+
+forbidden_changes:
+  - "GAP-01 pipe execution"
+  - "GAP-02 terminal_exec lifecycle redesign"
+  - "GAP-03 repo_remote_observer"
+  - "GAP-05 output budgets"
+  - "GAP-06 read SHA metadata"
+  - "GAP-07 continuation cursors"
+  - "GAP-08 fs_manage"
+  - "GAP-09 capacity fields"
+  - "GAP-10 advertised capability changes"
+  - "GAP-11 runtime_capabilities summary"
+  - "GAP-12 MCP Tasks"
+  - "GAP-13 restart durability"
+  - "unrelated dependency changes"
+  - "new Runtime listener, daemon, database, workflow engine, or background job system"
+  - "live package/install/service changes"
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  dependency_change: revised_contract_required
+  public_success_contract_change: revised_contract_required
+  blocking_gap_behavior: ARCHITECT_JUDGMENT_REQUIRED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "A single shared structured failure/effect contract exposes code, reason_code, message, retryable, effect_state, reconciliation_required, and safe_next_action with closed effect/action vocabularies."
+    evidence_required: "Focused contract/model/schema tests."
+  - id: AC-2
+    requirement: "Invalid request, authority/precondition, capacity, pre-effect start, post-effect unknown, known-present, unsupported capability, and internal-defect paths follow the Architect-approved effect/reconciliation semantics."
+    evidence_required: "Deterministic boundary-aware failure tests covering all required classes."
+  - id: AC-3
+    requirement: "MCP transport remains a tool error while preserving machine-readable structured Runtime error content under pinned mcp==2.2.0."
+    evidence_required: "SDK/API inspection plus MCP conformance test asserting isError=true and exact structuredContent."
+  - id: AC-4
+    requirement: "Covered machine decisions require zero English-string parsing; messages are bounded and sanitized."
+    evidence_required: "Tests derive actions solely from structured fields and assert message bounds/sanitization."
+  - id: AC-5
+    requirement: "Current public failure producers across all 19 tools are mapped to the shared contract without execution-behavior redesign or later-gap implementation."
+    evidence_required: "Internal mapping inventory plus focused regression coverage."
+  - id: AC-6
+    requirement: "Exact implementation candidate passes focused verification and canonical ./verify, is published non-force, and the repository report records exact candidate/tree/schema/kernel/transport evidence."
+    evidence_required: "Candidate SHA/tree, focused results, structured verifier completion, remote publication evidence, and report-only child."
+  - id: AC-7
+    requirement: "Live Runtime remains unchanged at 0.2.2 / 90a87fca8755ddc673e749bb5bf3e4489045a9b8."
+    evidence_required: "Report records live_runtime=UNCHANGED and accepted activation revision."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Fresh-resolve GitHub main, require exact initial main 8be273f8179e6fe001c5b86b820c981363fabca6, remote branches={main}, open PRs=0, then clean/sync local main."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Validate TASK-0144 revision 1 protocol-v3 authority, commit it alone, publish it first, then fresh-resolve the exact execution base."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Inspect pinned mcp==2.2.0 SDK/API and prove tool-error semantics plus structuredContent can coexist; otherwise stop ARCHITECT_JUDGMENT_REQUIRED before protocol widening."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Create a compact internal mapping of public failure producers before implementation and reuse existing typed contracts rather than a parallel subsystem."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Run deterministic focused tests for all required classifications, serialization/schema, message bounds/sanitization, explicit effect boundaries, and MCP conformance; commit coherent candidate immediately on PASS."
+      required: true
+    - id: CHECK-6
+      command_or_check: "Run canonical ./verify on the exact candidate through a recoverable carrier, require structured completion exit_code=0 and canonical verifier postconditions PASS, with no concurrent source mutation."
+      required: true
+    - id: CHECK-7
+      command_or_check: "Fresh-resolve remote main, publish exact candidate non-force, reconcile any lost publication response before retry."
+      required: true
+    - id: CHECK-8
+      command_or_check: "Author, validate, and publish report-r1 as a report-only child; fresh-reconcile clean/synced main and stop NEEDS_REVIEW."
+      required: true
+  authoritative_verification:
+    required: true
+    mechanism: "./verify on the exact implementation candidate via accepted recoverable Runtime 0.2.2 keyed execution or SentinelX background"
+    expected_signal: "Exact candidate, structured terminal completion, exit_code=0, canonical verifier modules/tests/postconditions PASS."
+
+report_requirements:
+  path: .agent/tasks/TASK-0144/report-r1.yaml
+  record:
+    - execution_base
+    - implementation_candidate
+    - candidate_tree
+    - error_effect_contract_version
+    - tool_contract_kernel_version
+    - exact_structured_fields
+    - closed_enum_values
+    - failure_mapping_coverage
+    - focused_tests
+    - canonical_verify
+    - success_response_compatibility
+    - mcp_error_transport_semantics
+    - live_runtime_unchanged
+    - runtime_activation_revision
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
