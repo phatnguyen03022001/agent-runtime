@@ -167,6 +167,9 @@ class _Session:
     stdout_capture: _BoundedPipeCapture | None = None
     stderr_capture: _BoundedPipeCapture | None = None
     readers_remaining: int = 0
+    pipe_reader_failed: bool = False
+    pipe_closing: bool = False
+    cleanup_failed: bool = False
     deadline_mono: float | None = None
     status: str = "running"
     lifecycle: str = "RUNNING"
@@ -228,7 +231,7 @@ class TerminalSessionManager:
             if max_active_sessions is None
             else _validated_session_limit(max_active_sessions)
         )
-        self._admission = heavy_execution_admission() if admission is None else admission
+        self._admission = admission
         self._sessions: dict[str, _Session] = {}
         self._start_identities: dict[str, str] = {}
         self._lock = threading.RLock()
@@ -334,7 +337,8 @@ class TerminalSessionManager:
             raise capacity_error
 
         try:
-            lease = self._admission.acquire()
+            admission = self._admission or heavy_execution_admission()
+            lease = admission.acquire()
         except BaseException as exc:
             if checked_identity is None:
                 with self._lock:
@@ -512,41 +516,38 @@ class TerminalSessionManager:
         )
         session = self._resolve_session(session_id=None, start_identity=start_identity)
         with session.changed:
-            while session.status != "exited":
+            while session.status != "exited" and not session.cleanup_failed:
                 deadline = session.deadline_mono
                 remaining = None if deadline is None else deadline - time.monotonic()
                 if remaining is not None and remaining <= 0:
                     break
                 session.changed.wait(remaining)
+        if session.cleanup_failed and session.status != "exited":
+            raise self._post_effect_error(
+                "terminal_exec dispatch occurred but process cleanup is incomplete",
+                "PROCESS_CLEANUP_FAILED",
+            )
         if session.status != "exited":
             self._cleanup_process(session, "timeout")
         if session.lifecycle == "START_FAILED_POST_EFFECT":
-            error = RuntimeStateError(
+            raise self._post_effect_error(
                 "terminal_exec dispatch occurred but completion is unknown",
-                reason_code="PROCESS_START_FAILED_POST_EFFECT",
+                "PROCESS_START_FAILED_POST_EFFECT",
             )
-            annotate_failure(
-                error,
-                code=ContractErrorCode.INTERNAL_ERROR,
-                reason_code="PROCESS_START_FAILED_POST_EFFECT",
-                message="terminal_exec dispatch occurred but completion is unknown",
-                retryable=False,
-                effect_state=EffectState.UNKNOWN,
-                reconciliation_required=True,
-                safe_next_action=SafeNextAction.RECONCILE,
-            )
-            raise error
         if session.lifecycle == "START_FAILED_PRE_EFFECT":
             raise RuntimeStateError(
                 "terminal_exec failed before process dispatch",
                 reason_code="PROCESS_START_FAILED_PRE_EFFECT",
             )
         if session.stdout_capture is None or session.stderr_capture is None:
-            raise RuntimeStateError("terminal_exec pipe captures are unavailable")
+            raise self._post_effect_error(
+                "terminal_exec dispatch occurred but output capture is unavailable",
+                "PROCESS_CAPTURE_UNAVAILABLE",
+            )
         if session.exit_code is None:
-            raise RuntimeStateError(
-                "terminal_exec process completion has no exit code",
-                reason_code="PROCESS_COMPLETION_UNKNOWN",
+            raise self._post_effect_error(
+                "terminal_exec dispatch occurred but process completion has no exit code",
+                "PROCESS_COMPLETION_UNKNOWN",
             )
         return {
             "cwd": session.cwd,
@@ -692,7 +693,11 @@ class TerminalSessionManager:
                         with self._lock:
                             self._remove_session_locked(session.session_id)
                 else:
-                    self._cleanup_process(session, "hard_wall_timeout")
+                    try:
+                        self._cleanup_process(session, "hard_wall_timeout")
+                    except Exception:
+                        # Preserve the keyed uncertain session; a later reaper pass may retry cleanup.
+                        pass
                 affected.append(session.session_id)
 
         with self._lock:
@@ -792,15 +797,37 @@ class TerminalSessionManager:
 
     def _pipe_reader(self, session: _Session, stream_name: str, stream: Any) -> None:
         capture = session.stdout_capture if stream_name == "stdout" else session.stderr_capture
+        reader_failed = False
         try:
             while True:
-                chunk = os.read(stream.fileno(), _READ_CHUNK_BYTES)
+                try:
+                    chunk = os.read(stream.fileno(), _READ_CHUNK_BYTES)
+                except InterruptedError:
+                    continue
+                except Exception:
+                    with session.changed:
+                        if not session.pipe_closing:
+                            session.pipe_reader_failed = True
+                            session.lifecycle = "START_FAILED_POST_EFFECT"
+                            reader_failed = True
+                        session.changed.notify_all()
+                    break
                 if not chunk:
-                    return
-                with session.changed:
+                    break
+                try:
                     if capture is not None:
                         capture.consume(chunk)
-                    self._append_pipe_output_locked(session, stream_name, chunk)
+                except Exception:
+                    with session.changed:
+                        if not session.pipe_closing:
+                            session.pipe_reader_failed = True
+                            session.lifecycle = "START_FAILED_POST_EFFECT"
+                            reader_failed = True
+                        session.changed.notify_all()
+                    break
+                with session.changed:
+                    if not session.finalized:
+                        self._append_pipe_output_locked(session, stream_name, chunk)
                     session.changed.notify_all()
         finally:
             try:
@@ -808,6 +835,12 @@ class TerminalSessionManager:
             except (OSError, ValueError):
                 pass
             self._reader_finished(session)
+        if reader_failed:
+            try:
+                self._cleanup_process(session, "start_failed_post_effect")
+            except Exception:
+                # The keyed session retains the post-effect uncertainty for poll/exec.
+                pass
 
     @staticmethod
     def _append_pipe_output_locked(session: _Session, stream_name: str, chunk: bytes) -> None:
@@ -852,9 +885,17 @@ class TerminalSessionManager:
             else:
                 process.wait(timeout=max(0.0, deadline - time.monotonic()))
         except subprocess.TimeoutExpired:
-            self._cleanup_process(session, "timeout")
+            try:
+                self._cleanup_process(session, "timeout")
+            except Exception:
+                # Cleanup stores a keyed post-effect failure for synchronous callers.
+                pass
             return
-        self._cleanup_process(session, "natural_exit")
+        try:
+            self._cleanup_process(session, "natural_exit")
+        except Exception:
+            # Cleanup stores a keyed post-effect failure for synchronous callers.
+            return
 
     def _cleanup_process(
         self,
@@ -870,18 +911,44 @@ class TerminalSessionManager:
             process = session.process
             if process is None:
                 return False
-            _terminate_process_group(process)
+            try:
+                _terminate_process_group(process)
+            except Exception as exc:
+                with session.changed:
+                    session.cleanup_failed = True
+                    session.lifecycle = "START_FAILED_POST_EFFECT"
+                    session.changed.notify_all()
+                annotate_failure(
+                    exc,
+                    code=ContractErrorCode.INTERNAL_ERROR,
+                    reason_code="PROCESS_CLEANUP_FAILED",
+                    message="terminal process dispatched but process-group cleanup did not complete",
+                    retryable=False,
+                    effect_state=EffectState.UNKNOWN,
+                    reconciliation_required=True,
+                    safe_next_action=SafeNextAction.RECONCILE,
+                )
+                raise
             session.reader_done.wait(_READER_DRAIN_SECONDS)
             if not session.reader_done.is_set() and session.mode == "pipe":
+                with session.changed:
+                    session.pipe_closing = True
                 for stream in (process.stdout, process.stderr):
                     if stream is not None:
                         try:
                             stream.close()
                         except (OSError, ValueError):
                             pass
-                session.reader_done.wait(_READER_DRAIN_SECONDS)
+                if not session.reader_done.wait(_READER_DRAIN_SECONDS):
+                    with session.changed:
+                        session.pipe_reader_failed = True
+                        session.lifecycle = "START_FAILED_POST_EFFECT"
+                        session.changed.notify_all()
             with session.changed:
+                if session.pipe_reader_failed:
+                    termination_state = "start_failed_post_effect"
                 session.exit_code = process.returncode
+                session.cleanup_failed = False
                 session.status = "exited"
                 session.lifecycle = (
                     "START_FAILED_POST_EFFECT"
@@ -1040,6 +1107,21 @@ class TerminalSessionManager:
                 result["exit_code"] = session.exit_code
                 result["termination_reason"] = session.termination_reason
             return result
+
+    @staticmethod
+    def _post_effect_error(message: str, reason_code: str) -> RuntimeStateError:
+        error = RuntimeStateError(message, reason_code=reason_code)
+        annotate_failure(
+            error,
+            code=ContractErrorCode.INTERNAL_ERROR,
+            reason_code=reason_code,
+            message=message,
+            retryable=False,
+            effect_state=EffectState.UNKNOWN,
+            reconciliation_required=True,
+            safe_next_action=SafeNextAction.RECONCILE,
+        )
+        return error
 
     @staticmethod
     def _validated_exec_timeout(timeout_seconds: float) -> float:

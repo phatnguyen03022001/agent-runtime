@@ -244,14 +244,14 @@ class HeavyExecutionAdmissionTests(unittest.TestCase):
     def test_terminal_exec_materializes_output_only_after_delayed_reader_drain(self) -> None:
         reader_barrier = threading.Barrier(3)
         release_readers = threading.Event()
-        original_consume = executor._BoundedCapture.consume
+        original_consume = session._BoundedPipeCapture.consume
 
-        def delayed_consume(capture: executor._BoundedCapture, stream) -> None:
+        def delayed_consume(capture: session._BoundedPipeCapture, chunk: bytes) -> None:
             reader_barrier.wait(timeout=5)
             self.assertTrue(release_readers.wait(timeout=5))
-            original_consume(capture, stream)
+            original_consume(capture, chunk)
 
-        with mock.patch.object(executor._BoundedCapture, "consume", delayed_consume), ThreadPoolExecutor(
+        with mock.patch.object(session._BoundedPipeCapture, "consume", delayed_consume), ThreadPoolExecutor(
             max_workers=1
         ) as workers:
             future = workers.submit(

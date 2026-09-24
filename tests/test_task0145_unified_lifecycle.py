@@ -1,17 +1,21 @@
 from __future__ import annotations
 
+import errno
 import os
 import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
 from agent_runtime.capacity import HeavyExecutionAdmission
-from agent_runtime.session import TerminalSessionManager
+from agent_runtime.errors import RuntimeStateError
+from agent_runtime.session import TerminalSessionManager, _BoundedPipeCapture
+from agent_runtime.tool_contract import EffectState
 
 
 class UnifiedLifecycleTests(unittest.TestCase):
@@ -208,6 +212,183 @@ class UnifiedLifecycleTests(unittest.TestCase):
                 self.manager.execute(argv, str(self.cwd), start_identity, 2.0)
         self.assertEqual(popen_count, 1)
         self.manager.control(str(started["session_id"]), "terminate")
+
+
+    def test_terminal_exec_capture_unavailable_is_unknown_after_dispatch(self) -> None:
+        start_identity = "f" * 32
+        with patch("agent_runtime.session._BoundedPipeCapture", side_effect=[None, None]):
+            with self.assertRaises(RuntimeStateError) as raised:
+                self.manager.execute(
+                    [sys.executable, "-u", "-c", "print('dispatched')"],
+                    str(self.cwd),
+                    start_identity,
+                    2.0,
+                )
+        self.assertEqual(raised.exception.effect_state, EffectState.UNKNOWN)
+        self.assertTrue(raised.exception.reconciliation_required)
+        self.assertEqual(raised.exception.safe_next_action, "reconcile")
+        observed = self.manager.poll(start_identity=start_identity)
+        self.assertEqual(observed["status"], "exited")
+        self.assertEqual(observed["exit_code"], 0)
+
+    def test_terminal_exec_missing_exit_code_is_unknown_after_dispatch(self) -> None:
+        start_identity = "0" * 32
+        completed_processes: list[tuple[subprocess.Popen[bytes], int | None]] = []
+
+        def discard_exit_code(process):
+            process.wait(timeout=2)
+            completed_processes.append((process, process.returncode))
+            process.returncode = None
+
+        with patch("agent_runtime.session._terminate_process_group", side_effect=discard_exit_code):
+            with self.assertRaises(RuntimeStateError) as raised:
+                self.manager.execute(
+                    [sys.executable, "-u", "-c", "print('dispatched')"],
+                    str(self.cwd),
+                    start_identity,
+                    2.0,
+                )
+        self.assertEqual(raised.exception.effect_state, EffectState.UNKNOWN)
+        self.assertTrue(raised.exception.reconciliation_required)
+        self.assertEqual(raised.exception.reason_code, "PROCESS_COMPLETION_UNKNOWN")
+        process, actual_exit_code = completed_processes[0]
+        process.returncode = actual_exit_code
+
+    def test_pipe_reader_failure_terminates_and_terminal_exec_reports_unknown(self) -> None:
+        start_identity = "9" * 32
+        real_popen = subprocess.Popen
+        real_read = os.read
+        entered = threading.Event()
+        release = threading.Event()
+        broken_fd: int | None = None
+
+        def gated_popen(*args, **kwargs):
+            nonlocal broken_fd
+            process = real_popen(*args, **kwargs)
+            assert process.stdout is not None
+            broken_fd = process.stdout.fileno()
+            entered.set()
+            if not release.wait(3):
+                raise TimeoutError("test did not release process dispatch")
+            return process
+
+        def failing_read(fd: int, size: int) -> bytes:
+            if fd == broken_fd:
+                raise OSError(errno.EIO, "injected pipe reader failure")
+            return real_read(fd, size)
+
+        argv = [sys.executable, "-u", "-c", "import time; time.sleep(30)"]
+        try:
+            with patch("agent_runtime.session.subprocess.Popen", side_effect=gated_popen):
+                with ThreadPoolExecutor(max_workers=1) as pool:
+                    operation = pool.submit(
+                        self.manager.execute, argv, str(self.cwd), start_identity, 5.0
+                    )
+                    self.assertTrue(entered.wait(2))
+                    with patch("agent_runtime.session.os.read", side_effect=failing_read):
+                        release.set()
+                        with self.assertRaises(RuntimeStateError) as raised:
+                            operation.result(timeout=5)
+        finally:
+            release.set()
+
+        self.assertEqual(raised.exception.effect_state, EffectState.UNKNOWN)
+        self.assertTrue(raised.exception.reconciliation_required)
+        observed = self.manager.poll(start_identity=start_identity)
+        self.assertEqual(observed["status"], "exited")
+        self.assertEqual(observed["lifecycle"], "START_FAILED_POST_EFFECT")
+        self.assertEqual(observed["termination_reason"], "start_failed_post_effect")
+
+    def test_terminal_exec_reports_unknown_when_pipe_reader_cannot_drain(self) -> None:
+        start_identity = "7" * 32
+        entered = threading.Event()
+        release = threading.Event()
+        original_consume = _BoundedPipeCapture.consume
+
+        def blocked_consume(capture, chunk: bytes) -> None:
+            entered.set()
+            if not release.wait(3):
+                raise TimeoutError("test did not release delayed capture reader")
+            original_consume(capture, chunk)
+
+        try:
+            with patch(
+                "agent_runtime.session._BoundedPipeCapture.consume",
+                new=blocked_consume,
+            ):
+                with ThreadPoolExecutor(max_workers=1) as pool:
+                    operation = pool.submit(
+                        self.manager.execute,
+                        [sys.executable, "-u", "-c", "print('late-output')"],
+                        str(self.cwd),
+                        start_identity,
+                        2.0,
+                    )
+                    self.assertTrue(entered.wait(2))
+                    with self.assertRaises(RuntimeStateError) as raised:
+                        operation.result(timeout=2)
+                    self.assertEqual(raised.exception.effect_state, EffectState.UNKNOWN)
+                    self.assertTrue(raised.exception.reconciliation_required)
+                    observed = self.manager.poll(start_identity=start_identity)
+                    self.assertEqual(observed["status"], "exited")
+                    self.assertEqual(observed["lifecycle"], "START_FAILED_POST_EFFECT")
+                    release.set()
+            after_drain = self.manager.poll(start_identity=start_identity)
+            self.assertEqual(after_drain["output_chunks"], [])
+        finally:
+            release.set()
+
+    def test_cleanup_failure_is_unknown_and_keeps_key_pollable(self) -> None:
+        start_identity = "8" * 32
+        argv = [sys.executable, "-u", "-c", "import time; time.sleep(30)"]
+        with patch(
+            "agent_runtime.session._terminate_process_group",
+            side_effect=PermissionError("injected cleanup failure"),
+        ):
+            self.manager.start(
+                argv,
+                str(self.cwd),
+                start_identity,
+                mode="pipe",
+                entry_surface="terminal_exec",
+                timeout_seconds=1.0,
+            )
+            deadline = time.monotonic() + 3.0
+            while time.monotonic() < deadline:
+                observed = self.manager.poll(start_identity=start_identity, wait_ms=100)
+                if observed["lifecycle"] == "START_FAILED_POST_EFFECT":
+                    break
+            else:
+                self.fail("post-effect cleanup failure was not observable by key")
+
+            with self.assertRaises(RuntimeStateError) as raised:
+                self.manager.execute(argv, str(self.cwd), start_identity, 1.0)
+
+        self.assertEqual(raised.exception.effect_state, EffectState.UNKNOWN)
+        self.assertTrue(raised.exception.reconciliation_required)
+        self.assertEqual(observed["lifecycle"], "START_FAILED_POST_EFFECT")
+        self.assertEqual(observed["status"], "running")
+
+    def test_hard_wall_reaper_keeps_key_when_cleanup_fails(self) -> None:
+        start_identity = "6" * 32
+        self.manager._running_hard_wall_seconds = 0.0
+        started = self.manager.start(
+            [sys.executable, "-u", "-c", "import time; time.sleep(30)"],
+            str(self.cwd),
+            start_identity,
+            mode="pipe",
+        )
+        session_id = str(started["session_id"])
+        with patch(
+            "agent_runtime.session._terminate_process_group",
+            side_effect=PermissionError("injected reaper cleanup failure"),
+        ):
+            affected = self.manager.reap_once()
+            self.assertIn(session_id, affected)
+            observed = self.manager.poll(start_identity=start_identity)
+
+        self.assertEqual(observed["status"], "running")
+        self.assertEqual(observed["lifecycle"], "START_FAILED_POST_EFFECT")
 
 
 if __name__ == "__main__":
