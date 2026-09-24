@@ -517,7 +517,7 @@ class FailureEffectBoundaryTests(unittest.TestCase):
 
     def test_failure_inventory_covers_exact_public_surface(self) -> None:
         self.assertEqual(set(server._PUBLIC_TOOL_EFFECT_RISK), set(server.PUBLIC_TOOL_NAMES))
-        self.assertEqual(len(server._PUBLIC_TOOL_EFFECT_RISK), 19)
+        self.assertEqual(len(server._PUBLIC_TOOL_EFFECT_RISK), 20)
 
 
 if __name__ == "__main__":

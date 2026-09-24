@@ -2,7 +2,7 @@
 
 Agent Runtime is a **bounded local execution provider** for ChatGPT and other MCP clients on macOS. **MCP is the protocol**; the admitted product transport is OpenAI Secure MCP Tunnel, which keeps the Runtime private and uses outbound HTTPS rather than a public inbound listener.
 
-The qualified Runtime source is version **0.3.0** with **exactly nineteen public tools**. The native app owns the installed lifecycle through **app-owned ServiceManagement**. The older LaunchAgent model is a **migration/rollback predecessor only**.
+The qualified Runtime source is version **0.3.0** with **exactly twenty public tools**. The native app owns the installed lifecycle through **app-owned ServiceManagement**. The older LaunchAgent model is a **migration/rollback predecessor only**.
 
 ## Supported product shape
 
@@ -85,11 +85,15 @@ Canonical `runtime.env` is retained by default during uninstall. Its credentials
 
 ## Public tool surface
 
-The Runtime exposes exactly nineteen public tools: `terminal_exec`, `terminal_start`, `terminal_poll`, `terminal_control`, `terminal_resize`, `capacity_observer`, `fs_read_batch`, `fs_list`, `fs_search`, `fs_patch`, `fs_write`, `repo_observer`, `repo_diff`, `repo_stage`, `repo_commit`, `repo_fast_forward`, `repo_publish`, `screen_capture`, and `runtime_capabilities`.
+The Runtime exposes exactly twenty public tools: `terminal_exec`, `terminal_start`, `terminal_poll`, `terminal_control`, `terminal_resize`, `capacity_observer`, `fs_read_batch`, `fs_list`, `fs_search`, `fs_patch`, `fs_write`, `fs_manage`, `repo_observer`, `repo_diff`, `repo_stage`, `repo_commit`, `repo_fast_forward`, `repo_publish`, `screen_capture`, and `runtime_capabilities`.
 
 Checkout source keeps PTY and pipe launches in one keyed process lifecycle. `terminal_start` defaults to PTY and can select separate stdout/stderr pipes; `terminal_exec` is a bounded synchronous facade over that pipe lifecycle. Source changes do not activate themselves: the installed Runtime 0.3.0 remains at its accepted activation until a separately authorized cutover. See [source execution recovery](docs/RECOVERY.md#source-execution-recovery) before repeating a mutation after an unknown result.
 
 Source `terminal_poll` request schema v4 keeps result schema v3, defaults to incremental output, and accepts `max_output_bytes` from 0 through 16 KiB. `output: none` returns status and lifecycle without consuming unread output; its `next_cursor` stays at the requested cursor or retained base when the requested cursor is valid; a cursor ahead of available output is rejected. A later incremental poll can read the same bytes. Poll budgets count raw bytes and do not exceed the existing 16 KiB hard limit. Valid UTF-8 code points stay intact across budget and pipe-read boundaries; when the next code point cannot fit, the cursor stays before it and the caller needs a larger budget. `wait_for` keeps its existing wait behavior.
+
+Source `fs_read_batch` keeps request schema v1 and uses result schema v2. Successful items retain the requested text range and add `size_bytes`, `returned_bytes`, `eof`, `truncated`, and a full raw-file `sha256` when the existing scan ceilings permit proving the whole file; a completed range remains successful with `sha256=null` when the remaining full-file hash cannot fit those ceilings. That digest is directly usable as the existing `fs_patch` expected-state CAS token.
+
+`fs_manage` uses request/result schema v1/v1 for bounded workspace-local `mkdir`, `move`, `delete`, and `chmod`. It rejects absolute/traversal/symlink paths and protected Runtime paths; move is same-filesystem atomic no-overwrite with no copy/delete fallback, delete is single-file or empty-directory only, and chmod accepts regular files with an expected SHA-256 and ordinary `0o000..0o777` permission bits only. Source changes do not activate the installed Runtime without a separately authorized cutover.
 
 Source request/result schemas for `fs_list`, `fs_search`, `repo_diff`, and `repo_observer` are v2/v2. Initial calls omit both `cursor` and `continuation_receipt`; resume calls provide both. Successful results retain existing fields and add `truncated`, `next_cursor`, and a closed ReceiptV1-shaped `continuation_receipt`. Cursors are opaque, stateless, ASCII, bounded to 1024 characters, expire after 300 seconds, bind the tool, semantic request parameters, page position, and observed-state receipt, and are evidence only—not authorization. `fs_list` revalidates the complete bounded directory observation; `fs_search` explicitly uses `continuation_consistency=revalidated` with no snapshot/cache/store; `repo_diff` reuses the full raw-diff ReceiptV1 and pages on valid UTF-8 boundaries; `repo_observer` revalidates one exact local observation and does not manufacture a resumable cursor when an existing hard observation bound prevents exact state identity.
 

@@ -95,6 +95,15 @@ TerminalDimension = Annotated[int, Field(strict=True, ge=1, le=65535)]
 FsReadPath = Annotated[StrictStr, Field(min_length=1, max_length=4096)]
 FsReadLine = Annotated[int, Field(strict=True, ge=1, le=FS_READ_MAX_LINE)]
 FsReadMessage = Annotated[StrictStr, Field(max_length=160)]
+Sha256Hex = Annotated[
+    StrictStr,
+    Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$"),
+]
+FsManagePath = Annotated[StrictStr, Field(min_length=1, max_length=4096)]
+FsManageOperation = Literal["mkdir", "move", "delete", "chmod"]
+FsManageKind = Literal["file", "directory"]
+FsManageParents = Annotated[bool, Field(strict=True)]
+FsManageMode = Annotated[int, Field(strict=True, ge=0, le=0o777)]
 
 
 class _ClosedResult(BaseModel):
@@ -236,6 +245,11 @@ class FsReadOkResult(_ClosedResult):
     start_line: int
     end_line: int | None
     text: str
+    size_bytes: int
+    returned_bytes: int
+    eof: bool
+    truncated: bool
+    sha256: Sha256Hex | None
 
 
 class FsReadErrorResult(_ClosedResult):
@@ -252,6 +266,24 @@ FsReadItemResult = Annotated[FsReadOkResult | FsReadErrorResult, Field(discrimin
 
 class FsReadBatchResult(_ClosedResult):
     items: list[FsReadItemResult]
+
+
+class FsManagePathState(_ClosedResult):
+    path: str
+    kind: Literal["absent", "file", "directory"]
+    device: int | None
+    inode: int | None
+    mode: int | None
+    size_bytes: int | None
+    sha256: Sha256Hex | None
+
+
+class FsManageResult(_ClosedResult):
+    schema_version: Literal[1]
+    operation: FsManageOperation
+    before: list[FsManagePathState]
+    after: list[FsManagePathState]
+    effect_state: Literal["absent", "present"]
 
 
 RepoObserverMaxPaths = Annotated[int, Field(strict=True, ge=1, le=1000)]
@@ -520,10 +552,7 @@ FsSearchMode = Literal["content", "path"]
 FsSearchRootPath = Annotated[StrictStr, Field(min_length=1, max_length=4096)]
 FsSearchMaxResults = Annotated[int, Field(strict=True, ge=1, le=500)]
 FsPatchPath = Annotated[StrictStr, Field(min_length=1, max_length=4096)]
-FsPatchExpectedSha256 = Annotated[
-    StrictStr,
-    Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$"),
-]
+FsPatchExpectedSha256 = Sha256Hex
 RepoDiffScope = Literal["worktree", "staged"]
 
 

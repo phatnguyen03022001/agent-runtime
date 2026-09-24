@@ -55,6 +55,7 @@ class RepoObserverMCPTests(unittest.IsolatedAsyncioTestCase):
                 "fs_search",
                 "fs_patch",
                 "fs_write",
+                "fs_manage",
                 "repo_observer",
                 "repo_diff",
                 "repo_stage",

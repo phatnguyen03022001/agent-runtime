@@ -12,6 +12,7 @@ from .contracts import (
 )
 from .executor import TERMINAL_EXEC_CONTRACT
 from .fs_list import FS_LIST_CONTRACT
+from .fs_manage import FS_MANAGE_CONTRACT
 from .fs_patch import FS_PATCH_CONTRACT
 from .fs_read import FS_READ_BATCH_CONTRACT
 from .fs_search import FS_SEARCH_CONTRACT
@@ -60,7 +61,7 @@ RUNTIME_CAPABILITIES_CONTRACT = ToolContract(
         open_world=False,
     ),
     preconditions={"arguments": "none", "inventory": "static-runtime-registry"},
-    bounds={"capabilities": 19},
+    bounds={"capabilities": 20},
     postconditions={
         "network_used": False,
         "host_probes": False,
@@ -99,11 +100,12 @@ CAPABILITY_REGISTRY = (
     CapabilityBinding(TERMINAL_CONTROL_CONTRACT),
     CapabilityBinding(TERMINAL_RESIZE_CONTRACT),
     CapabilityBinding(CAPACITY_OBSERVER_CONTRACT),
-    CapabilityBinding(FS_READ_BATCH_CONTRACT),
+    CapabilityBinding(FS_READ_BATCH_CONTRACT, result_schema_version=2),
     CapabilityBinding(FS_LIST_CONTRACT, request_schema_version=2, result_schema_version=2),
     CapabilityBinding(FS_SEARCH_CONTRACT, request_schema_version=2, result_schema_version=2),
     CapabilityBinding(FS_PATCH_CONTRACT),
     CapabilityBinding(FS_WRITE_CONTRACT),
+    CapabilityBinding(FS_MANAGE_CONTRACT),
     CapabilityBinding(REPO_OBSERVER_CONTRACT, request_schema_version=2, result_schema_version=2),
     CapabilityBinding(REPO_DIFF_CONTRACT, request_schema_version=2, result_schema_version=2),
     CapabilityBinding(REPO_STAGE_CONTRACT),

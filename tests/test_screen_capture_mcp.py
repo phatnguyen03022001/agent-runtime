@@ -23,6 +23,7 @@ EXPECTED_TOOLS = (
     "fs_search",
     "fs_patch",
     "fs_write",
+    "fs_manage",
     "repo_observer",
     "repo_diff",
     "repo_stage",
@@ -44,6 +45,7 @@ EXPECTED_ANNOTATIONS = {
     "fs_search": (True, False, True, False),
     "fs_patch": (False, True, False, False),
     "fs_write": (False, True, False, False),
+    "fs_manage": (False, True, False, False),
     "repo_observer": (True, False, True, False),
     "repo_diff": (True, False, True, False),
     "repo_stage": (False, True, False, False),
@@ -151,7 +153,7 @@ class ScreenCaptureMCPTests(unittest.IsolatedAsyncioTestCase):
 
     def test_readme_documents_exact_eleven_tool_surface(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("exactly nineteen public tools", readme)
+        self.assertIn("exactly twenty public tools", readme)
         self.assertIn("screen_capture", readme)
         self.assertIn("Screen Recording", readme)
         self.assertIn("cg_global_points", readme)

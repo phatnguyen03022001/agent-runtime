@@ -34,6 +34,20 @@ def _default_runtime_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+def is_protected_runtime_path(path: Path, *, runtime_root: Path | None = None) -> bool:
+    """Return whether an absolute normalized path is at or below the protected Runtime root."""
+
+    protected_root = (runtime_root or _default_runtime_root()).expanduser().resolve()
+    candidate = path.expanduser()
+    if not candidate.is_absolute():
+        raise ValueError("protected runtime path checks require an absolute path")
+    try:
+        candidate.relative_to(protected_root)
+    except ValueError:
+        return False
+    return True
+
+
 def _default_audit_file() -> Path:
     return Path.home() / "Library" / "Application Support" / "Agent Runtime" / "protected-attempts.json"
 

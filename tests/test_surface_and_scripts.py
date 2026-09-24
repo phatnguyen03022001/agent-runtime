@@ -122,7 +122,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         from agent_runtime.capability_registry import CAPABILITY_NAMES
         self.assertEqual(
             CAPABILITY_NAMES,
-            ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch", "fs_list", "fs_search", "fs_patch", "fs_write", "repo_observer", "repo_diff", "repo_stage", "repo_commit", "repo_fast_forward", "repo_publish", "screen_capture", "runtime_capabilities"),
+            ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch", "fs_list", "fs_search", "fs_patch", "fs_write", "fs_manage", "repo_observer", "repo_diff", "repo_stage", "repo_commit", "repo_fast_forward", "repo_publish", "screen_capture", "runtime_capabilities"),
         )
         for name in CAPABILITY_NAMES:
             self.assertIn(name, functions)
@@ -191,7 +191,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
             module = importlib.import_module("agent_runtime.server")
             self.assertEqual(
                 tuple(module.mcp.tools),
-                ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch", "fs_list", "fs_search", "fs_patch", "fs_write", "repo_observer", "repo_diff", "repo_stage", "repo_commit", "repo_fast_forward", "repo_publish", "screen_capture", "runtime_capabilities"),
+                ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch", "fs_list", "fs_search", "fs_patch", "fs_write", "fs_manage", "repo_observer", "repo_diff", "repo_stage", "repo_commit", "repo_fast_forward", "repo_publish", "screen_capture", "runtime_capabilities"),
             )
             expected = {
                 "terminal_exec": (False, True, True, True),
@@ -205,6 +205,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
                 "fs_search": (True, False, True, False),
                 "fs_patch": (False, True, False, False),
                 "fs_write": (False, True, False, False),
+                "fs_manage": (False, True, False, False),
                 "repo_observer": (True, False, True, False),
                 "repo_diff": (True, False, True, False),
                 "repo_stage": (False, True, False, False),
@@ -381,7 +382,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertIn("protected singleton", docs)
         self.assertIn("root/sudo", docs)
         self.assertIn("malicious local administrator", docs)
-        self.assertIn("exactly nineteen public tools", docs)
+        self.assertIn("exactly twenty public tools", docs)
         self.assertIn("AGENT_RUNTIME_MAX_PARALLELISM", docs)
         self.assertIn("capacity_observer", docs)
 

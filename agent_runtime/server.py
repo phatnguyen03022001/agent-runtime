@@ -41,6 +41,12 @@ from .contracts import (
     FsListMaxEntries,
     FsListPath,
     FsListResult,
+    FsManageKind,
+    FsManageMode,
+    FsManageOperation,
+    FsManageParents,
+    FsManagePath,
+    FsManageResult,
     FsPatchEdits,
     FsPatchExpectedSha256,
     FsPatchPath,
@@ -100,6 +106,7 @@ from .errors import RuntimeStateError, RuntimeValidationError
 from .executor import TERMINAL_EXEC_CONTRACT, execute_terminal
 from .fs_read import FS_READ_BATCH_CONTRACT, read_files_batch
 from .fs_list import FS_LIST_CONTRACT, list_directory
+from .fs_manage import FS_MANAGE_CONTRACT, manage_filesystem
 from .fs_patch import FS_PATCH_CONTRACT, patch_file
 from .fs_write import FS_WRITE_CONTRACT, write_file
 from .fs_search import FS_SEARCH_CONTRACT, search_files
@@ -146,7 +153,8 @@ SERVER_INSTRUCTIONS = (
     "fs_read_batch performs read-only ordered cwd-relative UTF-8 file reads for at most 20 items "
     "with fixed output and scan-work ceilings and per-item filesystem failures. "
     "fs_list and fs_search provide bounded no-follow filesystem discovery; fs_patch performs "
-    "expected-SHA exact text edits, fs_write performs whole-file expected-state create/replace, "
+    "expected-SHA exact text edits, fs_write performs whole-file expected-state create/replace, and "
+    "fs_manage performs bounded expected-state mkdir/move/delete/chmod without symlink traversal; "
     "and repo_diff returns bounded local-only "
     "tracked diffs with full-state receipts. "
     "repo_stage stages exactly one complete explicit regular-text candidate with expected-state guards and no implicit git add; "
@@ -227,6 +235,7 @@ _PUBLIC_TOOL_EFFECT_RISK = {
     "fs_search": "absent",
     "fs_patch": "possible",
     "fs_write": "possible",
+    "fs_manage": "possible",
     "repo_observer": "absent",
     "repo_diff": "absent",
     "repo_stage": "possible",
@@ -846,6 +855,43 @@ def fs_write(
         return write_file(cwd, path, operation, content, expected_sha256)
     except CapabilityFailure as exc:
         return cast(FsWriteResult, _capability_error_result("fs_write", exc))
+
+
+@_tool(
+    read_only=FS_MANAGE_CONTRACT.annotations.read_only,
+    destructive=FS_MANAGE_CONTRACT.annotations.destructive,
+    idempotent=FS_MANAGE_CONTRACT.annotations.idempotent,
+    open_world=FS_MANAGE_CONTRACT.annotations.open_world,
+)
+def fs_manage(
+    cwd: AbsoluteCwd,
+    operation: FsManageOperation,
+    path: FsManagePath | None = None,
+    source_path: FsManagePath | None = None,
+    destination_path: FsManagePath | None = None,
+    expected_kind: FsManageKind | None = None,
+    expected_sha256: FsPatchExpectedSha256 | None = None,
+    expected_source_sha256: FsPatchExpectedSha256 | None = None,
+    parents: FsManageParents = False,
+    mode: FsManageMode | None = None,
+) -> FsManageResult:
+    """Apply one bounded guarded local filesystem management operation."""
+
+    try:
+        return manage_filesystem(
+            cwd,
+            operation,
+            path,
+            source_path,
+            destination_path,
+            expected_kind,
+            expected_sha256,
+            expected_source_sha256,
+            parents,
+            mode,
+        )
+    except CapabilityFailure as exc:
+        return cast(FsManageResult, _capability_error_result("fs_manage", exc))
 
 
 @_tool(

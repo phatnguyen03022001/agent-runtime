@@ -24,6 +24,7 @@ EXPECTED_TOOLS = (
     "fs_search",
     "fs_patch",
     "fs_write",
+    "fs_manage",
     "repo_observer",
     "repo_diff",
     "repo_stage",
@@ -45,6 +46,7 @@ EXPECTED_ANNOTATIONS = {
     "fs_search": (True, False, True, False),
     "fs_patch": (False, True, False, False),
     "fs_write": (False, True, False, False),
+    "fs_manage": (False, True, False, False),
     "repo_observer": (True, False, True, False),
     "repo_diff": (True, False, True, False),
     "repo_stage": (False, True, False, False),
@@ -400,7 +402,12 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
             },
             "fs_read_batch": {
                 "items", "status", "path", "start_line", "end_line",
-                "text", "error_code", "message",
+                "text", "error_code", "message", "size_bytes", "returned_bytes",
+                "eof", "truncated", "sha256",
+            },
+            "fs_manage": {
+                "schema_version", "operation", "before", "after", "effect_state",
+                "path", "kind", "device", "inode", "mode", "size_bytes", "sha256",
             },
             "repo_observer": {
                 "schema_version", "repository", "branch", "tracking", "changes",

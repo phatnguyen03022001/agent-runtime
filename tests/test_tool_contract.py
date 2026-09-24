@@ -307,7 +307,7 @@ class FsReadBatchContractAdoptionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(contract.postconditions["result_order"], "request-order")  # type: ignore[index]
         self.assertEqual(contract.postconditions["filesystem_failures"], "per-item")  # type: ignore[index]
 
-    async def test_public_surface_annotations_and_fs_read_schemas_remain_unchanged(self) -> None:
+    async def test_public_surface_annotations_and_fs_read_result_v2(self) -> None:
         listed = await server.mcp.list_tools()
         self.assertEqual(
             tuple(tool.name for tool in listed),
@@ -323,6 +323,7 @@ class FsReadBatchContractAdoptionTests(unittest.IsolatedAsyncioTestCase):
                 "fs_search",
                 "fs_patch",
                 "fs_write",
+                "fs_manage",
                 "repo_observer",
                 "repo_diff",
                 "repo_stage",
@@ -364,7 +365,10 @@ class FsReadBatchContractAdoptionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(set(output["properties"]), {"items"})
         ok = output["$defs"]["FsReadOkResult"]
         error = output["$defs"]["FsReadErrorResult"]
-        self.assertEqual(set(ok["properties"]), {"status", "path", "start_line", "end_line", "text"})
+        self.assertEqual(
+            set(ok["properties"]),
+            {"status", "path", "start_line", "end_line", "text", "size_bytes", "returned_bytes", "eof", "truncated", "sha256"},
+        )
         self.assertEqual(
             set(error["properties"]),
             {"status", "path", "start_line", "end_line", "error_code", "message"},

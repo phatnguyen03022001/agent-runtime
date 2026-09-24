@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import errno
+import hashlib
 import os
 import stat
 
@@ -181,12 +182,16 @@ def _read_selected_text(
     start_line: int,
     end_line: int | None,
     batch_scan_remaining: int,
-) -> tuple[str, int]:
+    opened_size: int,
+) -> tuple[str, int, bool, bool, str | None]:
     output = bytearray()
     line_number = 1
     pending_cr = False
     pending_cr_selected = False
     scan_bytes = 0
+    selection_complete = False
+    eof = False
+    digest = hashlib.sha256()
 
     def selected() -> bool:
         return line_number >= start_line and (end_line is None or line_number <= end_line)
@@ -207,14 +212,39 @@ def _read_selected_text(
         nonlocal line_number
         line_number += 1
 
-    done = False
-    while not done:
+    def finish_eof() -> None:
+        nonlocal pending_cr, selection_complete, eof
+        if pending_cr and pending_cr_selected and not selection_complete:
+            write_selected(b"\r")
+        pending_cr = False
+        selection_complete = True
+        eof = True
+
+    def stable_opened_eof() -> bool:
+        if scan_bytes < opened_size:
+            return False
+        try:
+            current = os.fstat(file_fd)
+        except OSError:
+            return False
+        return stat.S_ISREG(current.st_mode) and current.st_size == opened_size
+
+    if opened_size == 0:
+        finish_eof()
+
+    while not eof:
         item_remaining = ITEM_SCAN_LIMIT_BYTES - scan_bytes
         batch_remaining = batch_scan_remaining - scan_bytes
-        if batch_remaining <= 0:
-            raise _ItemFailure("BATCH_SCAN_LIMIT_EXCEEDED", scan_bytes)
-        if item_remaining <= 0:
+        if batch_remaining <= 0 or item_remaining <= 0:
+            if selection_complete and stable_opened_eof():
+                finish_eof()
+                break
+            if selection_complete:
+                break
+            if batch_remaining <= 0:
+                raise _ItemFailure("BATCH_SCAN_LIMIT_EXCEEDED", scan_bytes)
             raise _ItemFailure("ITEM_SCAN_LIMIT_EXCEEDED", scan_bytes)
+
         read_size = min(_READ_CHUNK_BYTES, item_remaining, batch_remaining)
         try:
             raw = os.read(file_fd, read_size)
@@ -224,52 +254,58 @@ def _read_selected_text(
             fail_incomplete("READ_FAILED")
         scan_bytes += len(raw)
         if not raw:
-            if pending_cr and pending_cr_selected:
-                write_selected(b"\r")
+            finish_eof()
             break
 
-        for value in raw:
-            if pending_cr:
-                if value == 0x0A:
+        digest.update(raw)
+        if not selection_complete:
+            for value in raw:
+                if pending_cr:
+                    if value == 0x0A:
+                        if pending_cr_selected:
+                            write_selected(b"\r\n")
+                        pending_cr = False
+                        finish_line()
+                        if end_line is not None and line_number > end_line:
+                            selection_complete = True
+                            break
+                        continue
                     if pending_cr_selected:
-                        write_selected(b"\r\n")
+                        write_selected(b"\r")
                     pending_cr = False
                     finish_line()
                     if end_line is not None and line_number > end_line:
-                        done = True
+                        selection_complete = True
                         break
-                    continue
-                if pending_cr_selected:
-                    write_selected(b"\r")
-                pending_cr = False
-                finish_line()
-                if end_line is not None and line_number > end_line:
-                    done = True
-                    break
 
-            if value == 0x0D:
-                pending_cr = True
-                pending_cr_selected = selected()
-            elif value == 0x0A:
-                if selected():
-                    write_selected(b"\n")
-                finish_line()
-                if end_line is not None and line_number > end_line:
-                    done = True
-                    break
-            elif selected():
-                write_selected(bytes((value,)))
+                if value == 0x0D:
+                    pending_cr = True
+                    pending_cr_selected = selected()
+                elif value == 0x0A:
+                    if selected():
+                        write_selected(b"\n")
+                    finish_line()
+                    if end_line is not None and line_number > end_line:
+                        selection_complete = True
+                        break
+                elif selected():
+                    write_selected(bytes((value,)))
 
-        if not done:
-            if scan_bytes >= batch_scan_remaining:
-                raise _ItemFailure("BATCH_SCAN_LIMIT_EXCEEDED", scan_bytes)
-            if scan_bytes >= ITEM_SCAN_LIMIT_BYTES:
-                raise _ItemFailure("ITEM_SCAN_LIMIT_EXCEEDED", scan_bytes)
+        if stable_opened_eof() and (
+            selection_complete
+            or (
+                scan_bytes < ITEM_SCAN_LIMIT_BYTES
+                and scan_bytes < batch_scan_remaining
+            )
+        ):
+            finish_eof()
 
     try:
-        return bytes(output).decode("utf-8", errors="strict"), scan_bytes
+        text = bytes(output).decode("utf-8", errors="strict")
     except UnicodeDecodeError:
         raise _ItemFailure("INVALID_UTF8", scan_bytes) from None
+    truncated = not eof
+    return text, scan_bytes, eof, truncated, digest.hexdigest() if eof else None
 
 def _error_result(
     path: str, start_line: int, end_line: int | None, failure: _ItemFailure
@@ -323,12 +359,15 @@ def read_files_batch(cwd: str, items: list[FsReadItem]) -> dict[str, object]:
             try:
                 file_fd = _open_regular_at(cwd_fd, components)
                 try:
-                    text, item_scan_bytes = _read_selected_text(
+                    opened = os.fstat(file_fd)
+                    text, item_scan_bytes, eof, truncated, sha256 = _read_selected_text(
                         file_fd,
                         start_line,
                         end_line,
                         BATCH_SCAN_LIMIT_BYTES - batch_scan_bytes,
+                        opened.st_size,
                     )
+                    size_bytes = opened.st_size
                 finally:
                     os.close(file_fd)
             except _ItemFailure as failure:
@@ -356,6 +395,11 @@ def read_files_batch(cwd: str, items: list[FsReadItem]) -> dict[str, object]:
                     "start_line": start_line,
                     "end_line": end_line,
                     "text": text,
+                    "size_bytes": size_bytes,
+                    "returned_bytes": text_bytes,
+                    "eof": eof,
+                    "truncated": truncated,
+                    "sha256": sha256,
                 }
             )
     finally:

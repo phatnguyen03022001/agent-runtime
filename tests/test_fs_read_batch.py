@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import socket
 import tempfile
@@ -8,8 +9,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from agent_runtime import server
-from agent_runtime.contracts import FsReadItem
+from agent_runtime.contracts import FsPatchEdit, FsReadItem
 from agent_runtime.errors import RuntimeValidationError
+from agent_runtime.fs_patch import patch_file
 from agent_runtime.fs_read import read_files_batch
 
 ITEM_LIMIT = 128 * 1024
@@ -33,6 +35,7 @@ class FsReadBatchContractTests(unittest.IsolatedAsyncioTestCase):
                 "fs_search",
                 "fs_patch",
                 "fs_write",
+                "fs_manage",
                 "repo_observer",
                 "repo_diff",
                 "repo_stage",
@@ -83,7 +86,13 @@ class FsReadBatchBehaviorTests(unittest.TestCase):
         )
 
         self.assertEqual(
-            results,
+            [
+                {
+                    key: result[key]
+                    for key in ("status", "path", "start_line", "end_line", "text")
+                }
+                for result in results
+            ],
             [
                 {"status": "ok", "path": "a.txt", "start_line": 1, "end_line": None, "text": "one\r\ntwo\nthree\r"},
                 {"status": "ok", "path": "a.txt", "start_line": 2, "end_line": 2, "text": "two\n"},
@@ -229,6 +238,80 @@ class FsReadBatchBehaviorTests(unittest.TestCase):
         self.assertNotIn("text", results[2])
         self.assertEqual(results[3]["status"], "ok")
         self.assertEqual(results[3]["text"], "")
+
+    def test_result_v2_reports_full_file_metadata_and_range_hash(self) -> None:
+        payload = b"one\ntwo\nthree\n"
+        (self.cwd / "sample.txt").write_bytes(payload)
+
+        full, selected = self._call(
+            FsReadItem(path="sample.txt"),
+            FsReadItem(path="sample.txt", start_line=2, end_line=2),
+        )
+
+        expected_sha = hashlib.sha256(payload).hexdigest()
+        self.assertEqual(
+            {
+                "size_bytes": full["size_bytes"],
+                "returned_bytes": full["returned_bytes"],
+                "eof": full["eof"],
+                "truncated": full["truncated"],
+                "sha256": full["sha256"],
+            },
+            {
+                "size_bytes": len(payload),
+                "returned_bytes": len(payload),
+                "eof": True,
+                "truncated": False,
+                "sha256": expected_sha,
+            },
+        )
+        self.assertEqual(selected["text"], "two\n")
+        self.assertEqual(selected["returned_bytes"], len(b"two\n"))
+        self.assertTrue(selected["eof"])
+        self.assertFalse(selected["truncated"])
+        self.assertEqual(selected["sha256"], expected_sha)
+
+    def test_successful_range_keeps_text_when_full_hash_cannot_fit_scan_bound(self) -> None:
+        payload = b"first\n" + b"x" * (1024 * 1024)
+        (self.cwd / "large.txt").write_bytes(payload)
+
+        result = self._call(FsReadItem(path="large.txt", start_line=1, end_line=1))[0]
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["text"], "first\n")
+        self.assertEqual(result["size_bytes"], len(payload))
+        self.assertEqual(result["returned_bytes"], len(b"first\n"))
+        self.assertFalse(result["eof"])
+        self.assertTrue(result["truncated"])
+        self.assertIsNone(result["sha256"])
+
+    def test_read_sha_is_direct_fs_patch_cas_and_stale_sha_rejects(self) -> None:
+        target = self.cwd / "cas.txt"
+        target.write_text("one\n", encoding="utf-8")
+        observed = self._call(FsReadItem(path="cas.txt"))[0]
+        digest = observed["sha256"]
+        self.assertIsInstance(digest, str)
+
+        patched = patch_file(
+            str(self.cwd),
+            "cas.txt",
+            digest,
+            [FsPatchEdit(old_text="one", new_text="two")],
+        )
+        self.assertEqual(patched.sha256_before, digest)
+        self.assertEqual(target.read_text(encoding="utf-8"), "two\n")
+
+        stale = self._call(FsReadItem(path="cas.txt"))[0]["sha256"]
+        self.assertIsInstance(stale, str)
+        target.write_text("changed\n", encoding="utf-8")
+        with self.assertRaises(Exception):
+            patch_file(
+                str(self.cwd),
+                "cas.txt",
+                stale,
+                [FsPatchEdit(old_text="two", new_text="three")],
+            )
+        self.assertEqual(target.read_text(encoding="utf-8"), "changed\n")
 
 
 if __name__ == "__main__":
