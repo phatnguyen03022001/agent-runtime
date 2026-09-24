@@ -1,0 +1,176 @@
+protocol_version: 3
+report_id: TASK-0145-report-r1
+task_id: TASK-0145
+task_revision: 1
+report_revision: 1
+state: NEEDS_REVIEW
+result: NEEDS_REVIEW
+
+execution_base:
+  repository: phatnguyen03022001/agent-runtime
+  branch: main
+  commit: 15da7e78625f3135e61e0982026c6e6a4ac383f3
+
+implementation_candidate_and_tree:
+  candidate_commit: 2851b52ae72da8b109820d98405887b6a1146b37
+  candidate_tree: 1b94c7d85a64c4ba7e77e22c9ced10774e178900
+  final_execution_head: 2851b52ae72da8b109820d98405887b6a1146b37
+
+assurance_alignment:
+  standards_revision: 22fc4d881d5a0ee71b3af2b3acadb4ce8258bbc1
+  standards_requirement_ids:
+    - COR-1.2
+    - COR-1.3
+    - COR-2.1
+    - COR-3.1
+    - REL-2.2
+    - REL-2.3
+    - REL-3.2
+    - CMP-1.1
+    - CMP-2.3
+  documents_revision: 22fc4d881d5a0ee71b3af2b3acadb4ce8258bbc1
+  applied_document_domains:
+    - BEHAVIOR
+    - ARCHITECTURE
+    - INTERFACES
+    - QUALITY
+    - DELIVERY
+
+terminal_schema_versions_and_inventory:
+  advertised_public_tool_inventory: 19
+  tool_contract_kernel_version: 2
+  terminal_tools:
+    terminal_exec:
+      request_schema_version: 2
+      result_schema_version: 2
+    terminal_start:
+      request_schema_version: 3
+      result_schema_version: 3
+    terminal_poll:
+      request_schema_version: 3
+      result_schema_version: 3
+  no_new_public_tool: true
+
+key_binding_and_no_duplicate_spawn_evidence:
+  binding:
+    reservation: before_Popen
+    specification: canonical_cwd_argv_mode_entry_surface_and_normalized_timeout_when_applicable
+    identity_format: 32_lowercase_hex
+    mismatch_behavior: typed_pre_effect_conflict
+    retained_duplicate_behavior: join_original_operation_or_return_original_result
+  evidence:
+    - tests/test_task0145_unified_lifecycle.py::test_terminal_exec_concurrent_duplicate_and_fast_retry_share_one_result
+    - tests/test_task0145_unified_lifecycle.py::test_key_is_pollable_before_popen_and_repeated_start_does_not_dispatch
+    - tests/test_task0145_unified_lifecycle.py::test_identity_conflicts_across_mode_and_entry_surface_before_second_spawn
+    - tests/test_task0059_transport.py::test_shared_stdio_holds_six_heavy_rejects_seventh_and_keeps_cheap_calls_live
+
+pipe_stream_and_pty_compatibility_evidence:
+  pipe:
+    stdin: closed
+    stdout_stderr: separately_identifiable
+    poll_output: ordered_output_chunks_under_single_raw_byte_cursor
+    terminal_exec: separate_bounded_stdout_stderr_with_existing_truncation_meanings
+    evidence:
+      - tests/test_task0145_unified_lifecycle.py::test_pipe_uses_closed_stdin_and_preserves_stream_identity
+      - tests/test_task0145_unified_lifecycle.py::test_pipe_requires_identity_and_rejects_input_and_resize
+  pty:
+    default_mode: true
+    output: merged_compatibility_field
+    output_chunks: omitted
+    controls: existing_write_and_resize_behavior_preserved
+    evidence:
+      - tests/test_task0145_unified_lifecycle.py
+      - tests/test_protected_runtime.py::terminal control write guard regressions
+
+process_group_cleanup_and_lease_release_evidence:
+  ownership: one_session_manager_owns_dispatch_readers_process_group_cleanup_reaping_and_terminalization
+  cleanup: bounded_process_group_termination_and_reader_drain; incomplete_or_failed_post_effect_cleanup_remains_unknown_and_key_pollable
+  lease: released_once_across_exit_timeout_control_start_failure_shutdown_and_races
+  evidence:
+    - tests/test_task0057_admission.py::test_every_terminal_path_releases_its_lease_once
+    - tests/test_task0057_admission.py::test_terminal_exec_materializes_output_only_after_delayed_reader_drain
+    - tests/test_task0057_admission.py::test_isolated_runtime_sigterm_cleans_an_inflight_one_shot_group
+    - tests/test_task0057_admission.py::test_repeated_x6_pty_cycles_leave_no_owned_leases_fds_or_workers
+    - tests/test_task0145_unified_lifecycle.py::test_pipe_reader_failure_terminates_and_terminal_exec_reports_unknown
+    - tests/test_task0145_unified_lifecycle.py::test_terminal_exec_reports_unknown_when_pipe_reader_cannot_drain
+    - tests/test_task0145_unified_lifecycle.py::test_cleanup_failure_is_unknown_and_keeps_key_pollable
+    - tests/test_task0145_unified_lifecycle.py::test_hard_wall_reaper_keeps_key_when_cleanup_fails
+
+focused_tests_and_canonical_verify:
+  focused:
+    command: ".venv/bin/python -m unittest tests.test_timing tests.test_task0140_qualification tests.test_mcp_client_conformance tests.test_mcp_contracts tests.test_task0041_boundedness tests.test_task0059_transport"
+    result: PASS
+    tests: 37
+    duration_seconds: 2.263
+  canonical_verify:
+    command: ./verify
+    candidate_commit: 2851b52ae72da8b109820d98405887b6a1146b37
+    candidate_tree: 1b94c7d85a64c4ba7e77e22c9ced10774e178900
+    carrier: recoverable_local_carrier
+    session_id: 07f63fb8a70d7b93
+    start_identity: f623a5df1eb444c28823953ba111848d
+    lifecycle: COMPLETED
+    terminal_status: exited
+    termination: natural_exit
+    exit_code: 0
+    modules: 56/56
+    tests: 714
+    fast_lane_tests: 254
+    serial_lane_tests: 460
+    duration_seconds: 177.429
+    result: PASS
+
+verification_history:
+  intermediate_candidate_verifier_results:
+    - candidate_commit: 8c658ae319c48a9d42d6611a4f796f6a281a2c61
+      result: FAIL
+      failing_module: tests.test_protected_runtime
+      resolution: Updated stale protected-runtime fixtures for the shared session core in the next candidate.
+    - candidate_commit: 68258c5085840cc10279fd065c4c21cf9611082f
+      result: FAIL
+      failing_module: tests.test_task0059_transport
+      resolution: Updated all terminal_exec transport requests with required caller identities in the next candidate.
+    - candidate_commit: ff1df575689d60825bb56cf9d1c9d5a891e9292c
+      result: FAIL
+      failing_modules:
+        - tests.test_timing
+        - tests.test_task0140_qualification
+      resolution: Completed static audit and updated old-signature fixtures before the final candidate run.
+  final_candidate_result: PASS
+  final_candidate_commit: 2851b52ae72da8b109820d98405887b6a1146b37
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: EVIDENCE_INDEXED
+    evidence: Unified lifecycle is in agent_runtime/session.py; executor.py is a facade; lifecycle and process-ownership regressions are listed above.
+  - criterion_id: AC-2
+    status: EVIDENCE_INDEXED
+    evidence: Pre-Popen identity reservation, duplicate joining, mismatch rejection, and bounded-capacity evidence are listed above.
+  - criterion_id: AC-3
+    status: EVIDENCE_INDEXED
+    evidence: Terminal schema projections and separate pipe-stream/PTY compatibility evidence are listed above.
+  - criterion_id: AC-4
+    status: EVIDENCE_INDEXED
+    evidence: Delayed-reader, process-group, timeout, cleanup, reaper, and lease-release evidence is listed above.
+  - criterion_id: AC-5
+    status: EVIDENCE_INDEXED
+    evidence: Post-dispatch reader and cleanup fault-injection tests retain UNKNOWN outcomes and keyed reconciliation; docs/RECOVERY.md documents key eviction and restart limitations.
+  - criterion_id: AC-6
+    status: EVIDENCE_INDEXED
+    evidence: Exact candidate verification, non-force candidate publication, and live-runtime provenance are recorded above. This report does not self-assert its own post-commit remote visibility.
+
+publication_identity:
+  candidate_method: non_force_git_push
+  branch: main
+  candidate_commit: 2851b52ae72da8b109820d98405887b6a1146b37
+  candidate_tree: 1b94c7d85a64c4ba7e77e22c9ced10774e178900
+  fresh_remote_main_after_candidate_push: 2851b52ae72da8b109820d98405887b6a1146b37
+  local_main_after_candidate_reconciliation: 2851b52ae72da8b109820d98405887b6a1146b37
+  candidate_push_reconciliation: EFFECT_PRESENT
+
+live_runtime_unchanged:
+  installed_version: "0.2.2"
+  installed_revision: 90a87fca8755ddc673e749bb5bf3e4489045a9b8
+  installed_kernel: 1
+  source_kernel: 2
+  build_install_restart_plugin_reload_cutover: none
