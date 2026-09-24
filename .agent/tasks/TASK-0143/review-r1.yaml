@@ -1,0 +1,158 @@
+protocol_version: 3
+
+task_id: TASK-0143
+task_revision: 1
+review_revision: 1
+state: ACCEPTED
+owner: ARCHITECT
+
+reviewed_report:
+  path: .agent/tasks/TASK-0143/report-r1.yaml
+  commit: "58a40e6b3030600df8bf5294fb78ea7e11e7b145"
+  tree: "678125aadd652b8f2011bfc623695f7aec418248"
+  report_revision: 1
+  report_state: REPORTED
+  reported_outcome: NEEDS_REVIEW
+
+execution_base:
+  commit: "9b974cca54522e7220940296c47d4ae35760ee6f"
+
+accepted_implementation:
+  candidate: "90a87fca8755ddc673e749bb5bf3e4489045a9b8"
+  candidate_tree: "5c19b1a6d9f568162d5bb7ee36a2dccc3dde604b"
+  runtime_activation_revision: "90a87fca8755ddc673e749bb5bf3e4489045a9b8"
+
+independent_architect_verification:
+  report_topology:
+    result: PASS
+    direct_parent: "90a87fca8755ddc673e749bb5bf3e4489045a9b8"
+    report_only_diff:
+      - .agent/tasks/TASK-0143/report-r1.yaml
+
+  canonical_repository:
+    result: PASS
+    remote_branches:
+      - main
+    open_pull_requests: 0
+    local_head: "58a40e6b3030600df8bf5294fb78ea7e11e7b145"
+    origin_main: "58a40e6b3030600df8bf5294fb78ea7e11e7b145"
+    ahead_behind: "0/0"
+    worktree: CLEAN
+
+  runtime_identity:
+    result: PASS
+    runtime_version: "0.2.2"
+    public_tool_count: 19
+    tool_contract_kernel_version: 1
+    terminal_start_request_schema_version: 2
+    terminal_start_result_schema_version: 2
+    terminal_poll_request_schema_version: 3
+    terminal_poll_result_schema_version: 2
+    terminal_poll_max_wait_ms: 30000
+    schema_bundle_sha256: "159838ff289002b8e4247c53f496d5d4ffa400f795039d35384116ca090eed54"
+    schema_export_sha256: "8e0e85392d85b354c7bb321c6fb2fca465c732949d78f61e9b227ef7d2ba0ed3"
+    schema_export_bytes: 61979
+
+  installed_runtime:
+    result: PASS
+    doctor: "10/10 PASS"
+    health: HEALTHY
+    runtime_version: "0.2.2"
+    runtime_revision: "90a87fca8755ddc673e749bb5bf3e4489045a9b8"
+    git_tree: "5c19b1a6d9f568162d5bb7ee36a2dccc3dde604b"
+    codesign_consistent: true
+    cutover_transaction: ABSENT
+    runtime_env: UNCHANGED
+
+  focused_replay:
+    result: PASS
+    tests: 171
+    duration_seconds: 85.975
+    command: >-
+      .venv/bin/python -m unittest
+      tests.test_terminal_session
+      tests.test_candidate_cutover
+      tests.test_mcp_contracts
+      tests.test_mcp_client_conformance
+      tests.test_capability_registry
+      tests.test_schema_export
+    note: >-
+      Expected negative-path MCP/tool error traces were emitted by regression
+      tests; the focused suite terminated with exit_code=0 and unittest OK.
+
+  authoritative_source_verify:
+    result: PASS
+    modules: "54/54"
+    tests: 685
+    exact_candidate: "90a87fca8755ddc673e749bb5bf3e4489045a9b8"
+    exit_code: 0
+
+  live_execution_proof:
+    noisy_output_terminal_or_deadline: PASS
+    legacy_output_or_state: PASS
+    installed_keyed_verify:
+      result: PASS
+      termination_reason: natural_exit
+      exit_code: 0
+      canonical_verifier_postconditions: PASS
+      duration_seconds: 177.567
+      poll_calls: 5
+      output_triggered_early_returns: 0
+      cursor_expired: false
+      dropped_output_bytes: 0
+
+  governance:
+    screen_capture:
+      state: UNAVAILABLE
+      reason: VISUAL_PERCEPTION_BLOCKED
+      task_blocking: false
+
+acceptance:
+  AC_1_exact_predecessor_split_v1_compatibility: PASS
+  AC_2_terminal_poll_wait_contract: PASS
+  AC_3_terminal_or_deadline_noisy_output_behavior: PASS
+  AC_4_runtime_identity_and_schema: PASS
+  AC_5_exact_candidate_verification_and_publication: PASS
+  AC_6_single_transactional_cutover: PASS
+  AC_7_post_cutover_health_and_provenance: PASS
+  AC_8_live_noisy_and_legacy_smokes: PASS
+  AC_9_live_keyed_verify_long_poll: PASS
+  AC_10_environment_and_repository_hygiene: PASS
+
+findings:
+  blocking: []
+  non_blocking:
+    - id: NB-0143-001
+      description: >-
+        An earlier sealed package candidate was contaminated post-publication by
+        generated Python bytecode, invalidating deep codesign. It was never
+        installed. A fresh candidate was rebuilt, externally pinned-validated,
+        and used for the successful canonical cutover.
+      disposition: CLOSED_BY_RECOVERY
+    - id: NB-0143-002
+      description: >-
+        screen_capture remains unavailable under VISUAL_PERCEPTION_BLOCKED.
+        This is the pre-existing governance state and is outside TASK-0143 scope.
+      disposition: NON_BLOCKING
+
+accepted_package:
+  candidate_sha256: "9a9b9812981bca99596b32701762c94f5d3024b8b4403cb5bb91415e1d6ce369"
+  handoff_sha256: "32321384440a788ff6a8180794343e2cfda022a1c8e5b7ecc5a626ddaea629bd"
+
+program_state:
+  task_0143: ACCEPTED
+  runtime_version: "0.2.2"
+  runtime_activation_revision: "90a87fca8755ddc673e749bb5bf3e4489045a9b8"
+  runtime_survival_activation: CLOSED
+  next_runtime_work:
+    state: BACKLOG
+    note: >-
+      Future model-native Runtime improvements must be authored as separate tasks.
+      TASK-0143 does not authorize additional execution, context-budget,
+      repository-observation, error-taxonomy, MCP Tasks, or cross-restart
+      durability work.
+
+final_judgment:
+  result: TASK_0143_ACCEPTED
+  state: ACCEPTED
+  runtime_activation_revision: "90a87fca8755ddc673e749bb5bf3e4489045a9b8"
