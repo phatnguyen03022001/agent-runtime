@@ -1,0 +1,183 @@
+protocol_version: 3
+
+task_id: TASK-0146
+task_revision: 1
+state: APPROVED
+title: "Model-Efficient Execution Results"
+
+origin:
+  type: explicit_operator_authority
+  task_id: TASK-0146
+  gap_id: GAP-05
+  predecessor: TASK-0145
+  roadmap_authority: NONE
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+  canonical_branch: main
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "22fc4d881d5a0ee71b3af2b3acadb4ce8258bbc1"
+
+architect_analysis_skills: [architect]
+execution_skills:
+  required: [executor, verification]
+  recommended: [reliability]
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+execution_surface:
+  id: CODEX_LOCAL
+  controller: CODEX
+  preferred_transport: NATIVE
+
+authority_sources:
+  - source: "Operator TASK-0145 through TASK-0151 handoff, 2026-09-24"
+    role: "operator objective and sequence including Cutover A after this task"
+    precedence: 1
+  - source: ".agent/tasks/TASK-0145/review.yaml at 5923715bf90ccd52a17c95ed05468949cc8e574f"
+    role: "accepted predecessor"
+    precedence: 2
+  - source: "Pasted 13-gap research report TASK-0146 and migration matrix"
+    role: "advisory design evidence"
+    precedence: 3
+
+structure_authority:
+  status: RESOLVED
+  source: "Accepted TASK-0145 unified lifecycle and operator TASK-0146 roadmap"
+  rationale: "This is a bounded terminal_poll contract change inside the existing session, contract, server, and registry components. No new service or public tool is needed."
+
+live_runtime_authority:
+  installed_version: "0.2.2"
+  installed_revision: "90a87fca8755ddc673e749bb5bf3e4489045a9b8"
+  installed_kernel: 1
+  source_kernel: 2
+  rule: "Source development only in TASK-0146 execution. Cutover A is a later Architect-controlled activation boundary after acceptance."
+
+objective: "Close the execution portion of GAP-05 by letting callers request bounded incremental or status-only terminal_poll results, reducing model context use without changing the underlying process lifecycle, cursor truth, or installed Runtime before Cutover A."
+
+scope:
+  required_changes:
+    - "Add terminal_poll request v4 output=incremental|none, default incremental, and max_output_bytes as a caller raw-byte budget capped at the existing 16 KiB hard poll limit. Implement through server schema, session manager, capability registry, tool-contract projection, and source-facing docs. Keep terminal_poll result v3 unless a material new field is required by the frozen semantics below."
+    - "For incremental mode, return at most the effective raw-byte budget and advance next_cursor only over bytes actually emitted. Preserve PTY merged output, pipe stream identity/order, cursor_expired/dropped_output_bytes, and existing lifecycle/exit metadata. Default omitted fields reproduce current 16 KiB incremental behavior."
+    - "For output=none, return no PTY text and no pipe text chunks while preserving status/lifecycle/mode/exit information, cursor expiry and dropped-byte accounting. Do not consume unread output: next_cursor is the greater of requested cursor and base_cursor, bounded by retained end. Wait semantics remain governed by wait_for rather than silently changing timeout behavior."
+    - "Avoid splitting valid UTF-8 code points at the emitted budget boundary or pipe chunk boundary. If a caller budget cannot fit the next complete code point, do not advance past its bytes; document that a larger budget is needed. Invalid byte sequences may retain the established replacement-decoding behavior."
+    - "Use one shared byte-budget rule for terminal polling across PTY and pipe; preserve terminal_exec's existing separate 64 KiB per-stream capture/truncation contract and terminal_start's existing initial result. Do not add new public knobs to terminal_exec or terminal_start in this task."
+    - "Add focused tests for exact byte caps, small budget/UTF-8 boundaries, large stdout/stderr, no-output cursor/lifecycle behavior, default compatibility, retention expiry and a bounded model-result-size regression. Update only directly affected source documentation and schema fixtures."
+    - "Commit coherent candidate after focused PASS, run canonical ./verify on that exact candidate through a recoverable carrier, publish candidate non-force after fresh remote reconciliation, then publish a canonical Foundation-conforming report-r1.yaml as report-only child and stop NEEDS_REVIEW."
+  allowed_existing_files_or_components:
+    - "agent_runtime session, server, contracts, capability registry and tool contract projection components"
+    - "directly affected focused tests/schema fixtures"
+    - "README.md, docs/AGENT.md, docs/OPERATIONS.md, docs/RECOVERY.md where source/live and output contract need correction"
+    - ".agent/tasks/TASK-0146 task/report artifacts"
+
+invariants:
+  - "No new public tool; advertised inventory remains 19 and source ToolContract Kernel remains 2."
+  - "terminal_poll request schema becomes 4; result schema remains 3 absent a justified result-contract change. terminal_exec stays 2/2 and terminal_start stays 3/3."
+  - "All process admission, key binding, execution, cleanup, timeout, lease, and failure-effect semantics accepted in TASK-0145 remain unchanged."
+  - "Hard poll output cap remains 16 KiB raw bytes and completed retained output remains 64 KiB; caller budget never raises either bound."
+  - "No bytes are silently consumed by output=none or by an insufficient incremental budget; next_cursor remains a truthful raw-byte position."
+  - "No tail mode, universal summary flag, new daemon or persistence mechanism."
+  - "No build, install, restart, plugin reload or live Runtime cutover during source task."
+
+forbidden_changes:
+  - "GAP-05 collection-side, GAP-03, GAP-06 through GAP-13 implementation"
+  - "terminal_exec public schema change, terminal_start public schema change, new public tool, or ToolContract Kernel version change"
+  - "live Runtime package/install/service/plugin/configuration or macOS permission changes"
+  - "new branch, PR, force push, amend, squash, or blind publication retry"
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: revised_contract_required
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+assurance_alignment:
+  standards_revision: "22fc4d881d5a0ee71b3af2b3acadb4ce8258bbc1"
+  standards_requirement_ids: [COR-1.2, COR-1.3, COR-2.1, COR-3.1, REL-2.2, REL-2.3, REL-3.2, CMP-1.1, CMP-2.3]
+  rule: "Existing proof obligations apply to output truth, bounds, compatibility and exact-candidate verification; no maturity-level claim."
+  documents_revision: "22fc4d881d5a0ee71b3af2b3acadb4ce8258bbc1"
+  document_domains:
+    BEHAVIOR: "output modes, cursor transitions, wait behavior"
+    ARCHITECTURE: "shared terminal result projection"
+    INTERFACES: "terminal_poll request v4 and result v3"
+    QUALITY: "byte/UTF-8/large-output/model-size proof"
+    DELIVERY: "source/live split and Cutover A pending acceptance"
+  documents_rule: "Use existing target docs; do not claim Agent Documents V1 catalog adoption or DOCS_READY."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Incremental mode defaults to prior behavior and enforces caller budget and 16 KiB hard cap with truthful raw-byte cursor progression for PTY and pipe."
+    evidence_required: "Schema export/MCP conformance, boundary/large-output/stream tests, exact byte and cursor assertions."
+  - id: AC-2
+    requirement: "None mode returns zero output text without losing unread bytes or lifecycle/termination/expiry information."
+    evidence_required: "Status-only polling through running, exit, expiry, and subsequent incremental read tests."
+  - id: AC-3
+    requirement: "Valid UTF-8 code points are not corrupted by budget or chunk boundaries, and context-size improvement is measurable without weakening hard bounds."
+    evidence_required: "Multibyte boundary and bounded serialized-result comparison tests."
+  - id: AC-4
+    requirement: "Existing TASK-0145 process lifecycle, keyed execution, tool inventory and nonterminal public contracts remain intact."
+    evidence_required: "Focused regressions, schema inventory and canonical ./verify."
+  - id: AC-5
+    requirement: "Exact candidate passes focused and canonical verification, is published non-force, and canonical report-only child is remotely proven while installed Runtime stays unchanged."
+    evidence_required: "Candidate SHA/tree, structured verifier completion, fresh remote identity, validated canonical report, source/live provenance."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Fresh-resolve remote main and accepted TASK-0145 review; require exact task-authoring base and clean/safely synchronized local main before mutation."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Confirm task revision 1, execution-ready authority, pinned standards/document domains and current-phase capability preflight."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Run focused output/budget/UTF-8/schema/lifecycle tests; commit the coherent candidate after PASS."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Run ./verify on that exact candidate through a recoverable carrier with structured exit_code=0 and verifier postconditions PASS; no concurrent source writes."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Fresh-resolve remote main, publish exact verified candidate non-force and reconcile ambiguous publication before retry."
+      required: true
+    - id: CHECK-6
+      command_or_check: "Publish canonical report-r1.yaml as report-only child, fresh-reconcile remote/local main and stop NEEDS_REVIEW."
+      required: true
+  authoritative_verification:
+    required: true
+    mechanism: "./verify on exact implementation candidate through recoverable local carrier"
+    expected_signal: "Exact candidate, structured terminal completion, exit_code=0, canonical modules/tests/postconditions PASS."
+
+report_requirements:
+  path: .agent/tasks/TASK-0146/report-r1.yaml
+  canonical_contract: "Foundation skills/contracts/IMPLEMENTATION_REPORT.md at pinned revision"
+  record:
+    - "state=REPORTED and result=NEEDS_REVIEW"
+    - "canonical report fields required by pinned validator"
+    - "exact task/base/candidate/tree and source/live provenance"
+    - "AC-to-evidence and all required check/verifier results"
+    - "output mode/budget/UTF-8/model-size evidence"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+blocking_decisions: []
+execution_ready: true
