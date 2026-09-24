@@ -1,0 +1,174 @@
+protocol_version: 3
+
+task_id: TASK-0144
+task_revision: 1
+review_revision: 1
+state: ACCEPTED
+owner: ARCHITECT
+
+reviewed_report:
+  path: .agent/tasks/TASK-0144/report-r1.yaml
+  commit: "95f2864db760940a43772f19abcfaba0c3cb3449"
+  report_revision: 1
+  report_state: NEEDS_REVIEW
+
+execution_base:
+  commit: "450c1ef01486914f1ed80e4a943225859fe82c97"
+
+accepted_lineage:
+  task_authority: "450c1ef01486914f1ed80e4a943225859fe82c97"
+  recovered_checkpoint: "b6e9e3ef94f13e7339a2377a9b3782444b430fcd"
+  implementation_candidate: "3f6aa92f4a6b420dbd154dbf12d917a597be6fd6"
+  candidate_tree: "3039447c8c804ac973f69dd332ec2cedb949828c"
+  report_commit: "95f2864db760940a43772f19abcfaba0c3cb3449"
+
+independent_architect_verification:
+  report_topology:
+    result: PASS
+    direct_parent: "3f6aa92f4a6b420dbd154dbf12d917a597be6fd6"
+    report_only_diff:
+      - .agent/tasks/TASK-0144/report-r1.yaml
+
+  repository:
+    result: PASS
+    local_head: "95f2864db760940a43772f19abcfaba0c3cb3449"
+    origin_main: "95f2864db760940a43772f19abcfaba0c3cb3449"
+    ahead_behind: "0/0"
+    worktree: CLEAN
+    remote_branches:
+      - main
+    open_pull_requests: 0
+
+  source_contract:
+    result: PASS
+    tool_contract_kernel_version: 2
+    error_effect_contract_version: 1
+    structured_fields:
+      - code
+      - reason_code
+      - message
+      - retryable
+      - effect_state
+      - reconciliation_required
+      - safe_next_action
+    effect_states:
+      - absent
+      - present
+      - unknown
+    safe_next_actions:
+      - fix_request
+      - retry
+      - wait
+      - reconcile
+      - unsupported
+      - report_defect
+
+  mcp_error_transport:
+    result: PASS
+    pinned_sdk: "mcp==2.2.0"
+    is_error: true
+    structured_content: true
+    success_payload_abuse: false
+    note: >-
+      Independent source replay exercised the MCP Client path and confirmed
+      structured error payloads remain tool errors.
+
+  effect_boundary_truthfulness:
+    result: PASS
+    notes:
+      - "Pre-dispatch validation/capacity failures classify effect_state=absent."
+      - "Post-effect or ambiguous outcomes require reconciliation rather than blind retry."
+      - "Known post-mutation filesystem boundaries distinguish present/unknown from absent."
+      - "Repo publication ambiguity remains reconcile-required."
+
+  independent_focused_replay:
+    result: PASS
+    tests: 63
+    duration_seconds: 1.956
+    modules:
+      - tests.test_failure_effect_contract
+      - tests.test_task0140_qualification
+      - tests.test_mcp_contracts
+      - tests.test_tool_contract
+      - tests.test_schema_export
+    exit_code: 0
+    note: >-
+      Replay included the TASK-0140 qualification regression that caused the
+      first full verification failure and confirmed the final compatibility fix.
+
+  executor_focused_verification:
+    result: PASS
+    tests: 260
+
+  canonical_verification:
+    result: PASS
+    modules: "55/55"
+    tests: 703
+    exit_code: 0
+    duration_seconds: 199.127
+    full_verify_executions_after_convergence: 2
+    policy_judgment: PASS
+    note: >-
+      Two executions were justified: the first publication-gate run found a
+      real tests.test_task0140_qualification regression; the executor repaired
+      that exact defect, reran focused verification, created a child fix, and
+      only then performed the second full publication-gate verification.
+
+  live_runtime_split:
+    result: PASS
+    source_runtime_version: "0.2.2"
+    source_tool_contract_kernel_version: 2
+    installed_runtime_version: "0.2.2"
+    installed_runtime_revision: "90a87fca8755ddc673e749bb5bf3e4489045a9b8"
+    installed_git_tree: "5c19b1a6d9f568162d5bb7ee36a2dccc3dde604b"
+    installed_tool_contract_kernel_version: 1
+    running_from_installed_app: true
+    cutover_performed: false
+    note: >-
+      Source/main intentionally advances ahead of the installed activation
+      during the pre-Cutover-A development wave. This is expected state, not
+      Runtime drift.
+
+acceptance:
+  AC_1_shared_structured_failure_effect_contract: PASS
+  AC_2_required_effect_reconciliation_semantics: PASS
+  AC_3_mcp_tool_error_plus_structured_content: PASS
+  AC_4_zero_english_string_parsing_for_machine_action: PASS
+  AC_5_public_failure_inventory_coverage: PASS
+  AC_6_candidate_focused_and_canonical_verification: PASS
+  AC_7_live_runtime_unchanged: PASS
+
+findings:
+  blocking: []
+  non_blocking:
+    - id: NB-0144-001
+      description: >-
+        Source main now carries ToolContract Kernel 2 while the installed
+        Runtime 0.2.2 activation remains Kernel 1. This is intentional under
+        the two-cutover roadmap and must remain explicit in future task/report
+        provenance until Cutover A.
+      disposition: EXPECTED_SOURCE_LIVE_SPLIT
+    - id: NB-0144-002
+      description: >-
+        The first full publication-gate verification detected a legacy
+        qualification logging regression. The final child commit restored the
+        sanitized unexpected-failure logging contract and the second full
+        verification passed.
+      disposition: CLOSED_BY_CHILD_FIX
+
+program_state:
+  task_0144: ACCEPTED
+  gap_04: CLOSED_IN_SOURCE
+  live_runtime_activation:
+    version: "0.2.2"
+    revision: "90a87fca8755ddc673e749bb5bf3e4489045a9b8"
+    unchanged: true
+  next_roadmap_task:
+    task_id: TASK-0145
+    title: "Unified Recoverable Execution Core"
+    cutover_authorized: false
+
+final_judgment:
+  result: TASK_0144_ACCEPTED
+  state: ACCEPTED
+  implementation_candidate: "3f6aa92f4a6b420dbd154dbf12d917a597be6fd6"
