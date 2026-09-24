@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import socket
 import stat
@@ -50,8 +51,14 @@ class FsReadBatchAdversarialTests(unittest.TestCase):
             "end_line": 1,
             "text": "ok\n",
         }
-        self.assertEqual(same_chunk, expected)
-        self.assertEqual(later_chunk, expected)
+        expected_sha = hashlib.sha256(b"ok\n\xffsuffix").hexdigest()
+        for result in (same_chunk, later_chunk):
+            self.assertEqual({key: result[key] for key in expected}, expected)
+            self.assertEqual(result["size_bytes"], 10)
+            self.assertEqual(result["returned_bytes"], 3)
+            self.assertTrue(result["eof"])
+            self.assertFalse(result["truncated"])
+            self.assertEqual(result["sha256"], expected_sha)
 
         path.write_bytes(b"\xffprefix\nok\n")
         prefix_unselected = self._call(FsReadItem(path="range.txt", start_line=2, end_line=2))[0]
