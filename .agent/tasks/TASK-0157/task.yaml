@@ -1,0 +1,200 @@
+protocol_version: 3
+
+task_id: TASK-0157
+task_revision: 1
+state: APPROVED
+title: "Runtime 0.5.0 Predecessor Compatibility Repair + Reseal"
+
+origin:
+  type: corrective_followup
+  source_task: TASK-0156
+  source_result: BLOCKED
+  failure: "predecessor ServiceManagement contract is unsupported for Runtime refresh"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+  canonical_branch: main
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+accepted_release_line:
+  runtime_version: "0.5.0"
+  prior_source_candidate: "61ddb8cda4290799d9b2166f9b24060ab9c6b1ca"
+  prior_source_tree: "00d833ff1ec57973030f0361c4d96cb4e957dcf7"
+  prior_package_sha256: "bd6901087782ecedfb3eb21f9807c406311677dfecca4548c1b23e2c89a3429e"
+  prior_handoff_sha256: "deffa93f1cac42c208f95e44afca3d3401aa8028a79691d04b565a04d2f8b8ab"
+  prior_package_status: "OBSOLETE_FOR_ACTIVATION_AFTER_COMPAT_FIX"
+
+blocked_activation_evidence:
+  failed_task: TASK-0156
+  sentinel_job: "job_2f970974b551"
+  install_invocations_consumed: "1/1"
+  observed_predecessor:
+    runtime_version: "0.4.0"
+    runtime_revision: "cf6aba7e9ca22bf5f0c1202ed7b6ac40433053b0"
+    runtime_tree: "a27f62f1bdfcbc43adf1c11b479b4688d5b5f13f"
+    service_management: "enabled/enabled"
+    doctor: healthy
+    transaction_present: false
+  post_failure_state:
+    predecessor_unchanged: true
+    transaction_present: false
+    rollback_or_recovery_invoked: false
+
+objective: >
+  Make the smallest exact predecessor-compatibility correction required for
+  Runtime 0.5.0 cutover to recognize the actually installed Runtime 0.4.0
+  revision cf6aba7e... as the existing split-v1 ServiceManagement contract,
+  prove the correction without redesign, reseal one new immutable Runtime
+  0.5.0 package from the exact corrected candidate, and stop NEEDS_REVIEW
+  without touching the installed Runtime.
+
+required_change:
+  - "Add exactly cf6aba7e9ca22bf5f0c1202ed7b6ac40433053b0 to macos/candidate_cutover.py SPLIT_SERVICE_MANAGEMENT_REVISIONS."
+  - "Do not replace exact revision membership with heuristic detection."
+  - "Update tests/test_candidate_cutover.py only as needed to prove the exact predecessor classifies split-v1 and follows the existing split-v1 runtime-refresh path."
+  - "Preserve all existing known predecessor revisions and unknown-predecessor fail-closed behavior."
+  - "Preserve Runtime version 0.5.0, ToolContract Kernel 2, 21 known / 20 advertised tools and all accepted telemetry/durable/verification behavior."
+
+allowed_source_paths:
+  - macos/candidate_cutover.py
+  - tests/test_candidate_cutover.py
+  - ".agent/tasks/TASK-0157/report-r1.yaml"
+
+forbidden_source_changes:
+  - "Any agent_runtime product implementation file."
+  - "Any version bump beyond 0.5.0."
+  - "verify, verify_tests.py, verification_policy.py."
+  - "requirements.lock."
+  - "install.sh, start.sh, macos/package_app.sh or other package/cutover architecture."
+  - "Any heuristic predecessor detection."
+  - "Any MCP schema/tool/capability change."
+  - "Any MCP Tasks/GAP-12 implementation."
+
+executor_survival_protocol:
+  - "Do not run full qualification while editing."
+  - "Run only the exact compatibility-focused tests first."
+  - "Commit a clean corrective source checkpoint before any broad verification."
+  - "On the exact clean candidate run ./verify --profile candidate --base <task-base> exactly once."
+  - "If policy escalates requested candidate to effective qualification, that single PASS is the authoritative qualification. Do not run another qualification on the same SHA."
+  - "If that run fails, do not rerun the same SHA seeking green; diagnose and stop BLOCKED unless the failure is within this task authority."
+  - "Any tracked source/test write after qualification creates a new child candidate and invalidates the prior qualification."
+  - "Long commands >10s use a recoverable process surface; record process identity immediately."
+  - "Poll healthy long processes no more frequently than every 20 seconds."
+  - "Unknown outcome requires process/artifact/Git inspection before retry."
+  - "No blind retry and no unrelated host process termination."
+
+focused_verification:
+  exact_tests:
+    - "tests.test_candidate_cutover.CandidateCutoverTests.test_installed_predecessor_revision_is_recognized_as_split_v1"
+    - "tests.test_candidate_cutover.CandidateCutoverTests.test_installed_split_v1_predecessor_refresh_uses_split_runtime_contract"
+    - "tests.test_candidate_cutover.CandidateCutoverTests.test_unknown_predecessor_contract_fails_closed_before_service_mutation"
+  additional_requirements:
+    - "Add exact cf6aba7e... coverage to installed-predecessor recognition."
+    - "Add exact cf6aba7e... coverage to split-v1 refresh behavior."
+    - "Prove a neighboring/unlisted revision remains unknown or preserve an existing exact-neighbor fail-closed proof."
+    - "git diff --check PASS."
+
+broad_verification:
+  command: "./verify --profile candidate --base <task-base>"
+  rule: >
+    Run once only after a clean corrective candidate commit exists. If the
+    verification policy escalates this source change to effective qualification,
+    one terminal PASS is sufficient and must not be followed by another full
+    qualification on the same SHA.
+
+package_reseal:
+  preconditions:
+    - "Exact corrected candidate is clean and has terminal effective verification PASS."
+    - "No tracked candidate write after verification."
+  rules:
+    - "Build/sign/seal exactly one new package from the corrected candidate."
+    - "The old bd690108... package remains immutable historical evidence and must not be modified."
+    - "Use a recoverable long-process carrier and record job/process identity."
+    - "If packaging outcome becomes unknown, inspect process and build/candidates for an exact candidate bound to the corrected SHA/tree before any retry."
+    - "Strict deep codesign and pinned provenance validation must PASS."
+    - "Record exact candidate SHA-256, handoff SHA-256, record_count, source revision/tree and Runtime 0.5.0 projection."
+
+live_runtime_guard:
+  - "Do not invoke install-prebuilt."
+  - "Do not invoke resume/rollback/recover/commit-cutover."
+  - "Do not stop/restart/reload/reconnect Runtime."
+  - "Installed Runtime must remain 0.4.0 at cf6aba7e... and healthy with transaction absent throughout."
+  - "TASK-0156's consumed install authority is not reused."
+
+publication_lifecycle:
+  - "Fresh remote gate before publication: remote main still exact task base, branches={main}, open PRs=0."
+  - "Publish exact corrected source candidate non-force."
+  - "Create .agent/tasks/TASK-0157/report-r1.yaml as sole report-only child."
+  - "Validate report with pinned agent-skills authority."
+  - "Publish report non-force."
+  - "Reconcile HEAD=origin/main=remote main, ahead/behind=0/0, clean worktree/index."
+  - "Stop NEEDS_REVIEW."
+  - "Do not start activation in the same chat."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact installed predecessor is recognized by existing split-v1 contract."
+    evidence_required: "cf6aba7e... is exact allowlist member and focused classification proof PASS; no heuristic classification introduced."
+
+  - id: AC-2
+    requirement: "Runtime refresh follows existing split-v1 path."
+    evidence_required: "Focused cutover fixture proves unregister-runtime is used for cf6aba7e... and aggregate unregister is not."
+
+  - id: AC-3
+    requirement: "Unknown predecessor remains fail-closed."
+    evidence_required: "Unknown/unlisted predecessor proof PASS with zero consequence-bearing service mutation and no transaction creation."
+
+  - id: AC-4
+    requirement: "Corrected candidate is fully verified without redundant replay."
+    evidence_required: "Focused proof PASS and one exact clean candidate-profile run PASS; if escalated to qualification, no second full run."
+
+  - id: AC-5
+    requirement: "One new immutable Runtime 0.5.0 package binds corrected source."
+    evidence_required: "New package/handoff hashes, record_count, exact source revision/tree, strict codesign and provenance PASS."
+
+  - id: AC-6
+    requirement: "Installed Runtime remains untouched."
+    evidence_required: "Runtime 0.4.0/cf6aba7e... healthy, transaction absent, zero activation mutations."
+
+  - id: AC-7
+    requirement: "Canonical publication is exact."
+    evidence_required: "Non-force candidate publication, report-only child, final main-only/zero-PR/clean reconciliation."
+
+report_requirements:
+  path: .agent/tasks/TASK-0157/report-r1.yaml
+  record:
+    - "TASK-0156 blocked job and exact unsupported-predecessor failure"
+    - "exact installed predecessor revision/tree and healthy restored state"
+    - "exact two-file corrective source scope"
+    - "focused exact tests and unknown-predecessor fail-closed proof"
+    - "single effective candidate/qualification run and no redundant replay"
+    - "new corrected source candidate SHA/tree"
+    - "new package SHA-256, handoff SHA-256, record_count and provenance"
+    - "old package bd690108... left immutable and superseded for activation"
+    - "zero live activation effects"
+    - "final canonical Git reconciliation"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  rebuild_corrected_candidate_once: true
+  install_or_activate: false
+  create_version_tag: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
