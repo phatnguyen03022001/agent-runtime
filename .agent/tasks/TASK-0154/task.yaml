@@ -1,0 +1,434 @@
+protocol_version: 3
+
+task_id: TASK-0154
+task_revision: 1
+state: APPROVED
+title: "Verification Architecture Rationalization"
+
+origin:
+  type: explicit_operator_authority
+  task_id: TASK-0154
+  source: "Operator request to fix Agent Runtime test architecture without reducing correctness or proof quality."
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+  canonical_branch: main
+  scope_repository_only: true
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+predecessor:
+  accepted_task: TASK-0153
+  accepted_review_commit: "37ac4b7ffe3a9e5faa567eb3a63827d495dfc726"
+  accepted_candidate: "91c9a514eb38f45611ac6dd533d7f5e90da13983"
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  preferred_transport: AGENT_RUNTIME
+
+objective: >
+  Replace the current binary verification architecture with an explicit,
+  deterministic, auditable multi-lane system that preserves all material
+  regression, lifecycle, restart, durability, recovery and cutover proof while
+  making ordinary implementation feedback fast enough to complete coherent
+  Executor checkpoints inside bounded ChatGPT turns.
+
+measured_baseline:
+  measured_at_commit: "37ac4b7ffe3a9e5faa567eb3a63827d495dfc726"
+  command: "./verify"
+  result: PASS
+  modules: 62
+  tests: 791
+  verify_reported_wall_seconds: 129.534
+  process_real_seconds: 129.84
+  existing_fast_parallel_lane:
+    modules: 22
+    tests: 265
+    workers: 4
+    wall_seconds: 17.560
+  existing_serial_host_sensitive_lane:
+    modules: 40
+    tests: 526
+    workers: 1
+    wall_seconds: 111.973
+  dominant_modules:
+    tests.test_candidate_cutover: 41.333
+    tests.test_repo_commit: 17.510
+    tests.test_repo_publish: 14.239
+    tests.test_tunnel_identity: 12.789
+    tests.test_repo_stage: 11.573
+    tests.test_terminal_session: 9.998
+    tests.test_supervised_lifecycle: 9.040
+    tests.test_repo_fast_forward: 7.718
+    tests.test_repo_stage_commit_mcp: 4.773
+    tests.test_durable_pipe_restart: 4.056
+  operational_observation: >
+    Current full verify buffers worker output and emitted no useful progress for
+    more than a minute during this baseline. A healthy verification run is
+    therefore operationally opaque to an Executor until a worker/lane finishes.
+
+problem_statement:
+  - "verify_tests.py classifies only an explicit FAST_PARALLEL_SAFE allowlist; every other discovered module is forced into one serial host-sensitive lane."
+  - "Unknown new test modules silently become serial rather than requiring explicit proof classification."
+  - "Pure deterministic tests, isolated integration, host lifecycle, restart/durability and cutover qualification are not represented as distinct proof classes."
+  - "Ordinary source changes pay unrelated host/system/qualification wall-clock cost."
+  - "Real sleeps, polling loops and repeated process/fixture startup are used in places where deterministic barriers/fakes or reusable immutable fixtures may provide equivalent proof."
+  - "The harness does not continuously expose verification progress and has no architecture-level per-module/per-worker hard deadline."
+  - "Verification duration is an Executor-survival correctness concern, not merely a developer convenience issue."
+
+principles:
+  - "Do not reduce correctness to gain speed."
+  - "Test architecture and proof selection are the optimization target, not raw test count."
+  - "Ordinary source change != every expensive host/process/chaos proof."
+  - "Affected subsystem, verification infrastructure, release or qualification => appropriate expensive proof."
+  - "Unknown classification or path mapping fails closed to stronger verification."
+  - "Selection is deterministic from exact base-to-candidate diff; Executor discretion is not authority."
+  - "Real subprocess use alone does not imply serialization."
+  - "No test may become invisible merely because it is expensive."
+
+verification_lanes:
+  L0_STATIC:
+    purpose: "Syntax, importability, shell syntax, verification-policy consistency and inventory/classification closure."
+    examples:
+      - "py_compile"
+      - "bash -n"
+      - "manifest completeness and deterministic-plan validation"
+    real_waiting_allowed: false
+
+  L1_DETERMINISTIC_UNIT:
+    purpose: "Pure deterministic contract/state/algorithm tests."
+    admissibility:
+      - "No host-global service or fixed-port ownership."
+      - "No correctness dependency on real wall-clock sleep."
+      - "No externally shared mutable fixture."
+    worker_class: PARALLEL
+    default_workers: 4
+
+  L2_ISOLATED_INTEGRATION:
+    purpose: "Real local subprocess, disposable Git/filesystem and MCP integration with exact fixture ownership."
+    admissibility:
+      - "Every mutable resource is unique to the test/module."
+      - "Every spawned child is positively owned and boundedly cleaned."
+      - "No protected installed Runtime or host-global service lifecycle."
+      - "Synchronization is event/barrier/condition driven where elapsed time itself is not the proof."
+    worker_class: PARALLEL
+    default_workers: 4
+
+  L3_DETERMINISTIC_REGRESSION:
+    purpose: "Cross-module deterministic compatibility and complete ordinary-source regression."
+    admissibility:
+      - "Safe to run on every final ordinary source candidate."
+      - "No host-global lifecycle authority."
+      - "May use isolation keys when a shared process-local boundary requires serialization."
+    worker_class: POLICY_CONTROLLED
+
+  L4_HOST_LIFECYCLE:
+    purpose: "Install/start/service/process ownership/recovery and host-sensitive lifecycle proof."
+    selection: "Affected subsystem or explicit qualification."
+    worker_class: ISOLATED
+    default_workers: 1
+
+  L5_QUALIFICATION_CHAOS_CUTOVER:
+    purpose: "Restart, durability, chaos, package, cutover and release qualification."
+    selection: "Affected subsystem, verification-policy change, release/cutover task or explicit qualification."
+    worker_class: ISOLATED
+    default_workers: 1
+
+verification_policy_ssot:
+  requirement: >
+    Add one small Python policy/manifest SSOT consumed by verify_tests.py.
+    Every discovered tests/test_*.py module must be classified exactly once.
+  required_fields_per_module:
+    - lane
+    - subsystem_tags
+    - isolation_key
+    - proof_rationale
+    - timeout_seconds
+  unknown_module_behavior: FAIL_CLOSED
+  duplicate_classification_behavior: FAIL_CLOSED
+  unselected_module_behavior_in_qualification: FAIL_CLOSED
+
+profiles:
+  quick:
+    purpose: "Fast implementation feedback, never publication authority."
+    includes:
+      - L0_STATIC
+      - "globally-required L1 contract checks"
+      - "affected L1/L2 modules selected from exact diff"
+    max_wall_seconds_target: 20
+
+  candidate:
+    purpose: "Ordinary exact source-candidate publication proof."
+    includes:
+      - L0_STATIC
+      - "all required L1/L2/L3 deterministic regression"
+      - "any L4/L5 modules triggered by the exact changed subsystem"
+    requires_explicit_base: true
+    max_wall_seconds_without_L4_L5_target: 45
+
+  qualification:
+    purpose: "Full retained proof surface for release, cutover, verification-policy changes and explicit qualification."
+    includes:
+      - L0_STATIC
+      - L1_DETERMINISTIC_UNIT
+      - L2_ISOLATED_INTEGRATION
+      - L3_DETERMINISTIC_REGRESSION
+      - L4_HOST_LIFECYCLE
+      - L5_QUALIFICATION_CHAOS_CUTOVER
+    max_wall_seconds_target: 90
+
+cli_contract:
+  preserve:
+    - "./verify remains valid and backward-compatible as full qualification proof."
+    - "--quick may remain as a compatibility alias if behavior is explicit."
+  add:
+    - "./verify --profile quick --base <40-hex>"
+    - "./verify --profile candidate --base <40-hex>"
+    - "./verify --profile qualification --base <40-hex>"
+    - "./verify --plan --profile <profile> --base <40-hex>"
+  rules:
+    - "candidate and quick require an explicit exact base SHA; no guessed merge-base or implicit Executor choice."
+    - "qualification accepts a base for explainability but still includes the complete classified proof surface."
+    - "plan output is deterministic and causes no test execution."
+    - "plan lists every selected module, lane, subsystem trigger, isolation key and reason."
+    - "Same repository state + same base + same profile => byte-stable ordered plan."
+
+change_selection:
+  source_of_truth: "Exact git diff from explicit base SHA to current candidate HEAD."
+  requirements:
+    - "Maintain explicit path/pattern -> subsystem trigger mapping in the same verification policy SSOT."
+    - "Unknown changed path escalates to qualification rather than under-selecting."
+    - "Changes to verify, verify_tests.py, verification policy/manifest or verification-harness tests force qualification."
+    - "Changes to install.sh/start.sh/macos package/ServiceManagement/cutover paths trigger host lifecycle/qualification proof."
+    - "Changes to terminal/session/executor/durable-pipe lifecycle trigger terminal lifecycle plus restart/durability proof."
+    - "Changes to contracts/server/capability registry/tool-contract surface trigger global contract/client/schema proof."
+    - "Repository-tool source changes trigger the relevant repo integration/regression subsystem."
+    - "Tests changed directly trigger their own lane/subsystem and any proof set they define."
+    - "Documentation-only changes may select only L0 when no executable contract is affected, but this must be explicit in policy."
+
+parallelism_and_isolation:
+  - "Retain a bounded worker count; do not increase concurrency merely to meet timing targets."
+  - "Parallelize only modules whose resources are isolated according to explicit policy."
+  - "Use isolation keys to prevent incompatible modules from overlapping."
+  - "Host-global service ownership, fixed ports, protected Runtime state and installed-product lifecycle remain isolated."
+  - "Disposable temporary Git repositories and per-test filesystem roots are parallel-admissible when cleanup/ownership evidence is exact."
+  - "Historical placement in the old serial lane is not evidence that serialization is required."
+
+timing_and_test_refactor:
+  required:
+    - "Profile individual slow test cases before changing their synchronization."
+    - "Replace arbitrary real sleeps used only for synchronization with deterministic Event/Condition/barrier/fake-clock mechanisms when equivalent."
+    - "Retain real elapsed-time tests where elapsed time is itself the behavior under proof."
+    - "Replace oversized timeout guards with bounded safety deadlines while preserving behavioral proof."
+    - "Reduce repeated process/import/fixture construction when immutable setup can be reused without shared mutable-state leakage."
+    - "Split mixed modules only when needed to separate fundamentally different verification lanes."
+    - "Preserve at least one real integration proof for each material external behavior being abstracted by deterministic unit tests."
+  priority_bottlenecks:
+    - "tests.test_candidate_cutover"
+    - "tests.test_tunnel_identity"
+    - "tests.test_terminal_session"
+    - "tests.test_supervised_lifecycle"
+    - "tests.test_durable_pipe_restart"
+    - "repository Git integration modules when fixture startup dominates behavior proof"
+
+executor_survival:
+  - "Print/flush a module START event before execution and a terminal PASS/FAIL/TIMEOUT event after execution."
+  - "While any worker has no completed module for 5 seconds, emit a bounded heartbeat identifying profile, lane, active module(s) and elapsed seconds."
+  - "No parent verification process may wait indefinitely for a worker."
+  - "Every module has an explicit manifest timeout; timeout is a verification failure."
+  - "Timeout cleanup targets only harness-owned worker process groups and must not signal unrelated host processes."
+  - "Failure/timeout output identifies exact lane/module and preserves useful completed timing evidence."
+  - "A killed ChatGPT turn must leave already-emitted progress sufficient to identify the last active proof."
+
+quality_preservation:
+  - "No meaningful test/proof may be deleted merely to satisfy a timing target."
+  - "No assertion weakening, retry-to-green, skip/xfail introduction or ignored failure."
+  - "Capture base test-module inventory, test-case count and material proof obligations before implementation."
+  - "If a test is moved, consolidated or deleted, report an explicit old -> new proof mapping and why semantic coverage is preserved."
+  - "Qualification must include every classified module and every retained material pre-task proof."
+  - "Raw test count may change only with explicit semantic-consolidation evidence; test count itself is not the quality goal."
+  - "Timing targets are invalid if achieved by reducing required proof."
+
+implementation_scope:
+  allowed_primary:
+    - verify
+    - verify_tests.py
+    - "one new verification policy/manifest Python file"
+    - tests/test_verify_harness.py
+  allowed_targeted_refactors:
+    - tests/test_candidate_cutover.py
+    - tests/test_tunnel_identity.py
+    - tests/test_terminal_session.py
+    - tests/test_supervised_lifecycle.py
+    - tests/test_durable_pipe_restart.py
+    - "other existing tests only when measured timing evidence identifies a material bottleneck or classification/isolation correction"
+  allowed_docs:
+    - README.md
+    - "at most one directly relevant Runtime verification/operations document"
+  report:
+    - .agent/tasks/TASK-0154/report-r1.yaml
+
+structure_policy:
+  expected_new_files:
+    - "verification_policy.py or equivalently named single policy/manifest owner"
+    - .agent/tasks/TASK-0154/report-r1.yaml
+  allow_new_top_level_directories: false
+  allow_new_shared_runtime_modules: false
+  max_additional_test_files: 1
+
+forbidden_changes:
+  - "Any Agent Runtime product behavior, MCP tool/schema/failure/effect semantics or capability count change."
+  - "Any Runtime version or ToolContract Kernel bump."
+  - "Any install/restart/reload/cutover/product activation."
+  - "Any change outside phatnguyen03022001/agent-runtime."
+  - "Any deletion/skip/assertion weakening solely for speed."
+  - "Any unbounded worker/module wait."
+  - "Any dynamic heuristic that makes proof selection depend on machine load, current timing, randomness or Executor judgment."
+  - "Any branch, PR, force push, amend, squash, tag or release."
+
+verification_machinery_proof:
+  required_tests:
+    - "Every discovered test module is classified exactly once."
+    - "Unknown test module fails closed."
+    - "Duplicate classification fails closed."
+    - "Unknown changed path escalates to qualification."
+    - "Verification infrastructure change forces qualification."
+    - "Diff-to-subsystem selection is deterministic."
+    - "Same base/profile/HEAD produces byte-stable ordered plan."
+    - "quick subset, candidate and qualification profile inclusion rules are exact."
+    - "Qualification includes every classified test module."
+    - "Isolation-key conflicts never execute concurrently."
+    - "Parallel-safe independent modules can execute concurrently."
+    - "Module timeout returns nonzero and kills only harness-owned worker process group."
+    - "Worker crash/missing result returns nonzero."
+    - "Module START/PASS/FAIL/TIMEOUT output is flushed incrementally."
+    - "Heartbeat appears during a deliberately slow fixture without waiting for fixture completion."
+    - "Failure propagation remains exact and visible."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Verification proof classes are explicit and complete."
+    evidence_required: "All tests/test_*.py modules classified exactly once with lane/tags/isolation/rationale/timeout; qualification selects all; unknowns fail closed."
+
+  - id: AC-2
+    requirement: "Ordinary verification selection is deterministic and auditable."
+    evidence_required: "Exact base-to-candidate path mapping produces deterministic plan/explain output; representative subsystem fixtures prove correct candidate selection and unknown paths escalate."
+
+  - id: AC-3
+    requirement: "Parallelism/isolation is evidence-based."
+    evidence_required: "Parallel-safe modules overlap in controlled harness tests; incompatible isolation keys never overlap; no protected/global lifecycle proof is accidentally parallelized."
+
+  - id: AC-4
+    requirement: "Executor waiting is bounded and observable."
+    evidence_required: "START/progress/terminal output is incremental; heartbeat <=5s while blocked; module/worker hard deadline terminates owned worker group and fails with exact module/lane evidence."
+
+  - id: AC-5
+    requirement: "Test quality is preserved."
+    evidence_required: "Base vs final inventory/proof mapping shows no silent proof deletion; all material lifecycle/restart/durability/recovery/cutover proofs remain present in qualification; no skip/xfail/assertion weakening/retry-to-green."
+
+  - id: AC-6
+    requirement: "Measured wall-clock cost is materially reduced on the canonical operator Mac."
+    evidence_required: >
+      On exact clean final candidate under normal load: quick <=20s;
+      candidate with no L4/L5 trigger <=45s; full qualification <=90s.
+      Report before/after timings and the selected-module counts for each profile.
+      Targets are subordinate to AC-5 and may not be met by weakening proof.
+
+  - id: AC-7
+    requirement: "Backward-compatible full verification remains available."
+    evidence_required: "./verify with no profile executes full qualification and passes the complete retained proof surface."
+
+  - id: AC-8
+    requirement: "Product Runtime remains unchanged."
+    evidence_required: "No product source/runtime schema/version/kernel/capability/install/cutover change; installed Runtime remains unchanged."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Fresh exact-base gate: branches={main}, open PRs=0, local/origin/remote exact task-authoring HEAD, ahead/behind=0/0, clean worktree/index, accepted TASK-0153 review present."
+      required: true
+
+    - id: CHECK-2
+      command_or_check: "Reproduce and record clean base baseline before mutation: ./verify full wall time, lane totals, module inventory, test count, slowest modules and progress-output behavior."
+      required: true
+
+    - id: CHECK-3
+      command_or_check: "Produce an explicit baseline classification proposal and individual-case timing for every targeted slow module before refactoring it."
+      required: true
+
+    - id: CHECK-4
+      command_or_check: "Implement policy/manifest, deterministic planning, bounded workers/progress output and only evidence-driven test synchronization/fixture refactors."
+      required: true
+
+    - id: CHECK-5
+      command_or_check: "Run focused verification-harness proof, all directly refactored modules, and representative deterministic selection/isolation/timeout/heartbeat tests."
+      required: true
+
+    - id: CHECK-6
+      command_or_check: "Commit one exact source candidate after focused PASS; require clean candidate and git diff --check. Any subsequent test/harness/doc mutation creates a new candidate."
+      required: true
+
+    - id: CHECK-7
+      command_or_check: "On exact clean candidate run quick, representative ordinary candidate profile with no L4/L5 trigger, and full qualification; capture wall times and plan outputs. Full qualification must pass all retained proof."
+      required: true
+
+    - id: CHECK-8
+      command_or_check: "Require product Runtime invariants/source inventory unchanged and installed doctor healthy with no activation/cutover."
+      required: true
+
+    - id: CHECK-9
+      command_or_check: "Fresh-reconcile remote main still equals task base; publish exact verified candidate non-force; create report-r1.yaml as sole report-only child; validate/publish report and stop NEEDS_REVIEW."
+      required: true
+
+authoritative_verification:
+  required: true
+  mechanism: "Focused verification-harness tests + exact profile plans/timings + complete full qualification on exact clean candidate"
+  expected_signal: >
+    Explicit complete classification, deterministic diff-driven selection,
+    bounded observable workers, preserved full proof surface and measured
+    quick/candidate/qualification wall-clock targets all PASS without product
+    Runtime mutation.
+
+report_requirements:
+  path: .agent/tasks/TASK-0154/report-r1.yaml
+  record:
+    - "state=REPORTED and result=NEEDS_REVIEW"
+    - "exact task/base/candidate/tree/report lineage"
+    - "clean base baseline: 62 modules, 791 tests, 129.534s verify-reported / 129.84s process-real, 17.560s old fast lane, 111.973s old serial lane"
+    - "base and final module/test inventory"
+    - "final lane classification with module counts and proof rationale"
+    - "path/subsystem trigger policy and deterministic plan proof"
+    - "parallel/isolation policy and conflict proof"
+    - "all real-sleep/polling/fixture refactors with before/after behavior proof"
+    - "old test/proof -> new test/proof mapping for any move/consolidation/deletion"
+    - "quick/candidate/qualification exact plans, module/test counts and wall times"
+    - "incremental START/terminal/heartbeat evidence"
+    - "timeout owned-process cleanup proof"
+    - "full qualification complete-proof PASS"
+    - "no skip/xfail/assertion weakening/retry-to-green"
+    - "Runtime/product/version/Kernel/capability/installed activation unchanged"
+    - "non-force publication and sole report-only child reconciliation"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
