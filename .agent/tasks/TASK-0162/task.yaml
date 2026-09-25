@@ -1,0 +1,263 @@
+protocol_version: 3
+
+task_id: TASK-0162
+task_revision: 1
+state: APPROVED
+title: "Durable Finalization TOCTOU Reconciliation + Reseal"
+
+origin:
+  type: corrective_followup
+  source_task: TASK-0161
+  source_result: BLOCKED
+  blocker: DURABLE_RETAINED_LOOKUP_OWNER_LOST_LATCH
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+  canonical_branch: main
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+live_state_preserved_from_task_0161:
+  installed_runtime_version: "0.5.0"
+  installed_revision: "b0c7a0ae29dc66079cea3760828e00b86ab921e4"
+  installed_tree: "025ce0ba4b3e14c30564d98f152aec0cf9b65471"
+  transaction_present: false
+  strict_codesign: PASS
+  pinned_provenance: PASS
+  bytecode_entries: 0
+  service_management: "enabled/enabled"
+  healthz: live
+  readyz: ready
+  doctor: "healthy 10/10"
+  telemetry: off
+  repair_complete: true
+  do_not_mutate_in_this_task: true
+
+task_0161_effect_evidence:
+  install_invocations: 1
+  install_job: "job_098c8d5254c3"
+  install_result: PASS
+  commit_cutover_invocations: 1
+  commit_job: "job_21fea20d4261"
+  commit_result: COMMITTED
+  durable_effects: 1
+  durable_start_identity: "bd02aa068a5ccb251309aca700e97100"
+  durable_session_id: "d9cee10bfda8b7f2"
+  durable_exit_code: 0
+  durable_termination_reason: natural_exit
+  retained_lookup_result: BLOCKED
+
+independent_durable_state_reconciliation:
+  durable_state_path_present: true
+  start_identity: "bd02aa068a5ccb251309aca700e97100"
+  session_id: "d9cee10bfda8b7f2"
+  persisted_status: exited
+  persisted_lifecycle: COMPLETED
+  persisted_exit_code: 0
+  persisted_termination_reason: natural_exit
+  state_corrupt: false
+  conclusion: "Durable journal completed correctly; the lookup failure is an in-memory owner-loss latch defect."
+
+proven_root_cause:
+  component: agent_runtime/session.py
+  function: _refresh_durable_session
+  race: >
+    The function reads a snapshot whose persisted status is starting/running,
+    then verifies runner/process ownership. A fast natural exit can finalize the
+    durable state after that snapshot read while both runner and target process
+    identities disappear before ownership verification. The current grace/reread
+    path runs only when runner_live=true and process_live=false. If both identities
+    are already gone, the old nonterminal snapshot is immediately latched as
+    DURABLE_OWNER_LOST even though state.json may already have transitioned to
+    exited/COMPLETED.
+  permanent_failure_mechanism: >
+    durable_fault_reason is checked before any later snapshot reread, so once the
+    transient owner-loss observation is latched, subsequent lookup by either
+    start_identity or session_id cannot reconcile the now-valid terminal state.
+
+objective: >
+  Make durable owner reconciliation tolerant only to the bounded finalization
+  TOCTOU window: whenever a nonterminal durable snapshot has invalid owner
+  identity, boundedly reread durable state before latching DURABLE_OWNER_LOST.
+  Accept a valid terminal snapshot or restored valid owner continuity, but remain
+  fail-closed when the state stays nonterminal with invalid ownership after the
+  existing bounded grace. Preserve all durable identity, capacity, corruption,
+  control and unknown-outcome semantics. Verify once, reseal one Runtime 0.5.0
+  package, and leave the healthy installed Runtime untouched.
+
+required_implementation:
+  - "Change only the nonterminal invalid-owner reconciliation in agent_runtime/session.py."
+  - "For any starting/running snapshot whose owner identity is invalid, use the existing bounded _DURABLE_FINALIZATION_GRACE_SECONDS reread window regardless of whether runner, process, or both identities are already unavailable."
+  - "During the bounded reread, accept only when persisted status becomes exited or owner identity becomes valid again."
+  - "After the grace, if state remains starting/running and owner identity remains invalid, latch DURABLE_OWNER_LOST exactly as before."
+  - "Do not clear or ignore a previously established DURABLE_STATE_CORRUPT fault."
+  - "Do not turn a genuinely stale nonterminal owner-lost job into success."
+  - "Do not respawn a durable effect during reconciliation."
+  - "Do not change the 2.0-second finalization grace unless fresh focused proof demonstrates the constant itself is defective; no such change is authorized by default."
+  - "Keep Runtime version 0.5.0, ToolContract Kernel 2 and capability/tool counts unchanged."
+
+allowed_source_paths:
+  - agent_runtime/session.py
+  - tests/test_durable_pipe.py
+  - tests/test_durable_pipe_restart.py
+  - ".agent/tasks/TASK-0162/report-r1.yaml"
+
+forbidden_source_changes:
+  - agent_runtime/durable_pipe.py
+  - agent_runtime/durable_pipe_runner.py
+  - agent_runtime/executor.py
+  - agent_runtime/version.py
+  - macos/candidate_cutover.py
+  - tests/test_candidate_cutover.py
+  - verification_policy.py
+  - verify_tests.py
+  - verify
+  - install.sh
+  - start.sh
+  - macos/package_app.sh
+  - requirements.lock
+  - "Any MCP schema/capability/tool-count change"
+  - "Any telemetry enablement/configuration change"
+
+focused_verification:
+  requirements:
+    - "Add a deterministic regression reproducing the exact TOCTOU sequence: first durable snapshot nonterminal, ownership invalid because runner and process are both unavailable, subsequent bounded reread observes the same identity bound to exited/COMPLETED state, and poll/retained lookup succeeds without DURABLE_OWNER_LOST."
+    - "Prove lookup by both start_identity and session_id resolves the same completed session after reconciliation."
+    - "Prove no second process/effect is spawned during retained lookup."
+    - "Preserve the existing runner-disappearance owner-lost test: a genuinely nonterminal job with invalid owner after the full grace remains DURABLE_OWNER_LOST / EffectState.UNKNOWN / reconciliation_required=true."
+    - "Preserve corruption fail-closed tests and restart recovery tests."
+    - "Use deterministic mocked/faked snapshot/identity transitions where practical; do not rely on scheduler luck or retry-to-green."
+    - "Run directly affected durable-pipe and durable-restart tests while iterating."
+    - "git diff --check PASS."
+
+executor_survival_protocol:
+  - "Do not run broad verification while editing."
+  - "Focused proof first, then one clean source checkpoint."
+  - "On the exact clean candidate run ./verify --profile candidate --base <task-base> exactly once."
+  - "If candidate escalates to effective qualification, one terminal PASS is authoritative; do not run a second qualification on the same SHA."
+  - "Do not rerun a failed immutable SHA hoping for green."
+  - "Any tracked write after broad verification creates a new candidate and invalidates prior broad proof."
+  - "Commands expected to exceed 10 seconds use recoverable process execution and record process/session identity immediately."
+  - "Poll healthy long work no more frequently than every 20 seconds."
+  - "Unknown outcome requires process/Git/artifact inspection before retry."
+  - "Do not terminate unrelated pre-existing host processes."
+
+broad_verification:
+  command: "./verify --profile candidate --base <task-base>"
+  maximum_successful_runs_per_exact_candidate: 1
+  rule: >
+    Run only after an exact clean corrective candidate exists. If policy
+    escalates to qualification, that one terminal PASS is authoritative.
+
+package_reseal:
+  preconditions:
+    - "Exact corrected candidate clean."
+    - "Single effective broad verification PASS."
+    - "No tracked candidate write after verification."
+  rules:
+    - "Build/sign/seal exactly one new Runtime 0.5.0 package from the corrected candidate."
+    - "Do not overwrite accepted historical packages 713ffe9b... or 7faca55b...."
+    - "Record exact package SHA-256, handoff SHA-256, record_count and source revision/tree."
+    - "Require zero __pycache__ directories and zero *.pyc files."
+    - "Require strict deep codesign PASS and pinned provenance PASS."
+    - "Do not install or activate the new package in TASK-0162."
+
+sealed_candidate_regression_proof:
+  purpose: >
+    Prove the corrected package preserves both TASK-0159 signed-bundle
+    immutability and the new retained-lookup behavior before live activation.
+  requirements:
+    - "Use the new sealed candidate's own bundled Python/runtime with a fresh test-owned durable state root."
+    - "Run exactly one real short runtime_restart durable effect with caller-known start_identity and bounded deterministic output."
+    - "Poll to natural terminal success."
+    - "Retained lookup by same start_identity and same session_id must both resolve the same completed session without respawn."
+    - "After the effect and both retained lookups, zero __pycache__/pyc entries remain inside the sealed candidate."
+    - "Strict deep codesign and pinned provenance remain PASS."
+    - "Candidate closure/hash and handoff hash remain unchanged before/after."
+  failure_policy: >
+    Any retained-lookup failure, respawn, candidate mutation, bytecode creation,
+    codesign failure or provenance drift blocks. Do not clean/retry around it.
+
+live_runtime_guard:
+  - "Do not mutate ~/Applications/Agent Runtime.app."
+  - "Do not reinstall, restart, reload, reconnect, rollback, recover or commit-cutover."
+  - "Do not run any additional live durable effect."
+  - "Do not delete or alter TASK-0161 durable state for bd02aa068a5ccb251309aca700e97100."
+  - "Do not manually clear any in-memory fault by restarting Runtime."
+  - "Telemetry remains off."
+
+publication_lifecycle:
+  - "Fresh remote gate before source publication: remote main still exact task base, branches={main}, open PRs=0."
+  - "Publish exact corrected source candidate non-force."
+  - "Create .agent/tasks/TASK-0162/report-r1.yaml as the sole report-only child."
+  - "Validate report with pinned agent-skills authority."
+  - "Publish report non-force."
+  - "Final reconcile HEAD=origin/main=remote main, ahead/behind=0/0, clean worktree/index, branches={main}, open PRs=0."
+  - "Stop NEEDS_REVIEW."
+  - "Do not author or execute live activation in the same Executor chat."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Transient finalization TOCTOU cannot permanently latch owner-lost when the same durable identity becomes validly terminal inside the existing bounded grace."
+    evidence_required: "Deterministic focused race regression and exact source diff."
+  - id: AC-2
+    requirement: "True owner loss remains fail-closed."
+    evidence_required: "Persistent nonterminal invalid-owner regression still yields DURABLE_OWNER_LOST with unknown effect/reconciliation semantics."
+  - id: AC-3
+    requirement: "Durable retained lookup remains one-effect/idempotent for both selectors."
+    evidence_required: "start_identity and session_id resolve the same completed session with no respawn."
+  - id: AC-4
+    requirement: "Exact corrected source passes one non-redundant effective broad verification."
+    evidence_required: "Exact clean SHA/tree and one terminal candidate/qualification PASS."
+  - id: AC-5
+    requirement: "One new immutable Runtime 0.5.0 package binds the corrected source and preserves signed-bundle immutability."
+    evidence_required: "Package/handoff hashes, record_count, zero bytecode, codesign/provenance and sealed real durable lookup proof."
+  - id: AC-6
+    requirement: "Healthy TASK-0161 installed Runtime and its durable evidence remain untouched."
+    evidence_required: "Zero install/restart/reconnect/live-effect/transaction mutation in TASK-0162."
+  - id: AC-7
+    requirement: "Canonical publication/report closure is exact."
+    evidence_required: "Non-force candidate publication, report-only child, pinned validation and final clean main-only zero-PR reconciliation."
+
+report_requirements:
+  path: .agent/tasks/TASK-0162/report-r1.yaml
+  record:
+    - "TASK-0161 successful host repair and exact blocked retained lookup evidence"
+    - "independent persisted state showing exited/COMPLETED exit 0 for d9cee10bfda8b7f2"
+    - "exact finalization TOCTOU root cause"
+    - "exact source/test changed paths"
+    - "deterministic transient owner-loss reconciliation regression"
+    - "persistent owner-loss fail-closed regression"
+    - "focused durable/restart proof"
+    - "single effective broad verification"
+    - "corrected source candidate SHA/tree"
+    - "new package SHA-256, handoff SHA-256, record_count"
+    - "sealed-candidate one-effect retained lookup by both selectors"
+    - "zero candidate bytecode and unchanged closure/hash/codesign/provenance"
+    - "zero live Runtime mutation/effect"
+    - "final canonical Git reconciliation"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  build_corrected_candidate_once: true
+  install_or_activate_live_runtime: false
+  create_version_tag: false
+  publish_release: false
+  enable_telemetry: false
+
+blocking_decisions: []
+execution_ready: true
