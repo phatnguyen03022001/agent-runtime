@@ -142,10 +142,10 @@ class DurablePipeTests(unittest.TestCase):
             f"import time; print({secret!r}, flush=True); time.sleep(2)",
         ]
         real_popen = subprocess.Popen
-        observed: list[list[str]] = []
+        observed: list[tuple[list[str], dict[str, str]]] = []
 
         def capture_popen(args, *pargs, **kwargs):
-            observed.append(list(args))
+            observed.append((list(args), dict(kwargs["env"])))
             return real_popen(args, *pargs, **kwargs)
 
         with patch("agent_runtime.session.subprocess.Popen", new=capture_popen):
@@ -159,7 +159,8 @@ class DurablePipeTests(unittest.TestCase):
 
         self.assertEqual(result["durability"], "runtime_restart")
         self.assertEqual(len(observed), 1)
-        runner_argv = observed[0]
+        runner_argv, runner_env = observed[0]
+        self.assertEqual(runner_env["PYTHONDONTWRITEBYTECODE"], "1")
         self.assertEqual(runner_argv[-1], durable_job_id(identity))
         self.assertNotIn(secret, " ".join(runner_argv))
         self.assertNotIn(str(self.cwd), " ".join(runner_argv))
@@ -187,6 +188,43 @@ class DurablePipeTests(unittest.TestCase):
         manager.control(str(result["session_id"]), "terminate")
         final, _chunks, _cursor = self.wait_terminal(manager, identity)
         self.assertEqual(final["termination_reason"], "explicit_terminate")
+
+    def test_process_local_pipe_environment_remains_minimal(self) -> None:
+        manager = self.manager()
+        identity = "8" * 32
+        real_popen = subprocess.Popen
+        observed_envs: list[dict[str, str]] = []
+
+        def capture_popen(args, *pargs, **kwargs):
+            observed_envs.append(dict(kwargs["env"]))
+            return real_popen(args, *pargs, **kwargs)
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "PYTHONDONTWRITEBYTECODE": "parent-only",
+                    "TASK0159_ARBITRARY_USER_ENV": "must-not-propagate",
+                },
+                clear=False,
+            ),
+            patch("agent_runtime.session.subprocess.Popen", new=capture_popen),
+        ):
+            manager.start(
+                [sys.executable, "-c", "pass"],
+                str(self.cwd),
+                identity,
+                "pipe",
+                "process",
+            )
+
+        self.assertEqual(len(observed_envs), 1)
+        child_env = observed_envs[0]
+        self.assertNotIn("PYTHONDONTWRITEBYTECODE", child_env)
+        self.assertNotIn("TASK0159_ARBITRARY_USER_ENV", child_env)
+        final, _chunks, _cursor = self.wait_terminal(manager, identity)
+        self.assertEqual(final["exit_code"], 0)
+        self.assertEqual(final["termination_reason"], "natural_exit")
 
     def test_corrupt_partial_state_projects_unknown_reconciliation(self) -> None:
         identity = "2" * 32

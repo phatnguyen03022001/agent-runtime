@@ -665,6 +665,7 @@ class TerminalSessionManager:
             )
 
         child_env = _minimal_child_env()
+        child_env["PYTHONDONTWRITEBYTECODE"] = "1"
         workspace_root = os.environ.get(WORKSPACE_ROOT_ENV)
         if workspace_root is None:
             try:
