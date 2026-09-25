@@ -29,7 +29,7 @@ TOOL_EXECUTIONS_METRIC = "agent_runtime.tool.executions"
 PROCESS_COMPLETIONS_METRIC = "agent_runtime.process.completions"
 
 _OUTCOMES = frozenset({"ok", "error", "cancelled", "timed_out"})
-_PROCESS_KINDS = frozenset({"one_shot", "persistent_pty", "persistent_pipe"})
+_PROCESS_KINDS = frozenset({"one_shot", "persistent_pty", "persistent_pipe", "durable_pipe"})
 _TERMINATION_STATES = frozenset(
     {
         "completed",

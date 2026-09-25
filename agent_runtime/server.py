@@ -99,6 +99,7 @@ from .contracts import (
     TerminalData,
     TerminalDimension,
     TerminalExecResult,
+    TerminalDurability,
     TerminalMode,
     TerminalPollOutput,
     TerminalSessionResult,
@@ -136,6 +137,7 @@ from .session import (
     poll_terminal as _poll_terminal,
     shutdown_terminal_sessions,
     start_terminal as _start_terminal,
+    terminal_recovery_reason,
 )
 from .timing import timed_tool_wrapper, timing_middleware
 from .capability_registry import (
@@ -151,9 +153,10 @@ SERVER_DESCRIPTION = "Bounded local command execution and advisory capacity MCP 
 SERVER_INSTRUCTIONS = (
     "Execute literal argv with shell=False and no implicit shell. "
     "Use an absolute cwd under the configured workspace root. "
-    "terminal_exec is a caller-keyed synchronous pipe facade; terminal_start begins a PTY or "
-    "keyed pipe lifecycle managed with terminal_poll. terminal_control can interrupt or terminate "
-    "either mode, pipe input is rejected, and terminal_resize is PTY-only. "
+    "terminal_exec is a caller-keyed synchronous process-local pipe facade; terminal_start begins "
+    "a PTY or keyed pipe lifecycle managed with terminal_poll. terminal_start durability defaults "
+    "to process; runtime_restart is opt-in and valid only for keyed pipe mode. terminal_control can "
+    "interrupt or terminate either mode, pipe input is rejected, and terminal_resize is PTY-only. "
     "Terminal execution uses the operator account's normal permissions "
     "and may modify the host. Protected Runtime filtering is defense-in-depth for recognized argv, shell, "
     "and wrapper lifecycle intent; it is not a sandbox, filesystem confinement, privilege isolation, "
@@ -668,12 +671,21 @@ def terminal_start(
     cwd: AbsoluteCwd,
     start_identity: StartIdentity | None = None,
     mode: TerminalMode = "pty",
+    durability: TerminalDurability = "process",
 ) -> TerminalSessionResult:
-    """Start a keyed PTY or pipe process; it may modify the host."""
+    """Start a PTY, pipe, or opt-in cross-Runtime-restart durable pipe process."""
 
     return cast(
         TerminalSessionResult,
-        _call_runtime_tool("terminal_start", _start_terminal, argv, cwd, start_identity, mode),
+        _call_runtime_tool(
+            "terminal_start",
+            _start_terminal,
+            argv,
+            cwd,
+            start_identity,
+            mode,
+            durability,
+        ),
     )
 
 
@@ -766,14 +778,18 @@ def _operational_capacity_snapshot() -> tuple[int, int, int]:
 def capacity_observer() -> CapacityObserverResult:
     """Report advisory host capacity plus point-in-time Runtime usage."""
 
-    return cast(
-        CapacityObserverResult,
-        _call_runtime_tool(
-            "capacity_observer",
-            observe_capacity,
-            _operational_capacity_snapshot,
-        ),
+    result = _call_runtime_tool(
+        "capacity_observer",
+        observe_capacity,
+        _operational_capacity_snapshot,
     )
+    recovery_reason = terminal_recovery_reason()
+    if recovery_reason is not None:
+        reasons = result["reason_codes"]
+        if recovery_reason not in reasons:
+            result["reason_codes"] = [recovery_reason, *reasons]
+        result["recommended_additional_parallelism"] = 0
+    return cast(CapacityObserverResult, result)
 
 
 @_tool(

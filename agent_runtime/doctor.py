@@ -24,7 +24,12 @@ from .capability_registry import (
 from .capacity import DEFAULT_MAX_PARALLELISM, MAX_PARALLELISM_ENV
 from .contracts import DoctorCheck, DoctorReport
 from .schema_export import build_schema_bundle
-from .session import DEFAULT_SESSION_LIMIT, MAX_ACTIVE_SESSIONS, SESSION_LIMIT_ENV
+from .session import (
+    DEFAULT_SESSION_LIMIT,
+    MAX_ACTIVE_SESSIONS,
+    SESSION_LIMIT_ENV,
+    terminal_recovery_reason,
+)
 from .version import RUNTIME_VERSION
 
 _CHECK_IDS = (
@@ -220,6 +225,8 @@ def _tool_contract_schema_check(bundle: dict[str, object] | None) -> DoctorCheck
         and hidden_entries[0]["request_schema"] is None
         and hidden_entries[0]["result_schema"] is None
         and all(value == TOOL_CONTRACT_KERNEL_VERSION for value in kernels)
+        and schema_versions.get("terminal_start") == (4, 4)
+        and schema_versions.get("terminal_poll") == (4, 4)
         and schema_versions.get("capacity_observer") == (1, 2)
         and schema_versions.get("runtime_capabilities") == (2, 2)
         and schema_versions.get("fs_read_batch") == (1, 2)
@@ -318,6 +325,15 @@ def _capacity_session_config_check(environ: Mapping[str, str]) -> DoctorCheck:
         default=DEFAULT_SESSION_LIMIT,
         maximum=MAX_ACTIVE_SESSIONS,
     )
+    recovery_reason = terminal_recovery_reason()
+    if recovery_reason is not None:
+        return _check(
+            "capacity_session_config",
+            "fail",
+            recovery_reason,
+            "Durable Runtime recovery is not ready for new terminal execution.",
+            {"durable_recovery_ready": False},
+        )
     if not parallel_ok or not session_ok:
         return _check(
             "capacity_session_config",

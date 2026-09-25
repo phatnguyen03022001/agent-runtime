@@ -133,7 +133,7 @@ class CapabilityRegistryTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(descriptor.advertised, binding.advertised)
             expected_request_version = {
                 "terminal_exec": 2,
-                "terminal_start": 3,
+                "terminal_start": 4,
                 "terminal_poll": 4,
                 "fs_list": 2,
                 "fs_search": 2,
@@ -158,8 +158,8 @@ class CapabilityRegistryTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNone(descriptor.unavailable_reason_code)
             expected_result_version = {
                 "terminal_exec": 2,
-                "terminal_start": 3,
-                "terminal_poll": 3,
+                "terminal_start": 4,
+                "terminal_poll": 4,
                 "capacity_observer": 2,
                 "fs_read_batch": 2,
                 "fs_list": 2,

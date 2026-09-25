@@ -75,6 +75,7 @@ StartIdentity = Annotated[
     Field(min_length=START_IDENTITY_CHARS, max_length=START_IDENTITY_CHARS, pattern=r"^[0-9a-f]{32}$"),
 ]
 TerminalMode = Literal["pty", "pipe"]
+TerminalDurability = Literal["process", "runtime_restart"]
 Cursor = Annotated[int, Field(strict=True, ge=0)]
 ContinuationCursorToken = Annotated[StrictStr, Field(min_length=1, max_length=1024)]
 WaitMilliseconds = Annotated[int, Field(strict=True, ge=0, le=30000)]
@@ -132,6 +133,7 @@ class TerminalSessionResult(_ClosedResult):
     session_id: str
     start_identity: str | None = None
     mode: TerminalMode
+    durability: TerminalDurability
     status: Literal["starting", "running", "exited"]
     lifecycle: Literal[
         "STARTING",
@@ -852,7 +854,7 @@ class CapabilityDescriptor(_ClosedResult):
     authority: CapabilityAuthority
     annotations: CapabilityAnnotations
     request_schema_version: Literal[1, 2, 3, 4]
-    result_schema_version: Literal[1, 2, 3] | None
+    result_schema_version: Literal[1, 2, 3, 4] | None
     bounds: dict[str, object]
     supported: bool
     available: bool

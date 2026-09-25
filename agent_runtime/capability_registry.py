@@ -117,8 +117,8 @@ class CapabilityBinding:
     def __post_init__(self) -> None:
         if self.request_schema_version not in {1, 2, 3, 4}:
             raise ValueError("request_schema_version must be 1, 2, 3, or 4")
-        if self.result_schema_version not in {1, 2, 3, None}:
-            raise ValueError("result_schema_version must be 1, 2, 3, or null")
+        if self.result_schema_version not in {1, 2, 3, 4, None}:
+            raise ValueError("result_schema_version must be 1, 2, 3, 4, or null")
         if self.available and self.unavailable_reason_code is not None:
             raise ValueError("available capability must not have unavailable_reason_code")
         if not self.available and not self.unavailable_reason_code:
@@ -127,8 +127,8 @@ class CapabilityBinding:
 
 CAPABILITY_REGISTRY = (
     CapabilityBinding(TERMINAL_EXEC_CONTRACT, request_schema_version=2, result_schema_version=2),
-    CapabilityBinding(TERMINAL_START_CONTRACT, request_schema_version=3, result_schema_version=3),
-    CapabilityBinding(TERMINAL_POLL_CONTRACT, request_schema_version=4, result_schema_version=3),
+    CapabilityBinding(TERMINAL_START_CONTRACT, request_schema_version=4, result_schema_version=4),
+    CapabilityBinding(TERMINAL_POLL_CONTRACT, request_schema_version=4, result_schema_version=4),
     CapabilityBinding(TERMINAL_CONTROL_CONTRACT),
     CapabilityBinding(TERMINAL_RESIZE_CONTRACT),
     CapabilityBinding(CAPACITY_OBSERVER_CONTRACT, result_schema_version=2),

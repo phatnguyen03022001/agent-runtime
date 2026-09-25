@@ -292,6 +292,29 @@ assert "requests" not in sys.modules
         finally:
             session.close()
 
+    def test_durable_pipe_uses_the_fixed_process_kind_allowlist(self) -> None:
+        self.sink.observe(
+            _event(
+                "process_end",
+                wall_clock_start=100.0,
+                wall_clock_end=101.0,
+                monotonic_duration_ms=1000.0,
+                process_kind="durable_pipe",
+                termination_state="natural_exit",
+            ),
+            allowed_tool_names=ALLOWED_TOOLS,
+        )
+        points = self._metric_points()
+        process_points = points[telemetry.PROCESS_COMPLETIONS_METRIC]
+        self.assertEqual(len(process_points), 1)
+        self.assertEqual(
+            process_points[0].attributes["process.kind"],
+            "durable_pipe",
+        )
+        spans = self.span_exporter.get_finished_spans()
+        self.assertEqual(len(spans), 1)
+        self.assertEqual(spans[0].attributes["process.kind"], "durable_pipe")
+
     def test_process_trace_is_retroactive_and_requires_no_trace_registry(self) -> None:
         self.sink.observe(
             _event(

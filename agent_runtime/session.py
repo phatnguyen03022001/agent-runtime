@@ -11,10 +11,12 @@ import secrets
 import signal
 import struct
 import subprocess
+import sys
 import termios
 import threading
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable
 
 from .capacity import HeavyExecutionAdmission, HeavyExecutionLease, heavy_execution_admission
@@ -25,6 +27,19 @@ from .contracts import (
     TERMINAL_DATA_MAX_BYTES,
     TERMINAL_POLL_MAX_OUTPUT_BYTES,
 )
+from .durable_pipe import (
+    DURABLE_ROOT_ENV,
+    DURABLE_SPEC_SCHEMA_VERSION,
+    DurableControlPending,
+    DurableOwnerLost,
+    DurableRecoveryOverCapacity,
+    DurableSnapshot,
+    DurableStateCorrupt,
+    DurableStore,
+    durable_job_id,
+    execution_spec_digest,
+    verify_process_identity,
+)
 from .errors import (
     RuntimeCapacityError,
     RuntimeStateError,
@@ -32,6 +47,7 @@ from .errors import (
     annotate_failure,
 )
 from .executor import (
+    WORKSPACE_ROOT_ENV,
     _minimal_child_env,
     _terminate_process_group,
     _validated_argv,
@@ -65,6 +81,7 @@ MAX_EXEC_TIMEOUT_SECONDS = 3600.0
 DEFAULT_EXEC_TIMEOUT_SECONDS = 300.0
 _READ_CHUNK_BYTES = 8192
 _READER_DRAIN_SECONDS = 0.2
+_DURABLE_FINALIZATION_GRACE_SECONDS = 2.0
 _REAPER_INTERVAL_SECONDS = 1.0
 
 def _complete_utf8_prefix_length(data: bytes, *, final: bool) -> int:
@@ -180,6 +197,7 @@ class _Session:
     created_at: float = 0.0
     start_identity: str | None = None
     mode: str = "pty"
+    durability: str = "process"
     entry_surface: str = "terminal_start"
     timeout_seconds: float | None = None
     process: subprocess.Popen[bytes] | None = None
@@ -210,6 +228,12 @@ class _Session:
     process_started_mono: float = 0.0
     protected_input_buffer: str = ""
     heavy_lease: HeavyExecutionLease | None = None
+    spec_digest: str | None = None
+    durable_job_id: str | None = None
+    durable_created_at_epoch: float | None = None
+    durable_hard_wall_deadline_epoch: float | None = None
+    durable_fault_reason: str | None = None
+    durable_timing_emitted: bool = False
 
     def __post_init__(self) -> None:
         self.changed = threading.Condition(self.lock)
@@ -244,6 +268,7 @@ class TerminalSessionManager:
         reaper_interval: float = _REAPER_INTERVAL_SECONDS,
         max_active_sessions: int | None = None,
         admission: HeavyExecutionAdmission | None = None,
+        durable_state_root: str | Path | None = None,
         start_reaper: bool = True,
     ) -> None:
         self._clock = clock
@@ -258,9 +283,13 @@ class TerminalSessionManager:
         self._admission = admission
         self._sessions: dict[str, _Session] = {}
         self._start_identities: dict[str, str] = {}
+        self._durable_store = DurableStore(durable_state_root)
+        self._durable_recovery_reason: str | None = None
+        self._durable_scan_fault: str | None = None
         self._lock = threading.RLock()
         self._stop_reaper = threading.Event()
         self._reaper_thread: threading.Thread | None = None
+        self._recover_durable_jobs()
         if start_reaper:
             self._reaper_thread = threading.Thread(
                 target=self._reaper_loop,
@@ -278,12 +307,473 @@ class TerminalSessionManager:
                 for session in self._sessions.values()
             )
 
+    def recovery_reason(self) -> str | None:
+        return self._durable_recovery_reason
+
+    def _recover_durable_jobs(self) -> None:
+        try:
+            job_ids = self._durable_store.scan_job_ids()
+        except DurableRecoveryOverCapacity:
+            self._durable_recovery_reason = "DURABLE_RECOVERY_OVER_CAPACITY"
+            return
+        except DurableStateCorrupt:
+            self._durable_scan_fault = "DURABLE_STATE_CORRUPT"
+            return
+
+        recovered: list[tuple[_Session, bool]] = []
+        for job_id in job_ids:
+            try:
+                snapshot = self._durable_store.read_snapshot(job_id)
+            except DurableStateCorrupt:
+                self._durable_scan_fault = "DURABLE_STATE_CORRUPT"
+                continue
+            state = snapshot.state
+            if state["status"] == "exited":
+                completed = state["completed_at_epoch"]
+                if (
+                    isinstance(completed, (int, float))
+                    and not isinstance(completed, bool)
+                    and time.time() - float(completed) >= self._completed_retention_seconds
+                ):
+                    try:
+                        if self._durable_store.remove_completed(job_id):
+                            continue
+                    except DurableStateCorrupt:
+                        self._durable_scan_fault = "DURABLE_STATE_CORRUPT"
+            session = self._session_from_durable_snapshot(job_id, snapshot)
+            owner_valid = True
+            if session.status in {"starting", "running"}:
+                owner_valid = self._snapshot_owner_valid(snapshot)
+                if not owner_valid:
+                    session.durable_fault_reason = "DURABLE_OWNER_LOST"
+            recovered.append((session, owner_valid))
+
+        admission = self._admission or heavy_execution_admission()
+        valid_running = sum(
+            session.status in {"starting", "running"} and owner_valid
+            for session, owner_valid in recovered
+        )
+        total_running = sum(
+            session.status in {"starting", "running"}
+            for session, _owner_valid in recovered
+        )
+        if total_running > self.max_active_sessions:
+            self._durable_recovery_reason = "DURABLE_RECOVERY_OVER_CAPACITY"
+        elif valid_running and admission.active + valid_running > admission.limit:
+            self._durable_recovery_reason = "DURABLE_RECOVERY_OVER_CAPACITY"
+
+        for session, owner_valid in recovered:
+            if session.session_id in self._sessions:
+                self._durable_scan_fault = "DURABLE_STATE_CORRUPT"
+                continue
+            if session.status in {"starting", "running"} and owner_valid:
+                try:
+                    session.heavy_lease = admission.acquire()
+                except RuntimeCapacityError:
+                    self._durable_recovery_reason = "DURABLE_RECOVERY_OVER_CAPACITY"
+            self._sessions[session.session_id] = session
+            if session.start_identity is not None:
+                prior = self._start_identities.get(session.start_identity)
+                if prior is not None and prior != session.session_id:
+                    self._durable_scan_fault = "DURABLE_STATE_CORRUPT"
+                    session.durable_fault_reason = "DURABLE_STATE_CORRUPT"
+                else:
+                    self._start_identities[session.start_identity] = session.session_id
+
+    def _session_from_durable_snapshot(
+        self,
+        job_id: str,
+        snapshot: DurableSnapshot,
+    ) -> _Session:
+        state = snapshot.state
+        now = self._clock()
+        session = _Session(
+            session_id=state["session_id"],
+            cwd="",
+            argv=[],
+            created_at=now,
+            last_activity=now,
+            start_identity=state["start_identity"],
+            mode="pipe",
+            durability="runtime_restart",
+            entry_surface="terminal_start",
+            status=state["status"],
+            lifecycle=state["lifecycle"],
+            spec_digest=state["spec_digest"],
+            durable_job_id=job_id,
+            durable_created_at_epoch=float(state["created_at_epoch"]),
+            durable_hard_wall_deadline_epoch=float(state["hard_wall_deadline_epoch"]),
+        )
+        self._apply_durable_snapshot(session, snapshot)
+        return session
+
+    @staticmethod
+    def _snapshot_owner_valid(snapshot: DurableSnapshot) -> bool:
+        state = snapshot.state
+        return (
+            verify_process_identity(state["runner_identity"])
+            and verify_process_identity(state["process_identity"])
+        )
+
+    def _apply_durable_snapshot(
+        self,
+        session: _Session,
+        snapshot: DurableSnapshot,
+    ) -> None:
+        state = snapshot.state
+        if (
+            state["session_id"] != session.session_id
+            or state["start_identity"] != session.start_identity
+            or state["spec_digest"] != session.spec_digest
+            or state["durability"] != "runtime_restart"
+            or state["mode"] != "pipe"
+        ):
+            raise DurableStateCorrupt("durable recovery identity binding changed")
+        with session.changed:
+            session.base_cursor = int(state["base_cursor"])
+            session.output_chunks = list(snapshot.chunks)
+            session.retained_output_bytes = int(state["retained_output_bytes"])
+            session.status = state["status"]
+            session.lifecycle = state["lifecycle"]
+            session.termination_reason = state["termination_reason"]
+            session.exit_code = state["exit_code"]
+            session.durable_created_at_epoch = float(state["created_at_epoch"])
+            session.durable_hard_wall_deadline_epoch = float(state["hard_wall_deadline_epoch"])
+            session.changed.notify_all()
+
+    @staticmethod
+    def _raise_durable_unknown(reason_code: str, message: str) -> None:
+        error = RuntimeStateError(
+            message,
+            code=(
+                ContractErrorCode.INTERNAL_ERROR
+                if reason_code == "DURABLE_STATE_CORRUPT"
+                else ContractErrorCode.UNAVAILABLE
+            ),
+            reason_code=reason_code,
+        )
+        annotate_failure(
+            error,
+            code=error.code,
+            reason_code=reason_code,
+            message=message,
+            retryable=False,
+            effect_state=EffectState.UNKNOWN,
+            reconciliation_required=True,
+            safe_next_action=SafeNextAction.RECONCILE,
+        )
+        raise error
+
+    def _raise_if_recovery_blocked(self) -> None:
+        if self._durable_recovery_reason is None:
+            return
+        error = RuntimeStateError(
+            "durable Runtime recovery exceeds configured execution capacity",
+            code=ContractErrorCode.UNAVAILABLE,
+            reason_code=self._durable_recovery_reason,
+        )
+        annotate_failure(
+            error,
+            code=ContractErrorCode.UNAVAILABLE,
+            reason_code=self._durable_recovery_reason,
+            message="durable Runtime recovery exceeds configured execution capacity",
+            retryable=False,
+            effect_state=EffectState.ABSENT,
+            reconciliation_required=True,
+            safe_next_action=SafeNextAction.RECONCILE,
+        )
+        raise error
+
+    def _refresh_durable_session(self, session: _Session) -> DurableSnapshot:
+        if session.durable_fault_reason is not None:
+            self._raise_durable_unknown(
+                session.durable_fault_reason,
+                "durable job ownership or state cannot be established",
+            )
+        job_id = session.durable_job_id
+        if job_id is None:
+            self._raise_durable_unknown(
+                "DURABLE_STATE_CORRUPT",
+                "durable job identifier is unavailable",
+            )
+        try:
+            snapshot = self._durable_store.read_snapshot(job_id)
+        except DurableStateCorrupt:
+            session.durable_fault_reason = "DURABLE_STATE_CORRUPT"
+            self._raise_durable_unknown(
+                "DURABLE_STATE_CORRUPT",
+                "durable job state is corrupt or incomplete",
+            )
+        previous_status = session.status
+        if snapshot.state["status"] in {"starting", "running"} and not self._snapshot_owner_valid(snapshot):
+            runner_live = verify_process_identity(snapshot.state["runner_identity"])
+            process_live = verify_process_identity(snapshot.state["process_identity"])
+            if runner_live and not process_live:
+                transition_deadline = (
+                    time.monotonic() + _DURABLE_FINALIZATION_GRACE_SECONDS
+                )
+                while time.monotonic() < transition_deadline:
+                    time.sleep(0.02)
+                    try:
+                        candidate = self._durable_store.read_snapshot(job_id)
+                    except DurableStateCorrupt:
+                        continue
+                    snapshot = candidate
+                    if snapshot.state["status"] == "exited" or self._snapshot_owner_valid(snapshot):
+                        break
+            if snapshot.state["status"] in {"starting", "running"} and not self._snapshot_owner_valid(snapshot):
+                session.durable_fault_reason = "DURABLE_OWNER_LOST"
+                self._raise_durable_unknown(
+                    "DURABLE_OWNER_LOST",
+                    "durable job owner identity no longer matches the persisted process instance",
+                )
+        try:
+            self._apply_durable_snapshot(session, snapshot)
+        except DurableStateCorrupt:
+            session.durable_fault_reason = "DURABLE_STATE_CORRUPT"
+            self._raise_durable_unknown(
+                "DURABLE_STATE_CORRUPT",
+                "durable recovery identity binding changed",
+            )
+        if previous_status != "exited" and session.status == "exited":
+            self._release_lease(session)
+            if session.timing_context is not None and not session.durable_timing_emitted:
+                emit_process_end(
+                    session.timing_context,
+                    tool_name="terminal_start",
+                    process_kind="durable_pipe",
+                    started_wall=session.process_started_wall,
+                    started_mono=session.process_started_mono,
+                    termination_state=session.termination_reason or "start_failed_post_effect",
+                )
+                session.durable_timing_emitted = True
+        return snapshot
+
+    def _adopt_durable_snapshot(
+        self,
+        job_id: str,
+        snapshot: DurableSnapshot,
+    ) -> _Session:
+        session = self._session_from_durable_snapshot(job_id, snapshot)
+        with self._lock:
+            existing = self._sessions.get(session.session_id)
+            if existing is not None:
+                if (
+                    existing.start_identity != session.start_identity
+                    or existing.spec_digest != session.spec_digest
+                    or existing.durability != "runtime_restart"
+                ):
+                    self._raise_durable_unknown(
+                        "DURABLE_STATE_CORRUPT",
+                        "durable recovered session collides with an existing session",
+                    )
+                return existing
+            active = sum(
+                retained.status in {"starting", "running"}
+                for retained in self._sessions.values()
+            )
+            if session.status in {"starting", "running"} and active >= self.max_active_sessions:
+                self._durable_recovery_reason = "DURABLE_RECOVERY_OVER_CAPACITY"
+            owner_valid = (
+                session.status == "exited"
+                or self._snapshot_owner_valid(snapshot)
+            )
+            if session.status in {"starting", "running"} and not owner_valid:
+                session.durable_fault_reason = "DURABLE_OWNER_LOST"
+            elif session.status in {"starting", "running"}:
+                try:
+                    session.heavy_lease = (self._admission or heavy_execution_admission()).acquire()
+                except RuntimeCapacityError:
+                    self._durable_recovery_reason = "DURABLE_RECOVERY_OVER_CAPACITY"
+            self._sessions[session.session_id] = session
+            if session.start_identity is not None:
+                prior = self._start_identities.get(session.start_identity)
+                if prior is not None and prior != session.session_id:
+                    session.durable_fault_reason = "DURABLE_STATE_CORRUPT"
+                else:
+                    self._start_identities[session.start_identity] = session.session_id
+        return session
+
+    def _load_existing_durable_identity(
+        self,
+        start_identity: str,
+        spec_digest: str,
+    ) -> _Session | None:
+        try:
+            exists = self._durable_store.job_exists_for_identity(start_identity)
+        except DurableStateCorrupt:
+            self._raise_durable_unknown(
+                "DURABLE_STATE_CORRUPT",
+                "durable identity path cannot be validated",
+            )
+        if not exists:
+            return None
+        try:
+            snapshot = self._durable_store.read_for_identity(start_identity)
+        except DurableStateCorrupt:
+            self._raise_durable_unknown(
+                "DURABLE_STATE_CORRUPT",
+                "durable identity exists but its state is corrupt or incomplete",
+            )
+        if snapshot.state["spec_digest"] != spec_digest:
+            raise RuntimeStateError(
+                "START_IDENTITY_CONFLICT: start_identity is already bound to a different execution specification",
+                reason_code="START_IDENTITY_CONFLICT",
+            )
+        session = self._adopt_durable_snapshot(
+            durable_job_id(start_identity),
+            snapshot,
+        )
+        if session.durable_fault_reason is not None:
+            self._raise_durable_unknown(
+                session.durable_fault_reason,
+                "durable identity exists but owner continuity cannot be established",
+            )
+        return session
+
+    def _dispatch_durable(
+        self,
+        session: _Session,
+        checked_argv: list[str],
+        checked_cwd: str,
+    ) -> dict[str, Any]:
+        assert session.start_identity is not None
+        assert session.spec_digest is not None
+        job_id = durable_job_id(session.start_identity)
+        session.durable_job_id = job_id
+        hard_wall_ms = int(round(self._running_hard_wall_seconds * 1000.0))
+        spec = {
+            "schema_version": DURABLE_SPEC_SCHEMA_VERSION,
+            "job_id": job_id,
+            "session_id": session.session_id,
+            "start_identity": session.start_identity,
+            "spec_digest": session.spec_digest,
+            "cwd": checked_cwd,
+            "argv": list(checked_argv),
+            "mode": "pipe",
+            "durability": "runtime_restart",
+            "entry_surface": "terminal_start",
+            "hard_wall_ms": hard_wall_ms,
+        }
+        try:
+            self._durable_store.prepare_spec(spec)
+        except DurableStateCorrupt:
+            session.durable_fault_reason = "DURABLE_STATE_CORRUPT"
+            self._raise_durable_unknown(
+                "DURABLE_STATE_CORRUPT",
+                "durable state could not be prepared safely",
+            )
+
+        child_env = _minimal_child_env()
+        workspace_root = os.environ.get(WORKSPACE_ROOT_ENV)
+        if workspace_root is None:
+            try:
+                self._durable_store.abort_pre_dispatch(job_id)
+            finally:
+                self._terminalize_pre_effect(session)
+            raise RuntimeValidationError(f"{WORKSPACE_ROOT_ENV} must be set")
+        child_env[WORKSPACE_ROOT_ENV] = workspace_root
+        child_env[DURABLE_ROOT_ENV] = str(self._durable_store.root)
+        runner_argv = [
+            sys.executable,
+            "-m",
+            "agent_runtime.durable_pipe_runner",
+            job_id,
+        ]
+        session.process_started_wall = time.time()
+        session.process_started_mono = time.monotonic()
+        try:
+            bootstrap = subprocess.Popen(
+                runner_argv,
+                cwd=str(Path(__file__).resolve().parents[1]),
+                env=child_env,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                shell=False,
+                start_new_session=False,
+                close_fds=True,
+            )
+        except BaseException as exc:
+            try:
+                self._durable_store.abort_pre_dispatch(job_id)
+            finally:
+                self._terminalize_pre_effect(session)
+            if isinstance(exc, Exception):
+                annotate_failure(
+                    exc,
+                    code=ContractErrorCode.PRECONDITION_FAILED,
+                    reason_code="PROCESS_START_FAILED_PRE_EFFECT",
+                    message="durable runner failed before dispatch",
+                    retryable=False,
+                    effect_state=EffectState.ABSENT,
+                    reconciliation_required=False,
+                    safe_next_action=SafeNextAction.FIX_REQUEST,
+                )
+            raise
+
+        try:
+            bootstrap.wait(timeout=2.0)
+        except subprocess.TimeoutExpired:
+            session.durable_fault_reason = "DURABLE_OWNER_LOST"
+            self._durable_recovery_reason = "DURABLE_OWNER_LOST"
+            self._raise_durable_unknown(
+                "DURABLE_OWNER_LOST",
+                "durable runner bootstrap did not establish ownership in time",
+            )
+
+        deadline = time.monotonic() + 5.0
+        state_path = self._durable_store.job_path_for_identity(session.start_identity) / "state.json"
+        while True:
+            if state_path.exists():
+                try:
+                    snapshot = self._durable_store.read_snapshot(job_id)
+                except DurableStateCorrupt:
+                    if time.monotonic() < deadline:
+                        time.sleep(0.02)
+                        continue
+                    session.durable_fault_reason = "DURABLE_STATE_CORRUPT"
+                    self._raise_durable_unknown(
+                        "DURABLE_STATE_CORRUPT",
+                        "durable runner did not publish a consistent state",
+                    )
+                break
+            if time.monotonic() >= deadline:
+                session.durable_fault_reason = "DURABLE_OWNER_LOST"
+                self._durable_recovery_reason = "DURABLE_OWNER_LOST"
+                self._raise_durable_unknown(
+                    "DURABLE_OWNER_LOST",
+                    "durable runner dispatch outcome is unknown",
+                )
+            time.sleep(0.02)
+
+        if (
+            snapshot.state["session_id"] != session.session_id
+            or snapshot.state["start_identity"] != session.start_identity
+            or snapshot.state["spec_digest"] != session.spec_digest
+        ):
+            session.durable_fault_reason = "DURABLE_STATE_CORRUPT"
+            self._raise_durable_unknown(
+                "DURABLE_STATE_CORRUPT",
+                "durable runner published a mismatched identity binding",
+            )
+        self._apply_durable_snapshot(session, snapshot)
+        if session.status in {"starting", "running"} and not self._snapshot_owner_valid(snapshot):
+            # A very short target may finalize between the initial state read and
+            # process-instance verification. Re-read the atomically finalized
+            # state before treating missing ownership as ambiguous.
+            self._refresh_durable_session(session)
+        if session.status == "exited":
+            self._release_lease(session)
+        return self._session_result(session, cursor=0)
+
     def start(
         self,
         argv: list[str],
         cwd: str,
         start_identity: str | None = None,
         mode: str = "pty",
+        durability: str = "process",
         *,
         entry_surface: str = "terminal_start",
         timeout_seconds: float | None = None,
@@ -291,8 +781,22 @@ class TerminalSessionManager:
         checked_identity = self._validated_start_identity(start_identity)
         if not isinstance(mode, str) or mode not in {"pty", "pipe"}:
             raise RuntimeValidationError("mode must be pty or pipe")
+        if not isinstance(durability, str) or durability not in {"process", "runtime_restart"}:
+            raise RuntimeValidationError("durability must be process or runtime_restart")
         if mode == "pipe" and checked_identity is None:
             raise RuntimeValidationError("pipe mode requires start_identity")
+        if durability == "runtime_restart":
+            if mode != "pipe":
+                raise RuntimeValidationError(
+                    "runtime_restart durability requires pipe mode",
+                    reason_code="DURABLE_PTY_UNSUPPORTED",
+                )
+            if checked_identity is None:
+                raise RuntimeValidationError("runtime_restart durability requires start_identity")
+            if entry_surface != "terminal_start":
+                raise RuntimeValidationError(
+                    "runtime_restart durability is supported only by terminal_start"
+                )
         if entry_surface not in {"terminal_start", "terminal_exec"}:
             raise RuntimeValidationError("unsupported terminal entry surface")
         checked_timeout = (
@@ -302,10 +806,30 @@ class TerminalSessionManager:
         )
         if entry_surface == "terminal_exec" and checked_identity is None:
             raise RuntimeValidationError("terminal_exec requires start_identity")
+        if entry_surface == "terminal_exec" and durability != "process":
+            raise RuntimeValidationError("terminal_exec is process-local")
+        self._raise_if_recovery_blocked()
+
         checked_argv = _validated_argv(argv)
         _PROTECTED_GUARD.check(checked_argv, tool_name=entry_surface)
         checked_cwd = str(_validated_cwd(cwd, _workspace_root()))
-        exact_spec = (checked_cwd, tuple(checked_argv), mode, entry_surface, checked_timeout)
+        durable_digest = (
+            execution_spec_digest(
+                cwd=checked_cwd,
+                argv=checked_argv,
+                hard_wall_seconds=self._running_hard_wall_seconds,
+            )
+            if durability == "runtime_restart"
+            else None
+        )
+        exact_spec = (
+            checked_cwd,
+            tuple(checked_argv),
+            mode,
+            durability,
+            entry_surface,
+            checked_timeout,
+        )
         now = self._clock()
 
         capacity_error: RuntimeCapacityError | None = None
@@ -318,10 +842,19 @@ class TerminalSessionManager:
                     if existing is None:
                         self._start_identities.pop(checked_identity, None)
                     else:
+                        if existing.durability == "runtime_restart":
+                            if durability != "runtime_restart" or existing.spec_digest != durable_digest:
+                                raise RuntimeStateError(
+                                    "START_IDENTITY_CONFLICT: start_identity is already bound to a different execution specification",
+                                    reason_code="START_IDENTITY_CONFLICT",
+                                )
+                            self._refresh_durable_session(existing)
+                            return self._session_result(existing, cursor=0)
                         existing_spec = (
                             existing.cwd,
                             tuple(existing.argv),
                             existing.mode,
+                            existing.durability,
                             existing.entry_surface,
                             existing.timeout_seconds,
                         )
@@ -332,6 +865,16 @@ class TerminalSessionManager:
                             )
                         return self._session_result(existing, cursor=0)
 
+                if durability == "runtime_restart":
+                    assert durable_digest is not None
+                    recovered = self._load_existing_durable_identity(
+                        checked_identity,
+                        durable_digest,
+                    )
+                    if recovered is not None:
+                        self._refresh_durable_session(recovered)
+                        return self._session_result(recovered, cursor=0)
+
             session = _Session(
                 session_id=self._new_session_id_locked(),
                 cwd=checked_cwd,
@@ -340,11 +883,18 @@ class TerminalSessionManager:
                 last_activity=now,
                 start_identity=checked_identity,
                 mode=mode,
+                durability=durability,
                 entry_surface=entry_surface,
                 timeout_seconds=checked_timeout,
                 status="starting",
                 lifecycle="STARTING",
                 timing_context=current_call_context(),
+                spec_digest=durable_digest,
+                durable_job_id=(
+                    durable_job_id(checked_identity)
+                    if durability == "runtime_restart" and checked_identity is not None
+                    else None
+                ),
             )
             self._sessions[session.session_id] = session
             if checked_identity is not None:
@@ -394,6 +944,9 @@ class TerminalSessionManager:
             raise
         with session.cleanup_lock:
             session.heavy_lease = lease
+
+        if durability == "runtime_restart":
+            return self._dispatch_durable(session, checked_argv, checked_cwd)
 
         master_fd = slave_fd = -1
         process: subprocess.Popen[bytes] | None = None
@@ -595,6 +1148,42 @@ class TerminalSessionManager:
             "session_id": session.session_id,
         }
 
+    def _poll_durable(
+        self,
+        session: _Session,
+        *,
+        cursor: int,
+        wait_ms: int,
+        wait_for: str,
+        output: str,
+        max_output_bytes: int,
+    ) -> dict[str, Any]:
+        self._refresh_durable_session(session)
+        self._touch(session)
+        initial_status = session.status
+        initial_end = session.base_cursor + self._retained_output_length(session)
+        if wait_ms:
+            deadline = time.monotonic() + wait_ms / 1000.0
+            while True:
+                if wait_for == "terminal_or_deadline":
+                    if session.status == "exited":
+                        break
+                else:
+                    current_end = session.base_cursor + self._retained_output_length(session)
+                    if session.status != initial_status or current_end != initial_end:
+                        break
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                time.sleep(min(0.05, remaining))
+                self._refresh_durable_session(session)
+        return self._session_result(
+            session,
+            cursor=cursor,
+            output=output,
+            max_output_bytes=max_output_bytes,
+        )
+
     def poll(
         self,
         session_id: str | None = None,
@@ -611,6 +1200,16 @@ class TerminalSessionManager:
         checked_wait_for = self._validated_wait_for(wait_for)
         checked_output = self._validated_poll_output(output)
         checked_output_budget = self._validated_poll_output_budget(max_output_bytes)
+
+        if session.durability == "runtime_restart":
+            return self._poll_durable(
+                session,
+                cursor=checked_cursor,
+                wait_ms=checked_wait_ms,
+                wait_for=checked_wait_for,
+                output=checked_output,
+                max_output_bytes=checked_output_budget,
+            )
 
         self._touch(session)
         if checked_wait_ms:
@@ -635,6 +1234,97 @@ class TerminalSessionManager:
             max_output_bytes=checked_output_budget,
         )
 
+    def _control_durable(
+        self,
+        session: _Session,
+        action: str,
+        data: str | None,
+        rows: int | None,
+        cols: int | None,
+    ) -> dict[str, Any]:
+        if action == "write":
+            self._require_no_dimensions(rows, cols)
+            if not isinstance(data, str):
+                raise RuntimeValidationError("write action requires UTF-8 string data")
+            raise RuntimeValidationError(
+                "pipe sessions do not accept input",
+                reason_code="PIPE_WRITE_UNSUPPORTED",
+            )
+        if action == "resize":
+            if data is not None:
+                raise RuntimeValidationError("resize action does not accept data")
+            raise RuntimeValidationError(
+                "terminal_resize is supported only for PTY sessions",
+                reason_code="PTY_REQUIRED",
+            )
+        if action not in {"interrupt", "terminate"}:
+            raise RuntimeValidationError("action must be one of: write, interrupt, terminate, resize")
+        self._require_no_arguments(data, rows, cols)
+
+        snapshot = self._refresh_durable_session(session)
+        if session.status != "running":
+            raise RuntimeStateError("terminal session is not running")
+        state = snapshot.state
+        if not self._snapshot_owner_valid(snapshot):
+            session.durable_fault_reason = "DURABLE_OWNER_LOST"
+            self._raise_durable_unknown(
+                "DURABLE_OWNER_LOST",
+                "durable control target ownership cannot be verified",
+            )
+        job_id = session.durable_job_id
+        if job_id is None:
+            self._raise_durable_unknown(
+                "DURABLE_STATE_CORRUPT",
+                "durable control job identifier is unavailable",
+            )
+        try:
+            self._durable_store.write_control(job_id, action)
+        except DurableControlPending as exc:
+            raise RuntimeStateError(
+                str(exc),
+                code=ContractErrorCode.CONFLICT,
+                reason_code="DURABLE_CONTROL_PENDING",
+            ) from exc
+        except DurableStateCorrupt:
+            session.durable_fault_reason = "DURABLE_STATE_CORRUPT"
+            self._raise_durable_unknown(
+                "DURABLE_STATE_CORRUPT",
+                "durable control state cannot be written safely",
+            )
+
+        try:
+            confirmed = self._durable_store.read_snapshot(job_id)
+            if (
+                confirmed.state["runner_identity"] != state["runner_identity"]
+                or confirmed.state["process_identity"] != state["process_identity"]
+                or not self._snapshot_owner_valid(confirmed)
+            ):
+                self._durable_store.remove_control(job_id)
+                session.durable_fault_reason = "DURABLE_OWNER_LOST"
+                self._raise_durable_unknown(
+                    "DURABLE_OWNER_LOST",
+                    "durable control ownership changed before signal",
+                )
+            os.kill(int(state["runner_identity"]["pid"]), signal.SIGUSR1)
+        except ProcessLookupError:
+            try:
+                self._durable_store.remove_control(job_id)
+            except DurableStateCorrupt:
+                pass
+            session.durable_fault_reason = "DURABLE_OWNER_LOST"
+            self._raise_durable_unknown(
+                "DURABLE_OWNER_LOST",
+                "durable runner disappeared before control signal",
+            )
+        except DurableStateCorrupt:
+            session.durable_fault_reason = "DURABLE_STATE_CORRUPT"
+            self._raise_durable_unknown(
+                "DURABLE_STATE_CORRUPT",
+                "durable control state changed inconsistently",
+            )
+        self._touch(session)
+        return self._control_result(session)
+
     def control(
         self,
         session_id: str,
@@ -644,6 +1334,8 @@ class TerminalSessionManager:
         cols: int | None = None,
     ) -> dict[str, Any]:
         session = self._get_session(session_id)
+        if session.durability == "runtime_restart":
+            return self._control_durable(session, action, data, rows, cols)
         if action == "write":
             self._require_no_dimensions(rows, cols)
             if not isinstance(data, str):
@@ -723,7 +1415,29 @@ class TerminalSessionManager:
         with self._lock:
             sessions = list(self._sessions.values())
         affected: list[str] = []
+        wall_now = time.time()
         for session in sessions:
+            if session.durability == "runtime_restart":
+                try:
+                    self._refresh_durable_session(session)
+                except RuntimeStateError:
+                    continue
+                if session.status == "exited":
+                    try:
+                        snapshot = self._durable_store.read_snapshot(session.durable_job_id or "")
+                        completed = snapshot.state["completed_at_epoch"]
+                        if (
+                            isinstance(completed, (int, float))
+                            and not isinstance(completed, bool)
+                            and wall_now - float(completed) >= self._completed_retention_seconds
+                            and self._durable_store.remove_completed(session.durable_job_id or "")
+                        ):
+                            with self._lock:
+                                self._remove_session_locked(session.session_id)
+                            affected.append(session.session_id)
+                    except DurableStateCorrupt:
+                        session.durable_fault_reason = "DURABLE_STATE_CORRUPT"
+                continue
             if session.status in {"starting", "running"}:
                 if now - session.created_at < self._running_hard_wall_seconds:
                     continue
@@ -765,6 +1479,9 @@ class TerminalSessionManager:
         with self._lock:
             sessions = list(self._sessions.values())
         for session in sessions:
+            if session.durability == "runtime_restart":
+                self._release_lease(session)
+                continue
             if session.process is not None and not session.finalized:
                 self._cleanup_process(session, "shutdown", retain=False)
             else:
@@ -795,6 +1512,19 @@ class TerminalSessionManager:
                 mapped = self._start_identities.get(checked_identity)
                 session = None if mapped is None else self._sessions.get(mapped)
             if session is None:
+                try:
+                    if self._durable_store.job_exists_for_identity(checked_identity):
+                        snapshot = self._durable_store.read_for_identity(checked_identity)
+                        session = self._adopt_durable_snapshot(
+                            durable_job_id(checked_identity),
+                            snapshot,
+                        )
+                except DurableStateCorrupt:
+                    self._raise_durable_unknown(
+                        "DURABLE_STATE_CORRUPT",
+                        "durable identity exists but its state cannot be recovered",
+                    )
+            if session is None:
                 raise RuntimeValidationError(
                     "START_IDENTITY_UNKNOWN",
                     code=ContractErrorCode.NOT_FOUND,
@@ -809,6 +1539,11 @@ class TerminalSessionManager:
         with self._lock:
             session = self._sessions.get(session_id)
         if session is None:
+            if self._durable_scan_fault is not None:
+                self._raise_durable_unknown(
+                    self._durable_scan_fault,
+                    "durable recovery contains unreadable state and the requested session cannot be reconciled",
+                )
             raise RuntimeValidationError(
                 "unknown or expired session_id",
                 code=ContractErrorCode.NOT_FOUND,
@@ -1067,7 +1802,8 @@ class TerminalSessionManager:
         expired = [
             session_id
             for session_id, retained in self._sessions.items()
-            if retained.status == "exited"
+            if retained.durability == "process"
+            and retained.status == "exited"
             and retained.completed_at is not None
             and now - retained.completed_at >= self._completed_retention_seconds
         ]
@@ -1077,7 +1813,7 @@ class TerminalSessionManager:
         completed_ids = [
             session_id
             for session_id, retained in self._sessions.items()
-            if retained.status == "exited"
+            if retained.durability == "process" and retained.status == "exited"
         ]
         excess = len(completed_ids) - MAX_RETAINED_COMPLETED_SESSIONS
         for session_id in completed_ids[: max(0, excess)]:
@@ -1120,6 +1856,7 @@ class TerminalSessionManager:
                 "status": session.status,
                 "lifecycle": session.lifecycle,
                 "mode": session.mode,
+                "durability": session.durability,
                 "cursor_expired": cursor_expired,
                 "dropped_output_bytes": dropped,
             }
@@ -1386,8 +2123,9 @@ def start_terminal(
     cwd: str,
     start_identity: str | None = None,
     mode: str = "pty",
+    durability: str = "process",
 ) -> dict[str, Any]:
-    return _MANAGER.start(argv, cwd, start_identity, mode)
+    return _MANAGER.start(argv, cwd, start_identity, mode, durability)
 
 
 def execute_terminal(
@@ -1443,6 +2181,12 @@ def active_terminal_session_count() -> int:
     """Return the active session count owned by the single Runtime manager."""
 
     return _MANAGER.active_session_count()
+
+
+def terminal_recovery_reason() -> str | None:
+    """Return a stable fail-closed durable recovery reason, if one exists."""
+
+    return _MANAGER.recovery_reason()
 
 
 def _get_session(session_id: str) -> _Session:

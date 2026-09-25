@@ -198,6 +198,20 @@ class DoctorLocalStateTests(unittest.TestCase):
                 "fail",
             )
 
+    def test_durable_recovery_fault_fails_capacity_readiness_with_stable_reason(self) -> None:
+        with patch.object(
+            doctor,
+            "terminal_recovery_reason",
+            return_value="DURABLE_RECOVERY_OVER_CAPACITY",
+        ):
+            check = doctor._capacity_session_config_check({})
+        self.assertEqual(check.status, "fail")
+        self.assertEqual(
+            check.reason_code,
+            "DURABLE_RECOVERY_OVER_CAPACITY",
+        )
+        self.assertEqual(check.evidence, {"durable_recovery_ready": False})
+
     def test_git_identity_validation_never_emits_identity_values(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             env = valid_env(Path(raw))
