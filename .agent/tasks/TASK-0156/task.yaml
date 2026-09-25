@@ -1,0 +1,260 @@
+protocol_version: 3
+
+task_id: TASK-0156
+task_revision: 1
+state: APPROVED
+title: "Runtime 0.5.0 Activation-Only Cutover"
+
+origin:
+  type: explicit_operator_authority
+  task_id: TASK-0156
+  objective_source: "Activate the already-accepted immutable Runtime 0.5.0 package without repeating source verification or packaging."
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+  canonical_branch: main
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+accepted_predecessor:
+  task: TASK-0155
+  review_commit: "81bf4375eafe651216afacf1e3dd9238c22343bb"
+  source_candidate: "61ddb8cda4290799d9b2166f9b24060ab9c6b1ca"
+  source_tree: "00d833ff1ec57973030f0361c4d96cb4e957dcf7"
+  package_sha256: "bd6901087782ecedfb3eb21f9807c406311677dfecca4548c1b23e2c89a3429e"
+  handoff_sha256: "deffa93f1cac42c208f95e44afca3d3401aa8028a79691d04b565a04d2f8b8ab"
+  record_count: 1715
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  activation_carrier: SENTINELX
+  activation_host: mac-tphat-mb
+  activation_carrier_minimum:
+    operational: true
+    ping: true
+    accepted_agent_version: "0.13.2"
+  forbidden_activation_carrier:
+    - AGENT_RUNTIME
+
+objective: >
+  Activate the exact already-accepted Runtime 0.5.0 package through SentinelX,
+  prove coherent PENDING/APP_SWAPPED installed state, commit the cutover exactly
+  once, prove the installed bundle is healthy and self-contained, reconnect the
+  ChatGPT Agent Runtime surface at most once if needed, run only a minimal live
+  acceptance set, persist the report, and stop NEEDS_REVIEW.
+
+immutable_release_authority:
+  runtime_version: "0.5.0"
+  source_candidate: "61ddb8cda4290799d9b2166f9b24060ab9c6b1ca"
+  source_tree: "00d833ff1ec57973030f0361c4d96cb4e957dcf7"
+  package_directory: "build/candidates/bd6901087782ecedfb3eb21f9807c406311677dfecca4548c1b23e2c89a3429e"
+  candidate_app: "build/candidates/bd6901087782ecedfb3eb21f9807c406311677dfecca4548c1b23e2c89a3429e/Agent Runtime.app"
+  candidate_handoff: "build/candidates/bd6901087782ecedfb3eb21f9807c406311677dfecca4548c1b23e2c89a3429e/Agent Runtime.candidate.json"
+  candidate_sha256: "bd6901087782ecedfb3eb21f9807c406311677dfecca4548c1b23e2c89a3429e"
+  handoff_sha256: "deffa93f1cac42c208f95e44afca3d3401aa8028a79691d04b565a04d2f8b8ab"
+  record_count: 1715
+  tool_contract_kernel_version: 2
+  known_capabilities: 21
+  advertised_tools: 20
+
+source_and_package_freeze:
+  - "Do not edit product source, tests, docs, dependencies, package scripts, version projections or verification policy."
+  - "Do not rebuild, reseal or replace the accepted package."
+  - "Do not rerun focused tests, candidate profile or full qualification."
+  - "Do not call macos/package_app.sh."
+  - "Reuse TASK-0155 accepted qualification and immutable package evidence exactly."
+  - "Repository mutation is limited to .agent/tasks/TASK-0156/report-r1.yaml after successful live acceptance."
+
+executor_survival_protocol:
+  principle: "Activation must remain recoverable if the ChatGPT turn dies at any point."
+  mandatory_rules:
+    - "Use SentinelX for every consequence-bearing install/cutover command."
+    - "Never issue install, resume, rollback, recover or commit-cutover through Agent Runtime."
+    - "Before the first mutation, persist exact preflight evidence including package/handoff hashes, installed predecessor identity and transaction absence."
+    - "For any SentinelX command expected to exceed 10 seconds, use a background/recoverable job and record job_id immediately."
+    - "Do not poll a healthy background job more frequently than every 20 seconds."
+    - "Do not blind retry any mutation after an unknown result."
+    - "If a chat dies or a job result is unknown, first inspect the SentinelX job/result plus canonical cutover transaction and installed package identity."
+    - "A present recognized transaction is authority for resume/reconcile semantics; absence plus unchanged predecessor and a positively failed job is authority for a new attempt only when the canonical task still permits one."
+    - "Do not delete or manually edit the cutover transaction."
+    - "Do not kill unrelated pre-existing host processes."
+    - "Do not rerun source verification merely because activation/reconnect is interrupted."
+
+preflight:
+  required:
+    - "Fresh Git gate: local/origin/remote main equal exact task base, ahead/behind=0/0, clean worktree/index, remote branches={main}, open PRs=0."
+    - "TASK-0155 review 81bf4375eafe651216afacf1e3dd9238c22343bb is present in ancestry."
+    - "SentinelX mac-tphat-mb is operational and ping PASS."
+    - "Validate exact pinned package with candidate SHA-256 and handoff SHA-256; require source revision/tree and record_count exactly match immutable authority."
+    - "Strict deep codesign verification PASS."
+    - "Read installed bundle using its own runtime, not checkout doctor: require Runtime 0.4.0, revision cf6aba7e9ca22bf5f0c1202ed7b6ac40433053b0, tree a27f62f1bdfcbc43adf1c11b479b4688d5b5f13f, doctor healthy, ServiceManagement enabled/enabled and no cutover transaction."
+    - "Checkout doctor mismatch before activation is expected because checkout source is 0.5.0 while installed bundle is 0.4.0; do not treat that expected mismatch as a reason to modify source or rerun tests."
+
+activation:
+  install:
+    authority: "Exactly one initial install-prebuilt invocation is authorized."
+    carrier: SENTINELX
+    command: >
+      ./install.sh --install-prebuilt
+      build/candidates/bd6901087782ecedfb3eb21f9807c406311677dfecca4548c1b23e2c89a3429e/Agent Runtime.app
+      build/candidates/bd6901087782ecedfb3eb21f9807c406311677dfecca4548c1b23e2c89a3429e/Agent Runtime.candidate.json
+      --expected-candidate-sha256 bd6901087782ecedfb3eb21f9807c406311677dfecca4548c1b23e2c89a3429e
+      --expected-handoff-sha256 deffa93f1cac42c208f95e44afca3d3401aa8028a79691d04b565a04d2f8b8ab
+    expected_terminal_state: "PENDING / APP_SWAPPED"
+    retry_policy: "No blind second install."
+
+  unknown_or_interrupted_install:
+    - "Inspect SentinelX terminal job state."
+    - "Inspect canonical cutover transaction through SentinelX."
+    - "Inspect installed app provenance/version/revision/tree."
+    - "If APP_SWAPPED/PENDING is coherent, continue from transaction; do not reinstall."
+    - "If recognized resumable transaction exists, use only the canonical resume operation when transaction truth requires it."
+    - "If rollback/recovery is required by canonical transaction semantics, perform only that operation and stop BLOCKED afterward unless the same task explicitly still has an unused initial-install authority and host is fully restored."
+    - "If ownership/effect is ambiguous, stop BLOCKED. Do not guess."
+
+pending_state_gate:
+  require:
+    - "Transaction schema/phase/status is recognized and coherent as PENDING/APP_SWAPPED."
+    - "Installed bundle Runtime = 0.5.0."
+    - "Installed runtime revision = 61ddb8cda4290799d9b2166f9b24060ab9c6b1ca."
+    - "Installed tree = 00d833ff1ec57973030f0361c4d96cb4e957dcf7."
+    - "Installed package provenance matches exact candidate/handoff."
+    - "ServiceManagement main app and runtime agent enabled."
+    - "healthz=live and readyz=ready."
+    - "Direct installed-bundle doctor in a clean environment is healthy."
+  failure_policy: "Do not commit cutover if any predicate fails. Reconcile transaction truth and stop BLOCKED if not safely recoverable."
+
+commit_cutover:
+  authority: "Exactly one commit-cutover invocation after pending_state_gate PASS."
+  carrier: SENTINELX
+  command: "./install.sh --commit-cutover"
+  require_after:
+    - "command returns COMMITTED semantics"
+    - "cutover transaction absent"
+    - "installed Runtime remains exact 0.5.0 candidate"
+    - "ServiceManagement enabled/enabled"
+    - "healthz=live"
+    - "readyz=ready"
+    - "installed-bundle clean-environment doctor healthy"
+  retry_policy: "Never issue a second commit-cutover after an unknown result without first proving transaction state. Transaction absent plus exact installed identity is terminal success, not retry authority."
+
+post_activation_live_acceptance:
+  principle: "Minimal live proof only; no broad source test replay."
+  reconnect:
+    maximum: 1
+    requirement: >
+      Reconnect/reload ChatGPT Agent Runtime at most once only after finalized
+      installed doctor PASS. If the current connection naturally reconnects to
+      the new Runtime, count that as the single reconnect.
+    boundary: >
+      If connector/UI transition cannot be performed from the Executor surface,
+      stop OPERATOR_TRANSITION_REQUIRED with finalized healthy host state rather
+      than reinstalling or retesting.
+
+  checks:
+    - "runtime_capabilities reports Runtime 0.5.0, runtime_revision 61ddb8c..., Kernel 2, 21 known, 20 advertised, 20 available, 1 unavailable."
+    - "tools/list contains exactly 20 advertised tools and excludes screen_capture."
+    - "screen_capture full descriptor remains supported=true, available=false, advertised=false, unavailable_reason_code=VISUAL_PERCEPTION_BLOCKED."
+    - "terminal_start schema/result is 4/4 and terminal_poll schema/result is 4/4."
+    - "Run one short keyed pipe job with durability=runtime_restart, bounded output and a caller-known start_identity; poll it to terminal success and prove one effect only. Do not intentionally restart Runtime in this activation task."
+    - "capacity_observer returns coherent state."
+    - "No mutation-heavy fs_manage/repo_publish probe is required."
+
+telemetry_boundary:
+  - "Runtime 0.5.0 includes telemetry code and hash-locked OpenTelemetry dependencies."
+  - "Do not enable AGENT_RUNTIME_TELEMETRY=otlp in TASK-0156."
+  - "Telemetry remains default-off after activation unless it was already explicitly configured by operator authority."
+  - "Collector/Prometheus/Grafana setup and telemetry enablement are a separate task so activation rollback is not entangled with observability configuration."
+
+report_lifecycle:
+  - "Only after finalized host state and live acceptance PASS create .agent/tasks/TASK-0156/report-r1.yaml."
+  - "Report is the sole tracked mutation of TASK-0156."
+  - "Validate report with pinned agent-skills authority."
+  - "Publish report non-force."
+  - "Fresh reconcile HEAD=origin/main=remote main, ahead/behind=0/0, worktree/index clean, remote branches={main}, open PRs=0."
+  - "Stop NEEDS_REVIEW."
+
+report_requirements:
+  path: .agent/tasks/TASK-0156/report-r1.yaml
+  record:
+    - "exact task base and accepted TASK-0155 review/package identities"
+    - "zero source/test/package rebuild and zero source verification replay"
+    - "SentinelX host/agent/ping evidence"
+    - "predecessor installed 0.4.0 identity and transaction absence"
+    - "initial install job_id, bounded polling and terminal result"
+    - "any interruption/recovery decision with exact transaction truth"
+    - "PENDING/APP_SWAPPED exact 0.5.0 installed identity gate"
+    - "single commit-cutover invocation and terminal transaction absence"
+    - "direct clean-environment installed doctor result"
+    - "single reconnect/reload count"
+    - "minimal runtime_capabilities/tools/schema/durable-pipe live acceptance"
+    - "telemetry remained default-off and was not configured"
+    - "report-only publication and final clean reconciliation"
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact accepted package is activated without rebuild or source retest."
+    evidence_required: "Pinned candidate/handoff validation PASS; package/source identities exact; zero package rebuild and zero source qualification invocations."
+
+  - id: AC-2
+    requirement: "Activation uses an independent carrier and is interruption-safe."
+    evidence_required: "SentinelX operational/ping evidence, job identities, bounded polling and transaction-based reconciliation with no blind retry."
+
+  - id: AC-3
+    requirement: "Pending installed state is coherent before commit."
+    evidence_required: "PENDING/APP_SWAPPED plus exact Runtime 0.5.0 revision/tree/provenance, enabled services, live/ready and healthy installed doctor."
+
+  - id: AC-4
+    requirement: "Cutover is finalized exactly once."
+    evidence_required: "One commit-cutover invocation, COMMITTED semantics or equivalent transaction-absent exact-installed proof, transaction absent afterward."
+
+  - id: AC-5
+    requirement: "Minimal live Runtime acceptance passes."
+    evidence_required: "0.5.0 runtime_capabilities, 21/20 counts, stable twenty-tool surface, screen_capture denial semantics, terminal_start/poll 4/4 and one short runtime_restart keyed pipe job."
+
+  - id: AC-6
+    requirement: "Telemetry configuration remains decoupled from activation."
+    evidence_required: "No telemetry enablement/backend configuration mutation in TASK-0156."
+
+  - id: AC-7
+    requirement: "Canonical report closure is exact."
+    evidence_required: "Report-only tracked mutation, pinned validator PASS, non-force publication and final main-only/zero-PR/clean reconciliation."
+
+forbidden:
+  - "Any source/test/doc/dependency/package-script edit."
+  - "Any package rebuild/reseal."
+  - "Any focused/candidate/qualification source test run."
+  - "Any activation command through Agent Runtime."
+  - "Any blind retry."
+  - "Any second install-prebuilt without explicit new Architect authority."
+  - "Any second commit-cutover without transaction-proof authority."
+  - "Any telemetry backend/configuration mutation."
+  - "Any MCP Tasks/GAP-12 implementation."
+  - "Any branch, PR, force push, amend, squash, tag or release publication."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  install_exact_candidate: true
+  commit_cutover_once_after_gate: true
+  rebuild_candidate: false
+  enable_telemetry: false
+  create_version_tag: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
