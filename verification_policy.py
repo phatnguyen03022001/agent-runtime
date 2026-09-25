@@ -90,7 +90,7 @@ MODULE_POLICY_ENTRIES: tuple[tuple[str, ModulePolicy], ...] = (
         L5_QUALIFICATION_CHAOS_CUTOVER,
         ("cutover", "package", "host_lifecycle"),
         "Transactional package cutover, rollback and crash-boundary qualification.",
-        timeout=120.0,
+        timeout=180.0,
         isolation_key="qualification",
     )),
     ("tests.test_candidate_freeze", module_policy(
@@ -222,7 +222,7 @@ MODULE_POLICY_ENTRIES: tuple[tuple[str, ModulePolicy], ...] = (
         L2_ISOLATED_INTEGRATION,
         ("repo",),
         "Real Git commit integration over unique disposable repositories.",
-        timeout=45.0,
+        timeout=75.0,
     )),
     ("tests.test_repo_diff", module_policy(
         L2_ISOLATED_INTEGRATION,

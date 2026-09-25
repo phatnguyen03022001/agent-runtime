@@ -141,6 +141,25 @@ class VerifyHarnessTests(unittest.TestCase):
         self.assertEqual(verification_policy.GLOBAL_WORKER_LIMIT, 4)
         self.assertLessEqual(verification_policy.HEARTBEAT_SECONDS, 5.0)
 
+    def test_corrected_module_deadlines_preserve_policy_classification(self) -> None:
+        candidate_cutover = verification_policy.MODULE_POLICIES[
+            "tests.test_candidate_cutover"
+        ]
+        self.assertEqual(candidate_cutover.timeout_seconds, 180.0)
+        self.assertEqual(
+            candidate_cutover.lane,
+            verification_policy.L5_QUALIFICATION_CHAOS_CUTOVER,
+        )
+        self.assertEqual(candidate_cutover.isolation_key, "qualification")
+
+        repo_commit = verification_policy.MODULE_POLICIES["tests.test_repo_commit"]
+        self.assertEqual(repo_commit.timeout_seconds, 75.0)
+        self.assertEqual(
+            repo_commit.lane,
+            verification_policy.L2_ISOLATED_INTEGRATION,
+        )
+        self.assertIsNone(repo_commit.isolation_key)
+
     def test_unknown_test_module_fails_closed(self) -> None:
         modules = verify_tests.discover_modules() + ["tests.test_new_unknown"]
         with self.assertRaisesRegex(ValueError, "unclassified=tests.test_new_unknown"):
