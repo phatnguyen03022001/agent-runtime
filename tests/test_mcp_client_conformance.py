@@ -67,11 +67,13 @@ EXPECTED_OUTPUT_FIELDS = {
     },
     "terminal_start": {
         "session_id", "start_identity", "status", "lifecycle", "termination_reason",
-        "mode", "output", "output_chunks", "stream", "text", "next_cursor", "cursor_expired", "dropped_output_bytes", "exit_code",
+        "mode", "durability", "output", "output_chunks", "stream", "text",
+        "next_cursor", "cursor_expired", "dropped_output_bytes", "exit_code",
     },
     "terminal_poll": {
         "session_id", "start_identity", "status", "lifecycle", "termination_reason",
-        "mode", "output", "output_chunks", "stream", "text", "next_cursor", "cursor_expired", "dropped_output_bytes", "exit_code",
+        "mode", "durability", "output", "output_chunks", "stream", "text",
+        "next_cursor", "cursor_expired", "dropped_output_bytes", "exit_code",
     },
     "terminal_control": {"session_id", "status", "exit_code"},
     "terminal_resize": {"session_id", "status", "exit_code"},
@@ -280,6 +282,11 @@ class MCPClientConformanceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(start_identity["pattern"], "^[0-9a-f]{32}$")
             self.assertEqual(start_props["mode"]["enum"], ["pty", "pipe"])
             self.assertEqual(start_props["mode"]["default"], "pty")
+            self.assertEqual(
+                start_props["durability"]["enum"],
+                ["process", "runtime_restart"],
+            )
+            self.assertEqual(start_props["durability"]["default"], "process")
 
             poll_props = tools["terminal_poll"].input_schema["properties"]
             self.assertEqual(_string_branch(poll_props["session_id"])["minLength"], 1)

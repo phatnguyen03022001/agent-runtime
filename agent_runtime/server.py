@@ -673,7 +673,7 @@ def terminal_start(
     mode: TerminalMode = "pty",
     durability: TerminalDurability = "process",
 ) -> TerminalSessionResult:
-    """Start a PTY, pipe, or opt-in cross-Runtime-restart durable pipe process."""
+    """Start a PTY, pipe, or opt-in cross-Runtime-restart durable pipe process; it may modify the host."""
 
     return cast(
         TerminalSessionResult,
