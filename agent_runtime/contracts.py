@@ -212,10 +212,16 @@ CapacitySignals = CapacitySignalsAvailable | CapacitySignalsUnavailable
 
 
 class CapacityObserverResult(_ClosedResult):
-    schema_version: Literal[1]
+    schema_version: Literal[2]
     capacity_parallelism_ceiling: int
     reason_codes: list[str]
     signals: CapacitySignals
+    active_heavy: Annotated[int, Field(ge=0)]
+    available_heavy: Annotated[int, Field(ge=0)]
+    active_sessions: Annotated[int, Field(ge=0)]
+    recommended_additional_parallelism: Annotated[int, Field(ge=0)]
+    observed_at: Annotated[StrictStr, Field(min_length=20, max_length=32)]
+    reservation_guaranteed: Literal[False]
 
 
 class FsReadItem(_ClosedResult):
@@ -837,7 +843,7 @@ class CapabilityAnnotations(_ClosedResult):
 
 
 class CapabilityDescriptor(_ClosedResult):
-    schema_version: Literal[1]
+    schema_version: Literal[2]
     runtime_version: RuntimeVersion
     tool_contract_kernel_version: Literal[2]
     name: Annotated[StrictStr, Field(min_length=1, max_length=128)]
@@ -850,14 +856,58 @@ class CapabilityDescriptor(_ClosedResult):
     bounds: dict[str, object]
     supported: bool
     available: bool
+    advertised: bool
     unavailable_reason_code: CapabilityReasonCode | None
 
 
+RuntimeCapabilitiesDetail = Literal["summary", "full"]
+RuntimeCapabilityName = Annotated[StrictStr, Field(min_length=1, max_length=128)]
+RuntimeCapabilityNames = Annotated[
+    list[RuntimeCapabilityName],
+    Field(strict=True, min_length=1, max_length=21),
+]
+RuntimeRevision = Annotated[
+    StrictStr,
+    Field(min_length=40, max_length=40, pattern=r"^[0-9a-f]{40}$"),
+]
+
+
+class RuntimeCapabilitiesExecution(_ClosedResult):
+    heavy_ceiling: Annotated[int, Field(ge=1)]
+    active_session_ceiling: Annotated[int, Field(ge=1)]
+    terminal_poll_max_wait_ms: Annotated[int, Field(ge=0)]
+    running_hard_wall_ms: Annotated[int, Field(ge=1)]
+
+
 class RuntimeCapabilitiesResult(_ClosedResult):
-    schema_version: Literal[1]
+    schema_version: Literal[2]
+    detail: RuntimeCapabilitiesDetail
     runtime_version: RuntimeVersion
+    runtime_revision: RuntimeRevision | None
     tool_contract_kernel_version: Literal[2]
-    capabilities: list[CapabilityDescriptor]
+    advertised_tool_count: Annotated[int, Field(ge=0)]
+    capability_count: Annotated[int, Field(ge=0)]
+    available_count: Annotated[int, Field(ge=0)]
+    unavailable_count: Annotated[int, Field(ge=0)]
+    execution: RuntimeCapabilitiesExecution
+    capabilities: list[CapabilityDescriptor] | None = None
+
+    @model_validator(mode="after")
+    def _validate_detail_shape(self) -> "RuntimeCapabilitiesResult":
+        if self.detail == "summary" and self.capabilities is not None:
+            raise ValueError("summary detail must not include capabilities")
+        if self.detail == "full" and self.capabilities is None:
+            raise ValueError("full detail requires capabilities")
+        return self
+
+    @model_serializer(mode="wrap")
+    def _serialize(
+        self, handler: SerializerFunctionWrapHandler
+    ) -> dict[str, object]:
+        data = handler(self)
+        if self.detail == "summary":
+            data.pop("capabilities", None)
+        return data
 
 
 DoctorCheckStatus = Literal["pass", "warn", "fail", "not_applicable"]

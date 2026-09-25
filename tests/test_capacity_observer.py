@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import ctypes
 import os
+import threading
 import unittest
+from datetime import datetime
 from unittest import mock
 
 from agent_runtime import capacity
@@ -27,10 +29,20 @@ class CapacityObserverTests(unittest.TestCase):
             sampled_window_ms=50,
         )
 
-    def _observe(self, configured: str | None, signals: capacity.CapacitySignals | None = None):
+    def _observe(
+        self,
+        configured: str | None,
+        signals: capacity.CapacitySignals | None = None,
+        *,
+        active_heavy: int = 0,
+        heavy_limit: int = 6,
+        active_sessions: int = 0,
+    ):
         env = {} if configured is None else {capacity.MAX_PARALLELISM_ENV: configured}
         with patch_env(env), mock.patch.object(capacity, "_collect_signals", return_value=signals or self._healthy()):
-            return capacity.observe_capacity()
+            return capacity.observe_capacity(
+                lambda: (active_heavy, heavy_limit, active_sessions)
+            )
 
     def test_absent_operator_limit_defaults_to_two(self) -> None:
         result = self._observe(None)
@@ -60,7 +72,7 @@ class CapacityObserverTests(unittest.TestCase):
         for configured in ("", "0", "11", "-1", "2.0", "many"):
             with self.subTest(configured=configured), patch_env({capacity.MAX_PARALLELISM_ENV: configured}):
                 with self.assertRaisesRegex(ValueError, "AGENT_RUNTIME_MAX_PARALLELISM"):
-                    capacity.observe_capacity()
+                    capacity.observe_capacity(lambda: (0, 6, 0))
 
     def test_pressure_signals_each_serialize(self) -> None:
         cases = {
@@ -92,12 +104,71 @@ class CapacityObserverTests(unittest.TestCase):
         with patch_env({capacity.MAX_PARALLELISM_ENV: "10"}), mock.patch.object(
             capacity, "_collect_signals", side_effect=OSError("private detail must not leak")
         ):
-            result = capacity.observe_capacity()
-        self.assertEqual(result["schema_version"], 1)
+            result = capacity.observe_capacity(lambda: (2, 6, 3))
+        self.assertEqual(result["schema_version"], 2)
         self.assertEqual(result["capacity_parallelism_ceiling"], 1)
         self.assertEqual(result["reason_codes"], ["LIMIT_SIGNAL_UNKNOWN"])
         self.assertEqual(result["signals"], {"probe_status": "unavailable", "sampled_window_ms": 50})
+        self.assertEqual(result["active_heavy"], 2)
+        self.assertEqual(result["available_heavy"], 4)
+        self.assertEqual(result["active_sessions"], 3)
+        self.assertEqual(result["recommended_additional_parallelism"], 0)
+        self.assertFalse(result["reservation_guaranteed"])
         self.assertNotIn("private detail", repr(result))
+
+    def test_operational_snapshot_fields_are_bounded_and_formula_exact(self) -> None:
+        result = self._observe(
+            "6",
+            active_heavy=2,
+            heavy_limit=6,
+            active_sessions=4,
+        )
+        self.assertEqual(result["schema_version"], 2)
+        self.assertEqual(result["active_heavy"], 2)
+        self.assertEqual(result["available_heavy"], 4)
+        self.assertEqual(result["active_sessions"], 4)
+        self.assertEqual(result["recommended_additional_parallelism"], 4)
+        self.assertFalse(result["reservation_guaranteed"])
+        self.assertLessEqual(len(result["observed_at"]), 32)
+        parsed = datetime.fromisoformat(result["observed_at"].replace("Z", "+00:00"))
+        self.assertIsNotNone(parsed.tzinfo)
+
+    def test_heavy_admission_count_is_lock_protected_under_concurrency(self) -> None:
+        admission = capacity.HeavyExecutionAdmission(limit=3)
+        acquired = threading.Barrier(4)
+        release = threading.Event()
+        failures: list[BaseException] = []
+
+        def worker() -> None:
+            try:
+                lease = admission.acquire()
+                acquired.wait(timeout=2)
+                release.wait(timeout=2)
+                lease.release()
+            except BaseException as exc:
+                failures.append(exc)
+
+        threads = [threading.Thread(target=worker) for _ in range(3)]
+        for thread in threads:
+            thread.start()
+        acquired.wait(timeout=2)
+        self.assertEqual(admission.active, 3)
+        result = self._observe(
+            "6",
+            active_heavy=admission.active,
+            heavy_limit=admission.limit,
+            active_sessions=2,
+        )
+        self.assertEqual(result["available_heavy"], 0)
+        self.assertEqual(result["recommended_additional_parallelism"], 0)
+        with self.assertRaises(capacity.RuntimeCapacityError):
+            admission.acquire()
+
+        release.set()
+        for thread in threads:
+            thread.join(timeout=2)
+        self.assertEqual(failures, [])
+        self.assertEqual(admission.active, 0)
 
     def test_signal_summary_is_bounded_and_contains_no_process_inventory(self) -> None:
         result = self._observe("2")

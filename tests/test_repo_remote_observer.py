@@ -248,7 +248,7 @@ class RepoRemoteObserverMCPTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_public_schema_contract_and_success(self) -> None:
         tools = {tool.name: tool for tool in await server.mcp.list_tools()}
-        self.assertEqual(len(tools), 21)
+        self.assertEqual(len(tools), 20)
         tool = tools["repo_remote_observer"]
         annotations = tool.annotations.model_dump(by_alias=True)
         self.assertEqual(

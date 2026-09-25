@@ -2,7 +2,7 @@
 
 Agent Runtime is a **bounded local execution provider** for ChatGPT and other MCP clients on macOS. **MCP is the protocol**; the admitted product transport is OpenAI Secure MCP Tunnel, which keeps the Runtime private and uses outbound HTTPS rather than a public inbound listener.
 
-The qualified Runtime source is version **0.3.0** with **exactly twenty-one public tools**. The native app owns the installed lifecycle through **app-owned ServiceManagement**. The older LaunchAgent model is a **migration/rollback predecessor only**.
+The qualified Runtime source is version **0.3.0** with **exactly twenty public tools** and **twenty-one known capabilities**. The native app owns the installed lifecycle through **app-owned ServiceManagement**. The older LaunchAgent model is a **migration/rollback predecessor only**.
 
 ## Supported product shape
 
@@ -11,7 +11,7 @@ The qualified Runtime source is version **0.3.0** with **exactly twenty-one publ
 - Package-owned Runtime bytes under `~/Applications/Agent Runtime.app`.
 - Canonical operator configuration at `~/Library/Application Support/Agent Runtime/runtime.env`, mode `0600`.
 - One protected singleton tunnel/listener on `127.0.0.1:8080`.
-- Runtime source version 0.3.0, ToolContract Kernel v2, twenty-one-tool source MCP contract; the installed Runtime remains on its accepted nineteen-tool live surface until a separately authorized cutover.
+- Runtime source version 0.3.0, ToolContract Kernel v2, twenty advertised source MCP tools from twenty-one known capabilities; the installed Runtime remains on its accepted nineteen-tool live surface until a separately authorized cutover.
 - Runtime requires no blanket TCC permissions. Background Activity approval is operator/platform state.
 - Homebrew is optional; it is not an architecture prerequisite.
 
@@ -79,13 +79,13 @@ Detailed operator guidance:
 
 `AGENT_RUNTIME_MAX_ACTIVE_SESSIONS` accepts 1 through 6. Inspect the effective value with `./start.sh session-limit`. Persistent terminal sessions have a fixed 3600-second running hard wall; client polling does not extend it. Completed terminal results are retained for up to 3600 seconds and at most 16 completed sessions.
 
-`AGENT_RUNTIME_MAX_PARALLELISM` accepts 1 through 10. Runtime admission still enforces its frozen safe ceiling. `capacity_observer` is advisory only.
+`AGENT_RUNTIME_MAX_PARALLELISM` accepts 1 through 10. Runtime admission still enforces its frozen safe ceiling. `capacity_observer` result schema v2 preserves the host-capacity fields and adds point-in-time `active_heavy`, `available_heavy`, `active_sessions`, `recommended_additional_parallelism`, `observed_at`, and `reservation_guaranteed=false`; the result is advisory only and does not reserve capacity.
 
 Canonical `runtime.env` is retained by default during uninstall. Its credentials and Git identity values must never be printed or logged.
 
 ## Public tool surface
 
-The Runtime exposes exactly twenty-one source public tools: `terminal_exec`, `terminal_start`, `terminal_poll`, `terminal_control`, `terminal_resize`, `capacity_observer`, `fs_read_batch`, `fs_list`, `fs_search`, `fs_patch`, `fs_write`, `fs_manage`, `repo_observer`, `repo_remote_observer`, `repo_diff`, `repo_stage`, `repo_commit`, `repo_fast_forward`, `repo_publish`, `screen_capture`, and `runtime_capabilities`. The installed Runtime intentionally remains on its accepted nineteen-tool surface until a separately authorized cutover.
+The Runtime advertises exactly twenty source public tools: `terminal_exec`, `terminal_start`, `terminal_poll`, `terminal_control`, `terminal_resize`, `capacity_observer`, `fs_read_batch`, `fs_list`, `fs_search`, `fs_patch`, `fs_write`, `fs_manage`, `repo_observer`, `repo_remote_observer`, `repo_diff`, `repo_stage`, `repo_commit`, `repo_fast_forward`, `repo_publish`, and `runtime_capabilities`. The static registry retains twenty-one known capabilities. The installed Runtime intentionally remains on its accepted nineteen-tool surface until a separately authorized cutover.
 
 Checkout source keeps PTY and pipe launches in one keyed process lifecycle. `terminal_start` defaults to PTY and can select separate stdout/stderr pipes; `terminal_exec` is a bounded synchronous facade over that pipe lifecycle. Source changes do not activate themselves: the installed Runtime 0.3.0 remains at its accepted activation until a separately authorized cutover. See [source execution recovery](docs/RECOVERY.md#source-execution-recovery) before repeating a mutation after an unknown result.
 
@@ -99,7 +99,9 @@ Source request/result schemas for `fs_list`, `fs_search`, `repo_diff`, and `repo
 
 `repo_observer` remains typed local-only read-only Git observation with `fetched=false` and `network_used=false`. `repo_remote_observer` is a separate bounded read-only network authority: it enumerates exact `origin` branch refs without fetch or local mutation, reports current-branch absence as success, and keeps `ahead`/`behind` null because no commit graph is fetched. `repo_fast_forward` provides expected-state-guarded fixed-origin synchronization. `repo_publish` provides expected-state-guarded fixed-origin publication; repository/task authority remains outside Runtime.
 
-`screen_capture` remains contract-visible but governance-blocked as `VISUAL_PERCEPTION_BLOCKED`. It does not request Screen Recording permission. The dormant media contract retains deterministic `cg_global_points` metadata semantics for any separately authorized future implementation.
+`runtime_capabilities` request/result schema v2 defaults to a compact `detail=summary` response with Runtime identity, global known/advertised/availability counts, and fixed execution ceilings. `detail=full` returns the static known descriptors; an optional unique exact `names` filter is valid only with full detail and preserves registry order. Source/development summary reports `runtime_revision=null` rather than synthesizing mutable Git identity or performing network/package probes.
+
+`screen_capture` remains a known descriptor in full capability discovery with `supported=true`, `available=false`, `advertised=false`, and `VISUAL_PERCEPTION_BLOCKED`, but it is not registered in the stable MCP `tools/list` surface and direct MCP name calls cannot reach native capture. Its implementation and packaged helper remain retained. It does not request Screen Recording permission. The dormant media contract retains deterministic `cg_global_points` metadata semantics for any separately authorized future implementation.
 
 ## Lifecycle and authority
 

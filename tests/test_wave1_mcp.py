@@ -35,7 +35,6 @@ EXPECTED_TOOLS = (
     "repo_commit",
     "repo_fast_forward",
     "repo_publish",
-    "screen_capture",
     "runtime_capabilities",
 )
 
@@ -201,7 +200,7 @@ class Wave1MCPTests(unittest.IsolatedAsyncioTestCase):
             "agent_runtime.server.capture_screen",
             side_effect=AssertionError("native capture must not run"),
         ):
-            result = await server.mcp.call_tool("screen_capture", {})
+            result = server.screen_capture()
         self.assertTrue(getattr(result, "is_error", False), result)
         error = result.structured_content["error"]
         self.assertEqual(error["reason_code"], "VISUAL_PERCEPTION_BLOCKED")

@@ -269,6 +269,15 @@ class TerminalSessionManager:
             )
             self._reaper_thread.start()
 
+    def active_session_count(self) -> int:
+        """Return the lock-protected count of starting or running sessions."""
+
+        with self._lock:
+            return sum(
+                session.status in {"starting", "running"}
+                for session in self._sessions.values()
+            )
+
     def start(
         self,
         argv: list[str],
@@ -1428,6 +1437,12 @@ def configured_session_limit() -> int:
     """Expose the effective limit for operator diagnostics and tests."""
 
     return _MANAGER.max_active_sessions
+
+
+def active_terminal_session_count() -> int:
+    """Return the active session count owned by the single Runtime manager."""
+
+    return _MANAGER.active_session_count()
 
 
 def _get_session(session_id: str) -> _Session:

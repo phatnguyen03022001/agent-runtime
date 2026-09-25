@@ -12,6 +12,7 @@ import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from agent_runtime.session import TerminalSessionManager, control_terminal, poll_terminal, start_terminal
@@ -1474,6 +1475,30 @@ server._main()
         self.assertEqual(len(process_events), 1)
         self.assertEqual(process_events[0]["runtime_call_id"], context.runtime_call_id)
         self.assertEqual(process_events[0]["termination_state"], "explicit_terminate")
+
+    def test_active_session_count_uses_single_manager_registry_and_lock(self) -> None:
+        manager = TerminalSessionManager(start_reaper=False)
+
+        def cleanup() -> None:
+            with manager._lock:
+                manager._sessions.clear()
+            manager.shutdown()
+
+        self.addCleanup(cleanup)
+        with manager._lock:
+            manager._sessions = {
+                "starting": SimpleNamespace(status="starting"),
+                "running": SimpleNamespace(status="running"),
+                "completed": SimpleNamespace(status="exited"),
+            }
+
+        self.assertEqual(manager.active_session_count(), 2)
+        with manager._lock:
+            manager._sessions["starting"].status = "exited"
+        self.assertEqual(manager.active_session_count(), 1)
+        with manager._lock:
+            manager._sessions["running"].status = "exited"
+        self.assertEqual(manager.active_session_count(), 0)
 
     def test_hard_wall_and_shutdown_emit_bounded_persistent_process_events(self) -> None:
         output = io.StringIO()

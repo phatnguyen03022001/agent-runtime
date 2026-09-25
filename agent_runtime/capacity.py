@@ -7,8 +7,9 @@ import re
 import threading
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .errors import RuntimeCapacityError, RuntimeValidationError
 from .tool_contract import Authority, MutationAuthority, NetworkAuthority, ToolAnnotations, ToolClass, ToolContract
@@ -385,22 +386,63 @@ def _evaluate(signals: CapacitySignals, operator_max: int) -> dict[str, Any]:
         reasons = ["LIMIT_OPERATOR_MAX", *reasons]
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "capacity_parallelism_ceiling": min(operator_max, evidence_ceiling),
         "reason_codes": reasons,
         "signals": _signal_summary(signals),
     }
 
 
-def observe_capacity() -> dict[str, Any]:
+def _observed_at_utc() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _attach_operational_state(
+    result: dict[str, Any],
+    *,
+    active_heavy: int,
+    heavy_limit: int,
+    active_sessions: int,
+) -> dict[str, Any]:
+    available_heavy = max(0, heavy_limit - active_heavy)
+    recommendation = max(
+        0,
+        min(
+            available_heavy,
+            int(result["capacity_parallelism_ceiling"]) - active_heavy,
+        ),
+    )
+    return {
+        **result,
+        "active_heavy": max(0, active_heavy),
+        "available_heavy": available_heavy,
+        "active_sessions": max(0, active_sessions),
+        "recommended_additional_parallelism": recommendation,
+        "observed_at": _observed_at_utc(),
+        "reservation_guaranteed": False,
+    }
+
+
+def observe_capacity(
+    operational_snapshot: Callable[[], tuple[int, int, int]],
+) -> dict[str, Any]:
     operator_max = _configured_max_parallelism()
     try:
         signals = _collect_signals()
     except Exception:
-        return {
-            "schema_version": 1,
+        result: dict[str, Any] = {
+            "schema_version": 2,
             "capacity_parallelism_ceiling": 1,
             "reason_codes": ["LIMIT_SIGNAL_UNKNOWN"],
             "signals": {"probe_status": "unavailable", "sampled_window_ms": SAMPLE_WINDOW_MS},
         }
-    return _evaluate(signals, operator_max)
+    else:
+        result = _evaluate(signals, operator_max)
+
+    active_heavy, heavy_limit, active_sessions = operational_snapshot()
+    return _attach_operational_state(
+        result,
+        active_heavy=active_heavy,
+        heavy_limit=heavy_limit,
+        active_sessions=active_sessions,
+    )

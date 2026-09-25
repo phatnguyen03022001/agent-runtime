@@ -24,13 +24,19 @@ from mcp.types import CallToolResult
 
 _MCP_SERVER_LOGGER = logging.getLogger("mcp.server.mcpserver.server")
 
-from .capacity import CAPACITY_OBSERVER_CONTRACT, observe_capacity
+from .capacity import (
+    CAPACITY_OBSERVER_CONTRACT,
+    heavy_execution_admission,
+    observe_capacity,
+)
 from .contracts import (
     AbsoluteCwd,
     Argv,
     CapabilityFailure,
     CapacityObserverResult,
+    RuntimeCapabilitiesDetail,
     RuntimeCapabilitiesResult,
+    RuntimeCapabilityNames,
     ControlAction,
     Cursor,
     ContinuationCursorToken,
@@ -125,6 +131,7 @@ from .session import (
     TERMINAL_POLL_CONTRACT,
     TERMINAL_RESIZE_CONTRACT,
     TERMINAL_START_CONTRACT,
+    active_terminal_session_count,
     control_terminal as _control_terminal,
     poll_terminal as _poll_terminal,
     shutdown_terminal_sessions,
@@ -132,14 +139,14 @@ from .session import (
 )
 from .timing import timed_tool_wrapper, timing_middleware
 from .capability_registry import (
-    CAPABILITY_NAMES,
+    ADVERTISED_TOOL_NAMES,
     RUNTIME_CAPABILITIES_CONTRACT,
     runtime_capabilities_result,
 )
 from .version import RUNTIME_VERSION
 from .tool_contract import ContractErrorCode, EffectState, SafeNextAction
 
-PUBLIC_TOOL_NAMES = CAPABILITY_NAMES
+PUBLIC_TOOL_NAMES = ADVERTISED_TOOL_NAMES
 SERVER_DESCRIPTION = "Bounded local command execution and advisory capacity MCP server; terminal tools may modify the host."
 SERVER_INSTRUCTIONS = (
     "Execute literal argv with shell=False and no implicit shell. "
@@ -170,12 +177,11 @@ SERVER_INSTRUCTIONS = (
     "one bound branch and permits only an exact fast-forward of the current clean branch. "
     "repo_publish performs expected-state-guarded fixed-origin publication of exactly the current clean branch HEAD "
     "when it is the sole direct child of the bound existing origin branch head; repository and task authority remain external. "
-    "screen_capture remains exposed for contract compatibility, but visual perception is governance-blocked in "
-    "production: every invocation returns typed VISUAL_PERCEPTION_BLOCKED before native capture and produces no "
-    "image; only future Architect re-authorization plus new source verification, packaging, and activation may "
-    "change that state; Screen Recording permission is never requested automatically. "
-    "runtime_capabilities returns deterministic static Runtime identity and capability metadata only; "
-    "it performs no readiness, host, repository, package, permission, or network probes."
+    "The stable MCP surface advertises exactly twenty tools. screen_capture remains a known capability descriptor "
+    "with VISUAL_PERCEPTION_BLOCKED but is not advertised or callable through MCP; its implementation is retained "
+    "for future separately authorized source and activation work, and Screen Recording permission is never requested automatically. "
+    "runtime_capabilities returns a compact deterministic summary by default and supports full static descriptor discovery; "
+    "it performs no readiness, host-capacity, repository, package, permission, capture, or network probes."
 )
 class RuntimeMCPServer(MCPServer):
     async def call_tool(
@@ -247,7 +253,6 @@ _PUBLIC_TOOL_EFFECT_RISK = {
     "repo_commit": "possible",
     "repo_fast_forward": "possible",
     "repo_publish": "possible",
-    "screen_capture": "absent",
     "runtime_capabilities": "absent",
 }
 if set(_PUBLIC_TOOL_EFFECT_RISK) != set(PUBLIC_TOOL_NAMES):
@@ -743,6 +748,15 @@ def terminal_resize(
     )
 
 
+def _operational_capacity_snapshot() -> tuple[int, int, int]:
+    admission = heavy_execution_admission()
+    return (
+        admission.active,
+        admission.limit,
+        active_terminal_session_count(),
+    )
+
+
 @_tool(
     read_only=CAPACITY_OBSERVER_CONTRACT.annotations.read_only,
     destructive=CAPACITY_OBSERVER_CONTRACT.annotations.destructive,
@@ -750,9 +764,16 @@ def terminal_resize(
     open_world=CAPACITY_OBSERVER_CONTRACT.annotations.open_world,
 )
 def capacity_observer() -> CapacityObserverResult:
-    """Report a bounded read-only advisory machine-capacity ceiling."""
+    """Report advisory host capacity plus point-in-time Runtime usage."""
 
-    return cast(CapacityObserverResult, _call_runtime_tool("capacity_observer", observe_capacity))
+    return cast(
+        CapacityObserverResult,
+        _call_runtime_tool(
+            "capacity_observer",
+            observe_capacity,
+            _operational_capacity_snapshot,
+        ),
+    )
 
 
 @_tool(
@@ -1054,12 +1075,6 @@ def repo_publish(
         )
 
 
-@_tool(
-    read_only=SCREEN_CAPTURE_CONTRACT.annotations.read_only,
-    destructive=SCREEN_CAPTURE_CONTRACT.annotations.destructive,
-    idempotent=SCREEN_CAPTURE_CONTRACT.annotations.idempotent,
-    open_world=SCREEN_CAPTURE_CONTRACT.annotations.open_world,
-)
 def screen_capture(
     target: ScreenCaptureTarget = "frontmost_window",
     window_id: ScreenCaptureWindowId | None = None,
@@ -1088,10 +1103,13 @@ def screen_capture(
     idempotent=RUNTIME_CAPABILITIES_CONTRACT.annotations.idempotent,
     open_world=RUNTIME_CAPABILITIES_CONTRACT.annotations.open_world,
 )
-def runtime_capabilities() -> RuntimeCapabilitiesResult:
-    """Return deterministic Runtime identity and static public capability descriptors."""
+def runtime_capabilities(
+    detail: RuntimeCapabilitiesDetail = "summary",
+    names: RuntimeCapabilityNames | None = None,
+) -> RuntimeCapabilitiesResult:
+    """Return compact summary or exact static capability descriptors."""
 
-    return runtime_capabilities_result()
+    return runtime_capabilities_result(detail=detail, names=names)
 
 
 def _install_timing_middleware() -> None:

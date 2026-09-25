@@ -11,6 +11,7 @@ from pathlib import Path
 
 from agent_runtime import server
 from agent_runtime.capability_registry import (
+    ADVERTISED_TOOL_NAMES,
     CAPABILITY_NAMES,
     CAPABILITY_REGISTRY,
     descriptor_for,
@@ -24,28 +25,43 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class SchemaExportTests(unittest.TestCase):
-    def test_bundle_projects_actual_registered_schemas_and_exact_contracts(self) -> None:
+    def test_bundle_projects_known_inventory_and_only_advertised_registered_schemas(self) -> None:
         bundle = asyncio.run(build_schema_bundle())
         tools = asyncio.run(server.mcp.list_tools())
+        tools_by_name = {tool.name: tool for tool in tools}
+
         self.assertEqual(bundle["schema_version"], 1)
         self.assertEqual(bundle["runtime_version"], RUNTIME_VERSION)
         self.assertEqual(bundle["tool_contract_kernel_version"], 2)
-        entries = bundle["capabilities"]
-        self.assertEqual(tuple(entry["descriptor"]["name"] for entry in entries), CAPABILITY_NAMES)
-        self.assertEqual(len(entries), len(tools))
+        self.assertEqual(tuple(tools_by_name), ADVERTISED_TOOL_NAMES)
 
-        for binding, tool, entry in zip(CAPABILITY_REGISTRY, tools, entries, strict=True):
+        entries = bundle["capabilities"]
+        self.assertEqual(
+            tuple(entry["descriptor"]["name"] for entry in entries),
+            CAPABILITY_NAMES,
+        )
+        self.assertEqual(len(entries), 21)
+        self.assertEqual(len(tools), 20)
+
+        for binding, entry in zip(CAPABILITY_REGISTRY, entries, strict=True):
+            name = binding.contract.name
             self.assertEqual(entry["descriptor"], descriptor_for(binding).model_dump(mode="json"))
             self.assertEqual(entry["tool_contract"], tool_contract_projection(binding.contract))
-            self.assertEqual(entry["request_schema"], tool.input_schema)
-            self.assertEqual(entry["result_schema"], tool.output_schema)
+            if binding.advertised:
+                tool = tools_by_name[name]
+                self.assertEqual(entry["request_schema"], tool.input_schema)
+                self.assertEqual(entry["result_schema"], tool.output_schema)
+            else:
+                self.assertEqual(name, "screen_capture")
+                self.assertIsNone(entry["request_schema"])
+                self.assertIsNone(entry["result_schema"])
 
-        resultless = [
+        hidden = [
             entry["descriptor"]["name"]
             for entry in entries
-            if entry["result_schema"] is None
+            if not entry["descriptor"]["advertised"]
         ]
-        self.assertEqual(resultless, ["screen_capture"])
+        self.assertEqual(hidden, ["screen_capture"])
 
     def test_export_bytes_are_canonical_repeatable_and_digest_bound(self) -> None:
         first = export_schema_bytes()

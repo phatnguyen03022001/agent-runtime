@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ImageContent, TextContent
 
 from agent_runtime import screen_capture as screen_capture_feature
@@ -31,103 +32,38 @@ EXPECTED_TOOLS = (
     "repo_commit",
     "repo_fast_forward",
     "repo_publish",
-    "screen_capture",
     "runtime_capabilities",
 )
-EXPECTED_ANNOTATIONS = {
-    "terminal_exec": (False, True, True, True),
-    "terminal_start": (False, True, False, True),
-    "terminal_poll": (False, False, False, False),
-    "terminal_control": (False, True, False, True),
-    "terminal_resize": (False, False, True, False),
-    "capacity_observer": (True, False, True, False),
-    "fs_read_batch": (True, False, True, False),
-    "fs_list": (True, False, True, False),
-    "fs_search": (True, False, True, False),
-    "fs_patch": (False, True, False, False),
-    "fs_write": (False, True, False, False),
-    "fs_manage": (False, True, False, False),
-    "repo_observer": (True, False, True, False),
-    "repo_remote_observer": (True, False, True, True),
-    "repo_diff": (True, False, True, False),
-    "repo_stage": (False, True, False, False),
-    "repo_commit": (False, True, False, False),
-    "repo_fast_forward": (False, True, True, True),
-    "repo_publish": (False, True, True, True),
-    "screen_capture": (True, False, True, False),
-    "runtime_capabilities": (True, False, True, False),
-}
-INPUT_FIELDS = {
-    "target", "window_id", "application_bundle_id", "display_id",
-    "x", "y", "width", "height",
-}
-
-
-def _annotations(tool: object) -> tuple[bool, bool, bool, bool]:
-    values = getattr(tool, "annotations").model_dump(by_alias=True)
-    return (
-        values["readOnlyHint"],
-        values["destructiveHint"],
-        values["idempotentHint"],
-        values["openWorldHint"],
-    )
 
 
 class ScreenCaptureMCPTests(unittest.IsolatedAsyncioTestCase):
-    async def _tools(self) -> dict[str, object]:
-        return {tool.name: tool for tool in await server.mcp.list_tools()}
+    async def test_screen_capture_is_not_advertised_or_registered(self) -> None:
+        tools = await server.mcp.list_tools()
+        self.assertEqual(tuple(tool.name for tool in tools), EXPECTED_TOOLS)
+        self.assertNotIn("screen_capture", server.PUBLIC_TOOL_NAMES)
+        self.assertNotIn("screen_capture", tuple(tool.name for tool in tools))
 
-    async def test_screen_capture_is_exact_public_tool_18_with_annotations(self) -> None:
-        tools = await self._tools()
-        self.assertEqual(tuple(tools), EXPECTED_TOOLS)
-        for name, tool in tools.items():
-            self.assertEqual(_annotations(tool), EXPECTED_ANNOTATIONS[name])
-        self.assertEqual(tuple(tools)[:-1], EXPECTED_TOOLS[:-1])
-        self.assertEqual(tuple(tools)[-2], "screen_capture")
-        self.assertEqual(tuple(tools)[-1], "runtime_capabilities")
-
-    async def test_input_schema_is_closed_and_exact(self) -> None:
-        schema = (await self._tools())["screen_capture"].input_schema
-        self.assertFalse(schema["additionalProperties"])
-        self.assertEqual(set(schema["properties"]), INPUT_FIELDS)
-        self.assertEqual(schema["properties"]["target"]["default"], "frontmost_window")
-        self.assertEqual(
-            set(schema["properties"]["target"]["enum"]),
-            {"frontmost_window", "window", "application_window", "display", "region"},
-        )
-        self.assertEqual(schema.get("required", []), [])
-        for forbidden in (
-            "cwd", "argv", "command", "executable", "helper", "output_path",
-            "timeout", "codec", "scale", "cursor", "audio",
-        ):
-            self.assertNotIn(forbidden, schema["properties"])
-
-    async def test_output_schema_is_none_for_media_first_result(self) -> None:
-        schema = (await self._tools())["screen_capture"].output_schema
-        self.assertIsNone(schema)
-
-    async def test_screen_capture_is_blocked_before_argument_validation(self) -> None:
-        result = await server.mcp.call_tool("screen_capture", {"target": "window"})
-        self.assertTrue(result.is_error)
-        error = result.structured_content["error"]
-        self.assertEqual(len(result.content), 1)
-        self.assertIsInstance(result.content[0], TextContent)
-        self.assertEqual(error["code"], "UNAVAILABLE")
-        self.assertEqual(error["reason_code"], "VISUAL_PERCEPTION_BLOCKED")
-        self.assertFalse(error["retryable"])
-        self.assertEqual(error["effect_state"], "absent")
-        self.assertFalse(error["reconciliation_required"])
-        self.assertEqual(error["safe_next_action"], "unsupported")
-        self.assertLessEqual(len(error["message"]), 256)
-
-    async def test_production_guard_skips_capture_delegate_and_native_helper(self) -> None:
+    async def test_direct_mcp_name_call_cannot_reach_capture_delegate_or_native_helper(self) -> None:
         with patch.object(server, "capture_screen", side_effect=AssertionError("capture delegate invoked")) as capture:
             with patch.object(
                 screen_capture_feature,
                 "_invoke_helper",
                 side_effect=AssertionError("native helper invoked"),
             ) as helper:
-                result = await server.mcp.call_tool("screen_capture", {})
+                with self.assertRaisesRegex(ToolError, "Unknown tool: screen_capture"):
+                    await server.mcp.call_tool("screen_capture", {})
+
+        capture.assert_not_called()
+        helper.assert_not_called()
+
+    def test_retained_internal_guard_still_returns_visual_perception_blocked(self) -> None:
+        with patch.object(server, "capture_screen", side_effect=AssertionError("capture delegate invoked")) as capture:
+            with patch.object(
+                screen_capture_feature,
+                "_invoke_helper",
+                side_effect=AssertionError("native helper invoked"),
+            ) as helper:
+                result = server.screen_capture()
 
         self.assertTrue(result.is_error)
         images = [block for block in result.content if isinstance(block, ImageContent)]
@@ -139,26 +75,25 @@ class ScreenCaptureMCPTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(error["reason_code"], "VISUAL_PERCEPTION_BLOCKED")
         self.assertFalse(error["retryable"])
         self.assertEqual(error["effect_state"], "absent")
+        self.assertFalse(error["reconciliation_required"])
         self.assertEqual(error["safe_next_action"], "unsupported")
         capture.assert_not_called()
         helper.assert_not_called()
 
-    async def test_timing_and_instructions_expose_only_read_capture_boundary(self) -> None:
-        self.assertIn("screen_capture", ALLOWED_TOOL_NAMES)
+    def test_timing_and_instructions_distinguish_hidden_known_capability(self) -> None:
+        self.assertNotIn("screen_capture", ALLOWED_TOOL_NAMES)
+        self.assertIn("exactly twenty tools", server.SERVER_INSTRUCTIONS)
         self.assertIn("screen_capture", server.SERVER_INSTRUCTIONS)
-        self.assertIn("governance-blocked", server.SERVER_INSTRUCTIONS)
         self.assertIn("VISUAL_PERCEPTION_BLOCKED", server.SERVER_INSTRUCTIONS)
-        self.assertIn("before native capture", server.SERVER_INSTRUCTIONS)
-        self.assertIn("future Architect re-authorization", server.SERVER_INSTRUCTIONS)
-        self.assertIn("new source verification, packaging, and activation", server.SERVER_INSTRUCTIONS)
-        self.assertIn("never requested automatically", server.SERVER_INSTRUCTIONS)
+        self.assertIn("not advertised or callable through MCP", server.SERVER_INSTRUCTIONS)
+        self.assertIn("Screen Recording permission is never requested automatically", server.SERVER_INSTRUCTIONS)
 
-    def test_readme_documents_exact_eleven_tool_surface(self) -> None:
+    def test_readme_documents_twenty_advertised_and_twenty_one_known_capabilities(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("exactly twenty-one public tools", readme)
+        self.assertIn("exactly twenty public tools", readme)
+        self.assertIn("twenty-one known capabilities", readme)
         self.assertIn("screen_capture", readme)
         self.assertIn("Screen Recording", readme)
-        self.assertIn("cg_global_points", readme)
 
 
 if __name__ == "__main__":

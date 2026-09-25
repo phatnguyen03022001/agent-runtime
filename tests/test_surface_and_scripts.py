@@ -118,11 +118,15 @@ class SurfaceAndScriptsTests(unittest.TestCase):
                 functions.add(node.name)
 
         self.assertIsInstance(public_binding, ast.Name)
-        self.assertEqual(public_binding.id, "CAPABILITY_NAMES")
-        from agent_runtime.capability_registry import CAPABILITY_NAMES
+        self.assertEqual(public_binding.id, "ADVERTISED_TOOL_NAMES")
+        from agent_runtime.capability_registry import ADVERTISED_TOOL_NAMES, CAPABILITY_NAMES
         self.assertEqual(
             CAPABILITY_NAMES,
             ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch", "fs_list", "fs_search", "fs_patch", "fs_write", "fs_manage", "repo_observer", "repo_remote_observer", "repo_diff", "repo_stage", "repo_commit", "repo_fast_forward", "repo_publish", "screen_capture", "runtime_capabilities"),
+        )
+        self.assertEqual(
+            ADVERTISED_TOOL_NAMES,
+            tuple(name for name in CAPABILITY_NAMES if name != "screen_capture"),
         )
         for name in CAPABILITY_NAMES:
             self.assertIn(name, functions)
@@ -191,7 +195,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
             module = importlib.import_module("agent_runtime.server")
             self.assertEqual(
                 tuple(module.mcp.tools),
-                ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch", "fs_list", "fs_search", "fs_patch", "fs_write", "fs_manage", "repo_observer", "repo_remote_observer", "repo_diff", "repo_stage", "repo_commit", "repo_fast_forward", "repo_publish", "screen_capture", "runtime_capabilities"),
+                ("terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch", "fs_list", "fs_search", "fs_patch", "fs_write", "fs_manage", "repo_observer", "repo_remote_observer", "repo_diff", "repo_stage", "repo_commit", "repo_fast_forward", "repo_publish", "runtime_capabilities"),
             )
             expected = {
                 "terminal_exec": (False, True, True, True),
@@ -213,7 +217,6 @@ class SurfaceAndScriptsTests(unittest.TestCase):
                 "repo_commit": (False, True, False, False),
                 "repo_fast_forward": (False, True, True, True),
                 "repo_publish": (False, True, True, True),
-                "screen_capture": (True, False, True, False),
                 "runtime_capabilities": (True, False, True, False),
             }
             for name, values in expected.items():
@@ -383,7 +386,8 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertIn("protected singleton", docs)
         self.assertIn("root/sudo", docs)
         self.assertIn("malicious local administrator", docs)
-        self.assertIn("exactly twenty-one public tools", docs)
+        self.assertIn("exactly twenty public tools", docs)
+        self.assertIn("twenty-one known capabilities", docs)
         self.assertIn("AGENT_RUNTIME_MAX_PARALLELISM", docs)
         self.assertIn("capacity_observer", docs)
 

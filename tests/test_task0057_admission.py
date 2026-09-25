@@ -93,7 +93,16 @@ class HeavyExecutionAdmissionTests(unittest.TestCase):
                 vm_compressor_bytes=0, disk_available_bytes=10 * 1024**3, sampled_window_ms=50,
             )
             with mock.patch.object(capacity, "_collect_signals", return_value=healthy):
-                self.assertEqual(capacity.observe_capacity()["capacity_parallelism_ceiling"], 2)
+                observed = capacity.observe_capacity(
+                    lambda: (
+                        self.admission.active,
+                        self.admission.limit,
+                        manager.active_session_count(),
+                    )
+                )
+                self.assertEqual(observed["capacity_parallelism_ceiling"], 2)
+                self.assertEqual(observed["active_heavy"], 6)
+                self.assertEqual(observed["active_sessions"], 3)
             self.assertEqual(
                 fs_read.read_files_batch(str(self.cwd), [FsReadItem(path="readable.txt")])["items"][0]["text"],
                 "available\n",
@@ -155,7 +164,16 @@ class HeavyExecutionAdmissionTests(unittest.TestCase):
             vm_compressor_bytes=0, disk_available_bytes=10 * 1024**3, sampled_window_ms=50,
         )
         with mock.patch.object(capacity, "_collect_signals", return_value=healthy):
-            self.assertGreaterEqual(capacity.observe_capacity()["capacity_parallelism_ceiling"], 1)
+            observed = capacity.observe_capacity(
+                lambda: (
+                    self.admission.active,
+                    self.admission.limit,
+                    manager.active_session_count(),
+                )
+            )
+            self.assertGreaterEqual(observed["capacity_parallelism_ceiling"], 1)
+            self.assertEqual(observed["active_heavy"], 6)
+            self.assertEqual(observed["active_sessions"], 6)
         self.assertEqual(
             fs_read.read_files_batch(
                 str(self.cwd), [FsReadItem(path="readable-task0078.txt")]

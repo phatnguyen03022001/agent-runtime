@@ -45,7 +45,6 @@ EXPECTED_TOOLS = (
     "repo_commit",
     "repo_fast_forward",
     "repo_publish",
-    "screen_capture",
     "runtime_capabilities",
 )
 
@@ -67,7 +66,6 @@ LEGACY_ANNOTATIONS = {
     "repo_commit": (False, True, False, False),
     "repo_fast_forward": (False, True, True, True),
     "repo_publish": (False, True, True, True),
-    "screen_capture": (True, False, True, False),
 }
 
 
@@ -303,7 +301,7 @@ class FsWriteMCPTests(unittest.IsolatedAsyncioTestCase):
             "agent_runtime.server.capture_screen",
             side_effect=AssertionError("native capture must not run"),
         ):
-            result = await server.mcp.call_tool("screen_capture", {})
+            result = server.screen_capture()
         self.assertTrue(result.is_error)
         error = result.structured_content["error"]
         self.assertEqual(error["reason_code"], "VISUAL_PERCEPTION_BLOCKED")

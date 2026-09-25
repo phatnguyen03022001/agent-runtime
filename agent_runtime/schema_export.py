@@ -7,7 +7,7 @@ import sys
 
 from . import server
 from .capability_registry import (
-    CAPABILITY_NAMES,
+    ADVERTISED_TOOL_NAMES,
     CAPABILITY_REGISTRY,
     TOOL_CONTRACT_KERNEL_VERSION,
     descriptor_for,
@@ -40,21 +40,36 @@ def _canonical_schema_value(value: object) -> object:
 async def build_schema_bundle() -> dict[str, object]:
     tools = await server.mcp.list_tools()
     names = tuple(tool.name for tool in tools)
-    if names != CAPABILITY_NAMES:
-        raise RuntimeError("registered MCP tools do not match canonical capability registry")
+    if names != ADVERTISED_TOOL_NAMES:
+        raise RuntimeError("registered MCP tools do not match advertised capability registry")
+    tools_by_name = {tool.name: tool for tool in tools}
 
     entries: list[dict[str, object]] = []
-    for binding, tool in zip(CAPABILITY_REGISTRY, tools, strict=True):
-        request_schema = _canonical_schema_value(tool.input_schema)
-        result_schema = (
-            None
-            if tool.output_schema is None
-            else _canonical_schema_value(tool.output_schema)
-        )
-        if (result_schema is None) != (binding.result_schema_version is None):
-            raise RuntimeError(
-                f"{binding.contract.name} result schema availability binding does not match registered MCP output schema"
+    for binding in CAPABILITY_REGISTRY:
+        tool = tools_by_name.get(binding.contract.name)
+        if binding.advertised:
+            if tool is None:
+                raise RuntimeError(
+                    f"advertised capability is not registered: {binding.contract.name}"
+                )
+            request_schema = _canonical_schema_value(tool.input_schema)
+            result_schema = (
+                None
+                if tool.output_schema is None
+                else _canonical_schema_value(tool.output_schema)
             )
+            if (result_schema is None) != (binding.result_schema_version is None):
+                raise RuntimeError(
+                    f"{binding.contract.name} result schema availability binding does not match registered MCP output schema"
+                )
+        else:
+            if tool is not None:
+                raise RuntimeError(
+                    f"unadvertised capability is registered: {binding.contract.name}"
+                )
+            request_schema = None
+            result_schema = None
+
         entries.append(
             {
                 "descriptor": descriptor_for(binding).model_dump(mode="json"),

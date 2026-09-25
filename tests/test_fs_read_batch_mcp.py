@@ -149,7 +149,7 @@ class FsReadBatchMCPTests(unittest.IsolatedAsyncioTestCase):
             frozenset({
                 "terminal_exec", "terminal_start", "terminal_poll",
                 "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch",
-                "repo_observer", "repo_remote_observer", "repo_fast_forward", "repo_publish", "screen_capture",
+                "repo_observer", "repo_remote_observer", "repo_fast_forward", "repo_publish",
             }),
         )
         self.assertIn("fs_read_batch", server.SERVER_INSTRUCTIONS)

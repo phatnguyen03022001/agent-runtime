@@ -158,9 +158,8 @@ class FailureEffectMCPTests(unittest.IsolatedAsyncioTestCase):
             safe_next_action="fix_request",
         )
 
-    async def test_unsupported_capability_is_not_internal_defect(self) -> None:
-        async with Client(server.mcp) as client:
-            result = await client.call_tool("screen_capture", {})
+    async def test_retained_screen_capture_guard_is_not_internal_defect(self) -> None:
+        result = server.screen_capture()
         _assert_error(
             self,
             result,
@@ -517,7 +516,8 @@ class FailureEffectBoundaryTests(unittest.TestCase):
 
     def test_failure_inventory_covers_exact_public_surface(self) -> None:
         self.assertEqual(set(server._PUBLIC_TOOL_EFFECT_RISK), set(server.PUBLIC_TOOL_NAMES))
-        self.assertEqual(len(server._PUBLIC_TOOL_EFFECT_RISK), 21)
+        self.assertEqual(len(server._PUBLIC_TOOL_EFFECT_RISK), 20)
+        self.assertNotIn("screen_capture", server._PUBLIC_TOOL_EFFECT_RISK)
 
 
 if __name__ == "__main__":

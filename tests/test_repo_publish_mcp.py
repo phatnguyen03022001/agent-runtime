@@ -32,7 +32,6 @@ EXPECTED_TOOLS = (
     "repo_commit",
     "repo_fast_forward",
     "repo_publish",
-    "screen_capture",
     "runtime_capabilities",
 )
 EXPECTED_ANNOTATIONS = {
@@ -55,7 +54,6 @@ EXPECTED_ANNOTATIONS = {
     "repo_commit": (False, True, False, False),
     "repo_fast_forward": (False, True, True, True),
     "repo_publish": (False, True, True, True),
-    "screen_capture": (True, False, True, False),
     "runtime_capabilities": (True, False, True, False),
 }
 SUCCESS_FIELDS = {
@@ -164,7 +162,6 @@ class RepoPublishMCPTests(unittest.IsolatedAsyncioTestCase):
             "repo_observer",
             "repo_fast_forward",
             "repo_publish",
-            "screen_capture",
         )
         self.assertEqual(
             tuple(name for name in tools if name in legacy_order),
@@ -223,7 +220,8 @@ class RepoPublishMCPTests(unittest.IsolatedAsyncioTestCase):
 
     def test_readme_documents_exact_eleven_tool_surface_and_publication_boundary(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("exactly twenty-one public tools", readme)
+        self.assertIn("exactly twenty public tools", readme)
+        self.assertIn("twenty-one known capabilities", readme)
         self.assertIn("repo_publish", readme)
         self.assertIn("expected-state-guarded fixed-origin publication", readme)
         self.assertIn("repository/task authority remains", readme)

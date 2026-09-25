@@ -35,7 +35,6 @@ EXPECTED_TOOLS = (
     "repo_commit",
     "repo_fast_forward",
     "repo_publish",
-    "screen_capture",
     "runtime_capabilities",
 )
 EXPECTED_ANNOTATIONS = {
@@ -58,7 +57,6 @@ EXPECTED_ANNOTATIONS = {
     "repo_commit": (False, True, False, False),
     "repo_fast_forward": (False, True, True, True),
     "repo_publish": (False, True, True, True),
-    "screen_capture": (True, False, True, False),
     "runtime_capabilities": (True, False, True, False),
 }
 EXPECTED_OUTPUT_FIELDS = {
@@ -83,7 +81,8 @@ EXPECTED_OUTPUT_FIELDS = {
         "thermal_state", "swap_used_bytes", "swap_total_bytes", "swapin_delta_pages",
         "swapout_delta_pages", "vm_free_bytes", "vm_inactive_bytes",
         "vm_purgeable_bytes", "vm_compressor_bytes", "disk_available_bytes",
-        "probe_status",
+        "probe_status", "active_heavy", "available_heavy", "active_sessions",
+        "recommended_additional_parallelism", "observed_at", "reservation_guaranteed",
     },
     "fs_read_batch": {
         "items", "status", "path", "start_line", "end_line",
@@ -162,11 +161,15 @@ EXPECTED_OUTPUT_FIELDS = {
         "network_used", "push_attempted", "published", "deadline_seconds",
     },
     "runtime_capabilities": {
-        "schema_version", "runtime_version", "tool_contract_kernel_version", "capabilities",
-        "name", "tool_contract_version", "lifecycle", "authority", "annotations",
-        "request_schema_version", "result_schema_version", "bounds", "supported",
-        "available", "unavailable_reason_code", "workspace_bound", "network", "mutation",
-        "read_only", "destructive", "idempotent", "open_world",
+        "schema_version", "detail", "runtime_version", "runtime_revision",
+        "tool_contract_kernel_version", "advertised_tool_count", "capability_count",
+        "available_count", "unavailable_count", "execution", "heavy_ceiling",
+        "active_session_ceiling", "terminal_poll_max_wait_ms", "running_hard_wall_ms",
+        "capabilities", "name", "tool_contract_version", "lifecycle", "authority",
+        "annotations", "request_schema_version", "result_schema_version", "bounds",
+        "supported", "available", "advertised", "unavailable_reason_code",
+        "workspace_bound", "network", "mutation", "read_only", "destructive",
+        "idempotent", "open_world",
     },
 }
 
@@ -365,9 +368,6 @@ class MCPClientConformanceTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(sha["pattern"], "^[0-9a-f]{40}$")
 
             for name, tool in tools.items():
-                if name == "screen_capture":
-                    self.assertIsNone(tool.output_schema, name)
-                    continue
                 self.assertIsNotNone(tool.output_schema, name)
                 objects = [
                     node

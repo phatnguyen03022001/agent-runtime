@@ -63,7 +63,6 @@ class RepoObserverMCPTests(unittest.IsolatedAsyncioTestCase):
                 "repo_commit",
                 "repo_fast_forward",
                 "repo_publish",
-                "screen_capture",
                 "runtime_capabilities",
             ),
         )

@@ -32,7 +32,6 @@ EXPECTED_TOOLS = (
     "repo_commit",
     "repo_fast_forward",
     "repo_publish",
-    "screen_capture",
     "runtime_capabilities",
 )
 EXPECTED_ANNOTATIONS = {
@@ -55,7 +54,6 @@ EXPECTED_ANNOTATIONS = {
     "repo_commit": (False, True, False, False),
     "repo_fast_forward": (False, True, True, True),
     "repo_publish": (False, True, True, True),
-    "screen_capture": (True, False, True, False),
     "runtime_capabilities": (True, False, True, False),
 }
 
@@ -401,6 +399,12 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
                 "vm_compressor_bytes",
                 "disk_available_bytes",
                 "probe_status",
+                "active_heavy",
+                "available_heavy",
+                "active_sessions",
+                "recommended_additional_parallelism",
+                "observed_at",
+                "reservation_guaranteed",
             },
             "fs_read_batch": {
                 "items", "status", "path", "start_line", "end_line",
@@ -457,7 +461,6 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
                 "push_attempted", "published", "deadline_seconds",
             },
         }
-        self.assertIsNone(tools["screen_capture"].output_schema)
         for name, expected in expected_fields.items():
             schema = tools[name].output_schema
             self.assertIsNotNone(schema, name)
@@ -495,12 +498,11 @@ class MCPContractTests(unittest.IsolatedAsyncioTestCase):
             "local-only Git",
             "repo_fast_forward",
             "repo_publish",
+            "exactly twenty tools",
             "screen_capture",
-            "visual perception is governance-blocked",
             "VISUAL_PERCEPTION_BLOCKED",
-            "before native capture",
-            "future Architect re-authorization",
-            "new source verification, packaging, and activation",
+            "not advertised or callable through MCP",
+            "full static descriptor discovery",
             "fixed-origin",
             "publication",
         ):

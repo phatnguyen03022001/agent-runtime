@@ -15,6 +15,7 @@ from macos import candidate_cutover, package_provenance
 
 from . import protection, server
 from .capability_registry import (
+    ADVERTISED_TOOL_NAMES,
     CAPABILITY_NAMES,
     TOOL_CONTRACT_KERNEL_VERSION,
     capability_descriptors,
@@ -113,31 +114,45 @@ def _runtime_identity_check(bundle: dict[str, object] | None) -> DoctorCheck:
 def _capability_registry_check() -> DoctorCheck:
     descriptors = capability_descriptors()
     names = tuple(item.name for item in descriptors)
+    advertised = tuple(item.name for item in descriptors if item.advertised)
+    available_count = sum(item.available for item in descriptors)
     screen = next((item for item in descriptors if item.name == "screen_capture"), None)
     valid = (
         len(names) == 21
         and names == CAPABILITY_NAMES
-        and names == server.PUBLIC_TOOL_NAMES
+        and advertised == ADVERTISED_TOOL_NAMES
+        and advertised == server.PUBLIC_TOOL_NAMES
+        and len(advertised) == 20
         and len(set(names)) == 21
+        and available_count == 20
+        and len(descriptors) - available_count == 1
         and screen is not None
         and screen.supported
         and not screen.available
+        and not screen.advertised
         and screen.unavailable_reason_code == "VISUAL_PERCEPTION_BLOCKED"
     )
+    evidence = {
+        "capability_count": len(names),
+        "advertised_tool_count": len(advertised),
+        "available_count": available_count,
+        "unavailable_count": len(descriptors) - available_count,
+        "screen_capture": "VISUAL_PERCEPTION_BLOCKED",
+    }
     if not valid:
         return _check(
             "capability_registry",
             "fail",
             "CAPABILITY_REGISTRY_MISMATCH",
-            "Capability registry does not match the accepted public surface.",
-            {"tool_count": len(names)},
+            "Known and advertised capability inventories do not match accepted authority.",
+            evidence,
         )
     return _check(
         "capability_registry",
         "pass",
         "OK",
-        "Capability registry matches the accepted twenty-one-tool source surface.",
-        {"tool_count": len(names), "screen_capture": "VISUAL_PERCEPTION_BLOCKED"},
+        "Capability registry exposes twenty advertised tools from twenty-one known capabilities.",
+        evidence,
     )
 
 
@@ -160,11 +175,26 @@ def _tool_contract_schema_check(bundle: dict[str, object] | None) -> DoctorCheck
     try:
         names = tuple(entry["descriptor"]["name"] for entry in entries)
         kernels = tuple(entry["descriptor"]["tool_contract_kernel_version"] for entry in entries)
-        resultless = tuple(
+        advertised = tuple(
             entry["descriptor"]["name"]
             for entry in entries
-            if entry["result_schema"] is None
+            if entry["descriptor"]["advertised"]
         )
+        hidden = tuple(
+            entry["descriptor"]["name"]
+            for entry in entries
+            if not entry["descriptor"]["advertised"]
+        )
+        registered_resultless = tuple(
+            entry["descriptor"]["name"]
+            for entry in entries
+            if entry["descriptor"]["advertised"] and entry["result_schema"] is None
+        )
+        hidden_entries = [
+            entry
+            for entry in entries
+            if not entry["descriptor"]["advertised"]
+        ]
         digest = bundle["bundle_sha256"]
         schema_versions = {
             entry["descriptor"]["name"]: (
@@ -182,8 +212,16 @@ def _tool_contract_schema_check(bundle: dict[str, object] | None) -> DoctorCheck
         )
     valid = (
         names == CAPABILITY_NAMES
+        and advertised == ADVERTISED_TOOL_NAMES
+        and advertised == server.PUBLIC_TOOL_NAMES
+        and hidden == ("screen_capture",)
+        and registered_resultless == ()
+        and len(hidden_entries) == 1
+        and hidden_entries[0]["request_schema"] is None
+        and hidden_entries[0]["result_schema"] is None
         and all(value == TOOL_CONTRACT_KERNEL_VERSION for value in kernels)
-        and resultless == ("screen_capture",)
+        and schema_versions.get("capacity_observer") == (1, 2)
+        and schema_versions.get("runtime_capabilities") == (2, 2)
         and schema_versions.get("fs_read_batch") == (1, 2)
         and schema_versions.get("fs_manage") == (1, 1)
         and schema_versions.get("repo_remote_observer") == (1, 1)
@@ -204,7 +242,8 @@ def _tool_contract_schema_check(bundle: dict[str, object] | None) -> DoctorCheck
         "OK",
         "ToolContract Kernel and registered schemas match accepted authority.",
         {
-            "tool_count": len(entries),
+            "capability_count": len(entries),
+            "advertised_tool_count": len(advertised),
             "tool_contract_kernel_version": TOOL_CONTRACT_KERNEL_VERSION,
             "bundle_sha256": digest,
         },
@@ -572,9 +611,11 @@ def _governance_protection_check() -> DoctorCheck:
     guard = protection._PROTECTED_GUARD
     valid = (
         len(CAPABILITY_NAMES) == 21
+        and len(ADVERTISED_TOOL_NAMES) == 20
         and screen is not None
         and screen.supported
         and not screen.available
+        and not screen.advertised
         and screen.unavailable_reason_code == "VISUAL_PERCEPTION_BLOCKED"
         and isinstance(guard, protection.ProtectedRuntimeGuard)
         and bool(guard.protected_launchd_labels)
@@ -585,7 +626,10 @@ def _governance_protection_check() -> DoctorCheck:
             "fail",
             "GOVERNANCE_PROTECTION_INVALID",
             "Runtime governance or protected-runtime policy does not match accepted authority.",
-            {"tool_count": len(CAPABILITY_NAMES)},
+            {
+                "capability_count": len(CAPABILITY_NAMES),
+                "advertised_tool_count": len(ADVERTISED_TOOL_NAMES),
+            },
         )
     return _check(
         "governance_protection",
@@ -593,7 +637,8 @@ def _governance_protection_check() -> DoctorCheck:
         "OK",
         "Runtime governance and protected-runtime policy remain active.",
         {
-            "tool_count": len(CAPABILITY_NAMES),
+            "capability_count": len(CAPABILITY_NAMES),
+            "advertised_tool_count": len(ADVERTISED_TOOL_NAMES),
             "screen_capture": "VISUAL_PERCEPTION_BLOCKED",
             "protected_runtime": True,
         },
