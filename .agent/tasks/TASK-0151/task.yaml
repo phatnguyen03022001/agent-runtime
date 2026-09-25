@@ -1,7 +1,7 @@
 protocol_version: 3
 
 task_id: TASK-0151
-task_revision: 1
+task_revision: 2
 state: APPROVED
 title: "Cross-Surface Convergence + Final Activation"
 
@@ -74,54 +74,63 @@ authority_sources:
     role: "accepted continuation/ReceiptV1 source authority"
     precedence: 5
   - source: "Installed Runtime 0.3.0 activation revision 89111218720ddb2f12961f9375549733edd23ada, installed tree 00cdfce957326c011b5ed5a377074fa071821f55"
-    role: "exact current live predecessor for Cutover B compatibility and rollback authority"
+    role: "historical pre-Cutover-B predecessor authority already consumed successfully by revision 1"
     precedence: 6
+  - source: "TASK-0151 revision-1 verified/activated candidate 84f7c54821ec170df0478e0b83b285561703401f, tree 1913eddd8ecc5ef871402bb5651c5d7a0944dc95"
+    role: "immutable successful Phase-A + installed Runtime 0.4.0 checkpoint: focused 180/180 PASS, canonical ./verify 59/59 modules 754 tests PASS, one pinned Cutover-B install COMMITTED"
+    precedence: 7
+  - source: "Revision-1 terminal BLOCKED evidence: installed direct doctor fails because packaged runtime/macos contains runtime_config.py and package_provenance.py but omits candidate_cutover.py"
+    role: "corrective authority trigger; plugin reload/live acceptance/report were not started"
+    precedence: 8
 
 structure_authority:
   status: RESOLVED
   source: "Existing version/package/start/cutover/provenance owners plus accepted source capability surfaces"
   rationale: "TASK-0151 is final integration, not a new architectural gap. Make only the minimum source/package/cutover compatibility changes needed to package and activate the already-accepted surfaces. Reuse existing candidate provenance and transactional cutover machinery; no new release framework, daemon, supervisor or deployment abstraction."
 
-objective: "Produce and activate one exact Runtime 0.4.0 package that contains the accepted TASK-0147 through TASK-0150 source line, closes installed-doctor self-containment, truthfully binds runtime_capabilities.runtime_revision to the activated package revision, safely recognizes the installed 0.3.0 predecessor during ServiceManagement refresh, and completes Cutover B with one plugin reload and bounded live acceptance."
+objective: "Recover TASK-0151 from the revision-1 post-cutover BLOCKED state by preserving the already accepted Runtime 0.4.0 implementation, adding only the missing package-owned candidate_cutover module and exact current 84f7c548... split-v1 predecessor compatibility required for one corrective pinned activation, then close installed-doctor self-containment and complete the still-unperformed single plugin reload plus bounded live acceptance."
 
 execution_phases:
-  - id: A
-    name: SOURCE_CONVERGENCE
-    checkpoint: "verified and non-force published exact Runtime 0.4.0 source candidate"
-  - id: B
-    name: PACKAGE_CAPTURE
-    checkpoint: "signed pinned package candidate and handoff under build/candidates with exact hashes; no installed mutation yet"
-  - id: C
-    name: CUTOVER_B_AND_LIVE_ACCEPTANCE
-    checkpoint: "transaction finalized, direct installed doctor PASS, plugin reloaded once, live Runtime acceptance PASS"
+  - id: R2-A
+    name: CORRECTIVE_SOURCE_CLOSURE
+    checkpoint: "verified and non-force published Runtime 0.4.0 corrective source candidate preserving all accepted public surfaces"
+  - id: R2-B
+    name: CORRECTIVE_PACKAGE_CAPTURE
+    checkpoint: "new signed pinned package candidate/handoff from exact corrective source candidate; old revision-1 package retained only as historical evidence"
+  - id: R2-C
+    name: CORRECTIVE_ACTIVATION_AND_LIVE_ACCEPTANCE
+    checkpoint: "one corrective pinned activation from installed predecessor 84f7c548..., transaction finalized, direct installed doctor PASS, plugin reloaded once total for TASK-0151, live Runtime acceptance PASS"
 
 scope:
   required_changes:
     - "Freeze the accepted final public contract before packaging. Kernel remains 2. Known capabilities remain 21. Advertised tools remain exactly 20 with screen_capture retained as known supported-but-unavailable advertised=false / VISUAL_PERCEPTION_BLOCKED."
     - "Preserve exact final schemas: terminal_exec 2/2; terminal_start 3/3; terminal_poll 4/3; terminal_control 1/1; terminal_resize 1/1; capacity_observer 1/2; fs_read_batch 1/2; fs_list 2/2; fs_search 2/2; fs_patch 1/1; fs_write 1/1; fs_manage 1/1; repo_observer 2/2; repo_remote_observer 1/1; repo_diff 2/2; repo_stage 1/1; repo_commit 1/1; repo_fast_forward 1/1; repo_publish 1/1; runtime_capabilities 2/2. screen_capture remains known descriptor request 1 / result null and is not advertised."
     - "Bump Runtime source version SSOT from 0.3.0 to exactly 0.4.0 and update only canonical package/document/test projections required to keep version identity coherent, including CFBundleShortVersionString. Do not bump ToolContract Kernel."
-    - "Close INSTALLED_DOCTOR_SELF_CONTAINMENT using the smallest package-owned fix. The packaged Runtime must contain the runtime_config implementation required by packaged start.sh doctor; direct installed bundle Contents/Resources/runtime/start.sh doctor --json must succeed after Cutover B without importing any checkout-side module."
+    - "Revision-2 recovery starts from canonical source/remote main and installed Runtime both at revision 84f7c54821ec170df0478e0b83b285561703401f / tree 1913eddd8ecc5ef871402bb5651c5d7a0944dc95. Preserve that successful revision-1 implementation as immutable recovery evidence; do not reset/restart the accepted TASK-0151 work and do not repeat the already successful original Cutover-B attempt."
+    - "Close INSTALLED_DOCTOR_SELF_CONTAINMENT using the exact smallest proven package-owned fix: package runtime/macos/candidate_cutover.py alongside the already packaged runtime_config.py and package_provenance.py because agent_runtime.doctor imports candidate_cutover for ServiceManagement and cutover-state inspection. Direct installed bundle Contents/Resources/runtime/start.sh doctor --json must succeed without checkout modules."
+    - "Package self-containment tests must prove runtime/macos contains runtime_config.py, package_provenance.py and candidate_cutover.py, and that agent_runtime.doctor imports successfully when only the packaged Runtime root is on PYTHONPATH. candidate_cutover.py remains package-owned read-only doctor support; installed doctor must not invoke mutation operations."
+
     - "Package self-containment must remain closed by package provenance: package-owned runtime_config bytes are inside Contents/Resources/runtime and therefore included in runtime-manifest payload closure and candidate SHA. Do not make installed doctor fall back to the checkout repository."
     - "Bind runtime_capabilities.runtime_revision truthfully for installed Runtime without adding discovery-time package/network/repository probes. Source/development execution may still return null. Installed serve must derive the exact lowercase 40-hex runtime_revision from its own validated package manifest before server launch and inject it as immutable process identity; capability discovery reads that fixed process identity and does not re-read mutable files per call."
     - "Use one reserved internal environment key for that installed process identity, e.g. AGENT_RUNTIME_REVISION. It is package-owned, not accepted from runtime.env, not caller authority, must validate exact lowercase 40-hex, and must be absent/null in ordinary source execution unless explicitly injected by a trusted package/bootstrap test."
-    - "Close Cutover B predecessor compatibility before any installed mutation. The current installed activation revision 89111218720ddb2f12961f9375549733edd23ada must be recognized as the exact split-v1 ServiceManagement predecessor by checkout-side candidate_cutover. Add focused regression proving no other unknown predecessor becomes accepted."
+    - "Revision 1 already closed and consumed the 89111218720ddb2f12961f9375549733edd23ada predecessor path. For the revision-2 corrective activation only, add exact installed revision 84f7c54821ec170df0478e0b83b285561703401f to the split-v1 ServiceManagement predecessor set. Preserve 891112... and all previously accepted historical entries. Add regression proving 84f7c548... is accepted as split-v1 and a neighboring/unknown revision remains fail-closed."
     - "Do not rebuild or redesign candidate cutover. Preserve transactional PRE_SWAP/APP_SWAPPED rollback semantics, pinned candidate validation, exact candidate/handoff hashes, ServiceManagement reversibility and fail-closed unknown predecessor behavior."
     - "Run focused integration tests for version identity, final schema/inventory freeze, runtime_revision package-process binding, package self-contained doctor payload, direct package-owned runtime_config import, predecessor compatibility, package provenance closure and candidate cutover regressions."
-    - "Commit one coherent Phase-A source candidate only after focused PASS. Run canonical ./verify on that exact clean candidate. Any source/test/doc/package-script write afterward invalidates Phase-A verification and requires a new candidate plus canonical re-verification."
-    - "Fresh-reconcile remote main after exact-candidate verification and publish the exact verified Phase-A candidate non-force. This published commit becomes the only allowed Runtime 0.4.0 package source revision and eventual runtime_activation_revision."
-    - "Phase B must build/sign/package only from the exact verified/published Phase-A candidate using existing macos/package_app.sh. Do not rebuild from a later report/task commit. If checkout HEAD moved for non-source evidence, package from an exact clean checkout/worktree of the Phase-A candidate within the canonical repository constraints rather than changing package source identity."
+    - "Commit one coherent revision-2 corrective source candidate only after focused PASS. Its product delta beyond revision-1 candidate 84f7c548... is limited to package_app self-containment, exact predecessor compatibility and directly coupled tests/docs if needed. Runtime remains 0.4.0, Kernel 2 and all public schemas/inventory remain frozen. Run canonical ./verify on that exact clean candidate. Any source/test/doc/package-script write afterward invalidates verification and requires a successor candidate plus canonical re-verification."
+    - "Fresh-reconcile remote main after exact-candidate verification and publish the exact verified corrective candidate non-force. This new published corrective commit becomes the only allowed revision-2 package source and eventual runtime_activation_revision; revision-1 candidate 84f7c548... remains historical accepted evidence but must not be repackaged."
+    - "Revision-2 package capture must build/sign/package only from the exact verified/published corrective candidate using existing macos/package_app.sh. Do not reuse the revision-1 package hash 8ee716829c223c5271784c882abcfbb0fb1ef7e4d1f3ba67c59d38b72e847e76 or handoff hash d059fb01ea323db281fa14196bd32d8a72a5853a41d6c46ae535fbcb79a621e3 except as historical evidence. Capture new exact candidate/handoff hashes and record_count."
     - "Phase B must validate package Runtime version 0.4.0, Kernel 2, known=21, advertised=20, package manifest runtime_revision equal to the exact Phase-A candidate, package manifest git_tree equal to that candidate tree, strict codesign PASS, provenance manifest PASS, candidate closure PASS, and pinned candidate/handoff SHA-256 PASS. Record exact candidate SHA-256, handoff SHA-256 and record_count."
-    - "Before Cutover B, fresh-confirm installed predecessor remains Runtime 0.3.0 at activation revision 89111218720ddb2f12961f9375549733edd23ada, installed tree 00cdfce957326c011b5ed5a377074fa071821f55, ServiceManagement enabled/enabled, no pending transaction, canonical runtime.env valid, and repository/candidate package identities unchanged."
-    - "Perform exactly one Cutover B installation attempt using ./install.sh --install-prebuilt with exact expected candidate SHA-256 and exact expected handoff SHA-256. Do not run an unpinned installation path."
+    - "Before corrective activation, fresh-confirm installed predecessor is Runtime 0.4.0 at activation revision 84f7c54821ec170df0478e0b83b285561703401f, installed tree 1913eddd8ecc5ef871402bb5651c5d7a0944dc95, ServiceManagement enabled/enabled, healthz live, readyz ready, no pending transaction, canonical runtime.env valid, and direct installed doctor still reproduces only the known missing-candidate_cutover import failure."
+    - "Perform exactly one revision-2 corrective installation attempt using ./install.sh --install-prebuilt with the new exact expected candidate SHA-256 and new exact expected handoff SHA-256. This is a separately authorized corrective activation from installed revision 84f7c548..., not a blind retry of the already committed revision-1 Cutover B. Do not use an unpinned installation path."
     - "If Cutover B returns approval-required, ambiguous outcome, partial transaction, unknown predecessor, candidate mismatch or any unclassified state, stop fail-closed and reconcile with existing resume/rollback/recover mechanisms. Never blind-retry installation."
-    - "After successful app/runtime swap, require installed package identity Runtime 0.4.0, runtime_activation_revision equal to the exact Phase-A candidate, installed tree equal to the Phase-A candidate tree, Kernel 2, ServiceManagement enabled/enabled, and package candidate closure exactly equal to the pinned Phase-B candidate."
+    - "After successful corrective app/runtime swap, require installed package identity Runtime 0.4.0, runtime_activation_revision equal to the exact revision-2 corrective candidate, installed tree equal to that candidate tree, Kernel 2, ServiceManagement enabled/enabled, and package candidate closure exactly equal to the new pinned package candidate."
     - "Finalize the Cutover B transaction only after installed package/ServiceManagement/health predicates are coherent. After commit-cutover, require transaction absent/finalized and preserve rollback evidence only according to existing cutover lifecycle semantics."
     - "Close INSTALLED_DOCTOR_SELF_CONTAINMENT on the actual installed 0.4.0 package: invoke the installed bundle's own Contents/Resources/runtime/start.sh doctor --json directly. Require exit 0 and healthy status using package-owned Runtime bytes plus canonical runtime.env; no checkout PYTHONPATH/module may satisfy the proof."
-    - "Reload/reconnect the ChatGPT Agent Runtime plugin/schema exactly once after host cutover. Do not repeatedly reload. If this operator/platform boundary cannot be performed by the Executor, stop with OPERATOR_TRANSITION_REQUIRED after persisting exact host/package state; do not claim live MCP acceptance and do not rerun cutover."
+    - "Revision 1 performed zero plugin reloads. Reload/reconnect the ChatGPT Agent Runtime plugin/schema exactly once total for TASK-0151 after the corrective activation and direct installed doctor PASS. Do not repeatedly reload. If this operator/platform boundary cannot be performed by the Executor, stop with OPERATOR_TRANSITION_REQUIRED after persisting exact host/package state; do not claim live MCP acceptance and do not rerun either activation."
     - "After the one reload/reconnect, run minimal live Cutover-B acceptance through the fresh connection: runtime_capabilities default summary and detail=full; capacity_observer point-in-time state; repo_remote_observer fresh fixed-origin observation; one safe continuation round-trip on an already accepted read-only paginated collection tool; tools/list exactly 20 and screen_capture absent; full capability discovery exactly 21 with screen_capture advertised=false/VISUAL_PERCEPTION_BLOCKED; fs_manage and repo_remote_observer present; runtime_capabilities.runtime_revision equals exact Phase-A activation revision; Runtime 0.4.0 / Kernel 2."
     - "Live acceptance must also prove the installed Runtime has no pending transaction, direct installed doctor remains healthy, ServiceManagement remains enabled/enabled, capacity/session ceilings are coherent, and repository remains clean/synchronized. Do not exercise mutation-heavy fs_manage against important operator files; its live presence/schema is sufficient because isolated source verification already covers mutation behavior."
     - "Do not implement MCP Tasks, restart durability, telemetry/Prometheus/Grafana/OpenTelemetry, a scheduler, durable job supervisor, new capability family or any other post-roadmap feature in TASK-0151."
-    - "Only after Phase C live acceptance PASS create .agent/tasks/TASK-0151/report-r1.yaml, validate it using the pinned agent-skills validator, publish it as the sole report-only child of the canonical post-cutover evidence base without altering the Phase-A package source identity, fresh-reconcile final Git state, and stop NEEDS_REVIEW."
+    - "Only after revision-2 live acceptance PASS create .agent/tasks/TASK-0151/report-r1.yaml, validate it using the pinned agent-skills validator, publish it as the sole report-only child of the canonical post-activation evidence base without altering the corrective package source identity, fresh-reconcile final Git state, and stop NEEDS_REVIEW. No prior report-r1 exists from revision 1."
 
   allowed_existing_files_or_components:
     - "agent_runtime/version.py"
@@ -158,7 +167,8 @@ invariants:
   - "HeavyExecutionAdmission remains the sole admission owner; no reservation/scheduler semantics are added."
   - "repo_remote_observer remains fixed-origin read-only and no-fetch; fs_manage remains bounded/CAS/no-symlink/no-recursive-delete."
   - "Installed doctor after Cutover B is package-self-contained and does not require checkout modules."
-  - "The current 0.3.0 activation revision 89111218720ddb2f12961f9375549733edd23ada is the only newly authorized predecessor compatibility addition."
+  - "Historical revision-1 source candidate 84f7c54821ec170df0478e0b83b285561703401f / tree 1913eddd8ecc5ef871402bb5651c5d7a0944dc95 remains immutable evidence and is the exact current installed predecessor."
+  - "Revision 2 newly authorizes only exact predecessor 84f7c54821ec170df0478e0b83b285561703401f in addition to the already accepted predecessor sets; unknown revisions remain fail-closed."
   - "Package candidate is built from and activates exactly the canonical verified Phase-A source candidate; report/review commits are never package source identity."
   - "No package install occurs before exact source verification, exact package pinning and fresh predecessor reconciliation."
   - "No force push, amend, squash, branch sprawl, PR, tag or release publication."
@@ -169,7 +179,7 @@ forbidden_changes:
   - "Any schema/inventory change beyond the frozen accepted surfaces and Runtime version/runtime_revision integration described here."
   - "Any new public capability, re-advertisement of screen_capture, or deletion of its descriptor/source helper."
   - "Any unpinned package installation, blind cutover retry, force install, bypass of candidate/handoff hash validation or bypass of ServiceManagement predecessor checks."
-  - "Any acceptance of predecessor revisions other than the exact current installed 89111218720ddb2f12961f9375549733edd23ada addition plus already accepted historical sets."
+  - "Any newly accepted predecessor revision other than exact 84f7c54821ec170df0478e0b83b285561703401f; preserve already accepted historical predecessor sets without broadening them."
   - "Any package doctor fallback to checkout paths or generic PYTHONPATH outside the installed package."
   - "Any runtime.env acceptance of AGENT_RUNTIME_REVISION from operator configuration."
   - "Any dynamic Git/network lookup to derive runtime_revision."
@@ -191,11 +201,11 @@ acceptance_criteria:
     requirement: "One exact verified Runtime 0.4.0 source candidate freezes all accepted post-Cutover-A schemas and inventory."
     evidence_required: "Version SSOT/Info.plist=0.4.0, Kernel=2, 21 known/20 advertised/20 available/1 unavailable, exact schema matrix, focused integration PASS, git diff --check PASS and canonical ./verify PASS on exact Phase-A candidate with no source write afterward."
   - id: AC-2
-    requirement: "The Runtime 0.4.0 package is self-contained, provenance-closed and pinned to the exact Phase-A candidate."
-    evidence_required: "Strict codesign PASS; manifest revision/tree equal exact Phase-A candidate/tree; package contains package-owned runtime_config required by installed doctor; provenance validation PASS; exact candidate SHA-256/handoff SHA-256/record_count captured and pinned validation PASS."
+    requirement: "The revision-2 Runtime 0.4.0 corrective package is self-contained, provenance-closed and pinned to the exact corrective candidate."
+    evidence_required: "Strict codesign PASS; manifest revision/tree equal exact corrective candidate/tree; package contains package-owned runtime_config.py, package_provenance.py and candidate_cutover.py required by installed doctor; provenance validation PASS; new exact candidate SHA-256/handoff SHA-256/record_count captured and pinned validation PASS."
   - id: AC-3
-    requirement: "Cutover B safely transitions only from the exact accepted 0.3.0 predecessor and leaves coherent installed ownership."
-    evidence_required: "Focused predecessor regression proves 891112... split-v1 recognition and unknown fail-closed; one pinned install attempt; installed Runtime 0.4.0/activation revision exact Phase-A/tree exact Phase-A; ServiceManagement enabled/enabled; transaction finalized/absent; package closure exact."
+    requirement: "The corrective activation safely transitions only from exact installed revision-1 Runtime 0.4.0 predecessor 84f7c548... and leaves coherent installed ownership."
+    evidence_required: "Focused predecessor regression proves 84f7c548... split-v1 recognition and unknown fail-closed; exactly one revision-2 pinned install attempt; installed Runtime 0.4.0/activation revision exact corrective candidate/tree exact corrective candidate; ServiceManagement enabled/enabled; transaction finalized/absent; new package closure exact."
   - id: AC-4
     requirement: "Installed doctor self-containment defect is closed on the real activated package."
     evidence_required: "Direct invocation of installed Contents/Resources/runtime/start.sh doctor --json exits 0/healthy with package-owned runtime_config and canonical runtime.env, with checkout modules unavailable/not on PYTHONPATH."
@@ -209,28 +219,28 @@ acceptance_criteria:
 verification:
   executor_checks:
     - id: CHECK-1
-      command_or_check: "Fresh-resolve GitHub/local main. Require exact TASK-0151 task-authoring base, branches={main}, open PRs=0, ahead/behind=0/0, clean worktree/index, accepted TASK-0147/0148/0149/0150 reviews, installed predecessor identity 891112.../00cdf..., ServiceManagement enabled/enabled and no pending cutover transaction."
+      command_or_check: "Fresh-resolve GitHub/local main at exact TASK-0151 revision-2 task-authoring base. Require branches={main}, open PRs=0, ahead/behind=0/0, clean worktree/index, accepted TASK-0147/0148/0149/0150 reviews, historical revision-1 candidate 84f7c548.../1913eddd..., installed predecessor identity equal that same revision/tree, Runtime 0.4.0, ServiceManagement enabled/enabled, healthz live, readyz ready and no pending cutover transaction."
       required: true
     - id: CHECK-2
-      command_or_check: "Fresh-inspect final source surfaces, version/package/start/candidate-cutover/provenance owners and reproduce INSTALLED_DOCTOR_SELF_CONTAINMENT before mutation. Require source Runtime 0.3.0 before bump, Kernel 2, known=21, advertised=20 and current candidate_cutover missing 891112 predecessor support exactly as authorized."
+      command_or_check: "Fresh-inspect current Runtime 0.4.0 source/package/start/candidate-cutover/provenance owners and reproduce installed direct doctor failure. Require package payload contains runtime_config.py + package_provenance.py but lacks candidate_cutover.py, doctor import fails for candidate_cutover, and current candidate_cutover does not yet recognize installed revision 84f7c548... as split-v1."
       required: true
     - id: CHECK-3
-      command_or_check: "Implement only Phase-A integration: Runtime 0.4.0 version projection, package-owned runtime_config doctor closure, immutable installed runtime_revision process binding and exact predecessor compatibility. Run focused final integration/package/cutover tests."
+      command_or_check: "Implement only revision-2 corrective closure: package candidate_cutover.py into runtime/macos, add exact 84f7c548... split-v1 predecessor compatibility, and update directly coupled tests/docs. Do not change version, Kernel, schemas, capability counts, runtime_revision mechanism or accepted behavior. Run focused package/doctor/cutover regressions."
       required: true
     - id: CHECK-4
-      command_or_check: "Commit one coherent Phase-A candidate after focused PASS. Require clean candidate, exact SHA/tree, git diff --check, frozen schema/inventory matrix and no post-roadmap surface."
+      command_or_check: "Commit one coherent revision-2 corrective candidate after focused PASS. Require clean candidate, exact SHA/tree, git diff --check, product delta limited to package self-containment + exact predecessor compatibility + direct tests/docs, frozen Runtime 0.4.0/Kernel2/schema/inventory matrix and no post-roadmap surface."
       required: true
     - id: CHECK-5
       command_or_check: "Run canonical ./verify on exact clean Phase-A candidate through a recoverable carrier. Require exit_code=0 and all canonical modules/tests/postconditions PASS. Any source/test/doc/package-script write afterward invalidates candidate verification."
       required: true
     - id: CHECK-6
-      command_or_check: "Fresh-resolve remote main, require it still equals task execution base, publish exact verified Phase-A candidate non-force, reconcile publication, and freeze that SHA/tree as the sole Runtime 0.4.0 package/activation source identity."
+      command_or_check: "Fresh-resolve remote main, require it still equals revision-2 task execution base, publish exact verified corrective candidate non-force, reconcile publication, and freeze that SHA/tree as the sole revision-2 Runtime 0.4.0 package/activation source identity."
       required: true
     - id: CHECK-7
-      command_or_check: "Build/sign/package from exact Phase-A candidate only. Validate manifest/provenance/codesign/final surface/self-contained doctor payload and capture exact candidate SHA-256, handoff SHA-256 and record_count. Pinned validation must PASS before cutover."
+      command_or_check: "Build/sign/package from exact corrective candidate only. Validate manifest/provenance/codesign/final frozen surface and that packaged runtime/macos includes runtime_config.py, package_provenance.py and candidate_cutover.py. Capture new exact candidate SHA-256, handoff SHA-256 and record_count; pinned validation must PASS before corrective activation."
       required: true
     - id: CHECK-8
-      command_or_check: "Fresh pre-cutover reconcile installed predecessor/package/repository state, then execute exactly one pinned --install-prebuilt attempt. Handle approval/partial/ambiguous outcomes only through canonical reconciliation/resume/rollback/recover semantics; never blind retry."
+      command_or_check: "Fresh pre-activation reconcile installed predecessor 84f7c548.../1913eddd..., new package and repository state, then execute exactly one revision-2 pinned --install-prebuilt attempt. Handle approval/partial/ambiguous outcomes only through canonical reconciliation/resume/rollback/recover semantics; never blind retry."
       required: true
     - id: CHECK-9
       command_or_check: "After successful host activation, prove installed Runtime 0.4.0 identity, exact Phase-A activation revision/tree, package closure, ServiceManagement and health, commit/finalize transaction, then direct-run installed package doctor --json and require healthy self-contained PASS."
@@ -251,14 +261,14 @@ report_requirements:
   path: .agent/tasks/TASK-0151/report-r1.yaml
   record:
     - "state=REPORTED and result=NEEDS_REVIEW"
-    - "exact task/base/Phase-A candidate/tree/report lineage"
+    - "exact revision-2 task/base, historical revision-1 candidate 84f7c54821ec170df0478e0b83b285561703401f/tree 1913eddd8ecc5ef871402bb5651c5d7a0944dc95, corrective candidate/tree and report lineage"
     - "Runtime 0.4.0 version SSOT and final frozen schema/inventory matrix"
     - "focused integration and canonical exact-candidate verification"
     - "package manifest revision/tree, codesign/provenance result, candidate SHA-256, handoff SHA-256 and record_count"
-    - "package-owned runtime_config/self-contained doctor payload proof"
-    - "891112... exact predecessor compatibility proof and unknown-predecessor fail-closed regression"
-    - "single pinned Cutover B attempt and transaction lifecycle evidence"
-    - "installed Runtime 0.4.0 exact activation revision/tree/package closure and ServiceManagement state"
+    - "package-owned runtime_config.py + package_provenance.py + candidate_cutover.py self-contained doctor payload proof"
+    - "84f7c548... exact corrective predecessor compatibility proof, preserved historical predecessor sets and unknown-predecessor fail-closed regression"
+    - "revision-1 single pinned Cutover-B historical evidence plus exactly one separately authorized revision-2 corrective pinned activation attempt and transaction lifecycle evidence"
+    - "final installed Runtime 0.4.0 exact corrective activation revision/tree/new package closure and ServiceManagement state"
     - "direct installed bundle doctor --json healthy self-contained proof"
     - "plugin reload count exactly one or operator transition/continuation history if platform boundary required"
     - "live runtime_capabilities summary/full including exact runtime_revision"
