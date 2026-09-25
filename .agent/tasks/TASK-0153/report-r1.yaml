@@ -1,0 +1,328 @@
+protocol_version: 3
+
+task_id: TASK-0153
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0153/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  execution_surface: CHATGPT_LOCAL
+  preferred_transport: AGENT_RUNTIME
+  authorized_base_head: "b583c302fc07bad0641881908ea1a2e6229022f8"
+  final_execution_head: "91c9a514eb38f45611ac6dd533d7f5e90da13983"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - repository_content_write
+    - local_verification
+    - canonical_repository_publication
+  available:
+    - repository_content_write
+    - local_verification
+    - canonical_repository_publication
+  missing: []
+  passed: true
+
+implementation_candidate:
+  commit: "91c9a514eb38f45611ac6dd533d7f5e90da13983"
+  tree: "b5609e1fcffa5cd0ee08c14098f2564d79eebd82"
+  direct_parent: "b02de24dea9f7018261483889e49fc2cefd97b9d"
+  authorized_base: "b583c302fc07bad0641881908ea1a2e6229022f8"
+  lineage_commits: 4
+  changed_paths_from_base: 17
+  source_runtime_version: "0.4.0"
+  tool_contract_kernel_version: 2
+  known_capabilities: 21
+  advertised_tools: 20
+  available_capabilities: 20
+  unavailable_capabilities: 1
+  package_activation_surface_changed: false
+  installed_activation_performed: false
+
+commits_created:
+  - sha: "b7ba9feb3c5df632bae0d4e51b22930beb30eccb"
+    message: "TASK-0153: add durable restart-safe pipe jobs"
+  - sha: "c51da0c1d8690ea8483a5f6511263cca2546f3ad"
+    message: "TASK-0153: preserve MCP contract compatibility"
+  - sha: "b02de24dea9f7018261483889e49fc2cefd97b9d"
+    message: "TASK-0153: tolerate atomic durable snapshot replacement"
+  - sha: "91c9a514eb38f45611ac6dd533d7f5e90da13983"
+    message: "TASK-0153: align compatibility tests with durable schema"
+
+verification_convergence:
+  failed_candidate:
+    commit: "c51da0c1d8690ea8483a5f6511263cca2546f3ad"
+    tree: "77b6ec0fddfdc63177e1d5c98e5195cd1f421074"
+    canonical_verify: FAIL
+    published: false
+    failure: "Canonical verification reproduced a legitimate durable-state atomic-replacement race in DurableStore._secure_read(): lstat(path) and the subsequently opened descriptor could identify adjacent valid generations while state.json was atomically replaced, so the reader rejected a valid replacement as corruption."
+  architect_corrective_binding:
+    id: C1
+    authority: "Fix only the reproduced DurableStore._secure_read() atomic-replacement TOCTOU defect and directly coupled tests while preserving the existing implementation lineage."
+    corrective_commit: "b02de24dea9f7018261483889e49fc2cefd97b9d"
+    corrective_tree: "e9085da002835234922dabc1fa620f85a7e906ae"
+    changed_paths:
+      - agent_runtime/durable_pipe.py
+      - tests/test_durable_pipe.py
+    scope_proof: "git diff-tree on b02de24 showed exactly agent_runtime/durable_pipe.py and tests/test_durable_pipe.py."
+    deterministic_regression: "test_snapshot_retry_accepts_valid_atomic_state_replacement"
+    corruption_guard_regression: "test_snapshot_consistency_still_rejects_mixed_generation_and_integrity_corruption"
+    result: PASS
+  continuation_focused_failure:
+    candidate: "b02de24dea9f7018261483889e49fc2cefd97b9d"
+    focused_result: FAIL
+    cause: "Two pre-existing compatibility tests still encoded the pre-TASK-0153 terminal_start/session-result shape: test_surface_and_scripts omitted the durability argument and test_task0041_boundedness fixtures omitted the required durability result field."
+  final_test_only_correction:
+    commit: "91c9a514eb38f45611ac6dd533d7f5e90da13983"
+    changed_paths:
+      - tests/test_surface_and_scripts.py
+      - tests/test_task0041_boundedness.py
+    source_changed: false
+    history_rewrite: false
+    rationale: "Align stale compatibility expectations with the already-authorized terminal_start request/result v4 durable schema, then re-run all focused and canonical verification from the new exact candidate."
+  final_candidate_reverified_from_start: true
+  remote_history_rewritten: false
+
+public_contract:
+  terminal_exec:
+    request_schema_version: 2
+    result_schema_version: 2
+    durability: process_local
+    changed: false
+  terminal_start:
+    request_schema_version: 4
+    result_schema_version: 4
+    durability_values:
+      - process
+      - runtime_restart
+    default_durability: process
+    runtime_restart_mode_restriction: pipe_only
+    runtime_restart_requires_start_identity: true
+  terminal_poll:
+    request_schema_version: 4
+    result_schema_version: 4
+  terminal_control:
+    schema_changed: false
+  terminal_resize:
+    schema_changed: false
+  public_tool_count: 20
+  known_capability_count: 21
+  tool_added_or_removed: false
+  result: PASS
+
+durable_state:
+  default_root: "~/Library/Application Support/Agent Runtime/durable-jobs"
+  root_mode: "0700"
+  job_directory_mode: "0700"
+  file_mode: "0600"
+  bounded_scan_limit: 24
+  no_follow_reads: true
+  atomic_replace: true
+  state_schema_version: 1
+  journal_schema_version: 1
+  spec_schema_version: 1
+  integrity_version: 1
+  retained_output_max_bytes: 65536
+  state_max_bytes: 65536
+  journal_max_bytes: 262144
+  spec_max_bytes: 524288
+  secure_read_atomic_replacement_retry: true
+  mixed_generation_or_integrity_corruption_rejected: true
+  symlink_attack_rejected: true
+  permission_attack_rejected: true
+  result: PASS
+
+runner_privacy_and_ownership:
+  runner_argv_payload:
+    - python_executable
+    - "-m"
+    - agent_runtime.durable_pipe_runner
+    - opaque_job_id
+  user_command_on_runner_argv: false
+  user_cwd_on_runner_argv: false
+  transient_raw_spec_deleted_after_runner_acquisition: true
+  stdin_write_supported: false
+  resize_supported: false
+  native_process_instance_revalidation: true
+  pid_only_ownership_accepted: false
+  pid_reuse_or_instance_mismatch_rejected: true
+  owner_loss_respawned: false
+  result: PASS
+
+restart_and_output_semantics:
+  clean_restart_reattachment: PASS
+  abrupt_runtime_kill_reattachment: PASS
+  caller_known_start_identity_preserved: true
+  same_session_identity_preserved: true
+  lost_ack_repeat_joins_one_effect: PASS
+  different_spec_same_identity_conflict: PASS
+  output_stream_order_preserved: true
+  cursor_continuation_preserved: true
+  dropped_output_truthful: true
+  retained_output_bounded: true
+  completed_retention_bounded: true
+  hard_wall_survives_restart: PASS
+  explicit_terminate_after_restart_revalidates_owner: PASS
+  runner_disappearance: DURABLE_OWNER_LOST
+  runner_disappearance_respawn: false
+  corrupt_or_partial_state: DURABLE_STATE_CORRUPT
+  ambiguous_or_lost_owner_effect: UNKNOWN_RECONCILIATION_REQUIRED
+  host_reboot_durability_claimed: false
+  result: PASS
+
+capacity_accounting:
+  heavy_execution_admission_remains_single_ceiling: true
+  heavy_ceiling: 6
+  active_session_ceiling: 6
+  recovered_live_job_reacquires_one_heavy_lease: true
+  recovered_live_job_counts_as_active_session: true
+  completion_releases_once: true
+  over_capacity_recovery: DURABLE_RECOVERY_OVER_CAPACITY
+  over_capacity_recovery_kills_existing_job: false
+  capacity_observer_truthful_across_recovery: PASS
+  result: PASS
+
+compatibility:
+  pty_remains_process_local: true
+  pty_reattachment_claimed: false
+  normal_pipe_default_process_local: true
+  terminal_exec_process_local: true
+  telemetry_fail_open_privacy_contract_preserved: true
+  mcp_tasks_added: false
+  new_service_or_daemon_added: false
+  external_database_added: false
+  package_install_restart_reload_or_cutover_performed: false
+  result: PASS
+
+verification:
+  initial_corrective_scope:
+    candidate: "b02de24dea9f7018261483889e49fc2cefd97b9d"
+    c1_changed_paths:
+      - agent_runtime/durable_pipe.py
+      - tests/test_durable_pipe.py
+    result: PASS
+  targeted_compatibility_fix:
+    tests: 28
+    result: PASS
+  focused:
+    exact_candidate: "91c9a514eb38f45611ac6dd533d7f5e90da13983"
+    exact_tree: "b5609e1fcffa5cd0ee08c14098f2564d79eebd82"
+    scope: "durable TOCTOU/security/ownership, restart recovery, capacity accounting, terminal process-local compatibility, doctor/capability/schema/MCP contracts, timing and telemetry"
+    tests: 185
+    result: PASS
+  restart_chaos:
+    module: tests.test_durable_pipe_restart
+    rounds: 5
+    tests_per_round: 9
+    total_tests: 45
+    result: PASS
+  git_diff_check:
+    result: PASS
+  canonical_verify:
+    command: ./verify
+    exact_candidate: "91c9a514eb38f45611ac6dd533d7f5e90da13983"
+    exact_tree: "b5609e1fcffa5cd0ee08c14098f2564d79eebd82"
+    modules: "62/62"
+    tests: 791
+    exit_code: 0
+    result: PASS
+  source_test_doc_or_dependency_write_after_canonical_verify: false
+
+candidate_publication:
+  expected_remote_head: "b583c302fc07bad0641881908ea1a2e6229022f8"
+  remote_head_before: "b583c302fc07bad0641881908ea1a2e6229022f8"
+  remote_head_after: "91c9a514eb38f45611ac6dd533d7f5e90da13983"
+  remote_branches_before:
+    - main
+  open_prs_before: 0
+  non_force: true
+  remote_history_rewritten: false
+  compare_ahead_by: 4
+  compare_behind_by: 0
+  fresh_remote_reconciled: true
+  result: PASS
+
+report_lineage:
+  path: .agent/tasks/TASK-0153/report-r1.yaml
+  direct_parent: "91c9a514eb38f45611ac6dd533d7f5e90da13983"
+  allowed_report_only_path:
+    - .agent/tasks/TASK-0153/report-r1.yaml
+  report_commit_and_final_publication: EVIDENCE_INDEXED_AFTER_REPORT_AUTHORSHIP
+
+installed_runtime:
+  runtime_version: "0.4.0"
+  activation_revision: "cf6aba7e9ca22bf5f0c1202ed7b6ac40433053b0"
+  tool_contract_kernel_version: 2
+  capability_count: 21
+  advertised_tool_count: 20
+  available_count: 20
+  unavailable_count: 1
+  heavy_ceiling: 6
+  active_session_ceiling: 6
+  package_install_restart_reload_or_cutover_performed: false
+  result: PASS
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: PASS
+  evidence: "Exact clean candidate 91c9a514eb38f45611ac6dd533d7f5e90da13983 at tree b5609e1fcffa5cd0ee08c14098f2564d79eebd82 passed the final 185-test focused matrix, five independent 9-test restart-chaos rounds, git diff --check, and canonical ./verify at 62/62 modules and 791 tests with exit_code=0. The C1 TOCTOU correction is isolated to durable_pipe.py and its directly coupled tests; the later child is test-only compatibility convergence. No source/test/doc/dependency write occurred after the canonical PASS before non-force candidate publication."
+
+pushed: true
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "Real subprocess restart tests prove runtime_restart pipe jobs survive clean and abrupt Runtime-manager replacement, reattach by caller-known start_identity, preserve session identity, and lost-ACK retries join one effect rather than launching a duplicate."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "Restart-chaos tests prove output before/after restart, stream ordering, cursor continuation, dropped-output accounting, bounded journal retention, completion/exit semantics, and runner-enforced hard-wall deadlines remain truthful and bounded."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "Native process-instance verification rejects instance mismatch; symlink/permission attacks and corrupt or mixed-generation durable state fail closed. Runner disappearance projects owner-lost/unknown-effect reconciliation without respawn or blind signaling."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "Recovered live durable jobs reacquire exactly one HeavyExecutionAdmission lease and count as active sessions; completion releases once, over-capacity recovery fails closed without killing the extant job, and capacity_observer remains coherent."
+  - criterion_id: AC-5
+    status: PASS
+    evidence: "PTY, normal pipe and terminal_exec compatibility suites pass. durability defaults to process; runtime_restart is pipe-only and identity-bound; terminal_exec remains 2/2; terminal_start and terminal_poll are 4/4; source inventory remains 21 known and 20 advertised tools."
+  - criterion_id: AC-6
+    status: PASS
+    evidence: "Final candidate 91c9a514eb38f45611ac6dd533d7f5e90da13983/tree b5609e1fcffa5cd0ee08c14098f2564d79eebd82 passed focused proof plus five restart-chaos rounds and canonical ./verify 62/62 modules, 791 tests. It was published non-force from exact base after a fresh main-only/zero-PR gate. Installed Runtime remains 0.4.0 at cf6aba7e9ca22bf5f0c1202ed7b6ac40433053b0 with Kernel 2 and no activation."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Continuation began from the operator-specified clean preserved lineage on main with origin/main and remote main at exact base b583c302fc07bad0641881908ea1a2e6229022f8, local ahead 3/behind 0, no report, and no surviving verification process. Fresh publication gate later proved branches={main} and open PRs=0."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "Existing task/source contracts were re-read before mutation. Runtime remained 0.4.0/Kernel 2/21-known/20-advertised; installed activation remained cf6aba7e... and no package/cutover authority was exercised."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "C1 was inspected and limited to agent_runtime/durable_pipe.py plus tests/test_durable_pipe.py. Deterministic TOCTOU, integrity, ownership/security, schema, process-local compatibility, capacity and telemetry regressions are included in the final focused matrix."
+  - check_id: CHECK-4
+    result: PASS
+    evidence: "Five separate restart-chaos executions of tests.test_durable_pipe_restart each passed 9/9 tests, covering clean and abrupt replacement, lost ACK, different-spec conflict, hard wall, descendant pipe holding, terminate-after-restart, recovered capacity accounting, over-capacity and runner loss."
+  - check_id: CHECK-5
+    result: PASS
+    evidence: "The preserved implementation lineage was not reset, amended, squashed or rebased. After the b02de24 focused run exposed two stale compatibility tests, a new test-only child 91c9a514... was created as authorized by the continuation rule; final tree is b5609e1f...."
+  - check_id: CHECK-6
+    result: PASS
+    evidence: "Canonical ./verify was rerun from start on exact clean 91c9a514.../b5609e1f... and passed 62/62 modules, 791 tests, exit_code=0. No source/test/doc/dependency write occurred afterward."
+  - check_id: CHECK-7
+    result: EVIDENCE_INDEXED
+    evidence: "Fresh remote main equaled the exact task base before publication, branches were {main}, and open PRs were zero. The exact verified candidate was published non-force. This report is authored as the sole report-only child; pinned report validation, exact report commit/publication, final main-only/zero-PR/local-clean reconciliation and final read-only installed Runtime confirmation occur after these bytes are finalized and are indexed by the terminal Executor result."
+
+result: NEEDS_REVIEW
