@@ -1,0 +1,344 @@
+protocol_version: 3
+
+task_id: TASK-0152
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0152/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  execution_surface: CHATGPT_LOCAL
+  preferred_transport: AGENT_RUNTIME
+  authorized_base_head: "7de1e4cd853f02d2f7b9424ea70f3070038d4aa4"
+  final_execution_head: "eb6e35bb4090cca3ed4f8ea446f426fb7814794f"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - repository_content_write
+    - local_verification
+    - canonical_repository_publication
+  available:
+    - repository_content_write
+    - local_verification
+    - canonical_repository_publication
+  missing: []
+  passed: true
+
+implementation_candidate:
+  commit: "eb6e35bb4090cca3ed4f8ea446f426fb7814794f"
+  tree: "e2acef0551e99e8ef2ed091bfb6fed6793df99f4"
+  direct_parent: "7de1e4cd853f02d2f7b9424ea70f3070038d4aa4"
+  runtime_version: "0.4.0"
+  tool_contract_kernel_version: 2
+  known_capabilities: 21
+  advertised_tools: 20
+  available_capabilities: 20
+  unavailable_capabilities: 1
+  changed_paths: 11
+  package_activation_surface_changed: false
+  public_contract_changed: false
+
+verification_convergence:
+  initial_local_candidate:
+    commit: "d277cfc7cd5981968c7135f938e3d715ebe52de7"
+    canonical_verify: FAIL
+    failure: "tests.test_fs_read_batch_mcp retained a pre-TASK-0152 hard-coded eleven-tool timing allowlist expectation."
+    published: false
+  local_fix:
+    path: tests/test_fs_read_batch_mcp.py
+    change: "Compare the timing allowlist to ADVERTISED_TOOL_NAMES and require the exact twenty-tool cardinality."
+    classification: LOCAL
+  final_candidate_rebuilt_before_publication: true
+  remote_history_rewritten: false
+  final_candidate_reverified_from_start: true
+
+telemetry_configuration:
+  environment_variable: AGENT_RUNTIME_TELEMETRY
+  allowed_modes:
+    - off
+    - otlp
+  default_mode: off
+  otlp_protocol: HTTP
+  otlp_base_endpoint: "http://127.0.0.1:4318"
+  traces_endpoint: "http://127.0.0.1:4318/v1/traces"
+  metrics_endpoint: "http://127.0.0.1:4318/v1/metrics"
+  endpoint_configurable: false
+  headers_configurable: false
+  authentication_configurable: false
+  service_name_configurable: false
+  arbitrary_resource_labels_configurable: false
+  arbitrary_user_labels_configurable: false
+  automatic_instrumentation: false
+  opentelemetry_logs: false
+  collector_bundled: false
+  collector_health_dependency: false
+
+dependency_lock:
+  direct:
+    - name: opentelemetry-sdk
+      version: "1.44.0"
+      sha256: "df081c4c6bcfdb1211e3e86140376792643128a25f8d72d1d27675936e7e96ad"
+    - name: opentelemetry-exporter-otlp-proto-http
+      version: "1.44.0"
+      sha256: "838592fce774c1c8bb7b9a0a7facbfa82e17be5a8a4e94cef10cb84ae026bae3"
+  retained_direct:
+    - name: opentelemetry-api
+      version: "1.44.0"
+      sha256: "94b98c893a91b88657eaac1e3ba89618cdb85be6918196705354f34728b2cdef"
+  transitive:
+    - name: opentelemetry-exporter-otlp-proto-common
+      version: "1.44.0"
+      sha256: "9a9fe61bba73d802904bc989f1d6b4a7b1ee40f06c40e98d6f85af65aaebb694"
+    - name: opentelemetry-proto
+      version: "1.44.0"
+      sha256: "898b155a0e1557afd867478fb6158e8122a46329ca0bb8dc53cc55e98f017f56"
+    - name: opentelemetry-semantic-conventions
+      version: "0.65b0"
+      sha256: "1cacde7b0ad306f84c5ef08c3dbe1bbaf20165bba6f8bff43b670e555a086bcb"
+    - name: googleapis-common-protos
+      version: "1.75.4"
+      sha256: "e8eb9cffa9a9f3423090cc7a086012004196abab388a0561690e81887fd79cc1"
+    - name: protobuf
+      version: "7.36.2"
+      sha256: "cbc70b17ee27e28894c7fee8bb04be1abead49e936bc70eb60052531eee2079e"
+    - name: requests
+      version: "2.34.2"
+      sha256: "2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0"
+    - name: charset-normalizer
+      version: "3.5.1"
+      sha256: "e90251c0c7bdd54a100a0dce3c07b7e637278c93af29dbf78ebb89a58c4bac7d"
+    - name: urllib3
+      version: "2.8.0"
+      sha256: "0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3"
+    - name: certifi
+      version: "2026.7.22"
+      sha256: "62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775"
+  hash_lock_command: "python -m pip install --dry-run --ignore-installed --no-cache-dir --disable-pip-version-check --require-hashes -r requirements.lock"
+  hash_lock_result: PASS
+
+disabled_mode:
+  sdk_provider_initialized: false
+  exporter_initialized: false
+  http_client_initialized: false
+  collector_connection_attempted: false
+  proof: "A fresh-process test runs one telemetry observation with AGENT_RUNTIME_TELEMETRY=off and proves no opentelemetry.sdk module and no requests module is imported; the adapter builder is also asserted not called."
+  result: PASS
+
+privacy_contract:
+  resource_attributes:
+    - service.name
+    - runtime.version
+    - runtime.revision
+  span_and_metric_dimensions:
+    - tool.name
+    - outcome
+    - process.kind
+    - termination.state
+  runtime_call_id:
+    trace_correlation_only: true
+    metric_attribute: false
+  prohibited_payload_classes:
+    - command
+    - argv
+    - cwd
+    - path
+    - repository_url
+    - tool_arguments
+    - tool_results
+    - stdout
+    - stderr
+    - exception_message
+    - environment
+    - git_identity
+    - api_token
+    - raw_request_id
+    - session_id
+    - start_identity
+    - continuation_receipt
+  sentinel_non_leak_proof: PASS
+  unknown_or_high_cardinality_values_dropped: true
+  result: PASS
+
+metrics:
+  - name: agent_runtime.mcp.requests
+    dimensions:
+      - tool.name
+      - outcome
+  - name: agent_runtime.mcp.request.duration
+    unit: ms
+    dimensions:
+      - tool.name
+      - outcome
+  - name: agent_runtime.tool.executions
+    dimensions:
+      - tool.name
+      - outcome
+  - name: agent_runtime.process.completions
+    dimensions:
+      - tool.name
+      - process.kind
+      - termination.state
+
+traces:
+  span_names:
+    - agent_runtime.mcp.request
+    - agent_runtime.tool.execution
+    - agent_runtime.process.lifecycle
+  correlation_source: runtime_call_id
+  correlation_exported_as_attribute: false
+  terminal_start_process_may_outlive_request: true
+  retroactive_process_span_uses_recorded_start_end: true
+  unbounded_trace_registry_added: false
+  deterministic_lifetime_and_correlation_proof: PASS
+
+failure_isolation:
+  exporter_initialization_failure_fail_open: PASS
+  exporter_initialization_failure_retried_per_event: false
+  timing_json_emission_precedes_telemetry_sink: true
+  tool_result_unchanged_on_telemetry_failure: PASS
+  process_cleanup_diagnostic_unchanged_on_telemetry_failure: PASS
+  collector_required_for_healthz_or_readyz: false
+  ambient_http_proxy_trusted: false
+  ambient_otel_endpoint_or_headers_authoritative: false
+  fixed_http_header:
+    User-Agent: agent-runtime-telemetry
+  compression: none
+  result: PASS
+
+timing_surface:
+  existing_json_event_model_reused: true
+  event_kinds:
+    - mcp_request_start
+    - mcp_request_end
+    - tool_execution_end
+    - process_end
+  allowed_tool_names_exactly_advertised_surface: true
+  allowed_tool_count: 20
+  mcp_tool_added: false
+  second_event_pipeline_added: false
+  result: PASS
+
+verification:
+  focused:
+    - scope: "telemetry, timing, runtime config, installed serve config and public surface"
+      tests: 61
+      result: PASS
+    - scope: "fs_read_batch timing allowlist regression plus timing and telemetry"
+      tests: 22
+      result: PASS
+  git_diff_check:
+    result: PASS
+  lock_hash_closure:
+    result: PASS
+  identity_guard:
+    runtime_version: "0.4.0"
+    tool_contract_kernel_version: 2
+    known_capabilities: 21
+    advertised_tools: 20
+    result: PASS
+  canonical_verify:
+    command: ./verify
+    exact_candidate: "eb6e35bb4090cca3ed4f8ea446f426fb7814794f"
+    exact_tree: "e2acef0551e99e8ef2ed091bfb6fed6793df99f4"
+    carrier: "terminal_start/terminal_poll"
+    modules: "60/60"
+    tests: 771
+    exit_code: 0
+    duration_seconds: 184.170
+    dropped_output_bytes: 0
+    result: PASS
+  source_test_doc_or_dependency_write_after_canonical_verify: false
+
+candidate_publication:
+  expected_remote_head: "7de1e4cd853f02d2f7b9424ea70f3070038d4aa4"
+  remote_head_before: "7de1e4cd853f02d2f7b9424ea70f3070038d4aa4"
+  remote_head_after: "eb6e35bb4090cca3ed4f8ea446f426fb7814794f"
+  non_force: true
+  remote_history_rewritten: false
+  fresh_remote_reconciled: true
+  result: PASS
+
+report_lineage:
+  path: .agent/tasks/TASK-0152/report-r1.yaml
+  direct_parent: "eb6e35bb4090cca3ed4f8ea446f426fb7814794f"
+  allowed_report_only_path:
+    - .agent/tasks/TASK-0152/report-r1.yaml
+  report_commit_and_final_publication: EVIDENCE_INDEXED_AFTER_REPORT_AUTHORSHIP
+
+installed_runtime:
+  runtime_version: "0.4.0"
+  activation_revision: "cf6aba7e9ca22bf5f0c1202ed7b6ac40433053b0"
+  git_tree: "a27f62f1bdfcbc43adf1c11b479b4688d5b5f13f"
+  tool_contract_kernel_version: 2
+  known_capabilities: 21
+  advertised_tools: 20
+  available_capabilities: 20
+  unavailable_capabilities: 1
+  service_management:
+    main_app: enabled
+    runtime_agent: enabled
+  cutover_transaction_present: false
+  installed_doctor_status: healthy
+  package_install_restart_reload_or_cutover_performed: false
+  result: PASS
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: PASS
+  evidence: "Exact clean candidate eb6e35bb4090cca3ed4f8ea446f426fb7814794f at tree e2acef0551e99e8ef2ed091bfb6fed6793df99f4 passed the final focused suites, git diff --check, dependency hash closure and canonical ./verify at 60/60 modules and 771 tests with exit_code=0. Runtime 0.4.0, Kernel 2 and the 21-known/20-advertised capability surface are unchanged, and no source/test/doc/dependency write occurred after the canonical PASS."
+
+pushed: true
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "Telemetry defaults to off. Fresh-process tests prove off mode imports neither opentelemetry.sdk nor requests and never calls the OTLP builder. Builder/export failures are caught and cached fail-open; timing/tool/process tests prove telemetry exceptions cannot change tool results, JSON diagnostics or process cleanup. Collector presence is not a Runtime health/readiness dependency."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "In-memory SDK tests inspect finished spans and metric points. Only fixed resource/tool/outcome/process dimensions are emitted; unknown values are dropped. Sentinels for argv, cwd/path, repository URL, arguments/results, stdout/stderr, exception text, environment, Git identity, API token, session/start identity and continuation receipt do not appear."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "Telemetry consumes the accepted timing events rather than creating a second pipeline. runtime_call_id is validated and used only as trace correlation, never a metric attribute. ALLOWED_TOOL_NAMES equals ADVERTISED_TOOL_NAMES exactly and has cardinality twenty; existing timing JSON remains emitted before the optional sink."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "Deterministic tests prove MCP request count/duration, tool execution outcomes and process completion/termination metrics. Request, tool and process spans share correlation while process lifecycle spans may end after terminal_start request completion without any unbounded trace/session registry."
+  - criterion_id: AC-5
+    status: PASS
+    evidence: "runtime.env and start.sh accept only off|otlp with absent configuration resolving to off and arbitrary/remote values rejected before tunnel execution. OTLP/HTTP is fixed to 127.0.0.1:4318 with source-fixed headers/compression/timeouts and trust_env=false sessions. The exact OTel closure is version-pinned/hash-locked, and README documents only an optional external collector/backend topology."
+  - criterion_id: AC-6
+    status: PASS
+    evidence: "Final candidate eb6e35bb4090cca3ed4f8ea446f426fb7814794f/tree e2acef0551e99e8ef2ed091bfb6fed6793df99f4 passed canonical ./verify at 60/60 modules and 771 tests, was published non-force after fresh base reconciliation, and leaves Runtime 0.4.0/Kernel 2/21-known/20-advertised unchanged. Installed Runtime remains cf6aba7e.../a27f62f1... with enabled/enabled services, healthy doctor, no transaction and no activation performed by TASK-0152."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Initial fresh gate proved local HEAD=origin/main=remote main=7de1e4cd853f02d2f7b9424ea70f3070038d4aa4, branch main, ahead/behind=0/0, clean worktree/index, remote branches={main}, open PRs=0 and accepted TASK-0151 authority. Installed Runtime was 0.4.0 at cf6aba7e... with no transaction."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "Fresh inspection found the accepted bounded JSON timing events, requirements.lock with opentelemetry-api 1.44.0 but no SDK/exporter, no telemetry adapter, and the unchanged Runtime 0.4.0/Kernel 2/21-known/20-advertised source surface."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "The implementation adds one optional telemetry adapter over timing events, bounded off|otlp config and exact hash-locked OTel closure. Final focused suites passed 61 tests plus 22 targeted allowlist-regression tests with deterministic privacy, fail-open, correlation, metrics, traces, config and surface proof."
+  - check_id: CHECK-4
+    result: PASS
+    evidence: "The published source candidate is the single direct child eb6e35bb4090cca3ed4f8ea446f426fb7814794f/tree e2acef0551e99e8ef2ed091bfb6fed6793df99f4 of the exact task base. git diff --check and static identity guards passed; no GAP-12/GAP-13, package activation, Runtime version, Kernel or capability-schema surface was added."
+  - check_id: CHECK-5
+    result: PASS
+    evidence: "Canonical ./verify completed on the exact clean final candidate through one recoverable terminal_start/terminal_poll process and passed 60/60 modules, 771 tests, exit_code=0, dropped_output_bytes=0. No source/test/doc/dependency write occurred afterward."
+  - check_id: CHECK-6
+    result: EVIDENCE_INDEXED
+    evidence: "Fresh remote main still equaled the exact task base before candidate publication; typed repo_publish advanced main non-force to the exact verified candidate and fresh reconciliation matched local/remote. This report is authored as the sole report-only direct child; exact pinned validation, report commit/publication, final clean main-only/zero-PR reconciliation and final read-only installed Runtime confirmation occur after these report bytes are finalized and are indexed by the terminal Executor result."
+
+result: NEEDS_REVIEW
