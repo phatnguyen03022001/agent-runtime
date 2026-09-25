@@ -120,20 +120,30 @@ if [[ -n "${FAKE_CANONICAL_PID:-}" ]]; then echo "$FAKE_CANONICAL_PID"; fi
         self._write(
             "ps",
             """#!/bin/bash
-if [[ "$*" == *"777"* ]]; then
-  if [[ "$*" == *"comm="* ]]; then echo "/usr/bin/python3"; else echo "/usr/bin/python3 -m http.server 8080"; fi
+args=("$@")
+requested_pid=""
+output_format=""
+for ((i = 0; i < ${#args[@]}; i++)); do
+  if [[ "${args[$i]}" == "-p" && $((i + 1)) -lt ${#args[@]} ]]; then
+    requested_pid="${args[$((i + 1))]}"
+  elif [[ "${args[$i]}" == "-o" && $((i + 1)) -lt ${#args[@]} ]]; then
+    output_format="${args[$((i + 1))]}"
+  fi
+done
+if [[ "$requested_pid" == "777" ]]; then
+  if [[ "$output_format" == "comm=" ]]; then echo "/usr/bin/python3"; else echo "/usr/bin/python3 -m http.server 8080"; fi
   exit 0
 fi
 runtime_pid="$(cat "$HOME/fake-launchd/runtime.pid" 2>/dev/null || true)"
-if [[ -n "$runtime_pid" && "$*" == *" $runtime_pid "* ]]; then
-  if [[ "$*" == *"comm="* ]]; then
+if [[ -n "$runtime_pid" && "$requested_pid" == "$runtime_pid" ]]; then
+  if [[ "$output_format" == "comm=" ]]; then
     echo "$FAKE_TUNNEL_CLIENT"
   else
     echo "$FAKE_TUNNEL_CLIENT run --control-plane.poll-channel main --mcp.command command=$FAKE_REPO/.venv/bin/python -m agent_runtime.server,channel=main --health.listen-addr 127.0.0.1:8080"
   fi
   exit 0
 fi
-/bin/ps "$@"
+/bin/ps "${args[@]}"
 """,
         )
         self._write(
