@@ -1,0 +1,81 @@
+protocol_version: 3
+
+task_id: TASK-0158
+task_revision: 2
+review_revision: 1
+state: BLOCKED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0158/report-r1.yaml
+  commit: "0a34acb2d739d7b5bc9f09c42d255c7892ffdf67"
+  report_revision: 1
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+classification:
+  terminal: PRODUCT_DEFECT
+  blocker: SIGNED_INSTALLED_RUNTIME_MUTATES_AFTER_DURABLE_ACCEPTANCE
+
+architect_judgment:
+  executor_fault: false
+  report_lineage_valid: true
+  cutover_finalization_valid: true
+  connector_refresh_valid: true
+  durable_identity_semantics_valid: true
+  final_package_integrity_valid: false
+  acceptance_possible: false
+
+accepted_evidence:
+  - "Exact report commit 0a34acb2d739d7b5bc9f09c42d255c7892ffdf67 is the sole report-only child of TASK-0158 revision-2 task base 0ae2d28f471804964b5159b7013c0c7f5f6feb53."
+  - "Current connector independently exposes terminal_start.durability and Runtime 0.5.0 at revision 58027d5cebf1483f62d379ed05935c86da3a6f4a, Kernel 2, 21 known / 20 advertised / 20 available / 1 unavailable."
+  - "Independent retained lookup by start_identity 2d71473d275f42b180f9099c81d46003 resolves the same session 5e6578bede66dfa0 with durability=runtime_restart, lifecycle=COMPLETED, natural exit, exit_code=0 and deterministic stdout; no respawn is observed."
+  - "Independent capacity observation reports ceiling 6, active_heavy=0, active_sessions=0 and available_heavy=6."
+  - "Cutover transaction is absent and canonical Git state is synchronized and clean."
+
+blocking_evidence:
+  - "Independent installed-bundle doctor after the durable acceptance reports status=unhealthy: installed_package_identity is fail / INSTALLED_PACKAGE_INVALID while the other checks, including service_registration and cutover_identity, remain valid."
+  - "Independent /usr/bin/codesign --verify --deep --strict on ~/Applications/Agent Runtime.app fails with 'a sealed resource is missing or invalid'."
+  - "Verbose codesign identifies added .pyc resources inside the signed bundle."
+  - "Comparison of the accepted immutable candidate with the installed app shows 56 added __pycache__/*.pyc files and zero missing candidate files."
+  - "The accepted immutable candidate itself still passes strict deep codesign."
+  - "The added files include agent_runtime/__pycache__/durable_pipe_runner.cpython-313.pyc plus agent_runtime dependencies and third-party dependency bytecode."
+  - "Normal start.sh startup explicitly sets sys.dont_write_bytecode=True and PYTHONDONTWRITEBYTECODE=1, but the runtime_restart durable dispatch launches sys.executable -m agent_runtime.durable_pipe_runner through _minimal_child_env()."
+  - "_minimal_child_env() preserves only PATH, HOME, USER, TMPDIR, LANG and LC_*; it does not preserve or inject PYTHONDONTWRITEBYTECODE."
+  - "Therefore the durable runner interpreter writes bytecode into Contents/Resources/runtime inside the signed installed app. The TASK-0158 live acceptance effect itself is sufficient to invalidate the package seal."
+
+root_cause:
+  component: agent_runtime/session.py durable runtime_restart runner bootstrap
+  direct_path: "_dispatch_durable -> _minimal_child_env -> sys.executable -m agent_runtime.durable_pipe_runner"
+  missing_runtime_invariant: "Durable runner execution must not write Python bytecode into the signed installed application payload."
+  consequence: "A successful runtime_restart durable job can make the installed package fail codesign and doctor package-identity validation."
+
+decision:
+  task_0158_accepted: false
+  cleanup_installed_pycache_in_review: false
+  reinstall_in_review: false
+  rollback_in_review: false
+  next_authority_required: true
+  required_followup: >
+    Author a bounded corrective task that prevents durable runner bytecode writes
+    into the signed installed payload, proves the signed-app immutability
+    invariant under a real durable job, builds a new immutable corrected package,
+    and repairs/replaces the currently seal-invalid installed Runtime through an
+    independently carried transactional activation. Do not manually delete
+    installed pycache files as an untracked repair.
+
+repository_state_at_review:
+  report_head: "0a34acb2d739d7b5bc9f09c42d255c7892ffdf67"
+  report_parent: "0ae2d28f471804964b5159b7013c0c7f5f6feb53"
+  ahead_behind: "0/0"
+  worktree_index: CLEAN
+  remote_branches:
+    - main
+  open_prs: 0
+
+notes:
+  - "TASK-0158 r2 remains unaccepted despite successful cutover and connector/live-surface proof because its own durable acceptance invalidates the signed installed package."
+  - "No live remediation mutation was performed during independent review."
