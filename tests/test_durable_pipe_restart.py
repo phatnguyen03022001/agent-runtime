@@ -12,7 +12,12 @@ from unittest.mock import patch
 
 from agent_runtime import capacity, server
 from agent_runtime.capacity import HeavyExecutionAdmission
-from agent_runtime.durable_pipe import DurableStore, verify_process_identity
+from agent_runtime.durable_pipe import (
+    DurableSnapshot,
+    DurableStore,
+    durable_job_id,
+    verify_process_identity,
+)
 from agent_runtime.errors import RuntimeCapacityError, RuntimeStateError
 from agent_runtime.session import TerminalSessionManager
 from agent_runtime.tool_contract import EffectState, SafeNextAction
@@ -474,6 +479,75 @@ class DurablePipeRestartTests(unittest.TestCase):
         self.assertTrue(error.reconciliation_required)
         self.assertEqual(error.safe_next_action, SafeNextAction.RECONCILE)
         self.assertTrue(all(verify_process_identity(i) for i in self.process_identities[-2:]))
+
+    def test_finalization_race_reconciles_terminal_state_without_respawn(self) -> None:
+        identity = "6" * 32
+        manager, _admission = self.manager()
+        started = manager.start(
+            [sys.executable, "-u", "-c", "print('done', flush=True)"],
+            str(self.cwd),
+            identity,
+            "pipe",
+            "runtime_restart",
+        )
+
+        store = DurableStore(self.state_root)
+        job_id = durable_job_id(identity)
+        deadline = time.monotonic() + 3.0
+        terminal = None
+        while time.monotonic() < deadline:
+            snapshot = store.read_snapshot(str(job_id))
+            if snapshot.state["status"] == "exited":
+                terminal = snapshot
+                break
+            time.sleep(0.01)
+        self.assertIsNotNone(terminal)
+        assert terminal is not None
+        self.assertEqual(terminal.state["lifecycle"], "COMPLETED")
+        self.assertEqual(terminal.state["exit_code"], 0)
+
+        owner_deadline = time.monotonic() + 1.0
+        while time.monotonic() < owner_deadline and (
+            verify_process_identity(terminal.state["runner_identity"])
+            or verify_process_identity(terminal.state["process_identity"])
+        ):
+            time.sleep(0.01)
+        self.assertFalse(verify_process_identity(terminal.state["runner_identity"]))
+        self.assertFalse(verify_process_identity(terminal.state["process_identity"]))
+
+        stale_state = dict(terminal.state)
+        stale_state.update(
+            status="running",
+            lifecycle="RUNNING",
+            exit_code=None,
+            termination_reason=None,
+            completed_at_epoch=None,
+        )
+        stale = DurableSnapshot(state=stale_state, chunks=terminal.chunks)
+
+        with (
+            patch.object(
+                manager._durable_store,
+                "read_snapshot",
+                side_effect=[stale, terminal, terminal],
+            ) as read_snapshot,
+            patch("agent_runtime.session.subprocess.Popen") as popen,
+        ):
+            by_identity = manager.poll(start_identity=identity, cursor=0, wait_ms=0)
+            by_session = manager.poll(
+                session_id=str(started["session_id"]),
+                cursor=0,
+                wait_ms=0,
+            )
+
+        self.assertEqual(by_identity["session_id"], started["session_id"])
+        self.assertEqual(by_session["session_id"], started["session_id"])
+        self.assertEqual(by_identity["status"], "exited")
+        self.assertEqual(by_session["status"], "exited")
+        self.assertEqual(by_identity["exit_code"], 0)
+        self.assertEqual(by_session["exit_code"], 0)
+        self.assertEqual(read_snapshot.call_count, 3)
+        popen.assert_not_called()
 
     def test_runner_disappearance_is_owner_lost_without_respawn_or_signal(self) -> None:
         identity = "4" * 32

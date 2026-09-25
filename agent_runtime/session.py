@@ -506,21 +506,18 @@ class TerminalSessionManager:
             )
         previous_status = session.status
         if snapshot.state["status"] in {"starting", "running"} and not self._snapshot_owner_valid(snapshot):
-            runner_live = verify_process_identity(snapshot.state["runner_identity"])
-            process_live = verify_process_identity(snapshot.state["process_identity"])
-            if runner_live and not process_live:
-                transition_deadline = (
-                    time.monotonic() + _DURABLE_FINALIZATION_GRACE_SECONDS
-                )
-                while time.monotonic() < transition_deadline:
-                    time.sleep(0.02)
-                    try:
-                        candidate = self._durable_store.read_snapshot(job_id)
-                    except DurableStateCorrupt:
-                        continue
-                    snapshot = candidate
-                    if snapshot.state["status"] == "exited" or self._snapshot_owner_valid(snapshot):
-                        break
+            transition_deadline = (
+                time.monotonic() + _DURABLE_FINALIZATION_GRACE_SECONDS
+            )
+            while time.monotonic() < transition_deadline:
+                time.sleep(0.02)
+                try:
+                    candidate = self._durable_store.read_snapshot(job_id)
+                except DurableStateCorrupt:
+                    continue
+                snapshot = candidate
+                if snapshot.state["status"] == "exited" or self._snapshot_owner_valid(snapshot):
+                    break
             if snapshot.state["status"] in {"starting", "running"} and not self._snapshot_owner_valid(snapshot):
                 session.durable_fault_reason = "DURABLE_OWNER_LOST"
                 self._raise_durable_unknown(
