@@ -1,0 +1,302 @@
+protocol_version: 3
+
+task_id: TASK-0161
+task_revision: 1
+state: APPROVED
+title: "Runtime 0.5.0 Seal-Invalid Installed Generation Transactional Replacement"
+
+origin:
+  type: architect_live_repair_activation
+  predecessor_task: TASK-0160
+  predecessor_review: "a85702d4d66e1d595fb9b47d346039a10c0e6f72"
+  reason: >
+    TASK-0158 live durable acceptance exposed a signed-bundle bytecode mutation defect.
+    TASK-0159 corrected durable-runner bytecode behavior and TASK-0160 admitted the
+    exact currently installed 58027d5... split-v1 predecessor and resealed one
+    accepted replacement package. The installed generation remains operational but
+    seal-invalid and now requires bounded transactional replacement.
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+  canonical_branch: main
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+accepted_replacement_authority:
+  runtime_version: "0.5.0"
+  source_revision: "b0c7a0ae29dc66079cea3760828e00b86ab921e4"
+  source_tree: "025ce0ba4b3e14c30564d98f152aec0cf9b65471"
+  package_sha256: "713ffe9b4b612909f606fd9622b74cb40c0c9bbfa6ea89af8615f44e2461bf55"
+  handoff_sha256: "5b2d39848d7e42f3bdff9b41bcd3dfcba87b7403afca057ea3c92839dd2dc114"
+  record_count: 1714
+  strict_codesign: PASS
+  pinned_provenance: PASS
+  bytecode_entries: 0
+  tool_contract_kernel_version: 2
+  known_capabilities: 21
+  advertised_tools: 20
+
+known_installed_predecessor:
+  runtime_version: "0.5.0"
+  runtime_revision: "58027d5cebf1483f62d379ed05935c86da3a6f4a"
+  runtime_tree: "230f73f976e01aadb69bd4e220147fefc31d03b7"
+  predecessor_service_contract: split-v1
+  service_management: "enabled/enabled"
+  healthz: live
+  readyz: ready
+  transaction_present: false
+  strict_codesign: FAIL
+  doctor:
+    overall_status: unhealthy
+    exact_check_count: 10
+    pass_count: 9
+    warn_count: 0
+    fail_count: 1
+    sole_failure_id: installed_package_identity
+    sole_failure_reason: INSTALLED_PACKAGE_INVALID
+  accepted_defect: >
+    This sole package-integrity failure is the exact known TASK-0158 bytecode
+    seal drift. Any additional warning/failure or identity drift blocks repair.
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  consequence_bearing_carrier: SENTINELX
+  activation_host: mac-tphat-mb
+  forbidden_activation_carrier:
+    - AGENT_RUNTIME
+
+objective: >
+  Replace the exact seal-invalid installed Runtime 0.5.0 generation with the exact
+  accepted TASK-0160 Runtime 0.5.0 package through one transactional install and
+  one commit-cutover, both carried independently by SentinelX. Then prove the new
+  installed generation is strict-codesign-valid, healthy 10/10, exposes the exact
+  expected live MCP surface, survives one real durable keyed pipe effect without
+  creating bytecode inside the signed bundle, and close with a report only.
+
+absolute_freeze:
+  - "Do not modify product source, tests, docs, dependencies, verification policy, package scripts or task predecessors."
+  - "Do not run focused tests, candidate verification or qualification."
+  - "Do not rebuild, sign or reseal any package."
+  - "Do not mutate or overwrite accepted package 713ffe9b...."
+  - "Do not manually delete pycache/pyc from the installed predecessor as a repair."
+  - "Do not enable telemetry."
+  - "Do not implement MCP Tasks/GAP-12."
+
+executor_survival_protocol:
+  - "Treat install-prebuilt and commit-cutover as independent consequence-bearing effects carried only by SentinelX."
+  - "Exactly one install-prebuilt invocation is authorized in TASK-0161."
+  - "Exactly one commit-cutover invocation is authorized after an exact coherent PENDING gate."
+  - "Record SentinelX job/result identity immediately for each consequence-bearing invocation when available."
+  - "Poll healthy background work no more frequently than every 20 seconds."
+  - "Unknown outcome requires SentinelX job reconciliation plus transaction/installed-identity inspection before any conclusion."
+  - "Never blind retry install-prebuilt or commit-cutover."
+  - "If an install result is ambiguous but exact APP_SWAPPED/PENDING candidate state exists, treat install authority as consumed and continue from durable transaction state."
+  - "If commit result is ambiguous but transaction is absent and exact new installed identity plus healthy doctor are proven, treat commit as terminal success rather than retrying."
+  - "Do not terminate unrelated pre-existing host processes."
+
+pre_install_gate:
+  require:
+    - "Fresh Git state equals exact TASK-0161 base, branch main, worktree/index clean, remote branches={main}, open PRs=0."
+    - "SentinelX host mac-tphat-mb operational and ping PASS."
+    - "Accepted candidate path exists under build/candidates/713ffe9b... with exact app/handoff bytes."
+    - "Handoff SHA-256 exactly 5b2d3984...."
+    - "Canonical validate-candidate binds package 713ffe9b..., source revision b0c7a0ae..., source tree 025ce0ba..., record_count=1714."
+    - "Candidate strict deep codesign PASS and zero __pycache__/pyc entries."
+    - "Installed predecessor remains Runtime 0.5.0 revision 58027d5... tree 230f73f9...."
+    - "Installed predecessor transaction remains absent."
+    - "ServiceManagement remains enabled/enabled; healthz=live; readyz=ready."
+    - "Installed doctor is exactly unhealthy with 10 checks: 9 pass, 0 warn, 1 fail; sole fail installed_package_identity / INSTALLED_PACKAGE_INVALID."
+    - "No other installed doctor warning/failure is present."
+  failure_policy: >
+    Any candidate drift, predecessor identity drift, transaction presence,
+    ServiceManagement/health degradation or extra doctor warning/failure blocks
+    the install. Do not infer or repair around the mismatch.
+
+install_prebuilt:
+  authority: "Exactly one TASK-0161 install-prebuilt invocation."
+  carrier: SENTINELX
+  working_directory: "/Users/tienphat/Developer/agent-runtime"
+  command: >
+    ./install.sh --install-prebuilt
+    "build/candidates/713ffe9b4b612909f606fd9622b74cb40c0c9bbfa6ea89af8615f44e2461bf55/Agent Runtime.app"
+    "build/candidates/713ffe9b4b612909f606fd9622b74cb40c0c9bbfa6ea89af8615f44e2461bf55/Agent Runtime.candidate.json"
+    --expected-candidate-sha256 713ffe9b4b612909f606fd9622b74cb40c0c9bbfa6ea89af8615f44e2461bf55
+    --expected-handoff-sha256 5b2d39848d7e42f3bdff9b41bcd3dfcba87b7403afca057ea3c92839dd2dc114
+  expected_terminal_effect:
+    transaction_schema: 5
+    transaction_status: PENDING
+    transaction_phase: APP_SWAPPED
+    predecessor_service_contract: split-v1
+    installed_runtime_version: "0.5.0"
+    installed_revision: "b0c7a0ae29dc66079cea3760828e00b86ab921e4"
+    installed_tree: "025ce0ba4b3e14c30564d98f152aec0cf9b65471"
+  retry_policy: >
+    No second install-prebuilt is authorized. If result is unknown, inspect the
+    SentinelX job plus transaction and installed identity. Exact candidate
+    APP_SWAPPED/PENDING means the install effect succeeded and authority is consumed.
+
+pending_gate:
+  require:
+    - "Transaction schema=5, status=PENDING, phase=APP_SWAPPED."
+    - "Transaction binds exact candidate 713ffe9b..., handoff 5b2d3984..., source b0c7a0ae..., tree 025ce0ba..., record_count=1714."
+    - "predecessor_service_contract=split-v1."
+    - "Installed app is exact Runtime 0.5.0 revision b0c7a0ae... tree 025ce0ba...."
+    - "Installed candidate strict deep codesign PASS and canonical provenance PASS."
+    - "Installed bundle contains zero __pycache__ directories and zero *.pyc files."
+    - "ServiceManagement enabled/enabled."
+    - "healthz=live and readyz=ready."
+    - "Installed doctor overall status=degraded with exactly 10 checks: 9 pass, 1 warn, 0 fail."
+    - "The sole warning is cutover_identity / CUTOVER_TRANSACTION_PRESENT with evidence transaction_present=true, schema=5, status=PENDING, phase=APP_SWAPPED."
+  rule: >
+    The pending doctor may be degraded only for the exact recognized transaction
+    warning above. Any other warning or any failure blocks commit.
+
+commit_cutover:
+  authority: "Exactly one TASK-0161 commit-cutover invocation after pending_gate PASS."
+  carrier: SENTINELX
+  working_directory: "/Users/tienphat/Developer/agent-runtime"
+  command: "./install.sh --commit-cutover"
+  retry_policy: >
+    No second commit-cutover is authorized. Unknown result must be reconciled
+    against SentinelX job state, transaction absence and exact installed identity.
+
+post_commit_host_gate:
+  require:
+    - "Transaction absent."
+    - "Installed Runtime 0.5.0 revision exactly b0c7a0ae29dc66079cea3760828e00b86ab921e4."
+    - "Installed tree exactly 025ce0ba4b3e14c30564d98f152aec0cf9b65471."
+    - "Canonical installed package provenance binds exact accepted package/source."
+    - "Strict deep codesign PASS."
+    - "Zero __pycache__ directories and zero *.pyc files inside installed Agent Runtime.app."
+    - "ServiceManagement enabled/enabled."
+    - "healthz=live and readyz=ready."
+    - "Installed clean-environment doctor status=healthy with exactly 10/10 PASS and zero warn/fail."
+
+live_acceptance:
+  connector_transition:
+    reconnect_maximum: 1
+    rule: >
+      Use the existing connection if it freshly resolves the new Runtime revision.
+      If connector state is stale/unavailable after finalized healthy host proof,
+      one plugin/MCP reconnect is authorized. Do not restart Runtime merely to
+      refresh ChatGPT connector state.
+    fallback: >
+      If UI/plugin transition is required and cannot be completed in-chat, stop
+      OPERATOR_TRANSITION_REQUIRED with finalized host evidence. Do not reinstall
+      or recommit cutover.
+  pre_effect_checks:
+    - "runtime_capabilities reports Runtime 0.5.0, runtime_revision b0c7a0ae..., Kernel 2, 21 known / 20 advertised / 20 available / 1 unavailable."
+    - "tools/list exposes exactly 20 advertised tools."
+    - "screen_capture remains supported=true, available=false, advertised=false, reason=VISUAL_PERCEPTION_BLOCKED."
+    - "terminal_start request/result schema 4/4 and connector-exposed request includes durability."
+    - "terminal_poll request/result schema 4/4."
+    - "capacity_observer coherent with no unexpected active session pressure before acceptance."
+  durable_effect:
+    count: 1
+    requirements:
+      - "Run exactly one short deterministic mode=pipe durability=runtime_restart job with a caller-known fresh 32-hex start_identity."
+      - "Use bounded output and no intentional Runtime restart."
+      - "Poll to natural terminal success with exit_code=0."
+      - "Retained lookup/poll by the same start_identity must resolve the same session and must not respawn a second effect."
+  post_effect_integrity_gate:
+    require:
+      - "Installed Agent Runtime.app still has zero __pycache__ directories and zero *.pyc files."
+      - "Strict deep codesign still PASS after the real durable effect."
+      - "Installed canonical package provenance still PASS and remains bound to source b0c7a0ae... / tree 025ce0ba...."
+      - "Installed doctor remains healthy 10/10 with zero warn/fail after the durable effect."
+      - "Transaction remains absent, ServiceManagement enabled/enabled, healthz=live, readyz=ready."
+    failure_policy: >
+      If the live durable effect mutates the signed payload, breaks codesign,
+      degrades doctor or changes package identity, stop BLOCKED. Do not clean
+      generated files or reinstall to hide the failure.
+
+telemetry_boundary:
+  - "Keep telemetry default-off throughout TASK-0161."
+  - "Do not set AGENT_RUNTIME_TELEMETRY=otlp."
+  - "Do not configure Collector, Prometheus or Grafana."
+
+report_lifecycle:
+  - "Only after post_commit_host_gate and live_acceptance including post_effect_integrity_gate PASS create .agent/tasks/TASK-0161/report-r1.yaml."
+  - "The report is the sole tracked mutation after TASK-0161 task-authoring commit."
+  - "Validate the report with pinned agent-skills authority."
+  - "Publish report non-force."
+  - "Final reconcile HEAD=origin/main=remote main, ahead/behind=0/0, clean worktree/index, branches={main}, open PRs=0."
+  - "Stop NEEDS_REVIEW."
+
+report_requirements:
+  - "exact pre-install seal-invalid predecessor identity and sole doctor failure"
+  - "accepted package/source/tree/handoff/record_count and pre-install candidate integrity"
+  - "SentinelX install invocation count exactly 1 and job/result evidence when available"
+  - "exact APP_SWAPPED/PENDING transaction and split-v1 predecessor contract"
+  - "pending doctor 9 PASS + sole cutover_identity warning + 0 FAIL"
+  - "SentinelX commit-cutover invocation count exactly 1 and job/result evidence when available"
+  - "post-commit transaction absence and exact new installed identity"
+  - "post-commit strict codesign PASS, zero bytecode entries and doctor healthy 10/10"
+  - "connector reconnect count 0 or 1"
+  - "fresh live capability/tools/schema/capacity evidence"
+  - "exactly one live durable keyed pipe effect and same-identity retained lookup without respawn"
+  - "post-durable zero bytecode, strict codesign PASS, provenance PASS and doctor healthy 10/10"
+  - "zero source verification, zero package rebuild/reseal and telemetry remained off"
+  - "report-only non-force publication and final canonical reconciliation"
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact known seal-invalid predecessor is replaced without manual cleanup or source/package rebuild."
+    evidence_required: "Pre-install identity/doctor gate plus exactly one install-prebuilt invocation using exact accepted package."
+  - id: AC-2
+    requirement: "Transactional install reaches one coherent exact APP_SWAPPED/PENDING state through split-v1 predecessor compatibility."
+    evidence_required: "Schema-5 transaction, exact candidate identity, valid candidate package and corrected pending-doctor semantics."
+  - id: AC-3
+    requirement: "Exact pending transaction is committed exactly once."
+    evidence_required: "Single SentinelX commit-cutover plus transaction absence and exact installed replacement identity."
+  - id: AC-4
+    requirement: "Final installed replacement is package-integrity healthy before live acceptance."
+    evidence_required: "Strict codesign PASS, provenance PASS, zero pycache/pyc, health/readiness and doctor healthy 10/10."
+  - id: AC-5
+    requirement: "One real live durable effect proves the TASK-0159 bytecode fix survives installed execution."
+    evidence_required: "One keyed runtime_restart effect, same-session retained lookup, no respawn, post-effect zero bytecode/codesign/provenance/doctor PASS."
+  - id: AC-6
+    requirement: "Public Runtime surface remains exact and telemetry remains off."
+    evidence_required: "Runtime 0.5.0 revision b0c7a0ae..., Kernel 2, 21/20/20/1 capability counts, exact tools/schema/screen state, telemetry off."
+  - id: AC-7
+    requirement: "Canonical report closure is exact."
+    evidence_required: "Report-only child, pinned validation, non-force publication and final clean main-only zero-PR state."
+
+forbidden:
+  - "Any second install-prebuilt invocation."
+  - "Any second commit-cutover invocation."
+  - "Any blind retry after unknown outcome."
+  - "Any source/test/doc/dependency/verification mutation."
+  - "Any focused/candidate/qualification source verification replay."
+  - "Any package rebuild/reseal/sign operation."
+  - "Any manual deletion of installed pycache/pyc drift as repair."
+  - "Any use of Agent Runtime as install/commit carrier."
+  - "Any rollback/recover/resume unless a new unexpected transaction state independently requires Architect review."
+  - "Any intentional Runtime restart solely for durable proof or connector refresh."
+  - "Any telemetry enablement."
+  - "Any branch, PR, force push, amend, squash, tag or release publication."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  install_exact_candidate_once: true
+  commit_cutover_once: true
+  rebuild_candidate: false
+  enable_telemetry: false
+
+blocking_decisions: []
+execution_ready: true
