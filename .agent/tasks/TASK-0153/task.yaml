@@ -1,0 +1,267 @@
+protocol_version: 3
+
+task_id: TASK-0153
+task_revision: 1
+state: APPROVED
+title: "Durable Pipe Jobs / Cross-Restart Survival"
+
+origin:
+  type: explicit_operator_authority
+  task_id: TASK-0153
+  gap_id: GAP-13
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+  canonical_branch: main
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - security-review
+  - verification
+  - simplicity
+  - observability
+
+execution_skills:
+  required:
+    - executor
+    - verification
+    - reliability
+    - security-review
+  recommended:
+    - simplicity
+    - observability
+    - reuse-first
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  preferred_transport: AGENT_RUNTIME
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0152/review.yaml at a287eb5ea2a9ec86fe88309ab333a5d0b9ef258d"
+    role: "accepted source baseline: Runtime 0.4.0 / Kernel 2 / telemetry foundation / twenty advertised tools / twenty-one known capabilities"
+    precedence: 1
+  - source: "Accepted GAP-13 research"
+    role: "restart durability requires an owner outside the Runtime process; narrow noninteractive pipe jobs are the first authorized target; durable metadata alone is insufficient"
+    precedence: 2
+  - source: "Current terminal_start/terminal_poll shared keyed execution lifecycle"
+    role: "preserve caller-known start_identity, reserve-before-effect, bounded output, hard wall, retention, Receipt/lost-ACK semantics and process-group cleanup"
+    precedence: 3
+  - source: "Current HeavyExecutionAdmission and capacity_observer v2"
+    role: "single heavy ceiling must remain truthful across Runtime restart and recovered durable jobs"
+    precedence: 4
+  - source: "Existing bounded timing/optional telemetry substrate"
+    role: "measure durable lifecycle/recovery without adding a second observability pipeline"
+    precedence: 5
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing terminal session manager plus one per-job external runner and one bounded durable-state owner"
+  rationale: "Do not add a generic daemon, tmux dependency, third ServiceManagement job or durable PTY architecture. A per-job detached runner is the smallest external owner that can retain pipe FDs/output and hard-wall control when the MCP Runtime process disappears. Runtime reattaches through bounded local state."
+
+objective: "Close GAP-13 for noninteractive keyed pipe jobs only by adding an opt-in runtime_restart durability mode whose external per-job runner survives MCP Runtime process restart, preserves bounded output/state and caller-known recovery identity, restores admission accounting on reattach, and fails closed on stale/ambiguous ownership without changing PTY or terminal_exec semantics."
+
+scope:
+  required_changes:
+    - "Extend terminal_start with durability='process'|'runtime_restart', default 'process'. Increment terminal_start request schema 3->4. runtime_restart is valid only when mode='pipe' and start_identity is present. PTY + runtime_restart is INVALID_ARGUMENT."
+    - "Add durability to TerminalSessionResult and increment terminal_start result schema 3->4 and terminal_poll result schema 3->4. terminal_poll request remains 4. Existing process-local PTY/pipe calls return durability='process'; recovered durable pipe jobs return durability='runtime_restart'."
+    - "terminal_exec remains request/result 2/2 and process-local. Do not make a synchronous MCP request cross-restart durable. terminal_control remains 1/1 and terminal_resize 1/1."
+    - "Do not add an MCP tool. Known capabilities remain 21 and advertised tools remain 20. ToolContract Kernel remains 2 and Runtime source version remains 0.4.0."
+    - "Implement one narrow durable pipe runner as an external process owner. It is launched detached from the MCP Runtime process with shell=false, stdin=/dev/null, no network authority, an isolated process group/session and the same minimal child environment/protected-runtime command filtering as accepted pipe execution."
+    - "Do not pass user argv/cwd/content on the runner command line. Runtime reserves one secure per-job directory under ~/Library/Application Support/Agent Runtime/durable-jobs, mode 0700 root and 0700 job directory, writes a transient 0600 no-follow specification, then launches the runner using only opaque bounded identifiers/fixed state-root authority. Runner reads/validates the spec, dispatches the target, then removes the raw spec after durable dispatch state is established."
+    - "Persist only the minimum durable recovery state after dispatch: state schema version, session_id, start_identity, exact canonical execution-spec digest, durability/mode, lifecycle/status, runner/process ownership identity, hard-wall deadline, output-journal state/cursors, dropped-output count, exit code/termination reason when known, created/completed timestamps and integrity/version fields. Do not persist environment, stdout/stderr outside the bounded journal, exception text, telemetry IDs or secrets."
+    - "The execution-spec digest must bind normalized cwd, exact argv, mode='pipe', durability='runtime_restart', entry surface and hard-wall semantics. Repeating terminal_start with the same start_identity and identical spec joins the exact existing durable job before effect; a different spec returns START_IDENTITY_CONFLICT and never launches another process."
+    - "Use atomic write+rename/fsync semantics for durable state transitions and O_NOFOLLOW/lstat/fstat-style checks so state/spec/journal paths cannot be redirected through symlinks. Reject malformed ownership, modes, file types, schema versions or partial/corrupt records fail-closed."
+    - "The per-job runner owns target stdout/stderr for the whole process lifetime and drains both independently of MCP Runtime lifetime. Preserve the accepted bounded pipe semantics: ordered stream-labelled chunks, total retained-output hard bound, truthful dropped_output_bytes/cursor_expired behavior, UTF-8 replacement semantics, and continued draining after retention cap so the child cannot block on full pipes."
+    - "Runner independently enforces the existing one-hour running hard wall and bounded TERM->KILL process-group cleanup even while no Runtime server exists. A Runtime restart must never reset the job hard-wall deadline."
+    - "Runner records final exit_code and exact accepted termination_reason when known, atomically finalizes state, closes journal and exits. Completed durable state remains recoverable for the existing completed retention period; Runtime opportunistically enforces existing completed-retention/max-retained bounds. No completed runner process is kept sleeping solely for retention."
+    - "Implement Darwin process-instance verification for durable ownership that is stronger than PID existence: at minimum pid + process-group id + process start seconds/microseconds + executable identity, using bounded native process inspection rather than an unbounded /bin/ps hot path. PID reuse or identity mismatch is never treated as ownership."
+    - "Runtime startup/first terminal-manager construction scans only the bounded durable-jobs root, validates at most a fixed small ceiling consistent with existing session capacity, and reconstructs live durable proxy sessions only for positively verified runner ownership. No arbitrary filesystem scan."
+    - "Recovered running durable jobs consume the same HeavyExecutionAdmission ceiling and active-session ceiling as ordinary Runtime jobs. Reacquire one process-local HeavyExecutionLease per positively recovered live durable job before admitting new heavy work. capacity_observer active_heavy/active_sessions/available_heavy must therefore remain truthful after Runtime restart."
+    - "If the number of positively recovered live jobs exceeds configured heavy/session capacity, Runtime readiness for terminal execution must fail closed rather than silently overcommit or kill jobs. Observation/doctor must surface a stable reason; no automatic destructive reconciliation."
+    - "The terminal session reaper must release recovered/current heavy leases exactly once when durable state becomes terminal or is positively removed. Restart/recovery must never underflow/double-release HeavyExecutionAdmission."
+    - "terminal_poll must resolve durable jobs by either session_id or start_identity after Runtime restart and preserve cursor/output/status semantics. wait_ms/wait_for remain bounded; implement durable wait by bounded local state/journal observation, never unbounded filesystem polling or busy-spin."
+    - "terminal_control for a running durable pipe job supports existing interrupt/terminate semantics only. pipe write remains rejected and resize remains PTY-only. Before signaling, revalidate exact runner/process ownership; ambiguity returns structured UNKNOWN/reconciliation_required and sends no signal."
+    - "shutdown_terminal_sessions / normal MCP server shutdown must terminate process-local sessions exactly as today but leave runtime_restart durable jobs running. This is the intended ownership boundary. Product uninstall/cutover remains separately authoritative and is not modified in TASK-0153."
+    - "A clean Runtime process restart while a durable job runs must reattach without duplicate spawn, output loss within the retained bound, cursor reset, hard-wall reset or capacity-accounting loss."
+    - "An abrupt Runtime process kill while a durable job runs must have the same recovery semantics as a clean Runtime restart."
+    - "Host reboot survival is NOT claimed. After host reboot or external runner loss, a durable record whose owner cannot be positively revalidated returns structured DURABLE_OWNER_LOST / effect_state=unknown / reconciliation_required=true. Do not invent exit_code, auto-respawn, or reuse the same start_identity for a new effect."
+    - "A malformed/partial durable record returns structured DURABLE_STATE_CORRUPT / effect_state=unknown / reconciliation_required=true. Do not delete it and do not launch a replacement under the same identity automatically."
+    - "Stale completed records beyond retention may be removed only after their terminal state is fully readable and no owner is live. Stale ambiguous/running records are never silently deleted."
+    - "Add bounded durable lifecycle timing/telemetry integration by reusing existing timing events. process_kind may add durable_pipe as a fixed enum if needed. Do not add payload/high-cardinality telemetry and do not require telemetry to be enabled for durability."
+    - "Add restart-chaos integration tests with real subprocesses under temporary state roots: Runtime manager A starts a durable pipe job; manager A is destroyed/restarted while runner stays alive; manager B reattaches by start_identity/session_id; output emitted before and after restart is observed exactly within bounds; final exit is recovered."
+    - "Add lost-ACK test: dispatch occurs, caller receives no start result, a fresh manager repeats the identical start_identity/spec and joins one runner/process only."
+    - "Add tests for different-spec identity conflict, hard-wall across restart, terminate after restart, completed-result recovery, cursor continuation after restart, capacity recovery, PID-reuse identity mismatch, runner disappearance, corrupt/partial state, symlink/state permission attacks, output truncation and cleanup/retention."
+    - "Do not package/install/restart the installed product or perform a live cutover in TASK-0153. Restart-chaos proof occurs in isolated source test harnesses. Installed Runtime remains activation cf6aba7e9ca22bf5f0c1202ed7b6ac40433053b0 until later convergence."
+    - "Do not implement MCP Tasks in TASK-0153. GAP-12 remains for TASK-0154 admission/adapter after durable pipe semantics are accepted."
+    - "After focused PASS, commit one coherent implementation candidate, run canonical ./verify on that exact clean candidate, fresh-reconcile remote main, publish exact verified candidate non-force, publish report-r1.yaml as sole report-only child, and stop NEEDS_REVIEW."
+
+  allowed_existing_files_or_components:
+    - "agent_runtime/session.py"
+    - "agent_runtime/contracts.py"
+    - "agent_runtime/server.py"
+    - "agent_runtime/capacity.py"
+    - "agent_runtime/timing.py"
+    - "agent_runtime/telemetry.py only for fixed durable_pipe enum/lifecycle observation"
+    - "agent_runtime/errors.py only for direct structured durable-state error projection if required"
+    - "agent_runtime/tool_contract.py only for direct reason/effect compatibility if required"
+    - "new agent_runtime/durable_pipe.py"
+    - "new agent_runtime/durable_pipe_runner.py"
+    - "directly affected terminal/capacity/timing/telemetry/schema/doctor tests"
+    - "new tests/test_durable_pipe.py"
+    - "new tests/test_durable_pipe_restart.py"
+    - "README.md and directly affected execution/recovery docs"
+    - ".agent/tasks/TASK-0153/report-r1.yaml"
+
+structure_policy:
+  expected_new_files:
+    - "agent_runtime/durable_pipe.py"
+    - "agent_runtime/durable_pipe_runner.py"
+    - "tests/test_durable_pipe.py"
+    - "tests/test_durable_pipe_restart.py"
+    - ".agent/tasks/TASK-0153/report-r1.yaml"
+  unlisted_new_files:
+    allowed: true
+    max: 1
+    within:
+      - "tests"
+    purpose: "At most one directly coupled chaos/security test owner if existing files become disproportionate."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+invariants:
+  - "Runtime source remains 0.4.0 and ToolContract Kernel remains 2."
+  - "Known capabilities remain 21 and advertised tools remain 20."
+  - "terminal_exec remains 2/2 and process-local."
+  - "PTY semantics remain process-local and unchanged; no PTY reattachment is claimed."
+  - "Only terminal_start pipe mode may opt into runtime_restart durability."
+  - "Caller-known start_identity remains the pre-effect/lost-ACK authority; no server-generated-only identity can create a durable effect."
+  - "HeavyExecutionAdmission remains the single Runtime heavy ceiling and recovered durable jobs count against it."
+  - "Existing hard wall, output bounds, completed retention and max-session ceilings are not increased."
+  - "No arbitrary shell, network, launchd/ServiceManagement mutation or new privileged helper."
+  - "No user command/content is placed on runner argv."
+  - "No host-reboot durability claim; lost owner is explicit unknown effect, never guessed completion."
+  - "Optional telemetry remains fail-open and privacy-bounded."
+  - "No MCP Tasks, telemetry backend, package activation or later cutover."
+
+forbidden_changes:
+  - "Any generic job daemon, new launchd/ServiceManagement service, tmux dependency or external database."
+  - "Any durable PTY/stdin-write/resize architecture."
+  - "Any automatic respawn after ambiguous runner ownership or host reboot."
+  - "Any PID-only ownership check or signal without exact process-instance revalidation."
+  - "Any unbounded state directory scan, output file, polling loop or metadata growth."
+  - "Any command/cwd/argv/user output in telemetry."
+  - "Any public tool addition or removal."
+  - "Any Runtime version/Kernel bump, install/restart/cutover/plugin reload."
+  - "Any MCP Tasks implementation."
+  - "Any branch/PR/force push/amend/squash/tag/release."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: revised_contract_required
+  spec_change: revised_contract_required
+  dependency_change: forbidden
+  public_contract_change: allowed_only_for_terminal_start_and_terminal_poll_schema_evolution_described_here
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Opt-in durable pipe execution survives MCP Runtime process restart without duplicate effect."
+    evidence_required: "Real subprocess chaos proves one runtime_restart pipe job continues while manager/runtime A disappears, manager/runtime B reattaches by caller-known identity, same session identity is preserved and one target process only exists."
+  - id: AC-2
+    requirement: "Durable output/state semantics remain bounded and truthful across restart."
+    evidence_required: "Before/after-restart output, stream ordering, cursor continuation, truncation/dropped bytes, exit code/termination reason and completed retention tests match accepted pipe semantics; runner independently enforces hard wall."
+  - id: AC-3
+    requirement: "Ownership/recovery fails closed under ambiguity."
+    evidence_required: "Native process-instance verification rejects PID reuse/mismatch; runner disappearance, corrupt/partial state and symlink/permission attacks return structured reconciliation-required failures with no signal, respawn or duplicate launch."
+  - id: AC-4
+    requirement: "Capacity/session accounting remains coherent across restart."
+    evidence_required: "Recovered live durable jobs reacquire exactly one heavy lease each and count as active sessions; new work respects the same ceilings; completion releases once; over-capacity recovery fails closed; capacity_observer remains truthful."
+  - id: AC-5
+    requirement: "Process-local compatibility remains intact."
+    evidence_required: "PTY, normal pipe and terminal_exec regression suites preserve prior behavior; default durability=process; terminal_exec 2/2; no PTY durability; no new tools; source inventory remains 21 known/20 advertised."
+  - id: AC-6
+    requirement: "Exact candidate is canonically verified and published without installed activation."
+    evidence_required: "Focused chaos/security/schema/regression PASS, git diff --check, canonical ./verify PASS on exact candidate, source Runtime 0.4.0/Kernel2 unchanged, report-only child, installed Runtime unchanged, NEEDS_REVIEW."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Fresh-resolve canonical main at exact task-authoring base. Require branches={main}, open PRs=0, ahead/behind=0/0, clean worktree/index, accepted TASK-0152 review and installed Runtime 0.4.0 at cf6aba7e... with no pending cutover."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Fresh-inspect terminal session/admission/protection/timing contracts. Require terminal_start 3/3, terminal_poll 4/3, no durable_pipe modules/state root and existing process-local hard-wall/output/retention bounds before implementation."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Implement the narrow per-job durable runner/state path and schema evolution. Run focused lost-ACK/restart/capacity/output/ownership/security/telemetry/process-local compatibility tests."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Run real subprocess restart-chaos in temporary roots, including manager/runtime replacement while a durable job emits output before and after restart. Require deterministic cleanup of all test process groups/state."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Commit one coherent source candidate after focused PASS; require clean candidate, git diff --check, exact SHA/tree, Runtime 0.4.0/Kernel2/21-known/20-advertised and no MCP Tasks/package activation surface."
+      required: true
+    - id: CHECK-6
+      command_or_check: "Run canonical ./verify on exact clean candidate through a recoverable carrier. Any source/test/doc write afterward requires a new candidate and full re-verification."
+      required: true
+    - id: CHECK-7
+      command_or_check: "Fresh-resolve remote main, require it still equals task base, publish exact verified candidate non-force, create/validate/publish report-r1.yaml as sole report-only child, fresh-reconcile final clean main and stop NEEDS_REVIEW."
+      required: true
+
+authoritative_verification:
+  required: true
+  mechanism: "Real subprocess restart-chaos + focused ownership/capacity/output/security/schema regressions + canonical ./verify on exact source candidate"
+  expected_signal: "runtime_restart pipe job survives Runtime process restart with one effect, bounded recoverable output, exact ownership and restored admission accounting; process-local modes unchanged."
+
+report_requirements:
+  path: .agent/tasks/TASK-0153/report-r1.yaml
+  record:
+    - "state=REPORTED and result=NEEDS_REVIEW"
+    - "exact task/base/candidate/tree/report lineage"
+    - "terminal_start request/result 4/4 and terminal_poll request/result 4/4; unchanged terminal_exec/control/resize schemas"
+    - "durability process|runtime_restart contract and pipe-only restriction"
+    - "durable state root/file modes/no-follow/atomic-state/spec-digest proof"
+    - "runner command-line privacy and transient raw-spec deletion proof"
+    - "process-instance identity fields and PID-reuse rejection proof"
+    - "hard-wall/output-journal/cursor/dropped-output/completion retention proof"
+    - "clean + abrupt Runtime restart reattachment proof"
+    - "lost-ACK one-effect proof and different-spec conflict"
+    - "recovered HeavyExecutionAdmission/session accounting and capacity_observer proof"
+    - "runner loss/host reboot/corrupt state structured unknown-effect proof"
+    - "PTY/normal pipe/terminal_exec compatibility proof"
+    - "focused restart-chaos/security tests and canonical exact-candidate verification"
+    - "Runtime 0.4.0 / Kernel2 / 21 known / 20 advertised unchanged"
+    - "installed Runtime unchanged; no package/install/restart/cutover"
+    - "GAP-12 MCP Tasks remains deferred to TASK-0154"
+    - "candidate publication and sole report-only child reconciliation"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
