@@ -127,6 +127,7 @@ doctor_env = {
 for key in ("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS", "AGENT_RUNTIME_MAX_PARALLELISM"):
     if key in values:
         doctor_env[key] = values[key]
+doctor_env["AGENT_RUNTIME_TELEMETRY"] = values.get("AGENT_RUNTIME_TELEMETRY", "off")
 for key in ("USER", "TMPDIR", "LANG"):
     value = os.environ.get(key)
     if value:
@@ -357,7 +358,7 @@ required = {
     "AGENT_RUNTIME_WORKSPACE_ROOT",
 }
 git_identity_keys = ("AGENT_RUNTIME_GIT_NAME", "AGENT_RUNTIME_GIT_EMAIL")
-optional = {"AGENT_RUNTIME_MAX_ACTIVE_SESSIONS", "AGENT_RUNTIME_MAX_PARALLELISM"}
+optional = {"AGENT_RUNTIME_MAX_ACTIVE_SESSIONS", "AGENT_RUNTIME_MAX_PARALLELISM", "AGENT_RUNTIME_TELEMETRY"}
 values = {}
 for number, line in enumerate(lines, start=1):
     if not line or line.lstrip().startswith("#"):
@@ -386,6 +387,9 @@ if parallelism is not None and (re.fullmatch(r"[1-9][0-9]*", parallelism) is Non
 session_limit = values.get("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS")
 if session_limit is not None and (re.fullmatch(r"[1-9][0-9]*", session_limit) is None or not 1 <= int(session_limit) <= 6):
     fail("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS must be an integer from 1 through 6.")
+telemetry_mode = values.get("AGENT_RUNTIME_TELEMETRY", "off")
+if telemetry_mode not in {"off", "otlp"}:
+    fail("AGENT_RUNTIME_TELEMETRY must be off or otlp.")
 if identity_required:
     for key in git_identity_keys:
         value = values[key]
@@ -428,6 +432,7 @@ runtime_env = {
     # bytecode resources inside the app bundle.
     "PYTHONDONTWRITEBYTECODE": "1",
     "OPEN_WEB_UI": "false",
+    "AGENT_RUNTIME_TELEMETRY": telemetry_mode,
 }
 if identity_required:
     for key in git_identity_keys:

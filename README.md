@@ -81,6 +81,18 @@ Detailed operator guidance:
 
 `AGENT_RUNTIME_MAX_PARALLELISM` accepts 1 through 10. Runtime admission still enforces its frozen safe ceiling. `capacity_observer` result schema v2 preserves the host-capacity fields and adds point-in-time `active_heavy`, `available_heavy`, `active_sessions`, `recommended_additional_parallelism`, `observed_at`, and `reservation_guaranteed=false`; the result is advisory only and does not reserve capacity.
 
+`AGENT_RUNTIME_TELEMETRY` accepts only `off` or `otlp` and defaults to `off`. Disabled mode does not initialize an OpenTelemetry SDK provider, exporter thread, network client, or collector connection. `otlp` mode manually exports only bounded traces and metrics over OTLP/HTTP to the fixed loopback base endpoint `http://127.0.0.1:4318`; exporter batching and timeouts are source-fixed and fail open relative to Runtime behavior. The Runtime does not accept telemetry endpoint, header, authentication, service-name, resource-label, or arbitrary user-label configuration.
+
+Telemetry reuses the existing timing lifecycle and exports only fixed low-cardinality attributes: `service.name`, `runtime.version`, validated `runtime.revision` when available, allowlisted `tool.name`, `outcome`, `process.kind`, and `termination.state`. `runtime_call_id` is trace correlation only and is never a metric attribute. Commands, argv, paths, repository URLs, tool arguments/results, stdout/stderr, exception messages, environment values, Git identity, credentials, request IDs, session/start identities, and continuation receipts are not telemetry attributes. OpenTelemetry logs and automatic instrumentation are not enabled.
+
+The supported topology is intentionally external and optional:
+
+```text
+Agent Runtime -> optional loopback OTLP collector -> optional Prometheus/Grafana or other backend
+```
+
+This repository does not bundle or operate the collector, Prometheus, Grafana, or another telemetry backend, and collector availability is not a health/readiness dependency.
+
 Canonical `runtime.env` is retained by default during uninstall. Its credentials and Git identity values must never be printed or logged.
 
 ## Public tool surface

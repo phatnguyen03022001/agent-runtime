@@ -224,6 +224,40 @@ class RuntimeConfigTests(unittest.TestCase):
                 with self.assertRaisesRegex(SystemExit, "AGENT_RUNTIME_MAX_ACTIVE_SESSIONS"):
                     runtime_config.validate(canonical, require_mode=True)
 
+    def test_telemetry_mode_accepts_absent_off_and_otlp_only(self) -> None:
+        for configured in (None, "off", "otlp"):
+            with self.subTest(configured=configured), tempfile.TemporaryDirectory() as raw:
+                temp = Path(raw)
+                workspace = temp / "workspace"
+                workspace.mkdir()
+                canonical = temp / "runtime.env"
+                text = (
+                    "CONTROL_PLANE_API_KEY=test-key\n"
+                    "CONTROL_PLANE_TUNNEL_ID=test-tunnel\n"
+                    f"AGENT_RUNTIME_WORKSPACE_ROOT={workspace}\n"
+                )
+                if configured is not None:
+                    text += f"AGENT_RUNTIME_TELEMETRY={configured}\n"
+                canonical.write_text(text)
+                canonical.chmod(0o600)
+                runtime_config.validate(canonical, require_mode=True)
+
+    def test_telemetry_mode_rejects_empty_remote_and_arbitrary_values(self) -> None:
+        for configured in ("", "on", "http://collector.example", "grpc", "OTLP"):
+            with self.subTest(configured=configured), tempfile.TemporaryDirectory() as raw:
+                temp = Path(raw)
+                workspace = temp / "workspace"
+                workspace.mkdir()
+                canonical = temp / "runtime.env"
+                canonical.write_text(
+                    "CONTROL_PLANE_API_KEY=test-key\n"
+                    "CONTROL_PLANE_TUNNEL_ID=test-tunnel\n"
+                    f"AGENT_RUNTIME_WORKSPACE_ROOT={workspace}\n"
+                    f"AGENT_RUNTIME_TELEMETRY={configured}\n"
+                )
+                canonical.chmod(0o600)
+                with self.assertRaisesRegex(SystemExit, "AGENT_RUNTIME_TELEMETRY"):
+                    runtime_config.validate(canonical, require_mode=True)
 
     def test_first_bootstrap_fills_empty_secrets_from_process_environment(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

@@ -10,6 +10,7 @@ from mcp import Client
 from mcp.types import TextContent
 
 from agent_runtime import server
+from agent_runtime.capability_registry import ADVERTISED_TOOL_NAMES
 from agent_runtime.timing import ALLOWED_TOOL_NAMES
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -144,14 +145,8 @@ class FsReadBatchMCPTests(unittest.IsolatedAsyncioTestCase):
         delegate.assert_not_called()
 
     def test_timing_allowlist_and_server_instructions_cover_public_surface(self) -> None:
-        self.assertEqual(
-            ALLOWED_TOOL_NAMES,
-            frozenset({
-                "terminal_exec", "terminal_start", "terminal_poll",
-                "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch",
-                "repo_observer", "repo_remote_observer", "repo_fast_forward", "repo_publish",
-            }),
-        )
+        self.assertEqual(ALLOWED_TOOL_NAMES, frozenset(ADVERTISED_TOOL_NAMES))
+        self.assertEqual(len(ALLOWED_TOOL_NAMES), 20)
         self.assertIn("fs_read_batch", server.SERVER_INSTRUCTIONS)
         self.assertIn("cwd-relative", server.SERVER_INSTRUCTIONS)
         self.assertIn("read-only", server.SERVER_INSTRUCTIONS)

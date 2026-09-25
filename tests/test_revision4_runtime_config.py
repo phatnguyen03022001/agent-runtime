@@ -54,6 +54,7 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
             f"CONTROL_PLANE_API_KEY=test-key\n"
             f"CONTROL_PLANE_TUNNEL_ID=stable-test-id\n"
             f"AGENT_RUNTIME_WORKSPACE_ROOT={temp}\n"
+            "AGENT_RUNTIME_TELEMETRY=otlp\n"
             "AGENT_RUNTIME_GIT_NAME=Runtime Fixture\n"
             "AGENT_RUNTIME_GIT_EMAIL=runtime-fixture@example.invalid\n"
         )
@@ -69,7 +70,7 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
             f"for key in CONTROL_PLANE_API_KEY CONTROL_PLANE_TUNNEL_ID TUNNEL_CLIENT_CONFIG "
             "TUNNEL_CLIENT_PROFILE TUNNEL_CLIENT_PROFILE_FILE TUNNEL_CLIENT_PROFILE_DIR "
             "XDG_CONFIG_HOME AGENT_RUNTIME_TUNNEL_PROFILE AGENT_RUNTIME_GIT_NAME "
-            "AGENT_RUNTIME_GIT_EMAIL; do "
+            "AGENT_RUNTIME_GIT_EMAIL AGENT_RUNTIME_TELEMETRY; do "
             f"printf 'env:%s=%s\\n' \"$key\" \"${{!key-}}\" >> {str(capture)!r}; done\n"
             "exit 0\n"
         )
@@ -87,6 +88,7 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
                 "AGENT_RUNTIME_TUNNEL_PROFILE": "wrong-profile",
                 "AGENT_RUNTIME_GIT_NAME": "ambient-wrong-name",
                 "AGENT_RUNTIME_GIT_EMAIL": "ambient-wrong@example.invalid",
+                "AGENT_RUNTIME_TELEMETRY": "off",
             }
             result = subprocess.run(
                 [str(repo / "start.sh"), "--serve", str(tunnel)],
@@ -101,6 +103,7 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
             lines = capture.read_text().splitlines()
             self.assertEqual(sum(line == "env:CONTROL_PLANE_TUNNEL_ID=stable-test-id" for line in lines), 2)
             self.assertEqual(sum(line == "env:CONTROL_PLANE_API_KEY=test-key" for line in lines), 2)
+            self.assertEqual(sum(line == "env:AGENT_RUNTIME_TELEMETRY=otlp" for line in lines), 2)
             self.assertEqual(sum(line == "env:AGENT_RUNTIME_GIT_NAME=Runtime Fixture" for line in lines), 2)
             self.assertEqual(
                 sum(line == "env:AGENT_RUNTIME_GIT_EMAIL=runtime-fixture@example.invalid" for line in lines),
@@ -119,6 +122,46 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
             self.assertTrue(argv_lines[0].startswith("argv=doctor "))
             self.assertIn("--explain", argv_lines[0])
             self.assertTrue(argv_lines[1].startswith("argv=run "))
+
+    def test_serve_defaults_telemetry_off_when_canonical_setting_is_absent(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            repo, home, env_file, tunnel, capture = self._serve_fixture(Path(raw))
+            env_file.write_text(env_file.read_text().replace("AGENT_RUNTIME_TELEMETRY=otlp\n", ""))
+            result = subprocess.run(
+                [str(repo / "start.sh"), "--serve", str(tunnel)],
+                env={"HOME": str(home), "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"},
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                sum(
+                    line == "env:AGENT_RUNTIME_TELEMETRY=off"
+                    for line in capture.read_text().splitlines()
+                ),
+                2,
+            )
+
+    def test_serve_rejects_invalid_telemetry_before_tunnel_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            repo, home, env_file, tunnel, capture = self._serve_fixture(Path(raw))
+            env_file.write_text(
+                env_file.read_text().replace(
+                    "AGENT_RUNTIME_TELEMETRY=otlp",
+                    "AGENT_RUNTIME_TELEMETRY=http://collector.example",
+                )
+            )
+            result = subprocess.run(
+                [str(repo / "start.sh"), "--serve", str(tunnel)],
+                env={"HOME": str(home), "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"},
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("AGENT_RUNTIME_TELEMETRY must be off or otlp", result.stderr)
+            self.assertFalse(capture.exists())
 
     def test_installed_serve_binds_revision_from_validated_package_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

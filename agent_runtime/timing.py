@@ -12,9 +12,32 @@ from dataclasses import dataclass
 from functools import wraps
 from typing import Any, TypeVar
 
+from .telemetry import observe_timing_event
+
 
 ALLOWED_TOOL_NAMES = frozenset(
-    {"terminal_exec", "terminal_start", "terminal_poll", "terminal_control", "terminal_resize", "capacity_observer", "fs_read_batch", "repo_observer", "repo_remote_observer", "repo_fast_forward", "repo_publish"}
+    {
+        "terminal_exec",
+        "terminal_start",
+        "terminal_poll",
+        "terminal_control",
+        "terminal_resize",
+        "capacity_observer",
+        "fs_read_batch",
+        "fs_list",
+        "fs_search",
+        "fs_patch",
+        "fs_write",
+        "fs_manage",
+        "repo_observer",
+        "repo_remote_observer",
+        "repo_diff",
+        "repo_stage",
+        "repo_commit",
+        "repo_fast_forward",
+        "repo_publish",
+        "runtime_capabilities",
+    }
 )
 
 _CURRENT_CALL: contextvars.ContextVar[TimingContext | None] = contextvars.ContextVar(
@@ -85,7 +108,12 @@ def _emit(event: Mapping[str, Any]) -> None:
             sys.stderr.flush()
     except Exception:
         # Diagnostics must never change a tool result or cleanup path.
-        return
+        pass
+    try:
+        observe_timing_event(event, allowed_tool_names=ALLOWED_TOOL_NAMES)
+    except Exception:
+        # Optional telemetry is strictly fail-open relative to Runtime behavior.
+        pass
 
 
 def _common_event(event_kind: str, context: TimingContext) -> dict[str, Any]:

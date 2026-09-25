@@ -11,6 +11,9 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from agent_runtime.timing import (
+    ALLOWED_TOOL_NAMES,
+    TimingContext,
+    emit_process_end,
     timing_middleware,
     timed_tool_call,
 )
@@ -142,6 +145,12 @@ class TimingMiddlewareTests(unittest.IsolatedAsyncioTestCase):
 
 
 class TimingToolTests(unittest.TestCase):
+    def test_timing_allowlist_equals_exact_advertised_surface(self) -> None:
+        from agent_runtime.capability_registry import ADVERTISED_TOOL_NAMES
+
+        self.assertEqual(ALLOWED_TOOL_NAMES, frozenset(ADVERTISED_TOOL_NAMES))
+        self.assertEqual(len(ALLOWED_TOOL_NAMES), 20)
+
     def test_real_mcp_registration_keeps_surface_and_installs_middleware(self) -> None:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
@@ -206,6 +215,51 @@ class TimingToolTests(unittest.TestCase):
             [parameter.name for parameter in inspect.signature(server.screen_capture).parameters.values()],
             ["target", "window_id", "application_bundle_id", "display_id", "x", "y", "width", "height"],
         )
+
+    def test_telemetry_failure_cannot_change_tool_result_or_json_diagnostic(self) -> None:
+        output = io.StringIO()
+        from agent_runtime.timing import bind_call_context, reset_call_context
+
+        _context, token = bind_call_context("request-secret")
+        try:
+            with patch("agent_runtime.timing.sys.stderr", output), patch(
+                "agent_runtime.timing.observe_timing_event",
+                side_effect=RuntimeError("telemetry exporter failure sentinel"),
+            ):
+                result = timed_tool_call("terminal_exec", lambda: {"ok": True})
+        finally:
+            reset_call_context(token)
+
+        self.assertEqual(result, {"ok": True})
+        event = json.loads(output.getvalue())
+        self.assertEqual(event["event_kind"], "tool_execution_end")
+        self.assertEqual(event["outcome"], "ok")
+        self.assertNotIn("telemetry exporter failure sentinel", output.getvalue())
+
+    def test_telemetry_failure_cannot_change_process_cleanup_diagnostic(self) -> None:
+        output = io.StringIO()
+        context = TimingContext(
+            runtime_call_id="0123456789abcdef0123456789abcdef",
+            raw_request_id=None,
+            request_id_type="none",
+        )
+        with patch("agent_runtime.timing.sys.stderr", output), patch(
+            "agent_runtime.timing.observe_timing_event",
+            side_effect=RuntimeError("process telemetry failure sentinel"),
+        ):
+            emit_process_end(
+                context,
+                tool_name="terminal_start",
+                process_kind="persistent_pipe",
+                started_wall=1.0,
+                started_mono=1.0,
+                termination_state="natural_exit",
+            )
+
+        event = json.loads(output.getvalue())
+        self.assertEqual(event["event_kind"], "process_end")
+        self.assertEqual(event["tool_name"], "terminal_start")
+        self.assertNotIn("process telemetry failure sentinel", output.getvalue())
 
     def test_tool_execution_event_has_no_arguments_or_result_payload(self) -> None:
         output = io.StringIO()

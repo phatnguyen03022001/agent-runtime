@@ -17,7 +17,7 @@ REQUIRED = (
     "AGENT_RUNTIME_WORKSPACE_ROOT",
 )
 GIT_IDENTITY = ("AGENT_RUNTIME_GIT_NAME", "AGENT_RUNTIME_GIT_EMAIL")
-OPTIONAL = {"AGENT_RUNTIME_MAX_ACTIVE_SESSIONS", "AGENT_RUNTIME_MAX_PARALLELISM"}
+OPTIONAL = {"AGENT_RUNTIME_MAX_ACTIVE_SESSIONS", "AGENT_RUNTIME_MAX_PARALLELISM", "AGENT_RUNTIME_TELEMETRY"}
 ENTRY = re.compile(r"([A-Z_][A-Z0-9_]*)=(.*)")
 MAX_ACTIVE_SESSIONS = 6
 MAX_IDENTITY_BYTES = 256
@@ -97,6 +97,9 @@ def _validate_values(values: dict[str, str], workspace_root: Path | None = None)
         or not 1 <= int(session_limit) <= MAX_ACTIVE_SESSIONS
     ):
         fail(f"AGENT_RUNTIME_MAX_ACTIVE_SESSIONS must be an integer from 1 through {MAX_ACTIVE_SESSIONS}")
+    telemetry_mode = values.get("AGENT_RUNTIME_TELEMETRY", "off")
+    if telemetry_mode not in {"off", "otlp"}:
+        fail("AGENT_RUNTIME_TELEMETRY must be off or otlp")
 
 
 def validate(path: Path, *, require_mode: bool, require_git_identity: bool = False) -> bytes:
