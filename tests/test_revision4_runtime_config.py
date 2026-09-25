@@ -6,6 +6,7 @@ import os
 import plistlib
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -198,6 +199,33 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
             self.assertNotEqual(rejected.returncode, 0)
             self.assertFalse(capture.exists())
             self.assertIn("Installed Runtime package provenance is invalid", rejected.stderr)
+
+    def test_packaged_doctor_import_is_checkout_free(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            runtime = temp / "runtime"
+            (runtime / "agent_runtime").mkdir(parents=True)
+            (runtime / "macos").mkdir()
+            for source in (ROOT / "agent_runtime").glob("*.py"):
+                shutil.copy2(source, runtime / "agent_runtime" / source.name)
+            for name in ("runtime_config.py", "package_provenance.py", "candidate_cutover.py"):
+                shutil.copy2(ROOT / "macos" / name, runtime / "macos" / name)
+
+            env = {
+                "HOME": str(temp / "home"),
+                "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+                "PYTHONPATH": str(runtime),
+                "PYTHONDONTWRITEBYTECODE": "1",
+            }
+            result = subprocess.run(
+                [sys.executable, "-c", "import agent_runtime.doctor"],
+                cwd=temp,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_serve_fails_closed_if_legacy_profile_reappears(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

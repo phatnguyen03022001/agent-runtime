@@ -451,6 +451,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertIn('cp "$SOURCE_ROOT/start.sh" "$RUNTIME/start.sh"', package)
         self.assertIn('cp "$SOURCE_PACKAGE_ROOT/runtime_config.py" "$RUNTIME/macos/runtime_config.py"', package)
         self.assertIn('cp "$SOURCE_PACKAGE_ROOT/package_provenance.py" "$RUNTIME/macos/package_provenance.py"', package)
+        self.assertIn('cp "$SOURCE_PACKAGE_ROOT/candidate_cutover.py" "$RUNTIME/macos/candidate_cutover.py"', package)
         self.assertIn('package_provenance.py" stage "$REPO_ROOT" "$SOURCE_ROOT"', package)
         self.assertIn('--without-pip "$PACKAGE_VENV"', package)
         self.assertIn("--require-hashes", package)

@@ -827,6 +827,7 @@ class CandidateCutoverTests(unittest.TestCase):
             "99518e694467be8525d813a4e638c4c8e0324365",
             "90a87fca8755ddc673e749bb5bf3e4489045a9b8",
             "89111218720ddb2f12961f9375549733edd23ada",
+            "84f7c54821ec170df0478e0b83b285561703401f",
             "bf98ec4e9bcda97dfdc0ca52b8e0537dae14a1cc",
         )
         for revision in revisions:
@@ -836,6 +837,16 @@ class CandidateCutoverTests(unittest.TestCase):
                     self.assertEqual(cutover._runtime_manifest_revision(fx["target"]), revision)
                     self.assertEqual(cutover._predecessor_service_contract(fx["target"]), "split-v1")
 
+    def test_revision2_corrective_predecessor_is_exact_and_neighbor_remains_unknown(self) -> None:
+        exact_revision = "84f7c54821ec170df0478e0b83b285561703401f"
+        neighboring_revision = "84f7c54821ec170df0478e0b83b285561703401e"
+        for revision, expected in ((exact_revision, "split-v1"), (neighboring_revision, "unknown")):
+            with self.subTest(revision=revision):
+                with tempfile.TemporaryDirectory() as raw:
+                    _, cutover, fx = self._fixture(raw, predecessor_revision=revision)
+                    self.assertEqual(cutover._runtime_manifest_revision(fx["target"]), revision)
+                    self.assertEqual(cutover._predecessor_service_contract(fx["target"]), expected)
+
     def test_installed_split_v1_predecessor_refresh_uses_split_runtime_contract(self) -> None:
         exact_revision = "18cdb515fe037c9b6cb81ce6529d85ae734e195a"
         revisions = (
@@ -844,6 +855,7 @@ class CandidateCutoverTests(unittest.TestCase):
             "99518e694467be8525d813a4e638c4c8e0324365",
             "90a87fca8755ddc673e749bb5bf3e4489045a9b8",
             "89111218720ddb2f12961f9375549733edd23ada",
+            "84f7c54821ec170df0478e0b83b285561703401f",
             "bf98ec4e9bcda97dfdc0ca52b8e0537dae14a1cc",
             exact_revision,
         )

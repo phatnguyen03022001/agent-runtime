@@ -281,6 +281,7 @@ class PackageProvenanceTests(unittest.TestCase):
         self.assertIn('cp -R "$PACKAGE_VENV" "$RUNTIME/.venv"', package)
         self.assertIn('cp "$SOURCE_PACKAGE_ROOT/runtime_config.py" "$RUNTIME/macos/runtime_config.py"', package)
         self.assertIn('cp "$SOURCE_PACKAGE_ROOT/package_provenance.py" "$RUNTIME/macos/package_provenance.py"', package)
+        self.assertIn('cp "$SOURCE_PACKAGE_ROOT/candidate_cutover.py" "$RUNTIME/macos/candidate_cutover.py"', package)
         self.assertIn("--require-hashes", package)
         self.assertNotIn('cp -R -L "$REPO_ROOT/.venv"', package)
         self.assertIn("package_provenance.py", installer)

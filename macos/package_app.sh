@@ -79,6 +79,7 @@ cp "$NOTIFICATION_SOUND" "$RESOURCES/notification.mp3"
 cp "$SOURCE_ROOT/start.sh" "$RUNTIME/start.sh"
 cp "$SOURCE_PACKAGE_ROOT/runtime_config.py" "$RUNTIME/macos/runtime_config.py"
 cp "$SOURCE_PACKAGE_ROOT/package_provenance.py" "$RUNTIME/macos/package_provenance.py"
+cp "$SOURCE_PACKAGE_ROOT/candidate_cutover.py" "$RUNTIME/macos/candidate_cutover.py"
 find "$SOURCE_ROOT/agent_runtime" -maxdepth 1 -type f -name '*.py' -exec cp '{}' "$RUNTIME/agent_runtime/" \;
 PACKAGE_VENV="$TEMP_ROOT/runtime-venv"
 "$PYTHON_BIN" -m venv --copies --without-pip "$PACKAGE_VENV"
