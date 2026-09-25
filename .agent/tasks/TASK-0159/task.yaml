@@ -1,0 +1,256 @@
+protocol_version: 3
+
+task_id: TASK-0159
+task_revision: 1
+state: APPROVED
+title: "Durable Runner Signed-Bundle Immutability Repair + Reseal"
+
+origin:
+  type: corrective_followup
+  source_task: TASK-0158
+  source_review: "8beaac370e1ad384c9a88c6c77958a8bde8c3579"
+  source_result: BLOCKED
+  blocker: SIGNED_INSTALLED_RUNTIME_MUTATES_AFTER_DURABLE_ACCEPTANCE
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+  canonical_branch: main
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+accepted_release_line:
+  runtime_version: "0.5.0"
+  current_source_revision: "58027d5cebf1483f62d379ed05935c86da3a6f4a"
+  current_source_tree: "230f73f976e01aadb69bd4e220147fefc31d03b7"
+  current_package_sha256: "6fc3f7c72c365f569ba45f87134494926154868f7695b2fc143b723bce52b961"
+  current_handoff_sha256: "a10ee99c867345d7268fe84306a4dfca57974217f4f28f027d12e04c508e898b"
+
+installed_state_at_review:
+  runtime_version: "0.5.0"
+  runtime_revision: "58027d5cebf1483f62d379ed05935c86da3a6f4a"
+  runtime_tree: "230f73f976e01aadb69bd4e220147fefc31d03b7"
+  transaction_present: false
+  service_management: "enabled/enabled"
+  live_mcp_surface: operational
+  package_integrity:
+    strict_codesign: FAIL
+    doctor: unhealthy
+    failing_check: installed_package_identity
+    reason_code: INSTALLED_PACKAGE_INVALID
+    added_runtime_files: 56
+    added_file_class: "__pycache__/*.pyc"
+  live_repair_in_this_task: false
+
+proven_root_cause:
+  durable_dispatch_path: "_dispatch_durable -> _minimal_child_env -> sys.executable -m agent_runtime.durable_pipe_runner"
+  normal_runtime_startup:
+    sys_dont_write_bytecode: true
+    PYTHONDONTWRITEBYTECODE: "1"
+  durable_bootstrap_environment:
+    preserves:
+      - PATH
+      - HOME
+      - USER
+      - TMPDIR
+      - LANG
+      - LC_*
+    PYTHONDONTWRITEBYTECODE_present: false
+  consequence: >
+    The durable runner interpreter imports agent_runtime and dependencies from
+    the signed installed application and writes Python bytecode caches into the
+    sealed app bundle. A successful runtime_restart durable job therefore
+    invalidates strict codesign and installed package identity.
+
+objective: >
+  Make the smallest correction that prevents the durable runner bootstrap from
+  writing Python bytecode into the signed Runtime payload, preserve all terminal
+  user-command environment semantics outside that bootstrap, prove the fix with
+  focused tests and one effective qualification, build one new immutable Runtime
+  0.5.0 package, and prove a real runtime_restart durable job leaves the sealed
+  candidate byte-for-byte/codesign intact. Do not repair or restart the installed
+  Runtime in this task.
+
+required_implementation:
+  - "In agent_runtime/session.py, inject PYTHONDONTWRITEBYTECODE=1 into the environment used specifically to spawn sys.executable -m agent_runtime.durable_pipe_runner."
+  - "Do not add PYTHONDONTWRITEBYTECODE to the global _minimal_child_env() preserved-name contract."
+  - "Do not change the environment contract for user PTY/pipe commands or terminal_exec."
+  - "Do not redesign durable execution, schemas, identity, retention, recovery, capacity or process semantics."
+  - "Keep Runtime version 0.5.0, ToolContract Kernel 2, 21 known / 20 advertised capabilities."
+
+allowed_source_paths:
+  - agent_runtime/session.py
+  - tests/test_durable_pipe.py
+  - tests/test_durable_pipe_restart.py
+  - ".agent/tasks/TASK-0159/report-r1.yaml"
+
+forbidden_source_changes:
+  - agent_runtime/executor.py
+  - agent_runtime/durable_pipe.py
+  - agent_runtime/durable_pipe_runner.py
+  - agent_runtime/version.py
+  - requirements.lock
+  - verify
+  - verify_tests.py
+  - verification_policy.py
+  - macos/package_app.sh
+  - macos/candidate_cutover.py
+  - install.sh
+  - start.sh
+  - "Any MCP schema/capability count/version change"
+  - "Any telemetry enablement/configuration change"
+  - "Any MCP Tasks/GAP-12 implementation"
+
+focused_verification:
+  requirements:
+    - "Add a direct test that captures the durable runner bootstrap Popen environment and proves PYTHONDONTWRITEBYTECODE=1 is present."
+    - "The same test must prove the runner argv remains opaque and contains no user command/cwd secret material beyond the existing job identity contract."
+    - "Preserve tests proving durable runtime_restart execution, retention and restart-chaos semantics."
+    - "Prove ordinary _minimal_child_env() / process-local terminal child semantics are not widened to preserve arbitrary environment variables."
+    - "Run the directly affected durable-pipe and restart tests only while iterating."
+    - "git diff --check PASS."
+
+executor_survival_protocol:
+  - "Do not run broad verification while editing."
+  - "Focused proof first."
+  - "Commit one clean corrective source checkpoint before broad verification."
+  - "On that exact clean candidate run ./verify --profile candidate --base <task-base> exactly once."
+  - "If requested candidate escalates to effective qualification, one terminal PASS is authoritative and no second qualification may run on that SHA."
+  - "Do not rerun a failed immutable SHA hoping for green."
+  - "Any tracked source/test write after qualification creates a new child candidate and invalidates prior broad proof."
+  - "Commands expected to exceed 10 seconds use a recoverable process surface and record PID/session/job identity immediately."
+  - "Poll healthy long work no more frequently than every 20 seconds."
+  - "Unknown outcome requires Git/process/artifact inspection before retry."
+  - "Do not terminate unrelated pre-existing host processes."
+
+broad_verification:
+  command: "./verify --profile candidate --base <task-base>"
+  maximum_successful_runs_per_exact_candidate: 1
+  rule: >
+    Run only after the clean source checkpoint exists. If policy escalates the
+    candidate profile to effective qualification, do not run a second full
+    qualification.
+
+package_reseal:
+  preconditions:
+    - "Exact corrected candidate clean."
+    - "Single effective broad verification PASS."
+    - "No tracked candidate write after verification."
+  rules:
+    - "Build/sign/seal exactly one new Runtime 0.5.0 package from the corrected candidate."
+    - "Do not mutate or overwrite prior package 6fc3f7c7...."
+    - "Use recoverable process execution."
+    - "Record exact package SHA-256, handoff SHA-256, record_count, source revision/tree."
+    - "Strict deep codesign PASS before immutable-runtime proof."
+    - "Pinned provenance validation PASS before immutable-runtime proof."
+
+sealed_candidate_runtime_proof:
+  purpose: >
+    Prove the corrected packaged Runtime can execute a real runtime_restart
+    durable job from inside the signed candidate without modifying its sealed
+    application payload.
+  preconditions:
+    - "New exact package is already sealed and strict-codesign-valid."
+    - "Capture candidate SHA-256/handoff SHA-256 and complete candidate closure before execution."
+    - "No installation or cutover is performed."
+  execution:
+    - "Use the packaged Runtime's own bundled Python/interpreter and packaged agent_runtime modules."
+    - "Run a real TerminalSessionManager runtime_restart durable pipe job with a fresh temporary durable state root and a caller-known start_identity."
+    - "Use a short deterministic target command with bounded output."
+    - "Poll to terminal natural-exit success."
+    - "Perform retained lookup by the same start_identity and prove the same session is returned without respawn."
+    - "Do not intentionally restart the installed Runtime."
+  after_execution_require:
+    - "No __pycache__ directory or *.pyc file is added anywhere inside the candidate app bundle."
+    - "Candidate closure after execution equals the exact pre-execution closure."
+    - "Candidate SHA-256 after execution equals the exact pre-execution candidate SHA-256."
+    - "Handoff SHA-256 unchanged."
+    - "Strict deep codesign PASS after execution."
+    - "Pinned provenance validation PASS after execution."
+  failure_policy: >
+    If any sealed candidate byte changes or codesign/provenance fails, stop
+    BLOCKED. Do not clean the candidate and pretend the proof passed.
+
+live_runtime_guard:
+  - "Do not mutate the installed ~/Applications/Agent Runtime.app."
+  - "Do not delete its current pycache/pyc drift in this task."
+  - "Do not reinstall, resume, rollback, recover or commit-cutover."
+  - "Do not stop/restart/reload/reconnect the installed Runtime."
+  - "Installed Runtime may remain live but seal-invalid until the later activation-repair task."
+  - "Do not run another durable live acceptance against the seal-invalid installed Runtime."
+
+publication_lifecycle:
+  - "Fresh remote gate before source publication: remote main still exact task base, branches={main}, open PRs=0."
+  - "Publish exact corrected source candidate non-force."
+  - "Create .agent/tasks/TASK-0159/report-r1.yaml as the sole report-only child."
+  - "Validate report with pinned agent-skills authority."
+  - "Publish report non-force."
+  - "Final reconcile HEAD=origin/main=remote main, ahead/behind=0/0, clean worktree/index, branches={main}, open PRs=0."
+  - "Stop NEEDS_REVIEW."
+  - "Do not author or execute the live repair/activation task in the same Executor chat."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Durable runner bootstrap explicitly disables Python bytecode writes without changing global terminal child environment semantics."
+    evidence_required: "Exact source diff + focused Popen-env proof."
+  - id: AC-2
+    requirement: "Existing durable semantics remain intact."
+    evidence_required: "Affected durable/restart focused tests PASS."
+  - id: AC-3
+    requirement: "Corrected source candidate passes one non-redundant effective broad verification."
+    evidence_required: "Exact clean SHA + requested/effective profile + modules/tests + terminal result; no duplicate qualification."
+  - id: AC-4
+    requirement: "One new immutable Runtime 0.5.0 package binds the corrected source."
+    evidence_required: "New package/handoff hashes, record_count, source revision/tree, pre-proof codesign and provenance PASS."
+  - id: AC-5
+    requirement: "A real packaged runtime_restart durable job cannot mutate the sealed candidate."
+    evidence_required: "One durable effect + retained same-identity lookup + zero pycache/pyc additions + identical closure/hash before/after + post-proof codesign/provenance PASS."
+  - id: AC-6
+    requirement: "Installed seal-invalid Runtime is not silently repaired in the source/package task."
+    evidence_required: "Zero installed-app mutation, zero restart/reinstall/cutover/reconnect."
+  - id: AC-7
+    requirement: "Canonical publication/report closure is exact."
+    evidence_required: "Non-force candidate publication, report-only child, pinned validation and final clean main-only/zero-PR reconciliation."
+
+report_requirements:
+  path: .agent/tasks/TASK-0159/report-r1.yaml
+  record:
+    - "TASK-0158 review blocker and exact root cause"
+    - "current installed seal-invalid state observed but not mutated"
+    - "exact source/test changed paths"
+    - "focused durable bootstrap env proof"
+    - "single effective broad verification"
+    - "corrected source candidate SHA/tree"
+    - "new package SHA-256, handoff SHA-256, record_count"
+    - "pre-proof codesign/provenance"
+    - "sealed candidate real durable start_identity/session/result"
+    - "same-identity retained lookup and no respawn"
+    - "candidate closure/hash before and after"
+    - "zero __pycache__/pyc additions"
+    - "post-proof codesign/provenance"
+    - "zero installed Runtime mutation"
+    - "final canonical Git reconciliation"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  build_corrected_candidate_once: true
+  install_or_repair_live_runtime: false
+  create_version_tag: false
+  publish_release: false
+  enable_telemetry: false
+
+blocking_decisions: []
+execution_ready: true
