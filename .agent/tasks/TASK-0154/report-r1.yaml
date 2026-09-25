@@ -1,0 +1,486 @@
+protocol_version: 3
+
+task_id: TASK-0154
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0154/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  execution_surface: CHATGPT_LOCAL
+  preferred_transport: AGENT_RUNTIME
+  authorized_base_head: "b705cdbe3cb2b0f719eae49de414ca0e163ae662"
+  final_execution_head: "5031011d21e5b595d6576a91df78ee3e04ff154b"
+
+predecessor:
+  accepted_task: TASK-0153
+  accepted_review_commit: "37ac4b7ffe3a9e5faa567eb3a63827d495dfc726"
+  present_at_execution_base: true
+  ancestor_of_execution_base: true
+
+implementation_candidate:
+  commit: "5031011d21e5b595d6576a91df78ee3e04ff154b"
+  tree: "f9ec0ea160bf1c172c0fb0210cdf3cd65b4306ea"
+  authorized_base: "b705cdbe3cb2b0f719eae49de414ca0e163ae662"
+  lineage_commits: 2
+  changed_paths:
+    - tests/test_verify_harness.py
+    - verification_policy.py
+    - verify
+    - verify_tests.py
+  product_source_changed: false
+  runtime_version: "0.4.0"
+  tool_contract_kernel_version: 2
+  known_capabilities: 21
+  advertised_tools: 20
+  installed_activation_performed: false
+
+commits_created:
+  - sha: "60db17213b4409c98794b9af77ef04eab9e35290"
+    message: "TASK-0154 rationalize verification architecture"
+    classification: verification_architecture
+  - sha: "5031011d21e5b595d6576a91df78ee3e04ff154b"
+    message: "TASK-0154 preserve verify launcher contract"
+    classification: verify_launcher_compatibility
+    direct_parent: "60db17213b4409c98794b9af77ef04eab9e35290"
+    changed_paths:
+      - verify
+
+baseline:
+  canonical_task_measurement:
+    measured_at_commit: "37ac4b7ffe3a9e5faa567eb3a63827d495dfc726"
+    command: ./verify
+    result: PASS
+    modules: 62
+    tests: 791
+    verify_reported_wall_seconds: 129.534
+    process_real_seconds: 129.84
+    old_fast_parallel_lane:
+      modules: 22
+      tests: 265
+      workers: 4
+      wall_seconds: 17.560
+    old_serial_host_sensitive_lane:
+      modules: 40
+      tests: 526
+      workers: 1
+      wall_seconds: 111.973
+
+  fresh_exact_execution_base:
+    exact_head: "b705cdbe3cb2b0f719eae49de414ca0e163ae662"
+    command: ./verify
+    result: PASS
+    modules: 62
+    tests: 791
+    verify_reported_wall_seconds: 192.822
+    process_real_seconds: 193.13
+    process_user_seconds: 78.23
+    process_sys_seconds: 55.54
+    old_fast_parallel_lane:
+      modules: 22
+      tests: 265
+      wall_seconds: 14.027
+    old_serial_host_sensitive_lane:
+      modules: 40
+      tests: 526
+      wall_seconds: 178.794
+    slowest_modules:
+      tests.test_candidate_cutover: 72.920
+      tests.test_tunnel_identity: 30.335
+      tests.test_repo_commit: 13.980
+      tests.test_supervised_lifecycle: 13.143
+      tests.test_repo_publish: 12.288
+      tests.test_terminal_session: 9.852
+      tests.test_repo_stage: 9.754
+      tests.test_revision4_runtime_config: 7.538
+      tests.test_repo_fast_forward: 6.675
+      tests.test_task0055_cutover: 5.264
+    progress_observation: "No verifier progress was emitted for more than 90 seconds while the healthy full run remained active."
+
+baseline_profiling:
+  classification_proposal_before_refactor:
+    total_modules: 62
+    L1_DETERMINISTIC_UNIT: 17
+    L2_ISOLATED_INTEGRATION: 21
+    L3_DETERMINISTIC_REGRESSION: 10
+    L4_HOST_LIFECYCLE: 9
+    L5_QUALIFICATION_CHAOS_CUTOVER: 5
+    result: PASS
+
+  tests.test_candidate_cutover:
+    cases_profiled: 100
+    baseline_module_seconds: 72.920
+    observations:
+      - "Most cutover cases cost approximately 0.5-1.2 seconds; cost is distributed across repeated signed-app/transaction fixtures rather than one arbitrary sleep."
+      - "test_installed_split_v1_predecessor_refresh_uses_split_runtime_contract measured 7.858 seconds."
+      - "test_material_cutover_failures_auto_rollback_without_live_state measured 3.860 seconds."
+      - "Fixtures use disposable roots/fake launchctl while retaining real package/cutover semantics."
+    synchronization_or_fixture_refactor_performed: false
+    rationale: "Bounded lane scheduling alone met the full-qualification budget, so no material cutover test or assertion was changed."
+
+  tests.test_tunnel_identity:
+    cases_profiled: 15
+    individual_profile_total_seconds: 30.599
+    observations:
+      - "First-bootstrap environment/source precedence measured 4.901 seconds."
+      - "Verified Homebrew-style tunnel symlink measured 4.353 seconds."
+      - "Pending/commit/reinstall lifecycle measured 4.227 seconds."
+      - "Canonical-config mode/symlink coverage measured 3.686 seconds."
+      - "The integration owns a disposable repository, HOME, package and fake launchctl state."
+    synchronization_or_fixture_refactor_performed: false
+    rationale: "The existing real install/start integration proof was retained unchanged; explicit host-lifecycle isolation and concurrent independent lanes provided sufficient wall-time reduction."
+
+test_inventory:
+  base:
+    modules: 62
+    tests: 791
+  final:
+    modules: 62
+    tests: 804
+  module_deleted: false
+  material_product_test_deleted: false
+  final_test_count_delta: 13
+  explanation: "The existing verification-harness module was expanded from seven top-level harness tests to twenty top-level harness tests. Product/lifecycle/restart/durability/recovery/cutover modules were retained."
+
+verification_policy:
+  owner: verification_policy.py
+  exact_module_classification: true
+  duplicate_classification: FAIL_CLOSED
+  unknown_test_module: FAIL_CLOSED
+  unknown_changed_path: QUALIFICATION
+  global_worker_limit: 4
+  heartbeat_seconds: 5.0
+  lane_counts:
+    L1_DETERMINISTIC_UNIT: 17
+    L2_ISOLATED_INTEGRATION: 21
+    L3_DETERMINISTIC_REGRESSION: 10
+    L4_HOST_LIFECYCLE: 9
+    L5_QUALIFICATION_CHAOS_CUTOVER: 5
+  lane_proof_rationale:
+    L1_DETERMINISTIC_UNIT: "Pure contract/state/config/timing tests with no host-global ownership."
+    L2_ISOLATED_INTEGRATION: "Real subprocess/Git/filesystem/MCP integration whose mutable resources are disposable and independently owned."
+    L3_DETERMINISTIC_REGRESSION: "Cross-module deterministic compatibility and ordinary-source regression."
+    L4_HOST_LIFECYCLE: "Installed/start/service/process ownership and recovery proof, serialized by host-lifecycle isolation."
+    L5_QUALIFICATION_CHAOS_CUTOVER: "Restart/durability/package/cutover/qualification proof, serialized by qualification isolation."
+
+path_selection:
+  source_of_truth: "Exact git diff from explicit base SHA to candidate HEAD."
+  same_input_byte_stable_plan: PASS
+  verification_infrastructure_forces_qualification: PASS
+  unknown_path_forces_qualification: PASS
+  docs_only_l0_selection: PASS
+  repo_source_maps_to_repo_integration: PASS
+  terminal_session_maps_to_lifecycle_and_durability: PASS
+  direct_high_cost_test_change_escalates: PASS
+  actual_task_diff:
+    base: "b705cdbe3cb2b0f719eae49de414ca0e163ae662"
+    head: "5031011d21e5b595d6576a91df78ee3e04ff154b"
+    changed_paths:
+      - tests/test_verify_harness.py
+      - verification_policy.py
+      - verify
+      - verify_tests.py
+    requested_candidate_effective_profile: qualification
+    selected_modules: 62
+    escalations:
+      - verification entrypoint changed
+      - verification harness changed
+      - verification harness tests changed
+      - verification policy changed
+
+parallelism_and_isolation:
+  global_workers: 4
+  L1_workers: 4
+  L2_workers: 4
+  L3_workers: 4
+  L4_workers: 1
+  L5_workers: 1
+  L4_isolation_key: host-lifecycle
+  L5_isolation_key: qualification
+  independent_parallel_overlap_harness: PASS
+  conflicting_isolation_key_never_overlaps: PASS
+  protected_or_global_lifecycle_parallelized_with_same_key: false
+  disposable_git_filesystem_integrations_parallel_admitted: true
+  historical_serial_lane_used_as_authority: false
+
+executor_survival:
+  module_start_flushed_before_execution: PASS
+  pass_fail_timeout_terminal_events_flushed: PASS
+  heartbeat_interval_seconds: 5.0
+  full_run_heartbeat_evidence:
+    - "49.6s: candidate_cutover active 49.6s; tunnel_identity active 13.1s"
+    - "54.7s: candidate_cutover active 54.7s; tunnel_identity active 18.1s"
+    - "59.7s: candidate_cutover active 59.7s; tunnel_identity active 23.1s"
+    - "64.7s: candidate_cutover active 64.7s; tunnel_identity active 28.1s"
+    - "76.6s: durable_pipe_restart active 5.0s"
+    - "81.7s: task0055_cutover active 5.1s"
+  explicit_timeout_per_module: true
+  timeout_is_failure: true
+  worker_process_group_owned: true
+  timeout_cleanup_harness:
+    synthetic_timeout_seconds: 0.4
+    owned_descendant_terminated: true
+    unrelated_sentinel_process_preserved: true
+    result: PASS
+  worker_crash_missing_result_nonzero: PASS
+  failure_propagation_exact_visible: PASS
+
+focused_verification:
+  initial_harness:
+    command: ".venv/bin/python -m unittest -v tests.test_verify_harness"
+    tests: 20
+    result: PASS
+  compatibility_convergence:
+    trigger: "First clean-candidate candidate-profile run exposed three pre-existing verify launcher argv expectations after verification_policy.py had been added to the explicit py_compile argv."
+    failed_candidate: "60db17213b4409c98794b9af77ef04eab9e35290"
+    published: false
+    correction: "Keep the legacy explicit py_compile argv unchanged. verification_policy.py remains syntax/import checked because verify_tests.py imports it before any test execution."
+    corrected_candidate: "5031011d21e5b595d6576a91df78ee3e04ff154b"
+    focused_command: ".venv/bin/python -m unittest -v tests.test_surface_and_scripts tests.test_verify_harness"
+    tests: 39
+    result: PASS
+  git_diff_check:
+    result: PASS
+
+proof_mapping:
+  old_harness_to_final:
+    - old: "classification explicit / unknown default serial / workers fixed x4"
+      new:
+        - test_inventory_is_classified_exactly_once_with_expected_lane_counts
+        - test_unknown_test_module_fails_closed
+        - test_duplicate_classification_fails_closed
+      semantic_change: "Unknown classification now fails closed instead of silently falling into a serial catch-all."
+    - old: "serial reload boundary preserves order"
+      new:
+        - test_isolation_key_conflicts_never_overlap
+        - test_parallel_safe_independent_modules_overlap
+      semantic_change: "Ordering authority is now an explicit isolation key while independently owned resources prove real overlap."
+    - old: "quick runs only proven-safe lane"
+      new:
+        - test_repo_change_has_deterministic_quick_and_candidate_selection
+        - test_terminal_lifecycle_change_triggers_lifecycle_and_restart_proof
+        - test_qualification_includes_every_classified_module
+      semantic_change: "Quick/candidate/full inclusion is deterministic from the exact diff and explicit policy."
+    - old: "parallel worker failure propagates nonzero"
+      new:
+        - test_failure_propagation_is_exact_and_visible
+        - test_worker_crash_without_result_fails_exactly
+      semantic_change: "Failure and missing-result/crash paths are both explicit."
+    - old: "serial worker failure propagates nonzero"
+      new:
+        - test_failure_propagation_is_exact_and_visible
+        - test_module_timeout_kills_only_owned_worker_group
+      semantic_change: "Serial-isolation failure remains nonzero and now has explicit bounded timeout ownership proof."
+    - old: test_python_syntax_failure_stops_before_test_execution
+      new:
+        - test_python_syntax_failure_stops_before_test_execution
+      semantic_change: none
+    - old: test_shell_syntax_failure_stops_before_test_execution
+      new:
+        - test_shell_syntax_failure_stops_before_test_execution
+      semantic_change: none
+  product_proof_deleted_or_consolidated: false
+
+timing_refactors:
+  real_sleep_refactors: []
+  polling_refactors: []
+  fixture_reuse_refactors: []
+  module_splits: []
+  rationale: "Pre-mutation profiling was performed as required. No slow product test was modified because explicit classification, evidence-backed parallel admission, critical-lane ordering and isolation reduced wall time below all budgets without weakening proof."
+
+exact_profile_verification:
+  quick:
+    exact_candidate: "5031011d21e5b595d6576a91df78ee3e04ff154b"
+    exact_base: "5031011d21e5b595d6576a91df78ee3e04ff154b"
+    trigger_shape: "ordinary no-diff/no-L4-L5 timing fixture"
+    effective_profile: quick
+    selected_modules: 6
+    tests: 77
+    verifier_duration_seconds: 1.804
+    process_real_seconds: 2.54
+    target_max_seconds: 20
+    result: PASS
+
+  candidate_without_l4_l5:
+    exact_candidate: "5031011d21e5b595d6576a91df78ee3e04ff154b"
+    exact_base: "5031011d21e5b595d6576a91df78ee3e04ff154b"
+    trigger_shape: "representative ordinary candidate with no L4/L5 trigger"
+    effective_profile: candidate
+    selected_modules: 48
+    selected_lanes:
+      L1_DETERMINISTIC_UNIT: 17
+      L2_ISOLATED_INTEGRATION: 21
+      L3_DETERMINISTIC_REGRESSION: 10
+    tests: 515
+    verifier_duration_seconds: 23.792
+    process_real_seconds: 24.13
+    target_max_seconds: 45
+    result: PASS
+
+  qualification:
+    exact_candidate: "5031011d21e5b595d6576a91df78ee3e04ff154b"
+    command: ./verify
+    backward_compatible_no_profile_entrypoint: true
+    effective_profile: qualification
+    selected_modules: 62
+    classified_modules: 62
+    tests: 804
+    lane_modules:
+      L1_DETERMINISTIC_UNIT: 17
+      L2_ISOLATED_INTEGRATION: 21
+      L3_DETERMINISTIC_REGRESSION: 10
+      L4_HOST_LIFECYCLE: 9
+      L5_QUALIFICATION_CHAOS_CUTOVER: 5
+    lane_tests:
+      L1_DETERMINISTIC_UNIT: 214
+      L2_ISOLATED_INTEGRATION: 218
+      L3_DETERMINISTIC_REGRESSION: 83
+      L4_HOST_LIFECYCLE: 165
+      L5_QUALIFICATION_CHAOS_CUTOVER: 124
+    verifier_duration_seconds: 82.837
+    process_real_seconds: 83.16
+    process_user_seconds: 87.45
+    process_sys_seconds: 52.85
+    target_max_seconds: 90
+    result: PASS
+
+wall_clock_improvement:
+  fresh_exact_base_seconds: 192.822
+  final_qualification_seconds: 82.837
+  reduction_seconds: 109.985
+  reduction_percent_approx: 57.04
+  proof_surface_reduced: false
+
+quality_preservation:
+  meaningful_test_deleted_for_speed: false
+  assertion_weakened_for_speed: false
+  skip_added: false
+  xfail_added: false
+  retry_to_green_added: false
+  failure_hidden_or_ignored: false
+  required_lifecycle_proof_retained: true
+  required_restart_durability_proof_retained: true
+  required_recovery_proof_retained: true
+  required_cutover_proof_retained: true
+  qualification_includes_all_classified_modules: true
+  result: PASS
+
+product_runtime:
+  source_diff_from_task_base:
+    agent_runtime: unchanged
+    install_sh: unchanged
+    start_sh: unchanged
+    macos: unchanged
+    requirements_lock: unchanged
+    docs_and_readme: unchanged
+  installed_doctor:
+    command: "./start.sh doctor --json"
+    exit_code: 0
+    status: healthy
+    checks_passed: 10
+    checks_total: 10
+    runtime_version: "0.4.0"
+    installed_activation_revision: "cf6aba7e9ca22bf5f0c1202ed7b6ac40433053b0"
+    installed_git_tree: "a27f62f1bdfcbc43adf1c11b479b4688d5b5f13f"
+    tool_contract_kernel_version: 2
+    known_capabilities: 21
+    advertised_tools: 20
+    available_capabilities: 20
+    unavailable_capabilities: 1
+    service_main_app: enabled
+    service_runtime_agent: enabled
+    cutover_transaction_present: false
+  install_restart_reload_cutover_performed: false
+  result: PASS
+
+candidate_publication:
+  expected_remote_head: "b705cdbe3cb2b0f719eae49de414ca0e163ae662"
+  remote_head_before: "b705cdbe3cb2b0f719eae49de414ca0e163ae662"
+  remote_head_after: "5031011d21e5b595d6576a91df78ee3e04ff154b"
+  remote_branches_before:
+    - main
+  open_prs_before: 0
+  local_ahead_before: 2
+  local_behind_before: 0
+  non_force: true
+  remote_history_rewritten: false
+  fresh_remote_reconciled: true
+  result: PASS
+
+report_lineage:
+  path: .agent/tasks/TASK-0154/report-r1.yaml
+  direct_parent: "5031011d21e5b595d6576a91df78ee3e04ff154b"
+  allowed_report_only_path:
+    - .agent/tasks/TASK-0154/report-r1.yaml
+  source_test_doc_dependency_write_after_full_qualification: false
+  report_commit_and_final_publication: EVIDENCE_INDEXED_AFTER_REPORT_AUTHORSHIP
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: PASS
+  evidence: "Exact clean final candidate 5031011d21e5b595d6576a91df78ee3e04ff154b at tree f9ec0ea160bf1c172c0fb0210cdf3cd65b4306ea passed focused harness/launcher compatibility proof, deterministic plan proof, quick 6/6 modules and 77 tests, ordinary candidate 48/48 modules and 515 tests, and backward-compatible full ./verify qualification 62/62 modules and 804 tests in 82.837 seconds. Full qualification retained every lifecycle/restart/durability/recovery/cutover module. Installed doctor remained healthy with Runtime 0.4.0, Kernel 2, 21 known capabilities and 20 advertised tools, with no activation or cutover."
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "verification_policy.py explicitly classifies all 62 discovered test modules exactly once with lane, subsystem tags, isolation key, proof rationale and timeout. Unknown/duplicate classifications fail closed and full qualification selects all 62."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "Plans use the exact explicit base-to-HEAD Git diff and stable ordered policy data. Unknown paths and verification-infrastructure changes escalate to qualification. The actual TASK-0154 diff requested as candidate deterministically escalates to full qualification."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "Harness proof demonstrates independent modules overlap under the fixed four-worker ceiling while conflicting isolation keys never overlap. L4 host lifecycle and L5 qualification each retain a one-worker isolation boundary."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "START and terminal events flush incrementally; the full 82.837-second run emitted 5-second bounded heartbeats naming active modules. A synthetic 0.4-second timeout killed the owned worker process group while preserving an unrelated sentinel process."
+  - criterion_id: AC-5
+    status: PASS
+    evidence: "Base had 62 modules/791 tests; final has the same 62 modules and 804 tests. No product proof was deleted, skipped, xfailed, retried-to-green or assertion-weakened. All L4/L5 lifecycle/restart/durability/recovery/cutover proof remains in qualification."
+  - criterion_id: AC-6
+    status: PASS
+    evidence: "On exact clean final candidate, quick completed in 1.804s, ordinary candidate in 23.792s, and full qualification in 82.837s, meeting <=20s, <=45s and <=90s targets. Fresh exact-base full verification had measured 192.822s."
+  - criterion_id: AC-7
+    status: PASS
+    evidence: "./verify with no profile executed qualification and passed all 62 classified modules and 804 tests."
+  - criterion_id: AC-8
+    status: PASS
+    evidence: "Task-base to candidate product-source diff is empty. Installed doctor is healthy with Runtime 0.4.0, Kernel 2, 21 known capabilities, 20 advertised tools and no pending cutover; no install/restart/reload/cutover was performed."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Fresh gate proved remote branches={main}, open PRs=0, local/origin/remote at exact b705cdbe3cb2b0f719eae49de414ca0e163ae662, ahead/behind=0/0, clean worktree/index, and accepted review 37ac4b7ffe3a9e5faa567eb3a63827d495dfc726 present in ancestry."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "Fresh exact-base ./verify passed 62 modules/791 tests in 192.822s verifier wall / 193.13s real. Old fast lane was 14.027s, old serial lane 178.794s, and output remained opaque for more than 90 seconds."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "A 17/21/10/9/5 lane proposal covered all 62 modules before mutation. Individual-case profiles were captured for the two targeted dominant modules candidate_cutover and tunnel_identity before deciding not to refactor their synchronization."
+  - check_id: CHECK-4
+    result: PASS
+    evidence: "Added one verification policy SSOT, exact diff-driven planning, bounded four-worker scheduling, explicit isolation keys, per-module timeout, START/PASS/FAIL/TIMEOUT output and <=5s heartbeat. No product test synchronization was changed without evidence."
+  - check_id: CHECK-5
+    result: PASS
+    evidence: "Verification harness passed 20/20. After the first clean candidate exposed the launcher-argv compatibility regression, surface_and_scripts plus harness passed 39/39 on the correction."
+  - check_id: CHECK-6
+    result: PASS
+    evidence: "Source candidate 60db172... was committed after focused PASS. The later one-line verify-only compatibility correction produced new clean candidate 5031011... without amend/squash/rebase. git diff --check passed."
+  - check_id: CHECK-7
+    result: PASS
+    evidence: "Exact clean 5031011... passed quick 6 modules/77 tests in 1.804s, ordinary candidate 48 modules/515 tests in 23.792s, and full qualification 62 modules/804 tests in 82.837s. Exact plans were generated and the actual task diff escalated to qualification."
+  - check_id: CHECK-8
+    result: PASS
+    evidence: "Product source inventory is unchanged; installed doctor is healthy 10/10 with Runtime 0.4.0, Kernel 2, 21 capabilities and 20 advertised tools. No activation/cutover occurred."
+  - check_id: CHECK-9
+    result: EVIDENCE_INDEXED
+    evidence: "Fresh remote main equaled b705cdbe3cb2b0f719eae49de414ca0e163ae662, branches={main}, open PRs=0, and local candidate was clean before non-force publication to 5031011d21e5b595d6576a91df78ee3e04ff154b. This report is authored as the sole report-only child; exact report commit/publication and final reconciliation are indexed after these bytes are finalized."
+
+pushed: true
+result: NEEDS_REVIEW
