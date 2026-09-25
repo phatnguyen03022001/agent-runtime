@@ -72,6 +72,10 @@ class DurableStateCorrupt(DurableStateError):
     reason_code = "DURABLE_STATE_CORRUPT"
 
 
+class _DurableFileReplaced(DurableStateCorrupt):
+    pass
+
+
 class DurableOwnerLost(DurableStateError):
     reason_code = "DURABLE_OWNER_LOST"
 
@@ -465,11 +469,13 @@ class DurableStore:
             or stat.S_ISLNK(before.st_mode)
             or before.st_uid != os.getuid()
             or stat.S_IMODE(before.st_mode) != DURABLE_FILE_MODE
-            or before.st_nlink != 1
+            or before.st_nlink not in {0, 1}
         ):
             raise DurableStateCorrupt(f"durable file metadata is invalid: {path.name}")
         if before.st_size > maximum:
             raise DurableStateCorrupt(f"durable file exceeds bound: {path.name}")
+        if before.st_nlink == 0:
+            raise _DurableFileReplaced(f"durable file was atomically replaced: {path.name}")
         flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
         try:
             fd = os.open(path, flags)
@@ -478,15 +484,19 @@ class DurableStore:
         try:
             after = os.fstat(fd)
             if (
-                after.st_dev != before.st_dev
-                or after.st_ino != before.st_ino
-                or not stat.S_ISREG(after.st_mode)
+                not stat.S_ISREG(after.st_mode)
                 or after.st_uid != os.getuid()
                 or stat.S_IMODE(after.st_mode) != DURABLE_FILE_MODE
-                or after.st_nlink != 1
+                or after.st_nlink not in {0, 1}
                 or after.st_size > maximum
             ):
-                raise DurableStateCorrupt(f"durable file changed during validation: {path.name}")
+                raise DurableStateCorrupt(f"durable file metadata is invalid: {path.name}")
+            if (
+                after.st_nlink == 0
+                or after.st_dev != before.st_dev
+                or after.st_ino != before.st_ino
+            ):
+                raise _DurableFileReplaced(f"durable file was atomically replaced: {path.name}")
             remaining = maximum + 1
             chunks: list[bytes] = []
             while remaining > 0:
@@ -749,28 +759,31 @@ class DurableStore:
     def read_snapshot(self, job_id: str) -> DurableSnapshot:
         job_dir = self._validate_job_dir(job_id)
         for attempt in range(_SNAPSHOT_READ_ATTEMPTS):
-            state_raw = self._secure_read(job_dir / "state.json", maximum=MAX_STATE_BYTES)
-            state = validate_state(_parse_json(state_raw, label="durable state"))
-            journal_raw = self._secure_read(job_dir / "journal.json", maximum=MAX_JOURNAL_BYTES)
-            consistent = secrets.compare_digest(
-                hashlib.sha256(journal_raw).hexdigest(),
-                state["journal_sha256"],
-            )
-            if consistent:
-                generation, base_cursor, chunks = self._parse_journal(journal_raw)
-                consistent = (
-                    generation == state["journal_generation"]
-                    and base_cursor == state["base_cursor"]
-                    and sum(len(data) for _stream, data in chunks)
-                    == state["retained_output_bytes"]
+            try:
+                state_raw = self._secure_read(job_dir / "state.json", maximum=MAX_STATE_BYTES)
+                state = validate_state(_parse_json(state_raw, label="durable state"))
+                journal_raw = self._secure_read(job_dir / "journal.json", maximum=MAX_JOURNAL_BYTES)
+                consistent = secrets.compare_digest(
+                    hashlib.sha256(journal_raw).hexdigest(),
+                    state["journal_sha256"],
                 )
                 if consistent:
-                    state_raw_after = self._secure_read(
-                        job_dir / "state.json",
-                        maximum=MAX_STATE_BYTES,
+                    generation, base_cursor, chunks = self._parse_journal(journal_raw)
+                    consistent = (
+                        generation == state["journal_generation"]
+                        and base_cursor == state["base_cursor"]
+                        and sum(len(data) for _stream, data in chunks)
+                        == state["retained_output_bytes"]
                     )
-                    if state_raw_after == state_raw:
-                        return DurableSnapshot(state=state, chunks=chunks)
+                    if consistent:
+                        state_raw_after = self._secure_read(
+                            job_dir / "state.json",
+                            maximum=MAX_STATE_BYTES,
+                        )
+                        if state_raw_after == state_raw:
+                            return DurableSnapshot(state=state, chunks=chunks)
+            except _DurableFileReplaced:
+                pass
             if attempt + 1 < _SNAPSHOT_READ_ATTEMPTS:
                 time.sleep(_SNAPSHOT_RETRY_SECONDS)
         raise DurableStateCorrupt("durable state changed inconsistently during recovery")

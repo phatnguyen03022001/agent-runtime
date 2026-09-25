@@ -234,6 +234,143 @@ class DurablePipeTests(unittest.TestCase):
         with self.assertRaises(DurableStateCorrupt):
             store.scan_job_ids()
 
+    def test_snapshot_retry_accepts_valid_atomic_state_replacement(self) -> None:
+        manager = self.manager()
+        identity = "9" * 32
+        manager.start(
+            [sys.executable, "-u", "-c", "print('stable', flush=True)"],
+            str(self.cwd),
+            identity,
+            "pipe",
+            "runtime_restart",
+        )
+        self.remember_owners(identity)
+        self.wait_terminal(manager, identity)
+
+        store = DurableStore(self.state_root)
+        job_id = durable_job_id(identity)
+        job_dir = self.state_root / job_id
+        state_path = job_dir / "state.json"
+        baseline = store.read_snapshot(job_id)
+        replacement_path = job_dir / ".state.json.regression-replacement"
+        replacement_path.write_bytes(state_path.read_bytes())
+        os.chmod(replacement_path, 0o600)
+
+        real_open = os.open
+        state_open_count = 0
+
+        def replace_between_lstat_and_open(path, flags, *args, **kwargs):
+            nonlocal state_open_count
+            if Path(path) == state_path:
+                state_open_count += 1
+                if state_open_count == 1:
+                    os.replace(replacement_path, state_path)
+            return real_open(path, flags, *args, **kwargs)
+
+        with patch("agent_runtime.durable_pipe.os.open", new=replace_between_lstat_and_open):
+            snapshot = store.read_snapshot(job_id)
+
+        self.assertEqual(snapshot.state["start_identity"], identity)
+        self.assertEqual(
+            snapshot.state["journal_generation"],
+            baseline.state["journal_generation"],
+        )
+        self.assertEqual(snapshot.chunks, baseline.chunks)
+        self.assertEqual(state_open_count, 3)
+
+        replacement_after_open = job_dir / ".state.json.regression-after-open"
+        replacement_after_open.write_bytes(state_path.read_bytes())
+        os.chmod(replacement_after_open, 0o600)
+        after_open_count = 0
+
+        def replace_after_open_before_fstat(path, flags, *args, **kwargs):
+            nonlocal after_open_count
+            fd = real_open(path, flags, *args, **kwargs)
+            if Path(path) == state_path:
+                after_open_count += 1
+                if after_open_count == 1:
+                    os.replace(replacement_after_open, state_path)
+            return fd
+
+        with patch("agent_runtime.durable_pipe.os.open", new=replace_after_open_before_fstat):
+            after_open_snapshot = store.read_snapshot(job_id)
+
+        self.assertEqual(
+            after_open_snapshot.state["journal_generation"],
+            baseline.state["journal_generation"],
+        )
+        self.assertEqual(after_open_snapshot.chunks, baseline.chunks)
+        self.assertEqual(after_open_count, 3)
+
+        replacement_during_lstat = job_dir / ".state.json.regression-during-lstat"
+        replacement_during_lstat.write_bytes(state_path.read_bytes())
+        os.chmod(replacement_during_lstat, 0o600)
+        real_lstat = os.lstat
+        lstat_race_count = 0
+
+        def replace_while_lstat_holds_old_inode(path, *args, **kwargs):
+            nonlocal lstat_race_count
+            if Path(path) == state_path:
+                lstat_race_count += 1
+                if lstat_race_count == 1:
+                    fd = real_open(path, os.O_RDONLY)
+                    try:
+                        os.replace(replacement_during_lstat, state_path)
+                        return os.fstat(fd)
+                    finally:
+                        os.close(fd)
+            return real_lstat(path, *args, **kwargs)
+
+        with patch("agent_runtime.durable_pipe.os.lstat", new=replace_while_lstat_holds_old_inode):
+            during_lstat_snapshot = store.read_snapshot(job_id)
+
+        self.assertEqual(
+            during_lstat_snapshot.state["journal_generation"],
+            baseline.state["journal_generation"],
+        )
+        self.assertEqual(during_lstat_snapshot.chunks, baseline.chunks)
+        self.assertGreaterEqual(lstat_race_count, 2)
+
+    def test_snapshot_consistency_still_rejects_mixed_generation_and_integrity_corruption(self) -> None:
+        manager = self.manager()
+        identity = "8" * 32
+        manager.start(
+            [sys.executable, "-u", "-c", "print('stable', flush=True)"],
+            str(self.cwd),
+            identity,
+            "pipe",
+            "runtime_restart",
+        )
+        self.remember_owners(identity)
+        self.wait_terminal(manager, identity)
+
+        store = DurableStore(self.state_root)
+        job_id = durable_job_id(identity)
+        job_dir = self.state_root / job_id
+        snapshot = store.read_snapshot(job_id)
+
+        journal_path = job_dir / "journal.json"
+        journal_raw = journal_path.read_bytes()
+        generation = int(snapshot.state["journal_generation"])
+        mixed_journal = journal_raw.replace(
+            f'"generation":{generation}'.encode(),
+            f'"generation":{generation + 1}'.encode(),
+            1,
+        )
+        self.assertNotEqual(mixed_journal, journal_raw)
+        journal_path.write_bytes(mixed_journal)
+        with self.assertRaisesRegex(DurableStateCorrupt, "changed inconsistently"):
+            store.read_snapshot(job_id)
+        journal_path.write_bytes(journal_raw)
+
+        state_path = job_dir / "state.json"
+        state_raw = state_path.read_bytes()
+        tampered_state = state_raw.replace(identity.encode(), ("7" * 32).encode(), 1)
+        self.assertNotEqual(tampered_state, state_raw)
+        state_path.write_bytes(tampered_state)
+        with self.assertRaisesRegex(DurableStateCorrupt, "integrity"):
+            store.read_snapshot(job_id)
+
     def test_output_is_bounded_cursor_expiry_is_truthful_and_retention_cleans(self) -> None:
         manager = self.manager(retention=0.0)
         identity = "4" * 32
