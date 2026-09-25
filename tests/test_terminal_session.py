@@ -538,7 +538,11 @@ time.sleep(.4)
 
         retention_bound = 16
         now = [100.0]
-        manager = TerminalSessionManager(clock=lambda: now[0], start_reaper=False)
+        manager = TerminalSessionManager(
+            clock=lambda: now[0],
+            start_reaper=False,
+            durable_state_root=self.root / "retention-durable-state",
+        )
         self.addCleanup(manager.shutdown)
         session_ids: list[str] = []
 
