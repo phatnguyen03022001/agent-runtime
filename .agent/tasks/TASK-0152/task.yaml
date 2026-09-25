@@ -1,0 +1,238 @@
+protocol_version: 3
+
+task_id: TASK-0152
+task_revision: 1
+state: APPROVED
+title: "Optional Telemetry Foundation"
+
+origin:
+  type: explicit_operator_authority
+  task_id: TASK-0152
+  gap_id: "OBSERVABILITY-FOUNDATION"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+  canonical_branch: main
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+
+architect_analysis_skills:
+  - architect
+  - observability
+  - reliability
+  - security-review
+  - simplicity
+  - verification
+
+execution_skills:
+  required:
+    - executor
+    - verification
+    - security-review
+  recommended:
+    - observability
+    - reliability
+    - simplicity
+    - reuse-first
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  preferred_transport: AGENT_RUNTIME
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0151/review.yaml at b6952ed2579ce820dfd3911ed56ee1956f45bee7"
+    role: "accepted Runtime 0.4.0 / Kernel 2 / twenty advertised tools / twenty-one known capabilities baseline"
+    precedence: 1
+  - source: "Existing agent_runtime/timing.py bounded JSON diagnostics"
+    role: "already accepted event/correlation/privacy substrate: mcp_request_start/end, tool_execution_end and process_end with no argv/arguments/results/secrets"
+    precedence: 2
+  - source: "OpenTelemetry Python current status: traces and metrics stable; logs development"
+    role: "use stable traces/metrics only; do not adopt OpenTelemetry logs in this task"
+    precedence: 3
+  - source: "Current requirements.lock includes opentelemetry-api 1.44.0 but not SDK/exporter"
+    role: "dependency baseline; any SDK/exporter addition must be explicit, pinned and hash-locked"
+    precedence: 4
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing timing middleware + one optional telemetry adapter"
+  rationale: "Observability must reuse accepted TimingContext/events. Add no MCP tool and no second event pipeline. Telemetry is an optional sink over the existing bounded event model, not a new execution/control subsystem."
+
+objective: "Add a low-overhead, privacy-preserving, optional OpenTelemetry traces+metrics substrate over the existing timing events so Runtime behavior can be measured during long executions and future restart-chaos work without changing tool semantics, exposing user payloads, or requiring Prometheus/Grafana/Collector inside Agent Runtime."
+
+scope:
+  required_changes:
+    - "Create one optional telemetry adapter owned by agent_runtime/telemetry.py and integrate it with existing agent_runtime/timing.py. Existing bounded JSON stderr diagnostics remain authoritative and must continue even when telemetry is disabled or exporter initialization/export fails."
+    - "Do not add a public MCP tool, capability descriptor or advertised surface. Known capabilities remain 21; advertised tools remain 20; ToolContract Kernel remains 2; source Runtime version remains 0.4.0."
+    - "Telemetry is disabled by default. Disabled mode must not initialize an OpenTelemetry SDK provider, exporter thread, network client or collector connection."
+    - "Enable telemetry only through canonical Runtime configuration with one bounded mode field: AGENT_RUNTIME_TELEMETRY=off|otlp, default off. Do not accept arbitrary exporter URL, headers, auth tokens, service names, resource attributes or user-supplied labels in this task."
+    - "OTLP mode exports only to fixed loopback OTLP/HTTP endpoint http://127.0.0.1:4318 using standard OpenTelemetry Python SDK/exporter packages. The local Collector is external/operator-managed and optional. Agent Runtime must not install, launch, supervise or configure Collector, Prometheus or Grafana."
+    - "Add only the minimum pinned OpenTelemetry dependencies required for manual traces/metrics plus OTLP/HTTP export. Prefer versions matching the already locked opentelemetry-api line. All new direct/transitive dependencies must be fully hash-locked for canonical CPython/macOS packaging."
+    - "Do not use auto-instrumentation. Manual instrumentation only. Do not monkey-patch subprocess, HTTP, MCP, logging or standard libraries."
+    - "OpenTelemetry logs are explicitly out of scope because the current Python logs signal is not treated as stable authority for this task. Keep existing bounded JSON stderr events as the log-like diagnostic stream."
+    - "Exported telemetry MUST NOT include argv, command strings, cwd/path/file names, repository URLs, request arguments, results, stdout/stderr content, exception messages, environment variables, Git identity, API keys/tokens, runtime.env values, raw_request_id, session_id, start_identity or continuation receipts."
+    - "Allowed exported attributes are fixed low-cardinality values only: service.name='agent-runtime', runtime.version, runtime.revision when available, tool.name from the static advertised-tool allowlist, outcome, process.kind and termination.state from bounded enums. runtime_call_id may be used only as trace correlation, never as a metric attribute."
+    - "Converge timing.py tool-name allowlisting with the exact twenty advertised tool names without importing capability_registry in a way that creates cycles. Add a regression that the timing allowlist equals the advertised surface at source import/test time."
+    - "Metrics must be fixed-name and low-cardinality. Minimum set: MCP requests total by tool/outcome; MCP request duration histogram by tool/outcome; tool executions total by tool/outcome; process completions total by tool/process_kind/termination_state. Do not place runtime_call_id or any user-derived value in metric labels."
+    - "Traces must represent tools/call request lifetime and retained process lifetime where an accepted TimingContext exists. A terminal_start request may finish before its spawned process; process lifetime tracing may remain open only while the already-bounded Runtime session/process record exists. No new unbounded trace registry."
+    - "Exporter behavior is fail-open relative to Runtime operations: exporter initialization, queue saturation, collector absence, timeout or export error must never change tool result/effect, process lifecycle, admission, cleanup or server readiness."
+    - "Use bounded asynchronous batching from the OpenTelemetry SDK. Do not perform synchronous network export on the tool request/process cleanup path. Fix queue/batch/export timeout constants in source; do not add a configuration matrix in v1."
+    - "Collector absence in otlp mode must not make healthz/readyz fail. Doctor may report telemetry mode/config validity as informational evidence but must not require a live collector to declare Runtime healthy."
+    - "Canonical runtime.env validation/start.sh installed serve must accept and propagate only AGENT_RUNTIME_TELEMETRY=off|otlp. Unknown value fails before Runtime start. The setting contains no secret and may be included in bounded doctor evidence as the mode only."
+    - "Add deterministic tests using in-memory/fake span/metric exporters. Tests must prove correlation, low-cardinality attribute allowlist, no payload leakage, exporter failure isolation, disabled zero-export behavior, bounded process-span lifetime, and no tool-surface/schema change."
+    - "Add a lightweight performance guard: telemetry disabled must add no measurable exporter/network work and preserve current timing behavior; enabled instrumentation test must remain bounded without sleeps or external collector dependency. Do not establish a brittle wall-clock microbenchmark as a release gate."
+    - "Document the production topology succinctly: Agent Runtime -> optional OTLP/HTTP loopback Collector -> optional Prometheus/Grafana/other backend. Grafana/Prometheus are not Runtime dependencies and are not required for Runtime operation."
+    - "Do not package/install/restart/reload/cutover Runtime in TASK-0152. Installed Runtime remains accepted 0.4.0 at activation revision cf6aba7e9ca22bf5f0c1202ed7b6ac40433053b0 until a later convergence/cutover task."
+    - "After focused PASS, commit one coherent implementation candidate, run canonical ./verify on that exact clean candidate, fresh-reconcile remote main, publish exact verified candidate non-force, publish report-r1.yaml as sole report-only child, and stop NEEDS_REVIEW."
+
+  allowed_existing_files_or_components:
+    - "new agent_runtime/telemetry.py"
+    - "agent_runtime/timing.py"
+    - "agent_runtime/server.py only for lifecycle shutdown/initialization integration if required"
+    - "agent_runtime/doctor.py only for bounded telemetry-mode evidence if useful"
+    - "start.sh"
+    - "macos/runtime_config.py"
+    - "requirements.lock"
+    - "directly affected timing/config/package/doctor tests"
+    - "new tests/test_telemetry.py"
+    - "README.md and directly affected operations/observability docs"
+    - ".agent/tasks/TASK-0152/report-r1.yaml"
+
+structure_policy:
+  expected_new_files:
+    - "agent_runtime/telemetry.py"
+    - "tests/test_telemetry.py"
+    - ".agent/tasks/TASK-0152/report-r1.yaml"
+  unlisted_new_files:
+    allowed: true
+    max: 1
+    within:
+      - "docs"
+    purpose: "At most one focused observability document if README would become disproportionate."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+invariants:
+  - "Runtime source remains 0.4.0; ToolContract Kernel remains 2."
+  - "Known capabilities remain 21; advertised MCP tools remain exactly 20."
+  - "No public ToolContract/schema changes."
+  - "Telemetry disabled by default and never required for Runtime correctness/readiness."
+  - "No user payload, command/file/repository content, secrets or high-cardinality identifiers enter metrics."
+  - "Existing timing JSON stderr events remain bounded and behavior-compatible."
+  - "OTLP network authority is telemetry-only, loopback-only and absent when mode=off."
+  - "Collector/Prometheus/Grafana lifecycle is external to Runtime."
+  - "No OpenTelemetry logs signal in TASK-0152."
+  - "No GAP-12 MCP Tasks or GAP-13 durable-execution implementation."
+  - "No package/install/cutover or plugin reload."
+
+forbidden_changes:
+  - "Any new MCP/public capability or tool."
+  - "Any tool schema/result/failure/effect semantic change."
+  - "Any payload/content/error-message/argv/path/cwd/result/stdout/stderr telemetry export."
+  - "Any arbitrary OTLP endpoint, exporter headers, auth secret or remote-network telemetry configuration."
+  - "Any synchronous exporter call on MCP/process critical paths."
+  - "Any mandatory collector/backend dependency."
+  - "Any bundled Collector, Prometheus, Grafana, Loki, Tempo or dashboard service."
+  - "Any auto-instrumentation/monkey-patching."
+  - "Any durable process/task supervisor, restart reattachment or MCP Tasks implementation."
+  - "Any Runtime version/Kernel bump, install/restart/cutover, branch/PR/force-push/tag/release."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: revised_contract_required
+  dependency_change: allowed_only_for_exact_otel_sdk_exporter_closure
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Telemetry is optional, default-off and operationally non-authoritative."
+    evidence_required: "Disabled tests prove no SDK/exporter/network initialization; enabled exporter failures/collector absence cannot alter tool/process outcomes, health/readiness or cleanup."
+  - id: AC-2
+    requirement: "Telemetry exports only fixed privacy-safe low-cardinality semantics."
+    evidence_required: "Tests inspect spans/metric points and prove only authorized attributes; secret/argv/path/cwd/args/results/stdout/stderr/error-text sentinels never appear."
+  - id: AC-3
+    requirement: "Existing timing correlation is reused rather than replaced."
+    evidence_required: "MCP request/tool/process events remain behavior-compatible; runtime_call_id correlates traces but never metric labels; timing tool allowlist exactly matches twenty advertised tools."
+  - id: AC-4
+    requirement: "Metrics/traces cover the execution signals needed for future survival work."
+    evidence_required: "Deterministic tests prove request counts/durations, tool outcomes, process completion/termination state and request/process trace lifetimes including terminal_start returning before process end."
+  - id: AC-5
+    requirement: "Canonical configuration and production topology stay bounded."
+    evidence_required: "runtime.env/start accept off|otlp only; otlp fixed to 127.0.0.1:4318; collector/backend not started by Runtime; dependency lock fully hashed; docs show optional external collector topology."
+  - id: AC-6
+    requirement: "Exact candidate is canonically verified and published without live activation."
+    evidence_required: "Focused PASS, git diff --check, canonical ./verify PASS on exact candidate, Runtime 0.4.0/Kernel2/21-known/20-advertised unchanged, report-only child, installed activation unchanged, NEEDS_REVIEW."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Fresh-resolve GitHub/local main. Require exact task-authoring base, branches={main}, open PRs=0, ahead/behind=0/0, clean worktree/index, accepted TASK-0151 review, installed Runtime 0.4.0 at cf6aba7e... with no pending transaction."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Fresh-inspect timing.py/config/runtime startup/dependency lock. Confirm bounded JSON timing exists, opentelemetry-api is present, no telemetry adapter/SDK exporter exists, and current public surface is unchanged."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Implement the smallest optional telemetry adapter plus bounded config/dependency closure. Run focused privacy/failure-isolation/correlation/metric/trace/config/surface tests."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Commit one coherent source candidate after focused PASS; require clean candidate, git diff --check, exact SHA/tree and no GAP-12/GAP-13/package activation surface."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Run canonical ./verify on exact clean candidate. Any source/test/doc/dependency write afterward creates a new candidate requiring full re-verification."
+      required: true
+    - id: CHECK-6
+      command_or_check: "Fresh-resolve remote main, require it still equals task base, publish exact verified candidate non-force, create/validate/publish report-r1.yaml as sole report-only child, fresh-reconcile final clean main and stop NEEDS_REVIEW."
+      required: true
+
+authoritative_verification:
+  required: true
+  mechanism: "Focused privacy/failure-isolation/trace/metric/config tests plus canonical ./verify on exact source candidate"
+  expected_signal: "Default-off optional OTLP traces+metrics reuse timing events, leak no payload, never affect Runtime correctness, public surface unchanged and exact candidate verifies cleanly."
+
+report_requirements:
+  path: .agent/tasks/TASK-0152/report-r1.yaml
+  record:
+    - "state=REPORTED and result=NEEDS_REVIEW"
+    - "exact task/base/candidate/tree/report lineage"
+    - "telemetry mode contract off|otlp and fixed loopback endpoint"
+    - "OpenTelemetry direct/transitive dependency versions and hash-lock proof"
+    - "disabled-mode zero exporter/network initialization proof"
+    - "privacy attribute allowlist and sentinel non-leak proof"
+    - "metrics names/label dimensions and trace lifetime/correlation proof"
+    - "export failure/collector absence fail-open proof"
+    - "timing JSON compatibility and twenty-tool allowlist convergence"
+    - "focused + canonical exact-candidate verification"
+    - "Runtime 0.4.0 / Kernel 2 / 21 known / 20 advertised unchanged"
+    - "installed Runtime remains activation cf6aba7e... with no cutover"
+    - "candidate publication and sole report-only child reconciliation"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
