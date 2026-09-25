@@ -1,0 +1,221 @@
+protocol_version: 3
+
+task_id: TASK-0158
+task_revision: 1
+state: APPROVED
+title: "Runtime 0.5.0 Activation-Only Cutover — Corrected Candidate"
+
+origin:
+  type: corrective_activation_followup
+  blocked_task: TASK-0156
+  corrective_source_task: TASK-0157
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+  canonical_branch: main
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+accepted_predecessor:
+  task: TASK-0157
+  review_commit: "e1c86ab4d35f86cc5a3ad5c283a541c16b575b36"
+  source_candidate: "58027d5cebf1483f62d379ed05935c86da3a6f4a"
+  source_tree: "230f73f976e01aadb69bd4e220147fefc31d03b7"
+  package_sha256: "6fc3f7c72c365f569ba45f87134494926154868f7695b2fc143b723bce52b961"
+  handoff_sha256: "a10ee99c867345d7268fe84306a4dfca57974217f4f28f027d12e04c508e898b"
+  record_count: 1714
+
+prior_blocked_activation:
+  task: TASK-0156
+  failed_job: "job_2f970974b551"
+  failed_package_sha256: "bd6901087782ecedfb3eb21f9807c406311677dfecca4548c1b23e2c89a3429e"
+  failure: "predecessor ServiceManagement contract is unsupported for Runtime refresh"
+  transaction_after_failure_present: false
+  predecessor_restored_and_healthy: true
+  retry_of_task_0156_forbidden: true
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  activation_carrier: SENTINELX
+  activation_host: mac-tphat-mb
+  forbidden_activation_carrier:
+    - AGENT_RUNTIME
+
+objective: >
+  Activate the exact corrected and already-accepted Runtime 0.5.0 package
+  6fc3f7c7... through SentinelX, prove coherent PENDING/APP_SWAPPED state,
+  commit cutover exactly once, prove the installed Runtime is healthy and
+  self-contained, reconnect at most once if required, run only minimal live
+  acceptance, create the report, and stop NEEDS_REVIEW.
+
+immutable_release_authority:
+  runtime_version: "0.5.0"
+  source_candidate: "58027d5cebf1483f62d379ed05935c86da3a6f4a"
+  source_tree: "230f73f976e01aadb69bd4e220147fefc31d03b7"
+  package_directory: "build/candidates/6fc3f7c72c365f569ba45f87134494926154868f7695b2fc143b723bce52b961"
+  candidate_app: "build/candidates/6fc3f7c72c365f569ba45f87134494926154868f7695b2fc143b723bce52b961/Agent Runtime.app"
+  candidate_handoff: "build/candidates/6fc3f7c72c365f569ba45f87134494926154868f7695b2fc143b723bce52b961/Agent Runtime.candidate.json"
+  candidate_sha256: "6fc3f7c72c365f569ba45f87134494926154868f7695b2fc143b723bce52b961"
+  handoff_sha256: "a10ee99c867345d7268fe84306a4dfca57974217f4f28f027d12e04c508e898b"
+  record_count: 1714
+  predecessor_revision: "cf6aba7e9ca22bf5f0c1202ed7b6ac40433053b0"
+  predecessor_contract: "split-v1"
+  tool_contract_kernel_version: 2
+  known_capabilities: 21
+  advertised_tools: 20
+
+source_package_freeze:
+  - "Do not edit source, tests, docs, dependencies, verification policy or package scripts."
+  - "Do not rebuild/reseal the package."
+  - "Do not run focused tests, candidate profile or full qualification."
+  - "Do not invoke macos/package_app.sh."
+  - "Do not reuse the superseded bd690108... package."
+
+executor_survival_protocol:
+  - "Use SentinelX for every consequence-bearing activation command."
+  - "Record every background job_id immediately."
+  - "Poll healthy background jobs no more frequently than every 20 seconds."
+  - "Do not blind retry any install/resume/rollback/recover/commit operation."
+  - "If a chat dies or command outcome is unknown, inspect SentinelX job state, canonical transaction and installed package identity before taking action."
+  - "If transaction truth already proves APP_SWAPPED/PENDING, continue from that transaction; do not reinstall."
+  - "If transaction is absent and installed predecessor remains unchanged after a positively failed job, stop BLOCKED rather than inventing retry authority."
+  - "Do not terminate unrelated pre-existing host processes."
+  - "Do not rerun source verification due to activation interruption."
+
+preflight:
+  required:
+    - "Fresh Git gate: local/origin/remote exact task base, main only, zero PRs, clean worktree/index."
+    - "TASK-0157 review e1c86ab4... present in ancestry."
+    - "SentinelX mac-tphat-mb operational and ping PASS."
+    - "Validate exact corrected pinned package/handoff; require source 58027d5... tree 230f73f9... record_count 1714."
+    - "Strict deep codesign PASS."
+    - "Installed bundle own doctor proves predecessor Runtime 0.4.0 at cf6aba7e... / a27f62f1..., ServiceManagement enabled/enabled, healthz live, readyz ready, transaction absent."
+    - "Do not use checkout doctor as predecessor health gate because checkout source is 0.5.0."
+
+activation:
+  install:
+    authority: "Exactly one TASK-0158 install-prebuilt invocation."
+    carrier: SENTINELX
+    command: >
+      ./install.sh --install-prebuilt
+      build/candidates/6fc3f7c72c365f569ba45f87134494926154868f7695b2fc143b723bce52b961/Agent Runtime.app
+      build/candidates/6fc3f7c72c365f569ba45f87134494926154868f7695b2fc143b723bce52b961/Agent Runtime.candidate.json
+      --expected-candidate-sha256 6fc3f7c72c365f569ba45f87134494926154868f7695b2fc143b723bce52b961
+      --expected-handoff-sha256 a10ee99c867345d7268fe84306a4dfca57974217f4f28f027d12e04c508e898b
+    expected_terminal_state: "PENDING / APP_SWAPPED"
+    retry_policy: "No second install without new Architect authority."
+
+  unknown_outcome:
+    - "Inspect SentinelX job terminal state."
+    - "Inspect canonical cutover transaction."
+    - "Inspect installed app version/revision/tree/provenance."
+    - "If APP_SWAPPED/PENDING is coherent, continue without reinstall."
+    - "Use resume/rollback/recover only when canonical transaction truth requires it."
+    - "If effect ownership is ambiguous, stop BLOCKED."
+
+pending_gate:
+  require:
+    - "Recognized transaction status=PENDING phase=APP_SWAPPED."
+    - "Installed Runtime version=0.5.0."
+    - "Installed revision=58027d5cebf1483f62d379ed05935c86da3a6f4a."
+    - "Installed tree=230f73f976e01aadb69bd4e220147fefc31d03b7."
+    - "Installed package provenance binds exact package/handoff."
+    - "Predecessor service contract recorded as split-v1."
+    - "ServiceManagement enabled/enabled."
+    - "healthz=live and readyz=ready."
+    - "Installed-bundle clean-environment doctor healthy."
+  failure_policy: "Do not commit cutover unless every predicate passes."
+
+commit_cutover:
+  authority: "Exactly one invocation after pending_gate PASS."
+  carrier: SENTINELX
+  command: "./install.sh --commit-cutover"
+  require_after:
+    - "transaction absent"
+    - "installed Runtime 0.5.0 at exact revision/tree"
+    - "ServiceManagement enabled/enabled"
+    - "healthz=live"
+    - "readyz=ready"
+    - "installed-bundle clean-environment doctor healthy"
+  retry_policy: "Unknown result must be reconciled from transaction truth before any further action."
+
+live_acceptance:
+  reconnect:
+    maximum: 1
+    rule: "Reconnect/reload ChatGPT Agent Runtime at most once after finalized installed doctor PASS."
+    fallback: "If connector/UI transition is unavailable, stop OPERATOR_TRANSITION_REQUIRED with finalized healthy host state."
+
+  checks:
+    - "runtime_capabilities: Runtime 0.5.0, runtime_revision 58027d5..., Kernel 2, 21 known / 20 advertised / 20 available / 1 unavailable."
+    - "tools/list exactly 20; screen_capture absent."
+    - "Full screen_capture descriptor remains supported=true, available=false, advertised=false, reason VISUAL_PERCEPTION_BLOCKED."
+    - "terminal_start request/result 4/4 and terminal_poll request/result 4/4."
+    - "One short keyed pipe job with durability=runtime_restart, caller-known start_identity and bounded output reaches terminal success with one effect only."
+    - "capacity_observer returns coherent point-in-time state."
+    - "Do not intentionally restart Runtime to test durability."
+
+telemetry_boundary:
+  - "Telemetry code/dependencies are now part of the candidate."
+  - "Do not enable AGENT_RUNTIME_TELEMETRY=otlp in TASK-0158."
+  - "Do not configure Collector, Prometheus or Grafana."
+  - "Telemetry enablement remains a separate task after activation acceptance."
+
+report_lifecycle:
+  - "Only after finalized host state and live acceptance PASS create .agent/tasks/TASK-0158/report-r1.yaml."
+  - "Report is the sole tracked mutation."
+  - "Validate with pinned agent-skills authority."
+  - "Publish report non-force."
+  - "Reconcile HEAD=origin/main=remote main, ahead/behind=0/0, clean worktree/index, branches={main}, open PRs=0."
+  - "Stop NEEDS_REVIEW."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact corrected package is activated with no rebuild/retest."
+  - id: AC-2
+    requirement: "Independent-carrier activation is interruption-safe and uses no blind retry."
+  - id: AC-3
+    requirement: "Pending state proves exact 0.5.0 candidate and split-v1 predecessor compatibility."
+  - id: AC-4
+    requirement: "Cutover is finalized exactly once and transaction disappears."
+  - id: AC-5
+    requirement: "Minimal live acceptance proves the new public Runtime surface."
+  - id: AC-6
+    requirement: "Telemetry remains disabled/unconfigured."
+  - id: AC-7
+    requirement: "Report-only canonical closure is exact."
+
+forbidden:
+  - "Any source/test/doc/dependency/package mutation."
+  - "Any source verification replay."
+  - "Any package rebuild/reseal."
+  - "Any use of Agent Runtime as activation carrier."
+  - "Any blind retry."
+  - "Any second install without new Architect authority."
+  - "Any telemetry enablement."
+  - "Any MCP Tasks implementation."
+  - "Any branch, PR, force push, amend, squash, tag or release publication."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  install_exact_candidate: true
+  commit_cutover_once_after_gate: true
+  rebuild_candidate: false
+  enable_telemetry: false
+
+blocking_decisions: []
+execution_ready: true
