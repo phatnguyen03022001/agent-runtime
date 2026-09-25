@@ -1,0 +1,232 @@
+protocol_version: 3
+
+task_id: TASK-0159
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0159/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "007ad09d117eef82b722dd0614c04f4329ae209a"
+  final_execution_head: "db3cd4da9cae39deeba4d7b91f3b0030c6ed5086"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+  validator_blob: "32d14fa7c27c765f9719efa667cf920cd76a42f8"
+
+implementation_lineage:
+  task_base: "007ad09d117eef82b722dd0614c04f4329ae209a"
+  preserved_source_checkpoint: "fddb87db696b48abf81d1f4125b9948d942e2862"
+  c1_child: "d4e68a513903e237ba1a4f6961a16e4d5a7bd506"
+  c1_tree: "3af4cd04cef5149a96896703cf3077c77fdeefad"
+  c2_child: "db3cd4da9cae39deeba4d7b91f3b0030c6ed5086"
+  c2_tree: "f11c4c728983c3dd277f8efe406fe3494fe8fb22"
+  changed_paths:
+    - agent_runtime/session.py
+    - tests/test_durable_pipe.py
+    - tests/test_terminal_session.py
+    - tests/test_supervised_lifecycle.py
+  production_lifecycle_changed: false
+
+source_fix:
+  changed_paths:
+    - agent_runtime/session.py
+    - tests/test_durable_pipe.py
+  durable_runner_bootstrap_sets_python_dont_write_bytecode: true
+  minimal_child_env_contract_widened: false
+  user_terminal_environment_changed: false
+  focused_durable_tests: 19
+  focused_durable_result: PASS
+  runner_argv_remains_opaque: true
+
+original_checkpoint_qualification:
+  candidate: "fddb87db696b48abf81d1f4125b9948d942e2862"
+  published: false
+  broad_runs: 1
+  result: FAIL
+  sole_failing_test: "tests.test_terminal_session.TerminalSessionTests.test_natural_exit_retention_is_bounded_and_eviction_is_truthful"
+  retained_count_observed: 17
+  retention_bound: 16
+  leaked_recovered_session_id: "5e6578bede66dfa0"
+  diagnosis: "The test fixture counted a recovered runtime_restart durable session together with its process-local retention population; this was a test-isolation defect, not a retention product defect."
+c1_correction:
+  child: "d4e68a513903e237ba1a4f6961a16e4d5a7bd506"
+  direct_parent: "fddb87db696b48abf81d1f4125b9948d942e2862"
+  changed_path: tests/test_terminal_session.py
+  correction: "The process-retention test uses a test-owned durable state root instead of the real host durable store."
+  product_retention_code_changed: false
+  exact_corrected_test: "1/1 PASS"
+  terminal_session_module: "48/48 PASS"
+  broad_runs_on_child: 1
+  broad_result: FAIL
+  sole_failing_test: "tests.test_supervised_lifecycle.SupervisedLifecycleTests.test_restart_allows_main_app_not_found_when_runtime_agent_is_enabled"
+  sole_failure_diagnostic: "START ERROR: Runtime did not become ready: port 8080 listener is not the canonical installed no-profile Runtime"
+
+c2_correction:
+  child: "db3cd4da9cae39deeba4d7b91f3b0030c6ed5086"
+  tree: "f11c4c728983c3dd277f8efe406fe3494fe8fb22"
+  direct_parent: "d4e68a513903e237ba1a4f6961a16e4d5a7bd506"
+  changed_path: tests/test_supervised_lifecycle.py
+  diagnosis: "The fixture fake ps matched process identity by substring-searching the entire argv and separately rereading runtime.pid, creating a timing-sensitive fake identity boundary."
+  correction: "The fake ps now parses explicit -p and -o arguments, compares the requested PID exactly to the fixture runtime PID, preserves foreign PID 777 behavior, preserves command= and comm= responses, and falls back to /bin/ps with the original arguments."
+  production_start_sh_changed: false
+  lifecycle_semantics_changed: false
+  original_exact_test_reproducibility:
+    first_invocation: PASS
+    second_invocation: FAIL
+  exact_test_stability: "10/10 PASS"
+  supervised_lifecycle_module_stability: "3/3 PASS"
+  git_diff_check: PASS
+broad_verification:
+  command: "./verify --profile candidate --base 007ad09d117eef82b722dd0614c04f4329ae209a"
+  exact_candidate: "db3cd4da9cae39deeba4d7b91f3b0030c6ed5086"
+  requested_profile: candidate
+  effective_profile: qualification
+  invocation_count_on_exact_candidate: 1
+  modules: "62/62"
+  tests: 805
+  duration_seconds: 65.013
+  exit_code: 0
+  result: PASS
+  redundant_qualification_run: false
+
+package:
+  build_sign_seal_publish_attempts: 1
+  runtime_version: "0.5.0"
+  source_revision: "db3cd4da9cae39deeba4d7b91f3b0030c6ed5086"
+  source_tree: "f11c4c728983c3dd277f8efe406fe3494fe8fb22"
+  candidate_app: "build/candidates/7faca55bc0cf7edfe2a3a2495d6f7c57ebe74d5aa37aff7b1d4507a083720b31/Agent Runtime.app"
+  candidate_handoff: "build/candidates/7faca55bc0cf7edfe2a3a2495d6f7c57ebe74d5aa37aff7b1d4507a083720b31/Agent Runtime.candidate.json"
+  candidate_sha256: "7faca55bc0cf7edfe2a3a2495d6f7c57ebe74d5aa37aff7b1d4507a083720b31"
+  handoff_sha256: "f917cb23c47575546da7923f15f7bd1838a25fc7c1c8685eb21adb0a91849a44"
+  record_count: 1715
+  signing_authority_valid_identity_count: 1
+  signing_identity_disclosed: false
+  pre_proof_strict_codesign: PASS
+  pre_proof_pinned_provenance: PASS
+  pre_proof_bytecode_entries: 0
+sealed_candidate_proof:
+  failed_harness_attempt:
+    durable_effect_created: false
+    failure_stage: "DurableStore.prepare_spec before durable runner Popen"
+    cause: "The proof harness precreated the durable root with mode 0755 and ran the bundled interpreter from repository cwd, so import precedence selected checkout source."
+    candidate_mutated: false
+    candidate_integrity_recheck: PASS
+    bytecode_entries_after_failed_harness: 0
+  real_effect:
+    bundled_runtime_module: "build/candidates/7faca55bc0cf7edfe2a3a2495d6f7c57ebe74d5aa37aff7b1d4507a083720b31/Agent Runtime.app/Contents/Resources/runtime/agent_runtime/session.py"
+    start_identity: "0159c2a50159c2a50159c2a50159c2a5"
+    session_id: "635092d9d1a996e9"
+    mode: pipe
+    durability: runtime_restart
+    output: "TASK0159_SEALED_OK"
+    status: exited
+    exit_code: 0
+    termination_reason: natural_exit
+    retained_lookup_session_id: "635092d9d1a996e9"
+    retained_lookup_same_session: true
+    retained_lookup_respawned: false
+    durable_effects_created: 1
+  post_proof:
+    bytecode_entries: 0
+    candidate_sha256: "7faca55bc0cf7edfe2a3a2495d6f7c57ebe74d5aa37aff7b1d4507a083720b31"
+    handoff_sha256: "f917cb23c47575546da7923f15f7bd1838a25fc7c1c8685eb21adb0a91849a44"
+    record_count: 1715
+    closure_identical: true
+    strict_codesign: PASS
+    pinned_provenance: PASS
+  result: PASS
+live_runtime_boundary:
+  installed_runtime_mutations: 0
+  install_invocations: 0
+  restart_invocations: 0
+  reload_invocations: 0
+  reconnect_invocations: 0
+  rollback_invocations: 0
+  recovery_invocations: 0
+  commit_cutover_invocations: 0
+  live_durable_acceptance_invocations: 0
+  telemetry_enablements: 0
+  real_port_8080_mutations: 0
+  installed_seal_invalid_state_repaired: false
+  result: PASS
+
+candidate_publication:
+  remote_head_before: "007ad09d117eef82b722dd0614c04f4329ae209a"
+  remote_branches_before:
+    - main
+  open_prs_before: 0
+  published_candidate: "db3cd4da9cae39deeba4d7b91f3b0030c6ed5086"
+  remote_head_after: "db3cd4da9cae39deeba4d7b91f3b0030c6ed5086"
+  non_force: true
+  remote_history_rewritten: false
+  result: PASS
+
+report_lineage:
+  path: .agent/tasks/TASK-0159/report-r1.yaml
+  direct_parent: "db3cd4da9cae39deeba4d7b91f3b0030c6ed5086"
+  allowed_report_only_path:
+    - .agent/tasks/TASK-0159/report-r1.yaml
+  validation_and_publication: EVIDENCE_INDEXED_AFTER_REPORT_AUTHORSHIP
+authoritative_verification:
+  required: true
+  performed: true
+  result: PASS
+  evidence: "The exact clean C2 child db3cd4da9cae39deeba4d7b91f3b0030c6ed5086 passed the authorized 10/10 exact-test stability proof, 3/3 supervised-lifecycle module stability proof, and exactly one requested-candidate verification that escalated to qualification and passed 62/62 modules and 805 tests in 65.013 seconds. The same exact candidate produced one new sealed Runtime 0.5.0 package whose complete closure, handoff hash, zero-bytecode state, strict codesign and pinned provenance remained unchanged after one real packaged runtime_restart durable effect and same-identity retained lookup."
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "The durable runner bootstrap adds PYTHONDONTWRITEBYTECODE=1 only to its spawn environment. The global minimal child environment and ordinary terminal child semantics remain unchanged; direct durable proof remains 19/19 PASS."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "C1 isolated the process-retention test from the host durable store without product retention changes. C2 changed only tests/test_supervised_lifecycle.py to parse fake ps PID identity from explicit -p arguments; no production lifecycle source changed."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "The exact C2 candidate db3cd4d... / tree f11c4c7... ran broad verification exactly once; requested candidate escalated to qualification and passed 62/62 modules and 805 tests. No retry-to-green or second qualification occurred."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "Exactly one new Runtime 0.5.0 package was built, signed, sealed and SHA-addressed as 7faca55b... with handoff f917cb23..., record_count 1715, source db3cd4d... / f11c4c7..., and pre-proof strict codesign plus pinned provenance PASS."
+  - criterion_id: AC-5
+    status: PASS
+    evidence: "The candidate bundled Python/runtime executed one real runtime_restart pipe effect under start_identity 0159c2a50159c2a50159c2a50159c2a5. Session 635092d9d1a996e9 exited naturally with code 0 and deterministic output; same-identity retention resolved the same session without respawn."
+  - criterion_id: AC-6
+    status: PASS
+    evidence: "Zero installed Runtime mutation occurred. No install, restart, reload, reconnect, rollback, recovery, commit-cutover, live durable acceptance, telemetry enablement or real port 8080 ownership mutation was performed."
+  - criterion_id: AC-7
+    status: EVIDENCE_INDEXED
+    evidence: "The exact corrected source candidate was published non-force after a fresh main-only, zero-open-PR remote gate. This report is the sole authorized tracked child; pinned validation, report-only commit/publication and final local/remote reconciliation are performed after report authorship."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "C2 preserved both prior immutable commits, created one normal test-only child with exact parent d4e68a51..., and changed only tests/test_supervised_lifecycle.py."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "The previously unstable exact supervised-lifecycle test passed 10/10 consecutive executions; the complete supervised-lifecycle module passed 3/3 consecutive executions; git diff --check passed."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "Exactly one broad verification ran on db3cd4d... and passed effective qualification with 62/62 modules and 805 tests. That run also passed terminal-session 48/48 and durable-pipe/restart coverage."
+  - check_id: CHECK-4
+    result: PASS
+    evidence: "Exactly one successful build/sign/seal/publish invocation created candidate 7faca55b...; strict codesign and pinned provenance passed before the immutable-runtime proof."
+  - check_id: CHECK-5
+    result: PASS
+    evidence: "One real packaged runtime_restart effect exited naturally and the same start identity resolved the identical retained session without respawn. Post-proof candidate closure and handoff hashes were unchanged, bytecode entries remained zero, and strict codesign plus pinned provenance still passed."
+  - check_id: CHECK-6
+    result: PASS
+    evidence: "Fresh pre-publication remote inspection showed branches exactly {main}, remote main at 007ad09d..., and zero open pull requests; ordinary non-force publication advanced main to db3cd4d...."
+  - check_id: CHECK-7
+    result: EVIDENCE_INDEXED
+    evidence: "Pinned agent-skills report validation, the report-only direct-child commit, ordinary non-force report publication, and final HEAD/origin/main/remote reconciliation occur after these report bytes are finalized."
+
+pushed: true
+result: NEEDS_REVIEW
