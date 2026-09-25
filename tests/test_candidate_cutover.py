@@ -829,6 +829,7 @@ class CandidateCutoverTests(unittest.TestCase):
             "89111218720ddb2f12961f9375549733edd23ada",
             "84f7c54821ec170df0478e0b83b285561703401f",
             "bf98ec4e9bcda97dfdc0ca52b8e0537dae14a1cc",
+            "cf6aba7e9ca22bf5f0c1202ed7b6ac40433053b0",
         )
         for revision in revisions:
             with self.subTest(revision=revision):
@@ -838,8 +839,8 @@ class CandidateCutoverTests(unittest.TestCase):
                     self.assertEqual(cutover._predecessor_service_contract(fx["target"]), "split-v1")
 
     def test_revision2_corrective_predecessor_is_exact_and_neighbor_remains_unknown(self) -> None:
-        exact_revision = "84f7c54821ec170df0478e0b83b285561703401f"
-        neighboring_revision = "84f7c54821ec170df0478e0b83b285561703401e"
+        exact_revision = "cf6aba7e9ca22bf5f0c1202ed7b6ac40433053b0"
+        neighboring_revision = "cf6aba7e9ca22bf5f0c1202ed7b6ac40433053b1"
         for revision, expected in ((exact_revision, "split-v1"), (neighboring_revision, "unknown")):
             with self.subTest(revision=revision):
                 with tempfile.TemporaryDirectory() as raw:
@@ -857,6 +858,7 @@ class CandidateCutoverTests(unittest.TestCase):
             "89111218720ddb2f12961f9375549733edd23ada",
             "84f7c54821ec170df0478e0b83b285561703401f",
             "bf98ec4e9bcda97dfdc0ca52b8e0537dae14a1cc",
+            "cf6aba7e9ca22bf5f0c1202ed7b6ac40433053b0",
             exact_revision,
         )
         for revision in revisions:

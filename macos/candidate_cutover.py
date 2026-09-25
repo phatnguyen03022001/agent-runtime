@@ -47,6 +47,7 @@ SPLIT_SERVICE_MANAGEMENT_REVISIONS = {
     "bf98ec4e9bcda97dfdc0ca52b8e0537dae14a1cc",
     "b0dec3e556ff914fb9ca041c6b52f53c04ee3fd2",
     "b5ac0ed5b461d3a259e4111e1a8f13933985f81f",
+    "cf6aba7e9ca22bf5f0c1202ed7b6ac40433053b0",
 }
 UI_LABEL = "com.picmao.agent-runtime-ui"
 LEGACY_RUNTIME_LABEL = "com.picmao.agent-runtime-runtime"
