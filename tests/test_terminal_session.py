@@ -506,11 +506,19 @@ time.sleep(.4)
         self.assertEqual(
             polled["next_cursor"], polled["dropped_output_bytes"]
         )
-        recovered = poll_terminal(session_id, cursor=polled["next_cursor"])
-        self.assertLessEqual(
-            recovered["next_cursor"] - polled["next_cursor"], MAX_POLL_OUTPUT_BYTES
+        caller_cursor = polled["next_cursor"]
+        recovered = poll_terminal(session_id, cursor=caller_cursor)
+        self.assertEqual(
+            recovered["cursor_expired"], recovered["dropped_output_bytes"] > 0
         )
-        self.assertGreater(recovered["next_cursor"], polled["next_cursor"])
+        effective_retained_start = caller_cursor + recovered["dropped_output_bytes"]
+        self.assertLessEqual(
+            recovered["next_cursor"] - effective_retained_start, MAX_POLL_OUTPUT_BYTES
+        )
+        self.assertLessEqual(
+            len(recovered["output"].encode("utf-8")), MAX_POLL_OUTPUT_BYTES
+        )
+        self.assertGreater(recovered["next_cursor"], caller_cursor)
 
     def test_natural_exit_reports_exit_code_and_closes_pty(self) -> None:
         result = self.start([sys.executable, "-u", "-c", "print('done')"])
