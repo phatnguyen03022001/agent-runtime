@@ -801,7 +801,7 @@ class CandidateCutoverTests(unittest.TestCase):
             self.assertTrue(metadata["operations"]["runtime_registered"])
 
     def test_unknown_predecessor_contract_fails_closed_before_service_mutation(self) -> None:
-        unknown_revision = "d" * 40
+        unknown_revision = "58027d5cebf1483f62d379ed05935c86da3a6f4b"
         with tempfile.TemporaryDirectory() as raw:
             _, cutover, fx = self._fixture(
                 raw, predecessor_revision=unknown_revision, aggregate_only_predecessor=True
@@ -830,6 +830,7 @@ class CandidateCutoverTests(unittest.TestCase):
             "84f7c54821ec170df0478e0b83b285561703401f",
             "bf98ec4e9bcda97dfdc0ca52b8e0537dae14a1cc",
             "cf6aba7e9ca22bf5f0c1202ed7b6ac40433053b0",
+            "58027d5cebf1483f62d379ed05935c86da3a6f4a",
         )
         for revision in revisions:
             with self.subTest(revision=revision):
@@ -838,15 +839,42 @@ class CandidateCutoverTests(unittest.TestCase):
                     self.assertEqual(cutover._runtime_manifest_revision(fx["target"]), revision)
                     self.assertEqual(cutover._predecessor_service_contract(fx["target"]), "split-v1")
 
-    def test_revision2_corrective_predecessor_is_exact_and_neighbor_remains_unknown(self) -> None:
-        exact_revision = "cf6aba7e9ca22bf5f0c1202ed7b6ac40433053b0"
-        neighboring_revision = "cf6aba7e9ca22bf5f0c1202ed7b6ac40433053b1"
+    def test_seal_invalid_predecessor_is_exact_and_neighbor_remains_unknown(self) -> None:
+        exact_revision = "58027d5cebf1483f62d379ed05935c86da3a6f4a"
+        neighboring_revision = "58027d5cebf1483f62d379ed05935c86da3a6f4b"
         for revision, expected in ((exact_revision, "split-v1"), (neighboring_revision, "unknown")):
             with self.subTest(revision=revision):
                 with tempfile.TemporaryDirectory() as raw:
                     _, cutover, fx = self._fixture(raw, predecessor_revision=revision)
                     self.assertEqual(cutover._runtime_manifest_revision(fx["target"]), revision)
                     self.assertEqual(cutover._predecessor_service_contract(fx["target"]), expected)
+
+    def test_seal_invalid_predecessor_refresh_uses_split_runtime_contract(self) -> None:
+        revision = "58027d5cebf1483f62d379ed05935c86da3a6f4a"
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw, predecessor_revision=revision)
+            contract = cutover._predecessor_service_contract(fx["target"])
+            self.assertEqual(contract, "split-v1")
+            fx["modern_state"].update(main_app="enabled", runtime_agent="enabled")
+            metadata = {"predecessor_runtime_unregister": "not-started"}
+            operations = cutover._empty_operation_ledger()
+            cutover._unregister_predecessor_runtime_for_refresh(
+                fx["target"],
+                contract=contract,
+                modern_before={"main_app": "enabled"},
+                runtime_before={"registration_state": "enabled"},
+                operations=operations,
+                metadata=metadata,
+                metadata_path=Path(raw) / "predecessor-metadata.json",
+            )
+            predecessor_ops = [
+                operation
+                for app_revision, operation in fx["service_revision_operations"]
+                if app_revision == revision
+            ]
+            self.assertEqual(predecessor_ops, ["unregister-runtime"])
+            self.assertTrue(operations["runtime_unregistered"])
+            self.assertFalse(operations["main_unregistered"])
 
     def test_installed_split_v1_predecessor_refresh_uses_split_runtime_contract(self) -> None:
         exact_revision = "18cdb515fe037c9b6cb81ce6529d85ae734e195a"
