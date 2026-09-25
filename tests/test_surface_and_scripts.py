@@ -255,7 +255,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         )
         self.assertEqual(
             [arg.arg for arg in functions["terminal_start"].args.args],
-            ["argv", "cwd", "start_identity", "mode"],
+            ["argv", "cwd", "start_identity", "mode", "durability"],
         )
         self.assertEqual(
             [arg.arg for arg in functions["terminal_poll"].args.args],
