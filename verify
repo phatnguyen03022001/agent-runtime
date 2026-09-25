@@ -11,7 +11,19 @@ else
   PYTHON="python3"
 fi
 
-"$PYTHON" -m py_compile verify_tests.py agent_runtime/*.py tests/*.py
+PLAN_ONLY=0
+for arg in "$@"; do
+  if [[ "$arg" == "--plan" ]]; then
+    PLAN_ONLY=1
+    break
+  fi
+done
+
+if [[ "$PLAN_ONLY" -eq 1 ]]; then
+  PYTHONPATH="$ROOT" exec "$PYTHON" "$ROOT/verify_tests.py" "$@"
+fi
+
+"$PYTHON" -m py_compile verification_policy.py verify_tests.py agent_runtime/*.py tests/*.py
 bash -n install.sh
 bash -n start.sh
 bash -n verify
