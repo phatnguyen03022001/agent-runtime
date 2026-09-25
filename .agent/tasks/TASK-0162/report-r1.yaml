@@ -1,0 +1,275 @@
+protocol_version: 3
+
+task_id: TASK-0162
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0162/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "d0afc1a0921885828fb77c76fba0de8ba57a772f"
+  final_execution_head: "eff520b71cbad7abc749ca01a16dbb0030c8b9da"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+  validator_blob: "32d14fa7c27c765f9719efa667cf920cd76a42f8"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - canonical_remote_resolution
+    - repository_content_write
+    - deterministic_verification_execution
+    - recoverable_process_execution
+    - package_build_sign_seal
+    - sealed_candidate_execution
+    - report_validation
+    - git_commit
+    - non_force_git_publication
+    - remote_ref_reconciliation
+  available:
+    - canonical_remote_resolution
+    - repository_content_write
+    - deterministic_verification_execution
+    - recoverable_process_execution
+    - package_build_sign_seal
+    - sealed_candidate_execution
+    - report_validation
+    - git_commit
+    - non_force_git_publication
+    - remote_ref_reconciliation
+  missing: []
+  passed: true
+
+task_0161_preserved_host:
+  runtime_version: "0.5.0"
+  revision: "b0c7a0ae29dc66079cea3760828e00b86ab921e4"
+  tree: "025ce0ba4b3e14c30564d98f152aec0cf9b65471"
+  transaction_present: false
+  strict_codesign: PASS
+  pinned_provenance: PASS
+  bytecode_entries: 0
+  service_management: "enabled/enabled"
+  healthz: live
+  readyz: ready
+  doctor: "healthy 10/10"
+  telemetry: off
+  task_0161_install_invocations: 1
+  task_0161_install_job: "job_098c8d5254c3"
+  task_0161_commit_cutover_invocations: 1
+  task_0161_commit_job: "job_21fea20d4261"
+  task_0161_live_durable_effects: 1
+  mutated_by_task_0162: false
+
+blocked_retained_lookup_evidence:
+  start_identity: "bd02aa068a5ccb251309aca700e97100"
+  session_id: "d9cee10bfda8b7f2"
+  observed_exit_code: 0
+  observed_termination_reason: natural_exit
+  persisted_status: exited
+  persisted_lifecycle: COMPLETED
+  persisted_exit_code: 0
+  persisted_state_corrupt: false
+  retained_lookup_result: BLOCKED
+  retained_lookup_message: "durable job ownership or state cannot be established"
+
+root_cause:
+  component: agent_runtime/session.py
+  function: _refresh_durable_session
+  classification: finalization_TOCTOU_owner_loss_latch
+  evidence: "A stale starting/running snapshot could be followed by disappearance of both runner and target process identities after durable finalization. The old implementation entered the bounded reread only for runner-live/process-dead, so both-dead latched DURABLE_OWNER_LOST before observing the valid terminal snapshot. The latched fault then blocked later reconciliation."
+
+implementation:
+  candidate: "eff520b71cbad7abc749ca01a16dbb0030c8b9da"
+  tree: "e701694b5efcdd6356396de8200cce0bf1034be1"
+  direct_parent: "d0afc1a0921885828fb77c76fba0de8ba57a772f"
+  changed_paths:
+    - agent_runtime/session.py
+    - tests/test_durable_pipe_restart.py
+  grace_seconds_before: 2.0
+  grace_seconds_after: 2.0
+  semantic_change: "Every nonterminal durable snapshot with invalid owner identity now uses the existing bounded finalization reread. Terminal state or restored owner continuity is accepted; persistent nonterminal invalid ownership still latches DURABLE_OWNER_LOST."
+  durable_effect_respawn_added: false
+  corruption_fail_open_added: false
+  version_changed: false
+  tool_contract_kernel_changed: false
+  capability_or_tool_count_changed: false
+
+focused_verification:
+  regression_red_before_fix: PASS
+  regression_red_reason: DURABLE_OWNER_LOST
+  transient_finalization_race:
+    result: PASS
+    both_runner_and_process_unavailable: true
+    subsequent_same_identity_terminal: true
+    terminal_lifecycle: COMPLETED
+    retained_lookup_by_start_identity: PASS
+    retained_lookup_by_session_id: PASS
+    second_spawn_observed: false
+  persistent_owner_loss_fail_closed:
+    result: PASS
+    reason_code: DURABLE_OWNER_LOST
+    effect_state: UNKNOWN
+    reconciliation_required: true
+  command: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_durable_pipe tests.test_durable_pipe_restart"
+  tests: "20/20"
+  result: PASS
+  git_diff_check: PASS
+
+broad_verification:
+  command: "./verify --profile candidate --base d0afc1a0921885828fb77c76fba0de8ba57a772f"
+  exact_candidate: "eff520b71cbad7abc749ca01a16dbb0030c8b9da"
+  exact_tree: "e701694b5efcdd6356396de8200cce0bf1034be1"
+  requested_profile: candidate
+  effective_profile: qualification
+  invocation_count_on_exact_candidate: 1
+  modules: "62/62"
+  tests: 808
+  duration_seconds: 102.512
+  exit_code: 0
+  result: PASS
+  candidate_cutover_tests: 101
+  candidate_cutover_duration_seconds: 89.240
+  durable_pipe_restart_tests: 10
+  durable_pipe_restart_duration_seconds: 5.992
+  redundant_qualification_run: false
+  tracked_candidate_write_after_verification: false
+
+package:
+  build_sign_seal_publish_attempts: 1
+  pre_entry_configuration_failures_without_package_invocation: 2
+  runtime_version: "0.5.0"
+  source_revision: "eff520b71cbad7abc749ca01a16dbb0030c8b9da"
+  source_tree: "e701694b5efcdd6356396de8200cce0bf1034be1"
+  candidate_app: "build/candidates/b7ade416282569a18a14fecfa58f35a0d27549548668013904719a5277208509/Agent Runtime.app"
+  candidate_handoff: "build/candidates/b7ade416282569a18a14fecfa58f35a0d27549548668013904719a5277208509/Agent Runtime.candidate.json"
+  candidate_sha256: "b7ade416282569a18a14fecfa58f35a0d27549548668013904719a5277208509"
+  handoff_sha256: "3457077e7d508faa75356df21534bb6cf353244f421c76c4dc3a7c0f260dce58"
+  record_count: 1714
+  bytecode_directories: 0
+  bytecode_files: 0
+  strict_deep_codesign: PASS
+  pinned_provenance: PASS
+  historical_713ffe_package_overwritten: false
+  historical_7faca_package_overwritten: false
+
+sealed_candidate_regression:
+  execution_count: 1
+  bundled_python_used: true
+  fresh_test_owned_state_root: "build/task0162-sealed-proof-eff520b/durable-jobs"
+  start_identity: "16201620162016201620162016201620"
+  session_id: "28c35629b3c0c00a"
+  status: exited
+  lifecycle: COMPLETED
+  exit_code: 0
+  termination_reason: natural_exit
+  bounded_output: "sealed-ok"
+  retained_start_identity_session: "28c35629b3c0c00a"
+  retained_session_id_session: "28c35629b3c0c00a"
+  selectors_resolved_same_session: true
+  effect_lines: 1
+  respawn_observed: false
+  post_effect_bytecode_directories: 0
+  post_effect_bytecode_files: 0
+  post_effect_strict_deep_codesign: PASS
+  post_effect_pinned_provenance: PASS
+  candidate_sha256_unchanged: true
+  handoff_sha256_unchanged: true
+  record_count_unchanged: true
+  result: PASS
+
+live_runtime_boundary:
+  installed_app_mutations: 0
+  install_invocations: 0
+  restart_invocations: 0
+  reload_invocations: 0
+  reconnect_invocations: 0
+  rollback_invocations: 0
+  recovery_invocations: 0
+  commit_cutover_invocations: 0
+  additional_live_durable_effects: 0
+  task_0161_durable_state_mutations: 0
+  telemetry_enablements: 0
+  result: PASS
+
+candidate_publication:
+  remote_head_before: "d0afc1a0921885828fb77c76fba0de8ba57a772f"
+  remote_branches_before:
+    - main
+  open_prs_before: 0
+  published_candidate: "eff520b71cbad7abc749ca01a16dbb0030c8b9da"
+  remote_head_after: "eff520b71cbad7abc749ca01a16dbb0030c8b9da"
+  non_force: true
+  remote_history_rewritten: false
+  result: PASS
+
+report_lineage:
+  path: .agent/tasks/TASK-0162/report-r1.yaml
+  direct_parent: "eff520b71cbad7abc749ca01a16dbb0030c8b9da"
+  allowed_report_only_path:
+    - .agent/tasks/TASK-0162/report-r1.yaml
+  validation_and_publication: EVIDENCE_INDEXED_AFTER_REPORT_AUTHORSHIP
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: PASS
+  evidence: "The exact clean source candidate eff520b71cbad7abc749ca01a16dbb0030c8b9da passed focused durable/restart proof and one requested-candidate verification, which escalated to qualification and passed 62/62 modules and 808 tests in 102.512 seconds. Exactly one Runtime 0.5.0 package invocation produced the sealed candidate b7ade416...; its single bundled-runtime durable effect and both retained selectors passed while closure, bytecode, codesign and pinned provenance remained unchanged."
+
+pushed: true
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "Deterministic regression reproduced both owners unavailable after a stale nonterminal snapshot and proved the bounded reread accepts the same identity at exited/COMPLETED without latching owner-lost."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "Existing persistent runner-disappearance regression still returns DURABLE_OWNER_LOST with EffectState.UNKNOWN and reconciliation_required=true after the full grace."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "Focused proof and sealed-candidate proof both resolve start_identity and session_id to one completed session; sealed proof marker contains exactly one effect line and no respawn."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "Exact clean candidate eff520b... / e701694b... ran broad verification once; effective qualification passed 62/62 modules and 808 tests."
+  - criterion_id: AC-5
+    status: PASS
+    evidence: "Exactly one package_app invocation produced Runtime 0.5.0 candidate b7ade416... with handoff 3457077e..., record_count 1714, zero bytecode, strict codesign PASS and pinned provenance PASS; one sealed real durable effect preserved all closure evidence."
+  - criterion_id: AC-6
+    status: PASS
+    evidence: "TASK-0161 installed Runtime and durable evidence were not mutated: zero install/restart/reload/reconnect/cutover/recovery or additional live durable effect occurred; telemetry remained off."
+  - criterion_id: AC-7
+    status: EVIDENCE_INDEXED
+    evidence: "Fresh source-publication gate proved remote main at the task base, branches={main}, open PRs=0; source candidate was published non-force. Pinned report validation, report-only commit/publication and final reconciliation occur after these report bytes are finalized."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Source change is restricted to agent_runtime/session.py and tests/test_durable_pipe_restart.py; no forbidden source path changed."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "Focused durable/restart suite passed 20/20 and git diff --check passed before the clean checkpoint."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "Broad verification ran exactly once on eff520b... and passed effective qualification; no tracked candidate write followed."
+  - check_id: CHECK-4
+    result: PASS
+    evidence: "Exactly one package build/sign/seal/publish entry invocation succeeded; two earlier environment-wrapper errors occurred before package_app.sh was entered and created no package temp/candidate effect."
+  - check_id: CHECK-5
+    result: PASS
+    evidence: "Sealed proof used the candidate bundled interpreter, one fresh durable state root and one real effect; both retained selectors matched session 28c35629b3c0c00a."
+  - check_id: CHECK-6
+    result: PASS
+    evidence: "Candidate hashes, record_count, bytecode counts, strict codesign and pinned provenance were revalidated unchanged after sealed execution."
+  - check_id: CHECK-7
+    result: EVIDENCE_INDEXED
+    evidence: "Pinned validator, report-only direct-child commit, non-force publication and final main-only zero-PR clean reconciliation are performed after report authorship."
+
+result: NEEDS_REVIEW
