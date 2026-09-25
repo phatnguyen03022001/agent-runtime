@@ -1,0 +1,255 @@
+protocol_version: 3
+
+task_id: TASK-0155
+task_revision: 1
+state: APPROVED
+title: "Runtime 0.5.0 Release Convergence + Immutable Candidate"
+
+origin:
+  type: explicit_operator_authority
+  task_id: TASK-0155
+  objective_source: "Operator requested the next Agent Runtime convergence step with explicit Executor-survival constraints: avoid redundant test/poll loops, bound long turns, and make interruption recoverable."
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+  canonical_branch: main
+  scope_repository_only: true
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+predecessors:
+  - task: TASK-0152
+    accepted_feature: "Optional OpenTelemetry traces/metrics substrate"
+  - task: TASK-0153
+    accepted_feature: "runtime_restart durable pipe jobs"
+  - task: TASK-0154
+    accepted_feature: "bounded multi-lane verification architecture"
+    accepted_review_commit: "b1c8f4d81f05989457fbaca035733e426953a146"
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  preferred_transport_for_repository_work: AGENT_RUNTIME
+  preferred_independent_carrier_for_long_package_process: SENTINELX
+  live_activation_forbidden: true
+
+objective: >
+  Converge the already-accepted post-0.4.0 source line into one immutable Runtime
+  0.5.0 release candidate, prove it exactly once with the accepted verification
+  architecture, build/sign/seal one exact package candidate, and stop
+  NEEDS_REVIEW without installing, restarting, reconnecting or cutting over the
+  live Runtime.
+
+release_identity:
+  target_runtime_version: "0.5.0"
+  rationale: >
+    The accepted source since installed Runtime 0.4.0 adds optional telemetry,
+    runtime-restart durable pipe execution and public terminal schema evolution.
+    This is a backward-compatible feature release and must not masquerade as
+    the already-installed 0.4.0 generation.
+  tool_contract_kernel_version: 2
+  known_capabilities: 21
+  advertised_tools: 20
+  expected_public_schema:
+    terminal_exec: "2/2"
+    terminal_start: "4/4"
+    terminal_poll: "4/4"
+    runtime_capabilities: "2/2"
+
+required_source_changes:
+  - "Set agent_runtime/version.py Runtime SSOT from 0.4.0 to 0.5.0."
+  - "Project the same 0.5.0 into macos/AppBundle/Info.plist CFBundleShortVersionString."
+  - "Update the direct Runtime-version expectation in tests/test_capability_registry.py."
+  - "Update README current qualified source version statements from 0.4.0 to 0.5.0 while preserving the distinction that the installed Runtime remains 0.4.0 until a later activation task."
+  - "Do not change implementation semantics of telemetry, durable pipe execution, verification policy, MCP tools, failure/effect behavior, package/cutover mechanics or ServiceManagement."
+
+allowed_source_paths:
+  - agent_runtime/version.py
+  - macos/AppBundle/Info.plist
+  - tests/test_capability_registry.py
+  - README.md
+  - ".agent/tasks/TASK-0155/report-r1.yaml"
+
+forbidden_source_changes:
+  - "Any other agent_runtime/*.py product implementation file."
+  - "verify, verify_tests.py or verification_policy.py."
+  - "requirements.lock or dependencies."
+  - "install.sh, start.sh, macos/package_app.sh, macos/candidate_cutover.py or ServiceManagement sources."
+  - "Any MCP schema/tool/capability change beyond the already-accepted 0.5.0 source state."
+  - "Any implementation of MCP Tasks/GAP-12."
+  - "Any branch, PR, force push, amend, squash, tag or release publication."
+
+executor_survival_protocol:
+  principle: "A ChatGPT turn may die at any time; no phase may require memory of an unpersisted long-running result."
+  mandatory_rules:
+    - "Never run full qualification during exploratory implementation."
+    - "Use targeted tests first, then one candidate-profile run, then commit the source checkpoint."
+    - "Once a clean source candidate commit exists, treat its SHA as the durable recovery point."
+    - "Run full qualification exactly once on that exact candidate SHA. A second full qualification is allowed only if tracked source/test/package-input bytes changed afterward or the first run had no terminal result."
+    - "Never rerun a PASS proof on the same immutable SHA merely because the Executor chat restarted."
+    - "Before rerunning any interrupted command, first inspect Git SHA, worktree, process identity and durable output/artifacts to determine whether the prior command is still running or already completed."
+    - "No blind retry after unknown outcome."
+    - "Commands expected to exceed 10 seconds must be started once through a recoverable process surface, not held as one opaque synchronous call when a start/poll surface is available."
+    - "For a long-running process, record PID/session/start identity immediately in the operator-visible update and in scratch evidence outside tracked source."
+    - "Poll a healthy long command no more frequently than every 20 seconds unless the process emits a terminal event sooner. Do not busy-poll."
+    - "One poll may wait at most 30 seconds. After each poll, report only new progress/terminal evidence; do not dump repeated output."
+    - "If no new output exists but the process is positively alive, do not restart it."
+    - "If the chat dies, the next Executor must inspect the existing process/artifact/checkpoint before any retry."
+    - "Do not terminate unrelated pre-existing host processes."
+    - "Persist coherent Git checkpoints early; do not leave a large verified implementation only in an uncommitted worktree while starting expensive verification."
+
+verification_sequence:
+  phase_0_plan:
+    - "Fresh exact-base gate: main only, zero PRs, local/origin/remote exact base, clean."
+    - "Run ./verify --plan --profile candidate --base <task-base> before mutation only to understand selected proof. Do not run full tests here."
+
+  phase_1_focused:
+    commands:
+      - ".venv/bin/python -m unittest -q tests.test_capability_registry tests.test_mcp_contracts tests.test_mcp_client_conformance tests.test_schema_export tests.test_doctor tests.test_telemetry tests.test_durable_pipe tests.test_durable_pipe_restart"
+    rule: "Run once after version projection edits. Fix only direct release-identity defects."
+
+  phase_2_candidate_profile:
+    command: "./verify --profile candidate --base <task-base>"
+    target_seconds: 45
+    rule: >
+      Run once after focused PASS. If PASS, require git diff --check and commit
+      one coherent source candidate immediately. Do not run qualification before
+      the candidate commit exists.
+
+  phase_3_full_qualification:
+    command: "./verify --profile qualification --base <task-base>"
+    target_seconds: 90
+    max_successful_runs_per_exact_candidate: 1
+    rule: >
+      Run on the exact clean committed source candidate. Stream START/PASS/
+      HEARTBEAT output from TASK-0154. If terminal PASS, capture SHA/tree,
+      module/test count and wall time. Do not rerun on the same SHA.
+
+  invalidation:
+    - "Any tracked source/test/package-input write after phase_3 invalidates qualification and requires a new normal child candidate commit plus exactly one new qualification run."
+    - "Report-only authorship does not invalidate candidate qualification."
+
+source_candidate_acceptance:
+  - "Runtime source reports exactly 0.5.0 from version SSOT, MCP server, capability registry, schema export and package Info.plist projection."
+  - "ToolContract Kernel remains 2."
+  - "Known/advertised counts remain 21/20."
+  - "terminal_exec remains 2/2; terminal_start and terminal_poll remain 4/4."
+  - "Telemetry remains default-off, optional and fail-open."
+  - "runtime_restart durability remains pipe-only and caller-known-start-identity bound."
+  - "Verification architecture remains the accepted TASK-0154 implementation."
+  - "git diff --check PASS."
+  - "Focused proof PASS."
+  - "Candidate profile PASS within accepted budget."
+  - "One full qualification PASS on exact candidate within accepted budget."
+
+package_phase:
+  preconditions:
+    - "Exact source candidate is committed, clean and has terminal full-qualification PASS."
+    - "No tracked writes occurred after qualification."
+    - "Signing authority/config is already available through canonical ignored repository configuration; do not enumerate unrelated Keychain identities."
+  execution:
+    - "Run macos/package_app.sh exactly once for the exact qualified candidate."
+    - "Prefer an independent/recoverable local carrier for this >10s process."
+    - "Capture candidate_app, candidate_handoff and candidate_sha256 immediately when emitted."
+    - "Compute and record handoff SHA-256 and package record_count/source_revision/source_tree from canonical provenance validation."
+    - "Require strict deep codesign PASS and candidate provenance validation PASS."
+    - "Require packaged runtime contains agent_runtime/telemetry.py, durable_pipe.py, durable_pipe_runner.py, verification-independent runtime files, and the hash-locked OpenTelemetry dependencies."
+    - "Require packaged Runtime version projection is exactly 0.5.0."
+  unknown_outcome:
+    - "If packaging command outcome becomes unknown, do not rerun immediately."
+    - "First inspect the process identity and build/candidates for a sealed candidate whose provenance binds the exact source candidate SHA/tree."
+    - "If an exact valid sealed candidate already exists, reuse it; do not rebuild merely because the chat died."
+    - "If process is positively still running, continue bounded polling."
+    - "Only rerun packaging when the prior process is positively terminal-failed or absent and no valid exact candidate exists."
+  forbidden:
+    - "No ./install.sh --install-prebuilt."
+    - "No resume/rollback/recover/commit-cutover."
+    - "No Runtime stop/restart/signal."
+    - "No ChatGPT plugin reload/reconnect."
+    - "No live MCP acceptance through a new Runtime generation."
+
+publication_lifecycle:
+  - "After source qualification + immutable package proof, fresh-resolve remote main and require it still equals task base."
+  - "Publish exact source candidate non-force."
+  - "Create .agent/tasks/TASK-0155/report-r1.yaml as the sole report-only child."
+  - "Validate report against pinned agent-skills authority."
+  - "Publish report non-force."
+  - "Fresh reconcile local/origin/remote main, clean worktree/index, one remote branch, zero open PRs."
+  - "Stop NEEDS_REVIEW."
+  - "Do not start activation in the same chat."
+
+report_requirements:
+  path: .agent/tasks/TASK-0155/report-r1.yaml
+  record:
+    - "state=REPORTED and result=NEEDS_REVIEW"
+    - "exact task/base/source-candidate/tree/report lineage"
+    - "0.5.0 version SSOT and package projection closure"
+    - "accepted 0152 telemetry / 0153 durable pipe / 0154 verification convergence evidence"
+    - "focused proof count/result"
+    - "candidate-profile plan/count/wall time"
+    - "single exact-candidate qualification count/wall time and proof that it was not redundantly rerun"
+    - "candidate SHA/tree and no post-qualification tracked writes"
+    - "package process identity/start evidence and bounded-poll behavior"
+    - "candidate_app path, candidate SHA-256, handoff SHA-256, record_count, source_revision and source_tree"
+    - "strict codesign/provenance PASS"
+    - "packaged telemetry/durable modules and OTel dependency presence"
+    - "installed Runtime remains 0.4.0 at cf6aba7e9ca22bf5f0c1202ed7b6ac40433053b0"
+    - "zero install/restart/reload/cutover invocations"
+    - "non-force source/report publication and final clean reconciliation"
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Release identity is coherent."
+    evidence_required: "All source/package Runtime version projections equal 0.5.0; Kernel2 and 21/20 capability/tool counts unchanged."
+
+  - id: AC-2
+    requirement: "Accepted post-0.4.0 features converge without semantic redesign."
+    evidence_required: "Telemetry, durable runtime_restart pipe and verification architecture focused/source checks PASS with no unrelated product changes."
+
+  - id: AC-3
+    requirement: "Verification is strong but non-redundant."
+    evidence_required: "Focused -> candidate profile -> exactly one full qualification on exact committed candidate, all PASS within budgets; no duplicate full PASS run on same SHA."
+
+  - id: AC-4
+    requirement: "Immutable signed package binds exact qualified source."
+    evidence_required: "Strict codesign/provenance PASS and exact candidate/handoff hashes, record_count, source revision/tree."
+
+  - id: AC-5
+    requirement: "Executor interruption is recoverable without blind retries."
+    evidence_required: "Long process identity/progress evidence, bounded polling, no duplicate package build after unknown outcome, and durable Git candidate checkpoint before qualification/package."
+
+  - id: AC-6
+    requirement: "Live Runtime is untouched."
+    evidence_required: "Installed Runtime remains 0.4.0/cf6aba7e..., transaction absent, zero install/restart/reload/cutover."
+
+  - id: AC-7
+    requirement: "Canonical publication is exact."
+    evidence_required: "Exact source candidate published non-force, report sole child, final main-only/zero-PR/clean reconciliation."
+
+authoritative_verification:
+  required: true
+  mechanism: "Focused release identity/convergence proof + candidate profile + one full qualification + immutable package provenance validation"
+  expected_signal: "One exact Runtime 0.5.0 source/package candidate is ready for a separately reviewed activation-only task."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  publish_release: false
+  install_or_activate: false
+
+blocking_decisions: []
+execution_ready: true
