@@ -326,12 +326,12 @@ class CapabilityRegistryTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("exact lowercase 40-hex", invalid.stderr)
 
     def test_runtime_version_has_one_python_ssot_and_validated_package_projection(self) -> None:
-        self.assertEqual(RUNTIME_VERSION, "0.4.0")
+        self.assertEqual(RUNTIME_VERSION, "0.5.0")
         self.assertEqual(server.mcp.version, RUNTIME_VERSION)
         literal_sources = [
             path.name
             for path in sorted((ROOT / "agent_runtime").glob("*.py"))
-            if '"0.4.0"' in path.read_text(encoding="utf-8")
+            if '"0.5.0"' in path.read_text(encoding="utf-8")
         ]
         self.assertEqual(literal_sources, ["version.py"])
 
