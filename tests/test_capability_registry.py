@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import os
 import plistlib
+import subprocess
+import sys
 import unittest
 from dataclasses import fields
 from pathlib import Path
@@ -291,13 +294,44 @@ class CapabilityRegistryTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result.structured_content["error"]["code"], "INVALID_ARGUMENT")
                 self.assertEqual(result.structured_content["error"]["effect_state"], "absent")
 
+    def test_runtime_revision_uses_validated_reserved_process_identity(self) -> None:
+        script = (
+            "from agent_runtime.capability_registry import RUNTIME_REVISION; "
+            "print(RUNTIME_REVISION if RUNTIME_REVISION is not None else 'null')"
+        )
+        valid_env = os.environ.copy()
+        valid_env["AGENT_RUNTIME_REVISION"] = "a" * 40
+        valid = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=ROOT,
+            env=valid_env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(valid.returncode, 0, valid.stderr)
+        self.assertEqual(valid.stdout.strip(), "a" * 40)
+
+        invalid_env = os.environ.copy()
+        invalid_env["AGENT_RUNTIME_REVISION"] = "A" * 40
+        invalid = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=ROOT,
+            env=invalid_env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertNotEqual(invalid.returncode, 0)
+        self.assertIn("exact lowercase 40-hex", invalid.stderr)
+
     def test_runtime_version_has_one_python_ssot_and_validated_package_projection(self) -> None:
-        self.assertEqual(RUNTIME_VERSION, "0.3.0")
+        self.assertEqual(RUNTIME_VERSION, "0.4.0")
         self.assertEqual(server.mcp.version, RUNTIME_VERSION)
         literal_sources = [
             path.name
             for path in sorted((ROOT / "agent_runtime").glob("*.py"))
-            if '"0.3.0"' in path.read_text(encoding="utf-8")
+            if '"0.4.0"' in path.read_text(encoding="utf-8")
         ]
         self.assertEqual(literal_sources, ["version.py"])
 

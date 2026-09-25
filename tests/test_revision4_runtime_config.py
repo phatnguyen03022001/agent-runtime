@@ -20,6 +20,14 @@ assert CONFIG_SPEC is not None and CONFIG_SPEC.loader is not None
 runtime_config = importlib.util.module_from_spec(CONFIG_SPEC)
 CONFIG_SPEC.loader.exec_module(runtime_config)
 
+PROVENANCE_SPEC = importlib.util.spec_from_file_location(
+    "package_provenance_task0151",
+    ROOT / "macos" / "package_provenance.py",
+)
+assert PROVENANCE_SPEC is not None and PROVENANCE_SPEC.loader is not None
+package_provenance = importlib.util.module_from_spec(PROVENANCE_SPEC)
+PROVENANCE_SPEC.loader.exec_module(package_provenance)
+
 
 class Revision4RuntimeConfigTests(unittest.TestCase):
     def test_env_example_declares_tunnel_id_placeholder(self) -> None:
@@ -110,6 +118,86 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
             self.assertTrue(argv_lines[0].startswith("argv=doctor "))
             self.assertIn("--explain", argv_lines[0])
             self.assertTrue(argv_lines[1].startswith("argv=run "))
+
+    def test_installed_serve_binds_revision_from_validated_package_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            home = (temp / "home").resolve()
+            runtime = home / "Applications/Agent Runtime.app/Contents/Resources/runtime"
+            (runtime / "agent_runtime").mkdir(parents=True)
+            (runtime / "macos").mkdir()
+            (runtime / ".venv/bin").mkdir(parents=True)
+            shutil.copy2(ROOT / "start.sh", runtime / "start.sh")
+            (runtime / "start.sh").chmod(0o700)
+            shutil.copy2(ROOT / "macos/runtime_config.py", runtime / "macos/runtime_config.py")
+            shutil.copy2(ROOT / "macos/package_provenance.py", runtime / "macos/package_provenance.py")
+            (runtime / "agent_runtime/server.py").write_text("# fixture runtime payload\n")
+            fake_python = runtime / ".venv/bin/python"
+            fake_python.write_text("#!/bin/sh\nexit 0\n")
+            fake_python.chmod(0o700)
+
+            workspace = temp / "workspace"
+            workspace.mkdir()
+            config = home / "Library/Application Support/Agent Runtime/runtime.env"
+            config.parent.mkdir(parents=True)
+            config.write_text(
+                "CONTROL_PLANE_API_KEY=test-key\n"
+                "CONTROL_PLANE_TUNNEL_ID=stable-test-id\n"
+                f"AGENT_RUNTIME_WORKSPACE_ROOT={workspace}\n"
+                "AGENT_RUNTIME_GIT_NAME=Runtime Fixture\n"
+                "AGENT_RUNTIME_GIT_EMAIL=runtime-fixture@example.invalid\n"
+                f"AGENT_RUNTIME_REVISION={'e' * 40}\n"
+            )
+            config.chmod(0o600)
+
+            tools = temp / "tools"
+            tools.mkdir()
+            capture = temp / "capture.log"
+            tunnel = tools / "tunnel-client"
+            tunnel.write_text(
+                "#!/bin/bash\n"
+                f"printf 'revision=%s\\n' \"${{AGENT_RUNTIME_REVISION-}}\" >> {str(capture)!r}\n"
+                "exit 0\n"
+            )
+            tunnel.chmod(0o700)
+
+            revision = "a" * 40
+            tree = "b" * 40
+            package_provenance.write_manifest(
+                runtime,
+                runtime.parent / "runtime-manifest.json",
+                revision,
+                tree,
+                "c" * 64,
+            )
+
+            env = {
+                "HOME": str(home),
+                "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+                "AGENT_RUNTIME_REVISION": "d" * 40,
+            }
+            result = subprocess.run(
+                [str(runtime / "start.sh"), "--serve", str(tunnel), str(config)],
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(capture.read_text().splitlines(), [f"revision={revision}", f"revision={revision}"])
+
+            capture.unlink()
+            (runtime / "agent_runtime/server.py").write_text("# tampered fixture runtime payload\n")
+            rejected = subprocess.run(
+                [str(runtime / "start.sh"), "--serve", str(tunnel), str(config)],
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertFalse(capture.exists())
+            self.assertIn("Installed Runtime package provenance is invalid", rejected.stderr)
 
     def test_serve_fails_closed_if_legacy_profile_reappears(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

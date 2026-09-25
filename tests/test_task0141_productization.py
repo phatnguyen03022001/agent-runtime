@@ -201,6 +201,8 @@ class Task0141ProductizationTests(unittest.TestCase):
             (runtime / ".venv" / "bin").mkdir(parents=True)
             (runtime / "agent_runtime").mkdir()
             (runtime / "macos").mkdir()
+            shutil.copy2(ROOT / "start.sh", runtime / "start.sh")
+            (runtime / "start.sh").chmod(0o700)
             shutil.copy2(ROOT / "macos" / "runtime_config.py", runtime / "macos" / "runtime_config.py")
             (runtime / "agent_runtime" / "doctor.py").write_text("# fixture installed doctor\n")
             fake_python = runtime / ".venv" / "bin" / "python"
@@ -229,9 +231,11 @@ class Task0141ProductizationTests(unittest.TestCase):
             config.chmod(0o600)
             env = os.environ.copy()
             env["HOME"] = str(home)
+            env.pop("PYTHONPATH", None)
+            env.pop("AGENT_RUNTIME_REVISION", None)
             result = subprocess.run(
-                [str(ROOT / "start.sh"), "doctor", "--json"],
-                cwd=ROOT,
+                [str(runtime / "start.sh"), "doctor", "--json"],
+                cwd=temp,
                 env=env,
                 text=True,
                 capture_output=True,

@@ -826,6 +826,7 @@ class CandidateCutoverTests(unittest.TestCase):
             "4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b",
             "99518e694467be8525d813a4e638c4c8e0324365",
             "90a87fca8755ddc673e749bb5bf3e4489045a9b8",
+            "89111218720ddb2f12961f9375549733edd23ada",
             "bf98ec4e9bcda97dfdc0ca52b8e0537dae14a1cc",
         )
         for revision in revisions:
@@ -842,6 +843,7 @@ class CandidateCutoverTests(unittest.TestCase):
             "4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b",
             "99518e694467be8525d813a4e638c4c8e0324365",
             "90a87fca8755ddc673e749bb5bf3e4489045a9b8",
+            "89111218720ddb2f12961f9375549733edd23ada",
             "bf98ec4e9bcda97dfdc0ca52b8e0537dae14a1cc",
             exact_revision,
         )

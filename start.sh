@@ -96,6 +96,7 @@ runtime_path = sys.argv[4]
 json_mode = sys.argv[5] == "1"
 doctor_arg = sys.argv[6]
 
+sys.dont_write_bytecode = True
 sys.path.insert(0, runtime_root)
 from macos import runtime_config
 
@@ -339,6 +340,7 @@ runtime_python = sys.argv[3]
 runtime_path = sys.argv[4]
 runtime_root = sys.argv[5]
 require_git_identity = sys.argv[6] == "1"
+sys.dont_write_bytecode = True
 
 def fail(message):
     print("START ERROR: " + message, file=sys.stderr)
@@ -394,6 +396,27 @@ if identity_required:
         if len(raw) > 256 or any(ch in value for ch in ("\x00", "\r", "\n")):
             fail("Runtime Git identity is malformed.")
 
+runtime_revision = None
+if require_git_identity:
+    sys.path.insert(0, runtime_root)
+    try:
+        from macos import package_provenance
+    except ImportError:
+        fail("Installed Runtime package provenance is invalid.")
+    try:
+        manifest_path = Path(runtime_root).parent / "runtime-manifest.json"
+        manifest = package_provenance._load_manifest(manifest_path)
+        validated_manifest = package_provenance.validate_manifest(
+            Path(runtime_root),
+            manifest_path,
+            manifest.get("runtime_revision"),
+            manifest.get("git_tree"),
+            manifest.get("requirements_lock_sha256"),
+        )
+        runtime_revision = validated_manifest["runtime_revision"]
+    except (OSError, package_provenance.PackageProvenanceError):
+        fail("Installed Runtime package provenance is invalid.")
+
 runtime_env = {
     "PATH": runtime_path,
     "HOME": os.environ.get("HOME", str(Path.home())),
@@ -413,6 +436,8 @@ if values.get("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS") is not None:
     runtime_env["AGENT_RUNTIME_MAX_ACTIVE_SESSIONS"] = values["AGENT_RUNTIME_MAX_ACTIVE_SESSIONS"]
 if values.get("AGENT_RUNTIME_MAX_PARALLELISM") is not None:
     runtime_env["AGENT_RUNTIME_MAX_PARALLELISM"] = values["AGENT_RUNTIME_MAX_PARALLELISM"]
+if runtime_revision is not None:
+    runtime_env["AGENT_RUNTIME_REVISION"] = runtime_revision
 for key in ("USER", "TMPDIR", "LANG"):
     value = os.environ.get(key)
     if value:

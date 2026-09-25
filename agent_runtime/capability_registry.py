@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import re
 from dataclasses import dataclass
 
 from .capacity import CAPACITY_OBSERVER_CONTRACT, heavy_execution_admission
@@ -50,7 +52,20 @@ DESCRIPTOR_SCHEMA_VERSION = 2
 TOOL_CONTRACT_VERSION = 1
 REQUEST_SCHEMA_VERSION = 1
 RESULT_SCHEMA_VERSION = 1
-RUNTIME_REVISION: str | None = None
+_RUNTIME_REVISION_ENV = "AGENT_RUNTIME_REVISION"
+_RUNTIME_REVISION_PATTERN = re.compile(r"^[0-9a-f]{40}$")
+
+
+def _process_runtime_revision() -> str | None:
+    value = os.environ.get(_RUNTIME_REVISION_ENV)
+    if value is None:
+        return None
+    if _RUNTIME_REVISION_PATTERN.fullmatch(value) is None:
+        raise RuntimeError("AGENT_RUNTIME_REVISION process identity must be exact lowercase 40-hex")
+    return value
+
+
+RUNTIME_REVISION: str | None = _process_runtime_revision()
 
 RUNTIME_CAPABILITIES_CONTRACT = ToolContract(
     name="runtime_capabilities",

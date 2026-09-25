@@ -66,7 +66,7 @@ SCREEN_CAPTURE_BINARY="$BIN_DIR/AgentRuntimeScreenCapture"
 [[ -x "$RUNTIME_SERVICE_BINARY" ]] || { echo "PACKAGE ERROR: missing AgentRuntimeRuntimeService binary" >&2; exit 2; }
 [[ -x "$SCREEN_CAPTURE_BINARY" ]] || { echo "PACKAGE ERROR: missing AgentRuntimeScreenCapture binary" >&2; exit 2; }
 
-mkdir -p "$MACOS" "$RESOURCES" "$RUNTIME/agent_runtime" "$CONTENTS/Library/LaunchAgents"
+mkdir -p "$MACOS" "$RESOURCES" "$RUNTIME/agent_runtime" "$RUNTIME/macos" "$CONTENTS/Library/LaunchAgents"
 cp "$SOURCE_PACKAGE_ROOT/AppBundle/Info.plist" "$CONTENTS/Info.plist"
 cp "$BINARY" "$MACOS/AgentRuntimeMenuBar"
 cp "$RUNTIME_SERVICE_BINARY" "$MACOS/AgentRuntimeRuntimeService"
@@ -77,6 +77,8 @@ cp "$NOTIFICATION_SOUND" "$RESOURCES/notification.mp3"
 /usr/bin/strip -S "$MACOS/AgentRuntimeMenuBar" "$MACOS/AgentRuntimeRuntimeService" "$MACOS/AgentRuntimeScreenCapture"
 
 cp "$SOURCE_ROOT/start.sh" "$RUNTIME/start.sh"
+cp "$SOURCE_PACKAGE_ROOT/runtime_config.py" "$RUNTIME/macos/runtime_config.py"
+cp "$SOURCE_PACKAGE_ROOT/package_provenance.py" "$RUNTIME/macos/package_provenance.py"
 find "$SOURCE_ROOT/agent_runtime" -maxdepth 1 -type f -name '*.py' -exec cp '{}' "$RUNTIME/agent_runtime/" \;
 PACKAGE_VENV="$TEMP_ROOT/runtime-venv"
 "$PYTHON_BIN" -m venv --copies --without-pip "$PACKAGE_VENV"
