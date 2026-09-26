@@ -1,0 +1,110 @@
+protocol_version: 3
+
+task_id: TASK-0166
+task_revision: 1
+state: APPROVED
+title: "Current Runtime 0.5.0 Predecessor Compatibility Repair + Final Reseal"
+
+origin:
+  type: architect_pre_activation_correction
+  predecessor_task: TASK-0165
+  predecessor_review: "000f74d90029bdf18d19b00678efc551185daf79"
+  discovered_blocker: "Installed Runtime revision 837eb318... is not admitted by SPLIT_SERVICE_MANAGEMENT_REVISIONS."
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+accepted_predecessor:
+  task: TASK-0165
+  review_commit: "000f74d90029bdf18d19b00678efc551185daf79"
+  source_candidate: "3dd0601f75236453a8fbee0666906e1d826b943b"
+  source_tree: "d249bb47a50804808f0b3f23e8c6a5f7a9473dff"
+  package_sha256: "e7b5caa95e203f30963ccf864fa99c720d1b4c6bf982c3d85f34ac7f1fbb74fb"
+  handoff_sha256: "8a88895975a963810877826d91ae1b55c10fb3e65c6b7e78a2995aaf68ca281f"
+  record_count: 1714
+
+installed_state:
+  runtime_version: "0.5.0"
+  runtime_revision: "837eb3183793c5260d73fc54467170b37722e5f2"
+  runtime_tree: "8cc745fb008c3be511237f3253f9724c26dd939b"
+  service_management_contract: split-v1
+  service_management: "enabled/enabled"
+  transaction_present: false
+  live_runtime_operational: true
+  strict_codesign: PASS
+  doctor: "healthy 10/10"
+
+objective: >
+  Admit the exact currently installed Runtime revision 837eb3183793c5260d73fc54467170b37722e5f2
+  through the existing split-v1 predecessor contract, preserve all accepted durable
+  bootstrap/reaper and finalization fixes, run one authoritative verification, seal
+  exactly one Runtime 0.5.0 package, and stop NEEDS_REVIEW without touching live Runtime.
+
+required_change:
+  - "Add exactly 837eb3183793c5260d73fc54467170b37722e5f2 to macos/candidate_cutover.py SPLIT_SERVICE_MANAGEMENT_REVISIONS."
+  - "Do not introduce heuristic predecessor detection."
+  - "Update tests/test_candidate_cutover.py only as needed to prove exact split-v1 recognition/refresh and adjacent unknown fail-closed behavior."
+  - "Preserve TASK-0162 finalization fix and TASK-0165 bootstrap/reaper fix exactly."
+  - "Keep Runtime 0.5.0, Kernel 2 and public capability/tool counts unchanged."
+
+allowed_source_paths:
+  - macos/candidate_cutover.py
+  - tests/test_candidate_cutover.py
+  - ".agent/tasks/TASK-0166/report-r1.yaml"
+
+focused_verification:
+  requirements:
+    - "Exact 837eb3183793c5260d73fc54467170b37722e5f2 classifies split-v1."
+    - "Refresh uses unregister-runtime and not aggregate unregister."
+    - "Adjacent/unlisted predecessor remains unknown and fail-closed before mutation/transaction."
+    - "Full candidate-cutover suite remains PASS."
+    - "git diff --check PASS."
+
+broad_verification:
+  command: "./verify --profile candidate --base <task-base>"
+  maximum_successful_runs_per_exact_candidate: 1
+  rule: "One terminal PASS is authoritative; no rerun of the same immutable SHA."
+
+package_reseal:
+  rules:
+    - "Build/sign/seal exactly one new Runtime 0.5.0 package after broad PASS."
+    - "Do not overwrite historical packages."
+    - "Require exact source SHA/tree, package/handoff SHA-256, record_count."
+    - "Require zero __pycache__/pyc, strict deep codesign PASS and pinned provenance PASS."
+    - "Run one sealed start_reaper=true durable smoke preserving TASK-0165 behavior: one effect, natural exit 0, retained lookup by both selectors same session, no respawn, zero bytecode afterward."
+    - "Do not install or activate in TASK-0166."
+
+live_runtime_guard:
+  - "Do not install/reinstall, restart, reload, reconnect, rollback, recover or commit-cutover."
+  - "Do not run another live durable effect."
+  - "Do not mutate installed Agent Runtime.app or TASK-0164 durable evidence."
+  - "Telemetry remains off."
+
+publication_lifecycle:
+  - "Publish exact corrected source candidate non-force only after verification PASS."
+  - "Create .agent/tasks/TASK-0166/report-r1.yaml as sole report-only child."
+  - "Validate with pinned agent-skills authority."
+  - "Publish report non-force."
+  - "Final reconcile HEAD=origin/main=remote main, ahead/behind=0/0, clean, branches={main}, open PRs=0."
+  - "Stop NEEDS_REVIEW."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+
+release_authority:
+  build_corrected_candidate_once: true
+  install_or_activate_live_runtime: false
+  enable_telemetry: false
+
+blocking_decisions: []
+execution_ready: true
