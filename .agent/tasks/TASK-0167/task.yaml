@@ -1,0 +1,187 @@
+protocol_version: 3
+
+task_id: TASK-0167
+task_revision: 1
+state: APPROVED
+title: "Runtime 0.5.0 Final Activation and Freeze Closure"
+
+origin:
+  type: architect_live_activation
+  predecessor_task: TASK-0166
+  predecessor_review: "b04829c6724e10d30f65fce18e0ba01130d3bf66"
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+accepted_activation_authority:
+  runtime_version: "0.5.0"
+  source_revision: "2044df229a278bc36f9244cd2add54c9a0b28061"
+  source_tree: "75954d599045c10bd3b84d2a304b6f5fa19f2a4c"
+  package_sha256: "b58883e3edabbeb0885c7358c085182882c504ec5d4fa86df5f253148c3de173"
+  handoff_sha256: "9d7dc880688fa3c03f21980bc2ddca0933d035ebaf382073a4b3729c42cc6347"
+  record_count: 1715
+  strict_codesign: PASS
+  pinned_provenance: PASS
+  bytecode_entries: 0
+
+installed_predecessor:
+  runtime_version: "0.5.0"
+  runtime_revision: "837eb3183793c5260d73fc54467170b37722e5f2"
+  runtime_tree: "8cc745fb008c3be511237f3253f9724c26dd939b"
+  predecessor_service_contract: split-v1
+  service_management: "enabled/enabled"
+  transaction_present: false
+  strict_codesign: PASS
+  doctor: "healthy 10/10"
+
+objective: >
+  Activate the exact accepted TASK-0166 Runtime 0.5.0 package transactionally
+  through SentinelX, commit the cutover exactly once, prove the exact live public
+  Runtime surface, then execute exactly one live runtime_restart durable effect
+  and prove retained lookup by both start_identity and session_id resolves the
+  same completed session with no respawn and no signed-bundle mutation. On full
+  PASS, close TASK-0167 NEEDS_REVIEW as the Runtime 0.5.0 core freeze candidate.
+
+absolute_freeze:
+  - "No source/test/doc/dependency/verification-policy mutation."
+  - "No focused tests, candidate verification or qualification."
+  - "No package rebuild/reseal/resign."
+  - "No telemetry enablement; AGENT_RUNTIME_TELEMETRY remains off."
+  - "No branches, PRs, force push, amend, squash, tag or release publication."
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  consequence_bearing_carrier: SENTINELX
+  activation_host: mac-tphat-mb
+
+effect_authority:
+  install_prebuilt_max: 1
+  commit_cutover_max: 1
+  live_durable_effect_max: 1
+  connector_reconnect_max: 1
+  blind_retry: false
+
+pre_install_gate:
+  require:
+    - "Git exactly at TASK-0167 base, main only, clean, ahead/behind 0/0, open PRs=0."
+    - "SentinelX mac-tphat-mb ping PASS."
+    - "Accepted candidate app/handoff exact hashes b58883e3... / 9d7dc880...."
+    - "Candidate strict codesign PASS, pinned provenance PASS, record_count=1715, zero pycache/pyc."
+    - "Installed predecessor exact 837eb318... / 8cc745fb...."
+    - "Installed predecessor revision 837eb318... is present in SPLIT_SERVICE_MANAGEMENT_REVISIONS."
+    - "Installed predecessor transaction absent, doctor healthy 10/10, codesign PASS, ServiceManagement enabled/enabled, healthz live, readyz ready."
+
+install_prebuilt:
+  carrier: SENTINELX
+  working_directory: "/Users/tienphat/Developer/agent-runtime"
+  command: >
+    ./install.sh --install-prebuilt
+    "build/candidates/b58883e3edabbeb0885c7358c085182882c504ec5d4fa86df5f253148c3de173/Agent Runtime.app"
+    "build/candidates/b58883e3edabbeb0885c7358c085182882c504ec5d4fa86df5f253148c3de173/Agent Runtime.candidate.json"
+    --expected-candidate-sha256 b58883e3edabbeb0885c7358c085182882c504ec5d4fa86df5f253148c3de173
+    --expected-handoff-sha256 9d7dc880688fa3c03f21980bc2ddca0933d035ebaf382073a4b3729c42cc6347
+  retry_policy: "No second invocation. Unknown outcome reconciles from SentinelX job + transaction + installed identity."
+
+pending_gate:
+  require:
+    - "transaction schema=5, status=PENDING, phase=APP_SWAPPED"
+    - "predecessor_service_contract=split-v1"
+    - "transaction binds exact package/source/tree/handoff/record_count"
+    - "installed Runtime already exact 0.5.0 revision 2044df22... tree 75954d59..."
+    - "strict codesign PASS, pinned provenance PASS, zero pycache/pyc"
+    - "ServiceManagement enabled/enabled, healthz live, readyz ready"
+    - "doctor exactly 9 PASS / 1 WARN / 0 FAIL"
+    - "sole warning cutover_identity / CUTOVER_TRANSACTION_PRESENT for same PENDING/APP_SWAPPED transaction"
+
+commit_cutover:
+  carrier: SENTINELX
+  working_directory: "/Users/tienphat/Developer/agent-runtime"
+  command: "./install.sh --commit-cutover"
+  retry_policy: "No second invocation. Unknown outcome reconciles from SentinelX job + transaction absence + installed identity."
+
+post_commit_gate:
+  require:
+    - "transaction absent"
+    - "installed Runtime 0.5.0 revision 2044df229a278bc36f9244cd2add54c9a0b28061"
+    - "installed tree 75954d599045c10bd3b84d2a304b6f5fa19f2a4c"
+    - "strict deep codesign PASS"
+    - "pinned provenance PASS"
+    - "zero __pycache__/pyc"
+    - "ServiceManagement enabled/enabled"
+    - "healthz live and readyz ready"
+    - "doctor healthy 10/10 with zero warn/fail"
+
+live_surface_gate:
+  require:
+    - "runtime_capabilities: Runtime 0.5.0 revision 2044df22..., Kernel 2, 21 known / 20 advertised / 20 available / 1 unavailable"
+    - "tools/list exactly 20"
+    - "screen_capture supported=true, available=false, advertised=false, reason=VISUAL_PERCEPTION_BLOCKED"
+    - "terminal_start request/result 4/4 with durability exposed"
+    - "terminal_poll request/result 4/4"
+    - "capacity coherent with no unexpected active pressure"
+  connector_rule: >
+    Use current connector if it resolves revision 2044df22.... If stale, at most
+    one plugin/MCP reconnect is authorized. Do not restart Runtime just to refresh connector state.
+
+final_live_durable_acceptance:
+  count: 1
+  requirements:
+    - "Use one fresh caller-known 32-hex start_identity."
+    - "mode=pipe, durability=runtime_restart, short deterministic bounded command."
+    - "terminal_start must return coherently without owner/state fault."
+    - "Poll to natural exit_code=0."
+    - "Retained lookup by same start_identity returns same session."
+    - "Retained lookup by session_id returns same session."
+    - "Exactly one effect; no respawn."
+
+post_effect_integrity_gate:
+  require:
+    - "installed bundle still zero pycache/pyc"
+    - "strict deep codesign still PASS"
+    - "pinned provenance still PASS with exact source/tree binding"
+    - "doctor still healthy 10/10"
+    - "transaction absent"
+    - "ServiceManagement enabled/enabled"
+    - "healthz live and readyz ready"
+    - "capacity returns to 0 active / 6 available"
+    - "telemetry remains off"
+  failure_policy: >
+    Any durable retained-lookup failure, respawn, bytecode creation, codesign/
+    provenance drift, doctor degradation or identity mismatch blocks. Do not
+    reinstall, recommit, restart or clean files to hide failure.
+
+report_lifecycle:
+  - "Only after every gate PASS create .agent/tasks/TASK-0167/report-r1.yaml."
+  - "Report is the sole tracked mutation after task-authoring commit."
+  - "Validate with pinned agent-skills authority."
+  - "Publish report non-force."
+  - "Final reconcile HEAD=origin/main=remote main, ahead/behind=0/0, clean, branches={main}, open PRs=0."
+  - "Stop NEEDS_REVIEW."
+
+freeze_candidate:
+  if_all_acceptance_gates_pass: true
+  scope: "Agent Runtime 0.5.0 core execution substrate"
+  telemetry_live_enablement_excluded: true
+  note: "Telemetry implementation remains accepted but live telemetry remains off and is a separate optional task."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+
+release_authority:
+  install_exact_candidate_once: true
+  commit_cutover_once: true
+  rebuild_candidate: false
+  enable_telemetry: false
+
+blocking_decisions: []
+execution_ready: true
