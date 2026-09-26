@@ -1,0 +1,201 @@
+protocol_version: 3
+
+task_id: TASK-0163
+task_revision: 1
+state: APPROVED
+title: "Current Runtime 0.5.0 Predecessor Compatibility Repair + TOCTOU Reseal"
+
+origin:
+  type: architect_pre_activation_correction
+  predecessor_task: TASK-0162
+  predecessor_review: "76d2da2166aa457fba3ca1825da1ab2d8d03cded"
+  discovered_blocker: "Installed Runtime revision b0c7a0ae... is not admitted by SPLIT_SERVICE_MANAGEMENT_REVISIONS."
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+  canonical_branch: main
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+accepted_predecessor:
+  task: TASK-0162
+  review_commit: "76d2da2166aa457fba3ca1825da1ab2d8d03cded"
+  source_candidate: "eff520b71cbad7abc749ca01a16dbb0030c8b9da"
+  source_tree: "e701694b5efcdd6356396de8200cce0bf1034be1"
+  package_sha256: "b7ade416282569a18a14fecfa58f35a0d27549548668013904719a5277208509"
+  handoff_sha256: "3457077e7d508faa75356df21534bb6cf353244f421c76c4dc3a7c0f260dce58"
+  record_count: 1714
+
+installed_state:
+  runtime_version: "0.5.0"
+  runtime_revision: "b0c7a0ae29dc66079cea3760828e00b86ab921e4"
+  runtime_tree: "025ce0ba4b3e14c30564d98f152aec0cf9b65471"
+  service_management_contract: split-v1
+  service_management: "enabled/enabled"
+  transaction_present: false
+  live_runtime_operational: true
+  strict_codesign: PASS
+  doctor: "healthy 10/10"
+  repair_in_this_task: false
+
+pre_activation_discovery:
+  current_mapping:
+    file: macos/candidate_cutover.py
+    set: SPLIT_SERVICE_MANAGEMENT_REVISIONS
+    predecessor_present: false
+  consequence: >
+    Activation of the accepted TASK-0162 package would classify the currently
+    installed b0c7a0ae... predecessor as unknown and fail before transaction
+    creation. Activation is therefore not authorized until this exact predecessor
+    is admitted through the existing split-v1 compatibility contract.
+
+objective: >
+  Add the exact currently installed Runtime 0.5.0 revision
+  b0c7a0ae29dc66079cea3760828e00b86ab921e4 to the existing split-v1
+  ServiceManagement predecessor contract, preserve all unknown-predecessor
+  fail-closed semantics and the accepted TASK-0162 durable finalization fix,
+  run one authoritative verification, build/sign/seal one new Runtime 0.5.0
+  package, and stop NEEDS_REVIEW without touching the installed Runtime.
+
+required_change:
+  - "Add exactly b0c7a0ae29dc66079cea3760828e00b86ab921e4 to macos/candidate_cutover.py SPLIT_SERVICE_MANAGEMENT_REVISIONS."
+  - "Do not replace exact revision membership with heuristic predecessor detection."
+  - "Update tests/test_candidate_cutover.py only as needed to prove the exact b0c7a0ae... predecessor classifies split-v1 and uses the existing split-v1 refresh path."
+  - "Preserve all existing predecessor revisions and unknown-predecessor fail-closed behavior."
+  - "Preserve TASK-0159 bytecode immutability and TASK-0162 durable finalization reconciliation exactly."
+  - "Keep Runtime version 0.5.0, ToolContract Kernel 2, 21 known / 20 advertised capabilities."
+
+allowed_source_paths:
+  - macos/candidate_cutover.py
+  - tests/test_candidate_cutover.py
+  - ".agent/tasks/TASK-0163/report-r1.yaml"
+
+forbidden_source_changes:
+  - agent_runtime/session.py
+  - agent_runtime/durable_pipe.py
+  - agent_runtime/durable_pipe_runner.py
+  - agent_runtime/executor.py
+  - agent_runtime/version.py
+  - tests/test_durable_pipe.py
+  - tests/test_durable_pipe_restart.py
+  - verification_policy.py
+  - tests/test_verify_harness.py
+  - verify_tests.py
+  - verify
+  - install.sh
+  - start.sh
+  - macos/package_app.sh
+  - requirements.lock
+  - "Any MCP schema/capability/tool-count change"
+  - "Any telemetry configuration change"
+
+focused_verification:
+  requirements:
+    - "Prove exact b0c7a0ae29dc66079cea3760828e00b86ab921e4 classifies as split-v1."
+    - "Prove refresh for this exact predecessor uses unregister-runtime and never aggregate unregister."
+    - "Prove an adjacent/unlisted predecessor remains unknown and fail-closed before consequence-bearing mutation or transaction creation."
+    - "Preserve all existing candidate-cutover compatibility tests."
+    - "git diff --check PASS."
+
+executor_survival_protocol:
+  - "Run only candidate-cutover focused tests while editing."
+  - "Commit one clean corrective source checkpoint before broad verification."
+  - "On the exact clean candidate run ./verify --profile candidate --base <task-base> exactly once."
+  - "If requested candidate escalates to effective qualification, one terminal PASS is authoritative; do not run a second qualification on the same SHA."
+  - "Do not rerun a failed immutable SHA hoping for green."
+  - "Any tracked source/test write after broad verification creates a new candidate and invalidates prior proof."
+  - "Commands expected to exceed 10 seconds use recoverable process execution and record PID/session/job identity immediately."
+  - "Poll healthy long work no more frequently than every 20 seconds."
+  - "Unknown outcome requires Git/process/artifact inspection before retry."
+  - "Do not terminate unrelated pre-existing host processes."
+
+broad_verification:
+  command: "./verify --profile candidate --base <task-base>"
+  maximum_successful_runs_per_exact_candidate: 1
+  rule: >
+    Run only after a clean corrective candidate exists. If candidate escalates
+    to qualification, that one terminal PASS is authoritative.
+
+package_reseal:
+  preconditions:
+    - "Exact corrected candidate clean and broad verification PASS."
+    - "No tracked candidate write after verification."
+  rules:
+    - "Build/sign/seal exactly one new Runtime 0.5.0 package from the corrected candidate."
+    - "Do not overwrite accepted historical packages b7ade416..., 713ffe9b... or 7faca55b...."
+    - "Record exact package SHA-256, handoff SHA-256, record_count and source revision/tree."
+    - "Require zero __pycache__ directories and zero *.pyc files."
+    - "Require strict deep codesign PASS and pinned provenance PASS."
+    - "Run one sealed-candidate durable smoke using the packaged Runtime: one runtime_restart effect, terminal exit 0, retained lookup by start_identity and session_id resolve the same session, no respawn, zero bytecode afterward, strict codesign/provenance unchanged."
+    - "Do not install or activate the new package in TASK-0163."
+
+live_runtime_guard:
+  - "Do not mutate ~/Applications/Agent Runtime.app."
+  - "Do not install/reinstall, restart, reload, reconnect, rollback, recover or commit-cutover."
+  - "Do not run another live durable effect."
+  - "Do not alter TASK-0161 durable state."
+  - "Telemetry remains off."
+
+publication_lifecycle:
+  - "Fresh remote gate before source publication: remote main still exact task base, branches={main}, open PRs=0."
+  - "Publish exact corrected source candidate non-force."
+  - "Create .agent/tasks/TASK-0163/report-r1.yaml as the sole report-only child."
+  - "Validate report with pinned agent-skills authority."
+  - "Publish report non-force."
+  - "Final reconcile HEAD=origin/main=remote main, ahead/behind=0/0, clean worktree/index, branches={main}, open PRs=0."
+  - "Stop NEEDS_REVIEW."
+  - "Do not start live activation in the same Executor chat."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact installed predecessor b0c7a0ae... is admitted through the existing split-v1 contract without heuristics."
+  - id: AC-2
+    requirement: "Exact split-v1 refresh and unknown-predecessor fail-closed semantics are preserved."
+  - id: AC-3
+    requirement: "Exact corrected source passes one non-redundant effective broad verification."
+  - id: AC-4
+    requirement: "One new immutable Runtime 0.5.0 package binds the corrected source and preserves TASK-0162 durable retained-lookup behavior."
+  - id: AC-5
+    requirement: "Healthy installed Runtime remains untouched throughout TASK-0163."
+  - id: AC-6
+    requirement: "Canonical publication/report closure is exact."
+
+report_requirements:
+  path: .agent/tasks/TASK-0163/report-r1.yaml
+  record:
+    - "pre-activation discovery that installed predecessor b0c7a0ae... was missing from split-v1 allowlist"
+    - "exact installed Runtime identity and healthy state"
+    - "exact two-file corrective source scope"
+    - "focused split-v1 and unknown-predecessor proof"
+    - "single effective broad verification"
+    - "corrected source candidate SHA/tree"
+    - "new package SHA-256, handoff SHA-256, record_count"
+    - "sealed-candidate durable start_identity/session retained lookup by both selectors and no respawn"
+    - "zero candidate bytecode and codesign/provenance PASS"
+    - "zero live Runtime mutation/effect"
+    - "final canonical Git reconciliation"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  build_corrected_candidate_once: true
+  install_or_activate_live_runtime: false
+  create_version_tag: false
+  publish_release: false
+  enable_telemetry: false
+
+blocking_decisions: []
+execution_ready: true
