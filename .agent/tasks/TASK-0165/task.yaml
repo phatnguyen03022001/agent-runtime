@@ -1,0 +1,263 @@
+protocol_version: 3
+
+task_id: TASK-0165
+task_revision: 1
+state: APPROVED
+title: "Durable Bootstrap/Reaper Race Reconciliation + Reseal"
+
+origin:
+  type: corrective_followup
+  source_task: TASK-0164
+  source_result: BLOCKED
+  blocker: DURABLE_STARTUP_REAPER_PREPUBLICATION_FAULT_LATCH
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+  canonical_branch: main
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+live_state_preserved_from_task_0164:
+  installed_runtime_version: "0.5.0"
+  installed_revision: "837eb3183793c5260d73fc54467170b37722e5f2"
+  installed_tree: "8cc745fb008c3be511237f3253f9724c26dd939b"
+  transaction_present: false
+  strict_codesign: PASS
+  pinned_provenance: PASS
+  bytecode_entries: 0
+  service_management: "enabled/enabled"
+  healthz: live
+  readyz: ready
+  doctor: "healthy 10/10"
+  telemetry: off
+  cutover_complete: true
+  do_not_mutate_in_this_task: true
+
+task_0164_effect_evidence:
+  install_invocations: 1
+  install_job: "job_a11d1da1dfb9"
+  install_result: PASS
+  commit_cutover_invocations: 1
+  commit_job: "job_e4c38965f610"
+  commit_result: COMMITTED
+  durable_effects: 1
+  durable_start_identity: "16401640164016401640164016401640"
+  durable_session_id: "a30c24d4609a643a"
+  durable_persisted_status: exited
+  durable_persisted_lifecycle: COMPLETED
+  durable_exit_code: 0
+  durable_termination_reason: natural_exit
+  retained_lookup_result: BLOCKED
+
+independent_reproduction:
+  environment: "repository Runtime with test-owned durable root; live Runtime untouched"
+  start_reaper: true
+  reaper_interval_seconds: 0.001
+  durable_effect_result: "START_OK exited/COMPLETED/0"
+  retained_poll_result: "RuntimeStateError DURABLE_STATE_CORRUPT"
+  in_memory_fault: DURABLE_STATE_CORRUPT
+  session_status_after_effect: "exited/COMPLETED/0"
+  conclusion: "Reaper can permanently latch a pre-publication bootstrap observation even though dispatch later completes coherently."
+
+proven_root_cause:
+  component: agent_runtime/session.py
+  functions:
+    - start
+    - _dispatch_durable
+    - reap_once
+    - _refresh_durable_session
+  race: >
+    start() inserts a runtime_restart session into the global session map with
+    status/lifecycle STARTING before _dispatch_durable has published its first
+    durable state.json. The live manager's background reaper scans that session.
+    reap_once currently calls _refresh_durable_session for every durable session,
+    including STARTING bootstrap sessions. If the reaper wins before state.json
+    exists, read_snapshot fails and _refresh_durable_session permanently latches
+    DURABLE_STATE_CORRUPT. The dispatch path can then publish and complete a valid
+    exited/COMPLETED state, but retained lookup remains poisoned by the earlier
+    in-memory fault latch.
+  why_sealed_smokes_missed_it: >
+    Existing durable unit/sealed smoke managers use start_reaper=False, so they
+    prove finalization semantics but do not exercise the live global-manager
+    bootstrap/reaper concurrency.
+
+objective: >
+  Establish a single bootstrap owner boundary for runtime_restart sessions:
+  while a durable session is still STARTING, _dispatch_durable is the sole
+  reconciler of pre-publication state and the background reaper must not call
+  _refresh_durable_session on it. Once dispatch applies the first coherent
+  durable snapshot and the session becomes running/exited, normal reaper
+  reconciliation resumes unchanged. Preserve TASK-0162 finalization TOCTOU
+  semantics, genuine corruption/owner-loss fail-closed behavior, one-effect
+  identity semantics and all existing capacity/retention contracts.
+
+required_implementation:
+  - "Change the smallest durable reaper/bootstrap boundary in agent_runtime/session.py."
+  - "reap_once must not call _refresh_durable_session for runtime_restart sessions whose in-memory status is starting / lifecycle STARTING."
+  - "Do not silently convert or clear any durable fault already established after bootstrap ownership has transferred."
+  - "Do not weaken _refresh_durable_session corruption handling for running/exited sessions."
+  - "Do not change _DURABLE_FINALIZATION_GRACE_SECONDS=2.0."
+  - "Do not change reaper interval defaults merely to hide the race."
+  - "Do not delay runner execution or add retries/sleeps to make timing favorable."
+  - "Preserve Runtime 0.5.0, ToolContract Kernel 2 and capability/tool counts."
+
+allowed_source_paths:
+  - agent_runtime/session.py
+  - tests/test_durable_pipe.py
+  - tests/test_durable_pipe_restart.py
+  - tests/test_terminal_session.py
+  - ".agent/tasks/TASK-0165/report-r1.yaml"
+
+forbidden_source_changes:
+  - agent_runtime/durable_pipe.py
+  - agent_runtime/durable_pipe_runner.py
+  - agent_runtime/executor.py
+  - agent_runtime/version.py
+  - macos/candidate_cutover.py
+  - tests/test_candidate_cutover.py
+  - verification_policy.py
+  - tests/test_verify_harness.py
+  - verify_tests.py
+  - verify
+  - install.sh
+  - start.sh
+  - macos/package_app.sh
+  - requirements.lock
+  - "Any MCP schema/capability/tool-count change"
+  - "Any telemetry enablement/configuration change"
+
+focused_verification:
+  requirements:
+    - "Add a deterministic regression where start_reaper=True and reaper is forced to run while the durable session is STARTING before first state publication; the reaper must not latch DURABLE_STATE_CORRUPT or DURABLE_OWNER_LOST."
+    - "After the same dispatch completes, terminal_start and retained poll by start_identity must succeed with the original session and exit 0."
+    - "Retained poll by session_id must resolve the same completed session."
+    - "Prove no second process/effect is spawned."
+    - "Preserve TASK-0162 finalization TOCTOU regression."
+    - "Preserve persistent nonterminal owner-loss fail-closed behavior."
+    - "Preserve durable corruption fail-closed behavior after bootstrap ownership transfer."
+    - "Preserve retention/capacity/reaper behavior for running and completed durable sessions."
+    - "Do not rely on scheduler luck; use explicit synchronization/mocking to force the bootstrap/reaper interleaving."
+    - "Run directly affected durable/reaper tests while iterating."
+    - "git diff --check PASS."
+
+executor_survival_protocol:
+  - "Focused proof first; do not run broad verification while editing."
+  - "Commit one clean corrective source checkpoint before broad verification."
+  - "On the exact clean candidate run ./verify --profile candidate --base <task-base> exactly once."
+  - "If candidate escalates to effective qualification, one terminal PASS is authoritative; do not run a second qualification on the same SHA."
+  - "Do not rerun a failed immutable SHA hoping for green."
+  - "Any tracked write after broad verification creates a new candidate and invalidates prior proof."
+  - "Commands expected to exceed 10 seconds use recoverable execution and record process/session identity immediately."
+  - "Poll healthy long work no more frequently than every 20 seconds."
+  - "Unknown outcome requires process/Git/artifact inspection before retry."
+  - "Do not terminate unrelated pre-existing host processes."
+
+broad_verification:
+  command: "./verify --profile candidate --base <task-base>"
+  maximum_successful_runs_per_exact_candidate: 1
+  rule: >
+    Run only after an exact clean corrective candidate exists. If policy
+    escalates to qualification, that one terminal PASS is authoritative.
+
+package_reseal:
+  preconditions:
+    - "Exact corrected candidate clean."
+    - "Single effective broad verification PASS."
+    - "No tracked candidate write after verification."
+  rules:
+    - "Build/sign/seal exactly one new Runtime 0.5.0 package from the corrected candidate."
+    - "Do not overwrite historical packages 3ae1c4d5..., b7ade416..., 713ffe9b... or 7faca55b...."
+    - "Record exact package SHA-256, handoff SHA-256, record_count and source revision/tree."
+    - "Require zero __pycache__ directories and zero *.pyc files."
+    - "Require strict deep codesign PASS and pinned provenance PASS."
+    - "Do not install or activate the package in TASK-0165."
+
+sealed_candidate_live_shape_proof:
+  purpose: >
+    Reproduce the live global-manager shape rather than the prior start_reaper=False
+    smoke, and prove both bootstrap/reaper and finalization behavior in the sealed candidate.
+  requirements:
+    - "Use the sealed candidate's bundled Runtime with a fresh test-owned durable root."
+    - "Instantiate TerminalSessionManager with start_reaper=True."
+    - "Use a deliberately short deterministic runtime_restart pipe command and one fresh caller-known start_identity."
+    - "Use explicit test synchronization or a sufficiently bounded deterministic harness that proves at least one reaper pass occurs during STARTING bootstrap without relying on random timing."
+    - "Exactly one durable effect."
+    - "terminal_start returns coherently or joins the exact effect without owner/state fault."
+    - "Poll to natural exit 0."
+    - "Retained lookup by start_identity and session_id both resolve the same session."
+    - "No respawn / second effect."
+    - "After proof, zero pycache/pyc, strict codesign PASS, pinned provenance PASS, and candidate/handoff hashes unchanged."
+
+live_runtime_guard:
+  - "Do not mutate ~/Applications/Agent Runtime.app."
+  - "Do not install/reinstall, restart, reload, reconnect, rollback, recover or commit-cutover."
+  - "Do not run another live durable effect."
+  - "Do not alter TASK-0164 durable state for 16401640164016401640164016401640."
+  - "Do not clear live in-memory fault by restarting Runtime."
+  - "Telemetry remains off."
+
+publication_lifecycle:
+  - "Fresh remote gate before source publication: remote main still exact task base, branches={main}, open PRs=0."
+  - "Publish exact corrected source candidate non-force."
+  - "Create .agent/tasks/TASK-0165/report-r1.yaml as the sole report-only child."
+  - "Validate report with pinned agent-skills authority."
+  - "Publish report non-force."
+  - "Final reconcile HEAD=origin/main=remote main, ahead/behind=0/0, clean worktree/index, branches={main}, open PRs=0."
+  - "Stop NEEDS_REVIEW."
+  - "Do not start live activation in the same Executor chat."
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Background reaper cannot poison a durable session during STARTING before first state publication."
+  - id: AC-2
+    requirement: "After bootstrap ownership transfer, corruption and persistent owner loss remain fail-closed and TASK-0162 finalization reconciliation remains intact."
+  - id: AC-3
+    requirement: "One-effect retained lookup works by both start_identity and session_id under start_reaper=True."
+  - id: AC-4
+    requirement: "Exact corrected source passes one non-redundant effective broad verification."
+  - id: AC-5
+    requirement: "One new immutable Runtime 0.5.0 package passes a sealed start_reaper=True durable proof without bytecode/codesign/provenance drift."
+  - id: AC-6
+    requirement: "Healthy TASK-0164 installed Runtime and durable evidence remain untouched."
+  - id: AC-7
+    requirement: "Canonical publication/report closure is exact."
+
+report_requirements:
+  path: .agent/tasks/TASK-0165/report-r1.yaml
+  record:
+    - "TASK-0164 successful cutover and exact durable blocker evidence"
+    - "offline deterministic reproduction yielding START_OK then retained DURABLE_STATE_CORRUPT"
+    - "exact bootstrap/reaper root cause"
+    - "exact source/test changed paths"
+    - "deterministic forced STARTING/reaper regression"
+    - "TASK-0162 finalization and persistent owner-loss regression preservation"
+    - "focused durable/reaper proof"
+    - "single effective broad verification"
+    - "corrected source candidate SHA/tree"
+    - "new package SHA-256, handoff SHA-256, record_count"
+    - "sealed start_reaper=True one-effect proof with retained lookup by both selectors"
+    - "zero candidate bytecode and unchanged hash/codesign/provenance"
+    - "zero live Runtime mutation/effect"
+    - "final canonical Git reconciliation"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+
+release_authority:
+  build_corrected_candidate_once: true
+  install_or_activate_live_runtime: false
+  enable_telemetry: false
+
+blocking_decisions: []
+execution_ready: true
