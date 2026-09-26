@@ -1,0 +1,279 @@
+protocol_version: 3
+
+task_id: TASK-0168
+task_revision: 1
+state: APPROVED
+title: "Secure MCP Tunnel Refresh and Transport Attribution"
+
+origin:
+  type: explicit_operator_authority
+  task_id: TASK-0168
+  gap_id: "MCP-TRANSPORT-LATENCY-AND-STALE-TUNNEL-CLIENT"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "22fc4d881d5a0ee71b3af2b3acadb4ce8258bbc1"
+
+architect_analysis_skills:
+  - architect
+  - simplicity
+  - reliability
+  - verification
+  - security-review
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - verification
+    - security-review
+  recommended:
+    - simplicity
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  preferred_transport: AGENT_RUNTIME
+  consequence_bearing_carrier: SENTINELX
+  reason: "The transport is being refreshed, so host mutation/restart must use an independent carrier."
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0167/review.yaml at 2e7e5e381fca9b008bac1a5d3224a007285d4787"
+    role: "Accepted live Runtime 0.5.0 core freeze closure."
+    precedence: 1
+  - source: "OpenAI tunnel-client v0.0.14 tag commit 0f870e50a973fa820d4c409000059e181e8d242b"
+    role: "Current supported official release with transport reliability fixes."
+    precedence: 2
+  - source: "Official OpenAI Homebrew formula openai/tools/tunnel-client"
+    role: "Current install owner; stable=0.0.14; darwin-arm64 archive SHA-256=b540493c5bdbcdbb755700c8e2e16597e28b1569e425007e0f73111047bd6a64."
+    precedence: 3
+  - source: "Architect live attribution on 2026-09-26"
+    role: "Direct local MCP is sub-ms for runtime_capabilities and ~3-4 ms for terminal_exec true; live ChatGPT round-trips are ~0.6-1.3 s read-only and ~2.2-2.3 s terminal_exec true."
+    precedence: 4
+
+structure_authority:
+  status: NOT_APPLICABLE
+  source: "Transport-only task"
+  rationale: "Runtime product source structure is frozen; only external tunnel-client state, bounded lifecycle state, and the report may change."
+
+objective: "Replace stale official OpenAI tunnel-client 0.0.11 with exact supported v0.0.14 through the existing official Homebrew owner, adopt it through one bounded Runtime restart via SentinelX, and produce before/after evidence that separates local Runtime MCP cost from tunnel/control-plane end-to-end cost. Preserve Runtime 0.5.0 core exactly. If residual latency is external to the local MCP server, prove that boundary and stop rather than modifying Runtime source without causal evidence."
+
+architect_evidence:
+  runtime_version: "0.5.0"
+  runtime_revision: "2044df229a278bc36f9244cd2add54c9a0b28061"
+  runtime_tree: "75954d599045c10bd3b84d2a304b6f5fa19f2a4c"
+  kernel_known_advertised_available: "2 / 21 / 20 / 20"
+  doctor: "healthy 10/10"
+  transaction_present: false
+  telemetry_mode: off
+  current_tunnel_client:
+    path: "/opt/homebrew/bin/tunnel-client"
+    formula: "openai/tools/tunnel-client"
+    installed_version: "0.0.11"
+    installed_git_sha: "8d55683eeef80bc5e360d95abf4692454fafc615"
+    linked_keg: "0.0.11"
+    outdated: true
+  target_tunnel_client:
+    version: "0.0.14"
+    release_commit: "0f870e50a973fa820d4c409000059e181e8d242b"
+    archive_url: "https://persistent.oaistatic.com/tunnel-client/v0.0.14/tunnel-client-v0.0.14-darwin-arm64.zip"
+    archive_sha256: "b540493c5bdbcdbb755700c8e2e16597e28b1569e425007e0f73111047bd6a64"
+  indicative_latency_ms:
+    live_runtime_capabilities: [605, 1037, 1094]
+    live_capacity_observer: [1117, 1099, 1120]
+    live_fs_list: [1042, 652, 1095]
+    live_repo_observer: [1189, 1266, 1147]
+    live_terminal_exec_true: [2173, 2306]
+    live_terminal_exec_sleep_1: [3349]
+    direct_runtime_capabilities_steady: [0.658, 0.472, 0.464, 0.463, 0.399, 0.403, 0.411, 0.414, 0.404]
+    direct_terminal_exec_true_steady: [3.685, 3.508, 3.397, 3.172]
+    note: "These samples establish attribution direction only, not an SLA."
+
+scope:
+  required_changes:
+    - "Freshly prove exact Runtime/package/transaction health and current tunnel-client/Homebrew ownership before mutation."
+    - "Freshly prove formula stable version, URL and SHA-256 still equal exact v0.0.14 authority; any drift is BLOCKED."
+    - "Capture bounded pre-upgrade direct-local MCP and controller-live MCP baselines."
+    - "Preserve an exact reversible 0.0.11 rollback path before forward mutation."
+    - "Upgrade only openai/tools/tunnel-client to exact 0.0.14; disable unrelated Homebrew auto-update/cleanup."
+    - "Adopt the new binary with at most one forward Runtime restart through SentinelX; reconcile unknown outcome before retry."
+    - "Prove the live process uses 0.0.14 / 0f870e50... and Runtime remains exact 0.5.0 / 2044df22... with unchanged public surface."
+    - "Capture identical post-upgrade benchmarks and bounded safe tunnel-client health diagnostics."
+    - "Attribute residual latency; when direct-local stays fast but live latency remains much larger with healthy local transport, record EXTERNAL_TRANSPORT_DOMINANT and do not change Runtime source."
+    - "On material regression, use the one authorized rollback path, restore 0.0.11 and healthy Runtime, then report BLOCKED."
+    - "On PASS, create .agent/tasks/TASK-0168/report-r1.yaml as the sole tracked mutation, validate, publish non-force, stop NEEDS_REVIEW."
+  allowed_existing_files_or_components:
+    - "/opt/homebrew/bin/tunnel-client"
+    - "/opt/homebrew/Cellar/tunnel-client/*"
+    - "openai/tools/tunnel-client Homebrew formula"
+    - "Agent Runtime ServiceManagement lifecycle only for bounded restart/observation"
+    - "installed Runtime read-only health/package/capability surfaces"
+    - "tunnel-client read-only health/admin diagnostics with payload capture disabled"
+    - ".agent/tasks/TASK-0168/report-r1.yaml"
+
+effect_authority:
+  homebrew_upgrade_max: 1
+  forward_runtime_restart_max: 1
+  connector_reconnect_max: 1
+  rollback_transport_max: 1
+  rollback_runtime_restart_max: 1
+  blind_retry: false
+  runtime_install_or_cutover_max: 0
+  live_durable_effect_max: 0
+
+benchmark_contract:
+  purpose: "Causal attribution, not a brittle network SLA."
+  direct_local_mcp:
+    warmup_allowed: 1
+    measured_samples_per_operation: 5
+  controller_live_mcp:
+    measured_samples_per_operation: 5
+    unavailable_rule: "If controller-side wall time cannot be captured truthfully, record UNAVAILABLE; never estimate."
+  operations:
+    - runtime_capabilities_summary
+    - capacity_observer
+    - fs_list_small
+    - repo_observer_clean
+    - terminal_exec_usr_bin_true
+    - terminal_exec_sleep_1
+  statistics: [min, median, max]
+  rules:
+    - "Use identical operation shape before and after."
+    - "Benchmark commands must be read-only/no-effect except bounded /usr/bin/true and /bin/sleep 1 processes."
+    - "Do not infer model thinking time from MCP timing."
+    - "Do not infer unobserved network/control-plane internals."
+    - "Any future Runtime source optimization requires separate Architect authority."
+
+invariants:
+  - "Runtime remains 0.5.0 revision 2044df229a278bc36f9244cd2add54c9a0b28061 tree 75954d599045c10bd3b84d2a304b6f5fa19f2a4c."
+  - "Kernel/capability counts remain 2 / 21 / 20 / 20."
+  - "No Runtime source, tests, docs, dependencies, verification policy or package bytes change."
+  - "No Runtime reinstall, package rebuild/reseal/resign, cutover or recovery transaction."
+  - "Telemetry remains off; no Collector, Prometheus, Grafana or other observability service is installed."
+  - "No tunnel payload capture and no secret/header/token logging."
+  - "Official OpenAI Homebrew tap remains the tunnel-client owner."
+  - "Git topology remains main-only; no branch/PR/force push/amend/squash/tag/release."
+
+forbidden_changes:
+  - "Any edit under agent_runtime/, tests/, macos/, docs/, README.md, start.sh, install.sh, verify*, requirements* or .env*."
+  - "Any new MCP tool/capability/schema/result/failure/effect semantic."
+  - "Any custom tunnel, proxy, sidecar, daemon, broker, polling loop or replacement transport."
+  - "Any control-plane base URL/auth/organization/header/proxy/tunnel identity change."
+  - "Any unsafe raw HTTP/payload capture."
+  - "Any tunnel-client version other than exact v0.0.14."
+  - "Any Homebrew-wide upgrade or unrelated package mutation."
+  - "Any Runtime optimization justified only by end-to-end tunnel latency."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: revised_contract_required
+  dependency_change: exact_tunnel_client_0_0_14_only
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Runtime 0.5.0 core remains exactly frozen and healthy."
+    evidence_required: "Before/after exact revision/tree, absent transaction, doctor 10/10, Kernel 2 and 21/20/20 capability counts."
+  - id: AC-2
+    requirement: "Transport supply-chain identity is exact and official."
+    evidence_required: "Homebrew formula and official OpenAI release independently bind v0.0.14, commit 0f870e50..., exact darwin-arm64 URL and SHA-256 b540493c...."
+  - id: AC-3
+    requirement: "The host adopts exact tunnel-client 0.0.14 safely."
+    evidence_required: "One bounded upgrade and at most one forward restart through SentinelX; live version/SHA exact; rollback path proven before mutation; no blind retry."
+  - id: AC-4
+    requirement: "MCP transport remains functionally correct."
+    evidence_required: "Exact Runtime reachable, 20 tools advertised, representative read-only/terminal calls succeed, no material local transport failure, doctor/readiness healthy."
+  - id: AC-5
+    requirement: "Latency is causally attributed."
+    evidence_required: "Identical before/after matrix separates direct-local from controller-live cost and records raw samples plus min/median/max without unsupported inference."
+  - id: AC-6
+    requirement: "No unnecessary Runtime implementation is introduced."
+    evidence_required: "If local MCP remains fast and residual live latency dominates externally, report EXTERNAL_TRANSPORT_DOMINANT with zero Runtime source changes."
+  - id: AC-7
+    requirement: "Failure cannot strand the substrate."
+    evidence_required: "On material v0.0.14 regression, one rollback restores 0.0.11 and healthy Runtime and task returns BLOCKED; on PASS rollback is unused."
+  - id: AC-8
+    requirement: "Canonical repository closure is minimal."
+    evidence_required: "report-r1.yaml is the sole tracked child, validates against Foundation 22fc4d88..., publishes non-force, final main reconciles cleanly."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Fresh exact-base/main-only/clean gate; prove TASK-0167 ACCEPTED, Runtime healthy/frozen and current tunnel-client 0.0.11 ownership."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Fresh official release + brew formula identity gate; prove exact 0.0.14 URL/SHA and reversible 0.0.11 path before mutation."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Capture pre-upgrade direct-local and controller-live baseline plus safe tunnel-client health."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Through SentinelX perform exactly one scoped Homebrew upgrade to 0.0.14 with unrelated auto-update/cleanup disabled; prove installed version/release SHA before restart."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Through SentinelX perform at most one forward Runtime restart; reconcile live process/tunnel identity, doctor/readiness and exact Runtime surface; reconnect connector at most once only if stale."
+      required: true
+    - id: CHECK-6
+      command_or_check: "Capture identical post-upgrade benchmark and safe diagnostics; produce truthful local-vs-transport attribution."
+      required: true
+    - id: CHECK-7
+      command_or_check: "Prove zero Runtime source/package/install/cutover/telemetry mutation and no unrelated Homebrew mutation; rollback exactly once only on material failure."
+      required: true
+    - id: CHECK-8
+      command_or_check: "On PASS create/validate/publish report-r1.yaml as sole tracked mutation and final-reconcile clean main; stop NEEDS_REVIEW."
+      required: true
+  authoritative_verification:
+    required: true
+    mechanism: "Exact supply-chain identity + before/after direct-local/live measurements + live Runtime/connector health and contract proof."
+    expected_signal: "Official 0.0.14 live; Runtime core unchanged/healthy; transport correct; residual latency attributed without speculative Runtime changes."
+
+report_requirements:
+  path: .agent/tasks/TASK-0168/report-r1.yaml
+  record:
+    - "state=REPORTED; NEEDS_REVIEW on PASS"
+    - "exact task/base/report lineage and Foundation revision"
+    - "pre/post Runtime identity, doctor, transaction and public counts"
+    - "pre/post tunnel-client owner/version/release SHA/formula identity"
+    - "official URL/checksum evidence and rollback-path proof"
+    - "upgrade/restart/reconnect/rollback invocation counts"
+    - "before/after benchmark raw samples and min/median/max"
+    - "direct-local vs controller-live attribution and residual classification"
+    - "safe tunnel health evidence with no payload/secret capture"
+    - "zero Runtime source/package/install/cutover/telemetry mutation"
+    - "sole report-only child and non-force final reconciliation"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
