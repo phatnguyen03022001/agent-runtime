@@ -1416,6 +1416,8 @@ class TerminalSessionManager:
         wall_now = time.time()
         for session in sessions:
             if session.durability == "runtime_restart":
+                if session.status == "starting" and session.lifecycle == "STARTING":
+                    continue
                 try:
                     self._refresh_durable_session(session)
                 except RuntimeStateError:

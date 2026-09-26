@@ -6,6 +6,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -225,6 +226,117 @@ class DurablePipeTests(unittest.TestCase):
         final, _chunks, _cursor = self.wait_terminal(manager, identity)
         self.assertEqual(final["exit_code"], 0)
         self.assertEqual(final["termination_reason"], "natural_exit")
+
+    def test_reaper_skips_starting_durable_session_before_first_state_publication(self) -> None:
+        identity = "b" * 32
+        marker = self.root / "bootstrap-effect.log"
+        bootstrap_blocked = threading.Event()
+        allow_prepare = threading.Event()
+        reaper_passed_starting = threading.Event()
+        start_done = threading.Event()
+        outcome: dict[str, object] = {}
+        observed_runner_spawns: list[list[str]] = []
+
+        class ObservedManager(TerminalSessionManager):
+            def reap_once(observed_self) -> list[str]:
+                with observed_self._lock:
+                    saw_starting = any(
+                        retained.durability == "runtime_restart"
+                        and retained.status == "starting"
+                        and retained.lifecycle == "STARTING"
+                        for retained in observed_self._sessions.values()
+                    )
+                affected = super().reap_once()
+                if saw_starting:
+                    reaper_passed_starting.set()
+                return affected
+
+        manager = ObservedManager(
+            admission=HeavyExecutionAdmission(2),
+            max_active_sessions=2,
+            running_hard_wall_seconds=5.0,
+            completed_retention_seconds=3600.0,
+            reaper_interval=0.001,
+            durable_state_root=self.state_root,
+            start_reaper=True,
+        )
+        self.managers.append(manager)
+        real_prepare = manager._durable_store.prepare_spec
+        real_popen = subprocess.Popen
+
+        def blocked_prepare(spec: dict[str, object]) -> None:
+            bootstrap_blocked.set()
+            if not allow_prepare.wait(2.0):
+                raise AssertionError("durable bootstrap release was not signaled")
+            real_prepare(spec)
+
+        def capture_popen(args, *pargs, **kwargs):
+            observed_runner_spawns.append(list(args))
+            return real_popen(args, *pargs, **kwargs)
+
+        def run_start() -> None:
+            try:
+                outcome["result"] = manager.start(
+                    [
+                        sys.executable,
+                        "-u",
+                        "-c",
+                        "from pathlib import Path; import sys; "
+                        "p=Path(sys.argv[1]); "
+                        "p.open('a', encoding='utf-8').write('effect\\n')",
+                        str(marker),
+                    ],
+                    str(self.cwd),
+                    identity,
+                    "pipe",
+                    "runtime_restart",
+                )
+            except BaseException as exc:
+                outcome["error"] = exc
+            finally:
+                start_done.set()
+
+        with (
+            patch.object(manager._durable_store, "prepare_spec", side_effect=blocked_prepare),
+            patch("agent_runtime.session.subprocess.Popen", new=capture_popen),
+        ):
+            start_thread = threading.Thread(target=run_start, name="durable-start-test")
+            start_thread.start()
+            self.assertTrue(bootstrap_blocked.wait(1.0))
+            try:
+                self.assertFalse(
+                    (self.state_root / durable_job_id(identity) / "state.json").exists()
+                )
+                self.assertTrue(reaper_passed_starting.wait(1.0))
+                with manager._lock:
+                    retained = manager._sessions[manager._start_identities[identity]]
+                    self.assertEqual(retained.status, "starting")
+                    self.assertEqual(retained.lifecycle, "STARTING")
+                    self.assertIsNone(retained.durable_fault_reason)
+            finally:
+                allow_prepare.set()
+            self.assertTrue(start_done.wait(4.0))
+            start_thread.join(timeout=0.1)
+
+        if "error" in outcome:
+            raise outcome["error"]  # type: ignore[misc]
+        started = outcome["result"]
+        assert isinstance(started, dict)
+        self.assertEqual(len(observed_runner_spawns), 1)
+        self.remember_owners(identity)
+        final, _chunks, _cursor = self.wait_terminal(manager, identity)
+        by_identity = manager.poll(start_identity=identity, cursor=0, wait_ms=0)
+        by_session = manager.poll(
+            session_id=str(started["session_id"]), cursor=0, wait_ms=0
+        )
+        self.assertEqual(final["termination_reason"], "natural_exit")
+        self.assertEqual(final["exit_code"], 0)
+        self.assertEqual(by_identity["session_id"], started["session_id"])
+        self.assertEqual(by_session["session_id"], started["session_id"])
+        self.assertEqual(marker.read_text(encoding="utf-8").splitlines(), ["effect"])
+        with manager._lock:
+            retained = manager._sessions[str(started["session_id"])]
+            self.assertIsNone(retained.durable_fault_reason)
 
     def test_corrupt_partial_state_projects_unknown_reconciliation(self) -> None:
         identity = "2" * 32
