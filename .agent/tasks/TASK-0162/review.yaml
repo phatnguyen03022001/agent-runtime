@@ -1,0 +1,104 @@
+protocol_version: 3
+
+task_id: TASK-0162
+task_revision: 1
+review_revision: 1
+state: ACCEPTED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0162/report-r1.yaml
+  commit: "29957fbd86827c13253deee0ab4616d968f719f3"
+  report_revision: 1
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  source_scope: PASS
+  verification_lifecycle: PASS
+  package_provenance: PASS
+  sealed_candidate_regression: PASS
+  live_runtime_guard: PASS
+
+acceptance_basis:
+  - "Exact report commit 29957fbd86827c13253deee0ab4616d968f719f3 is the sole report-only child of source candidate eff520b71cbad7abc749ca01a16dbb0030c8b9da."
+  - "Exact source candidate eff520b71cbad7abc749ca01a16dbb0030c8b9da is the sole implementation child of TASK-0162 base d0afc1a0921885828fb77c76fba0de8ba57a772f and has tree e701694b5efcdd6356396de8200cce0bf1034be1."
+  - "Source scope is restricted to agent_runtime/session.py and tests/test_durable_pipe_restart.py."
+  - "The production change preserves _DURABLE_FINALIZATION_GRACE_SECONDS at 2.0 seconds and applies the existing bounded reread to every nonterminal durable snapshot with invalid owner identity; only a still-nonterminal invalid-owner state after the grace latches DURABLE_OWNER_LOST."
+  - "Independent focused replay passed tests.test_durable_pipe plus tests.test_durable_pipe_restart 20/20."
+  - "The deterministic regression proves the stale-running/both-owners-gone TOCTOU reconciles to the same exited/COMPLETED durable identity and both retained selectors resolve the same session without spawning another effect."
+  - "The existing persistent owner-loss regression remains fail-closed with DURABLE_OWNER_LOST / EffectState.UNKNOWN / reconciliation_required=true."
+  - "Executor broad verification ran exactly once on eff520b...; requested candidate escalated to qualification and passed 62/62 modules and 808 tests. No redundant qualification ran."
+  - "Exact Runtime 0.5.0 package b7ade416282569a18a14fecfa58f35a0d27549548668013904719a5277208509 binds source eff520b... / tree e701694b..., handoff 3457077e7d508faa75356df21534bb6cf353244f421c76c4dc3a7c0f260dce58, record_count 1714, zero bytecode entries, strict deep codesign PASS and pinned provenance PASS."
+  - "Independent reviewer sealed-candidate execution used the packaged bundled Runtime and one real runtime_restart durable effect with start_identity a162a162a162a162a162a162a162a162. Session a1d5936f4c5c5e2d exited naturally with exit_code 0; retained lookup by both start_identity and session_id resolved the same session."
+  - "Independent reviewer sealed-candidate closure digest remained exactly 550667c9103eaa76ddf1947df9ffa0637f7e7293737482b3a363354678d163a1 before and after the effect; bytecode entries remained zero, handoff hash remained exact, strict codesign PASS and pinned provenance PASS."
+  - "Live TASK-0161 installed Runtime remained untouched during TASK-0162 review and is still Runtime 0.5.0 revision b0c7a0ae29dc66079cea3760828e00b86ab921e4, package identity valid, strict codesign PASS, transaction absent and doctor healthy 10/10."
+  - "Final canonical repository state before review publication is synchronized, clean, main-only and zero-open-PR."
+
+final_candidate:
+  runtime_version: "0.5.0"
+  source_candidate: "eff520b71cbad7abc749ca01a16dbb0030c8b9da"
+  source_tree: "e701694b5efcdd6356396de8200cce0bf1034be1"
+  package_sha256: "b7ade416282569a18a14fecfa58f35a0d27549548668013904719a5277208509"
+  handoff_sha256: "3457077e7d508faa75356df21534bb6cf353244f421c76c4dc3a7c0f260dce58"
+  record_count: 1714
+  strict_codesign: PASS
+  provenance: PASS
+  bytecode_entries: 0
+  result: PASS
+
+verification:
+  independent_focused_tests: "20/20 PASS"
+  executor_effective_qualification_modules: 62
+  executor_effective_qualification_tests: 808
+  redundant_second_qualification: false
+  result: PASS
+
+sealed_candidate_regression:
+  executor_start_identity: "16201620162016201620162016201620"
+  executor_session_id: "28c35629b3c0c00a"
+  reviewer_start_identity: "a162a162a162a162a162a162a162a162"
+  reviewer_session_id: "a1d5936f4c5c5e2d"
+  reviewer_exit_code: 0
+  reviewer_start_identity_lookup_same_session: true
+  reviewer_session_id_lookup_same_session: true
+  closure_before: "550667c9103eaa76ddf1947df9ffa0637f7e7293737482b3a363354678d163a1"
+  closure_after: "550667c9103eaa76ddf1947df9ffa0637f7e7293737482b3a363354678d163a1"
+  bytecode_entries_after: 0
+  handoff_unchanged: true
+  strict_codesign_after: PASS
+  provenance_after: PASS
+  result: PASS
+
+live_runtime_guard:
+  installed_runtime_version: "0.5.0"
+  installed_revision: "b0c7a0ae29dc66079cea3760828e00b86ab921e4"
+  installed_tree: "025ce0ba4b3e14c30564d98f152aec0cf9b65471"
+  transaction_present: false
+  installed_codesign: PASS
+  doctor: "healthy 10/10"
+  task_0162_live_mutations: 0
+  result: PASS
+
+promotion_readiness:
+  eligible_for_live_activation_task: true
+  exact_package_required: "b7ade416282569a18a14fecfa58f35a0d27549548668013904719a5277208509"
+  exact_handoff_required: "3457077e7d508faa75356df21534bb6cf353244f421c76c4dc3a7c0f260dce58"
+  exact_source_revision_required: "eff520b71cbad7abc749ca01a16dbb0030c8b9da"
+  exact_source_tree_required: "e701694b5efcdd6356396de8200cce0bf1034be1"
+  reason: >
+    The durable finalization TOCTOU defect is corrected and independently proven
+    in a sealed Runtime 0.5.0 package. A later task may transactionally replace
+    the currently healthy b0c7a0ae... installed generation with this exact package,
+    without source retest or package rebuild.
+
+notes:
+  - "TASK-0162 is terminally ACCEPTED for exact report 29957fbd86827c13253deee0ab4616d968f719f3."
+  - "Do not rerun a live durable effect on the current b0c7a0ae... generation as a substitute for activation."
+  - "The next task must be activation-only and reuse exact package b7ade416...."
