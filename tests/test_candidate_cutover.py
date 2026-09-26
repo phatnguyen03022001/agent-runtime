@@ -31,7 +31,7 @@ def load_module(path: Path, name: str):
 class CandidateClosureTests(unittest.TestCase):
     def _signed_app(
         self, provenance, root: Path, *, marker: str = "candidate", revision: str = "a" * 40,
-        runtime_label: str = MODERN_RUNTIME_LABEL,
+        runtime_label: str = MODERN_RUNTIME_LABEL, manifest_schema: int = 2,
     ) -> Path:
         app = root / "Agent Runtime.app"
         macos = app / "Contents" / "MacOS"
@@ -61,13 +61,15 @@ class CandidateClosureTests(unittest.TestCase):
         start.write_text("#!/bin/sh\nexit 0\n")
         start.chmod(0o755)
         (runtime / "agent_runtime" / "server.py").write_text("TOOLS = 6\n")
-        provenance.write_manifest(
-            runtime,
-            app / "Contents" / "Resources" / "runtime-manifest.json",
-            revision,
-            "b" * 40,
-            "c" * 64,
-        )
+        manifest_path = app / "Contents" / "Resources" / "runtime-manifest.json"
+        provenance.write_manifest(runtime, manifest_path, revision, "b" * 40, "c" * 64)
+        if manifest_schema == 1:
+            data = json.loads(manifest_path.read_text())
+            data["schema"] = 1
+            data.pop("service_management_contract", None)
+            manifest_path.write_text(json.dumps(data, indent=2) + "\n")
+        elif manifest_schema != 2:
+            raise AssertionError(manifest_schema)
         subprocess.run(["/usr/bin/codesign", "--force", "--deep", "--sign", "-", str(app)], check=True, capture_output=True)
         provenance._codesign_team_identifier = lambda _path: "TEAMTEST"
         return app
@@ -122,6 +124,9 @@ class CandidateClosureTests(unittest.TestCase):
             app = self._signed_app(provenance, root)
             handoff = root / "candidate.json"
             sealed = provenance.seal_candidate(app, handoff)
+            manifest = json.loads((app / "Contents/Resources/runtime-manifest.json").read_text())
+            self.assertEqual(manifest["schema"], 2)
+            self.assertEqual(manifest["service_management_contract"], "split-v1")
             self.assertFalse((app / "candidate.json").exists())
             self.assertEqual(sealed["schema"], 2)
             self.assertEqual(sealed["team_identifier"], "TEAMTEST")
@@ -132,6 +137,21 @@ class CandidateClosureTests(unittest.TestCase):
             self.assertEqual(sealed["candidate_sha256"], provenance.candidate_closure(app)["candidate_sha256"])
             validated = provenance.validate_candidate(app, handoff)
             self.assertEqual(validated, sealed)
+
+    def test_candidate_identity_rejects_service_contract_tampering(self) -> None:
+        provenance = load_module(PROVENANCE_PATH, "package_provenance_contract_tamper")
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            app = self._signed_app(provenance, root)
+            handoff = root / "candidate.json"
+            provenance.seal_candidate(app, handoff)
+            manifest_path = app / "Contents/Resources/runtime-manifest.json"
+            manifest = json.loads(manifest_path.read_text())
+            manifest["service_management_contract"] = "split-v2"
+            manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+            provenance._verify_codesign = lambda _app: None
+            with self.assertRaisesRegex(provenance.PackageProvenanceError, "service-management contract"):
+                provenance.validate_candidate(app, handoff)
 
     def test_candidate_validation_rejects_wrong_identity_and_post_seal_mutation(self) -> None:
         provenance = load_module(PROVENANCE_PATH, "package_provenance_handoff_reject")
@@ -408,7 +428,7 @@ class CandidateCutoverTests(unittest.TestCase):
         runtime_env.chmod(0o600)
         previous = CandidateClosureTests()._signed_app(
             provenance, root / "previous", marker="previous", revision=predecessor_revision,
-            runtime_label=previous_runtime_label,
+            runtime_label=previous_runtime_label, manifest_schema=1,
         )
         target.parent.mkdir(parents=True)
         shutil.copytree(previous, target, copy_function=shutil.copy2)
@@ -528,6 +548,26 @@ class CandidateCutoverTests(unittest.TestCase):
             programs[service] = str(program)
         fx["launch_state"].write_text(json.dumps(sorted(loaded)) + "\n")
         fx["programs_path"].write_text(json.dumps(programs, sort_keys=True) + "\n")
+
+    def _rewrite_runtime_manifest(
+        self,
+        app: Path,
+        *,
+        schema: int = 2,
+        contract: object = "split-v1",
+        include_contract: bool = True,
+        extra_key: bool = False,
+    ) -> None:
+        path = app / "Contents" / "Resources" / "runtime-manifest.json"
+        data = json.loads(path.read_text())
+        data["schema"] = schema
+        if include_contract:
+            data["service_management_contract"] = contract
+        else:
+            data.pop("service_management_contract", None)
+        if extra_key:
+            data["unexpected"] = "value"
+        path.write_text(json.dumps(data, indent=2) + "\n")
 
     def _set_launch_service_without_program(self, fx, service: str, present: bool) -> None:
         loaded = set(json.loads(fx["launch_state"].read_text()))
@@ -813,6 +853,56 @@ class CandidateCutoverTests(unittest.TestCase):
             non_status = [op for _, op in fx["service_operations"] if op != "status"]
             self.assertEqual(non_status, [])
             self.assertFalse(fx["transaction"].exists())
+
+    def test_schema2_split_contract_is_revision_independent(self) -> None:
+        revisions = ("1" * 40, "2" * 40)
+        for revision in revisions:
+            with self.subTest(revision=revision):
+                with tempfile.TemporaryDirectory() as raw:
+                    _, cutover, fx = self._fixture(raw, predecessor_revision=revision)
+                    self.assertNotIn(revision, cutover.SPLIT_SERVICE_MANAGEMENT_REVISIONS)
+                    self.assertNotIn(revision, cutover.AGGREGATE_ONLY_SERVICE_MANAGEMENT_REVISIONS)
+                    self._rewrite_runtime_manifest(fx["target"], contract="split-v1")
+                    self.assertEqual(cutover._runtime_manifest_revision(fx["target"]), revision)
+                    self.assertEqual(cutover._predecessor_service_contract(fx["target"]), "split-v1")
+
+    def test_current_installed_legacy_predecessor_is_final_exact_bridge(self) -> None:
+        exact_revision = "2044df229a278bc36f9244cd2add54c9a0b28061"
+        neighboring_revision = "2044df229a278bc36f9244cd2add54c9a0b28062"
+        for revision, expected in ((exact_revision, "split-v1"), (neighboring_revision, "unknown")):
+            with self.subTest(revision=revision):
+                with tempfile.TemporaryDirectory() as raw:
+                    _, cutover, fx = self._fixture(raw, predecessor_revision=revision)
+                    self.assertEqual(cutover._runtime_manifest_revision(fx["target"]), revision)
+                    self.assertEqual(cutover._predecessor_service_contract(fx["target"]), expected)
+
+    def test_unknown_schema2_contract_is_rejected_explicitly(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            _, cutover, fx = self._fixture(raw, predecessor_revision="3" * 40)
+            self._rewrite_runtime_manifest(fx["target"], contract="split-v2")
+            with self.assertRaisesRegex(cutover.CutoverError, "service-management contract"):
+                cutover._predecessor_service_contract(fx["target"])
+
+    def test_invalid_schema2_predecessor_metadata_fails_closed_before_service_mutation(self) -> None:
+        cases = (
+            ("unknown_schema", {"schema": 3}),
+            ("missing_contract", {"include_contract": False}),
+            ("unknown_contract", {"contract": "split-v2"}),
+            ("malformed_contract", {"contract": 2}),
+            ("extra_key", {"extra_key": True}),
+        )
+        for name, mutation in cases:
+            with self.subTest(name=name):
+                with tempfile.TemporaryDirectory() as raw:
+                    _, cutover, fx = self._fixture(raw, predecessor_revision="4" * 40)
+                    self._rewrite_runtime_manifest(fx["target"], **mutation)
+                    fx["modern_state"].update(main_app="enabled", runtime_agent="enabled")
+                    self._set_launch_program(fx, f"gui/501/{MODERN_RUNTIME_LABEL}", None)
+                    with self.assertRaises(cutover.CutoverError):
+                        self._cutover(cutover, fx)
+                    non_status = [op for _, op in fx["service_operations"] if op != "status"]
+                    self.assertEqual(non_status, [])
+                    self.assertFalse(fx["transaction"].exists())
 
     def test_split_v1_predecessor_revision_is_recognized(self) -> None:
         revision = "b5ac0ed5b461d3a259e4111e1a8f13933985f81f"

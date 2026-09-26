@@ -17,14 +17,18 @@ import subprocess
 import tarfile
 from pathlib import Path, PurePosixPath
 
-SCHEMA = 1
+LEGACY_SCHEMA = 1
+SCHEMA = 2
 CANDIDATE_SCHEMA = 2
 OWNER = "com.picmao.agent-runtime"
+SERVICE_MANAGEMENT_CONTRACT = "split-v1"
+SERVICE_MANAGEMENT_CONTRACTS = {SERVICE_MANAGEMENT_CONTRACT}
 HEX40 = re.compile(r"[0-9a-f]{40}")
 HEX64 = re.compile(r"[0-9a-f]{64}")
 MANIFEST_KEYS = {
     "schema",
     "owner",
+    "service_management_contract",
     "runtime_revision",
     "git_tree",
     "requirements_lock_sha256",
@@ -34,6 +38,7 @@ MANIFEST_KEYS = {
     "files",
     "payload_sha256",
 }
+LEGACY_MANIFEST_KEYS = MANIFEST_KEYS - {"service_management_contract"}
 ENTRY_KEYS = {"path", "size", "sha256"}
 CANDIDATE_KEYS = {
     "schema",
@@ -216,6 +221,7 @@ def write_manifest(
     manifest: dict[str, object] = {
         "schema": SCHEMA,
         "owner": OWNER,
+        "service_management_contract": SERVICE_MANAGEMENT_CONTRACT,
         "runtime_revision": revision,
         "git_tree": tree,
         "requirements_lock_sha256": lock_sha,
@@ -238,8 +244,20 @@ def _load_manifest(manifest_path: Path) -> dict[str, object]:
         value = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise PackageProvenanceError("runtime manifest is malformed") from exc
-    if not isinstance(value, dict) or set(value) != MANIFEST_KEYS:
+    if not isinstance(value, dict):
         raise PackageProvenanceError("runtime manifest shape is invalid")
+    schema = value.get("schema")
+    if schema == SCHEMA:
+        if set(value) != MANIFEST_KEYS:
+            raise PackageProvenanceError("runtime manifest shape is invalid")
+        contract = value.get("service_management_contract")
+        if not isinstance(contract, str) or contract not in SERVICE_MANAGEMENT_CONTRACTS:
+            raise PackageProvenanceError("runtime manifest service-management contract is invalid")
+    elif schema == LEGACY_SCHEMA:
+        if set(value) != LEGACY_MANIFEST_KEYS:
+            raise PackageProvenanceError("runtime manifest shape is invalid")
+    else:
+        raise PackageProvenanceError("runtime manifest schema is invalid")
     return value
 
 

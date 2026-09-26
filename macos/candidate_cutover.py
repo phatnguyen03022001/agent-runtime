@@ -32,12 +32,14 @@ CANDIDATE_VALIDATION_KEYS = {
     "expected_candidate_sha256",
     "expected_handoff_sha256",
 }
+# Schema-1 compatibility only. New schema-2 packages declare the contract in signed manifest metadata.
 AGGREGATE_ONLY_SERVICE_MANAGEMENT_REVISIONS = {
     "4fbf5b1b0ef3708c8fff479ca6718344f3bfd3c0",
 }
 SPLIT_SERVICE_MANAGEMENT_REVISIONS = {
     "03dd4ede4205680335ce851fb1f2992371544937",
     "18cdb515fe037c9b6cb81ce6529d85ae734e195a",
+    "2044df229a278bc36f9244cd2add54c9a0b28061",
     "4b9d7617d7dfbf297cf6e0776fdd1c8f6f58cc5b",
     "58027d5cebf1483f62d379ed05935c86da3a6f4a",
     "7077257837bdaf76ef1558fe78b900ec3af68788",
@@ -124,22 +126,33 @@ def _service_management(app: Path, operation: str) -> dict[str, str]:
     return value
 
 
-def _runtime_manifest_revision(app: Path) -> str:
+def _runtime_manifest(app: Path) -> dict[str, object]:
     manifest_path = app / "Contents" / "Resources" / "runtime-manifest.json"
     try:
         manifest = provenance._load_manifest(manifest_path)
     except provenance.PackageProvenanceError as exc:
+        if "service-management contract" in str(exc):
+            raise CutoverError("predecessor Runtime service-management contract is invalid") from exc
         raise CutoverError("predecessor Runtime manifest is invalid") from exc
-    revision = manifest.get("runtime_revision")
-    if manifest.get("schema") != provenance.SCHEMA or manifest.get("owner") != provenance.OWNER:
+    if manifest.get("owner") != provenance.OWNER:
         raise CutoverError("predecessor Runtime manifest ownership is invalid")
+    if manifest.get("schema") not in {provenance.LEGACY_SCHEMA, provenance.SCHEMA}:
+        raise CutoverError("predecessor Runtime manifest schema is invalid")
+    revision = manifest.get("runtime_revision")
     if not isinstance(revision, str) or provenance.HEX40.fullmatch(revision) is None:
         raise CutoverError("predecessor Runtime revision is invalid")
-    return revision
+    return manifest
+
+
+def _runtime_manifest_revision(app: Path) -> str:
+    return str(_runtime_manifest(app)["runtime_revision"])
 
 
 def _predecessor_service_contract(app: Path) -> str:
-    revision = _runtime_manifest_revision(app)
+    manifest = _runtime_manifest(app)
+    if manifest["schema"] == provenance.SCHEMA:
+        return str(manifest["service_management_contract"])
+    revision = str(manifest["runtime_revision"])
     if revision in AGGREGATE_ONLY_SERVICE_MANAGEMENT_REVISIONS:
         return "aggregate-v1"
     if revision in SPLIT_SERVICE_MANAGEMENT_REVISIONS:

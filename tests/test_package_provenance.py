@@ -156,6 +156,9 @@ class PackageProvenanceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             runtime, manifest, revision, tree, lock_sha = self._make_manifest_fixture(provenance, Path(raw))
             data = json.loads(manifest.read_text())
+            self.assertEqual(data["schema"], 2)
+            self.assertEqual(data["service_management_contract"], "split-v1")
+            self.assertEqual(set(data), provenance.MANIFEST_KEYS)
             self.assertEqual(data["runtime_revision"], revision)
             self.assertEqual(data["git_tree"], tree)
             self.assertEqual(data["requirements_lock_sha256"], lock_sha)
@@ -226,6 +229,11 @@ class PackageProvenanceTests(unittest.TestCase):
                 ("invalid_revision", lambda data: data.__setitem__("runtime_revision", "invalid")),
                 ("invalid_tree", lambda data: data.__setitem__("git_tree", "invalid")),
                 ("invalid_lock", lambda data: data.__setitem__("requirements_lock_sha256", "invalid")),
+                ("missing_contract", lambda data: data.pop("service_management_contract", None)),
+                ("unknown_contract", lambda data: data.__setitem__("service_management_contract", "split-v2")),
+                ("malformed_contract", lambda data: data.__setitem__("service_management_contract", 2)),
+                ("unknown_schema", lambda data: data.__setitem__("schema", 3)),
+                ("extra_manifest_key", lambda data: data.__setitem__("unexpected", "value")),
             ):
                 rt, mf = fixture(name)
                 data = json.loads(mf.read_text())
