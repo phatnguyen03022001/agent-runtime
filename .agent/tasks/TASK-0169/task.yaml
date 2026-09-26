@@ -1,0 +1,237 @@
+protocol_version: 3
+
+task_id: TASK-0169
+task_revision: 1
+state: APPROVED
+title: "Schema-2 Lifecycle Activation and Live Compatibility Proof"
+
+origin:
+  type: architect_continuation
+  task_id: TASK-0169
+  gap_id: "SCHEMA2-LIVE-ACTIVATION-CLOSURE"
+  predecessor_task: TASK-0168
+  predecessor_review: "1ac39cc10fc08442349b9cacdf1d3479d79594d7"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "22fc4d881d5a0ee71b3af2b3acadb4ce8258bbc1"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - verification
+  - security-review
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - verification
+    - security-review
+  recommended:
+    - simplicity
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  preferred_transport: AGENT_RUNTIME
+  consequence_bearing_carrier: SENTINELX
+  reason: "Packaging is local/read-only relative to the live Runtime, but install/cutover mutates the execution substrate itself and must use an independent carrier."
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0168/review.yaml at 1ac39cc10fc08442349b9cacdf1d3479d79594d7"
+    role: "Accepted signed ServiceManagement contract v2 source architecture."
+    precedence: 1
+  - source: "TASK-0168 final source candidate 06cb31e54bf3d04753dc538b2a0d1cd8c57f1878 tree 56b157be600c9553fa69ccdab19b301349a0e04a"
+    role: "Authoritative accepted product implementation and qualification evidence."
+    precedence: 2
+  - source: "Live installed Runtime 0.5.0 / 2044df229a278bc36f9244cd2add54c9a0b28061"
+    role: "Current schema-1 predecessor that must be replaced safely."
+    precedence: 3
+
+structure_authority:
+  status: NOT_APPLICABLE
+  source: "Activation-only continuation"
+  rationale: "No product source structure change is authorized. This task packages and activates already-accepted source bytes and records evidence."
+
+objective: "Build one exact sealed Runtime package from this task's canonical base HEAD, whose product/source bytes are proven equivalent to accepted TASK-0168 candidate 06cb31e5... except for governance artifacts, activate it transactionally over the live schema-1 2044df22... Runtime, and prove the resulting installed schema-2 package self-describes service_management_contract=split-v1 while its runtime_revision is not present in the legacy SHA allowlists. This closes the recurring predecessor-SHA admission loop without a second activation. Do not modify product source."
+
+scope:
+  required_changes:
+    - "Freshly prove exact base, clean main-only topology, accepted TASK-0168 review, unchanged live schema-1 Runtime and absent transaction."
+    - "Prove no package-input/product source path changed between accepted source candidate 06cb31e5... and this task-authoring base; only task/report/review governance descendants may differ."
+    - "Do not rerun canonical source ./verify while product bytes remain unchanged; reuse accepted TASK-0168 exact-SHA qualification."
+    - "Build exactly one successful signed/sealed candidate from the canonical task-authoring base with the existing package pipeline and explicit signing identity."
+    - "Validate package provenance, strict codesign, candidate handoff/closure, manifest schema=2 and service_management_contract=split-v1."
+    - "Before live mutation, prove the exact installed schema-1 predecessor 2044df22... classifies split-v1 through the final one-time legacy bridge."
+    - "Use SentinelX for live install/cutover. Invoke install-prebuilt at most once and commit-cutover at most once; reconcile any unknown outcome before considering another action."
+    - "After activation, prove transaction absent, doctor healthy 10/10, ServiceManagement enabled/enabled, Runtime 0.5.0, Kernel/capability counts 2 / 21 / 20 / 20, strict codesign/provenance and zero pycache/pyc drift."
+    - "Read the installed schema-2 manifest and prove service_management_contract=split-v1."
+    - "Prove the newly installed runtime_revision is absent from AGGREGATE_ONLY_SERVICE_MANAGEMENT_REVISIONS and SPLIT_SERVICE_MANAGEMENT_REVISIONS while _predecessor_service_contract(installed_app) still returns split-v1. This is the live proof that future generation-changing refreshes no longer require new SHA admission."
+    - "Do not perform a second Runtime upgrade merely to prove compatibility."
+    - "On PASS, create report-r1.yaml as the sole tracked child after the activation/package source boundary, validate/publish non-force, and stop NEEDS_REVIEW."
+
+  allowed_existing_files_or_components:
+    - "macos/package_app.sh and existing package/provenance validation surfaces, read-only except generated build artifacts"
+    - "install.sh existing activation commands"
+    - "installed Agent Runtime package/service state"
+    - "SentinelX independent carrier"
+    - "build/candidates existing package output boundary"
+    - ".agent/tasks/TASK-0169/report-r1.yaml"
+
+structure_policy:
+  expected_new_files: []
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "No tracked source files are authorized beyond the report artifact."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+effect_authority:
+  successful_package_build_max: 1
+  install_prebuilt_max: 1
+  commit_cutover_max: 1
+  connector_reconnect_max: 1
+  rollback_cutover_max: 1
+  blind_retry: false
+  source_mutation_max: 0
+
+invariants:
+  - "No tracked product/source/test/doc/dependency/verification-policy file changes."
+  - "Runtime version remains 0.5.0 and ToolContract Kernel remains 2."
+  - "Known/advertised/available capability counts remain 21/20/20."
+  - "Manifest schema remains 2 with service_management_contract=split-v1."
+  - "No future/new installed runtime_revision is added to legacy ServiceManagement SHA allowlists."
+  - "No tunnel-client/Homebrew mutation."
+  - "Telemetry remains off."
+  - "No branch, PR, force push, amend, squash, tag or release."
+
+forbidden_changes:
+  - "Any edit to agent_runtime/, macos/, tests/, README.md, docs/, start.sh, install.sh, verify*, requirements* or .env*."
+  - "Any new SHA admission for the new installed revision."
+  - "Any second activation or synthetic live generation-changing upgrade."
+  - "Any source requalification rerun unless product bytes are proven changed."
+  - "Any package rebuild after a successful exact package has already been sealed unless that package is proven invalid and Architect authority is revised."
+  - "Any telemetry/collector/tunnel work."
+  - "Any weakening of codesign, provenance, manifest, cutover or doctor checks."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: revised_contract_required
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Package source is exact and already qualified."
+    evidence_required: "Task-authoring base differs from accepted source candidate only by governance artifacts; no package-input/product source bytes differ. No redundant source ./verify is run."
+
+  - id: AC-2
+    requirement: "One exact schema-2 package is produced and sealed."
+    evidence_required: "Candidate package/handoff hashes, strict codesign, provenance and manifest schema 2 / split-v1 all PASS from one successful package build."
+
+  - id: AC-3
+    requirement: "Schema-1 -> schema-2 live migration succeeds transactionally."
+    evidence_required: "Exact 2044df22... predecessor is recognized through the final legacy bridge; one install-prebuilt and one commit-cutover at most; final transaction absent and services healthy."
+
+  - id: AC-4
+    requirement: "Live Runtime remains functionally healthy after activation."
+    evidence_required: "Doctor 10/10, ServiceManagement enabled/enabled, Runtime 0.5.0, Kernel 2, 21/20/20 capability counts, strict codesign/provenance and zero bytecode contamination."
+
+  - id: AC-5
+    requirement: "The recurring SHA-admission loop is proven dead on the installed package."
+    evidence_required: "Installed runtime_revision is absent from both legacy SHA sets; installed manifest explicitly says split-v1; _predecessor_service_contract(installed_app) returns split-v1."
+
+  - id: AC-6
+    requirement: "Proof does not manufacture another release cycle."
+    evidence_required: "No second upgrade, no new allowlist edit, no source mutation and no canonical source requalification rerun."
+
+  - id: AC-7
+    requirement: "Canonical closure is minimal."
+    evidence_required: "report-r1.yaml is the sole tracked child, validates against Foundation 22fc4d88..., publishes non-force, and final main reconciles cleanly."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Fresh base/main-only/clean gate; resolve accepted TASK-0168 review and live 2044df22... schema-1 state."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Prove package-input/product-source equivalence between 06cb31e5... and task-authoring base. If any package-input/source byte changed, STOP BLOCKED; do not reuse qualification."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Build one successful package with existing signing pipeline; record exact candidate/handoff hashes and validate strict codesign/provenance/schema-2 split-v1 metadata."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Pre-mutation classify installed 2044df22... predecessor as split-v1 through legacy bridge and prove rollback/cutover state is unambiguous."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Through SentinelX perform bounded install-prebuilt then commit-cutover as required. Reconcile unknown outcomes; never blind-retry."
+      required: true
+    - id: CHECK-6
+      command_or_check: "After connector recovery if needed, prove final live health, codesign/provenance, no pycache/pyc, exact runtime/capability identity and transaction absence."
+      required: true
+    - id: CHECK-7
+      command_or_check: "Prove installed runtime_revision is absent from both legacy SHA sets while installed manifest and predecessor classifier independently resolve split-v1."
+      required: true
+    - id: CHECK-8
+      command_or_check: "Create/validate/publish report-r1.yaml as sole tracked child, fresh-reconcile local/origin/remote main, stop NEEDS_REVIEW."
+      required: true
+
+  authoritative_verification:
+    required: true
+    mechanism: "Exact sealed-package identity + transactional live activation + post-activation package/doctor/codesign/capability proof + live revision-independent predecessor classification."
+    expected_signal: "Schema-2 Runtime is live and healthy, its revision is not in legacy SHA allowlists, and its signed manifest alone supplies split-v1 predecessor compatibility."
+
+report_requirements:
+  path: .agent/tasks/TASK-0169/report-r1.yaml
+  record:
+    - "state=REPORTED; result=NEEDS_REVIEW on PASS"
+    - "exact task/base/package/report lineage"
+    - "accepted TASK-0168 source/review references"
+    - "package-input/source equivalence proof and source-verify reuse rationale"
+    - "package/handoff hashes, codesign/provenance and schema-2 manifest evidence"
+    - "install/commit/reconnect/rollback invocation counts"
+    - "predecessor legacy-bridge proof before activation"
+    - "final live Runtime/doctor/service/capability/transaction/bytecode state"
+    - "installed runtime_revision absence from both legacy SHA sets"
+    - "installed manifest split-v1 + live predecessor classifier split-v1"
+    - "zero tracked source mutation and zero second activation"
+    - "report-only publication/final reconciliation"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
