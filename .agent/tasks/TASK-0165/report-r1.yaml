@@ -1,0 +1,307 @@
+protocol_version: 3
+
+task_id: TASK-0165
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0165/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "8397cfb3d893cd18a7d81d95b6e12a4121a83e78"
+  final_execution_head: "3dd0601f75236453a8fbee0666906e1d826b943b"
+
+skill_library:
+  repository: phatnguyen03022001/agent-skills
+  authorized_revision: "87a37a72a4952b1da273d9af308642f4295fda6b"
+  validator_blob: "32d14fa7c27c765f9719efa667cf920cd76a42f8"
+  report_contract_blob: "5c84ed1eb3a67a5a16b9645adb488d52c24707fe"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - canonical_remote_resolution
+    - repository_content_write
+    - deterministic_verification_execution
+    - recoverable_process_execution
+    - package_build_sign_seal
+    - sealed_candidate_execution
+    - report_validation
+    - git_commit
+    - non_force_git_publication
+    - remote_ref_reconciliation
+  available:
+    - canonical_remote_resolution
+    - repository_content_write
+    - deterministic_verification_execution
+    - recoverable_process_execution
+    - package_build_sign_seal
+    - sealed_candidate_execution
+    - report_validation
+    - git_commit
+    - non_force_git_publication
+    - remote_ref_reconciliation
+  missing: []
+  passed: true
+
+task_0164_preserved_live_runtime:
+  runtime_version: "0.5.0"
+  revision: "837eb3183793c5260d73fc54467170b37722e5f2"
+  tree: "8cc745fb008c3be511237f3253f9724c26dd939b"
+  transaction_present: false
+  strict_codesign: PASS
+  pinned_provenance: PASS
+  bytecode_entries: 0
+  service_management: "enabled/enabled"
+  healthz: live
+  readyz: ready
+  doctor: "healthy 10/10"
+  telemetry: off
+  task_0164_install_invocations: 1
+  task_0164_install_job: "job_a11d1da1dfb9"
+  task_0164_commit_cutover_invocations: 1
+  task_0164_commit_job: "job_e4c38965f610"
+  task_0164_live_durable_effects: 1
+  mutated_by_task_0165: false
+
+task_0164_blocker:
+  start_identity: "16401640164016401640164016401640"
+  session_id: "a30c24d4609a643a"
+  persisted_status: exited
+  persisted_lifecycle: COMPLETED
+  persisted_exit_code: 0
+  persisted_termination_reason: natural_exit
+  retained_lookup_result: BLOCKED
+  retained_lookup_message: "durable job ownership or state cannot be established"
+
+independent_reproduction:
+  source: "Canonical TASK-0165 Architect evidence"
+  environment: "repository Runtime with test-owned durable root"
+  start_reaper: true
+  reaper_interval_seconds: 0.001
+  start_result: "exited/COMPLETED/0"
+  retained_poll_result: DURABLE_STATE_CORRUPT
+  in_memory_fault: DURABLE_STATE_CORRUPT
+  result: REPRODUCED_BY_ARCHITECT
+
+root_cause:
+  component: agent_runtime/session.py
+  functions:
+    - start
+    - _dispatch_durable
+    - reap_once
+    - _refresh_durable_session
+  classification: durable_bootstrap_reaper_prepublication_fault_latch
+  evidence: "start() publishes a runtime_restart session into the manager as starting/STARTING before _dispatch_durable() publishes the first durable state. The background reaper previously refreshed every durable session, so a pre-publication read latched DURABLE_STATE_CORRUPT even when dispatch later completed coherently."
+
+implementation:
+  candidate: "3dd0601f75236453a8fbee0666906e1d826b943b"
+  tree: "d249bb47a50804808f0b3f23e8c6a5f7a9473dff"
+  direct_parent: "8397cfb3d893cd18a7d81d95b6e12a4121a83e78"
+  changed_paths:
+    - agent_runtime/session.py
+    - tests/test_durable_pipe.py
+  semantic_change: "reap_once skips only runtime_restart sessions still exactly starting/STARTING, leaving _dispatch_durable as the sole bootstrap reconciler until the first coherent durable snapshot transfers ownership."
+  durable_refresh_corruption_handling_changed: false
+  durable_owner_loss_semantics_changed: false
+  finalization_grace_seconds_before: 2.0
+  finalization_grace_seconds_after: 2.0
+  default_reaper_interval_changed: false
+  runtime_version_changed: false
+  tool_contract_kernel_changed: false
+  capability_or_tool_count_changed: false
+
+deterministic_regression:
+  test: test_reaper_skips_starting_durable_session_before_first_state_publication
+  start_reaper: true
+  explicit_event_synchronization: true
+  first_state_absent_during_forced_reaper_pass: true
+  scheduler_luck_required: false
+  red_before_fix: PASS
+  red_reason: DURABLE_STATE_CORRUPT
+  green_after_fix: PASS
+  bootstrap_fault_after_fix: null
+  dispatch_completed: true
+  terminal_status: exited
+  terminal_lifecycle: COMPLETED
+  exit_code: 0
+  termination_reason: natural_exit
+  retained_lookup_by_start_identity: PASS
+  retained_lookup_by_session_id: PASS
+  selectors_resolve_same_session: true
+  runner_spawns: 1
+  effect_markers: 1
+  respawn_observed: false
+
+focused_verification:
+  command: "PYTHONPATH=$PWD ./.venv/bin/python -m unittest tests.test_durable_pipe tests.test_durable_pipe_restart"
+  tests: "21/21"
+  duration_seconds: 6.010
+  result: PASS
+  task_0162_finalization_toctou_regression: PASS
+  persistent_owner_loss_fail_closed: PASS
+  corruption_fail_closed_after_bootstrap: PASS
+  durable_retention_capacity_reaper_regressions: PASS
+  git_diff_check: PASS
+
+broad_verification:
+  command: "./verify --profile candidate --base 8397cfb3d893cd18a7d81d95b6e12a4121a83e78"
+  exact_candidate: "3dd0601f75236453a8fbee0666906e1d826b943b"
+  exact_tree: "d249bb47a50804808f0b3f23e8c6a5f7a9473dff"
+  requested_profile: candidate
+  reported_profile: candidate
+  qualification_lane_selected: true
+  invocation_count_on_exact_candidate: 1
+  selected_modules: "53/53"
+  classified_modules: 62
+  tests: 611
+  duration_seconds: 33.351
+  exit_code: 0
+  result: PASS
+  redundant_qualification_run: false
+  tracked_candidate_write_after_verification: false
+
+package:
+  build_sign_seal_publish_attempts: 1
+  runtime_version: "0.5.0"
+  source_revision: "3dd0601f75236453a8fbee0666906e1d826b943b"
+  source_tree: "d249bb47a50804808f0b3f23e8c6a5f7a9473dff"
+  candidate_app: "build/candidates/e7b5caa95e203f30963ccf864fa99c720d1b4c6bf982c3d85f34ac7f1fbb74fb/Agent Runtime.app"
+  candidate_handoff: "build/candidates/e7b5caa95e203f30963ccf864fa99c720d1b4c6bf982c3d85f34ac7f1fbb74fb/Agent Runtime.candidate.json"
+  candidate_sha256: "e7b5caa95e203f30963ccf864fa99c720d1b4c6bf982c3d85f34ac7f1fbb74fb"
+  handoff_sha256: "8a88895975a963810877826d91ae1b55c10fb3e65c6b7e78a2995aaf68ca281f"
+  requirements_lock_sha256: "0e18226dbb6538c29bd96739f447b639ec63cb0291eef8ce4c70b45a2bb377d2"
+  record_count: 1714
+  bytecode_directories: 0
+  bytecode_files: 0
+  strict_deep_codesign: PASS
+  pinned_provenance: PASS
+  historical_packages_overwritten: false
+  installed_or_activated: false
+
+sealed_candidate_live_shape_proof:
+  execution_count: 1
+  bundled_runtime_used: true
+  bundled_python_used: true
+  fresh_test_owned_durable_root: true
+  start_reaper: true
+  reaper_interval_seconds: 0.001
+  explicit_event_synchronization: true
+  reaper_passes_during_starting: 127
+  first_state_absent_during_forced_pass: true
+  start_identity: "16516516516516516516516516516516"
+  session_id: "b2813eca60753e3b"
+  status: exited
+  lifecycle: COMPLETED
+  exit_code: 0
+  termination_reason: natural_exit
+  retained_start_identity_session: "b2813eca60753e3b"
+  retained_session_id_session: "b2813eca60753e3b"
+  selectors_resolved_same_session: true
+  durable_fault: null
+  runner_spawns: 1
+  effect_markers: 1
+  respawn_observed: false
+  post_effect_bytecode_directories: 0
+  post_effect_bytecode_files: 0
+  post_effect_strict_deep_codesign: PASS
+  post_effect_pinned_provenance: PASS
+  candidate_sha256_unchanged: true
+  handoff_sha256_unchanged: true
+  record_count_unchanged: true
+  result: PASS
+
+live_runtime_boundary:
+  installed_app_mutations: 0
+  install_invocations: 0
+  restart_invocations: 0
+  reload_invocations: 0
+  reconnect_invocations: 0
+  rollback_invocations: 0
+  recovery_invocations: 0
+  commit_cutover_invocations: 0
+  additional_live_durable_effects: 0
+  task_0164_durable_state_mutations: 0
+  live_fault_clearing_restarts: 0
+  telemetry_enablements: 0
+  result: PASS
+
+candidate_publication:
+  remote_head_before: "8397cfb3d893cd18a7d81d95b6e12a4121a83e78"
+  remote_branches_before:
+    - main
+  open_prs_before: 0
+  published_candidate: "3dd0601f75236453a8fbee0666906e1d826b943b"
+  remote_head_after: "3dd0601f75236453a8fbee0666906e1d826b943b"
+  non_force: true
+  remote_history_rewritten: false
+  result: PASS
+
+report_lineage:
+  path: .agent/tasks/TASK-0165/report-r1.yaml
+  direct_parent: "3dd0601f75236453a8fbee0666906e1d826b943b"
+  allowed_report_only_path:
+    - .agent/tasks/TASK-0165/report-r1.yaml
+  validation_and_publication: EVIDENCE_INDEXED_AFTER_REPORT_AUTHORSHIP
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: PASS
+  evidence: "The exact clean candidate 3dd0601f75236453a8fbee0666906e1d826b943b passed the deterministic durable/reaper focused proof and one canonical candidate verification selecting the qualification lane, with 53/53 selected modules and 611 tests. Exactly one Runtime 0.5.0 package was sealed, and its bundled Runtime passed the required start_reaper=true one-effect proof while bytecode, strict codesign, pinned provenance and both external hashes remained unchanged."
+
+pushed: true
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "The forced STARTING/pre-publication regression observed a real background reaper pass before state.json existed and proved no DURABLE_STATE_CORRUPT or DURABLE_OWNER_LOST latch after the two-line reap_once ownership fence."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "Existing finalization TOCTOU, persistent owner-loss and corruption fail-closed regressions remain green; _refresh_durable_session and the 2.0-second finalization grace were not changed."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "Focused and sealed proofs both resolve start_identity and session_id to one naturally completed session with exactly one runner/effect and no respawn under start_reaper=true."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "Exact candidate 3dd0601f75236453a8fbee0666906e1d826b943b / d249bb47a50804808f0b3f23e8c6a5f7a9473dff ran broad verification exactly once and passed 53/53 selected modules and 611 tests."
+  - criterion_id: AC-5
+    status: PASS
+    evidence: "Exactly one new Runtime 0.5.0 package e7b5caa95e203f30963ccf864fa99c720d1b4c6bf982c3d85f34ac7f1fbb74fb was sealed with handoff 8a88895975a963810877826d91ae1b55c10fb3e65c6b7e78a2995aaf68ca281f, record_count 1714, zero bytecode, strict codesign PASS and pinned provenance PASS before and after the sealed live-shape proof."
+  - criterion_id: AC-6
+    status: PASS
+    evidence: "TASK-0165 performed zero installed Runtime mutation, install, restart, reload, reconnect, rollback, recovery, commit-cutover or additional live durable effect; telemetry remained off."
+  - criterion_id: AC-7
+    status: EVIDENCE_INDEXED
+    evidence: "Fresh source-publication gate proved remote main at the exact task base, topology {main}, and open PRs=0 before ordinary non-force publication of the exact source candidate. Pinned report validation, report-only commit/publication and final canonical reconciliation occur after these report bytes are finalized."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Implementation changes only agent_runtime/session.py and tests/test_durable_pipe.py, both authorized by TASK-0165; no forbidden source path changed."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "The new regression was first observed failing specifically because DURABLE_STATE_CORRUPT was latched, then passed after the smallest reap_once fence; focused durable/restart proof passed 21/21 and git diff --check passed."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "Broad verification ran once on immutable source SHA 3dd0601f75236453a8fbee0666906e1d826b943b and passed; no tracked candidate write followed."
+  - check_id: CHECK-4
+    result: PASS
+    evidence: "One package_app.sh invocation produced one new immutable package without overwriting historical candidates or installing it."
+  - check_id: CHECK-5
+    result: PASS
+    evidence: "The sealed proof used the candidate bundled Runtime, explicit bootstrap/reaper synchronization, 127 observed reaper passes during STARTING, one effect and both retained selectors resolving session b2813eca60753e3b."
+  - check_id: CHECK-6
+    result: PASS
+    evidence: "Post-proof package checks reconfirmed zero bytecode, unchanged handoff hash, strict deep codesign PASS and exact pinned provenance PASS."
+  - check_id: CHECK-7
+    result: EVIDENCE_INDEXED
+    evidence: "The report is authored as the sole report-only child. Its exact pinned-validator PASS, report commit/publication and final main-only clean reconciliation are consequence-boundary evidence established after report authorship."
+
+result: NEEDS_REVIEW
