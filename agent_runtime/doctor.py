@@ -466,7 +466,10 @@ def _installed_package_check(app: Path) -> DoctorCheck:
         payload_sha = manifest.get("payload_sha256")
         files = manifest.get("files")
         if (
-            manifest.get("schema") != package_provenance.SCHEMA
+            manifest.get("schema") not in {
+                package_provenance.LEGACY_SCHEMA,
+                package_provenance.SCHEMA,
+            }
             or manifest.get("owner") != package_provenance.OWNER
             or manifest.get("entrypoint") != "runtime/start.sh"
             or manifest.get("python") != "runtime/.venv/bin/python"

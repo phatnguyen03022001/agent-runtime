@@ -277,6 +277,27 @@ class DoctorLocalStateTests(unittest.TestCase):
             responsible.assert_called_once_with(app)
             codesign.assert_called_once_with(app)
 
+    def test_exact_legacy_schema1_installed_package_remains_valid_during_schema2_migration(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            app = make_installed_fixture(home)
+            manifest_path = app / "Contents" / "Resources" / "runtime-manifest.json"
+            manifest = json.loads(manifest_path.read_text())
+            manifest["schema"] = doctor.package_provenance.LEGACY_SCHEMA
+            manifest.pop("service_management_contract")
+            manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+            identity = {
+                "team_identifier": "TEAM",
+                "main_executable": doctor.package_provenance.MAIN_EXECUTABLE_RELATIVE,
+                "runtime_service_executable": doctor.package_provenance.RUNTIME_SERVICE_EXECUTABLE_RELATIVE,
+            }
+            with patch.object(doctor.package_provenance, "responsible_code_identity", return_value=identity):
+                with patch.object(doctor.package_provenance, "_verify_codesign", return_value=None):
+                    check = doctor._installed_package_check(app)
+            self.assertEqual(check.status, "pass")
+            self.assertEqual(check.reason_code, "OK")
+            self.assertEqual(check.evidence["runtime_revision"], "a" * 40)
+
     def test_foreign_or_malformed_installed_package_fails(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             home = Path(raw)
