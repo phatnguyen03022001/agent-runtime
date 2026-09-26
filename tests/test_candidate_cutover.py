@@ -801,7 +801,7 @@ class CandidateCutoverTests(unittest.TestCase):
             self.assertTrue(metadata["operations"]["runtime_registered"])
 
     def test_unknown_predecessor_contract_fails_closed_before_service_mutation(self) -> None:
-        unknown_revision = "b0c7a0ae29dc66079cea3760828e00b86ab921e5"
+        unknown_revision = "837eb3183793c5260d73fc54467170b37722e5f3"
         with tempfile.TemporaryDirectory() as raw:
             _, cutover, fx = self._fixture(
                 raw, predecessor_revision=unknown_revision, aggregate_only_predecessor=True
@@ -832,6 +832,7 @@ class CandidateCutoverTests(unittest.TestCase):
             "cf6aba7e9ca22bf5f0c1202ed7b6ac40433053b0",
             "58027d5cebf1483f62d379ed05935c86da3a6f4a",
             "b0c7a0ae29dc66079cea3760828e00b86ab921e4",
+            "837eb3183793c5260d73fc54467170b37722e5f2",
         )
         for revision in revisions:
             with self.subTest(revision=revision):
@@ -840,9 +841,9 @@ class CandidateCutoverTests(unittest.TestCase):
                     self.assertEqual(cutover._runtime_manifest_revision(fx["target"]), revision)
                     self.assertEqual(cutover._predecessor_service_contract(fx["target"]), "split-v1")
 
-    def test_seal_invalid_predecessor_is_exact_and_neighbor_remains_unknown(self) -> None:
-        exact_revision = "b0c7a0ae29dc66079cea3760828e00b86ab921e4"
-        neighboring_revision = "b0c7a0ae29dc66079cea3760828e00b86ab921e5"
+    def test_current_predecessor_is_exact_and_neighbor_remains_unknown(self) -> None:
+        exact_revision = "837eb3183793c5260d73fc54467170b37722e5f2"
+        neighboring_revision = "837eb3183793c5260d73fc54467170b37722e5f3"
         for revision, expected in ((exact_revision, "split-v1"), (neighboring_revision, "unknown")):
             with self.subTest(revision=revision):
                 with tempfile.TemporaryDirectory() as raw:
@@ -889,6 +890,7 @@ class CandidateCutoverTests(unittest.TestCase):
             "bf98ec4e9bcda97dfdc0ca52b8e0537dae14a1cc",
             "cf6aba7e9ca22bf5f0c1202ed7b6ac40433053b0",
             "b0c7a0ae29dc66079cea3760828e00b86ab921e4",
+            "837eb3183793c5260d73fc54467170b37722e5f2",
             exact_revision,
         )
         for revision in revisions:
