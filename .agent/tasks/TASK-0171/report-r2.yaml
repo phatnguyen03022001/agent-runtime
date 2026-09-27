@@ -1,0 +1,338 @@
+protocol_version: 3
+
+task_id: TASK-0171
+task_revision: 1
+report_revision: 2
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0171/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  authorized_base_head: "b6faf4dd265c7093f1e5dbb8346e1d19b020f5ab"
+  final_execution_head: "b6faf4dd265c7093f1e5dbb8346e1d19b020f5ab"
+  source_candidate_commit: "59e570fca94d0ff858df1d1c6e4c7df66210ca8b"
+  source_candidate_tree: "b6615adb161026adf9d7d600fb1070656c2b2ccb"
+  source_candidate_direct_parent: "eb769d5f5b2aab9ffe202faaf0b442071545e7df"
+
+prior_report:
+  path: .agent/tasks/TASK-0171/report-r1.yaml
+  commit: "8d1848068a623026a33865d62c8cd705d80abfde"
+  report_revision: 1
+
+corrective_review:
+  path: .agent/tasks/TASK-0171/review.yaml
+  commit: "b6faf4dd265c7093f1e5dbb8346e1d19b020f5ab"
+  review_revision: 1
+  state: REVISION_REQUIRED
+  finding: F-0171-001
+  correction: "Parser-compatible module_counts serialization only; prior execution evidence reused without verification rerun."
+  validator:
+    foundation_revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+    path: skills/scripts/validate_skill_library.py
+    blob: "809a9bf67c6d80b5c024cddff4cf4afb29dda1a8"
+    result: PASS
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  authorized_revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+
+source_candidate:
+  result: PASS
+  pushed: true
+  publication:
+    remote: origin
+    branch: main
+    remote_before: "eb769d5f5b2aab9ffe202faaf0b442071545e7df"
+    remote_after: "59e570fca94d0ff858df1d1c6e4c7df66210ca8b"
+    non_force_cas: true
+  runtime_product_version_changed: false
+  tool_contract_or_mcp_surface_changed: false
+  source_build_lane_preserved: true
+  install_sh_modified: false
+  candidate_schema_changed: false
+  cutover_semantics_changed: false
+
+file_boundary:
+  modified:
+    - README.md
+    - docs/INSTALL.md
+    - macos/install_preflight.py
+    - macos/package_app.sh
+    - macos/runtime_config.py
+    - tests/test_candidate_cutover.py
+    - tests/test_package_provenance.py
+    - tests/test_runtime_config.py
+    - tests/test_task0141_productization.py
+  added:
+    - macos/distribution_verify.py
+    - macos/install_release.sh
+  new_top_level_directories: 0
+  new_shared_modules: 0
+
+distribution_lane:
+  mode: "explicit --distribution"
+  default_source_mode_unchanged: true
+  required_authority_inputs:
+    signing_identity: "explicit non-empty Developer ID Application identity"
+    notarization_locator: "explicit non-empty notarytool keychain-profile locator"
+  keychain_identity_enumeration: false
+  credential_discovery_or_creation: false
+  release_publication_performed: false
+  notarization_submission_performed: false
+  executable_graph:
+    runtime_python: "signed before Runtime manifest with hardened-runtime and timestamp options"
+    runtime_native_extensions: "*.so and *.dylib signed before Runtime manifest with hardened-runtime and timestamp options"
+    app_native_executables: "all three packaged native executables signed explicitly with hardened-runtime and timestamp options"
+    outer_app: "signed after nested code with hardened-runtime and timestamp options"
+  final_order:
+    - "sign packaged Runtime Python and native extensions"
+    - "generate Runtime provenance manifest over the signed Runtime payload"
+    - "sign packaged native app executables"
+    - "sign outer Agent Runtime.app"
+    - "strict deep codesign verification"
+    - "construct notarization archive"
+    - "notarytool submission using caller-supplied keychain profile"
+    - "staple Agent Runtime.app"
+    - "distribution verification: strict codesign, exact Developer ID authority, hardened runtime, timestamp, Gatekeeper, stapler validation, and unchanged embedded Runtime provenance"
+    - "package provenance validation"
+    - "seal external candidate handoff from the final post-staple app closure"
+    - "publish sealed candidate"
+  post_staple_identity_bound: true
+
+prebuilt_install:
+  release_bundle_shape:
+    - "Agent Runtime.app"
+    - "Agent Runtime.candidate.json"
+  installer_location: "Agent Runtime.app/Contents/Resources/runtime/macos/install_release.sh"
+  python_authority: "candidate app embedded Runtime .venv/bin/python"
+  helper_authority:
+    - "embedded install_preflight.py"
+    - "embedded runtime_config.py"
+    - "embedded package_provenance.py"
+    - "embedded candidate_cutover.py"
+  external_candidate_handoff_required_for_fresh_install: true
+  gatekeeper_required_for_fresh_install: true
+  canonical_runtime_env:
+    path: "~/Library/Application Support/Agent Runtime/runtime.env"
+    mode: "0600"
+    first_install_write: "private temporary file plus atomic hard-link publication"
+    existing_file_behavior: "validate and preserve existing canonical bytes"
+  workspace:
+    source: "explicit operator argument"
+    absolute_required: true
+    existing_directory_required: true
+    checkout_derived: false
+    canonicalized_before_persistence: true
+  secret_handling:
+    printed: false
+    copied_outside_runtime_env: false
+    process_values_cleared_before_provenance_and_cutover: true
+    git_identity_required_as_explicit_pair_for_first_prebuilt_install: true
+  tunnel_policy:
+    official_external_dependency_required: true
+    accepted_tunnel_fingerprint_unchanged: true
+    homebrew_symlink_compatible: true
+    generic_enrollment_added: false
+  cutover:
+    implementation: "existing candidate_cutover.py"
+    automatic_commit: false
+    result_after_success: "pending explicit commit"
+    resume_commit_rollback_recovery_commands_preserved: true
+    lifecycle_commands_do_not_require_external_handoff_after_fresh_install: true
+
+target_prerequisite_matrix:
+  macos_arm64:
+    required: true
+  ordinary_lifecycle_system_tools:
+    required: true
+  official_tunnel_client:
+    required: true
+  provisioned_control_plane_api_key:
+    required: true
+  provisioned_control_plane_tunnel_id:
+    required: true
+  explicit_runtime_git_name_email:
+    required: true
+  explicit_existing_absolute_workspace:
+    required: true
+  human_background_activity_approval_if_required:
+    required: true
+  agent_runtime_git_checkout:
+    required: false
+  agent_runtime_git_remote_identity:
+    required: false
+  host_cpython_3_13:
+    required: false
+  xcode_or_swift:
+    required: false
+  local_code_signing_identity:
+    required: false
+  target_notary_credentials:
+    required: false
+
+verification:
+  red_green:
+    initial_missing_capabilities:
+      red: "4/4 expected behavioral failures"
+      green: "6/6 focused tests PASS after implementation"
+    complete_executable_graph:
+      red: "distribution ordering test ERROR plus native-extension verification test FAIL"
+      green: "2/2 PASS after inside-out signing and native-extension verification"
+    installed_lifecycle_handoff_independence:
+      red: "1/1 expected failure"
+      green: "1/1 PASS"
+    homebrew_tunnel_symlink_compatibility:
+      red: "1/1 expected failure"
+      green: "1/1 PASS"
+    secret_environment_clear:
+      red: "1/1 expected error"
+      green: "1/1 PASS"
+    empty_distribution_authority_rejection:
+      red: "2 failing subcases"
+      green: "1 test / 2 subcases PASS"
+  focused:
+    command_scope:
+      - tests.test_package_provenance
+      - tests.test_runtime_config
+      - tests.test_task0141_productization
+      - tests.test_candidate_cutover
+      - tests.test_surface_and_scripts
+    result: PASS
+    tests: 165
+    module_counts:
+      - module: tests.test_package_provenance
+        tests: 14
+      - module: tests.test_runtime_config
+        tests: 16
+      - module: tests.test_task0141_productization
+        tests: 9
+      - module: tests.test_candidate_cutover
+        tests: 107
+      - module: tests.test_surface_and_scripts
+        tests: 19
+    duration_s: 79.220
+    bash_syntax: PASS
+    python_syntax: PASS
+    git_diff_check: PASS
+  canonical:
+    command: "./verify"
+    invocation_count: 1
+    source_candidate: "59e570fca94d0ff858df1d1c6e4c7df66210ca8b"
+    source_tree: "b6615adb161026adf9d7d600fb1070656c2b2ccb"
+    result: PASS
+    modules: "62/62"
+    tests: 822
+    duration_s: 92.154
+    tracked_source_changes_after_run: 0
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: PASS
+  evidence: "Reused the immutable TASK-0171 source-candidate verification without rerun: focused distribution/install coverage 165 tests PASS; canonical ./verify ran exactly once on source candidate 59e570fca94d0ff858df1d1c6e4c7df66210ca8b / tree b6615adb161026adf9d7d600fb1070656c2b2ccb and passed 62/62 modules, 822 tests in 92.154s. This corrective continuation changes report serialization only and does not change tracked source/test/doc/package bytes."
+
+pushed: true
+
+source_build_compatibility:
+  package_default_mode: "existing no-argument source mode"
+  source_signing_identity_contract_preserved: true
+  source_notarization_required: false
+  source_install_entrypoint: "./install.sh"
+  source_install_entrypoint_changed: false
+  directly_affected_regressions: PASS
+
+live_effects:
+  real_notarization_submissions: 0
+  github_release_publications: 0
+  valid_distribution_package_builds: 0
+  installed_runtime_install_or_cutover_invocations: 0
+  installed_runtime_restart_invocations: 0
+  installed_runtime_commit_or_rollback_invocations: 0
+  tunnel_client_mutations: 0
+  signing_or_notary_credential_mutations: 0
+  keychain_identity_enumerations: 0
+  telemetry_mutations: 0
+  host_tcc_or_privilege_mutations: 0
+
+final_live_runtime_read_only_proof:
+  runtime_version: "0.5.0"
+  runtime_revision: "b1879b5c185e93457bb634a7ab0508f7220416af"
+  runtime_tree: "2c52b095491471b2a723fe7bfa0fa57d9e6da14d"
+  tool_contract_kernel_version: 2
+  known_capabilities: 21
+  advertised_tools: 20
+  available_capabilities: 20
+  unavailable_capabilities: 1
+  doctor_status: healthy
+  doctor_checks: "10/10"
+  service_management: "enabled/enabled"
+  transaction_present: false
+  screen_capture: VISUAL_PERCEPTION_BLOCKED
+
+documentation:
+  prebuilt_and_source_paths_separated: true
+  permanent_machine_specific_state_added: false
+  claims_public_notarized_release_active: false
+  qualification_boundary_explicit: true
+
+report_lineage:
+  path: .agent/tasks/TASK-0171/report-r2.yaml
+  direct_parent: "b6faf4dd265c7093f1e5dbb8346e1d19b020f5ab"
+  prior_report_commit: "8d1848068a623026a33865d62c8cd705d80abfde"
+  corrective_review_commit: "b6faf4dd265c7093f1e5dbb8346e1d19b020f5ab"
+  allowed_report_only_path:
+    - .agent/tasks/TASK-0171/report-r2.yaml
+  validation_and_publication: EVIDENCE_INDEXED_AFTER_REPORT_AUTHORSHIP
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "Default source packaging remains available without notarization. Distribution is a separate explicit mode, rejects empty Developer ID/notary authority values before source staging, never enumerates Keychain identities, and focused source-compatibility regressions are green."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "Package-order tests bind inside-out hardened/timestamp signing, notarization submission, stapling, post-staple strict codesign/Developer-ID/Gatekeeper/stapler/provenance verification, then final seal/publication. Runtime native code is signed before manifest generation so embedded provenance represents final signed Runtime bytes."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "Prebuilt fixtures and installer contract tests require no product checkout, Git remote, host Python, CPython 3.13, Xcode/Swift, or target signing identity. Embedded app Python and package-owned helpers perform preflight, config, provenance validation and the existing candidate cutover."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "Tests prove explicit existing absolute workspace authority, mode-0600 atomic canonical runtime.env initialization, exact provisioned transport and Runtime Git identity validation without disclosure, Homebrew tunnel-client symlink compatibility under the unchanged tunnel fingerprint, secret environment clearing before cutover, and pending explicit commit semantics."
+  - criterion_id: AC-5
+    status: PASS
+    evidence: "Focused package/cutover regressions pass, strict candidate validation remains authoritative, responsible TeamIdentifier checks are not weakened, no candidate seal exists before staple/distribution verification, and no privileged helper, TCC widening, bundled tunnel client, or generic tunnel enrollment was introduced."
+  - criterion_id: AC-6
+    status: PASS
+    evidence: "README and INSTALL now separate checkout-independent prebuilt operator installation from build-from-source maintainer packaging, describe only invariant prerequisites, and explicitly state that source capability does not imply a qualified or published notarized release."
+  - criterion_id: AC-7
+    status: PASS
+    evidence: "Zero real notarization, release, live install/cutover/restart, tunnel, telemetry, Keychain enumeration, signing/notary credential, or TCC effects occurred. Fresh read-only proof after source verification shows the same installed Runtime 0.5.0 / b1879b5c... / 2c52b095..., doctor healthy 10/10, enabled/enabled services, and no transaction."
+  - criterion_id: AC-8
+    status: EVIDENCE_INDEXED
+    evidence: "Source candidate 59e570fc... / tree b6615adb... retains focused 165-test PASS, git diff --check PASS, and canonical ./verify exactly once with 62/62 modules and 822 tests PASS. No verification was rerun in this corrective continuation. Report revision 2 corrects only F-0171-001 serialization and is authored as the sole report-only child of corrective review commit b6faf4dd...."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Exact base eb769d5f..., clean canonical main and fresh origin/main equality were resolved before mutation; required Foundation skills were read from exact revision 0083d138...."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "Implementation reused existing candidate/provenance/config/cutover architecture and added only two bounded macos helpers; no parallel package format, updater, daemon, privileged helper or second lifecycle was introduced."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "All directly affected focused tests pass: 165 tests across package provenance, Runtime config, productization preflight, candidate cutover and surface/script compatibility."
+  - check_id: CHECK-4
+    result: PASS
+    evidence: "Canonical ./verify ran exactly once on immutable source commit 59e570fc... and passed 62/62 modules, 822 tests in 92.154s; no tracked source bytes changed afterward."
+  - check_id: CHECK-5
+    result: PASS
+    evidence: "Source candidate was published by exact remote CAS from eb769d5f... to 59e570fc... on main with no branch creation."
+  - check_id: CHECK-6
+    result: EVIDENCE_INDEXED
+    evidence: "Report revision 2 is the sole authorized child path of corrective review commit b6faf4dd.... Exact pinned-validator PASS is required before commit; report-only commit/publication and final local/origin/remote reconciliation follow report authorship."
+
+result: NEEDS_REVIEW
