@@ -1,0 +1,213 @@
+protocol_version: 3
+
+task_id: TASK-0174
+task_revision: 2
+report_revision: 2
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0174/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  authorized_base_head: "f38049c2caf1bf66366ccec867789553b544f11e"
+  final_execution_head: "9aa506b711f776066c4ec91bb8d3b4a82d85332c"
+  source_candidate_commit: "9aa506b711f776066c4ec91bb8d3b4a82d85332c"
+  source_candidate_tree: "c79aa55ffc200dd1b4a06b4304f13adfbbd7ec50"
+  source_candidate_direct_parent: "f38049c2caf1bf66366ccec867789553b544f11e"
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  authorized_revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - canonical_remote_resolution
+    - source_and_test_inspection
+    - bounded_repository_content_write
+    - source_only_process_execution
+    - pinned_foundation_skill_resolution
+    - pinned_foundation_report_validation
+    - git_commit
+    - non_force_git_publication
+  available:
+    - canonical_remote_resolution
+    - source_and_test_inspection
+    - bounded_repository_content_write
+    - source_only_process_execution
+    - pinned_foundation_skill_resolution
+    - pinned_foundation_report_validation
+    - git_commit
+    - non_force_git_publication
+  missing: []
+  passed: true
+
+source_candidate:
+  result: PASS
+  pushed_before_report_authorship: false
+  runtime_product_version_changed: false
+  tool_contract_or_mcp_surface_changed: false
+  doctor_default_semantics_changed: false
+  candidate_cutover_semantics_changed: false
+  tunnel_client_contract_changed: false
+  apple_distribution_authority_dependency_added: false
+
+file_boundary:
+  modified:
+    - README.md
+    - docs/INSTALL.md
+    - docs/RECOVERY.md
+    - macos/Sources/AgentRuntimeMenuBar/AppDelegate.swift
+    - macos/Tests/AgentRuntimeMenuBarTests/PresentationTests.swift
+    - macos/runtime_config.py
+    - tests/test_runtime_config.py
+  added:
+    - macos/Sources/AgentRuntimeMenuBar/FirstRunSetupController.swift
+  new_top_level_directories: 0
+  new_shared_modules: 0
+
+onboarding_design:
+  native_owner: AgentRuntimeMenuBar
+  fresh_launch_behavior: "Automatically present native first-run setup when no usable canonical Runtime configuration exists."
+  existing_valid_install_behavior: "Preserve canonical runtime.env bytes and proceed directly to the existing control panel when the installed app has valid configuration and no unresolved cutover."
+  secret_entry:
+    api_key: NSSecureTextField
+    tunnel_id: NSSecureTextField
+    process_boundary: "Bounded JSON on child stdin only."
+    argv_secret_values: false
+    preferences_store_added: false
+    logging_store_added: false
+  workspace_selection: "NSOpenPanel directory-only selection; typed workspace path is not part of the normal fresh-user path."
+  git_identity: "Requested in fresh setup because canonical prebuilt validation requires the complete Runtime Git name/email pair; existing valid configuration is not re-prompted."
+  canonical_config:
+    authority: macos/runtime_config.py
+    path: "~/Library/Application Support/Agent Runtime/runtime.env"
+    mode: "0600"
+    publication: "Private temporary file plus atomic hard-link publication through the existing helper semantics."
+    alternate_store_added: false
+  lifecycle:
+    installer: macos/install_release.sh
+    preflight: macos/install_preflight.py
+    provenance: macos/package_provenance.py
+    cutover: macos/candidate_cutover.py
+    doctor: "package-owned start.sh doctor --json"
+    readiness: "existing loopback /readyz"
+    parallel_swift_lifecycle_added: false
+  pre_commit_gate: "Require readiness ready and package-owned doctor degraded solely by the exact cutover_identity/CUTOVER_TRANSACTION_PRESENT warning for recognized PENDING/APP_SWAPPED; any extra warning, failure, or malformed status blocks commit."
+  terminal_success_gate: "Invoke the existing commit path only after the pre-commit gate; then require transaction absence, readiness ready, and package-owned doctor overall healthy."
+  approval_and_recovery: "Background Activity approval remains human-owned; native actions dispatch the existing resume/rollback/recover lifecycle paths."
+
+security_review:
+  result: PASS
+  assets:
+    - CONTROL_PLANE_API_KEY
+    - CONTROL_PLANE_TUNNEL_ID
+    - canonical runtime.env
+    - candidate provenance and cutover transaction authority
+  evidence:
+    - "Native source contains no UserDefaults, Logger, or os_log credential path."
+    - "Sentinel tests prove API/tunnel values stay off argv and stdout/stderr; the native process runner forwards them only as stdin to runtime_config.py."
+    - "runtime_config.py rejects unknown fields, validates the complete value set before canonical visibility, preserves mode 0600, removes its private temporary file, and emits only sanitized field/prerequisite errors."
+    - "Existing invalid/unsafe canonical configuration is inspected fail-closed and is never silently replaced."
+    - "External candidate handoff, tunnel-client identity checks, ServiceManagement, candidate cutover, doctor, and readiness remain delegated to their existing package-owned authorities."
+  findings: []
+
+verification:
+  tdd:
+    runtime_config_native_stdin:
+      red: "New stdin/inspection tests failed before the CLI contract existed."
+      green: "tests.test_runtime_config PASS 19/19 after implementation and existing canonical-env compatibility repair."
+    native_first_run:
+      red: "Swift first-run tests failed to compile before onboarding types/orchestration existed."
+      green: "First-run focused Swift coverage PASS 9/9."
+    malformed_doctor_fail_closed:
+      red: "Malformed unknown doctor check status was initially accepted by the gate."
+      green: "Doctor gate regressions PASS after requiring recognized pre-commit statuses and all-pass post-commit checks."
+  affected_regressions:
+    python:
+      interpreter: ".venv/bin/python"
+      modules:
+        - tests.test_runtime_config
+        - tests.test_candidate_cutover
+        - tests.test_doctor
+        - tests.test_package_provenance
+        - tests.test_task0141_productization
+        - tests.test_surface_and_scripts
+        - tests.test_tunnel_identity
+        - tests.test_service_recovery
+      result: PASS
+      tests: 225
+    swift:
+      command: "cd macos && swift test"
+      result: PASS
+      tests: 79
+      menu_bar_tests: 45
+      core_tests: 34
+    git_diff_check: PASS
+  canonical:
+    command: "./verify"
+    invocation_count: 1
+    source_candidate: "9aa506b711f776066c4ec91bb8d3b4a82d85332c"
+    source_tree: "c79aa55ffc200dd1b4a06b4304f13adfbbd7ec50"
+    result: PASS
+    modules: "62/62"
+    tests: 825
+    duration_s: 90.537
+    tracked_source_changes_after_run: 0
+
+authoritative_verification:
+  required: false
+  performed: true
+  result: PASS
+  evidence: "TASK-0174 declares no separate authoritative verifier. Its required canonical qualification was performed exactly once on immutable source candidate 9aa506b711f776066c4ec91bb8d3b4a82d85332c / tree c79aa55ffc200dd1b4a06b4304f13adfbbd7ec50: ./verify PASS, 62/62 modules, 825 tests, 90.537s."
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "Native launch-policy and presentation tests prove missing configuration opens fresh setup automatically, valid installed configuration bypasses onboarding, secure fields collect fresh values, and the workspace is selected rather than typed. README.md and docs/INSTALL.md make open Agent Runtime.app -> native setup the primary newcomer path."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "NSSecureTextField is used for API/tunnel entry; the Swift runner test proves dynamic sentinel secrets appear only in first helper stdin and never in argv, while runtime_config subprocess tests prove no sentinel appears in stdout/stderr, canonical mode is 0600, and no non-canonical temp artifact remains. Static source inspection found no UserDefaults/Logger/os_log store."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "Native tests prove NSOpenPanel is directory-only and single-selection, cancel preserves prior selection, and a nonexistent workspace returns bounded feedback before any helper/lifecycle dispatch, canonical file, or transaction."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "Fresh setup supplies the complete Git name/email pair to the existing helper; tests.test_runtime_config preserves malformed/partial pair rejection. Existing canonical inspection test proves a valid configured install is neither re-prompted nor rewritten."
+  - criterion_id: AC-5
+    status: PASS
+    evidence: "runtime_config stdin tests prove malformed/incomplete input returns nonzero without secret echo, canonical file, or even canonical parent creation; invalid workspace native coverage proves no process dispatch or cutover begins."
+  - criterion_id: AC-6
+    status: PASS
+    evidence: "Native orchestration tests record exact dispatch to packaged runtime_config.py and install_release.sh, package-owned doctor, readiness, and existing --commit-cutover path. Existing candidate/provenance regressions pass; candidate_cutover.py, install_release.sh, install_preflight.py, package_provenance.py, and agent_runtime/doctor.py are unchanged."
+  - criterion_id: AC-7
+    status: PASS
+    evidence: "Deterministic gate/integration coverage proves only recognized PENDING/APP_SWAPPED with sole CUTOVER_TRANSACTION_PRESENT warning is commit-eligible; extra warning, failure, or malformed check blocks commit. Success sequencing proves readiness before existing commit and transaction-free healthy doctor plus readiness after commit. Approval and PARTIAL remain non-success actionable states, while existing candidate-cutover and ServiceManagement regressions preserve resume/recovery behavior."
+  - criterion_id: AC-8
+    status: PASS
+    evidence: "The native flow references only app-embedded Runtime Python/helpers plus ordinary macOS tools and the external accepted tunnel-client. Existing prebuilt productization/provenance regressions pass; no checkout, host CPython 3.13, Xcode/Swift, signing identity, notary profile, or Apple credential was added as a consumer prerequisite."
+  - criterion_id: AC-9
+    status: PASS
+    evidence: "Affected Python regressions PASS 225/225, full Swift tests PASS 79/79, and canonical ./verify PASS 62/62 modules / 825 tests. Default doctor source, tunnel identity source, candidate provenance/cutover source, Runtime version, ToolContract Kernel, MCP surface, and telemetry contracts were not modified."
+  - criterion_id: AC-10
+    status: PASS
+    evidence: "One immutable source candidate 9aa506b711f776066c4ec91bb8d3b4a82d85332c / tree c79aa55ffc200dd1b4a06b4304f13adfbbd7ec50 passed focused/broad qualification, git diff --check, and exactly one canonical ./verify. All live Runtime/config/tunnel, Apple credential/notary, host dependency, and release/tag effects are zero."
+
+live_effects:
+  live_runtime_install_or_cutover: 0
+  live_runtime_restart: 0
+  live_runtime_configuration_mutation: 0
+  tunnel_client_mutation: 0
+  apple_signing_or_notary_credential_mutation: 0
+  apple_notarization_submission: 0
+  release_or_tag_publication: 0
+  host_dependency_install: 0
+  keychain_identity_enumeration: 0
+
+pushed: false
+
+result: NEEDS_REVIEW
