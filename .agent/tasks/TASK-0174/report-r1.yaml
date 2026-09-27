@@ -1,0 +1,135 @@
+protocol_version: 3
+
+task_id: TASK-0174
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0174/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  authorized_base_head: "a1fcff6f970324129e7c14ef613b1d00dad54899"
+  final_execution_head: "a1fcff6f970324129e7c14ef613b1d00dad54899"
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  authorized_revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - canonical_remote_resolution
+    - source_and_test_inspection
+    - bounded_repository_content_write
+    - pinned_foundation_report_validation
+    - git_commit
+    - non_force_git_publication
+  available:
+    - canonical_remote_resolution
+    - source_and_test_inspection
+    - bounded_repository_content_write
+    - pinned_foundation_report_validation
+    - git_commit
+    - non_force_git_publication
+  missing: []
+  passed: true
+
+contract_gap:
+  classification: SPEC_CONTRADICTION
+  discovered_before_product_mutation: true
+  requirement: "TASK-0174 requires package-owned Runtime doctor to be healthy before enabling/finalizing the existing pending cutover commit."
+  existing_authoritative_behavior: "The package-owned doctor intentionally reports CUTOVER_TRANSACTION_PRESENT as a warning whenever a recognized PREPARED, AWAITING_APPROVAL, PENDING, or PARTIAL transaction exists. Doctor status composition therefore reports degraded, not healthy, while a PENDING transaction is still present."
+  direct_evidence:
+    task_requirement: ".agent/tasks/TASK-0174/task.yaml AC-7 and required_changes completion predicate"
+    doctor_source: "agent_runtime/doctor.py _cutover_identity_check + _compose_status"
+    doctor_regression: "tests/test_doctor.py asserts CUTOVER_TRANSACTION_PRESENT and degraded composition"
+  unsafe_workarounds_rejected:
+    - "Treating degraded as healthy would weaken the explicit acceptance predicate."
+    - "Hiding, moving, deleting, or synthesizing cutover transaction state for doctor would violate accepted transaction/recovery semantics."
+    - "Monkeypatching or duplicating doctor semantics in Swift would violate the no-parallel-doctor/lifecycle boundary."
+    - "Changing doctor semantics requires Architect authorization because agent_runtime/doctor.py is not in TASK-0174 allowed existing implementation components and would alter an accepted public operational contract."
+  required_architect_decision:
+    - "Either revise AC-7 to permit the expected pre-commit doctor result only when the sole non-pass condition is recognized CUTOVER_TRANSACTION_PRESENT, then require readiness, commit, and a post-commit healthy doctor before terminal success."
+    - "Or explicitly authorize a narrow package-owned doctor pre-commit mode/semantic that can report healthy for one recognized PENDING transaction without weakening default doctor behavior."
+
+scope_effects:
+  product_source_mutations: 0
+  test_mutations: 0
+  documentation_mutations: 0
+  runtime_config_mutations: 0
+  live_runtime_install_or_cutover: 0
+  live_runtime_restart: 0
+  tunnel_client_mutations: 0
+  apple_credential_or_notary_mutations: 0
+  apple_notarization_submissions: 0
+  release_or_tag_publications: 0
+  host_dependency_installs: 0
+  source_verification_runs: 0
+  canonical_verify_runs: 0
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: NOT_RUN_BLOCKED
+  evidence: "Execution stopped before product mutation because AC-7 cannot be satisfied under the simultaneously authoritative doctor and pending-cutover semantics. No immutable onboarding candidate exists, so focused verification and canonical ./verify were not run."
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: NOT_RUN_BLOCKED
+    evidence: "Native newcomer onboarding implementation did not begin because the terminal success/commit contract is contradictory before mutation."
+  - criterion_id: AC-2
+    status: NOT_RUN_BLOCKED
+    evidence: "No onboarding secret-entry/process-boundary implementation was created; zero Runtime credential/config mutation occurred."
+  - criterion_id: AC-3
+    status: NOT_RUN_BLOCKED
+    evidence: "No workspace-picker implementation was created; zero configuration or lifecycle mutation occurred."
+  - criterion_id: AC-4
+    status: NOT_RUN_BLOCKED
+    evidence: "No Git-identity onboarding implementation was created; existing canonical configuration behavior remains untouched."
+  - criterion_id: AC-5
+    status: NOT_RUN_BLOCKED
+    evidence: "No new configuration path was implemented or exercised; canonical runtime.env was not modified."
+  - criterion_id: AC-6
+    status: NOT_RUN_BLOCKED
+    evidence: "Existing install_release.py/shell, provenance, and candidate-cutover paths were inspected but not modified or executed against live state."
+  - criterion_id: AC-7
+    status: BLOCKED
+    evidence: "A recognized PENDING cutover necessarily makes the existing package-owned doctor degraded via CUTOVER_TRANSACTION_PRESENT, while AC-7 requires doctor healthy before finalizing that same pending commit. Satisfying both requires a revised contract or explicitly authorized doctor semantic change."
+  - criterion_id: AC-8
+    status: NOT_RUN_BLOCKED
+    evidence: "No isolated prebuilt onboarding candidate exists to qualify checkout/toolchain independence."
+  - criterion_id: AC-9
+    status: NOT_RUN_BLOCKED
+    evidence: "No source candidate or directly affected regression suite was produced; existing contracts were left unchanged."
+  - criterion_id: AC-10
+    status: BLOCKED
+    evidence: "No coherent onboarding source candidate can be truthfully fully qualified while AC-7 remains internally unsatisfiable. All prohibited live/config/tunnel/Apple/release effects remain zero."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Fresh remote resolution established HEAD=origin/main=a1fcff6f970324129e7c14ef613b1d00dad54899, branch main, clean worktree/index, and exact origin git@github.com:phatnguyen03022001/agent-runtime.git."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "Pinned Foundation execution skills executor, security-review, verification, and recommended simplicity were resolved at 0083d1383bfc0326729e615a85844b7b2004950d."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "Current source inspection confirmed prebuilt first-run configuration authority is macos/runtime_config.py, release lifecycle is macos/install_release.sh plus candidate_cutover.py, and AppDelegate currently only reports missing canonical configuration."
+  - check_id: CHECK-4
+    result: BLOCKED
+    evidence: "agent_runtime/doctor.py intentionally emits CUTOVER_TRANSACTION_PRESENT for PENDING and _compose_status maps warnings to degraded; tests/test_doctor.py preserves that behavior. This directly contradicts AC-7's mandatory pre-commit healthy doctor predicate."
+  - check_id: CHECK-5
+    result: PASS
+    evidence: "Execution stopped before product/test/docs mutation, live Runtime/config/tunnel effects, Apple authority effects, dependency installation, tag/release publication, or source verification."
+
+blockers:
+  - "TASK-0174 AC-7 requires a healthy doctor before committing a PENDING cutover, but the accepted package-owned doctor contract intentionally cannot be healthy while that PENDING transaction exists. Architect contract revision is required before onboarding source mutation."
+
+pushed: true
+
+result: BLOCKED
