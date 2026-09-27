@@ -2552,6 +2552,50 @@ class CandidateCutoverTests(unittest.TestCase):
         self.assertNotIn('STAGING_APP="$TARGET_APPS/.Agent Runtime.app.', text)
         self.assertNotIn('/usr/bin/codesign --verify --deep --strict "$app"', text)
 
+    def test_release_bundle_installer_uses_embedded_runtime_and_preserves_pending_cutover(self) -> None:
+        path = ROOT / "macos" / "install_release.sh"
+        self.assertTrue(path.is_file(), "checkout-independent release installer must exist")
+        text = path.read_text()
+        self.assertIn("--workspace-root", text)
+        self.assertIn('PYTHON="$RUNTIME_ROOT/.venv/bin/python"', text)
+        self.assertIn('PREFLIGHT="$SCRIPT_DIR/install_preflight.py"', text)
+        self.assertIn('CONFIG_HELPER="$SCRIPT_DIR/runtime_config.py"', text)
+        self.assertIn('PROVENANCE="$SCRIPT_DIR/package_provenance.py"', text)
+        self.assertIn('CUTOVER="$SCRIPT_DIR/candidate_cutover.py"', text)
+        self.assertIn('"$PYTHON" "$PREFLIGHT" --prebuilt', text)
+        self.assertIn('"$PYTHON" "$CONFIG_HELPER" --prebuilt', text)
+        self.assertIn('"$PYTHON" "$PROVENANCE" validate-candidate', text)
+        self.assertIn('"$PYTHON" "$CUTOVER" cutover', text)
+        self.assertIn("--commit-cutover", text)
+        self.assertIn("--rollback-cutover", text)
+        self.assertIn("pending explicit commit", text.lower())
+        for forbidden in (
+            "package_app.sh",
+            "AGENT_RUNTIME_CODESIGN_IDENTITY",
+            "python3",
+            "xcrun",
+            "swift",
+            "git rev-parse",
+            "git config",
+            "codesign",
+        ):
+            self.assertNotIn(forbidden, text)
+
+        install_start = text.index("--workspace-root)")
+        install_end = text.index("--commit-cutover)", install_start)
+        handoff_check = text.index("release bundle candidate handoff is missing or unsafe.")
+        self.assertLess(install_start, handoff_check)
+        self.assertLess(handoff_check, install_end)
+        install_branch = text[install_start:install_end]
+        config_write = install_branch.index('"$PYTHON" "$CONFIG_HELPER" --prebuilt')
+        secret_clear = install_branch.index(
+            "unset CONTROL_PLANE_API_KEY CONTROL_PLANE_TUNNEL_ID AGENT_RUNTIME_GIT_NAME AGENT_RUNTIME_GIT_EMAIL"
+        )
+        provenance_check = install_branch.index('"$PYTHON" "$PROVENANCE" validate-candidate')
+        self.assertLess(config_write, secret_clear)
+        self.assertLess(secret_clear, provenance_check)
+        self.assertNotIn(" commit ", install_branch)
+        self.assertNotIn("--commit-cutover", install_branch)
 
 
 if __name__ == "__main__":

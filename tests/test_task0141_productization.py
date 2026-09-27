@@ -322,6 +322,82 @@ class Task0141ProductizationTests(unittest.TestCase):
         self.assertIn("doctor [--json]", starter)
         self.assertNotIn("./start.sh --serve", readme + operations + agent)
 
+    def test_prebuilt_preflight_is_checkout_independent_and_secret_safe(self) -> None:
+        self.assertTrue(hasattr(preflight, "collect_prebuilt_report"), "prebuilt preflight must exist")
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            bundle = temp / "release"
+            home = temp / "home"
+            workspace = temp / "workspace"
+            tools = temp / "tools"
+            app = bundle / "Agent Runtime.app"
+            runtime = app / "Contents" / "Resources" / "runtime"
+            embedded_python = runtime / ".venv" / "bin" / "python"
+            embedded_macos = runtime / "macos"
+            handoff = bundle / "Agent Runtime.candidate.json"
+            for directory in (home, workspace, tools, embedded_python.parent, embedded_macos):
+                directory.mkdir(parents=True, exist_ok=True)
+            embedded_python.write_text("#!/bin/sh\nexit 0\n")
+            embedded_python.chmod(0o700)
+            for name in ("runtime_config.py", "package_provenance.py", "candidate_cutover.py", "install_preflight.py"):
+                (embedded_macos / name).write_text("# fixture\n")
+            handoff.write_text("{}\n")
+            tunnel_target = tools / "tunnel-client-real"
+            tunnel_target.write_text("#!/bin/sh\nexit 0\n")
+            tunnel_target.chmod(0o700)
+            tunnel = tools / "tunnel-client"
+            tunnel.symlink_to(tunnel_target)
+
+            tunnel_id = "task0171-prebuilt-tunnel"
+            secrets = (
+                "TASK0171_PREBUILT_API_SECRET",
+                tunnel_id,
+                "Task 0171 Operator",
+                "task0171@example.invalid",
+            )
+            environ = {
+                "PATH": str(tools),
+                "CONTROL_PLANE_API_KEY": secrets[0],
+                "CONTROL_PLANE_TUNNEL_ID": secrets[1],
+                "AGENT_RUNTIME_GIT_NAME": secrets[2],
+                "AGENT_RUNTIME_GIT_EMAIL": secrets[3],
+            }
+
+            def fake_which(name: str, path=None):
+                if name == "tunnel-client":
+                    return str(tunnel)
+                if name in {"launchctl", "lsof", "curl"}:
+                    return "/usr/bin/true"
+                return None
+
+            with mock.patch.object(preflight.platform, "system", return_value="Darwin"), mock.patch.object(
+                preflight.platform, "machine", return_value="arm64"
+            ), mock.patch.object(preflight.shutil, "which", side_effect=fake_which), mock.patch.object(
+                preflight, "EXPECTED_TUNNEL_FINGERPRINT", hashlib.sha256(tunnel_id.encode()).hexdigest()[:12]
+            ), mock.patch.object(
+                preflight.package_provenance, "validate_candidate", return_value={"candidate_sha256": "a" * 64}
+            ), mock.patch.object(
+                preflight, "_run", return_value=subprocess.CompletedProcess([], 0, "", "")
+            ):
+                report = preflight.collect_prebuilt_report(
+                    bundle,
+                    workspace,
+                    home,
+                    environ=environ,
+                )
+
+            self.assertEqual(report["status"], "ready")
+            ids = {item["id"] for item in report["checks"]}
+            self.assertNotIn("repository", ids)
+            self.assertNotIn("packaging_python", ids)
+            self.assertNotIn("developer_toolchain", ids)
+            self.assertNotIn("signing_prerequisite", ids)
+            encoded = json.dumps(report, sort_keys=True)
+            human = preflight.render_human(report)
+            for secret in secrets:
+                self.assertNotIn(secret, encoded)
+                self.assertNotIn(secret, human)
+
 
 if __name__ == "__main__":
     unittest.main()

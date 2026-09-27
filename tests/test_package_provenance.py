@@ -408,6 +408,156 @@ class PackageProvenanceTests(unittest.TestCase):
         self.assertNotIn('APP="$REPO_ROOT/build/Agent Runtime.app"', package)
         self.assertNotIn('CANDIDATE_HANDOFF="$REPO_ROOT/build/Agent Runtime.candidate.json"', package)
 
+    def test_distribution_packaging_is_explicit_and_seals_only_after_staple_verification(self) -> None:
+        verifier_path = ROOT / "macos" / "distribution_verify.py"
+        self.assertTrue(verifier_path.is_file(), "distribution verification helper must exist")
+        package = (ROOT / "macos" / "package_app.sh").read_text()
+        self.assertIn("--distribution", package)
+        self.assertIn("--signing-identity", package)
+        self.assertIn("--notary-keychain-profile", package)
+        self.assertNotIn("security find-identity", package)
+        self.assertIn('/usr/bin/codesign --force --deep --sign "$SIGNING_IDENTITY" "$APP"', package)
+        runtime_sign = package.index(
+            '/usr/bin/codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$RUNTIME/.venv/bin/python"'
+        )
+        native_extension_sign = package.index('DISTRIBUTION_RUNTIME_CODE', runtime_sign)
+        manifest = package.index('package_provenance.py" manifest', native_extension_sign)
+        native_sign = package.index(
+            '/usr/bin/codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$executable"',
+            manifest,
+        )
+        distribution_sign = package.index(
+            '/usr/bin/codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$APP"',
+            native_sign,
+        )
+        self.assertLess(runtime_sign, native_extension_sign)
+        self.assertLess(native_extension_sign, manifest)
+        self.assertLess(manifest, native_sign)
+        self.assertLess(native_sign, distribution_sign)
+        notarize = package.index('notarytool submit', distribution_sign)
+        staple = package.index('stapler staple "$APP"', notarize)
+        verify = package.index('distribution_verify.py', staple)
+        seal = package.index('package_provenance.py" seal', verify)
+        publish = package.index('package_provenance.py" publish', seal)
+        self.assertLess(distribution_sign, notarize)
+        self.assertLess(notarize, staple)
+        self.assertLess(staple, verify)
+        self.assertLess(verify, seal)
+        self.assertLess(seal, publish)
+
+    def test_distribution_mode_rejects_empty_authority_values_before_build(self) -> None:
+        package = ROOT / "macos" / "package_app.sh"
+        env = dict(os.environ)
+        env["AGENT_RUNTIME_PACKAGING_PYTHON"] = str(ROOT / ".venv" / "bin" / "python")
+        cases = (
+            (
+                [
+                    "--distribution",
+                    "--signing-identity",
+                    "Developer ID Application: ",
+                    "--notary-keychain-profile",
+                    "fixture-profile",
+                ],
+                "distribution signing identity must be an explicit Developer ID Application identity",
+            ),
+            (
+                [
+                    "--distribution",
+                    "--signing-identity",
+                    "Developer ID Application: Fixture Corp (ABCDE12345)",
+                    "--notary-keychain-profile",
+                    "   ",
+                ],
+                "distribution mode requires an explicit notary keychain profile locator",
+            ),
+        )
+        for argv, expected in cases:
+            with self.subTest(argv=argv):
+                result = subprocess.run(
+                    [str(package), *argv],
+                    cwd=ROOT,
+                    env=env,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 2)
+                self.assertIn(expected, result.stderr)
+                self.assertNotIn("notarytool submit", result.stderr)
+
+    def test_distribution_verifier_checks_hardened_developer_id_gatekeeper_staple_and_provenance(self) -> None:
+        verifier_path = ROOT / "macos" / "distribution_verify.py"
+        self.assertTrue(verifier_path.is_file(), "distribution verification helper must exist")
+        spec = importlib.util.spec_from_file_location("distribution_verify_test", verifier_path)
+        assert spec is not None and spec.loader is not None
+        verifier = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(verifier)
+
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            app = root / "Agent Runtime.app"
+            executables = (
+                app / "Contents/MacOS/AgentRuntimeMenuBar",
+                app / "Contents/MacOS/AgentRuntimeRuntimeService",
+                app / "Contents/MacOS/AgentRuntimeScreenCapture",
+                app / "Contents/Resources/runtime/.venv/bin/python",
+                app / "Contents/Resources/runtime/.venv/lib/python3.13/site-packages/fixture_native.so",
+            )
+            for executable in executables:
+                executable.parent.mkdir(parents=True, exist_ok=True)
+                executable.write_text("#!/bin/sh\n")
+                executable.chmod(0o700)
+            lock = root / "requirements.lock"
+            lock.write_text("fixture\n")
+            lock_sha = hashlib.sha256(lock.read_bytes()).hexdigest()
+            identity = "Developer ID Application: Fixture Corp (ABCDE12345)"
+            calls: list[tuple[str, ...]] = []
+
+            def fake_run(argv: list[str]) -> subprocess.CompletedProcess[str]:
+                calls.append(tuple(argv))
+                if argv[:3] == ["/usr/bin/codesign", "-d", "--verbose=4"]:
+                    detail = (
+                        f"Authority={identity}\n"
+                        "TeamIdentifier=ABCDE12345\n"
+                        "flags=0x10000(runtime)\n"
+                        "Timestamp=Sep 27, 2026 at 18:00:00\n"
+                    )
+                    return subprocess.CompletedProcess(argv, 0, "", detail)
+                return subprocess.CompletedProcess(argv, 0, "", "")
+
+            embedded = {
+                "source_revision": "a" * 40,
+                "source_tree": "b" * 40,
+                "requirements_lock_sha256": lock_sha,
+                "team_identifier": "ABCDE12345",
+            }
+            with mock.patch.object(verifier, "_run", side_effect=fake_run), mock.patch.object(
+                verifier.provenance, "embedded_candidate_identity", return_value=embedded
+            ):
+                verifier.verify_distribution(
+                    app,
+                    signing_identity=identity,
+                    runtime_revision="a" * 40,
+                    runtime_tree="b" * 40,
+                    requirements_lock=lock,
+                )
+
+            self.assertIn(("/usr/bin/codesign", "--verify", "--deep", "--strict", str(app)), calls)
+            self.assertIn(("/usr/sbin/spctl", "--assess", "--type", "execute", "--verbose=4", str(app)), calls)
+            self.assertIn(("/usr/bin/xcrun", "stapler", "validate", str(app)), calls)
+            inspected = [call[-1] for call in calls if call[:3] == ("/usr/bin/codesign", "-d", "--verbose=4")]
+            self.assertEqual(inspected, [str(app), *(str(path) for path in executables)])
+
+            with self.assertRaisesRegex(verifier.DistributionVerificationError, "Developer ID Application"):
+                verifier.verify_distribution(
+                    app,
+                    signing_identity="Apple Development: Fixture",
+                    runtime_revision="a" * 40,
+                    runtime_tree="b" * 40,
+                    requirements_lock=lock,
+                )
 
 
 if __name__ == "__main__":

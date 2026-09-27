@@ -17,6 +17,7 @@ from typing import Mapping
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import candidate_cutover
+import package_provenance
 import runtime_config
 
 EXPECTED_ORIGINS = {
@@ -474,6 +475,206 @@ def collect_report(
     }
 
 
+def collect_prebuilt_report(
+    bundle_root: Path,
+    workspace_root: Path,
+    home: Path,
+    *,
+    environ: Mapping[str, str] | None = None,
+) -> dict[str, object]:
+    bundle_root = bundle_root.resolve()
+    home = home.resolve()
+    env = dict(os.environ if environ is None else environ)
+    checks: list[dict[str, object]] = []
+
+    system = platform.system().lower()
+    machine = platform.machine().lower()
+    platform_ok = system == "darwin" and machine == "arm64"
+    checks.append(
+        _check(
+            "platform",
+            "pass" if platform_ok else "fail",
+            "OK" if platform_ok else "UNSUPPORTED_PLATFORM",
+            "macOS arm64 prebuilt target is supported." if platform_ok else "Prebuilt Agent Runtime is qualified only for macOS arm64.",
+            action_class=ACTION_HUMAN,
+            evidence={"system": system, "architecture": machine},
+        )
+    )
+
+    workspace_ok = workspace_root.is_absolute() and workspace_root.is_dir()
+    resolved_workspace = workspace_root.resolve() if workspace_ok else workspace_root
+    checks.append(
+        _check(
+            "workspace",
+            "pass" if workspace_ok else "fail",
+            "OK" if workspace_ok else "WORKSPACE_INVALID",
+            "Explicit prebuilt workspace is an existing absolute directory." if workspace_ok else "Provide an explicit absolute existing workspace root.",
+            action_class=ACTION_HUMAN,
+        )
+    )
+
+    app = bundle_root / "Agent Runtime.app"
+    handoff = bundle_root / "Agent Runtime.candidate.json"
+    runtime = app / "Contents" / "Resources" / "runtime"
+    embedded_python = runtime / ".venv" / "bin" / "python"
+    embedded_helpers = tuple(
+        runtime / "macos" / name
+        for name in (
+            "runtime_config.py",
+            "package_provenance.py",
+            "candidate_cutover.py",
+            "install_preflight.py",
+        )
+    )
+    bundle_ok = (
+        app.is_dir()
+        and not app.is_symlink()
+        and handoff.is_file()
+        and not handoff.is_symlink()
+        and embedded_python.is_file()
+        and not embedded_python.is_symlink()
+        and os.access(embedded_python, os.X_OK)
+        and all(path.is_file() and not path.is_symlink() for path in embedded_helpers)
+    )
+    checks.append(
+        _check(
+            "release_bundle",
+            "pass" if bundle_ok else "fail",
+            "OK" if bundle_ok else "RELEASE_BUNDLE_INVALID",
+            "Signed release bundle contains the packaged Runtime installer substrate." if bundle_ok else "Release bundle is missing required app, handoff, embedded Python, or Runtime helpers.",
+            action_class=ACTION_STOP,
+        )
+    )
+
+    candidate_ok = False
+    if bundle_ok:
+        try:
+            package_provenance.validate_candidate(app, handoff)
+            gatekeeper = _run(
+                ["/usr/sbin/spctl", "--assess", "--type", "execute", "--verbose=4", str(app)]
+            )
+            candidate_ok = gatekeeper.returncode == 0
+        except package_provenance.PackageProvenanceError:
+            candidate_ok = False
+    checks.append(
+        _check(
+            "release_trust",
+            "pass" if candidate_ok else "fail",
+            "OK" if candidate_ok else "RELEASE_TRUST_INVALID",
+            "Candidate handoff, strict code signature, provenance, and Gatekeeper assessment are valid." if candidate_ok else "Release candidate failed handoff, signature, provenance, or Gatekeeper validation.",
+            action_class=ACTION_STOP,
+        )
+    )
+
+    required_commands = ("launchctl", "lsof", "curl")
+    missing_commands = [
+        name for name in required_commands if shutil.which(name, path=env.get("PATH")) is None
+    ]
+    checks.append(
+        _check(
+            "system_commands",
+            "pass" if not missing_commands else "fail",
+            "OK" if not missing_commands else "REQUIRED_COMMAND_UNAVAILABLE",
+            "Required macOS lifecycle commands are available." if not missing_commands else "One or more required macOS lifecycle commands are unavailable.",
+            action_class=ACTION_HUMAN,
+            evidence={"missing_count": len(missing_commands)},
+        )
+    )
+
+    canonical = home / RUNTIME_ENV_RELATIVE
+    effective: dict[str, str] = {}
+    configuration_ok = False
+    if workspace_ok:
+        try:
+            if canonical.exists() or canonical.is_symlink():
+                runtime_config.validate_prebuilt_configuration(canonical, resolved_workspace)
+                _, _, effective = runtime_config._read(canonical, require_mode=True)
+            else:
+                effective = runtime_config.prebuilt_values(resolved_workspace, environ=env)
+            configuration_ok = True
+        except SystemExit:
+            configuration_ok = False
+    checks.append(
+        _check(
+            "runtime_configuration",
+            "pass" if configuration_ok else "fail",
+            "OK" if configuration_ok else "RUNTIME_CONFIGURATION_INCOMPLETE",
+            "Canonical or provisioned Runtime configuration is complete without exposing values." if configuration_ok else "Provide valid provisioned transport credentials, Runtime Git identity, and workspace configuration.",
+            action_class=ACTION_HUMAN,
+            evidence={"canonical_present": canonical.exists() or canonical.is_symlink()},
+        )
+    )
+
+    tunnel_client = shutil.which("tunnel-client", path=env.get("PATH"))
+    tunnel_executable_ok = False
+    if tunnel_client:
+        tunnel_path = Path(tunnel_client)
+        tunnel_executable_ok = (
+            tunnel_path.is_absolute()
+            and tunnel_path.is_file()
+            and os.access(tunnel_path, os.X_OK)
+        )
+    tunnel_id = effective.get("CONTROL_PLANE_TUNNEL_ID", "")
+    fingerprint_ok = bool(tunnel_id) and hashlib.sha256(tunnel_id.encode("utf-8")).hexdigest()[:12] == EXPECTED_TUNNEL_FINGERPRINT
+    tunnel_ok = tunnel_executable_ok and fingerprint_ok
+    checks.append(
+        _check(
+            "openai_tunnel",
+            "pass" if tunnel_ok else "fail",
+            "OK" if tunnel_ok else ("TUNNEL_CLIENT_UNAVAILABLE" if not tunnel_executable_ok else "TUNNEL_IDENTITY_MISMATCH"),
+            "Official tunnel-client path and accepted tunnel identity are ready." if tunnel_ok else (
+                "Install the official OpenAI tunnel-client before installation."
+                if not tunnel_executable_ok
+                else "Configured tunnel identity does not match the accepted Runtime tunnel fingerprint."
+            ),
+            action_class=ACTION_HUMAN,
+            evidence={"executable_ready": tunnel_executable_ok, "fingerprint_match": fingerprint_ok},
+        )
+    )
+
+    legacy = home / LEGACY_TUNNEL_RELATIVE
+    legacy_absent = not legacy.exists() and not legacy.is_symlink()
+    checks.append(
+        _check(
+            "legacy_tunnel_profile",
+            "pass" if legacy_absent else "fail",
+            "OK" if legacy_absent else "LEGACY_TUNNEL_PROFILE_PRESENT",
+            "No legacy tunnel profile is present." if legacy_absent else "Legacy tunnel profile must be removed through an explicit operator decision before installation.",
+            action_class=ACTION_HUMAN,
+        )
+    )
+
+    target_app = home / APP_RELATIVE
+    transaction = home / CUTOVER_RELATIVE
+    target_safe = not target_app.exists() and not target_app.is_symlink() or (
+        target_app.is_dir() and not target_app.is_symlink()
+    )
+    transaction_present = transaction.exists() or transaction.is_symlink()
+    installed_ok = target_safe and not transaction_present
+    checks.append(
+        _check(
+            "installed_state",
+            "pass" if installed_ok else "fail",
+            "OK" if installed_ok else ("CUTOVER_TRANSACTION_PRESENT" if transaction_present else "INSTALLED_PACKAGE_INVALID"),
+            "Installed app/cutover state does not block a new installation transaction." if installed_ok else (
+                "A cutover transaction is already present; resolve it before a new install."
+                if transaction_present
+                else "Installed app path is unsafe or ambiguous."
+            ),
+            action_class=ACTION_HUMAN if transaction_present else ACTION_STOP,
+            evidence={"app_present": target_app.exists() or target_app.is_symlink(), "cutover_present": transaction_present},
+        )
+    )
+
+    status = "ready" if all(item["status"] == "pass" for item in checks) else "blocked"
+    return {
+        "schema_version": 1,
+        "mode": "prebuilt",
+        "status": status,
+        "checks": checks,
+    }
+
+
 def render_human(report: Mapping[str, object]) -> str:
     lines = [f"Agent Runtime install preflight: {str(report['status']).upper()}"]
     for raw in report["checks"]:
@@ -486,16 +687,27 @@ def render_human(report: Mapping[str, object]) -> str:
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="./install.sh --check")
+    parser = argparse.ArgumentParser(prog="install_preflight.py")
     parser.add_argument("--json", action="store_true", help="emit deterministic JSON")
+    parser.add_argument("--prebuilt", action="store_true", help="check an extracted release bundle")
+    parser.add_argument("--bundle-root", type=Path)
+    parser.add_argument("--workspace-root", type=Path)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
-    root = Path(__file__).resolve().parent.parent
+    parser = _parser()
+    args = parser.parse_args(argv)
     home = Path.home()
-    report = collect_report(root, home)
+    if args.prebuilt:
+        if args.bundle_root is None or args.workspace_root is None:
+            parser.error("--prebuilt requires --bundle-root and --workspace-root")
+        report = collect_prebuilt_report(args.bundle_root, args.workspace_root, home)
+    else:
+        if args.bundle_root is not None or args.workspace_root is not None:
+            parser.error("--bundle-root and --workspace-root require --prebuilt")
+        root = Path(__file__).resolve().parent.parent
+        report = collect_report(root, home)
     output = json.dumps(report, ensure_ascii=False, separators=(",", ":"), sort_keys=True) if args.json else render_human(report)
     sys.stdout.write(output + "\n")
     return 0 if report["status"] == "ready" else 1

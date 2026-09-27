@@ -17,53 +17,62 @@ The qualified Runtime source and installed Runtime are version **0.5.0** with **
 
 ServiceManagement may report `enabled`, `requires-approval`, `not-registered`, or `not-found`. Approval is a human/platform boundary; the Runtime does not open System Settings or bypass it.
 
-## Quick Start
+## Installation paths
 
-1. Clone the canonical repository and enter its root.
-2. Create checkout configuration:
+### Prebuilt release — provisioned operators
 
-   ```bash
-   cp .env.example .env
-   chmod 600 .env
-   ```
+A qualified release bundle is checkout-independent. It contains only the signed `Agent Runtime.app` plus its external `Agent Runtime.candidate.json` handoff. The installer is sealed inside the app at `Contents/Resources/runtime/macos/install_release.sh` and uses the app's packaged Python/runtime helpers.
 
-   Fill `CONTROL_PLANE_API_KEY`, `CONTROL_PLANE_TUNNEL_ID`, and the Runtime Git identity pair. Do not commit `.env`.
+Target-machine prerequisites are macOS arm64, the official OpenAI `tunnel-client`, ordinary macOS lifecycle tools, an explicit existing absolute workspace root, and provisioned Runtime values. No agent-runtime Git clone, CPython 3.13, Swift/Xcode, or local signing identity is required.
 
-3. Supply an explicit non-ad-hoc signing identity:
+For a fresh install, provision the required values in the installer environment without printing them:
 
-   ```bash
-   export AGENT_RUNTIME_CODESIGN_IDENTITY="Developer ID Application: ..."
-   ```
+```bash
+export CONTROL_PLANE_API_KEY="<provisioned>"
+export CONTROL_PLANE_TUNNEL_ID="<provisioned>"
+export AGENT_RUNTIME_GIT_NAME="<runtime-git-name>"
+export AGENT_RUNTIME_GIT_EMAIL="<runtime-git-email>"
 
-4. Run the strict read-only preflight:
+RELEASE_INSTALLER="./Agent Runtime.app/Contents/Resources/runtime/macos/install_release.sh"
+"$RELEASE_INSTALLER" --workspace-root /absolute/existing/workspace
+```
 
-   ```bash
-   ./install.sh --check
-   ./install.sh --check --json
-   ```
+The installer validates the release candidate against its external handoff and Gatekeeper, initializes or validates canonical mode-`0600` `runtime.env`, and enters the existing transactional cutover. Installation remains pending until an explicit downstream decision:
 
-5. When preflight is `READY`, install through the canonical path:
+```bash
+"$RELEASE_INSTALLER" --commit-cutover
+# or
+"$RELEASE_INSTALLER" --rollback-cutover
+```
 
-   ```bash
-   ./install.sh
-   ```
+Background Activity approval, when required by macOS, remains a human action. The repository contains the source architecture for this lane; that does **not** claim that a public notarized release has been qualified or published. Distribution qualification is a separate release-authority step.
 
-6. If macOS reports Background Activity approval is required, approve it manually, then follow the recovery guidance. Start and diagnose with:
+### Build from source — maintainers
 
-   ```bash
-   ./start.sh start
-   ./start.sh status
-   ./start.sh doctor
-   ./start.sh doctor --json
-   ```
+The existing maintainer lane remains independent of notarization. Clone the canonical repository, create `.env` from `.env.example`, provide an explicit non-ad-hoc `AGENT_RUNTIME_CODESIGN_IDENTITY`, then run:
 
-7. After downstream acceptance, explicitly commit or roll back the pending cutover:
+```bash
+./install.sh --check
+./install.sh --check --json
+./install.sh
+```
 
-   ```bash
-   ./install.sh --commit-cutover
-   # or
-   ./install.sh --rollback-cutover
-   ```
+This lane uses the canonical CPython 3.13 packaging interpreter plus Xcode/Swift, builds and signs locally, and leaves the same pending transactional cutover. Start and diagnose from the checkout with:
+
+```bash
+./start.sh start
+./start.sh status
+./start.sh doctor
+./start.sh doctor --json
+```
+
+Then explicitly commit or roll back:
+
+```bash
+./install.sh --commit-cutover
+# or
+./install.sh --rollback-cutover
+```
 
 Detailed operator guidance:
 
@@ -144,6 +153,8 @@ The threat model explicitly excludes `root/sudo`, a **malicious local administra
 
 Production `screen_capture` is governance-blocked as `VISUAL_PERCEPTION_BLOCKED`; this is not a missing Screen Recording permission and must not be “fixed” by widening TCC permissions.
 
-## Native build prerequisites
+## Packaging prerequisites
 
-Packaging requires the canonical **CPython 3.13** arm64 interpreter and an explicit `AGENT_RUNTIME_CODESIGN_IDENTITY`. Apple developer tools must provide `xcrun` and Swift. See [docs/INSTALL.md](docs/INSTALL.md) for the current prerequisite boundary.
+Source packaging requires the canonical **CPython 3.13** arm64 interpreter, Apple developer tools with `xcrun` and Swift, and an explicit `AGENT_RUNTIME_CODESIGN_IDENTITY`.
+
+The opt-in distribution mode additionally requires an explicit `Developer ID Application: ...` identity and an explicit existing notarytool keychain-profile locator. It signs with hardened-runtime/timestamp semantics, submits for notarization, staples, runs strict code-signature/Gatekeeper/stapler/provenance verification, and only then seals the final candidate. The scripts never enumerate Keychain identities or create/modify signing or notary credentials. See [docs/INSTALL.md](docs/INSTALL.md).

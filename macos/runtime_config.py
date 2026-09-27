@@ -262,12 +262,98 @@ def ensure(
             pass
 
 
+def _normalized_prebuilt_workspace(workspace_root: Path) -> Path:
+    if not workspace_root.is_absolute() or not workspace_root.is_dir():
+        fail("AGENT_RUNTIME_WORKSPACE_ROOT must be an absolute existing directory")
+    return workspace_root.resolve()
+
+
+def prebuilt_values(
+    workspace_root: Path,
+    *,
+    environ: dict[str, str] | None = None,
+) -> dict[str, str]:
+    workspace = _normalized_prebuilt_workspace(workspace_root)
+    env = os.environ if environ is None else environ
+    values = {
+        "CONTROL_PLANE_API_KEY": env.get("CONTROL_PLANE_API_KEY", ""),
+        "CONTROL_PLANE_TUNNEL_ID": env.get("CONTROL_PLANE_TUNNEL_ID", ""),
+        "AGENT_RUNTIME_WORKSPACE_ROOT": str(workspace),
+        "AGENT_RUNTIME_GIT_NAME": env.get("AGENT_RUNTIME_GIT_NAME", ""),
+        "AGENT_RUNTIME_GIT_EMAIL": env.get("AGENT_RUNTIME_GIT_EMAIL", ""),
+    }
+    for key in sorted(OPTIONAL):
+        value = env.get(key)
+        if value is not None and value != "":
+            values[key] = value
+    _validate_values(values, workspace)
+    _validated_identity(values, required=True)
+    return values
+
+
+def _prebuilt_payload(values: dict[str, str]) -> bytes:
+    ordered = [
+        *REQUIRED,
+        *GIT_IDENTITY,
+        "AGENT_RUNTIME_MAX_ACTIVE_SESSIONS",
+        "AGENT_RUNTIME_MAX_PARALLELISM",
+        "AGENT_RUNTIME_TELEMETRY",
+    ]
+    return "".join(f"{key}={values[key]}\n" for key in ordered if key in values).encode("utf-8")
+
+
+def validate_prebuilt_configuration(canonical: Path, workspace_root: Path) -> bytes:
+    workspace = _normalized_prebuilt_workspace(workspace_root)
+    raw, _, values = _read(canonical, require_mode=True)
+    _validate_values(values)
+    _validated_identity(values, required=True)
+    configured_workspace = Path(values["AGENT_RUNTIME_WORKSPACE_ROOT"])
+    if not configured_workspace.is_absolute() or configured_workspace.resolve() != workspace:
+        fail("canonical Runtime workspace does not match explicit prebuilt workspace")
+    return raw
+
+
+def ensure_prebuilt(
+    canonical: Path,
+    workspace_root: Path,
+    *,
+    environ: dict[str, str] | None = None,
+) -> None:
+    workspace = _normalized_prebuilt_workspace(workspace_root)
+    if canonical.exists() or canonical.is_symlink():
+        validate_prebuilt_configuration(canonical, workspace)
+        return
+
+    values = prebuilt_values(workspace, environ=environ)
+    raw = _prebuilt_payload(values)
+    canonical.parent.mkdir(parents=True, exist_ok=True)
+    private = _write_private(canonical, raw)
+    try:
+        validate_prebuilt_configuration(private, workspace)
+        try:
+            os.link(private, canonical)
+        except FileExistsError:
+            validate_prebuilt_configuration(canonical, workspace)
+            return
+    finally:
+        try:
+            private.unlink()
+        except FileNotFoundError:
+            pass
+
+
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
-        fail("usage: runtime_config.py SOURCE_ENV CANONICAL_ENV WORKSPACE_ROOT")
-    ensure(
-        Path(sys.argv[1]),
-        Path(sys.argv[2]),
-        Path(sys.argv[3]),
-        require_git_identity=True,
-    )
+    if len(sys.argv) == 4 and sys.argv[1] == "--prebuilt":
+        ensure_prebuilt(Path(sys.argv[2]), Path(sys.argv[3]))
+    elif len(sys.argv) == 4:
+        ensure(
+            Path(sys.argv[1]),
+            Path(sys.argv[2]),
+            Path(sys.argv[3]),
+            require_git_identity=True,
+        )
+    else:
+        fail(
+            "usage: runtime_config.py SOURCE_ENV CANONICAL_ENV WORKSPACE_ROOT "
+            "or runtime_config.py --prebuilt CANONICAL_ENV WORKSPACE_ROOT"
+        )

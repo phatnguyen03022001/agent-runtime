@@ -7,9 +7,25 @@ BUILD_ROOT="$REPO_ROOT/build"
 CANDIDATES_ROOT="$REPO_ROOT/build/candidates"
 source "$PACKAGE_ROOT/packaging_python.sh"
 PYTHON_BIN="$(resolve_packaging_python "PACKAGE ERROR")"
-SIGNING_IDENTITY="${AGENT_RUNTIME_CODESIGN_IDENTITY:-}"
-[[ -n "$SIGNING_IDENTITY" && "$SIGNING_IDENTITY" != "-" ]] \
-  || { echo "PACKAGE ERROR: AGENT_RUNTIME_CODESIGN_IDENTITY must name an explicit non-ad-hoc signing identity" >&2; exit 2; }
+PACKAGE_MODE="source"
+NOTARY_PROFILE=""
+if [[ "$#" == "0" ]]; then
+  SIGNING_IDENTITY="${AGENT_RUNTIME_CODESIGN_IDENTITY:-}"
+  [[ -n "$SIGNING_IDENTITY" && "$SIGNING_IDENTITY" != "-" ]] \
+    || { echo "PACKAGE ERROR: AGENT_RUNTIME_CODESIGN_IDENTITY must name an explicit non-ad-hoc signing identity" >&2; exit 2; }
+elif [[ "$#" == "5" && "$1" == "--distribution" && "$2" == "--signing-identity" && "$4" == "--notary-keychain-profile" ]]; then
+  PACKAGE_MODE="distribution"
+  SIGNING_IDENTITY="$3"
+  NOTARY_PROFILE="$5"
+  DEVELOPER_ID_LABEL="${SIGNING_IDENTITY#Developer ID Application: }"
+  [[ "$SIGNING_IDENTITY" == "Developer ID Application: "* && "$DEVELOPER_ID_LABEL" =~ [^[:space:]] && "$SIGNING_IDENTITY" != *$'\n'* && "$SIGNING_IDENTITY" != *$'\r'* ]] \
+    || { echo "PACKAGE ERROR: distribution signing identity must be an explicit Developer ID Application identity" >&2; exit 2; }
+  [[ "$NOTARY_PROFILE" =~ [^[:space:]] && "$NOTARY_PROFILE" != *$'\n'* && "$NOTARY_PROFILE" != *$'\r'* ]] \
+    || { echo "PACKAGE ERROR: distribution mode requires an explicit notary keychain profile locator" >&2; exit 2; }
+else
+  echo "PACKAGE ERROR: usage: package_app.sh [--distribution --signing-identity <Developer-ID-identity> --notary-keychain-profile <profile>]" >&2
+  exit 2
+fi
 
 mkdir -p "$BUILD_ROOT"
 TEMP_ROOT="$(mktemp -d "$BUILD_ROOT/.agent-runtime-package.XXXXXX")"
@@ -80,6 +96,11 @@ cp "$SOURCE_ROOT/start.sh" "$RUNTIME/start.sh"
 cp "$SOURCE_PACKAGE_ROOT/runtime_config.py" "$RUNTIME/macos/runtime_config.py"
 cp "$SOURCE_PACKAGE_ROOT/package_provenance.py" "$RUNTIME/macos/package_provenance.py"
 cp "$SOURCE_PACKAGE_ROOT/candidate_cutover.py" "$RUNTIME/macos/candidate_cutover.py"
+if [[ "$PACKAGE_MODE" == "distribution" ]]; then
+  cp "$SOURCE_PACKAGE_ROOT/install_preflight.py" "$RUNTIME/macos/install_preflight.py"
+  cp "$SOURCE_PACKAGE_ROOT/install_release.sh" "$RUNTIME/macos/install_release.sh"
+  chmod 755 "$RUNTIME/macos/install_release.sh"
+fi
 find "$SOURCE_ROOT/agent_runtime" -maxdepth 1 -type f -name '*.py' -exec cp '{}' "$RUNTIME/agent_runtime/" \;
 PACKAGE_VENV="$TEMP_ROOT/runtime-venv"
 "$PYTHON_BIN" -m venv --copies --without-pip "$PACKAGE_VENV"
@@ -99,6 +120,14 @@ mv -f "$TMP_PYVENV" "$PACKAGE_VENV/pyvenv.cfg"
 /bin/cp -R "$PACKAGE_VENV" "$RUNTIME/.venv"
 chmod 755 "$RUNTIME/start.sh" "$RUNTIME/.venv/bin/python"
 
+if [[ "$PACKAGE_MODE" == "distribution" ]]; then
+  /usr/bin/codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$RUNTIME/.venv/bin/python" >/dev/null
+  while IFS= read -r DISTRIBUTION_RUNTIME_CODE; do
+    [[ -n "$DISTRIBUTION_RUNTIME_CODE" ]] || continue
+    /usr/bin/codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$DISTRIBUTION_RUNTIME_CODE" >/dev/null
+  done < <(find "$RUNTIME/.venv" -type f \( -name '*.so' -o -name '*.dylib' \) -print | LC_ALL=C sort)
+fi
+
 "$PYTHON_BIN" "$SOURCE_PACKAGE_ROOT/package_provenance.py" manifest \
   "$RUNTIME" "$RESOURCES/runtime-manifest.json" \
   "$RUNTIME_REVISION" "$RUNTIME_TREE" "$SOURCE_ROOT/requirements.lock" \
@@ -107,8 +136,28 @@ chmod 755 "$RUNTIME/start.sh" "$RUNTIME/.venv/bin/python"
 /usr/bin/plutil -lint "$CONTENTS/Info.plist" >/dev/null
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$CONTENTS/Info.plist")" == "true" ]] \
   || { echo "PACKAGE ERROR: LSUIElement must be true" >&2; exit 2; }
-/usr/bin/codesign --force --deep --sign "$SIGNING_IDENTITY" "$APP" >/dev/null
-/usr/bin/codesign --verify --deep --strict "$APP"
+if [[ "$PACKAGE_MODE" == "distribution" ]]; then
+  for executable in \
+    "$MACOS/AgentRuntimeMenuBar" \
+    "$MACOS/AgentRuntimeRuntimeService" \
+    "$MACOS/AgentRuntimeScreenCapture"; do
+    /usr/bin/codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$executable" >/dev/null
+  done
+  /usr/bin/codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$APP" >/dev/null
+  /usr/bin/codesign --verify --deep --strict "$APP"
+  NOTARY_ARCHIVE="$TEMP_ROOT/Agent-Runtime-notarization.zip"
+  /usr/bin/ditto -c -k --keepParent "$APP" "$NOTARY_ARCHIVE"
+  /usr/bin/xcrun notarytool submit "$NOTARY_ARCHIVE" --keychain-profile "$NOTARY_PROFILE" --wait >&2
+  /usr/bin/xcrun stapler staple "$APP" >&2
+  "$PYTHON_BIN" "$SOURCE_PACKAGE_ROOT/distribution_verify.py" "$APP" \
+    --signing-identity "$SIGNING_IDENTITY" \
+    --runtime-revision "$RUNTIME_REVISION" \
+    --runtime-tree "$RUNTIME_TREE" \
+    --requirements-lock "$SOURCE_ROOT/requirements.lock"
+else
+  /usr/bin/codesign --force --deep --sign "$SIGNING_IDENTITY" "$APP" >/dev/null
+  /usr/bin/codesign --verify --deep --strict "$APP"
+fi
 "$PYTHON_BIN" "$SOURCE_PACKAGE_ROOT/package_provenance.py" validate \
   "$RUNTIME" "$RESOURCES/runtime-manifest.json" \
   "$RUNTIME_REVISION" "$RUNTIME_TREE" "$SOURCE_ROOT/requirements.lock"

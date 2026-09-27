@@ -324,6 +324,62 @@ class RuntimeConfigTests(unittest.TestCase):
                 runtime_config.ensure(source, canonical, workspace)
             self.assertEqual(canonical.read_bytes(), before)
 
+    def test_prebuilt_bootstrap_requires_explicit_provisioning_and_writes_private_canonical_config(self) -> None:
+        self.assertTrue(hasattr(runtime_config, "ensure_prebuilt"), "prebuilt config entrypoint must exist")
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            workspace = temp / "workspace"
+            workspace.mkdir()
+            canonical = temp / "config" / "runtime.env"
+            environ = {
+                "CONTROL_PLANE_API_KEY": "PREBUILT_SECRET_API",
+                "CONTROL_PLANE_TUNNEL_ID": "PREBUILT_SECRET_TUNNEL",
+                "AGENT_RUNTIME_GIT_NAME": "Prebuilt Operator",
+                "AGENT_RUNTIME_GIT_EMAIL": "prebuilt@example.invalid",
+                "AGENT_RUNTIME_MAX_ACTIVE_SESSIONS": "6",
+                "AGENT_RUNTIME_MAX_PARALLELISM": "2",
+            }
+
+            runtime_config.ensure_prebuilt(canonical, workspace, environ=environ)
+
+            text = canonical.read_text()
+            self.assertEqual(stat.S_IMODE(canonical.stat().st_mode), 0o600)
+            self.assertIn("CONTROL_PLANE_API_KEY=PREBUILT_SECRET_API\n", text)
+            self.assertIn("CONTROL_PLANE_TUNNEL_ID=PREBUILT_SECRET_TUNNEL\n", text)
+            self.assertIn(f"AGENT_RUNTIME_WORKSPACE_ROOT={workspace.resolve()}\n", text)
+            self.assertIn("AGENT_RUNTIME_GIT_NAME=Prebuilt Operator\n", text)
+            self.assertIn("AGENT_RUNTIME_GIT_EMAIL=prebuilt@example.invalid\n", text)
+
+            before = canonical.read_bytes()
+            runtime_config.ensure_prebuilt(canonical, workspace, environ={})
+            self.assertEqual(canonical.read_bytes(), before)
+
+    def test_prebuilt_bootstrap_rejects_missing_workspace_or_identity_without_disclosing_secrets(self) -> None:
+        self.assertTrue(hasattr(runtime_config, "ensure_prebuilt"), "prebuilt config entrypoint must exist")
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            workspace = temp / "workspace"
+            workspace.mkdir()
+            canonical = temp / "runtime.env"
+            secret = "DO_NOT_DISCLOSE_PREBUILT_SECRET"
+            environ = {
+                "CONTROL_PLANE_API_KEY": secret,
+                "CONTROL_PLANE_TUNNEL_ID": "fixture-tunnel",
+                "AGENT_RUNTIME_GIT_NAME": "Prebuilt Operator",
+            }
+            with self.assertRaises(SystemExit) as raised:
+                runtime_config.ensure_prebuilt(canonical, workspace, environ=environ)
+            self.assertNotIn(secret, str(raised.exception))
+            self.assertFalse(canonical.exists())
+
+            missing_workspace = temp / "missing"
+            complete = {
+                **environ,
+                "AGENT_RUNTIME_GIT_EMAIL": "prebuilt@example.invalid",
+            }
+            with self.assertRaisesRegex(SystemExit, "absolute existing directory"):
+                runtime_config.ensure_prebuilt(canonical, missing_workspace, environ=complete)
+
 
 if __name__ == "__main__":
     unittest.main()
