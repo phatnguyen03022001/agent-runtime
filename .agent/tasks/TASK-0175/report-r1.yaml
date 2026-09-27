@@ -1,0 +1,234 @@
+protocol_version: 3
+
+task_id: TASK-0175
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0175/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  pre_execution_head: "2be021bb07053ebcb96769e1ded2453dc9089b62"
+  authorized_base_head: "2be021bb07053ebcb96769e1ded2453dc9089b62"
+  final_execution_head: "15ea3a19cb21ae8b104009dd49ebaefd89b0d8eb"
+  source_candidate_tree: "8ee09d9822c927ea032507187a439c121649ab86"
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  authorized_revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+  observed_revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+
+execution_skills_used:
+  required:
+    - executor
+    - verification
+  recommended:
+    - simplicity
+    - security-review
+  external: []
+
+pre_execution_checks:
+  protocol_version_supported: true
+  handoff_type_confirmed: true
+  task_at_base_confirmed: true
+  task_identity_confirmed: true
+  architect_binding_confirmed: true
+  repository_confirmed: true
+  branch_confirmed: true
+  base_head_confirmed: true
+  skill_revision_confirmed: true
+  required_execution_skills_available: true
+  structure_authority_confirmed: true
+  working_tree_clean: true
+
+source_candidate:
+  commit: "15ea3a19cb21ae8b104009dd49ebaefd89b0d8eb"
+  tree: "8ee09d9822c927ea032507187a439c121649ab86"
+  sole_parent: "2be021bb07053ebcb96769e1ded2453dc9089b62"
+  commit_message: "TASK-0175 add native Background Activity settings handoff"
+  new_files: 0
+  new_dependencies: 0
+  servicemanagement_registration_semantics_changed: false
+  runtime_lifecycle_semantics_changed: false
+
+changed_files:
+  - path: README.md
+    summary: "Document the app-guided Background Activity settings handoff and bounded continuation."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: docs/INSTALL.md
+    summary: "Make the native Background Activity settings action the newcomer path and state that navigation grants no authority."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: macos/Sources/AgentRuntimeMenuBar/FirstRunSetupController.swift
+    summary: "Add the approval-required settings button with a default SMAppService.openSystemSettingsLoginItems() handoff and no lifecycle side effect."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+  - path: macos/Tests/AgentRuntimeMenuBarTests/PresentationTests.swift
+    summary: "Add deterministic handoff and resume-gate regressions without opening live System Settings."
+    new_file: false
+    in_scope: true
+    structure_authorized: true
+
+commits_created:
+  - sha: "15ea3a19cb21ae8b104009dd49ebaefd89b0d8eb"
+    message: "TASK-0175 add native Background Activity settings handoff"
+
+authorization_handoff:
+  supported_api: "SMAppService.openSystemSettingsLoginItems()"
+  production_binding: "FirstRunSetupController default openBackgroundActivitySettings closure"
+  ui_action: "Open Background Activity Settings…"
+  continuation_action: "Continue After Approval"
+  settings_navigation_only: true
+  settings_navigation_marks_success: false
+  settings_navigation_dispatches_lifecycle_action: false
+  settings_navigation_mutates_runtime_configuration: false
+  macos_remains_authorization_owner: true
+
+continuation_evidence:
+  still_unapproved: "Deterministic orchestrator coverage dispatches the existing --resume-cutover path, receives SERVICE_APPROVAL_REQUIRED with AWAITING_APPROVAL/APP_SWAPPED, returns approvalRequired, and proves --commit-cutover is not invoked."
+  approved: "Deterministic orchestrator coverage dispatches the existing --resume-cutover path, then preserves the accepted pre-commit doctor gate, readiness gate, existing --commit-cutover action, transaction-free post-commit doctor gate, and final readiness gate before success."
+  parallel_state_machine_added: false
+
+verification_evidence:
+  red:
+    command: "cd macos && swift test --filter PresentationTests.testApprovalRequiredOffersNativeSettingsHandoffAndKeepsResumeBounded"
+    result: FAIL_AS_EXPECTED
+    evidence: "Compilation failed before implementation because FirstRunSetupController did not accept openBackgroundActivitySettings; exact compiler diagnostic was extra argument 'openBackgroundActivitySettings' in call."
+  focused_green:
+    command: "cd macos && swift test --filter PresentationTests.testApprovalRequiredOffersNativeSettingsHandoffAndKeepsResumeBounded"
+    result: PASS
+    tests: 1
+    failures: 0
+  presentation_regression:
+    command: "cd macos && swift test --filter PresentationTests"
+    result: PASS
+    tests: 22
+    failures: 0
+  full_swift:
+    command: "cd macos && swift test"
+    result: PASS
+    tests: 81
+    failures: 0
+    breakdown: "AgentRuntimeMenuBarTests 47/47; AgentRuntimeCoreTests 34/34."
+  diff_check:
+    command: "git diff --check"
+    result: PASS
+  canonical_verify:
+    command: "./verify"
+    dispatch_count: 1
+    candidate_commit: "15ea3a19cb21ae8b104009dd49ebaefd89b0d8eb"
+    result: FAIL
+    exit_code: 1
+    lifecycle: COMPLETED
+    termination_reason: natural_exit
+    completed_modules: 31
+    selected_modules: 62
+    completed_tests: 477
+    duration_s: 78.413
+    failing_modules:
+      - tests.test_pressure_concurrency
+      - tests.test_terminal_session
+    evidence: "The exactly-once qualification run was launched through a runtime-restart durable Agent Runtime terminal session. Every verification worker that constructed a default TerminalSessionManager recovered that same still-running durable job from the shared durable root, consuming one manager session before capacity assertions. tests.test_pressure_concurrency then hit configured maximum 6 active terminal sessions reached; tests.test_terminal_session recorded one failure and four errors from the same pre-existing recovered session. The retained durable record proves exit_code=1 and the final VERIFY total modules=31/62 classified_modules=62 tests=477 duration_s=78.413 profile=qualification requested_profile=qualification. CHECK-4 forbids rerunning broad canonical verification, so no second ./verify was dispatched."
+  task_artifact_validation:
+    validator_revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+    result: PASS
+    evidence: "Pinned Foundation validate_skill_library.py accepted the canonical TASK-0175 task artifact."
+  report_artifact_validation:
+    validator_revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+    result: PASS
+    evidence: "Pinned Foundation validate_skill_library.py accepted report-r1.yaml after its blocking-gap serialization was corrected to the protocol-v3 schema."
+
+live_effects:
+  system_settings_open: 0
+  service_management_mutation: 0
+  runtime_install_or_cutover: 0
+  runtime_restart: 0
+  runtime_configuration_mutation: 0
+  tunnel_client_mutation: 0
+  apple_signing_or_notary_credential_mutation: 0
+  apple_notarization_submission: 0
+  host_dependency_install: 0
+  tag_publication: 0
+  release_publication: 0
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "The approval-required controller exposes Open Background Activity Settings… and the production default resolves directly to SMAppService.openSystemSettingsLoginItems(); the deterministic test injects the navigation closure so qualification opens no live settings."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "Clicking the injected settings action increments only the handoff observation; it dispatches no recovery action, produces no completion, and changes no configuration. Returning still unapproved remains approvalRequired and commit is not invoked."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "The continuation regression proves the existing .resume path invokes --resume-cutover and preserves the existing doctor/readiness/commit/post-doctor gates; no second ServiceManagement or activation state machine was added."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "Full Swift regression passed 81/81 with zero failures. The candidate changes only FirstRunSetupController.swift, PresentationTests.swift, README.md and docs/INSTALL.md; ServiceManagementController and lifecycle/config/provenance/tunnel/doctor code are unchanged; no source file or dependency was added."
+  - criterion_id: AC-5
+    status: PASS
+    evidence: "README.md and docs/INSTALL.md now describe the native app-guided Background Activity settings action, human-owned approval, and bounded Continue After Approval flow."
+  - criterion_id: AC-6
+    status: BLOCKED
+    evidence: "RED/GREEN, final Swift suite, and git diff --check passed, but the exactly-once canonical ./verify run exited 1 because the durable Agent Runtime execution carrier contaminated capacity-state tests by being recovered as a pre-existing session. The task explicitly forbids a broad rerun, so canonical verification cannot be converted to PASS in this execution."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Causal RED failed on the missing injected handoff before production implementation; focused GREEN passed 1/1 afterward without opening live System Settings."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "Final full macOS Swift suite passed 81/81 with zero failures on immutable source bytes."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "git diff --check passed on the final source candidate before commit."
+  - check_id: CHECK-4
+    result: FAIL
+    evidence: "Canonical ./verify was dispatched exactly once on source candidate 15ea3a19cb21ae8b104009dd49ebaefd89b0d8eb and exited 1 after 31/62 modules and 477 tests because the durable Agent Runtime carrier was recovered into capacity-test managers. No rerun was performed."
+  - check_id: CHECK-5
+    result: PASS
+    evidence: "Both the canonical TASK-0175 task artifact and report-r1.yaml pass the pinned Foundation validator at revision 0083d1383bfc0326729e615a85844b7b2004950d."
+
+discovered_gaps:
+  - gap_id: "CANONICAL-VERIFY-DURABLE-CARRIER-CAPACITY-CONTAMINATION"
+    classification: BLOCKING
+    type: execution_surface
+    severity: material
+    description: "Running canonical verification as a runtime-restart durable Agent Runtime terminal job makes the verifier's own live durable job recoverable by default TerminalSessionManager instances inside capacity tests, reducing their effective clean-session envelope."
+    evidence: "Retained exactly-once verifier output shows RuntimeCapacityError at configured maximum 6 and terminal-session capacity failures while the verifier durable job was still running; source inspection confirms TerminalSessionManager recovers durable jobs at construction and counts recovered running sessions toward max_active_sessions."
+    impact: "AC-6 cannot be proven because canonical ./verify did not PASS and task authority forbids rerunning it in this execution."
+    blocks_current_task: true
+    action_taken: "Stopped broad verification after the single canonical run, recovered its durable exit/output evidence without rerunning it, preserved the immutable source candidate, and classified the execution as BLOCKED."
+    suggested_next_step: "Architect should authorize a continuation that requalifies the unchanged source candidate through a clean non-Runtime carrier or otherwise revises the exact-once verification authority; do not rerun under this task revision."
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: NOT_REQUIRED
+  evidence: "TASK-0175 defines no separate authoritative-verification mechanism. Executor qualification evidence is recorded above; the required canonical ./verify check failed exactly once and blocks task closure."
+
+deviations_from_task: []
+
+blockers:
+  - "Canonical ./verify did not PASS on the immutable candidate because the selected durable Agent Runtime execution carrier contaminated capacity-state tests. CHECK-4 permits only one canonical run, so this execution cannot rerun it on a clean non-Runtime carrier; Architect continuation or revised authority is required."
+
+publication:
+  candidate_published_before_report: false
+  report_publication_mode: "single non-force compare-and-swap publication from the authorized remote base to the report-only child, if report validation passes and remote base remains unchanged"
+  final_remote_reconciliation: "Not self-attested before publication; fresh remote/local evidence must be obtained after the report commit is published."
+
+working_tree_after:
+  clean: false
+  summary: "Report authorship is the only expected uncommitted change before report validation and report-only commit."
+
+pushed: false
+
+result: BLOCKED
