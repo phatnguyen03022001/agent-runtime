@@ -1,0 +1,243 @@
+protocol_version: 3
+
+task_id: TASK-0180
+task_revision: 1
+state: APPROVED
+title: "Immutable Approved Substrate and External Python Payload Qualification"
+
+origin:
+  type: architect
+  task_id: "TASK-0180"
+  gap_id: "ZERO-COST-IMMUTABLE-SUBSTRATE-PAYLOAD-UPDATES"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+
+architect_analysis_skills:
+  - architect
+  - design-review
+  - simplicity
+  - security-review
+  - verification
+
+execution_skills:
+  required:
+    - executor
+    - security-review
+    - verification
+  recommended:
+    - simplicity
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  preferred_transport: AGENT_RUNTIME
+  reason: "Proof-only local qualification with one disposable ad-hoc substrate and no product mutation."
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0179/review.yaml at 21b9816536161e4587a0a3a27ea5967cf1c6bd66"
+    role: "Canonical direction: ordinary zero-cost updates must stop replacing the approved app; qualify immutable executable/native substrate plus external first-party Python payload."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0179/report-r1.yaml at 95e4bcf5861649d4d8e5ea18929e19831a2896bc"
+    role: "Direct evidence that one approval makes an ad-hoc app, embedded helper, and bundled CPython executable, while a byte-distinct quarantined app replacement requires another approval."
+    precedence: 2
+  - source: "Current package_app.sh and packaging_python.sh"
+    role: "Current packaging already embeds self-contained CPython 3.13 and all third-party dependencies; this native/executable substrate can remain immutable between ordinary Runtime logic releases."
+    precedence: 3
+  - source: "Current agent_runtime/*.py package"
+    role: "First-party Runtime implementation is a bounded Python package suitable for a separate pure-Python release payload."
+    precedence: 4
+  - source: "Current requirements.lock"
+    role: "Native-bearing dependencies including cffi, cryptography, pydantic_core, and rpds-py make third-party/native dependency changes substrate changes, not ordinary payload changes."
+    precedence: 5
+  - source: "Foundation content-addressed/fail-closed design principles"
+    role: "Mutable release selection must be exact, bounded, content-addressed, and fail closed without creating another lifecycle or updater state machine."
+    precedence: 6
+
+structure_authority:
+  status: RESOLVED
+  source: "One immutable disposable app substrate + one immutable bootstrap + content-addressed external pure-Python release directories"
+  rationale: "The experiment isolates the only remaining fast zero-cost update boundary. App/helper/Python/native dependency bytes do not change between v1 and v2; only first-party Python payload bytes and one atomic release pointer change."
+
+objective: "Prove whether one user-approved ad-hoc executable/native substrate can execute multiple quarantined content-addressed first-party Python releases without another Gatekeeper approval. Build one disposable app containing an embedded helper, self-contained CPython 3.13, installed third-party/native dependencies, and an immutable bootstrap. After at most one operator approval, a disposable user LaunchAgent must run the helper; bundled Python must validate and import external quarantined payload v1. Then, without changing any app/substrate byte or requesting another approval, switch only the content-addressed release pointer to quarantined payload v2 and prove the same helper/Python loads v2. This task is qualification-only."
+
+scope:
+  required_changes:
+    - "Freshly prove clean canonical main at the exact TASK-0180 base, TASK-0179 BLOCKED review ancestry, and zero surviving product mutation."
+    - "Create exactly one disposable substrate app identity, one fresh LaunchAgent label, and one fresh disposable application-support root. Never use production Agent Runtime identifiers, paths, config, or lifecycle state."
+    - "The disposable substrate app must contain one long-running native helper, one immutable Python bootstrap script, one self-contained CPython 3.13 environment, and the current third-party dependencies needed to import agent_runtime.server. Do not embed the first-party agent_runtime package in the substrate."
+    - "Use existing packaging_python.sh/materialization behavior where practical. The fixture may copy read-only bytes from existing local packaging inputs, but must not mutate the installed production app or Runtime."
+    - "Ad-hoc sign nested native code, bundled Python/native libraries, and the containing app with stable explicit identifiers/designated requirements. TeamIdentifier must remain absent."
+    - "Apply quarantine to the disposable substrate app with the documented Foundation quarantineProperties API and attempt normal app launch. If the host requires manual approval, stop OPERATOR_INPUT_REQUIRED and request exactly one System Settings -> Privacy & Security -> Open Anyway/Open action for this exact disposable substrate app. No second substrate approval is authorized."
+    - "After approval, prove the substrate app runs and record its exact main PID/path/hash. The substrate app bytes must then remain immutable for the rest of TASK-0180."
+    - "Create payload v1 and payload v2 outside the app under one fresh disposable application-support root. Each payload consists only of regular non-executable first-party Python files copied from current agent_runtime/*.py plus one fixture-only pure-Python release marker. No symlink, executable bit, Mach-O, .so, .dylib, .bundle, copied interpreter, third-party package, shell script, or native extension is allowed in either payload."
+    - "Payload v1 and v2 must differ only in pure-Python payload bytes needed to prove generation change. Their third-party/native substrate contract remains identical."
+    - "For each payload, compute a deterministic canonical closure over relative path, file mode, and SHA-256. Name the release directory by its 64-hex closure identity and persist a small manifest containing the closure identity plus expected substrate contract facts. The release directory must be immutable after closure."
+    - "Apply quarantine using Foundation quarantineProperties to each external release root and its payload files. Do not remove quarantine to make the experiment pass."
+    - "The immutable bootstrap inside the approved app must read one exact 64-hex release pointer, resolve only the matching release directory beneath the disposable releases root, reject symlinks/unlisted/native/executable payload members, recompute the canonical closure, verify the manifest/substrate contract, disable bytecode writes, prepend only that release directory to sys.path, import external agent_runtime.server, and import the fixture release marker."
+    - "The bootstrap must prove that agent_runtime was imported from the external selected release rather than from the substrate app and must verify the expected 20-tool public surface before entering a bounded long-running state for observation."
+    - "Create one disposable traditional user LaunchAgent whose ProgramArguments point only to the immutable embedded helper. The helper may invoke only the immutable bundled Python/bootstrap and must obtain release selection through the external pointer; no app byte may encode v1 versus v2."
+    - "With pointer=v1, bootstrap the LaunchAgent and require exact-label state=running, helper PID/path/hash, bundled-Python child PID/path/hash, imported agent_runtime path beneath release v1, exact v1 release marker, exact v1 closure identity, and 20-tool surface witness."
+    - "Boot out v1 and require exact-label absence plus helper/Python termination. The substrate app and all substrate bytes must remain unchanged."
+    - "Atomically replace only the release pointer with the exact v2 closure identity. Do not modify the app, helper, bootstrap, Python environment, requirements/native dependencies, plist, or LaunchAgent label."
+    - "Bootstrap the same disposable LaunchAgent again with no operator approval. Require new helper/Python PIDs, the same immutable executable hashes, imported agent_runtime path beneath release v2, exact v2 release marker, exact v2 closure identity, and the same 20-tool surface witness."
+    - "Any Gatekeeper/manual-approval prompt after the one substrate approval, trusted-execution rejection, payload closure mismatch, fallback import from the app, native file in payload, or failure to load v2 returns BLOCKED."
+    - "Cleanup must terminate disposable app/helper/Python processes, boot out the disposable LaunchAgent, remove its plist, remove the application-support root and fixture app/run root, and prove all exact disposable process/service/filesystem identities absent. The host's remembered approval record may remain."
+    - "No product source/tests/docs/dependencies/package logic, canonical runtime.env, live Runtime, tunnel-client, production lifecycle state, Apple developer authority, tag, release, or repository topology may change."
+    - "Do not run canonical ./verify and do not build a real Agent Runtime product candidate."
+    - "Create report-r1.yaml only on terminal PASS/BLOCKED. While waiting for the single human approval, preserve the exact fixture and report OPERATOR_INPUT_REQUIRED instead of fabricating a terminal report."
+
+  allowed_existing_files_or_components:
+    - "macos/packaging_python.sh for read/reuse"
+    - "requirements.lock for read/reuse"
+    - "agent_runtime/*.py as read-only payload source"
+    - "build/ ignored disposable fixture root"
+    - "$HOME/Library/Application Support/<fresh TASK-0180 disposable root>"
+    - "$HOME/Library/LaunchAgents/<fresh TASK-0180 disposable plist>"
+    - ".agent/tasks/TASK-0180/report-r1.yaml"
+  expected_files_are_restrictive: true
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0180/report-r1.yaml"
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "All fixture/substrate/payload files are disposable and outside tracked repository state."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+effect_authority:
+  disposable_substrate_app_identity_max: 1
+  operator_manual_substrate_approval_max: 1
+  disposable_launchagent_bootstrap_v1_max: 1
+  disposable_launchagent_bootstrap_v2_max: 1
+  external_payload_generations_max: 2
+  release_pointer_updates_max: 1
+  product_source_mutation_max: 0
+  canonical_verify_max: 0
+  real_product_candidate_build_max: 0
+  production_lifecycle_mutation_max: 0
+  live_runtime_mutation_max: 0
+  runtime_config_mutation_max: 0
+  tunnel_client_mutation_max: 0
+  apple_developer_authority_mutation_max: 0
+  release_or_tag_publication_max: 0
+  host_dependency_install_max: 0
+
+invariants:
+  - "The substrate app/helper/bootstrap/Python/third-party/native dependency bytes are identical for v1 and v2 payload execution."
+  - "Ordinary payloads are pure first-party Python only."
+  - "Exactly one manual substrate approval is allowed; payload v2 must run with zero additional approval."
+  - "External payload selection is content-addressed and fail-closed."
+  - "Payload updates do not modify the app bundle."
+  - "No product mutation occurs in TASK-0180."
+  - "MAIN_ONLY topology remains unchanged."
+
+forbidden_changes:
+  - "Replacing or modifying the substrate app between payload v1 and v2."
+  - "Putting CPython, native extensions, third-party dependencies, helper binaries, shell scripts, or executable files into the external payload."
+  - "Using product Agent Runtime app or TeamIdentifier-signed production bytes as the zero-cost proof substrate."
+  - "Using SMAppService or a second operator approval."
+  - "Paid Apple distribution authority, custom trust authority, or fake TeamIdentifier."
+  - "Product implementation, tracked fixture code, canonical verify, product candidate build, branch, PR, force push, tag, or release."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: revised_contract_required
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "One approved immutable ad-hoc substrate is executable and remains byte-identical throughout qualification."
+    evidence_required: "At most one operator approval; exact app/helper/Python/bootstrap/native-substrate identities recorded; no substrate byte changes between v1 and v2 phases."
+
+  - id: AC-2
+    requirement: "Quarantined content-addressed pure-Python payload v1 executes through the approved substrate."
+    evidence_required: "LaunchAgent/helper/Python exact witnesses plus external agent_runtime import path under release v1, exact closure/marker, and 20-tool surface."
+
+  - id: AC-3
+    requirement: "Quarantined content-addressed pure-Python payload v2 executes with no additional approval and no substrate change."
+    evidence_required: "Only pointer changes from v1 closure to v2 closure; same helper/Python hashes, new PIDs, external import path under release v2, exact closure/marker, 20-tool surface, and zero new approval prompt."
+
+  - id: AC-4
+    requirement: "The payload boundary excludes native/executable drift and fails closed."
+    evidence_required: "Both payload inventories contain only permitted regular non-executable Python/manifest files; bootstrap verifies closure/substrate contract and imports no first-party package from the app."
+
+  - id: AC-5
+    requirement: "Qualification leaves no disposable execution/filesystem/service residue and no production consequence."
+    evidence_required: "Disposable PIDs/label/plist/app/application-support/run-root absent; product/test/doc/dependency/verify/build/production effect counts zero."
+
+  - id: AC-6
+    requirement: "Repository closure is report-only."
+    evidence_required: "report-r1 validates with pinned Foundation, report-only diff-check passes, publication is non-force after fresh remote CAS proof, and final main is clean/synced."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Build one quarantined immutable ad-hoc substrate with helper/bootstrap/self-contained CPython+dependencies, obtain at most one operator approval, and freeze substrate hashes."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Build/quarantine content-addressed pure-Python payloads v1/v2 and prove their bounded inventories/closures/substrate contract."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Run v1 through one disposable LaunchAgent, boot out, atomically switch only the release pointer, then run v2 through the same immutable substrate with no new approval."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Clean all disposable state, validate report-only closure, publish non-force after fresh remote proof, and reconcile clean main."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+
+report_requirements:
+  path: ".agent/tasks/TASK-0180/report-r1.yaml"
+  record:
+    - "exact base and TASK-0179 review/report ancestry"
+    - "substrate app/helper/bootstrap/Python/native dependency identities and one-approval evidence"
+    - "v1/v2 payload inventories, closure identities, quarantine facts, and substrate contract"
+    - "v1 helper/Python/import-path/release-marker/20-tool witnesses"
+    - "exact release-pointer transition and proof that substrate hashes remained unchanged"
+    - "v2 helper/Python/import-path/release-marker/20-tool witnesses and zero additional approval"
+    - "cleanup evidence and zero production/product effects"
+    - "result NEEDS_REVIEW on full PASS, otherwise BLOCKED"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
