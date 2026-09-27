@@ -1,0 +1,222 @@
+protocol_version: 3
+
+task_id: TASK-0174
+task_revision: 1
+state: APPROVED
+title: "Native First-Run Onboarding for Prebuilt Installation"
+
+origin:
+  type: architect_continuation
+  task_id: "TASK-0174"
+  gap_id: "NEWCOMER-FIRST-RUN-ONBOARDING"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+architect_analysis_skills:
+  - architect
+  - design-review
+  - simplicity
+  - security-review
+  - verification
+
+execution_skills:
+  required:
+    - executor
+    - security-review
+    - verification
+  recommended:
+    - simplicity
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  preferred_transport: AGENT_RUNTIME
+  reason: "This is source-only onboarding productization. It must not mutate the live Runtime, tunnel-client, Apple distribution authority, or host credentials during qualification."
+
+authority_sources:
+  - source: "Operator productization request at exact base 838cb89f84c0dae308d8900fc5f3fae1a0b8d66a"
+    role: "Durable newcomer-installation objective, security constraints, minimum acceptance predicates, and explicit separation from TASK-0173 Apple authority."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0171/review.yaml resolved at 838cb89f84c0dae308d8900fc5f3fae1a0b8d66a"
+    role: "Accepted checkout-independent prebuilt distribution/install source architecture, packaged Runtime Python/helpers, canonical runtime.env ownership, and transactional cutover semantics."
+    precedence: 2
+  - source: ".agent/tasks/TASK-0173/report-r1.yaml at 838cb89f84c0dae308d8900fc5f3fae1a0b8d66a"
+    role: "Current BLOCKED Apple distribution-authority evidence; onboarding source progress is explicitly independent of that human Apple boundary."
+    precedence: 3
+  - source: "macos/Sources/AgentRuntimeMenuBar, macos/runtime_config.py, macos/install_release.sh, agent_runtime/doctor.py, and existing package/cutover tests at 838cb89f84c0dae308d8900fc5f3fae1a0b8d66a"
+    role: "Existing native app, canonical configuration helper, prebuilt installer, lifecycle, and health/readiness implementation to reuse rather than duplicate."
+    precedence: 4
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing Agent Runtime menu-bar app plus canonical runtime_config.py/install_release.sh/candidate_cutover.py/doctor surfaces."
+  rationale: "The smallest sufficient design is one bounded first-run native setup surface inside the existing app. No companion app, second configuration system, installer framework, helper service, or parallel lifecycle is required."
+
+objective: "Make the accepted prebuilt-consumer path usable by a newcomer without Terminal configuration: when a fresh prebuilt launch lacks usable canonical Runtime configuration, present one native first-run setup flow inside Agent Runtime.app that securely collects the required Runtime values, selects an existing workspace through the macOS folder picker, validates before persistence, writes only the existing canonical mode-0600 runtime.env through the existing configuration authority, enters the existing prebuilt/candidate lifecycle, and declares success only from Runtime doctor plus readiness evidence. Existing valid configured installs must continue directly to the current control panel."
+
+scope:
+  required_changes:
+    - "Implement the first-run setup as a native surface owned by the existing AgentRuntimeMenuBar app. On a fresh prebuilt launch, present it automatically rather than requiring the newcomer to discover the menu-bar control first. Do not create a separate setup application or installer product."
+    - "Trigger onboarding only when the prebuilt consumer path cannot use a valid canonical Runtime configuration. A valid existing canonical runtime.env remains authoritative and must not be rewritten, migrated, or re-prompted merely because the new UI exists."
+    - "For a fresh configuration, collect CONTROL_PLANE_API_KEY through a secure non-echoing native secret input. CONTROL_PLANE_TUNNEL_ID must receive equivalent no-log/no-report treatment consistent with the existing tunnel security boundary. Do not place either value in command-line arguments, repository files, UserDefaults, task evidence, or logs."
+    - "Select AGENT_RUNTIME_WORKSPACE_ROOT with an NSOpenPanel-style directory-only macOS selection flow. The user must not type the workspace path in the normal first-run path. Cancellation performs no configuration or lifecycle mutation."
+    - "Require the selected workspace to resolve through the existing canonical validation rules to an explicit existing absolute directory. Reject invalid/unsafe selections before persistence or cutover and surface actionable user-facing feedback."
+    - "Request AGENT_RUNTIME_GIT_NAME and AGENT_RUNTIME_GIT_EMAIL only when the canonical configuration being created or validated requires that pair. Preserve existing validation semantics for pair completeness and malformed values."
+    - "Reuse or minimally extend macos/runtime_config.py as the single canonical parser/validator/private writer for Runtime configuration. Native UI may orchestrate it, but must not implement a second independent runtime.env schema, validator, writer, or alternate configuration store."
+    - "Validate all required values before the canonical file becomes visible. Preserve atomic/private-write behavior, non-symlink regular-file checks, canonical path ~/Library/Application Support/Agent Runtime/runtime.env, and final mode 0600."
+    - "On validation failure, persist no partial canonical configuration, begin no candidate cutover, and start no Runtime. Surface a bounded reason that identifies the invalid field or prerequisite without reproducing secret values."
+    - "Reuse the package-embedded prebuilt installer/preflight/provenance/candidate-cutover path for installation and activation, including the accepted external Agent Runtime.candidate.json handoff beside the release app. If that handoff is absent or unsafe, fail closed with an instruction to reopen the complete release bundle; do not synthesize, relocate, or replace provenance. Do not reimplement signing, provenance, candidate copying, ServiceManagement, transaction, resume, rollback, recovery, or commit semantics in Swift."
+    - "The native flow may supply validated first-run values to existing packaged helpers through a bounded non-echoing process boundary, but secret material must remain absent from argv, stdout/stderr, unified logging, crash-oriented diagnostic strings authored by this flow, and repository evidence."
+    - "Preserve the accepted pending-cutover safety boundary. Do not claim setup success while the transaction is unresolved. Any resume/rollback/recovery action must call the existing lifecycle path and must reconcile unknown effects before retry."
+    - "Make the user-facing completion decision simple: after configuration/install/start succeeds, require package-owned Runtime doctor to be healthy and Runtime readiness to be ready before enabling/finalizing the existing cutover commit and before showing the terminal success state."
+    - "If Background Activity approval or another existing macOS human prerequisite blocks progress, show one actionable state and allow bounded continuation through the existing resume path after the user completes that platform action. Do not automate around macOS approval."
+    - "Keep the external official tunnel-client prerequisite and accepted tunnel identity checks unchanged. Missing/invalid tunnel prerequisites fail closed with actionable setup feedback; this task does not install or update tunnel-client."
+    - "Update the prebuilt-user documentation so the primary newcomer path is open Agent Runtime.app -> native setup -> workspace selection -> activation/success. Remove shell exports, manual runtime.env editing, and typed workspace paths from the required fresh-user path while preserving a clearly separate maintainer/source path."
+    - "Qualify this source change without a live host install, real Runtime credentials, Apple signing/notary credentials, notarization, release publication, or mutation of the currently installed Runtime. Use fixtures/temp homes/sentinel secrets for end-to-end source tests."
+    - "TASK-0173 may remain BLOCKED. Do not read, provision, enumerate, or change Developer ID/notary credentials and do not make this source candidate depend on completing Apple account bureaucracy."
+
+  allowed_existing_files_or_components:
+    - "macos/Sources/AgentRuntimeMenuBar/**"
+    - "macos/Sources/AgentRuntimeCore/** only if a narrow reusable non-UI boundary is materially required"
+    - "macos/runtime_config.py"
+    - "macos/install_release.sh"
+    - "macos/install_preflight.py and macos/candidate_cutover.py only for the smallest compatibility change proven necessary; existing lifecycle semantics remain authoritative"
+    - "macos/Tests/AgentRuntimeMenuBarTests/** and macos/Tests/AgentRuntimeCoreTests/**"
+    - "tests/test_candidate_cutover.py and directly affected existing installer/config/doctor tests"
+    - "README.md, docs/INSTALL.md, docs/OPERATIONS.md, docs/RECOVERY.md"
+    - ".agent/tasks/TASK-0174/**"
+
+structure_policy:
+  expected_new_files: []
+  unlisted_new_files:
+    allowed: true
+    max: 1
+    within:
+      - "macos/Sources/AgentRuntimeMenuBar"
+    purpose: "One focused first-run setup view/controller file is permitted if separating it from the existing control panel materially improves cohesion. No new directory or subsystem is authorized."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+effect_authority:
+  live_runtime_install_or_cutover_max: 0
+  live_runtime_restart_max: 0
+  live_runtime_configuration_mutation_max: 0
+  tunnel_client_mutation_max: 0
+  apple_signing_or_notary_credential_mutation_max: 0
+  apple_notarization_submission_max: 0
+  release_or_tag_publication_max: 0
+  host_dependency_install_max: 0
+
+invariants:
+  - "Canonical Runtime configuration remains ~/Library/Application Support/Agent Runtime/runtime.env and remains operator-owned mode 0600."
+  - "No second configuration store, credential daemon, setup daemon, privileged helper, installer framework, package manager, updater, or parallel lifecycle is introduced."
+  - "API key and tunnel identity values are never printed, logged, committed, included in reports, or passed as command-line arguments."
+  - "The accepted candidate provenance, external handoff, transactional cutover, resume/rollback/recovery/commit, ServiceManagement, and tunnel security boundaries remain authoritative."
+  - "A valid existing configured install continues to the current menu-bar control panel without mandatory onboarding or destructive config rewrite."
+  - "Fresh prebuilt use requires no agent-runtime checkout, Git clone, host CPython 3.13, Xcode/Swift toolchain, local Developer ID identity, or notarytool credentials."
+  - "The app may use only the Runtime Python/helpers already embedded by the accepted prebuilt package architecture."
+  - "The official tunnel-client remains an external prerequisite; this task neither vendors nor upgrades it."
+  - "Runtime version, ToolContract Kernel, MCP public surface, telemetry semantics, and same-UID threat model do not change."
+  - "TASK-0173 Apple distribution authority remains independent and may stay BLOCKED."
+  - "MAIN_ONLY topology remains unchanged."
+
+forbidden_changes:
+  - "Manual runtime.env editing, shell export, repository checkout, or typed workspace path as a required fresh-user onboarding step."
+  - "Storing Runtime credentials in UserDefaults, plist preferences, a second env file, Keychain, repository state, logs, reports, or a new credential service."
+  - "Passing CONTROL_PLANE_API_KEY or CONTROL_PLANE_TUNNEL_ID in process argv or embedding either value in user-facing error text."
+  - "Silently replacing an existing canonical runtime.env that fails validation or has unsafe ownership/type/mode."
+  - "Reimplementing candidate cutover, ServiceManagement, provenance, signing, tunnel enrollment, doctor, or readiness logic in a parallel Swift lifecycle."
+  - "Adding a companion setup app, installer package/framework, privileged helper, launch daemon, updater, package manager, or background credential process."
+  - "Installing host dependencies or requiring CPython/Xcode/Swift/signing/notary tooling on the consumer Mac."
+  - "Real Developer ID provisioning, Keychain identity/profile enumeration, notarytool credential creation, notarization, stapling, tag/release publication, or TASK-0172 execution."
+  - "Any live Runtime/tunnel/config mutation during source qualification."
+  - "Any branch, PR, force push, amend, squash, tag, or unrelated cleanup."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: revised_contract_required
+  dependency_change: forbidden
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "A fresh prebuilt user can complete required Runtime configuration from the existing macOS app without Terminal configuration."
+    evidence_required: "Native UI/source tests prove the first-run path collects the required fresh configuration, requires no manual runtime.env edit, shell export, checkout, or typed workspace path, and a valid existing configured install bypasses onboarding."
+
+  - id: AC-2
+    requirement: "Runtime secrets remain non-echoing and non-leaking while canonical persistence semantics stay unchanged."
+    evidence_required: "Tests with sentinel API key/tunnel values prove secure native entry and no occurrence in argv, stdout/stderr, logs/diagnostic messages, reports, preferences, repository files, or non-canonical temp artifacts; the only durable configured destination is canonical runtime.env mode 0600 through the existing helper authority."
+
+  - id: AC-3
+    requirement: "Workspace selection is explicit, native, and fail-closed."
+    evidence_required: "UI tests or deterministic presentation/controller tests prove directory-only macOS selection, cancel-with-zero-effect behavior, and rejection of nonexistent/non-directory/invalid workspace input before persistence or lifecycle mutation."
+
+  - id: AC-4
+    requirement: "Git identity is requested only when required and existing configuration remains compatible."
+    evidence_required: "Tests cover fresh required name/email pair validation, malformed/partial rejection, and an already-valid canonical configuration path that is neither re-prompted nor rewritten."
+  - id: AC-5
+    requirement: "Invalid configuration cannot create partial product state."
+    evidence_required: "End-to-end fixture tests prove validation precedes canonical visibility and cutover; invalid/missing values leave no canonical partial file or transaction and return actionable redacted feedback."
+
+  - id: AC-6
+    requirement: "Installation and activation reuse the accepted Runtime lifecycle rather than duplicating it."
+    evidence_required: "Source/fixture evidence proves onboarding dispatches the existing package-embedded preflight/config/provenance/candidate-cutover/resume/commit path; transaction ambiguity remains fail-closed and no parallel lifecycle implementation appears."
+
+  - id: AC-7
+    requirement: "The final user success state is backed by actual Runtime health."
+    evidence_required: "Deterministic integration tests prove setup cannot report success or finalize the pending cutover until package-owned Runtime doctor is healthy and readiness is ready; failure or Background Activity approval produces a non-success actionable state and preserves existing resume/rollback/recovery semantics."
+
+  - id: AC-8
+    requirement: "The prebuilt consumer path remains checkout- and toolchain-independent."
+    evidence_required: "Isolated prebuilt fixtures prove the flow requires no agent-runtime repository, Git checkout, host CPython 3.13, Xcode/Swift, local signing identity, notary profile, or Apple credential; packaged Runtime Python/helpers are sufficient apart from the existing external tunnel-client/macOS prerequisites."
+
+  - id: AC-9
+    requirement: "Security, provenance, and public Runtime contracts remain unchanged."
+    evidence_required: "Directly affected regressions prove canonical runtime.env mode/ownership, tunnel identity validation, candidate provenance/handoff, transaction semantics, Runtime/Kernel/capability contracts, and existing configured-install behavior remain green."
+
+  - id: AC-10
+    requirement: "One coherent onboarding source candidate is fully qualified with no live consequence."
+    evidence_required: "Relevant native Swift tests plus installer/config/cutover/doctor regressions PASS, git diff --check PASS, canonical ./verify PASS once on the immutable final candidate, and report evidence records zero live Runtime/config/tunnel mutation, zero Apple credential/notary effects, and zero release/tag effects."
+
+verification:
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
