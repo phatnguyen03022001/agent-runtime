@@ -3,6 +3,7 @@ from __future__ import annotations
 
 """Validate and initialize the per-user Agent Runtime configuration."""
 
+import json
 import os
 import re
 import stat
@@ -302,6 +303,33 @@ def _prebuilt_payload(values: dict[str, str]) -> bytes:
     return "".join(f"{key}={values[key]}\n" for key in ordered if key in values).encode("utf-8")
 
 
+def prebuilt_values_from_mapping(values: dict[str, object]) -> dict[str, str]:
+    allowed = set(REQUIRED) | set(GIT_IDENTITY) | OPTIONAL
+    if any(key not in allowed for key in values):
+        fail("unsupported configuration field")
+    if any(not isinstance(value, str) for value in values.values()):
+        fail("configuration values must be strings")
+
+    normalized = {key: str(value) for key, value in values.items()}
+    workspace_value = normalized.get("AGENT_RUNTIME_WORKSPACE_ROOT", "")
+    workspace = _normalized_prebuilt_workspace(Path(workspace_value))
+    normalized["AGENT_RUNTIME_WORKSPACE_ROOT"] = str(workspace)
+    _validate_values(normalized, workspace)
+    _validated_identity(normalized, required=True)
+    return normalized
+
+
+def inspect_prebuilt_existing(canonical: Path) -> dict[str, object]:
+    _, _, values = _read(canonical, require_mode=True)
+    _validate_values(values)
+    _validated_identity(values, required=True)
+    workspace = _normalized_prebuilt_workspace(Path(values["AGENT_RUNTIME_WORKSPACE_ROOT"]))
+    return {
+        "git_identity_ready": True,
+        "workspace_root": str(workspace),
+    }
+
+
 def validate_prebuilt_configuration(canonical: Path, workspace_root: Path) -> bytes:
     workspace = _normalized_prebuilt_workspace(workspace_root)
     raw, _, values = _read(canonical, require_mode=True)
@@ -313,19 +341,14 @@ def validate_prebuilt_configuration(canonical: Path, workspace_root: Path) -> by
     return raw
 
 
-def ensure_prebuilt(
-    canonical: Path,
-    workspace_root: Path,
-    *,
-    environ: dict[str, str] | None = None,
-) -> None:
-    workspace = _normalized_prebuilt_workspace(workspace_root)
+def ensure_prebuilt_values(canonical: Path, values: dict[str, object]) -> None:
+    normalized = prebuilt_values_from_mapping(values)
+    workspace = Path(normalized["AGENT_RUNTIME_WORKSPACE_ROOT"])
     if canonical.exists() or canonical.is_symlink():
         validate_prebuilt_configuration(canonical, workspace)
         return
 
-    values = prebuilt_values(workspace, environ=environ)
-    raw = _prebuilt_payload(values)
+    raw = _prebuilt_payload(normalized)
     canonical.parent.mkdir(parents=True, exist_ok=True)
     private = _write_private(canonical, raw)
     try:
@@ -342,8 +365,37 @@ def ensure_prebuilt(
             pass
 
 
+def ensure_prebuilt(
+    canonical: Path,
+    workspace_root: Path,
+    *,
+    environ: dict[str, str] | None = None,
+) -> None:
+    workspace = _normalized_prebuilt_workspace(workspace_root)
+    if canonical.exists() or canonical.is_symlink():
+        validate_prebuilt_configuration(canonical, workspace)
+        return
+
+    values = prebuilt_values(workspace, environ=environ)
+    ensure_prebuilt_values(canonical, values)
+
+
 if __name__ == "__main__":
-    if len(sys.argv) == 4 and sys.argv[1] == "--prebuilt":
+    if len(sys.argv) == 3 and sys.argv[1] == "--prebuilt-stdin":
+        payload = sys.stdin.buffer.read(65537)
+        if len(payload) > 65536:
+            fail("native configuration input is too large")
+        try:
+            decoded = json.loads(payload.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError):
+            fail("native configuration input is malformed")
+        if not isinstance(decoded, dict) or not all(isinstance(key, str) for key in decoded):
+            fail("native configuration input must be an object")
+        ensure_prebuilt_values(Path(sys.argv[2]), decoded)
+    elif len(sys.argv) == 3 and sys.argv[1] == "--inspect-prebuilt-existing":
+        inspected = inspect_prebuilt_existing(Path(sys.argv[2]))
+        sys.stdout.write(json.dumps(inspected, separators=(",", ":"), sort_keys=True) + "\n")
+    elif len(sys.argv) == 4 and sys.argv[1] == "--prebuilt":
         ensure_prebuilt(Path(sys.argv[2]), Path(sys.argv[3]))
     elif len(sys.argv) == 4:
         ensure(
@@ -354,6 +406,8 @@ if __name__ == "__main__":
         )
     else:
         fail(
-            "usage: runtime_config.py SOURCE_ENV CANONICAL_ENV WORKSPACE_ROOT "
-            "or runtime_config.py --prebuilt CANONICAL_ENV WORKSPACE_ROOT"
+            "usage: runtime_config.py SOURCE_ENV CANONICAL_ENV WORKSPACE_ROOT, "
+            "runtime_config.py --prebuilt CANONICAL_ENV WORKSPACE_ROOT, "
+            "runtime_config.py --prebuilt-stdin CANONICAL_ENV, or "
+            "runtime_config.py --inspect-prebuilt-existing CANONICAL_ENV"
         )

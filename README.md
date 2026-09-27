@@ -19,33 +19,19 @@ ServiceManagement may report `enabled`, `requires-approval`, `not-registered`, o
 
 ## Installation paths
 
-### Prebuilt release — provisioned operators
+### Prebuilt release — newcomer path
 
-A qualified release bundle is checkout-independent. It contains only the signed `Agent Runtime.app` plus its external `Agent Runtime.candidate.json` handoff. The installer is sealed inside the app at `Contents/Resources/runtime/macos/install_release.sh` and uses the app's packaged Python/runtime helpers.
+A qualified release bundle is checkout-independent. It contains the signed `Agent Runtime.app` plus its external `Agent Runtime.candidate.json` handoff. Keep those two items together and open `Agent Runtime.app`.
 
-Target-machine prerequisites are macOS arm64, the official OpenAI `tunnel-client`, ordinary macOS lifecycle tools, an explicit existing absolute workspace root, and provisioned Runtime values. No agent-runtime Git clone, CPython 3.13, Swift/Xcode, or local signing identity is required.
+On a fresh machine the existing app opens native setup automatically. Enter the provisioned Control Plane API key and tunnel ID in secure fields, provide the Runtime Git name/email pair when requested, and choose the workspace with the macOS folder picker. The normal newcomer path does **not** require Terminal, shell exports, manual `runtime.env` editing, or typing a workspace path.
 
-For a fresh install, provision the required values in the installer environment without printing them:
+The app delegates validation, canonical mode-`0600` configuration publication, release preflight/provenance, candidate cutover, resume/recovery, doctor, readiness, and commit to the existing package-owned helpers. It does not reimplement lifecycle semantics in Swift. A recognized pending cutover may be doctor `degraded` before commit only because of `CUTOVER_TRANSACTION_PRESENT`; any additional doctor warning or failure blocks commit. Setup reports success only after the existing commit resolves the transaction, readiness is `ready`, and package-owned doctor is `healthy`.
 
-```bash
-export CONTROL_PLANE_API_KEY="<provisioned>"
-export CONTROL_PLANE_TUNNEL_ID="<provisioned>"
-export AGENT_RUNTIME_GIT_NAME="<runtime-git-name>"
-export AGENT_RUNTIME_GIT_EMAIL="<runtime-git-email>"
+If macOS requires Background Activity approval, setup stops at that human boundary and offers bounded continuation after approval. The official OpenAI `tunnel-client` remains an external prerequisite and is neither installed nor upgraded by setup.
 
-RELEASE_INSTALLER="./Agent Runtime.app/Contents/Resources/runtime/macos/install_release.sh"
-"$RELEASE_INSTALLER" --workspace-root /absolute/existing/workspace
-```
+An already-valid installed canonical configuration remains authoritative and goes directly to the current control panel without being rewritten or re-prompted. No agent-runtime Git clone, CPython 3.13, Swift/Xcode, local signing identity, or notary credentials are required on the consumer Mac.
 
-The installer validates the release candidate against its external handoff and Gatekeeper, initializes or validates canonical mode-`0600` `runtime.env`, and enters the existing transactional cutover. Installation remains pending until an explicit downstream decision:
-
-```bash
-"$RELEASE_INSTALLER" --commit-cutover
-# or
-"$RELEASE_INSTALLER" --rollback-cutover
-```
-
-Background Activity approval, when required by macOS, remains a human action. The repository contains the source architecture for this lane; that does **not** claim that a public notarized release has been qualified or published. Distribution qualification is a separate release-authority step.
+The repository contains the source architecture for this lane; that does **not** claim that a public notarized release has been qualified or published. Distribution qualification remains a separate release-authority step.
 
 ### Build from source — maintainers
 

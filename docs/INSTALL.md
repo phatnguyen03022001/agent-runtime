@@ -36,63 +36,51 @@ The target does **not** need an agent-runtime Git clone, Git repository identity
 OpenAI Secure MCP Tunnel guidance and `tunnel-client` acquisition are:
 https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
 
-### Provision configuration
+### First-run native setup
 
-For first install, provide the required values to the installer environment. Keep the actual values out of shell history, logs, tickets, and repository files.
+Keep `Agent Runtime.app` beside `Agent Runtime.candidate.json` and open the app. A fresh prebuilt launch with no usable canonical configuration presents setup automatically.
 
-```bash
-export CONTROL_PLANE_API_KEY="<provisioned>"
-export CONTROL_PLANE_TUNNEL_ID="<provisioned>"
-export AGENT_RUNTIME_GIT_NAME="<runtime-git-name>"
-export AGENT_RUNTIME_GIT_EMAIL="<runtime-git-email>"
-```
+1. Enter the provisioned `CONTROL_PLANE_API_KEY` in the secure API-key field.
+2. Enter the provisioned `CONTROL_PLANE_TUNNEL_ID` in the secure tunnel field.
+3. Provide the Runtime Git name/email pair when setup requires it.
+4. Choose an existing workspace with the macOS directory picker. The normal path does not accept a typed workspace path.
+5. Continue setup. If macOS requests Background Activity approval, complete that platform action and use the setup continuation action.
 
-Optional bounded Runtime settings may also be provided with their existing names. The installer writes first-install configuration atomically to:
+Secrets cross from the native UI to the packaged configuration helper only through bounded stdin. They are not placed in argv, shell exports, UserDefaults, logs, diagnostics, or repository evidence. The canonical destination remains:
 
 ```text
 ~/Library/Application Support/Agent Runtime/runtime.env
 ```
 
-The file is mode `0600`. If a canonical file already exists, it remains authoritative: the installer validates it and the explicit workspace instead of overwriting it from process environment values.
+The existing `runtime_config.py` authority validates all values before publication and creates the canonical file privately and atomically at mode `0600`. Invalid input creates no partial canonical file and starts no cutover. An existing canonical file is inspected and preserved; setup never silently repairs or overwrites an invalid/unsafe existing file.
 
-### Install the extracted release
+The native flow then delegates to the packaged `install_release.sh`, provenance, and `candidate_cutover.py` implementation. The external candidate handoff is mandatory and must remain beside the app. Missing or unsafe handoff state fails closed with guidance to reopen the complete release bundle.
 
-From the extracted bundle directory:
+Before commit, setup requires:
+
+- Runtime readiness `ready`;
+- zero doctor failures; and
+- exactly one doctor warning: `cutover_identity/CUTOVER_TRANSACTION_PRESENT` for the recognized `PENDING` / `APP_SWAPPED` transaction.
+
+The package-owned doctor therefore remains `degraded` at that boundary solely because the transaction still exists. Any additional warning or failure blocks commit. Only then may setup invoke the existing cutover commit. Terminal success additionally requires the transaction to be absent, readiness to remain `ready`, and package-owned doctor overall status to be `healthy`.
+
+A recognized approval, partial, or otherwise non-success state stays actionable through the existing resume/rollback/recovery paths. Setup does not bypass macOS approval and does not install or update the external `tunnel-client`.
+
+An already-valid installed configuration with no pending cutover bypasses onboarding and opens the current control panel directly.
+
+### Packaged lifecycle CLI — maintainers and recovery
+
+The sealed installer remains available as the low-level package/recovery interface; it is **not** a required fresh-user step:
 
 ```bash
 RELEASE_INSTALLER="./Agent Runtime.app/Contents/Resources/runtime/macos/install_release.sh"
-"$RELEASE_INSTALLER" --workspace-root /absolute/existing/workspace
-```
-
-The prebuilt path performs these boundaries in order:
-
-1. require macOS arm64, the exact release bundle shape, ordinary lifecycle tools, the official tunnel client, and the accepted tunnel identity;
-2. validate the app against the external candidate handoff and Gatekeeper;
-3. validate or atomically initialize canonical mode-`0600` `runtime.env` without printing secrets;
-4. validate the candidate again with package-owned provenance code;
-5. enter the existing `candidate_cutover.py` transaction using the app's embedded Python.
-
-The installer never builds or re-signs the app. Successful installation remains pending; it never commits automatically.
-
-If macOS requires Background Activity approval, complete that human/platform action and then use the existing resume/recovery command from the same installer:
-
-```bash
 "$RELEASE_INSTALLER" --resume-cutover
-```
-
-After downstream acceptance, explicitly choose:
-
-```bash
 "$RELEASE_INSTALLER" --commit-cutover
-# or
 "$RELEASE_INSTALLER" --rollback-cutover
-```
-
-For a partial transaction, use:
-
-```bash
 "$RELEASE_INSTALLER" --recover-partial-cutover
 ```
+
+These commands preserve the same transaction authority used by native setup. Do not delete or synthesize cutover metadata to force progress.
 
 ## Build from source
 

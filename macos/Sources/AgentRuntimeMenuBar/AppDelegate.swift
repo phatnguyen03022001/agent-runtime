@@ -48,6 +48,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var runtimeConfiguration: RuntimeConfiguration?
     private var configurationError: String?
     private var instanceLock: MenuBarInstanceLock?
+    private var firstRunOrchestrator: FirstRunSetupOrchestrator?
+    private var firstRunWindowController: NSWindowController?
     private var offlineAudioPolicy = OfflineAudioPolicy()
     private var notificationSound: NSSound?
     private let auditReader = ProtectionAuditReader()
@@ -62,10 +64,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         instanceLock = lock
         NSApp.setActivationPolicy(.accessory)
-        configureRuntime()
         configureStatusItem()
         configurePopover()
-        refreshStatus()
+        configureFirstRunOrRuntime()
         timer = Timer.scheduledTimer(
             timeInterval: 2.0,
             target: self,
@@ -85,6 +86,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func configureRuntime() {
+        runtimeConfiguration = nil
+        controller = nil
+        configurationError = nil
         do {
             let configuration = try Self.installedRuntimeConfiguration()
             let system = DarwinProcessSystem()
@@ -167,6 +171,73 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.behavior = .transient
         popover.animates = false
         popover.contentViewController = controlPanel
+    }
+
+    private func configureFirstRunOrRuntime() {
+        let orchestrator = FirstRunSetupOrchestrator(paths: .production())
+        firstRunOrchestrator = orchestrator
+        let configuration = orchestrator.inspectConfiguration()
+        let activationRequired: Bool
+        if case .valid = configuration {
+            activationRequired = orchestrator.requiresOnboardingForValidConfiguration()
+        } else {
+            activationRequired = false
+        }
+
+        switch FirstRunLaunchPolicy.decide(
+            configuration: configuration,
+            activationRequired: activationRequired
+        ) {
+        case .controlPanel:
+            configureRuntime()
+            refreshStatus()
+        case .showFresh:
+            configurationError = "First-run setup is required."
+            refreshStatus()
+            showFirstRunSetup(mode: .fresh)
+        case .showConfigured(let workspace):
+            configurationError = "Runtime activation is not complete."
+            refreshStatus()
+            showFirstRunSetup(mode: .configured(workspace))
+        case .showBlocked(let message):
+            configurationError = message
+            refreshStatus()
+            showFirstRunSetup(mode: .blocked(message))
+        }
+    }
+
+    private func showFirstRunSetup(mode: FirstRunSetupMode) {
+        guard let orchestrator = firstRunOrchestrator else { return }
+        let controller = FirstRunSetupController(
+            mode: mode,
+            begin: { input in orchestrator.begin(input) },
+            activateConfigured: { workspace in orchestrator.continueConfigured(workspace: workspace) },
+            performAction: { action in orchestrator.perform(action) },
+            completed: { [weak self] in self?.firstRunCompleted() }
+        )
+        let window = NSWindow(contentViewController: controller)
+        window.title = "Agent Runtime Setup"
+        window.styleMask = [.titled, .closable]
+        window.isReleasedWhenClosed = false
+        window.center()
+        let windowController = NSWindowController(window: window)
+        firstRunWindowController = windowController
+        windowController.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func firstRunCompleted() {
+        guard let orchestrator = firstRunOrchestrator else { return }
+        if Bundle.main.bundleURL.standardizedFileURL.path
+            == orchestrator.paths.installedApp.standardizedFileURL.path {
+            firstRunWindowController?.close()
+            firstRunWindowController = nil
+            configureRuntime()
+            refreshStatus()
+            return
+        }
+        configurationError = "Setup complete. The installed Agent Runtime is healthy."
+        refreshStatus()
     }
 
     @objc private func timerFired() {

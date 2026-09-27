@@ -37,9 +37,9 @@ Each material non-OK doctor reason code has exactly one action class.
 
 A recognized cutover may be `AWAITING_APPROVAL`, `PENDING`, or `PARTIAL`.
 
-- **AWAITING_APPROVAL**: HUMAN_ACTION_REQUIRED. Resolve the macOS approval boundary, then use the documented resume path.
-- **PENDING**: HUMAN_ACTION_REQUIRED. Downstream acceptance must decide commit or rollback.
-- **PARTIAL**: run the bounded partial recovery command only when the transaction metadata is recognized:
+- **AWAITING_APPROVAL**: HUMAN_ACTION_REQUIRED. Resolve the macOS approval boundary. Native first-run setup then continues through the existing resume path; the CLI remains available for maintainer/recovery use.
+- **PENDING**: native first-run setup commits only when readiness is `ready` and package-owned doctor has no failure and no warning except the recognized `CUTOVER_TRANSACTION_PRESENT` warning for `PENDING/APP_SWAPPED`. CLI recovery/maintainer use still requires an explicit commit-or-rollback decision.
+- **PARTIAL**: native setup surfaces the existing bounded recovery action. The equivalent CLI command is:
 
   ```bash
   ./install.sh --recover-partial-cutover

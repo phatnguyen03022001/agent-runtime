@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import subprocess
+import sys
 import stat
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 from unittest import mock
 
@@ -379,6 +383,105 @@ class RuntimeConfigTests(unittest.TestCase):
             }
             with self.assertRaisesRegex(SystemExit, "absolute existing directory"):
                 runtime_config.ensure_prebuilt(canonical, missing_workspace, environ=complete)
+
+
+    def test_native_stdin_bootstrap_is_private_atomic_and_non_echoing(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            workspace = temp / "workspace"
+            workspace.mkdir()
+            canonical = temp / "config" / "runtime.env"
+            api_secret = "NATIVE_SENTINEL_" + uuid.uuid4().hex
+            tunnel_secret = "NATIVE_SENTINEL_" + uuid.uuid4().hex
+            payload = {
+                "CONTROL_PLANE_API_KEY": api_secret,
+                "CONTROL_PLANE_TUNNEL_ID": tunnel_secret,
+                "AGENT_RUNTIME_WORKSPACE_ROOT": str(workspace),
+                "AGENT_RUNTIME_GIT_NAME": "Native Operator",
+                "AGENT_RUNTIME_GIT_EMAIL": "native@example.invalid",
+            }
+
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "macos" / "runtime_config.py"), "--prebuilt-stdin", str(canonical)],
+                input=json.dumps(payload),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn(api_secret, result.stdout + result.stderr)
+            self.assertNotIn(tunnel_secret, result.stdout + result.stderr)
+            self.assertEqual(stat.S_IMODE(canonical.stat().st_mode), 0o600)
+            self.assertIn(f"AGENT_RUNTIME_WORKSPACE_ROOT={workspace.resolve()}\n", canonical.read_text())
+            self.assertIn(f"CONTROL_PLANE_API_KEY={api_secret}\n", canonical.read_text())
+            self.assertEqual([path.name for path in canonical.parent.iterdir()], ["runtime.env"])
+
+            inspected = subprocess.run(
+                [sys.executable, str(ROOT / "macos" / "runtime_config.py"), "--inspect-prebuilt-existing", str(canonical)],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(inspected.returncode, 0, inspected.stderr)
+            self.assertNotIn(api_secret, inspected.stdout + inspected.stderr)
+            self.assertNotIn(tunnel_secret, inspected.stdout + inspected.stderr)
+            self.assertEqual(
+                json.loads(inspected.stdout),
+                {"git_identity_ready": True, "workspace_root": str(workspace.resolve())},
+            )
+
+    def test_native_stdin_invalid_input_leaves_no_canonical_or_secret_output(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            workspace = temp / "workspace"
+            workspace.mkdir()
+            canonical = temp / "config" / "runtime.env"
+            secret = "INVALID_NATIVE_SENTINEL_" + uuid.uuid4().hex
+            payload = {
+                "CONTROL_PLANE_API_KEY": secret,
+                "CONTROL_PLANE_TUNNEL_ID": "fixture-tunnel",
+                "AGENT_RUNTIME_WORKSPACE_ROOT": str(workspace),
+                "AGENT_RUNTIME_GIT_NAME": "Missing Email",
+            }
+
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "macos" / "runtime_config.py"), "--prebuilt-stdin", str(canonical)],
+                input=json.dumps(payload),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertNotIn(secret, result.stdout + result.stderr)
+            self.assertFalse(canonical.exists())
+            self.assertFalse(canonical.parent.exists())
+
+    def test_native_stdin_rejects_unknown_configuration_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            workspace = temp / "workspace"
+            workspace.mkdir()
+            canonical = temp / "runtime.env"
+            payload = {
+                "CONTROL_PLANE_API_KEY": "api",
+                "CONTROL_PLANE_TUNNEL_ID": "tunnel",
+                "AGENT_RUNTIME_WORKSPACE_ROOT": str(workspace),
+                "AGENT_RUNTIME_GIT_NAME": "Native Operator",
+                "AGENT_RUNTIME_GIT_EMAIL": "native@example.invalid",
+                "UNRECOGNIZED": "value",
+            }
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "macos" / "runtime_config.py"), "--prebuilt-stdin", str(canonical)],
+                input=json.dumps(payload),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(canonical.exists())
+            self.assertIn("unsupported configuration field", result.stderr)
 
 
 if __name__ == "__main__":
