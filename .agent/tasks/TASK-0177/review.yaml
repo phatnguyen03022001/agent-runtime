@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0177
-task_revision: 2
-review_revision: 2
+task_revision: 3
+review_revision: 3
 state: BLOCKED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
-  path: .agent/tasks/TASK-0177/report-r2.yaml
-  commit: "3d2aab2ef830c2c9719c230b600110fa866503cd"
-  report_revision: 2
+  path: .agent/tasks/TASK-0177/report-r3.yaml
+  commit: "3176a743ceb766886172699f4c626ad345b034fc"
+  report_revision: 3
 
 independence:
   reviewer_role: ARCHITECT
@@ -24,46 +24,43 @@ contract_compliance:
   scope: PASS
   structure_policy: PASS
   git_authority: PASS
-  acceptance_criteria: BLOCKED_BY_EXHAUSTED_PROBE_EVIDENCE_BUDGET
+  acceptance_criteria: BLOCKED_BY_PLATFORM_SECURITY
   verifier_evidence: NOT_REQUIRED
 
 blocking_findings:
-  - id: B-0177-002
+  - id: B-0177-003
     severity: BLOCKING
-    summary: "The sole revision-2 probe registered the disposable v1 Runtime agent but did not observe the task-mandated launchctl 'last exit code = 71' witness, so the changed-binary phase was never reached and revision 2 has no remaining probe authority."
-    required_authority: "TASK-0177 revision 3 must authorize exactly one corrected disposable probe using a stable running-process witness instead of transient nonzero exit-status state."
+    summary: "On the current macOS host, the disposable SMAppService Runtime agent registers but its ad-hoc-signed helper is killed by AMFI with an enforcing Launch Constraint Violation before the required running-process witness can exist."
+    required_authority: "Do not retry SMAppService/ad-hoc. A new canonical task must qualify a different zero-cost lifecycle architecture before any product mutation."
 
 acceptance_basis:
-  - "Fresh review resolution proves HEAD, origin/main, and remote main at exact report commit 3d2aab2ef830c2c9719c230b600110fa866503cd with a clean main worktree."
-  - "The reviewed report is the sole child of revision-2 execution base 490ee0fd89c375b92b9d8cecc3ebfd6efd12a2d3; its only tracked change is report-r2.yaml and pinned Foundation report validation passes."
-  - "Revision-2 preconditions, fresh non-production identifiers, byte-distinct helper builds, stable explicit signing identifiers/DRs, ad-hoc signing, registration, cleanup, and zero production consequence all conform to task authority."
-  - "The missing last-exit-code witness is not evidence that SMAppService rejected the ad-hoc custom-DR helper. Registration succeeded and targeted launchd logs corroborate service submission/inactive cycling."
-  - "The revision-2 witness design is materially flawed for this fixture: the product LaunchAgent uses KeepAlive with SuccessfulExit=false. Current launchd.plist semantics say nonzero exits cause restart, and KeepAlive implies RunAtLoad. A helper intentionally exiting 71 therefore enters restart/throttle behavior, making a stable poll of one exact last-exit-code field an unnecessarily brittle proof boundary."
-  - "The real split-v1 product refresh does not require generation-specific exit codes. It needs proof that the registered helper generation is actually running from the expected executable path, that the predecessor Runtime service can be unregistered to absence, and that a byte-distinct successor with the same stable signing identifiers/DRs can be registered and launched after app replacement while main-app ownership remains valid."
-  - "A corrected generation witness can stay entirely outside product state: make each fixture helper remain running long enough for exact-label launchctl to expose state=running and a PID; bind that PID to the exact helper path; hash the on-disk helper bytes before launch; require v1 and v2 hashes to differ; require predecessor PID/service absence before replacing the app; then repeat for v2 with a new PID at the same path and stable explicit DR."
-  - "This running-process/path/hash witness directly proves the generation actually launched without relying on repository marker writes, transient exit status, logs as sole proof, or a stricter lifecycle than the production cutover implements."
-  - "No product/test/documentation/dependency mutation, canonical verify, candidate build, archive build, or production Runtime/ServiceManagement/config/tunnel/Apple/release consequence occurred."
+  - "Fresh review resolution proves HEAD, origin/main, and remote main at exact report commit 3176a743ceb766886172699f4c626ad345b034fc with a clean main worktree."
+  - "The reviewed report is the sole child of revision-3 execution base 3f2ebb7abe485066a8c8b76ac1ad7d214c23ea05; its only tracked change is report-r3.yaml and pinned Foundation report validation passes."
+  - "Revision-3 used the direct running-process witness required by the task, so this failure is not the marker-file defect from revision 1 or the transient last-exit-code defect from revision 2."
+  - "The disposable v1 Runtime agent registered successfully, xpcproxy resolved the exact expected helper, launchd attempted the spawn, and AMFI explicitly classified the helper as ad-hoc signed before rejecting execution with AppleMobileFileIntegrityError Code=-423 and an enforcing Launch Constraint Violation."
+  - "The crash evidence independently records SIGKILL / Code Signature Invalid with termination namespace CODESIGNING and Launch Constraint Violation, explaining why no stable state=running/PID/path/hash witness could exist."
+  - "The task correctly stopped before v2, product mutation, canonical verification, candidate/archive manufacture, or any production Runtime/ServiceManagement/config/tunnel/Apple/release consequence."
+  - "Current Apple documentation continues to support traditional per-user launchd agents in a user's Library/LaunchAgents directory. Apple DTS also states that when not using SMAppService, Program or ProgramArguments must be used rather than BundleProgram."
+  - "Agent Runtime already contains historical direct-launchctl LaunchAgent validation, bootstrap/bootout, rollback, and service-identity code, so a per-user LaunchAgent redesign can reuse existing mechanisms rather than introduce an unrelated lifecycle framework."
 
 continuation:
   allowed: false
   preconditions:
-    - "TASK-0177 revision 2 is exhausted and must not be resumed directly."
-    - "A revision-3 task must grant one new disposable probe and replace the last-exit-code witness with a bounded running-process/PID/path/hash witness that mirrors the real split-v1 refresh sequence."
+    - "TASK-0177 is exhausted and the SMAppService plus ad-hoc custom-DR path is closed under current zero-cost authority."
+    - "Any continuation requires a new task with a new lifecycle contract and a proof-first direct user-LaunchAgent gate."
   preserve:
     operator_zero_cost_decision: true
-    revision_1_report_commit: "a1ceb88ad519180735a867320094fb0f9fc3d49b"
-    revision_1_review_commit: "2c9d91decf2bcf0d9f5aba106bacc54f57f33495"
-    revision_2_report_commit: "3d2aab2ef830c2c9719c230b600110fa866503cd"
-    product_mutation_through_revision_2: 0
-    canonical_verify_invocations_through_revision_2: 0
-    real_candidate_builds_through_revision_2: 0
+    task_0175_onboarding_authority: "10c3810729683c6440aa1d86ae22366a04baae39"
+    task_0177_platform_blocker: "B-0177-003"
+    product_mutation_through_task_0177: 0
+    canonical_verify_invocations_through_task_0177: 0
+    real_candidate_builds_through_task_0177: 0
   forbidden:
-    - "Treating revision-2 registration/log evidence as changed-binary continuity proof."
-    - "Running another disposable probe under revision-2 authority."
-    - "Using transient helper exit-code state as the required revision-3 generation witness."
-    - "Starting product identity/provenance mutation before revision-3 AC-1 passes."
-    - "Using production Agent Runtime ServiceManagement identities in the disposable probe."
+    - "A fourth SMAppService/ad-hoc probe."
+    - "Weakening or bypassing AMFI launch constraints."
+    - "Re-enabling Developer ID/notarization without a new explicit operator decision."
+    - "Treating SMAppService registration success as executable-launch viability."
 
 notes:
-  - "TASK-0177 revision 2 is terminally BLOCKED by exhausted verification authority, not by a proven platform incompatibility."
-  - "The next admissible work is TASK-0177 revision 3 with one bounded corrected probe; no new operator product decision is required."
+  - "TASK-0177 revision 3 is terminally BLOCKED by a reproduced platform-security constraint, not by fixture design."
+  - "The next architecture candidate is a same-user launchd LaunchAgent lifecycle using ProgramArguments and existing Agent Runtime rollback/provenance machinery."
