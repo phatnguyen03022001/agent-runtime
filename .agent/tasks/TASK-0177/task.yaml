@@ -1,0 +1,263 @@
+protocol_version: 3
+
+task_id: TASK-0177
+task_revision: 1
+state: APPROVED
+title: "Zero-Cost Stable Code Identity and Provenance Redesign"
+
+origin:
+  type: architect
+  task_id: "TASK-0177"
+  gap_id: "ZERO-COST-STABLE-CODE-IDENTITY-REDESIGN"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+
+architect_analysis_skills:
+  - architect
+  - design-review
+  - simplicity
+  - security-review
+  - verification
+
+execution_skills:
+  required:
+    - executor
+    - security-review
+    - verification
+  recommended:
+    - simplicity
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  preferred_transport: AGENT_RUNTIME
+  reason: "Repository work remains local through the existing Runtime transport. The disposable ServiceManagement probe must use non-production identities only, and canonical ./verify must use the direct local clean carrier established by TASK-0175."
+
+authority_sources:
+  - source: "Operator decision '2' after TASK-0176 canonical BLOCKED review"
+    role: "Explicitly preserves zero-cost distribution and authorizes material redesign of the signing/lifecycle/provenance identity contract instead of re-enabling paid Developer ID authority."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0176/review.yaml at ef8c624f1de78b69d61cd9580b0d8d118601cb4f"
+    role: "Canonical blocker: default ad-hoc identity cannot satisfy the existing TeamIdentifier-based provenance/recovery and SMAppService continuity contract."
+    precedence: 2
+  - source: ".agent/tasks/TASK-0175/review.yaml at 10c3810729683c6440aa1d86ae22366a04baae39"
+    role: "Latest accepted newcomer onboarding source authority to preserve."
+    precedence: 3
+  - source: "Current package/provenance/cutover/ServiceManagement implementation at TASK-0177 planning base"
+    role: "Existing one-lifecycle architecture to adapt rather than replace unless the bounded platform probe proves SMAppService itself non-viable."
+    precedence: 4
+  - source: "Apple Applying Code Requirements and Code Signing Requirement Language documentation"
+    role: "Apple permits explicit designated requirements; DR is the criterion used to recognize code as the same code previously seen."
+    precedence: 5
+  - source: "Apple SMAppService documentation and Apple DTS update guidance"
+    role: "SMAppService remains the modern embedded LaunchAgent authority; DTS evidence shows update launch behavior is materially sensitive to signing identifier/designated-requirement continuity."
+    precedence: 6
+  - source: "Architect disposable custom-DR probe at planning base"
+    role: "Two different Mach-O binaries ad-hoc signed with the same explicit identifier and designated requirement both passed strict codesign and emitted the identical DR: designated => identifier com.picmao.agent-runtime. This proves build-specific CDHash DR is avoidable, but does not prove SMAppService viability or publisher authenticity."
+    precedence: 7
+  - source: "Apple Xcode distribution documentation exposing Copy App for unsigned macOS output"
+    role: "Confirms macOS can produce non-Developer-ID app artifacts, but does not establish SMAppService compatibility or trusted publisher identity."
+    precedence: 8
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing package_app.sh + package_provenance.py + candidate_cutover.py + ServiceManagementController.swift"
+  rationale: "First attempt the smallest redesign: preserve SMAppService, use ad-hoc code sealing with stable explicit designated requirements for continuity, and redefine provenance truthfully around exact package closure plus explicit responsible-code continuity metadata. Do not introduce a second lifecycle or cryptographic credential system unless evidence later proves this insufficient."
+
+objective: "Preserve the zero-cost native prebuilt product by replacing the paid TeamIdentifier/Developer-ID ownership assumption with a truthful zero-cost code-identity contract. First prove on a disposable non-production SMAppService fixture that ad-hoc code using stable explicit signing identifiers/designated requirements can register, launch, unregister, and survive a changed-binary update/re-registration without Developer ID. Only after that proof passes, evolve Agent Runtime package provenance/cutover/recovery to treat ad-hoc signing as integrity plus code-continuity metadata rather than publisher authentication, preserve legacy signed predecessor handling, replace the stale paid distribution lane with one zero-cost prebuilt lane, fully qualify the source, and freeze one immutable local artifact for Fresh-Install Acceptance."
+
+scope:
+  required_changes:
+    - "Freshly prove clean canonical main at the exact task base, accepted TASK-0176 BLOCKED review ancestry, and unchanged TASK-0175 onboarding authority before mutation."
+    - "Before Agent Runtime product mutation, create exactly one disposable non-production SMAppService probe under ignored build output using unique bundle/service identifiers that cannot collide with com.picmao.agent-runtime or installed Runtime labels."
+    - "The disposable probe must compare at least two different helper/app builds that share explicit stable code-signing identifiers and explicit stable designated requirements under ad-hoc signing. It must prove the bounded lifecycle needed by the product: register, observable enabled/requires-approval state as applicable, helper launch/ownership, unregister, changed-binary replacement or update/re-registration, and final cleanup."
+    - "The probe may mutate only its own disposable ServiceManagement registration and files. It must never register, unregister, replace, stop, restart, or inspect secrets from the production Agent Runtime ServiceManagement identities. Reconcile and remove all disposable registration/files before implementation continues."
+    - "If the disposable SMAppService probe cannot prove stable changed-binary continuity with ad-hoc explicit DRs, STOP BLOCKED before product mutation. Do not silently fall back to manual LaunchAgents in this task; that is a separate architecture boundary."
+    - "If the probe passes, preserve SMAppService as the product lifecycle authority. Do not add direct ~/Library/LaunchAgents ownership, raw launchctl bootstrap as the normal path, daemon/privileged-helper architecture, installer framework, updater, or second lifecycle state machine."
+    - "Add one zero-cost prebuilt package mode using ad-hoc code sealing. Responsible executables whose continuity matters to SMAppService/provenance must receive deterministic explicit signing identifiers and explicit stable designated requirements; nested executable code must remain correctly sealed and covered by exact candidate closure."
+    - "Do not use TeamIdentifier as zero-cost owner identity and do not serialize a fake team value. If candidate/provenance serialization changes, version the contract and make the zero-cost representation explicitly identify its signing mode and exact responsible-code continuity properties."
+    - "Redefine zero-cost provenance truthfully: strict code-signature validation proves code sealing/integrity; exact candidate closure and external handoff prove the exact artifact bytes/lineage; explicit signing identifier/DR checks prove expected continuity metadata. None of these may be described as Apple publisher authentication or Developer ID trust."
+    - "Preserve legacy signed candidate/predecessor compatibility needed for current installs. Existing legacy candidate schemas with real TeamIdentifier remain validated by their legacy rules. New zero-cost candidates use the new contract. Recovery/rollback must validate each snapshot against the identity contract recorded for that snapshot rather than requiring a fake shared TeamIdentifier across legacy and zero-cost generations."
+    - "Preserve fail-closed tamper detection across candidate validation, cutover, rollback, recovery, and pinned handoff validation. Mismatched closure, signing mode, signing identifier, designated requirement, executable graph, source revision/tree, or handoff identity must fail."
+    - "Update the threat model and installation documentation to state the intentional security trade-off: zero-cost ad-hoc distribution has no Apple-authenticated publisher identity and Gatekeeper may require a bounded manual Open/Open Anyway action. The product does not claim Developer ID/notarization trust. Same-UID limitations remain explicit."
+    - "Delete or make unreachable the active Developer-ID/notarization/stapling package lane and stale current-product documentation once the zero-cost replacement is qualified. Preserve all historical TASK-0172/TASK-0173 governance artifacts unchanged."
+    - "Preserve TASK-0174/TASK-0175 native onboarding and the existing consumer sequence after launch: API key, tunnel ID, Runtime Git identity, workspace picker, Background Activity approval if required, existing cutover/readiness/doctor gates, Runtime healthy."
+    - "Consumer requirements remain: no agent-runtime checkout, host CPython 3.13, Xcode/Swift, signing identity, Apple developer credentials, notary profile, or custom trust root. Existing official tunnel-client and Runtime configuration inputs remain separate prerequisites."
+    - "Do not add a project signing-key/CA credential system in this task. The selected contract intentionally limits zero-cost provenance to exact artifact integrity/lineage plus stable code-continuity metadata; any future publisher-authentication layer requires separate authority."
+    - "Add focused regression coverage for the new and legacy provenance schemas, stable DR/signing-identifier validation, cross-generation rollback/recovery, tamper rejection, package graph sealing, no-fake-TeamIdentifier behavior, and unchanged native onboarding/lifecycle semantics."
+    - "Run relevant Swift ServiceManagement/onboarding tests and focused Python package/provenance/cutover/preflight tests. Reuse unaffected TASK-0175 evidence only where exact bytes and predicates remain equivalent."
+    - "Run canonical ./verify at most once on the immutable final source candidate through a direct local non-Agent-Runtime-durable carrier consistent with TASK-0175."
+    - "After final source qualification, build at most one real zero-cost release candidate and one complete archive containing Agent Runtime.app plus Agent Runtime.candidate.json. Do not install/activate it against the live production Runtime in this task."
+    - "Independently record and revalidate the final source revision/tree, zero-cost signing mode, responsible signing identifiers/DRs, candidate closure SHA-256, handoff SHA-256, archive SHA-256, manifest identity, and exact local artifact paths."
+    - "Do not publish a GitHub Release or tag. The exact immutable local artifact is the handoff to the next Fresh-Install Acceptance task."
+    - "On PASS, report NEEDS_REVIEW. On any failed platform/security/lifecycle predicate, report BLOCKED without weakening the contract."
+
+  allowed_existing_files_or_components:
+    - "macos/package_app.sh"
+    - "macos/package_provenance.py"
+    - "macos/candidate_cutover.py"
+    - "macos/install_preflight.py"
+    - "macos/install_release.sh"
+    - "macos/distribution_verify.py for deletion or replacement by zero-cost-specific verification within existing package surfaces"
+    - "macos/AppBundle"
+    - "macos/Sources/AgentRuntimeMenuBar"
+    - "macos/Tests/AgentRuntimeMenuBarTests"
+    - "existing Python package/provenance/cutover/preflight tests"
+    - "README.md"
+    - "docs/INSTALL.md"
+    - "THREAT_MODEL.md"
+    - "build/ ignored disposable probe and artifact output"
+    - ".agent/tasks/TASK-0177/report-r1.yaml"
+  expected_files_are_restrictive: true
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0177/report-r1.yaml"
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "Reuse existing product surfaces. Disposable probe sources/artifacts belong only under ignored build output and must be removed after proof."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+effect_authority:
+  disposable_smappservice_probe_max: 1
+  canonical_verify_max: 1
+  real_zero_cost_candidate_build_max: 1
+  production_service_management_mutation_max: 0
+  live_runtime_install_or_cutover_max: 0
+  live_runtime_restart_max: 0
+  live_runtime_configuration_mutation_max: 0
+  tunnel_client_mutation_max: 0
+  apple_developer_enrollment_max: 0
+  developer_id_provisioning_max: 0
+  apple_notarization_submission_max: 0
+  stapling_max: 0
+  custom_trust_root_install_max: 0
+  release_or_tag_publication_max: 0
+  host_dependency_install_max: 0
+
+invariants:
+  - "Distribution remains zero-cost with no Apple Developer Program, Developer ID, notarization, notarytool, stapling, paid signing service, or consumer developer credential."
+  - "SMAppService remains the preferred product lifecycle and may be preserved only if the disposable changed-binary ad-hoc custom-DR proof passes."
+  - "Zero-cost code identity is never called Apple publisher authentication. TeamIdentifier is absent for ad-hoc code and must remain absent rather than fabricated."
+  - "Legacy real-TeamIdentifier package evidence remains interpretable for existing predecessors; historical schemas are not rewritten."
+  - "Exact closure/handoff/source-lineage validation remains fail-closed and continues to detect byte tampering."
+  - "Native newcomer onboarding, canonical runtime.env semantics, tunnel identity, readiness/doctor gates, cutover transaction semantics, and the 20-tool Runtime public surface remain unchanged unless this task explicitly changes only identity/provenance handling."
+  - "No production Runtime, ServiceManagement identity, config, tunnel, Apple account state, trust root, tag, or public release is mutated."
+  - "MAIN_ONLY repository topology remains unchanged."
+
+forbidden_changes:
+  - "Fake TeamIdentifier, bundle-ID-only claims of publisher authenticity, or documentation that implies ad-hoc code is Developer-ID trusted."
+  - "Manual LaunchAgent/raw launchctl lifecycle fallback, daemon/privileged-helper architecture, second installer/updater/state machine, or parallel configuration system."
+  - "New project signing private key, self-signed CA, custom trust root, certificate installer, or credential-management subsystem."
+  - "Developer ID, Apple Developer Program enrollment, notarization, stapling, notarytool profile, paid signing service, Personal Team reprovisioning, or consumer Apple developer credentials."
+  - "Global Gatekeeper disabling or quarantine removal as the supported consumer path."
+  - "Production ServiceManagement register/unregister/update during the disposable probe."
+  - "Changes to MCP tool semantics, Runtime kernel/capability architecture, tunnel-client architecture, or unrelated refactor/cleanup."
+  - "Git branch creation, PR, force push, amend, squash, tag, or public release."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: revised_contract_required
+  dependency_change: forbidden
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Ad-hoc explicit designated requirements are proven viable for the existing SMAppService lifecycle before product mutation."
+    evidence_required: "One disposable non-production fixture demonstrates two different builds with stable explicit signing identifiers/DRs can complete the required register/launch/state/unregister/update-or-reregister lifecycle and cleans up fully. Production identifiers/state are untouched."
+
+  - id: AC-2
+    requirement: "The zero-cost package has a truthful, stable responsible-code continuity contract without fake Apple identity."
+    evidence_required: "Artifact inspection proves ad-hoc signatures, TeamIdentifier absent, deterministic expected signing identifiers/DRs on responsible executables, strict signature validity, and exact closure coverage. Tests reject wrong signing mode/identifier/DR and any invented team value."
+
+  - id: AC-3
+    requirement: "Provenance/cutover/recovery remain fail-closed across legacy signed and new zero-cost generations."
+    evidence_required: "Versioned candidate/handoff tests prove legacy TeamIdentifier candidates keep legacy validation, new candidates use the zero-cost identity contract, each rollback snapshot is checked against its own recorded contract, cross-generation transitions are deterministic, and tamper/mismatch cases fail."
+
+  - id: AC-4
+    requirement: "The security boundary is explicit rather than overstated."
+    evidence_required: "THREAT_MODEL/INSTALL/README state that zero-cost ad-hoc packaging provides code sealing and project artifact integrity/lineage checks but no Apple-authenticated publisher identity or notarization trust; supported Gatekeeper handling is bounded manual user approval only."
+
+  - id: AC-5
+    requirement: "The newcomer/lifecycle product remains one coherent implementation."
+    evidence_required: "Existing native setup, Background Activity handling, canonical config, candidate transaction, readiness, doctor, rollback/recovery, tunnel identity, and 20-tool public contract regressions pass with no second lifecycle/configuration mechanism."
+
+  - id: AC-6
+    requirement: "The final source candidate is fully qualified with no production consequence."
+    evidence_required: "Focused Python and Swift suites PASS, git diff --check PASS, canonical ./verify runs at most once via the clean direct-local carrier and PASSes, and zero production Runtime/ServiceManagement/config/tunnel/Apple/tag/release effect is recorded."
+
+  - id: AC-7
+    requirement: "One immutable zero-cost prebuilt artifact is frozen for Fresh-Install Acceptance."
+    evidence_required: "Exactly one real final candidate build and one complete archive are produced after source qualification; report records and revalidates exact source revision/tree, signing mode, responsible signing identifiers/DRs, candidate SHA-256, handoff SHA-256, archive SHA-256, manifest identity, and local paths."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Freshly prove exact base/lineage and execute the single disposable non-production SMAppService custom-DR viability probe with full cleanup before product mutation."
+      required: true
+    - id: CHECK-2
+      command_or_check: "If AC-1 passes, implement and test the minimal zero-cost identity/provenance evolution; otherwise stop BLOCKED."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Run focused affected Python/Swift verification, git diff --check, then canonical ./verify at most once on immutable final source through the TASK-0175-approved clean carrier."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Build/freeze at most one final zero-cost candidate + archive, revalidate all identities/checksums, validate report, publish non-force after fresh remote CAS proof, and reconcile clean main."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+
+report_requirements:
+  path: ".agent/tasks/TASK-0177/report-r1.yaml"
+  record:
+    - "exact task base, accepted TASK-0176 review ancestry, and preserved TASK-0175 onboarding authority"
+    - "complete disposable SMAppService probe evidence and cleanup reconciliation"
+    - "selected zero-cost code-identity/provenance semantics and explicit security trade-off"
+    - "all changed product/test/doc paths and versioned compatibility behavior"
+    - "focused verification, Swift verification, diff-check, and at-most-once canonical verify result"
+    - "final candidate/handoff/archive identities when PASS"
+    - "zero production Runtime/ServiceManagement/config/tunnel/Apple/trust-root/tag/release effects"
+    - "result NEEDS_REVIEW on complete PASS, otherwise BLOCKED"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
