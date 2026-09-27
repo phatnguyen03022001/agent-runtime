@@ -1,0 +1,284 @@
+protocol_version: 3
+
+task_id: TASK-0178
+task_revision: 1
+state: APPROVED
+title: "Zero-Cost User LaunchAgent Lifecycle and Prebuilt Qualification"
+
+origin:
+  type: architect
+  task_id: "TASK-0178"
+  gap_id: "ZERO-COST-USER-LAUNCHAGENT-LIFECYCLE"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+
+architect_analysis_skills:
+  - architect
+  - design-review
+  - simplicity
+  - security-review
+  - verification
+
+execution_skills:
+  required:
+    - executor
+    - security-review
+    - verification
+  recommended:
+    - simplicity
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  preferred_transport: AGENT_RUNTIME
+  reason: "Repository work remains local through the existing Runtime transport. The disposable user-LaunchAgent probe uses only fresh non-production identifiers; canonical ./verify must use the direct local clean carrier established by TASK-0175."
+
+authority_sources:
+  - source: "Operator zero-cost architecture decision preserved from choice '2'"
+    role: "Zero-cost remains mandatory; Developer ID, notarization, paid Apple membership, consumer developer credentials, and custom trust authority remain excluded."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0177/review.yaml at 5c2fbf360dea00e0fc115fde6c43b9de329890fd"
+    role: "Canonical platform blocker closing the SMAppService plus ad-hoc path after AMFI Launch Constraint Violation on macOS 27.0 (26A428)."
+    precedence: 2
+  - source: ".agent/tasks/TASK-0177/report-r3.yaml at 3176a743ceb766886172699f4c626ad345b034fc"
+    role: "Direct current-host evidence: SMAppService registration succeeds, xpcproxy resolves the helper, then AMFI kills the ad-hoc helper with AppleMobileFileIntegrityError -423 / CODESIGNING Launch Constraint Violation."
+    precedence: 3
+  - source: ".agent/tasks/TASK-0175/review.yaml at 10c3810729683c6440aa1d86ae22366a04baae39"
+    role: "Latest accepted native newcomer onboarding authority whose config/readiness/doctor semantics must be preserved."
+    precedence: 4
+  - source: "Apple Daemons and Services Programming Guide: Creating Launch Daemons and Agents"
+    role: "Platform authority that per-user launchd agents are loaded for logged-in users from the user's Library/LaunchAgents directory."
+    precedence: 5
+  - source: "Apple ServiceManagement documentation: Updating helper executables from earlier versions of macOS"
+    role: "Platform authority for legacy LaunchAgent/LaunchDaemon integration and Background Items attribution behavior."
+    precedence: 6
+  - source: "Apple DTS launchd guidance"
+    role: "When not using SMAppService, launchd jobs use Program or ProgramArguments rather than BundleProgram; traditional LaunchAgents remain supported. AssociatedBundleIdentifiers requires compatible signing identity for reliable app attribution and is not a substitute for missing TeamIdentifier."
+    precedence: 7
+  - source: "Current candidate_cutover.py legacy LaunchAgent support"
+    role: "Existing product code already validates direct LaunchAgent plists, bootout/bootstrap state, exact service program identity, rollback file snapshots, and restoration. Reuse this machinery rather than create a parallel lifecycle."
+    precedence: 8
+  - source: "Current AgentRuntimeRuntimeService helper and runtime/start.sh"
+    role: "The existing native helper already supervises the bundled Runtime lifecycle and canonical runtime.env. The new LaunchAgent may invoke it by absolute ProgramArguments path if the proof gate establishes direct launchd viability."
+    precedence: 9
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing candidate_cutover.py legacy LaunchAgent machinery + AgentRuntimeRuntimeService + install_release.sh + native onboarding flow"
+  rationale: "Replace only the lifecycle authority that is incompatible with zero-cost distribution. Use one canonical per-user LaunchAgent contract, not SMAppService plus fallback. Preserve old SMAppService code only as bounded predecessor migration/rollback compatibility where required."
+
+objective: "Replace the blocked zero-cost SMAppService lifecycle with one zero-cost per-user launchd LaunchAgent lifecycle that runs the existing Runtime service helper from the installed app, preserves transactional cutover/rollback/recovery/config/readiness/doctor semantics, and requires no Apple developer authority. First prove on the current host that a fresh non-production ad-hoc native helper launched through a traditional user LaunchAgent can execute, remain running, be booted out, be replaced by byte-distinct v2, and launch again without the SMAppService AMFI constraint. Only after that gate passes, evolve Agent Runtime to the new single lifecycle, redesign zero-cost package provenance truthfully, qualify the final source, and freeze one immutable local prebuilt artifact for Fresh-Install Acceptance."
+
+scope:
+  required_changes:
+    - "Freshly prove clean canonical main at the exact TASK-0178 base, TASK-0177 BLOCKED review 5c2fbf360dea00e0fc115fde6c43b9de329890fd ancestry, and accepted TASK-0175 onboarding authority before any effect."
+    - "TASK-0177 is terminal history. Do not run a fourth SMAppService/ad-hoc probe and do not treat registration success as launch viability."
+    - "Before product mutation, execute exactly one disposable direct user-LaunchAgent probe with fresh identifiers. The probe must use a unique plist under the current user's Library/LaunchAgents directory and an ad-hoc-signed long-running native helper under ignored build output; it must not use SMAppService, BundleProgram, production labels, production app paths, or production configuration."
+    - "The disposable plist must use ProgramArguments with the absolute helper path, a unique Label, and only the minimum lifecycle keys needed to model the Runtime job. Do not use AssociatedBundleIdentifiers as a fake responsibility binding; zero-cost ad-hoc code has no TeamIdentifier to satisfy Apple's reliable attribution contract."
+    - "Record v1 helper SHA-256 and code-signing facts, bootstrap the exact plist into gui/<uid>, and prove exact-label launchd state=running with a concrete PID. Resolve that PID to the exact helper path and re-hash the helper to the v1 SHA-256."
+    - "Boot out v1, require exact-label absence and PID termination, replace the helper bytes with byte-distinct v2 at the same path, record v2 SHA-256 != v1, bootstrap the same plist again, and prove state=running + new PID + exact path + v2 SHA-256."
+    - "The direct LaunchAgent proof must explicitly distinguish the TASK-0177 SMAppService failure: absence of AMFI Launch Constraint Violation for the disposable direct-launchd helper is required. Any CODESIGNING/AMFI rejection, failure to reach running state, failure to bootout/rebootstrap, or cleanup failure returns BLOCKED before product mutation."
+    - "Cleanup must boot out the disposable service, prove label/PIDs absent, remove the disposable plist from ~/Library/LaunchAgents, remove all run-owned build files, and leave no active disposable job. Read-only Background Task Management residue/history may be recorded but must not be reset or globally mutated to manufacture cleanliness."
+    - "If and only if the direct user-LaunchAgent gate passes, make it the sole current Runtime lifecycle authority. Normal current-product behavior must not register mainApp or Runtime through SMAppService and must not keep an SMAppService fallback."
+    - "Keep Agent Runtime.app as the user-launched native setup/control surface. The Runtime background service alone is persisted through the per-user LaunchAgent; the menu-bar app need not auto-launch at login for Runtime health."
+    - "Use one canonical current LaunchAgent label and one plist in ~/Library/LaunchAgents. Prefer reuse of the already-owned historical Runtime label/mechanics when that minimizes migration and remains unambiguous; do not introduce multiple current labels."
+    - "The current LaunchAgent plist must use ProgramArguments with the absolute installed AgentRuntimeRuntimeService path. Preserve the existing helper's supervision of runtime/start.sh --serve, tunnel-client discovery, canonical runtime.env, desired-state marker, and SIGTERM behavior unless direct evidence requires a smaller equivalent change."
+    - "Preserve fail-closed ownership: current plist must be a regular non-symlink file with exact expected Label/ProgramArguments and restrictive owner-controlled mode; launchd service identity must resolve to the exact installed helper path; candidate/cutover logic must reject foreign or ambiguous same-label jobs before mutation."
+    - "Same-UID security semantics remain explicit: a malicious process running as the same user is outside the protection boundary already documented by Agent Runtime. Moving the plist into ~/Library/LaunchAgents must not be described as privilege isolation."
+    - "Migrate accepted installed SMAppService predecessors transactionally. Before app swap, use the predecessor app's supported ServiceManagement commands to unregister predecessor Runtime/main-app registrations as required; snapshot enough state for rollback; after swap, install/bootstrap the new user LaunchAgent. If the transaction fails, restore the previous app and previous lifecycle ownership exactly enough to return to the proven predecessor state."
+    - "Historical direct LaunchAgent predecessors and current SMAppService predecessors must remain distinguishable. Version the service-management/lifecycle contract rather than silently reinterpreting split-v1."
+    - "Remove SMAppService registration from the new normal onboarding/install/cutover path. Swift ServiceManagement code may remain only where needed for bounded migration/unregister compatibility; stale current-product Background Activity instructions must be removed or rewritten."
+    - "Evolve zero-cost package provenance without fake TeamIdentifier. New candidates must record a truthful zero-cost signing mode and exact artifact/source/closure identity. Strict ad-hoc code-signature validation may be used only as sealing/integrity evidence, never Apple publisher authentication."
+    - "Legacy candidates with real TeamIdentifier remain validated under their historical schema/rules. New zero-cost candidates use a versioned schema that does not require or fabricate TeamIdentifier. Cutover/rollback validates each generation under the identity contract actually recorded for it."
+    - "Candidate closure, external handoff, source revision/tree, requirements-lock identity, Runtime manifest, responsible executable paths, and tamper rejection remain fail-closed. A modified plist/helper/app/handoff must not pass by relying only on label or bundle identifier."
+    - "Replace the active paid Developer-ID/notarization/stapling package path with one zero-cost prebuilt path. Remove active AGENT_RUNTIME_CODESIGN_IDENTITY dependence from the supported prebuilt flow. Preserve TASK-0172/TASK-0173 historical artifacts unchanged."
+    - "The final package must require no checkout, host CPython 3.13, Xcode/Swift, local signing identity, Apple developer credentials, notary profile, custom trust root, or periodic reprovisioning on the consumer Mac."
+    - "Document the truthful consumer flow: download/extract complete app+handoff bundle, perform only bounded Gatekeeper Open/Open Anyway if required, launch Agent Runtime manually, complete API key/tunnel/Git/workspace setup, install/bootstrap the per-user Runtime LaunchAgent, and reach readiness + healthy doctor. Background Items UI may display the executable rather than trusted app attribution under zero-cost signing; do not claim otherwise."
+    - "Do not instruct global Gatekeeper disable, quarantine stripping, custom certificate trust, sudo/system LaunchDaemon installation, or manual launchctl commands as the normal consumer workflow."
+    - "Update uninstall/recovery so the current user LaunchAgent is booted out and its owned plist removed safely; preserve rollback/recovery invariants and reject foreign same-label ownership."
+    - "Add focused regression coverage for direct LaunchAgent install/bootstrap/bootout/identity, migration from split-v1 SMAppService, legacy rollback, zero-cost provenance schema, no-fake-TeamIdentifier behavior, uninstall/recovery, onboarding, readiness, doctor, and tunnel identity."
+    - "Run relevant Swift and Python focused suites. Reuse unaffected TASK-0175 evidence only where exact bytes/predicates remain equivalent."
+    - "Run canonical ./verify at most once on the immutable final source candidate through a direct local non-Agent-Runtime-durable carrier consistent with TASK-0175."
+    - "After final source qualification, build at most one real zero-cost candidate and one complete archive containing Agent Runtime.app plus Agent Runtime.candidate.json. Do not install or activate that real candidate against the production Runtime in TASK-0178."
+    - "Independently record/revalidate exact final source revision/tree, signing mode, candidate closure SHA-256, handoff SHA-256, archive SHA-256, Runtime manifest identity, current lifecycle contract, and exact local artifact paths."
+    - "Do not publish a GitHub Release or create a tag. Keep the immutable artifact locally under ignored build output for the next Fresh-Install Acceptance task."
+    - "On complete PASS create report-r1.yaml and stop NEEDS_REVIEW. On any failed viability/security/lifecycle predicate stop BLOCKED without falling back to SMAppService, paid signing, system daemons, or a second lifecycle."
+
+  allowed_existing_files_or_components:
+    - "macos/package_app.sh"
+    - "macos/package_provenance.py"
+    - "macos/candidate_cutover.py"
+    - "macos/install_preflight.py"
+    - "macos/install_release.sh"
+    - "macos/distribution_verify.py for removal or replacement by zero-cost verification in existing package surfaces"
+    - "macos/uninstall.sh or existing uninstall surface"
+    - "macos/AppBundle"
+    - "macos/Sources/AgentRuntimeMenuBar"
+    - "macos/Sources/AgentRuntimeRuntimeService"
+    - "macos/Tests"
+    - "existing Python package/provenance/cutover/preflight/uninstall/recovery/onboarding tests"
+    - "README.md"
+    - "docs/INSTALL.md"
+    - "docs/RECOVERY.md"
+    - "THREAT_MODEL.md"
+    - "build/ ignored disposable probe and candidate output"
+    - ".agent/tasks/TASK-0178/report-r1.yaml"
+  expected_files_are_restrictive: true
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0178/report-r1.yaml"
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "Reuse existing lifecycle, package, provenance, recovery, and test surfaces. Disposable probe files are ignored build/user-LaunchAgent artifacts and must be cleaned."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+effect_authority:
+  disposable_user_launchagent_probe_max: 1
+  disposable_user_launchagent_plist_install_max: 1
+  canonical_verify_max: 1
+  real_zero_cost_candidate_build_max: 1
+  production_smappservice_mutation_max: 0
+  production_user_launchagent_mutation_max: 0
+  live_runtime_install_or_cutover_max: 0
+  live_runtime_restart_max: 0
+  live_runtime_configuration_mutation_max: 0
+  system_launchdaemon_mutation_max: 0
+  tunnel_client_mutation_max: 0
+  apple_developer_enrollment_max: 0
+  developer_id_provisioning_max: 0
+  apple_notarization_submission_max: 0
+  stapling_max: 0
+  custom_trust_root_install_max: 0
+  background_task_management_reset_max: 0
+  release_or_tag_publication_max: 0
+  host_dependency_install_max: 0
+
+invariants:
+  - "Distribution remains zero-cost: no Apple Developer Program, Developer ID, notarization, notarytool, stapling, paid signing service, Personal Team reprovisioning, or consumer Apple developer credential."
+  - "TASK-0177 closes the SMAppService plus ad-hoc current lifecycle path. TASK-0178 may use SMAppService only to migrate/rollback an already-installed accepted predecessor, never as the new normal lifecycle."
+  - "The current Runtime lifecycle has exactly one authority: a per-user launchd LaunchAgent owned by Agent Runtime."
+  - "No root/sudo/system LaunchDaemon or privileged helper is introduced."
+  - "Native onboarding config, canonical runtime.env, tunnel identity, desired-state semantics, transactionality, readiness, doctor, rollback/recovery, and the 20-tool public surface remain intact."
+  - "No fake TeamIdentifier or Apple publisher-authentication claim is permitted for ad-hoc zero-cost artifacts."
+  - "Same-UID threat-model limitations remain explicit and are not weakened by claims of protection that a user-writable LaunchAgent plist cannot provide."
+  - "No production Runtime/ServiceManagement/LaunchAgent/config/tunnel/Apple/trust-root/tag/release state is mutated during qualification."
+  - "MAIN_ONLY topology remains unchanged."
+
+forbidden_changes:
+  - "Any fourth SMAppService/ad-hoc viability probe or normal-product SMAppService fallback."
+  - "Developer ID, notarization, stapling, paid Apple membership, Personal Team distribution, consumer developer credentials, custom CA/trust root, or fake TeamIdentifier."
+  - "System LaunchDaemon, sudo/root installation, privileged helper, daemon architecture, second updater/installer/state machine, or parallel lifecycle."
+  - "AssociatedBundleIdentifiers used to imply app responsibility when signing identity requirements are not satisfied."
+  - "Global Gatekeeper disable, quarantine removal as supported flow, or AMFI/security bypass."
+  - "Production Runtime/config/tunnel/SMAppService/user-LaunchAgent mutation during TASK-0178."
+  - "MCP surface/kernel/capability/tunnel architecture changes unrelated to lifecycle migration."
+  - "Branch creation, PR, force push, amend, squash, tag, public release, or unrelated cleanup."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: revised_contract_required
+  dependency_change: forbidden
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Traditional per-user launchd can execute and refresh the selected zero-cost ad-hoc helper contract on the current host without the TASK-0177 SMAppService launch constraint."
+    evidence_required: "One disposable ~/Library/LaunchAgents fixture proves v1 running PID/path/hash, bootout+absence, byte-distinct v2 at same path, v2 running new PID/path/hash, no enforcing AMFI Launch Constraint Violation, and full cleanup with zero production identifiers touched."
+
+  - id: AC-2
+    requirement: "The new product has exactly one current zero-cost Runtime lifecycle with transactional migration from accepted predecessors."
+    evidence_required: "Source/tests prove current installs materialize one owned user LaunchAgent plist using ProgramArguments to the installed Runtime helper; bootstrap/bootout/identity are fail-closed; normal path contains no SMAppService registration; split-v1 predecessor migration and rollback restore correct previous lifecycle ownership."
+
+  - id: AC-3
+    requirement: "Zero-cost provenance is truthful and backward-safe."
+    evidence_required: "Versioned candidate/handoff validation proves new ad-hoc candidates do not contain/fake TeamIdentifier, preserve exact closure/source/manifest identity and tamper rejection, while legacy real-TeamIdentifier candidates remain validated under historical rules."
+
+  - id: AC-4
+    requirement: "Native newcomer setup and operational semantics remain coherent."
+    evidence_required: "Setup/install, desired-state, Runtime supervision, tunnel identity, readiness, doctor, uninstall, recovery, and relevant Swift behavior tests PASS with a single LaunchAgent lifecycle; no consumer launchctl/sudo/build/signing credential is required."
+
+  - id: AC-5
+    requirement: "Documentation states the actual zero-cost security and macOS UX boundaries."
+    evidence_required: "README/INSTALL/RECOVERY/THREAT_MODEL accurately describe manual Gatekeeper approval if required, user LaunchAgent persistence, possible Background Items executable-name attribution under ad-hoc signing, same-UID limits, no notarization/Developer ID trust, and no global security bypass."
+
+  - id: AC-6
+    requirement: "The immutable final source is qualified without production consequence."
+    evidence_required: "Focused affected Python/Swift suites PASS, git diff --check PASS, canonical ./verify runs at most once via the clean direct-local carrier and PASSes, and all production effect counters remain zero."
+
+  - id: AC-7
+    requirement: "One immutable zero-cost prebuilt release artifact is frozen for Fresh-Install Acceptance."
+    evidence_required: "Exactly one final real candidate and one complete archive are built after source qualification; report revalidates source revision/tree, zero-cost signing mode, lifecycle contract, manifest, candidate SHA-256, handoff SHA-256, archive SHA-256, and local artifact paths."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Freshly prove exact base/lineage, then run exactly one disposable direct user-LaunchAgent v1/v2 running-process viability probe in ~/Library/LaunchAgents with complete cleanup and no production labels."
+      required: true
+    - id: CHECK-2
+      command_or_check: "If AC-1 passes, implement the single user-LaunchAgent lifecycle plus zero-cost provenance/migration changes and run focused affected tests; otherwise stop BLOCKED."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Run relevant Swift tests, Python focused suites, git diff --check, then canonical ./verify at most once on immutable final source through the TASK-0175 clean carrier."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Build at most one final zero-cost candidate/archive, independently revalidate all identities/checksums/contracts, validate report, publish non-force after fresh remote CAS proof, and reconcile clean main."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+
+report_requirements:
+  path: ".agent/tasks/TASK-0178/report-r1.yaml"
+  record:
+    - "TASK-0177 final blocker/review identity and exact TASK-0178 execution base"
+    - "complete disposable user-LaunchAgent v1/v2 proof and cleanup evidence"
+    - "selected canonical LaunchAgent label/plist ownership and migration contract"
+    - "zero-cost provenance schema and legacy compatibility"
+    - "all changed source/test/doc paths"
+    - "focused Python/Swift results, diff-check, and at-most-once canonical verify"
+    - "final candidate/handoff/archive identities on PASS"
+    - "zero production Runtime/SMAppService/LaunchAgent/config/tunnel/Apple/trust-root/tag/release effects"
+    - "result NEEDS_REVIEW on complete PASS, otherwise BLOCKED"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
