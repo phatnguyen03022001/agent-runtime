@@ -1,0 +1,229 @@
+protocol_version: 3
+
+task_id: TASK-0171
+task_revision: 1
+state: APPROVED
+title: "Distributable Prebuilt Installation Lane"
+
+origin:
+  type: architect_continuation
+  task_id: TASK-0171
+  gap_id: "DEVELOPER-GRADE-FRESH-INSTALL"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+
+architect_analysis_skills:
+  - architect
+  - simplicity
+  - reliability
+  - verification
+  - security-review
+
+execution_skills:
+  required:
+    - executor
+    - simplicity
+    - reliability
+    - verification
+    - security-review
+  recommended: []
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  preferred_transport: AGENT_RUNTIME
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0170/review.yaml at ea76c6ed38e78c60470856720f8bfb9da934d672"
+    role: "Accepted live Runtime 0.5.0 with official tunnel-client 0.0.14."
+    precedence: 1
+  - source: "Live package distribution evidence on 2026-09-27"
+    role: "Installed app is Apple Development signed, code directory flags are none, spctl assessment rejects it, and no notarization ticket is stapled."
+    precedence: 2
+  - source: "macos/package_app.sh at TASK-0171 base"
+    role: "Current package lane builds locally with Swift/CPython, uses one explicit signing identity, signs with codesign --deep, then seals/publishes a candidate; no distribution/notarization lane exists."
+    precedence: 3
+  - source: "docs/INSTALL.md and install.sh at TASK-0171 base"
+    role: "Current fresh-install path requires a canonical Git clone, CPython 3.13, Xcode/Swift, local signing identity, source verification and local package build before transactional install."
+    precedence: 4
+  - source: "Existing package_provenance / candidate_cutover / runtime_config substrate"
+    role: "Already provides sealed candidate identity, signed TeamIdentifier binding, transactional cutover, config validation and package-owned Python/runtime helpers; reuse rather than invent a second installer architecture."
+    precedence: 5
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing package/candidate/cutover architecture"
+  rationale: "Productization must extend the existing package and transactional install boundaries. Do not create a parallel package format, updater service, privileged helper, installer daemon, package manager, control plane, or second lifecycle."
+
+objective: "Add a production-grade prebuilt distribution lane for provisioned macOS operators while preserving the current source-build maintainer lane. A release artifact must be capable of becoming Developer-ID-signed, hardened-runtime-enabled, notarized and stapled before final candidate sealing, and must carry a checkout-independent transactional installer path that uses the candidate's packaged Runtime substrate rather than requiring the target operator to clone agent-runtime or install CPython 3.13, Xcode/Swift, or a local signing identity. This task is source-only: implement and verify the distribution/install architecture, but do not submit to Apple notarization, publish a release, mutate the installed Runtime, or require operator signing/notary credentials."
+
+scope:
+  required_changes:
+    - "Preserve the existing developer/source-build path for maintainers. Source qualification and local candidate packaging remain available and must not become dependent on Apple notarization or external release infrastructure."
+    - "Add an explicit distribution/release packaging mode rather than silently changing every package build. Distribution mode must fail closed unless an explicit Developer ID Application signing identity and explicit notarization authority locator/profile are supplied by the caller; never enumerate or guess Keychain identities or credentials."
+    - "Distribution mode must sign the complete final executable code graph with Developer ID-compatible hardened-runtime/timestamp semantics suitable for Apple notarization. Do not weaken existing strict codesign or responsible TeamIdentifier checks."
+    - "Apple notarization/stapling must occur before final candidate sealing/publication, because stapling mutates the app bytes. The final candidate closure/handoff must therefore bind the exact post-staple app, not the pre-notarization app."
+    - "Keep notarization credentials out of product configuration and repository artifacts. They are build/release authority only and must never enter runtime.env, candidate metadata, logs, docs examples containing secrets, or installed product state."
+    - "Provide deterministic distribution verification hooks/commands that a later qualification task can use to require strict codesign, hardened-runtime Developer ID identity, successful Gatekeeper assessment, successful stapler validation and unchanged embedded Runtime provenance before sealing."
+    - "Create a checkout-independent prebuilt installation path for an extracted release bundle. The installer may be CLI-based, but it must not require the target operator to have a Git checkout of agent-runtime, Git repository identity for the product checkout, CPython 3.13, Swift/Xcode, or any local code-signing identity."
+    - "Reuse the candidate app's embedded Python/runtime helpers for provenance/config/cutover work where Python is required. Do not add a second bundled Python or depend on a host-installed Python solely for prebuilt installation."
+    - "The prebuilt installer may require only the supported macOS arm64 platform, ordinary system tools already required for lifecycle operation, the official OpenAI tunnel-client, provisioned CONTROL_PLANE_API_KEY / CONTROL_PLANE_TUNNEL_ID, explicit Runtime Git name/email, an explicit existing absolute workspace root, and any unavoidable human Background Activity approval."
+    - "Preserve the current exact tunnel identity/security policy. This is a distributable installer for provisioned authorized operators, not a generic public tunnel registration mechanism."
+    - "The prebuilt installer must initialize/validate the canonical ~/Library/Application Support/Agent Runtime/runtime.env with mode 0600 without printing secrets, validate the release candidate against its external handoff, and enter the same existing transactional cutover semantics as install.sh --install-prebuilt."
+    - "Fresh first-install from a release bundle must not derive AGENT_RUNTIME_WORKSPACE_ROOT from an agent-runtime checkout. Require an explicit absolute existing workspace root as operator input/config and preserve existing Runtime workspace semantics."
+    - "Release-bundle installation must retain the same explicit pending cutover decision: successful install is not automatically committed. Existing commit/rollback/recovery authority remains unchanged."
+    - "Keep the release artifact minimal. Reuse existing .env.example semantics or a bounded release-specific template only if necessary; do not bundle source history, tests, build toolchain, signing credentials, notary credentials, or unrelated repository content."
+    - "Update README/docs so operator paths are clearly separated: prebuilt release installation for provisioned operators versus build-from-source for maintainers. Permanent docs must describe invariant prerequisites rather than one machine's installed state."
+    - "Add deterministic tests for distribution-mode command ordering and fail-closed credential/identity requirements, final-seal-after-staple ordering, post-staple candidate identity, checkout-independent prebuilt install preflight, explicit workspace requirement, secret non-disclosure, source-build compatibility, and transactional cutover reuse."
+    - "Run focused tests and canonical ./verify exactly once on the immutable final source candidate unless tracked source bytes change afterward."
+    - "Do not perform a real notarization submission, release publication, live Runtime install/cutover/restart, tunnel-client mutation, telemetry change, or host signing-credential mutation in TASK-0171."
+    - "On PASS, publish one coherent source candidate and a report-only child, then stop NEEDS_REVIEW."
+
+  allowed_existing_files_or_components:
+    - "macos/package_app.sh"
+    - "macos/package_provenance.py"
+    - "macos/candidate_cutover.py only if a minimal reusable prebuilt entrypoint adaptation is required; existing transactional semantics must remain unchanged"
+    - "macos/runtime_config.py"
+    - "macos/install_preflight.py only for separating source-build and prebuilt-install prerequisite logic"
+    - "install.sh"
+    - ".env.example"
+    - "README.md"
+    - "docs/INSTALL.md"
+    - "docs/OPERATIONS.md and docs/RECOVERY.md only for directly required invariant install/recovery clarification"
+    - "tests/test_package_provenance.py"
+    - "tests/test_candidate_cutover.py"
+    - "directly affected install/package/doctor contract tests"
+    - "new bounded release/distribution helper(s) under macos/ and matching tests if existing files cannot express the lane cleanly"
+    - ".agent/tasks/TASK-0171/report-r1.yaml"
+
+structure_policy:
+  expected_new_files: []
+  unlisted_new_files:
+    allowed: true
+    max: 4
+    within:
+      - "macos/"
+      - "tests/"
+    purpose: "Allow the smallest release-bundle/notarization/install helpers and direct tests if extending existing scripts would create unsafe coupling."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+invariants:
+  - "Runtime product version remains 0.5.0; ToolContract Kernel and MCP public surface are unchanged."
+  - "Existing source-build maintainer path remains supported and does not require notarization by default."
+  - "Existing candidate schema, manifest schema-2 ServiceManagement contract, provenance closure, TeamIdentifier binding and transactional cutover semantics remain authoritative."
+  - "Distribution mode never seals/publishes a candidate before all distribution-signing/notarization/stapling mutations are complete."
+  - "Prebuilt installation requires no agent-runtime Git checkout, build toolchain, CPython 3.13, Swift/Xcode or local signing identity on the target machine."
+  - "No secrets are printed, committed, embedded in release artifacts, or copied outside canonical runtime.env."
+  - "No root/sudo requirement, privileged helper, installer daemon or blanket TCC permission is introduced."
+  - "Official OpenAI tunnel-client remains an external supported dependency; it is not vendored into Agent Runtime."
+  - "No live host/product activation effect occurs in this task."
+  - "MAIN_ONLY topology remains unchanged."
+
+forbidden_changes:
+  - "Real notarization submission, notary credential creation, Keychain enumeration, signing-certificate discovery, or release publication."
+  - "Any installed Runtime/package/tunnel-client/service mutation."
+  - "Automatic cutover commit after prebuilt installation."
+  - "Generic arbitrary tunnel enrollment or weakening of the accepted tunnel identity boundary."
+  - "New update daemon, privileged helper, launch daemon, installer service, package manager, auto-updater, release database or remote control plane."
+  - "Bundling Homebrew, tunnel-client, Apple credentials, source Git history, tests or build toolchain into the release artifact."
+  - "Requiring end users to install the source build dependencies merely to consume a prebuilt release."
+  - "Changing MCP tools, Runtime execution semantics, protection semantics, telemetry semantics or same-UID threat-model boundary."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: revised_contract_required
+  dependency_change: forbidden
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Distribution packaging is an explicit fail-closed lane and source packaging remains compatible."
+    evidence_required: "Tests prove default/source packaging behavior remains available while distribution mode separately requires explicit Developer ID and notary authority inputs and never enumerates/guesses credentials."
+
+  - id: AC-2
+    requirement: "The final distributable candidate can be notarized without invalidating its identity."
+    evidence_required: "Deterministic package-order proof shows Developer-ID/hardened-runtime signing -> notarization submission -> stapling -> Gatekeeper/stapler/provenance verification -> candidate seal/publication, with final closure calculated only after stapling."
+
+  - id: AC-3
+    requirement: "A provisioned operator can install a prebuilt bundle without the source-development toolchain."
+    evidence_required: "Fixture/isolated prebuilt-install tests prove no dependency on an agent-runtime Git checkout, Git remote, CPython 3.13, Swift/Xcode or local signing identity; embedded app Runtime substrate performs required Python validation/cutover logic."
+
+  - id: AC-4
+    requirement: "Prebuilt configuration and first-install authority remain safe."
+    evidence_required: "Tests prove explicit absolute existing workspace input, exact required provisioned credentials/identity validation without disclosure, canonical mode-0600 runtime.env initialization, official tunnel-client prerequisite and unchanged pending commit/rollback semantics."
+
+  - id: AC-5
+    requirement: "Existing provenance/security boundaries are preserved."
+    evidence_required: "Candidate handoff/provenance/TeamIdentifier/strict codesign regressions remain green; distribution lane cannot seal an unstapled/incompletely verified release candidate and introduces no privileged/TCC/tunnel-policy broadening."
+
+  - id: AC-6
+    requirement: "Operator documentation makes release install simpler and separates it from maintainer build."
+    evidence_required: "README/INSTALL describe a checkout-independent prebuilt path with its actual remaining prerequisites and a separate source-build path; no docs claim release/notarization is active before TASK-0172 qualification."
+
+  - id: AC-7
+    requirement: "No live distribution consequence occurs in source qualification."
+    evidence_required: "No notarization submission, GitHub release, installed Runtime mutation, restart/cutover, tunnel mutation or host credential mutation occurs; live Runtime remains exact and healthy."
+
+  - id: AC-8
+    requirement: "One coherent final source candidate is verified."
+    evidence_required: "Focused distribution/install regressions PASS, existing directly affected package/cutover regressions PASS, git diff --check PASS, and canonical ./verify PASS exactly once on the immutable final candidate unless tracked source bytes change."
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "Focused distribution/install source tests plus canonical ./verify on the immutable final source candidate; no real notarization or live installation in this task."
+    expected_signal: "Source contains a fail-closed Developer-ID/notarization-capable distribution lane and a checkout-independent transactional prebuilt installer while existing Runtime/source-build behavior remains green."
+
+report_requirements:
+  path: .agent/tasks/TASK-0171/report-r1.yaml
+  record:
+    - "task_revision=1; state=REPORTED; result=NEEDS_REVIEW on PASS"
+    - "exact base/candidate/tree/report lineage"
+    - "distribution lane and source-build compatibility summary"
+    - "new/modified file boundary"
+    - "sign/notarize/staple/verify/seal ordering proof"
+    - "prebuilt target-machine prerequisite matrix proving removed build prerequisites"
+    - "workspace/config/secret-handling proof"
+    - "candidate/provenance/cutover regression evidence"
+    - "focused and canonical verification results/counts"
+    - "explicit proof of zero live notarization/release/install/restart/tunnel/credential effects"
+    - "final clean main/report-only publication reconciliation"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
