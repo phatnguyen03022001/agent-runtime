@@ -1,0 +1,65 @@
+protocol_version: 3
+
+task_id: TASK-0180
+task_revision: 1
+review_revision: 1
+state: BLOCKED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0180/report-r1.yaml
+  commit: "2f69dfc5f8f6b008cb83143de25208e2b8f6df52"
+  report_revision: 1
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  skill_rules: PASS
+  scope: PASS
+  structure_policy: PASS
+  git_authority: PASS
+  acceptance_criteria: BLOCKED_BY_FIXTURE_CHILD_OWNERSHIP
+  verifier_evidence: NOT_REQUIRED
+
+blocking_findings:
+  - id: B-0180-001
+    severity: BLOCKING
+    summary: "The immutable-substrate/external-payload architecture passed v1 execution, but the disposable native helper did not own termination of its long-running bundled-Python child. launchctl bootout removed the helper while Python survived as PPID 1, so the task correctly stopped before pointer=v2."
+    required_authority: "TASK-0180 revision 2 must keep the same architecture and repeat qualification with a helper that owns the Python child process group and performs bounded signal-forwarding, wait, and forced cleanup before exiting."
+
+acceptance_basis:
+  - "Fresh review resolution proves HEAD, origin/main, and remote main at exact report commit 2f69dfc5f8f6b008cb83143de25208e2b8f6df52 with a clean main worktree."
+  - "The reviewed report is the sole child of revision-1 execution base 79076a166575be3225b0c9214f30edec7d876699; its only tracked change is report-r1.yaml, pinned Foundation report validation passes, and git diff --check passes."
+  - "Revision 1 establishes the central architecture predicate rather than failing it: one frozen TeamIdentifier-free ad-hoc substrate loaded quarantined external content-addressed first-party Python payload v1, imported agent_runtime from outside the app, and exposed the exact 20-tool surface while helper/Python/substrate hashes stayed frozen."
+  - "The blocker occurred only at the mandatory v1 shutdown boundary. Exact evidence shows launchctl bootout removed the service, helper PID 63510 terminated, and child Python PID 63515 remained alive as PPID 1."
+  - "No release-pointer mutation or v2 bootstrap occurred after the failed shutdown gate, and the orphan child was cleaned only after exact identity reconciliation. No product/test/doc/dependency/canonical-verify/real-candidate/production consequence occurred."
+  - "This is a fixture lifecycle-ownership defect, not a Gatekeeper or external-payload rejection. A native supervisor can own its spawned Python generation by placing the child in a dedicated process group, forwarding termination to that group, waiting boundedly for child exit, escalating only the exact owned group if necessary, and reaping the child before the supervisor exits."
+  - "The repository already uses bounded process-group termination patterns in agent_runtime/executor.py and durable execution code; revision 2 should reuse that ownership principle in the disposable helper rather than invent another lifecycle architecture."
+  - "A corrected qualification must still require helper and Python both absent before pointer mutation, so no stale generation can execute after v2 selection."
+
+continuation:
+  allowed: false
+  preconditions:
+    - "TASK-0180 revision 1 is exhausted and must not be resumed directly."
+    - "Revision 2 may authorize one fresh disposable qualification using corrected helper-to-Python lifecycle ownership."
+  preserve:
+    task_0179_review_commit: "21b9816536161e4587a0a3a27ea5967cf1c6bd66"
+    revision_1_report_commit: "2f69dfc5f8f6b008cb83143de25208e2b8f6df52"
+    architecture_direction: "immutable approved executable/native substrate plus external content-addressed pure-Python payload"
+    accepted_product_mutation: 0
+    canonical_verify_invocations: 0
+    real_product_candidate_builds: 0
+  forbidden:
+    - "Changing architecture because of B-0180-001."
+    - "Switching the release pointer while any previous-generation helper or Python child remains alive."
+    - "Using broad process killing or unrelated process cleanup as the normal lifecycle proof."
+    - "Product implementation before revision-2 v1-to-v2 qualification passes."
+
+notes:
+  - "The next task revision is a corrected lifecycle qualification continuation, not a new architecture task."
