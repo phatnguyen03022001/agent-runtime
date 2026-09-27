@@ -2,14 +2,14 @@ protocol_version: 3
 
 task_id: TASK-0171
 task_revision: 1
-review_revision: 1
-state: REVISION_REQUIRED
+review_revision: 2
+state: ACCEPTED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
-  path: .agent/tasks/TASK-0171/report-r1.yaml
-  commit: "8d1848068a623026a33865d62c8cd705d80abfde"
-  report_revision: 1
+  path: .agent/tasks/TASK-0171/report-r2.yaml
+  commit: "86012a2ce2ec9e3daa1811b07b292cb62bcc470e"
+  report_revision: 2
 
 independence:
   reviewer_role: ARCHITECT
@@ -17,7 +17,7 @@ independence:
   exact_report_identity_verified: true
 
 contract_compliance:
-  protocol_version: NOT_PROVEN
+  protocol_version: PASS
   identity: PASS
   execution_base: PASS
   skill_rules: PASS
@@ -27,24 +27,27 @@ contract_compliance:
   acceptance_criteria: PASS
   verifier_evidence: PASS
 
-findings:
-  - id: F-0171-001
-    severity: MATERIAL
-    disposition: REVISION_REQUIRED
-    summary: "Canonical report revision 1 is not parser-valid YAML under the pinned Foundation validator."
-    evidence: "Fresh validation of exact committed .agent/tasks/TASK-0171/report-r1.yaml at 8d184806... fails at line 189 with 'expected mapping key'. The failing serialization is the module_counts mapping using unquoted dotted keys such as tests.test_package_provenance."
-    required_correction: "Preserve source candidate 59e570fca94d0ff858df1d1c6e4c7df66210ca8b and all execution evidence. Produce report revision 2 only, correcting parser-compatible serialization for the module_counts keys (and only any additional mechanical serialization issue the pinned validator actually proves), then validate the exact corrected report. Do not modify product/source/test/doc bytes and do not rerun focused or canonical verification."
+acceptance_basis:
+  - "Report revision 2 at 86012a2ce2ec9e3daa1811b07b292cb62bcc470e is the sole report-only child of corrective REVISION_REQUIRED review commit b6faf4dd265c7093f1e5dbb8346e1d19b020f5ab."
+  - "F-0171-001 is closed: parser-invalid dotted module_counts keys were replaced by parser-compatible sequence entries without changing execution meaning."
+  - "Fresh pinned Foundation validation passes on the exact committed report revision 2."
+  - "Preserved implementation candidate remains 59e570fca94d0ff858df1d1c6e4c7df66210ca8b with tree b6615adb161026adf9d7d600fb1070656c2b2ccb and direct parent eb769d5f5b2aab9ffe202faaf0b442071545e7df."
+  - "Independent review of the candidate proved the distribution lane is real source behavior: explicit Developer ID/hardened-runtime/timestamp signing, notarization submission, stapling, post-staple verification, then final candidate seal/publication."
+  - "Independent review proved the release installer uses candidate-embedded Runtime Python/helpers, requires an explicit existing absolute workspace, and does not depend on an agent-runtime checkout, host CPython 3.13, Swift/Xcode, or target signing/notary credentials."
+  - "Source candidate scope is limited to authorized distribution/install/docs/tests surfaces and introduces only macos/distribution_verify.py and macos/install_release.sh as bounded helpers."
+  - "Executor evidence preserves focused 165 tests PASS and canonical ./verify exactly once on immutable candidate with 62/62 modules and 822 tests PASS; the corrective continuation correctly did not rerun them."
+  - "Architect focused recheck of package_provenance/runtime_config/productization passed 39/39 before the corrective report continuation."
+  - "No real notarization submission, GitHub release, Runtime activation/restart/cutover, tunnel-client mutation, credential mutation, telemetry change or TCC mutation occurred in TASK-0171."
 
-preserved_evidence:
-  source_candidate: "59e570fca94d0ff858df1d1c6e4c7df66210ca8b"
-  source_tree: "b6615adb161026adf9d7d600fb1070656c2b2ccb"
-  candidate_parent: "eb769d5f5b2aab9ffe202faaf0b442071545e7df"
+final_candidate:
+  commit: "59e570fca94d0ff858df1d1c6e4c7df66210ca8b"
+  tree: "b6615adb161026adf9d7d600fb1070656c2b2ccb"
   focused_executor_evidence: "165 tests PASS"
-  canonical_executor_evidence: "62/62 modules, 822 tests PASS, one invocation on immutable candidate"
-  architect_focused_recheck: "39/39 PASS for package_provenance, runtime_config, and productization"
-  live_runtime: "0.5.0 / b1879b5c185e93457bb634a7ab0508f7220416af / 2c52b095491471b2a723fe7bfa0fa57d9e6da14d; doctor healthy 10/10; Kernel 2; 21/20/20"
-  source_diff_check: PASS
+  canonical_verify: "62/62 modules, 822 tests PASS, exactly once"
+  architect_focused_recheck: "39/39 PASS"
+  report_validation: PASS
+  result: PASS
 
 notes:
-  - "This review does not reject the TASK-0171 implementation candidate. The only material blocker is canonical report serialization."
-  - "A corrected report revision must be a report-only child of this REVISION_REQUIRED review commit and must preserve the exact source candidate and prior verification evidence without rerun."
+  - "TASK-0171 is terminally ACCEPTED for exact report revision 2 at 86012a2ce2ec9e3daa1811b07b292cb62bcc470e."
+  - "The source architecture is qualified only. Real Developer ID/notarization/stapling/distribution consequence remains a separate task boundary."
