@@ -44,7 +44,7 @@ Keep `Agent Runtime.app` beside `Agent Runtime.candidate.json` and open the app.
 2. Enter the provisioned `CONTROL_PLANE_TUNNEL_ID` in the secure tunnel field.
 3. Provide the Runtime Git name/email pair when setup requires it.
 4. Choose an existing workspace with the macOS directory picker. The normal path does not accept a typed workspace path.
-5. Continue setup. If macOS requests Background Activity approval, complete that platform action and use the setup continuation action.
+5. Continue setup. If macOS requires Background Activity approval, setup explains the requirement and offers **Open Background Activity Settings…** to open the macOS Login Items/Background Activity control. Grant approval there, return to Agent Runtime, then use **Continue After Approval**.
 
 Secrets cross from the native UI to the packaged configuration helper only through bounded stdin. They are not placed in argv, shell exports, UserDefaults, logs, diagnostics, or repository evidence. The canonical destination remains:
 
@@ -64,7 +64,7 @@ Before commit, setup requires:
 
 The package-owned doctor therefore remains `degraded` at that boundary solely because the transaction still exists. Any additional warning or failure blocks commit. Only then may setup invoke the existing cutover commit. Terminal success additionally requires the transaction to be absent, readiness to remain `ready`, and package-owned doctor overall status to be `healthy`.
 
-A recognized approval, partial, or otherwise non-success state stays actionable through the existing resume/rollback/recovery paths. Setup does not bypass macOS approval and does not install or update the external `tunnel-client`.
+Opening Background Activity settings is navigation only: it does not grant approval, mark setup complete, change Runtime configuration, or commit/resume/rollback/recover the cutover. If approval is still pending, **Continue After Approval** remains non-success and actionable; after approval it reuses the existing resume/doctor/readiness/cutover path. Setup does not bypass macOS approval and does not install or update the external `tunnel-client`.
 
 An already-valid installed configuration with no pending cutover bypasses onboarding and opens the current control panel directly.
 

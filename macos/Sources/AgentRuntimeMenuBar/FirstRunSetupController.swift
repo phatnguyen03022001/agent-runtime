@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import ServiceManagement
 
 struct FirstRunProcessResult: Equatable {
     let exitCode: Int32
@@ -537,11 +538,13 @@ final class FirstRunSetupController: NSViewController {
     private let gitEmailField = NSTextField()
     private let statusField = NSTextField(wrappingLabelWithString: "")
     private let primaryButton = NSButton()
+    private let settingsButton = NSButton()
     private let secondaryButton = NSButton()
     private let mode: FirstRunSetupMode
     private let begin: (FirstRunSetupInput) -> FirstRunSetupOutcome
     private let activateConfigured: (URL) -> FirstRunSetupOutcome
     private let performAction: (FirstRunRecoveryAction) -> FirstRunSetupOutcome
+    private let openBackgroundActivitySettings: () -> Void
     private let completed: () -> Void
     private var recoveryAction: FirstRunRecoveryAction?
 
@@ -550,12 +553,16 @@ final class FirstRunSetupController: NSViewController {
         begin: @escaping (FirstRunSetupInput) -> FirstRunSetupOutcome,
         activateConfigured: @escaping (URL) -> FirstRunSetupOutcome,
         performAction: @escaping (FirstRunRecoveryAction) -> FirstRunSetupOutcome,
+        openBackgroundActivitySettings: @escaping () -> Void = {
+            SMAppService.openSystemSettingsLoginItems()
+        },
         completed: @escaping () -> Void
     ) {
         self.mode = mode
         self.begin = begin
         self.activateConfigured = activateConfigured
         self.performAction = performAction
+        self.openBackgroundActivitySettings = openBackgroundActivitySettings
         self.completed = completed
         super.init(nibName: nil, bundle: nil)
         preferredContentSize = NSSize(width: 470, height: 360)
@@ -616,6 +623,12 @@ final class FirstRunSetupController: NSViewController {
         primaryButton.bezelStyle = .rounded
         stack.addArrangedSubview(primaryButton)
 
+        settingsButton.target = self
+        settingsButton.action = #selector(settingsPressed)
+        settingsButton.bezelStyle = .rounded
+        settingsButton.isHidden = true
+        stack.addArrangedSubview(settingsButton)
+
         secondaryButton.target = self
         secondaryButton.action = #selector(secondaryPressed)
         secondaryButton.bezelStyle = .rounded
@@ -629,6 +642,7 @@ final class FirstRunSetupController: NSViewController {
             stack.topAnchor.constraint(equalTo: root.topAnchor, constant: 24),
             stack.bottomAnchor.constraint(lessThanOrEqualTo: root.bottomAnchor, constant: -24),
             primaryButton.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            settingsButton.widthAnchor.constraint(equalTo: stack.widthAnchor),
             secondaryButton.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ])
         view = root
@@ -670,6 +684,7 @@ final class FirstRunSetupController: NSViewController {
 
     @objc private func primaryPressed() {
         primaryButton.isEnabled = false
+        settingsButton.isHidden = true
         secondaryButton.isHidden = true
         recoveryAction = nil
         statusField.stringValue = "Checking configuration and activation…"
@@ -700,6 +715,10 @@ final class FirstRunSetupController: NSViewController {
         apply(outcome)
     }
 
+    @objc private func settingsPressed() {
+        openBackgroundActivitySettings()
+    }
+
     @objc private func secondaryPressed() {
         guard let recoveryAction else { return }
         secondaryButton.isEnabled = false
@@ -711,14 +730,19 @@ final class FirstRunSetupController: NSViewController {
         case .success:
             statusField.stringValue = "Setup complete. Runtime readiness is ready and package-owned doctor is healthy."
             primaryButton.isHidden = true
+            settingsButton.isHidden = true
             secondaryButton.isHidden = true
             completed()
         case .approvalRequired:
             statusField.stringValue =
-                "macOS Background Activity approval is required. Approve it in System Settings, then continue."
+                "Agent Runtime needs macOS Background Activity authorization for its Runtime service. macOS requires you to approve it; open Background Activity settings, approve Agent Runtime, then continue."
+            settingsButton.title = "Open Background Activity Settings…"
+            settingsButton.isHidden = false
+            settingsButton.isEnabled = true
             showSecondary(title: "Continue After Approval", action: .resume)
         case .actionRequired(let message, let action):
             statusField.stringValue = message
+            settingsButton.isHidden = true
             let title: String
             switch action {
             case .recheck: title = "Check Again"
@@ -729,6 +753,7 @@ final class FirstRunSetupController: NSViewController {
             showSecondary(title: title, action: action)
         case .failure(let message):
             statusField.stringValue = message
+            settingsButton.isHidden = true
             secondaryButton.isHidden = true
             primaryButton.isEnabled = true
         }

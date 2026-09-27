@@ -386,6 +386,71 @@ final class PresentationTests: XCTestCase {
         XCTAssertEqual(FirstRunDoctorGate.preCommitDecision(from: partial), .recoverPartial)
     }
 
+    func testFirstRunResumeStaysPendingWithoutApprovalAndUsesExistingCommitGatesAfterApproval() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let paths = FirstRunSetupPaths(
+            candidateApp: root.appendingPathComponent("release/Agent Runtime.app", isDirectory: true),
+            home: root.appendingPathComponent("home", isDirectory: true)
+        )
+        let approval = try doctorReport(
+            status: "degraded",
+            checks: [
+                check("service_registration", "warn", "SERVICE_APPROVAL_REQUIRED"),
+                check(
+                    "cutover_identity",
+                    "warn",
+                    "CUTOVER_TRANSACTION_PRESENT",
+                    evidence: ["transaction_present": true, "status": "AWAITING_APPROVAL", "phase": "APP_SWAPPED"]
+                ),
+            ]
+        )
+        let pendingRunner = RecordingFirstRunRunner(results: [
+            .init(exitCode: 0),
+            .init(exitCode: 1, standardOutput: approval),
+        ])
+        let pending = FirstRunSetupOrchestrator(paths: paths, runner: pendingRunner)
+
+        XCTAssertEqual(pending.perform(.resume), .approvalRequired)
+        XCTAssertEqual(pendingRunner.invocations.first?.arguments, [paths.installer.path, "--resume-cutover"])
+        XCTAssertFalse(
+            pendingRunner.invocations.contains(where: { $0.arguments.contains("--commit-cutover") })
+        )
+
+        let preCommit = try doctorReport(
+            status: "degraded",
+            checks: [
+                check("runtime_identity", "pass", "OK"),
+                check(
+                    "cutover_identity",
+                    "warn",
+                    "CUTOVER_TRANSACTION_PRESENT",
+                    evidence: ["transaction_present": true, "status": "PENDING", "phase": "APP_SWAPPED"]
+                ),
+            ]
+        )
+        let postCommit = try doctorReport(
+            status: "healthy",
+            checks: [
+                check("runtime_identity", "pass", "OK"),
+                check("cutover_identity", "pass", "OK", evidence: ["transaction_present": false]),
+            ]
+        )
+        let approvedRunner = RecordingFirstRunRunner(results: [
+            .init(exitCode: 0),
+            .init(exitCode: 1, standardOutput: preCommit),
+            .init(exitCode: 0),
+            .init(exitCode: 0),
+            .init(exitCode: 0, standardOutput: postCommit),
+            .init(exitCode: 0),
+        ])
+        let approved = FirstRunSetupOrchestrator(paths: paths, runner: approvedRunner)
+
+        XCTAssertEqual(approved.perform(.resume), .success)
+        XCTAssertEqual(approvedRunner.invocations.count, 6)
+        XCTAssertEqual(approvedRunner.invocations[0].arguments, [paths.installer.path, "--resume-cutover"])
+        XCTAssertEqual(approvedRunner.invocations[3].arguments, [paths.installer.path, "--commit-cutover"])
+    }
+
     func testFirstRunExistingCanonicalInspectionPreservesBytesAndBypassesInstalledSetup() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let home = root.appendingPathComponent("home", isDirectory: true)
@@ -583,6 +648,51 @@ final class PresentationTests: XCTestCase {
     }
 
     @MainActor
+    func testApprovalRequiredOffersNativeSettingsHandoffAndKeepsResumeBounded() throws {
+        var handoffCount = 0
+        var recoveryActions: [FirstRunRecoveryAction] = []
+        var completionCount = 0
+        let controller = FirstRunSetupController(
+            mode: .fresh,
+            begin: { _ in .approvalRequired },
+            activateConfigured: { _ in .failure("not called") },
+            performAction: { action in
+                recoveryActions.append(action)
+                return .approvalRequired
+            },
+            openBackgroundActivitySettings: { handoffCount += 1 },
+            completed: { completionCount += 1 }
+        )
+        controller.selectedWorkspace = URL(fileURLWithPath: "/")
+        controller.loadView()
+
+        try XCTUnwrap(button(titled: "Set Up", in: controller.view)).performClick(nil)
+
+        XCTAssertTrue(
+            labels(in: controller.view).contains(where: {
+                $0.contains("Background Activity") && $0.contains("macOS")
+            })
+        )
+        let openSettings = try XCTUnwrap(
+            button(titled: "Open Background Activity Settings…", in: controller.view)
+        )
+        let continueSetup = try XCTUnwrap(
+            button(titled: "Continue After Approval", in: controller.view)
+        )
+
+        openSettings.performClick(nil)
+        XCTAssertEqual(handoffCount, 1)
+        XCTAssertTrue(recoveryActions.isEmpty)
+        XCTAssertEqual(completionCount, 0)
+
+        continueSetup.performClick(nil)
+        XCTAssertEqual(recoveryActions, [.resume])
+        XCTAssertEqual(handoffCount, 1)
+        XCTAssertEqual(completionCount, 0)
+        XCTAssertNotNil(button(titled: "Open Background Activity Settings…", in: controller.view))
+    }
+
+    @MainActor
     func testFirstRunWorkspacePickerIsDirectoryOnlyAndCancelDoesNotChangeSelection() {
         let controller = FirstRunSetupController(
             mode: .fresh,
@@ -613,6 +723,31 @@ final class PresentationTests: XCTestCase {
         controller.applyWorkspaceSelection(response: .cancel, urls: [URL(fileURLWithPath: "/ignored")])
         let selectedWorkspace = controller.selectedWorkspace
         XCTAssertEqual(selectedWorkspace, original)
+    }
+
+    @MainActor
+    private func button(titled title: String, in view: NSView) -> NSButton? {
+        if let button = view as? NSButton, button.title == title {
+            return button
+        }
+        for subview in view.subviews {
+            if let match = button(titled: title, in: subview) {
+                return match
+            }
+        }
+        return nil
+    }
+
+    @MainActor
+    private func labels(in view: NSView) -> [String] {
+        var values: [String] = []
+        if let field = view as? NSTextField, !field.stringValue.isEmpty {
+            values.append(field.stringValue)
+        }
+        for subview in view.subviews {
+            values.append(contentsOf: labels(in: subview))
+        }
+        return values
     }
 
     private func check(

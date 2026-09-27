@@ -15,7 +15,7 @@ The qualified Runtime source and installed Runtime are version **0.5.0** with **
 - Runtime requires no blanket TCC permissions. Background Activity approval is operator/platform state.
 - Homebrew is optional; it is not an architecture prerequisite.
 
-ServiceManagement may report `enabled`, `requires-approval`, `not-registered`, or `not-found`. Approval is a human/platform boundary; the Runtime does not open System Settings or bypass it.
+ServiceManagement may report `enabled`, `requires-approval`, `not-registered`, or `not-found`. Approval is a human/platform boundary. When approval is required, the native setup can open the macOS Login Items/Background Activity control through ServiceManagement; only macOS and the operator can grant approval.
 
 ## Installation paths
 
@@ -27,7 +27,7 @@ On a fresh machine the existing app opens native setup automatically. Enter the 
 
 The app delegates validation, canonical mode-`0600` configuration publication, release preflight/provenance, candidate cutover, resume/recovery, doctor, readiness, and commit to the existing package-owned helpers. It does not reimplement lifecycle semantics in Swift. A recognized pending cutover may be doctor `degraded` before commit only because of `CUTOVER_TRANSACTION_PRESENT`; any additional doctor warning or failure blocks commit. Setup reports success only after the existing commit resolves the transaction, readiness is `ready`, and package-owned doctor is `healthy`.
 
-If macOS requires Background Activity approval, setup stops at that human boundary and offers bounded continuation after approval. The official OpenAI `tunnel-client` remains an external prerequisite and is neither installed nor upgraded by setup.
+If macOS requires Background Activity approval, setup explains why the Runtime service needs it and offers **Open Background Activity Settings…**, which opens the supported macOS Login Items/Background Activity control. Opening settings is navigation only: setup remains non-success until the operator grants approval and uses **Continue After Approval**, which reuses the existing bounded resume/doctor/readiness/cutover path. The official OpenAI `tunnel-client` remains an external prerequisite and is neither installed nor upgraded by setup.
 
 An already-valid installed canonical configuration remains authoritative and goes directly to the current control panel without being rewritten or re-prompted. No agent-runtime Git clone, CPython 3.13, Swift/Xcode, local signing identity, or notary credentials are required on the consumer Mac.
 
