@@ -1,0 +1,251 @@
+protocol_version: 3
+
+task_id: TASK-0173
+task_revision: 1
+state: APPROVED
+title: "Provision Durable Apple Distribution Authority"
+
+origin:
+  type: architect_continuation
+  task_id: TASK-0173
+  gap_id: "APPLE-DISTRIBUTION-AUTHORITY-PROVISIONING"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+
+architect_analysis_skills:
+  - architect
+  - security-review
+  - reliability
+  - verification
+
+execution_skills:
+  required:
+    - executor
+    - security-review
+    - reliability
+    - verification
+  recommended:
+    - simplicity
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  preferred_transport: AGENT_RUNTIME
+  reason: "This task provisions and validates operator-owned Apple distribution authority only. It must not mutate the installed Runtime, tunnel-client, product source, or TASK-0172 distribution consequences."
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0172/review.yaml at db9963ea39726f24e125f9729a4129a032e9b733"
+    role: "Canonical BLOCKED review proving the root cause is absent explicit Developer ID Application and notarytool keychain-profile authority, with all TASK-0172 distribution consequence counters unconsumed."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0171/review.yaml at 3cebeaa909ff6135edba5d5070c59ec3244b3c5d"
+    role: "Accepted distribution-lane source contract that consumes explicit Developer ID Application and notarytool keychain-profile locators."
+    precedence: 2
+  - source: "TASK-0171 accepted source candidate 59e570fca94d0ff858df1d1c6e4c7df66210ca8b tree b6615adb161026adf9d7d600fb1070656c2b2ccb"
+    role: "Authoritative source qualification to preserve without rerun or product mutation."
+    precedence: 3
+  - source: "Apple Developer supported Developer ID certificate issuance and xcrun notarytool store-credentials workflows"
+    role: "External platform authority for certificate issuance and Keychain-backed notarization credentials; re-check official Apple behavior if the installed tooling or documented workflow disagrees."
+    precedence: 4
+
+structure_authority:
+  status: AUTHORIZED_MINIMAL_GOVERNANCE_RECORD
+  source: ".agent is the existing repository governance/config surface"
+  rationale: "Persist one small non-secret distribution authority record under the existing .agent surface. Do not extend capability-policy.yaml with unrelated credential metadata and do not create a credential subsystem."
+
+objective: "Establish and prove one durable operator-owned Apple distribution authority contract for Agent Runtime: one exact Developer ID Application signing identity and one exact reusable notarytool keychain-profile locator, persist only their non-secret binding metadata in .agent/distribution-authority.yaml, and prove both exact locators are usable without building, notarizing, stapling, installing, or activating an Agent Runtime distribution candidate. Preserve Keychain as the credential boundary and leave all TASK-0172 consequence counters untouched."
+
+scope:
+  required_changes:
+    - "Freshly prove the exact task base, clean canonical main topology, TASK-0172 BLOCKED review identity, and that TASK-0172 distribution build/notarization/staple counters remain zero before any authority provisioning."
+    - "Do not rerun TASK-0171 focused verification or canonical ./verify. Do not modify any product, package-input, test, documentation, dependency, workflow, Runtime, tunnel-client, release, tag, or candidate bytes."
+    - "Require the operator to explicitly select the Apple Developer team/TeamIdentifier that owns this Agent Runtime distribution authority before any certificate or notary credential provisioning. Never infer a team from arbitrary Keychain or account state."
+    - "For Developer ID Application authority, accept either: (a) an exact operator-supplied existing identity label; or (b) explicit operator authorization to provision one new Developer ID Application certificate for the selected team through Apple's supported workflow. Do not enumerate Keychain identities or select an identity by search/ranking."
+    - "If new Developer ID Application issuance requires Apple account login, account/role selection, certificate issuance, 2FA, CSR approval, certificate download, private-key creation/import, or Keychain Access interaction, stop at that human boundary and report the exact operator action required. Do not bypass, scrape, automate around, or guess authentication. Resume only after the operator explicitly supplies the resulting exact Developer ID Application identity label."
+    - "A newly provisioned Developer ID Application private key must remain in the operator's macOS Keychain. Never export, print, copy into the repository, or serialize its private key material."
+    - "Validate the exact Developer ID Application locator without identity enumeration by signing one disposable bounded Mach-O probe under build/authority-validation/TASK-0173 using the exact supplied label, hardened runtime options, and trusted timestamp semantics."
+    - "After probe signing, independently inspect only that probe signature and require: codesign verification PASS; Authority is Developer ID Application; TeamIdentifier equals the explicitly selected TeamIdentifier; runtime flag is present; and a trusted timestamp is present. Apple Development, Mac Developer, ad-hoc, or unsigned results are rejection conditions."
+    - "For notarization authority, accept either: (a) an exact operator-supplied existing notarytool keychain-profile locator; or (b) explicit operator authorization to create the deterministic profile locator agent-runtime.notarytool.<TeamIdentifier> for the selected team."
+    - "Prefer a Team App Store Connect API key for new notarytool authority. Do not use an Individual App Store Connect API key for notarytool. Do not persist API private-key contents, Apple passwords, app-specific passwords, tokens, API key IDs, issuer IDs, or private-key paths in Git or task/report evidence."
+    - "If creation of a Team App Store Connect API key, App Store Connect API access, account/role selection, login, 2FA, private-key download, or other Apple authentication requires operator interaction, stop at that human boundary and report the precise required action. Resume only after the operator explicitly authorizes the selected Team API key material for one bounded notarytool store-credentials operation."
+    - "Create a new notarytool profile only with xcrun notarytool store-credentials using the exact deterministic profile locator and validation enabled, so credentials are validated before durable Keychain storage. The Executor must not echo credential material and must not persist the provisioning inputs."
+    - "For an explicitly supplied existing notarytool profile, validate only that exact locator. An authentication-only notarytool request may be used with response content suppressed; record only PASS/FAIL and command exit status needed for evidence. Do not enumerate stored profiles or persist unrelated notarization history."
+    - "No real notarization submission is authorized. No Agent Runtime archive, app, package, DMG, ZIP, candidate, handoff, or release artifact may be submitted to Apple in this task."
+    - "After both exact locators validate, create .agent/distribution-authority.yaml as the sole durable authority binding. It may contain only protocol/record identity, repository, status, exact Developer ID Application identity label, exact TeamIdentifier, exact notarytool keychain-profile locator, notary authority type, provisioning/validation status, optional trustworthy validation timestamps, credential_boundary=macOS Keychain, and secrets_persisted=false."
+    - "Before committing the authority record, mechanically reject secret-like or prohibited fields/content: certificate private keys, .p8 contents, Apple IDs/passwords, app-specific passwords, API private keys, bearer/JWT tokens, API key IDs, issuer IDs, environment credential values, or raw Keychain item contents."
+    - "Create report-r1.yaml with exact non-secret evidence, zero TASK-0172 consequences, zero Agent Runtime candidate build/submission/stapling effects, and exact authority-record identity. Validate, commit, publish non-force, reconcile clean main, and stop NEEDS_REVIEW for independent Architect acceptance."
+    - "After independent acceptance of TASK-0173, TASK-0172 may be revised/resumed separately using only the exact persisted identity label and keychain-profile locator. TASK-0173 itself never executes TASK-0172 packaging."
+
+  allowed_existing_files_or_components:
+    - ".agent governance/config surface"
+    - ".agent/tasks/TASK-0173/report-r1.yaml"
+    - "build/authority-validation/TASK-0173 ignored disposable probe workspace"
+    - "xcrun clang for a minimal disposable Mach-O probe"
+    - "codesign for exact-locator probe signing and inspection"
+    - "xcrun notarytool store-credentials for one explicitly authorized exact profile"
+    - "xcrun notarytool authentication-only validation for one explicit existing profile"
+    - "Apple Developer / App Store Connect / Keychain Access operator workflow at explicit human boundaries"
+
+structure_policy:
+  expected_new_files:
+    - ".agent/distribution-authority.yaml"
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "No tracked files beyond the canonical authority record and task report are authorized."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+effect_authority:
+  developer_id_application_certificate_provisioning_max: 1
+  notarytool_profile_store_max: 1
+  disposable_probe_build_max: 1
+  disposable_probe_sign_max: 1
+  exact_notary_authentication_validation_max: 1
+  tracked_authority_record_create_max: 1
+  task_0172_distribution_build_max: 0
+  task_0172_notarization_submission_max: 0
+  task_0172_stapling_max: 0
+  agent_runtime_candidate_build_max: 0
+  apple_notarization_submission_max: 0
+  live_runtime_install_or_cutover_max: 0
+  live_runtime_restart_max: 0
+  tunnel_client_mutation_max: 0
+  source_mutation_max: 0
+  release_or_tag_publication_max: 0
+  arbitrary_keychain_enumeration_max: 0
+  arbitrary_credential_discovery_max: 0
+  blind_retry: false
+
+operator_boundary:
+  required_selection:
+    - "Exact Apple Developer TeamIdentifier."
+    - "Existing exact Developer ID Application identity label, or explicit authorization to provision one new certificate for that team."
+    - "Existing exact notarytool keychain-profile locator, or explicit authorization to create agent-runtime.notarytool.<TeamIdentifier>."
+    - "For new notarytool provisioning, explicit operator-selected Team App Store Connect API key authority and its credential material supplied only at the interactive/provisioning boundary."
+  stop_conditions:
+    - "Apple login, 2FA, account/team selection, role grant, API access grant, certificate issuance approval, Team API key creation/download, private-key import, or any other authentication step requires human action."
+    - "The operator-selected team cannot create Developer ID Application certificates or cannot create/use a Team App Store Connect API key suitable for notarytool."
+    - "The deterministic notarytool profile locator already exists but was not explicitly selected for reuse or overwrite."
+    - "The exact Developer ID label or exact notarytool profile cannot be validated without broad identity/profile discovery."
+  behavior: "STOP BLOCKED at the human boundary, preserve all zero consequence counters, and report one precise operator action. Resume the same task only after explicit operator authority is supplied."
+
+invariants:
+  - "No Agent Runtime product/source/package-input/test/doc/dependency/workflow bytes change."
+  - "TASK-0171 verification is not rerun."
+  - "TASK-0172 remains BLOCKED and its distribution build/notarization/staple consequence counters remain zero."
+  - "No Agent Runtime candidate is built and no artifact is submitted to Apple's notarization service."
+  - "Live Runtime, ServiceManagement state, transaction state, and tunnel-client remain untouched."
+  - "Keychain remains the durable credential boundary for signing private key and notarytool profile."
+  - "Operator retains ownership of Apple Developer and App Store Connect account authority."
+  - "No arbitrary Keychain identity/profile enumeration or credential discovery occurs."
+  - "No secret credential material is printed, persisted in Git, copied into report evidence, or stored in .agent/distribution-authority.yaml."
+  - "The persisted signing locator is the exact Developer ID Application label actually used to sign the probe."
+  - "The persisted TeamIdentifier is extracted from and matches the signed probe."
+  - "The persisted notarytool locator is the exact profile that successfully authenticated."
+  - "No branch, PR, force push, amend, squash, tag, GitHub Release, or unrelated repository metadata mutation."
+
+forbidden_changes:
+  - "Any edit under agent_runtime/, macos/, tests/, docs/, README.md, THREAT_MODEL.md, install.sh, start.sh, requirements*, verification_policy.py, verify*, .github/, .env*, or .agent/capability-policy.yaml."
+  - "Any invocation of macos/package_app.sh distribution mode or any Agent Runtime package/candidate build."
+  - "Any Apple notarization submission, stapling action, Gatekeeper qualification of an Agent Runtime candidate, fresh install, activation, rollback, cutover, reconnect, or recovery."
+  - "Any Keychain-wide identity enumeration, certificate/profile search, password dump, raw Keychain item read, or arbitrary credential discovery."
+  - "Any silent selection among multiple identities, teams, profiles, API keys, or Apple accounts."
+  - "Any certificate/private-key export, API private-key serialization, password/token logging, or credential material committed to Git."
+  - "Any automated Apple login/2FA/account-selection bypass or browser scraping around authentication."
+  - "Any replacement of Keychain with a repository secret file, environment-secret contract, signing daemon, release service, credential broker, or parallel configuration architecture."
+  - "Any TASK-0172 execution or TASK-0171 source requalification in this task."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: revised_contract_required
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Apple distribution authority is explicitly operator-owned and selection is deterministic."
+    evidence_required: "The report records the explicit TeamIdentifier, exact Developer ID Application identity label, and exact notarytool keychain-profile locator; no broad Keychain/profile enumeration, arbitrary discovery, or silent selection occurred."
+
+  - id: AC-2
+    requirement: "The exact Developer ID Application locator is usable for Agent Runtime distribution signing semantics."
+    evidence_required: "One disposable bounded Mach-O probe signed with the exact identity passes strict codesign verification; signature Authority is Developer ID Application, TeamIdentifier matches the selected team, runtime flag is present, and trusted timestamp is present."
+
+  - id: AC-3
+    requirement: "The exact notarytool profile is reusable and authenticated without a notarization submission."
+    evidence_required: "The exact profile locator either passes store-credentials validation during creation or an authentication-only validation as an explicitly selected existing profile; no submission is created and no credential material appears in evidence."
+
+  - id: AC-4
+    requirement: "The durable repository authority record is minimal, non-secret, and directly consumable by future TASK-0172 continuation."
+    evidence_required: ".agent/distribution-authority.yaml exists and contains only the allowed non-secret fields; its exact identity label, TeamIdentifier and keychain-profile locator match the validated authorities; secret-content checks PASS."
+
+  - id: AC-5
+    requirement: "Credential and account ownership boundaries are preserved."
+    evidence_required: "Signing private key and notarytool credentials remain in macOS Keychain/operator custody; Apple login/2FA/account selection/API-key creation or certificate issuance was performed only by the operator at explicit human boundaries."
+
+  - id: AC-6
+    requirement: "TASK-0172 and live Agent Runtime consequences remain untouched."
+    evidence_required: "Agent Runtime candidate builds=0, Apple notarization submissions=0, stapling=0, TASK-0172 build/submission/staple counters remain zero, live Runtime/tunnel mutations=0, source mutations=0, releases/tags=0, and TASK-0171 verification reruns=0."
+
+  - id: AC-7
+    requirement: "Canonical closure is minimal and reviewable."
+    evidence_required: "Only .agent/distribution-authority.yaml and .agent/tasks/TASK-0173/report-r1.yaml are tracked execution outputs; report contains no secrets, validates, publishes non-force, and final main is clean/synced before independent Architect review."
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "Exact-locator disposable Developer ID signing probe plus exact-profile notarytool authentication validation, with no Agent Runtime build and no notarization submission."
+    expected_signal: "The exact persisted Developer ID Application label and TeamIdentifier prove hardened-runtime/timestamp signing on a disposable probe, and the exact persisted notarytool keychain-profile authenticates successfully without exposing credentials or submitting an artifact."
+
+report_requirements:
+  path: .agent/tasks/TASK-0173/report-r1.yaml
+  record:
+    - "task_revision=1; state=REPORTED; result=NEEDS_REVIEW on PASS, BLOCKED at any human authority boundary or failed exact-locator validation"
+    - "exact task/base/report lineage"
+    - "TASK-0172 BLOCKED review identity and proof its build/notarization/staple counters remain zero"
+    - "explicit operator-selected TeamIdentifier"
+    - "exact Developer ID Application identity label and whether reused or newly provisioned"
+    - "disposable probe path/hash or equivalent bounded identity, strict codesign result, Developer ID authority, TeamIdentifier, runtime flag and trusted timestamp evidence"
+    - "exact notarytool keychain-profile locator, authority type, reused/new status and authentication validation PASS/FAIL without response payload or credentials"
+    - ".agent/distribution-authority.yaml hash and allowed-field/secret-scan result"
+    - "human-boundary actions requested/performed without secret material"
+    - "zero Agent Runtime candidate build, notarization submission, stapling, TASK-0172 consequence, live Runtime/tunnel, source, release/tag and TASK-0171 verification effects"
+    - "report-only/authority-record publication and final clean/synced reconciliation"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
