@@ -1,7 +1,7 @@
 protocol_version: 3
 
 task_id: TASK-0174
-task_revision: 1
+task_revision: 2
 state: APPROVED
 title: "Native First-Run Onboarding for Prebuilt Installation"
 
@@ -54,25 +54,28 @@ execution_surface:
   reason: "This is source-only onboarding productization. It must not mutate the live Runtime, tunnel-client, Apple distribution authority, or host credentials during qualification."
 
 authority_sources:
+  - source: ".agent/tasks/TASK-0174/report-r1.yaml at fa2a2d254dca98f7adc704b15424b800aacda02b"
+    role: "BLOCKED revision-1 execution evidence proving the pre-commit healthy-doctor predicate contradicts the existing recognized PENDING transaction warning semantics before any product-source mutation."
+    precedence: 1
   - source: "Operator productization request at exact base 838cb89f84c0dae308d8900fc5f3fae1a0b8d66a"
     role: "Durable newcomer-installation objective, security constraints, minimum acceptance predicates, and explicit separation from TASK-0173 Apple authority."
-    precedence: 1
+    precedence: 2
   - source: ".agent/tasks/TASK-0171/review.yaml resolved at 838cb89f84c0dae308d8900fc5f3fae1a0b8d66a"
     role: "Accepted checkout-independent prebuilt distribution/install source architecture, packaged Runtime Python/helpers, canonical runtime.env ownership, and transactional cutover semantics."
-    precedence: 2
+    precedence: 3
   - source: ".agent/tasks/TASK-0173/report-r1.yaml at 838cb89f84c0dae308d8900fc5f3fae1a0b8d66a"
     role: "Current BLOCKED Apple distribution-authority evidence; onboarding source progress is explicitly independent of that human Apple boundary."
-    precedence: 3
+    precedence: 4
   - source: "macos/Sources/AgentRuntimeMenuBar, macos/runtime_config.py, macos/install_release.sh, agent_runtime/doctor.py, and existing package/cutover tests at 838cb89f84c0dae308d8900fc5f3fae1a0b8d66a"
     role: "Existing native app, canonical configuration helper, prebuilt installer, lifecycle, and health/readiness implementation to reuse rather than duplicate."
-    precedence: 4
+    precedence: 5
 
 structure_authority:
   status: RESOLVED
   source: "Existing Agent Runtime menu-bar app plus canonical runtime_config.py/install_release.sh/candidate_cutover.py/doctor surfaces."
   rationale: "The smallest sufficient design is one bounded first-run native setup surface inside the existing app. No companion app, second configuration system, installer framework, helper service, or parallel lifecycle is required."
 
-objective: "Make the accepted prebuilt-consumer path usable by a newcomer without Terminal configuration: when a fresh prebuilt launch lacks usable canonical Runtime configuration, present one native first-run setup flow inside Agent Runtime.app that securely collects the required Runtime values, selects an existing workspace through the macOS folder picker, validates before persistence, writes only the existing canonical mode-0600 runtime.env through the existing configuration authority, enters the existing prebuilt/candidate lifecycle, and declares success only from Runtime doctor plus readiness evidence. Existing valid configured installs must continue directly to the current control panel."
+objective: "Make the accepted prebuilt-consumer path usable by a newcomer without Terminal configuration: when a fresh prebuilt launch lacks usable canonical Runtime configuration, present one native first-run setup flow inside Agent Runtime.app that securely collects the required Runtime values, selects an existing workspace through the macOS folder picker, validates before persistence, writes only the existing canonical mode-0600 runtime.env through the existing configuration authority, enters the existing prebuilt/candidate lifecycle, uses the existing recognized-transaction doctor warning plus readiness as the pre-commit gate, and declares terminal success only after the existing cutover commit removes the transaction and package-owned Runtime doctor is healthy. Existing valid configured installs must continue directly to the current control panel."
 
 scope:
   required_changes:
@@ -88,7 +91,8 @@ scope:
     - "Reuse the package-embedded prebuilt installer/preflight/provenance/candidate-cutover path for installation and activation, including the accepted external Agent Runtime.candidate.json handoff beside the release app. If that handoff is absent or unsafe, fail closed with an instruction to reopen the complete release bundle; do not synthesize, relocate, or replace provenance. Do not reimplement signing, provenance, candidate copying, ServiceManagement, transaction, resume, rollback, recovery, or commit semantics in Swift."
     - "The native flow may supply validated first-run values to existing packaged helpers through a bounded non-echoing process boundary, but secret material must remain absent from argv, stdout/stderr, unified logging, crash-oriented diagnostic strings authored by this flow, and repository evidence."
     - "Preserve the accepted pending-cutover safety boundary. Do not claim setup success while the transaction is unresolved. Any resume/rollback/recovery action must call the existing lifecycle path and must reconcile unknown effects before retry."
-    - "Make the user-facing completion decision simple: after configuration/install/start succeeds, require package-owned Runtime doctor to be healthy and Runtime readiness to be ready before enabling/finalizing the existing cutover commit and before showing the terminal success state."
+    - "Preserve default package-owned doctor semantics. Before finalizing a recognized PENDING/APP_SWAPPED cutover, require Runtime readiness to be ready and require doctor to contain no fail checks and no warning other than the existing cutover_identity warning with reason_code=CUTOVER_TRANSACTION_PRESENT for that exact recognized transaction. Overall doctor may therefore be degraded at this pre-commit boundary solely because of CUTOVER_TRANSACTION_PRESENT."
+    - "Only after that bounded pre-commit gate passes may onboarding invoke the existing cutover commit. After commit, require transaction absence, Runtime readiness ready, and package-owned Runtime doctor overall status healthy before showing terminal setup success. Any post-commit degraded/unhealthy doctor is non-success and must surface the existing bounded recovery/action path rather than being relabeled healthy."
     - "If Background Activity approval or another existing macOS human prerequisite blocks progress, show one actionable state and allow bounded continuation through the existing resume path after the user completes that platform action. Do not automate around macOS approval."
     - "Keep the external official tunnel-client prerequisite and accepted tunnel identity checks unchanged. Missing/invalid tunnel prerequisites fail closed with actionable setup feedback; this task does not install or update tunnel-client."
     - "Update the prebuilt-user documentation so the primary newcomer path is open Agent Runtime.app -> native setup -> workspace selection -> activation/success. Remove shell exports, manual runtime.env editing, and typed workspace paths from the required fresh-user path while preserving a clearly separate maintainer/source path."
@@ -132,6 +136,7 @@ invariants:
   - "No second configuration store, credential daemon, setup daemon, privileged helper, installer framework, package manager, updater, or parallel lifecycle is introduced."
   - "API key and tunnel identity values are never printed, logged, committed, included in reports, or passed as command-line arguments."
   - "The accepted candidate provenance, external handoff, transactional cutover, resume/rollback/recovery/commit, ServiceManagement, and tunnel security boundaries remain authoritative."
+  - "Default doctor composition remains unchanged: a recognized pending cutover continues to emit CUTOVER_TRANSACTION_PRESENT as warn and therefore yields degraded overall status until the transaction is committed or otherwise resolved."
   - "A valid existing configured install continues to the current menu-bar control panel without mandatory onboarding or destructive config rewrite."
   - "Fresh prebuilt use requires no agent-runtime checkout, Git clone, host CPython 3.13, Xcode/Swift toolchain, local Developer ID identity, or notarytool credentials."
   - "The app may use only the Runtime Python/helpers already embedded by the accepted prebuilt package architecture."
@@ -146,6 +151,7 @@ forbidden_changes:
   - "Passing CONTROL_PLANE_API_KEY or CONTROL_PLANE_TUNNEL_ID in process argv or embedding either value in user-facing error text."
   - "Silently replacing an existing canonical runtime.env that fails validation or has unsafe ownership/type/mode."
   - "Reimplementing candidate cutover, ServiceManagement, provenance, signing, tunnel enrollment, doctor, or readiness logic in a parallel Swift lifecycle."
+  - "Changing default doctor warning/status composition, suppressing CUTOVER_TRANSACTION_PRESENT, adding a special healthy-while-pending doctor mode, or treating unrelated doctor warnings as acceptable pre-commit health."
   - "Adding a companion setup app, installer package/framework, privileged helper, launch daemon, updater, package manager, or background credential process."
   - "Installing host dependencies or requiring CPython/Xcode/Swift/signing/notary tooling on the consumer Mac."
   - "Real Developer ID provisioning, Keychain identity/profile enumeration, notarytool credential creation, notarization, stapling, tag/release publication, or TASK-0172 execution."
@@ -186,8 +192,8 @@ acceptance_criteria:
     evidence_required: "Source/fixture evidence proves onboarding dispatches the existing package-embedded preflight/config/provenance/candidate-cutover/resume/commit path; transaction ambiguity remains fail-closed and no parallel lifecycle implementation appears."
 
   - id: AC-7
-    requirement: "The final user success state is backed by actual Runtime health."
-    evidence_required: "Deterministic integration tests prove setup cannot report success or finalize the pending cutover until package-owned Runtime doctor is healthy and readiness is ready; failure or Background Activity approval produces a non-success actionable state and preserves existing resume/rollback/recovery semantics."
+    requirement: "The pending cutover is finalized only from a narrowly recognized pre-commit state, and terminal success is backed by healthy post-commit Runtime state."
+    evidence_required: "Deterministic integration tests prove the pre-commit gate accepts only readiness=ready plus a package-owned doctor report with zero fail checks and exactly the existing recognized CUTOVER_TRANSACTION_PRESENT warning as the sole warning for PENDING/APP_SWAPPED; any additional warning/failure blocks commit. Tests then prove commit uses the existing lifecycle, removes/resolves the transaction, and terminal success requires readiness=ready plus post-commit doctor overall status=healthy. Background Activity approval and other failures remain non-success actionable states using existing resume/rollback/recovery semantics."
 
   - id: AC-8
     requirement: "The prebuilt consumer path remains checkout- and toolchain-independent."
