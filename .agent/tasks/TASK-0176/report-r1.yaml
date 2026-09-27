@@ -1,0 +1,219 @@
+protocol_version: 3
+
+task_id: TASK-0176
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0176/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  pre_execution_head: "981222640afab5d5302bd7d4b39f4949d5432fa4"
+  authorized_base_head: "981222640afab5d5302bd7d4b39f4949d5432fa4"
+  final_execution_head: "981222640afab5d5302bd7d4b39f4949d5432fa4"
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  authorized_revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+  observed_revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - repository_content_read
+    - repository_content_write
+    - current_platform_research
+    - direct_local_process
+    - git_remote_read
+    - git_non_force_push
+  available:
+    - repository_content_read
+    - repository_content_write
+    - current_platform_research
+    - direct_local_process
+    - git_remote_read
+    - git_non_force_push
+  missing: []
+  passed: true
+
+base_and_lineage:
+  local_head: "981222640afab5d5302bd7d4b39f4949d5432fa4"
+  origin_main: "981222640afab5d5302bd7d4b39f4949d5432fa4"
+  remote_main: "981222640afab5d5302bd7d4b39f4949d5432fa4"
+  worktree_count: 1
+  task_0175_accepted_ancestor: "10c3810729683c6440aa1d86ae22366a04baae39"
+  task_0175_source_candidate: "15ea3a19cb21ae8b104009dd49ebaefd89b0d8eb"
+  task_0175_source_tree: "8ee09d9822c927ea032507187a439c121649ab86"
+  post_candidate_non_governance_drift: false
+  evidence: "Fresh fetch plus ls-remote proved local HEAD, origin/main, and remote refs/heads/main all equal the authorized TASK-0176 base. git merge-base --is-ancestor accepted TASK-0175 review lineage. The only tracked paths changed from the preserved TASK-0175 source candidate through this base are TASK-0175/TASK-0176 governance artifacts."
+
+current_product_identity_contract:
+  package_signing_graph: "macos/package_app.sh requires an explicit non-ad-hoc identity in source mode. Its distribution mode requires an explicit Developer ID Application identity plus notary profile, signs nested Python/native runtime code and responsible executables, signs the app, notarizes, staples, and verifies distribution identity."
+  candidate_handoff: "macos/package_provenance.py serializes a non-empty real team_identifier plus exact source revision/tree, runtime manifest identity, responsible executable paths, candidate closure SHA-256, and record count."
+  responsible_code: "The main app, Runtime service helper, and screen-capture helper must all expose the same non-empty TeamIdentifier; missing/not-set/none/null is rejected."
+  recovery_ownership: "macos/candidate_cutover.py revalidates strict signatures and exact TeamIdentifier ownership for rollback snapshots and staged/installed candidates in addition to exact closure and external handoff checks."
+  service_management: "Agent Runtime uses SMAppService.mainApp and SMAppService.agent(plistName:) with the Runtime LaunchAgent embedded in the app bundle. No manual LaunchAgent fallback is part of the accepted lifecycle."
+
+platform_evidence:
+  accessed_date: "2026-09-28"
+  apple_adhoc: "Apple Security documentation states that an ad-hoc signature seals code without a signing identity; no identity can be retrieved and any code requirement restricting signing identity fails. https://developer.apple.com/documentation/security/seccodesignatureflags/adhoc"
+  apple_distribution: "Apple documentation says independent Mac distribution uses a Developer ID Application identity. https://developer.apple.com/documentation/xcode/creating-distribution-signed-code-for-the-mac/"
+  apple_membership: "Apple membership documentation places app distribution, Developer ID, and notarization in Apple Developer Program membership; a free Personal Team is for personal-device testing and requires periodic reprovisioning. https://developer.apple.com/support/compare-memberships/ and https://developer.apple.com/help/account/basics/about-your-developer-account"
+  apple_smappservice: "Apple DTS SMAppService guidance embeds the helper with Code Sign on Copy and a selected team. Apple DTS update guidance shows launch constraints are sensitive to executable designated requirements and specifically asks whether the new executable satisfies the old DR. https://developer.apple.com/forums/thread/802443 and https://developer.apple.com/forums/thread/795022"
+
+zero_cost_probe:
+  count: 1
+  kind: "Disposable ad-hoc Mach-O signing probe"
+  path: "build/task-0176-zero-cost-probe"
+  persistent_keychain_or_trust_effect: false
+  service_management_effect: false
+  result: BLOCKING
+  evidence: "On the current macOS host, codesign --sign - produced flags=adhoc, Signature=adhoc, TeamIdentifier=not set, and a designated requirement equal to the exact CDHash. codesign --verify --strict passed, proving integrity alone. Identifier-only and anchor apple generic requirements both failed. The probe directory was removed after evidence capture."
+
+viability_matrix:
+  - form: "Completely unsigned"
+    zero_cost: true
+    disposition: REJECTED
+    evidence: "No code signature exists to satisfy the accepted strict-signature/responsible-code ownership contract; this weakens AC-4 before SMAppService compatibility is even considered."
+  - form: "Ad-hoc signature"
+    zero_cost: true
+    disposition: REJECTED
+    evidence: "Apple defines ad-hoc as having no signing identity. The bounded host probe confirmed TeamIdentifier=not set and a build-specific CDHash designated requirement. Strict codesign verification therefore proves sealing only, not stable owner identity. Replacing TeamIdentifier with bundle ID or a sentinel is explicitly forbidden, and a changing CDHash cannot establish stable update/recovery ownership across new builds."
+  - form: "Self-signed certificate or local CA"
+    zero_cost: true
+    disposition: REJECTED
+    evidence: "TASK-0176 explicitly forbids a persistent self-signed/local-CA signing authority, consumer trust-root bootstrap, and a new signing credential-management subsystem. Architect planning evidence also recorded TeamIdentifier=not set for the disposable self-signed probe."
+  - form: "Free Personal Team or Apple Development"
+    zero_cost: true
+    disposition: REJECTED
+    evidence: "Apple documents Personal Team as personal-device testing with periodic reprovisioning; TASK-0176 forbids customer distribution requiring consumer Apple developer credentials, provisioning/reprovisioning, periodic rebuild, or reinstall."
+  - form: "Developer ID Application plus notarization"
+    zero_cost: false
+    disposition: REJECTED
+    evidence: "This is Apple's independent-distribution identity and would satisfy a stable Apple-issued identity model, but it requires Apple Developer Program membership and is expressly superseded/forbidden by TASK-0176."
+  - form: "Other current native zero-cost distribution identity"
+    zero_cost: true
+    disposition: NOT_FOUND
+    evidence: "Current Apple distribution and membership guidance exposes no free, non-expiring, transferable signing identity for independent Mac customer distribution that supplies stable responsible-code identity without consumer credentials or a custom trust authority."
+
+viability_gate:
+  result: BLOCKED
+  blocker_id: "B-0176-001"
+  exact_blocker: "No genuinely zero-cost signing/package form was proven to provide the stable cryptographic responsible-code identity required simultaneously by the accepted TeamIdentifier-based provenance/recovery contract and SMAppService update ownership continuity. Ad-hoc signing preserves code integrity but has no signing identity and its default DR is build-specific CDHash; unsigned code has no signature; self-signed/local-CA and Personal Team paths violate explicit task boundaries; Apple's stable independent-distribution identity is Developer ID and requires paid program membership."
+  security_reason: "Treating ad-hoc integrity, a bundle identifier, CDHash, or a fabricated team sentinel as owner identity would weaken the existing same-UID tamper/mismatch boundary and rollback ownership checks. The task forbids that downgrade."
+  service_management_reason: "Apple DTS evidence ties SMAppService update launch constraints to designated-requirement continuity. The ad-hoc probe produced a CDHash-only DR, so a future build changes the identity predicate; no task-authorized live ServiceManagement mutation may be used to pretend this continuity is proven."
+  action: "Stopped before product mutation and before artifact manufacture as required."
+
+effects:
+  product_source_mutation: 0
+  test_mutation: 0
+  documentation_mutation: 0
+  dependency_mutation: 0
+  canonical_verify_invocations: 0
+  real_zero_cost_candidate_builds: 0
+  live_runtime_install_or_cutover: 0
+  live_runtime_restart: 0
+  live_runtime_configuration_mutation: 0
+  live_service_management_mutation: 0
+  live_system_settings_open: 0
+  tunnel_client_mutation: 0
+  apple_developer_enrollment: 0
+  developer_id_provisioning: 0
+  apple_signing_or_notary_credential_mutation: 0
+  apple_notarization_submission: 0
+  stapling: 0
+  custom_trust_root_install: 0
+  host_dependency_install: 0
+  tag_publication: 0
+  release_publication: 0
+
+local_hygiene:
+  result: PASS
+  run_root: "build/task-0176-zero-cost-probe"
+  cleanup_performed: true
+  retained: []
+  evidence: "The single disposable ad-hoc probe was created only under ignored build output and removed after evidence capture. No probe files remain."
+
+changed_files:
+  - path: ".agent/tasks/TASK-0176/report-r1.yaml"
+    summary: "Executor BLOCKED report for the zero-cost distribution viability gate."
+    new_file: true
+    in_scope: true
+    structure_authorized: true
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "The report records the current package/ServiceManagement identity contract and a fail-closed matrix for unsigned, ad-hoc, self-signed/local-CA, Personal Team/Apple Development, Developer ID, and other current zero-cost native forms. Current Apple platform guidance plus one bounded host probe were used; codesign verification alone was explicitly not treated as viability."
+  - criterion_id: AC-2
+    status: NOT_PROVEN
+    evidence: "No zero-cost form satisfying the full product contract exists in the proven matrix. Developer ID is not zero-cost; Personal Team requires periodic reprovisioning; self-signed/local-CA requires forbidden authority/trust management; ad-hoc has no stable signing identity."
+  - criterion_id: AC-3
+    status: BLOCKED
+    evidence: "SMAppService ownership/update continuity cannot be proven for the only otherwise plausible zero-cost form. Apple DTS ties update launch constraints to designated-requirement continuity, while the ad-hoc probe produced a CDHash-only designated requirement that changes with executable bytes. The task forbids a fallback lifecycle and live ServiceManagement mutation."
+  - criterion_id: AC-4
+    status: BLOCKED
+    evidence: "Current provenance and recovery require a real matching TeamIdentifier across responsible executables and rollback snapshots. Ad-hoc reports TeamIdentifier=not set. Replacing that with bundle ID, CDHash-only ownership, or a fabricated sentinel would weaken the accepted security contract and is explicitly forbidden."
+  - criterion_id: AC-5
+    status: NOT_EXECUTED
+    evidence: "The viability gate blocked before documentation/product mutation. No unsupported zero-cost newcomer flow was documented."
+  - criterion_id: AC-6
+    status: NOT_EXECUTED
+    evidence: "The task requires no artifact when viability fails. Zero real candidate builds and zero release archives were produced."
+  - criterion_id: AC-7
+    status: NOT_EXECUTED
+    evidence: "TASK-0175 ancestry/source identity was proven, but focused implementation verification and canonical ./verify are downstream of viability PASS. No product bytes changed and canonical ./verify was not invoked."
+  - criterion_id: AC-8
+    status: PASS
+    evidence: "No live Runtime/config/ServiceManagement/tunnel/Apple/trust-root/tag/release consequence occurred. The only authorized tracked execution output is this BLOCKED report."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Fresh Git proof bound clean main, local/origin/remote base 981222640afab5d5302bd7d4b39f4949d5432fa4, accepted TASK-0175 ancestry, preserved candidate/tree, and governance-only post-candidate drift."
+  - check_id: CHECK-2
+    result: BLOCKED
+    evidence: "The bounded viability analysis plus the single authorized ad-hoc probe found no zero-cost form satisfying AC-1 through AC-4. B-0176-001 is therefore terminal for this task revision."
+  - check_id: CHECK-3
+    result: NOT_EXECUTED
+    evidence: "Implementation, focused package/provenance/cutover/ServiceManagement/onboarding tests, and Swift verification are authorized only after viability PASS."
+  - check_id: CHECK-4
+    result: NOT_EXECUTED
+    evidence: "No implementation candidate exists. git diff --check applies to the report-only closure; canonical ./verify remains at zero invocations because the viability gate failed before source qualification."
+  - check_id: CHECK-5
+    result: NOT_EXECUTED
+    evidence: "No real zero-cost candidate may be built after a failed viability gate; candidate, handoff, and archive identities therefore do not exist."
+  - check_id: CHECK-6
+    result: EVIDENCE_INDEXED
+    evidence: "Pinned task/report validation, report-only diff check, fresh publication CAS proof, non-force report publication, and final clean/synced reconciliation are consequence-boundary steps after final report authorship and are not self-attested in advance."
+
+discovered_gaps:
+  - gap_id: "ZERO-COST-STABLE-MACOS-DISTRIBUTION-IDENTITY"
+    classification: BLOCKING
+    type: platform_authority
+    severity: material
+    description: "The accepted lifecycle requires stable cryptographic responsible-code ownership across candidate, update, cutover, rollback, recovery, and SMAppService-managed helper execution, but no task-permitted zero-cost macOS distribution identity supplies that property."
+    evidence: "Apple documents ad-hoc signatures as identity-less; the bounded host probe confirmed TeamIdentifier=not set and CDHash-only DR; Personal Team is temporary personal-device testing; self-signed/local-CA authority is forbidden; Apple's independent distribution identity is Developer ID under paid membership."
+    impact: "AC-3 and AC-4 cannot be satisfied without either paid Developer ID authority or an explicitly forbidden/weaker replacement identity/lifecycle."
+    blocks_current_task: true
+    action_taken: "Stopped before product mutation, canonical verification, candidate build, live ServiceManagement testing, and release artifact manufacture."
+    suggested_next_step: "Architect/operator must revise one material constraint if distribution is still required: either permit Apple Developer Program/Developer ID, or define a different product/lifecycle/security contract in a new task. TASK-0176 itself provides no authority to weaken those invariants."
+
+deviations_from_task: []
+blockers:
+  - "B-0176-001: no task-permitted genuinely zero-cost signing/package form preserves both stable SMAppService ownership continuity and the accepted truthful provenance/recovery owner identity."
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: NOT_REQUIRED
+  evidence: "TASK-0176 has no separate authoritative verifier. The viability gate failed before implementation verification or canonical ./verify became authorized."
+
+pushed: false
+
+result: BLOCKED
