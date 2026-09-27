@@ -1,0 +1,205 @@
+protocol_version: 3
+
+task_id: TASK-0170
+task_revision: 1
+state: APPROVED
+title: "Official Secure MCP Tunnel Refresh"
+
+origin:
+  type: architect_continuation
+  task_id: TASK-0170
+  gap_id: "OUTDATED-OFFICIAL-TUNNEL-CLIENT"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - verification
+  - security-review
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - verification
+    - security-review
+  recommended:
+    - simplicity
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  preferred_transport: AGENT_RUNTIME
+  consequence_bearing_carrier: SENTINELX
+  reason: "The task mutates the external tunnel binary used by the active Runtime and may interrupt the selected local transport. Upgrade/restart/rollback effects therefore require an independent carrier."
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0169/review.yaml at e7c518b1a1cddb024fb239a6ce61cbb1b993856e"
+    role: "Accepted live Runtime 0.5.0 schema-2 lifecycle closure."
+    precedence: 1
+  - source: "Live Runtime evidence on 2026-09-27"
+    role: "Runtime 0.5.0 / b1879b5c185e93457bb634a7ab0508f7220416af, Kernel 2, 21/20/20, doctor healthy 10/10, readyz=ready."
+    precedence: 2
+  - source: "Installed tunnel-client evidence on 2026-09-27"
+    role: "Current host binary is tunnel-client 0.0.11+8d55683eeef80bc5e360d95abf4692454fafc615 at /opt/homebrew/bin/tunnel-client."
+    precedence: 3
+  - source: "Homebrew openai/tools formula evidence on 2026-09-27"
+    role: "Supported macOS formula stable is 0.0.14 at official URL https://persistent.oaistatic.com/tunnel-client/v0.0.14/tunnel-client-v0.0.14-darwin-arm64.zip with SHA-256 b540493c5bdbcdbb755700c8e2e16597e28b1569e425007e0f73111047bd6a64."
+    precedence: 4
+  - source: "Official OpenAI tunnel-client installation guidance"
+    role: "Homebrew is the supported macOS installation path; direct release ZIPs are not the selected product path for this task."
+    precedence: 5
+
+structure_authority:
+  status: NOT_APPLICABLE
+  source: "Host dependency refresh only"
+  rationale: "No Agent Runtime product source, package, schema, public tool, or repository structure change is authorized."
+
+objective: "Replace the live external OpenAI Secure MCP Tunnel client from exact installed 0.0.11 to the currently supported Homebrew formula 0.0.14, restart the Runtime transport exactly once through an independent carrier, prove Runtime health and connector behavior are preserved, and record bounded before/after transport latency evidence. Do not modify Agent Runtime product source or activate another Runtime package."
+
+scope:
+  required_changes:
+    - "Freshly prove exact task base, clean main-only topology, accepted TASK-0169 review, live Runtime 0.5.0 identity, doctor healthy 10/10, transaction absent, readyz ready, and current tunnel-client exact 0.0.11."
+    - "Freshly resolve Homebrew formula metadata immediately before mutation. Proceed only if stable version is exactly 0.0.14 and archive SHA-256 is exactly b540493c5bdbcdbb755700c8e2e16597e28b1569e425007e0f73111047bd6a64. If formula identity drifted, STOP BLOCKED for revised authority."
+    - "Before mutation, prove a bounded rollback path can restore exact 0.0.11 executable behavior and Homebrew-managed state if 0.0.14 fails acceptance. Preserve the existing 0.0.11 keg and prohibit cleanup of it during the attempt. If rollback cannot be proven before mutation, STOP BLOCKED."
+    - "Capture a bounded pre-upgrade live benchmark using the same workload that will be repeated after upgrade: runtime_capabilities summary, capacity_observer, a small fs_list, a clean repo_observer, terminal_exec /usr/bin/true, and terminal_exec /bin/sleep 1. Use five live samples per cheap/read-only operation where practical and three samples for each terminal_exec operation. Record raw samples plus median; this is attribution evidence, not an SLA."
+    - "Use SentinelX for the Homebrew mutation. Perform at most one official Homebrew upgrade from openai/tools/tunnel-client to exact 0.0.14. Do not install from an unnotarized direct ZIP and do not modify the tap/formula source."
+    - "Verify /opt/homebrew/bin/tunnel-client resolves to the Homebrew-managed 0.0.14 binary and tunnel-client --version reports exact 0.0.14 lineage before restarting Runtime."
+    - "Use SentinelX for at most one Runtime restart required to adopt the new tunnel binary. Do not reinstall/rebuild/reseal/cut over Agent Runtime."
+    - "After restart, prove healthz/readyz, doctor healthy 10/10, Runtime 0.5.0 / b1879b5c..., Kernel 2, 21/20/20 capabilities, ServiceManagement enabled/enabled, transaction absent, strict installed package identity unchanged, and no bytecode contamination."
+    - "Repeat the exact benchmark workload after acceptance using the same sample counts. Record raw samples, median, delta, and whether the observed path remains transport-dominant. Do not infer hidden platform or model latency subcomponents."
+    - "If 0.0.14 causes a material readiness, doctor, connector, tool-semantic, or transport regression, use only the pre-proven rollback path through SentinelX, restart once if required, prove exact 0.0.11 health restoration, report BLOCKED/ROLLED_BACK, and do not blind retry the upgrade."
+    - "Do not modify any tracked product/source/test/doc/dependency/verification file. On PASS or truthful rollback/block, create only .agent/tasks/TASK-0170/report-r1.yaml as the repository mutation, validate it, publish non-force, reconcile remote/main cleanly, and stop NEEDS_REVIEW."
+
+  allowed_existing_files_or_components:
+    - "official Homebrew openai/tools/tunnel-client installation state"
+    - "installed Runtime lifecycle via existing start.sh commands, consequence-bearing actions carried by SentinelX"
+    - "read-only Runtime MCP tools and health/doctor surfaces"
+    - ".agent/tasks/TASK-0170/report-r1.yaml"
+
+structure_policy:
+  expected_new_files: []
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "No tracked files are authorized except the task report."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+effect_authority:
+  homebrew_upgrade_max: 1
+  runtime_restart_max: 1
+  tunnel_rollback_max: 1
+  rollback_restart_max: 1
+  connector_reconnect_max: 1
+  runtime_install_or_cutover_max: 0
+  source_mutation_max: 0
+  blind_retry: false
+
+invariants:
+  - "Agent Runtime remains version 0.5.0 with runtime revision b1879b5c185e93457bb634a7ab0508f7220416af and tree 2c52b095491471b2a723fe7bfa0fa57d9e6da14d."
+  - "ToolContract Kernel remains 2 and known/advertised/available counts remain 21/20/20."
+  - "No Agent Runtime package build, install-prebuilt, commit-cutover, rollback-cutover, source verification, source mutation, telemetry enablement, or configuration change occurs."
+  - "CONTROL_PLANE_API_KEY, tunnel ID, Git identity, signing identity, and other secrets are never printed or persisted into report evidence."
+  - "Tunnel acquisition remains the official OpenAI Homebrew path."
+  - "No branch, PR, force push, amend, squash, tag, release, or repository metadata mutation."
+
+forbidden_changes:
+  - "Any edit under agent_runtime/, macos/, tests/, docs/, README.md, install.sh, start.sh, requirements*, verification_policy.py, verify*, .env* or GitHub workflow files."
+  - "Any Runtime package rebuild/reseal/reinstall/cutover."
+  - "Any direct-download tunnel-client installation or Gatekeeper bypass."
+  - "Any tunnel/control-plane URL, header, API key, tunnel ID, poll-channel, MCP command, health address, proxy, or identity configuration change."
+  - "Any telemetry/collector/Prometheus/Grafana installation or enablement."
+  - "Any unsupported manual symlink rollback that leaves Homebrew state inconsistent."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: revised_contract_required
+  dependency_change: revised_contract_required
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Upgrade target and rollback are trustworthy before mutation."
+    evidence_required: "Fresh Homebrew metadata proves exact supported 0.0.14 URL/checksum; exact live 0.0.11 identity and a clean rollback path are proven before the sole upgrade."
+
+  - id: AC-2
+    requirement: "Official tunnel-client 0.0.14 is adopted without Runtime product drift."
+    evidence_required: "One Homebrew upgrade and at most one Runtime restart result in exact tunnel-client 0.0.14 while Runtime package/revision/tree/Kernel/capability identities remain unchanged."
+
+  - id: AC-3
+    requirement: "Live Runtime remains healthy and functionally reachable."
+    evidence_required: "healthz/readyz PASS, doctor 10/10, enabled/enabled services, transaction absent, 21/20/20 capabilities, and representative MCP tool calls PASS after restart."
+
+  - id: AC-4
+    requirement: "Transport effect is measured honestly."
+    evidence_required: "Same bounded pre/post workload has raw samples and medians; report distinguishes observed end-to-end live RTT from local Runtime execution and makes no unsupported attribution claim."
+
+  - id: AC-5
+    requirement: "Regression handling is fail-closed."
+    evidence_required: "No blind retry. Any material regression uses only the pre-proven rollback path, restores exact 0.0.11 health, and terminates truthfully rather than leaving an ambiguous transport state."
+
+  - id: AC-6
+    requirement: "Repository/product scope remains frozen."
+    evidence_required: "No tracked product/source changes; report-r1.yaml is the sole repository mutation and final main is clean/synced."
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "Fresh tunnel version/path proof + live Runtime doctor/health/capability proof + same-workload pre/post benchmark + repository final reconciliation."
+    expected_signal: "Tunnel-client 0.0.14 is live through the official Homebrew path, Runtime 0.5.0 is unchanged and healthy, and no source/package drift occurred."
+
+report_requirements:
+  path: .agent/tasks/TASK-0170/report-r1.yaml
+  record:
+    - "task_revision=1; state=REPORTED; result=NEEDS_REVIEW on PASS"
+    - "exact task/base/report lineage"
+    - "pre-upgrade Runtime and tunnel-client identity"
+    - "fresh Homebrew 0.0.14 URL/checksum identity"
+    - "rollback proof before mutation"
+    - "Homebrew upgrade / Runtime restart / rollback / reconnect invocation counts"
+    - "post-upgrade tunnel-client exact version/path"
+    - "final Runtime/doctor/service/capability/transaction/package state"
+    - "pre/post benchmark raw samples, medians and deltas"
+    - "zero product/source/package/config/telemetry mutation"
+    - "report-only publication and final reconciliation"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
