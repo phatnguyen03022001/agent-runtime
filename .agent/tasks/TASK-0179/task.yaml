@@ -1,0 +1,229 @@
+protocol_version: 3
+
+task_id: TASK-0179
+task_revision: 1
+state: APPROVED
+title: "User-Approved App Bundle Qualification"
+
+origin:
+  type: architect
+  task_id: "TASK-0179"
+  gap_id: "APP-BUNDLE-APPROVAL-CONTAINMENT"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+
+architect_analysis_skills:
+  - architect
+  - design-review
+  - simplicity
+  - security-review
+  - verification
+
+execution_skills:
+  required:
+    - executor
+    - security-review
+    - verification
+  recommended:
+    - simplicity
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  preferred_transport: AGENT_RUNTIME
+  reason: "Local proof-only qualification. Product source remains immutable."
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0178/review.yaml at 00c0fafaa7444786b1ac5a762b5f935aa04f8f70"
+    role: "Standalone ad-hoc helper launch is blocked; app-bundle approval containment remains untested."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0178/report-r2.yaml at 2780e40eb58f263db3dc815197c6f62519808818"
+    role: "Recovered standalone-helper rejection and zero accepted product mutation."
+    precedence: 2
+  - source: "Apple DTS Resolving Gatekeeper Problems"
+    role: "When a tool is embedded in an app and the user allows the app, Gatekeeper records the app decision and applies it to code within the app, including the tool."
+    precedence: 3
+  - source: "Apple Support Safely open apps on your Mac"
+    role: "Open Anyway saves the app as an exception for future launches."
+    precedence: 4
+  - source: "Apple Foundation URLResourceValues.quarantineProperties"
+    role: "Documented quarantine metadata API for the disposable fixture."
+    precedence: 5
+  - source: "Current package_app.sh and packaging_python.sh"
+    role: "Agent Runtime embeds a self-contained CPython 3.13 runtime; the fixture must cover representative bundled Python execution."
+    precedence: 6
+
+structure_authority:
+  status: RESOLVED
+  source: "Disposable fixture under ignored build output only"
+  rationale: "Qualify the unresolved app-approval boundary before any product redesign."
+
+objective: "Prove or reject a zero-cost one-approval model: one fresh quarantined ad-hoc app bundle is explicitly allowed by the user once; afterward a traditional user LaunchAgent must run an embedded ad-hoc helper and that helper must run bundled CPython from the same app. A quarantined byte-distinct v2 with the same explicit identifiers/designated requirements must then work without a second user approval. No product mutation is authorized."
+
+scope:
+  required_changes:
+    - "Freshly prove clean canonical main at the exact base, TASK-0178 BLOCKED review ancestry, and zero surviving TASK-0178 product mutation."
+    - "Create exactly one disposable run root under ignored build output with one fresh bundle identifier and one fresh LaunchAgent label. Do not use production Agent Runtime identifiers or state."
+    - "Build disposable v1 and v2 app bundles with the same bundle identifier, main signing identifier/explicit designated requirement, helper signing identifier/explicit designated requirement, helper relative path, bundled-Python relative path, and LaunchAgent label. v1 and v2 main/helper bytes must differ."
+    - "Materialize a representative self-contained CPython 3.13 runtime inside each app at Contents/Resources/runtime/.venv using existing packaging materialization logic or an equivalent byte-faithful disposable copy."
+    - "The disposable helper must stay running and spawn the bundled Python executable in a long-running minimal mode. Evidence must expose main/helper/Python PID, exact executable path, and SHA-256."
+    - "Ad-hoc sign the responsible nested code and app bundle with stable explicit identifiers/designated requirements. TeamIdentifier must remain absent."
+    - "Apply quarantine to disposable v1 using Foundation quarantineProperties. Do not remove quarantine as part of qualification."
+    - "Attempt normal v1 app launch. If macOS requires the documented manual approval, stop with OPERATOR_INPUT_REQUIRED and ask the operator only to use System Settings -> Privacy & Security -> Open Anyway/Open for the exact disposable app. Exactly one such operator approval is authorized."
+    - "After approval, require v1 main app to run with exact PID/path/hash."
+    - "Create one disposable plist in the current user's Library/LaunchAgents with ProgramArguments pointing directly to the embedded helper path. Use the fresh label only."
+    - "Bootstrap v1 and require exact-label state=running with helper PID/path/v1 hash. Require the helper child to be the bundled .venv/bin/python with exact PID/path/hash and remain healthy."
+    - "Boot out v1 and require label absence plus helper/Python termination before update testing."
+    - "Prepare byte-distinct v2 with the same stable identity/DR contract and apply quarantine to v2. Replace v1 at the same disposable installed app path."
+    - "Launch v2 normally without another operator approval. If another manual approval is required, stop BLOCKED with classification PER_UPDATE_APPROVAL_REQUIRED."
+    - "If v2 app launches without new approval, bootstrap the same disposable LaunchAgent contract and prove v2 helper PID/path/hash plus bundled-Python PID/path/hash."
+    - "Cleanup must terminate disposable processes, boot out the disposable service, remove its plist, remove the disposable app/run root, and prove those identities absent. Do not attempt to erase the operating system's remembered approval entry."
+    - "No product source/tests/docs/dependencies/package logic, Runtime state, runtime.env, tunnel-client, production lifecycle state, Apple developer authority, tag, release, or repository topology may change."
+    - "Do not run canonical ./verify or build a real product candidate."
+    - "Create report-r1.yaml only on terminal PASS/BLOCKED. While waiting for the one human approval, preserve the exact disposable fixture and communicate OPERATOR_INPUT_REQUIRED instead of writing a terminal report."
+
+  allowed_existing_files_or_components:
+    - "macos/packaging_python.sh for read/reuse"
+    - "build/ ignored disposable qualification root"
+    - "$HOME/Library/LaunchAgents/<fresh TASK-0179 disposable plist>"
+    - ".agent/tasks/TASK-0179/report-r1.yaml"
+  expected_files_are_restrictive: true
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0179/report-r1.yaml"
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "Fixture files are ignored and disposable."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+effect_authority:
+  disposable_app_identity_max: 1
+  operator_manual_app_approval_max: 1
+  disposable_launchagent_bootstrap_v1_max: 1
+  disposable_launchagent_bootstrap_v2_max: 1
+  product_source_mutation_max: 0
+  canonical_verify_max: 0
+  real_product_candidate_build_max: 0
+  production_lifecycle_mutation_max: 0
+  live_runtime_mutation_max: 0
+  runtime_config_mutation_max: 0
+  tunnel_client_mutation_max: 0
+  apple_developer_authority_mutation_max: 0
+  release_or_tag_publication_max: 0
+  host_dependency_install_max: 0
+
+invariants:
+  - "This task tests approved-app containment, not a standalone helper."
+  - "Exactly one manual app approval is allowed; v2 must work without another approval to PASS."
+  - "Bundled Python execution is part of the required witness."
+  - "No product mutation occurs."
+  - "No production identifier/state is used."
+  - "MAIN_ONLY topology remains unchanged."
+
+forbidden_changes:
+  - "Repeating the standalone-helper qualification from TASK-0178."
+  - "Using SMAppService for this qualification."
+  - "Using paid Apple distribution authority or custom trust authority."
+  - "Using a second operator approval for v2."
+  - "Product implementation or tracked fixture code."
+  - "Branch creation, PR, force push, tag, or public release."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: revised_contract_required
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "One user approval authorizes quarantined v1 app execution."
+    evidence_required: "v1 launches normally after at most one documented operator approval; exact main PID/path/hash is proven."
+
+  - id: AC-2
+    requirement: "Embedded helper and bundled CPython run after v1 app approval."
+    evidence_required: "Disposable LaunchAgent reaches running state; helper PID/path/hash and child bundled-Python PID/path/hash are exact and healthy."
+
+  - id: AC-3
+    requirement: "One approval survives byte-distinct quarantined v2."
+    evidence_required: "v2 main/helper bytes differ; v2 remains under the stable identity/DR contract; v2 app/helper/Python run with zero second operator approval."
+
+  - id: AC-4
+    requirement: "Disposable execution state is cleaned."
+    evidence_required: "Disposable PIDs, LaunchAgent label/plist, app, and run root are absent; production state is untouched."
+
+  - id: AC-5
+    requirement: "Repository closure is report-only."
+    evidence_required: "No product/test/doc/dependency change; report validates with pinned Foundation, publishes non-force after fresh remote proof, and final main is clean/synced."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Build one fresh quarantined v1/v2 disposable app fixture with embedded helper and bundled CPython under ignored build output."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Exercise v1 normal app launch and at most one operator Open Anyway approval; prove embedded helper and bundled Python through one disposable user LaunchAgent."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Replace with quarantined byte-distinct v2 and require app/helper/Python launch with no second approval."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Clean disposable state; validate and publish report-only closure."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+
+report_requirements:
+  path: ".agent/tasks/TASK-0179/report-r1.yaml"
+  record:
+    - "exact base and TASK-0178 review ancestry"
+    - "fresh disposable identities and macOS build"
+    - "v1 quarantine and single operator approval evidence"
+    - "v1 main/helper/Python PID/path/hash evidence"
+    - "v2 identity/quarantine/update-continuity evidence"
+    - "v2 main/helper/Python evidence or exact blocker"
+    - "cleanup evidence and zero production effects"
+    - "result NEEDS_REVIEW on full PASS, otherwise BLOCKED"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
