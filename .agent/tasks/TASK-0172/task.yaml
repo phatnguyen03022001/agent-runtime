@@ -1,0 +1,210 @@
+protocol_version: 3
+
+task_id: TASK-0172
+task_revision: 1
+state: APPROVED
+title: "Developer ID and Notarization Qualification"
+
+origin:
+  type: architect_continuation
+  task_id: TASK-0172
+  gap_id: "DISTRIBUTION-ARTIFACT-NOTARIZATION-QUALIFICATION"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_task_authoring_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - verification
+  - security-review
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - verification
+    - security-review
+  recommended:
+    - simplicity
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  preferred_transport: AGENT_RUNTIME
+  reason: "This task builds and notarizes an offline distribution artifact but does not mutate the installed Runtime. Runtime may remain the execution transport."
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0171/review.yaml at 3cebeaa909ff6135edba5d5070c59ec3244b3c5d"
+    role: "Accepted source architecture for Developer-ID/hardened-runtime/notarization/staple distribution and checkout-independent prebuilt installation."
+    precedence: 1
+  - source: "TASK-0171 final source candidate 59e570fca94d0ff858df1d1c6e4c7df66210ca8b tree b6615adb161026adf9d7d600fb1070656c2b2ccb"
+    role: "Authoritative qualified source bytes."
+    precedence: 2
+  - source: "Live Runtime state after TASK-0170"
+    role: "Installed Runtime remains 0.5.0 / b1879b5c... with official tunnel-client 0.0.14; this task must not mutate it."
+    precedence: 3
+
+structure_authority:
+  status: NOT_APPLICABLE
+  source: "Qualification-only continuation"
+  rationale: "No product source structure change is authorized. This task consumes the accepted distribution lane and records artifact qualification evidence only."
+
+objective: "Produce exactly one real Agent Runtime distribution candidate through the accepted TASK-0171 distribution lane using an explicitly supplied Developer ID Application identity and an explicitly supplied Apple notarytool keychain-profile locator, obtain a successful Apple notarization result, staple the ticket, verify Gatekeeper/stapler/codesign/provenance on the exact post-staple candidate, and freeze its exact artifact identity for later fresh-install acceptance. Do not install or activate the candidate and do not publish a GitHub Release."
+
+scope:
+  required_changes:
+    - "Freshly prove exact task base, clean main-only topology, accepted TASK-0171 review, unchanged live Runtime state, and no pending cutover transaction."
+    - "Prove product/package-input source bytes at the task base are unchanged from accepted TASK-0171 source candidate 59e570fc... except governance descendants. If any package-input/product byte changed, STOP BLOCKED and do not reuse source qualification."
+    - "Reuse TASK-0171 focused/canonical source qualification. Do not rerun canonical ./verify while product/package-input source bytes remain unchanged."
+    - "Require an explicit Developer ID Application signing identity and explicit notarytool keychain-profile locator from the execution environment/operator authority. Reject empty/non-Developer-ID identity or empty profile before packaging."
+    - "Do not enumerate Keychain identities, search for certificates, inspect unrelated Keychain items, create credentials, mutate signing/notary credentials, or print credential values."
+    - "Before the sole distribution build, perform only bounded non-secret capability checks necessary to prove xcrun/codesign/notarytool/stapler availability and the explicit input syntax. If the explicit signing/notary authority is unavailable or invalid, STOP BLOCKED before notarization submission."
+    - "Invoke the accepted macos/package_app.sh --distribution lane at most once successfully from the canonical task base. The distribution lane itself owns Developer-ID/hardened-runtime/timestamp signing, notarization submission, stapling, verification, final candidate sealing and candidate publication under build/candidates."
+    - "Allow at most one Apple notarization submission. If the submission outcome is unknown, reconcile it using the exact explicit notary profile and available notarytool submission identity/output before any further consequence. Never blind-resubmit."
+    - "Record the notarization submission identifier/status if returned, but never record credentials, private keys, passwords or secret profile contents."
+    - "After the successful build, independently prove the exact candidate app passes: codesign --verify --deep --strict; Developer ID Application authority; hardened-runtime flag; trusted timestamp; spctl --assess execute PASS; stapler validate PASS; package provenance validation PASS; final candidate handoff validation PASS."
+    - "Prove the candidate handoff/closure identity was produced after stapling and binds the exact post-staple app bytes. Record candidate SHA-256, handoff SHA-256, source revision/tree, manifest schema, service_management_contract, TeamIdentifier and record count."
+    - "Prove the release bundle contains the checkout-independent install_release.sh and embedded Runtime Python/helper substrate required by TASK-0171."
+    - "Do not execute install_release.sh against the live user HOME in this task. Do not install, restart, reconnect, cut over, commit, roll back or recover the live Runtime."
+    - "Do not publish a GitHub Release, create a tag, upload an artifact externally, or mutate repository metadata."
+    - "On PASS, create report-r1.yaml as the sole tracked child of the task-authoring base, validate/publish non-force, reconcile main cleanly, and stop NEEDS_REVIEW."
+
+  allowed_existing_files_or_components:
+    - "macos/package_app.sh distribution mode, read-only source use"
+    - "macos/distribution_verify.py, read-only execution"
+    - "macos/package_provenance.py, read-only execution"
+    - "build/candidates ignored artifact output"
+    - "Apple codesign/notarytool/stapler command surfaces using explicit existing authority"
+    - ".agent/tasks/TASK-0172/report-r1.yaml"
+
+structure_policy:
+  expected_new_files: []
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "No tracked product/source files are authorized beyond the report artifact."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+effect_authority:
+  successful_distribution_build_max: 1
+  notarization_submission_max: 1
+  stapling_max: 1
+  live_runtime_install_or_cutover_max: 0
+  live_runtime_restart_max: 0
+  github_release_publication_max: 0
+  source_mutation_max: 0
+  credential_mutation_max: 0
+  blind_retry: false
+
+invariants:
+  - "No tracked product/source/test/doc/dependency/workflow file changes."
+  - "Runtime source/product version remains 0.5.0 and ToolContract Kernel/public MCP surface remain unchanged."
+  - "Installed Runtime and tunnel-client state remain unchanged."
+  - "No Keychain identity enumeration or credential discovery/creation occurs."
+  - "No secrets are printed or persisted in report evidence."
+  - "No second notarization submission or distribution rebuild after a successful exact candidate."
+  - "No branch, PR, force push, amend, squash, tag or release."
+
+forbidden_changes:
+  - "Any edit under agent_runtime/, macos/, tests/, docs/, README.md, install.sh, start.sh, requirements*, verification_policy.py, verify*, .env* or workflow files."
+  - "Any live use of install_release.sh or install.sh --install-prebuilt."
+  - "Any installed Runtime/tunnel/service mutation."
+  - "Any Keychain enumeration, certificate discovery, notary-profile creation, Apple credential mutation, Gatekeeper bypass or ad-hoc signing fallback."
+  - "Any GitHub Release/tag/artifact upload."
+  - "Any source requalification rerun while source/package-input bytes are unchanged."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: revised_contract_required
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "The exact accepted TASK-0171 source is reused without redundant source qualification."
+    evidence_required: "Task base differs from 59e570fc... only by governance artifacts; no package-input/product bytes changed and canonical ./verify is not rerun."
+
+  - id: AC-2
+    requirement: "One real Developer-ID notarized distribution candidate is produced."
+    evidence_required: "Exactly one successful distribution build and at most one notarization submission yield a post-staple candidate with exact source/tree/candidate/handoff identity."
+
+  - id: AC-3
+    requirement: "Apple distribution trust is independently proven on the final app."
+    evidence_required: "Developer ID authority, hardened runtime, trusted timestamp, strict codesign, Gatekeeper assessment, stapler validation and package provenance all PASS on the exact sealed post-staple candidate."
+
+  - id: AC-4
+    requirement: "Candidate closure binds the final post-staple bytes."
+    evidence_required: "Final handoff candidate SHA/record count matches an independent closure calculation after stapler validation; no signing/notarization/stapling mutation occurs after seal."
+
+  - id: AC-5
+    requirement: "Checkout-independent install substrate is present in the qualified artifact."
+    evidence_required: "Exact candidate contains executable install_release.sh, embedded Runtime Python, install_preflight.py, runtime_config.py, package_provenance.py and candidate_cutover.py, with handoff external to the app."
+
+  - id: AC-6
+    requirement: "Qualification is consequence-bounded."
+    evidence_required: "No live install/restart/cutover/tunnel mutation, no credential mutation/enumeration, no release/tag/upload and no product/source tracked mutation occur."
+
+  - id: AC-7
+    requirement: "Canonical closure is minimal and truthful."
+    evidence_required: "report-r1.yaml records exact artifact/notarization evidence without secrets, validates, is the sole tracked child, publishes non-force and final main is clean/synced."
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "Real Developer ID signing + Apple notarization/stapling + final Gatekeeper/stapler/codesign/provenance/candidate closure proof."
+    expected_signal: "Exact post-staple Agent Runtime candidate is accepted by Apple distribution trust checks and frozen for fresh-install acceptance."
+
+report_requirements:
+  path: .agent/tasks/TASK-0172/report-r1.yaml
+  record:
+    - "task_revision=1; state=REPORTED; result=NEEDS_REVIEW on PASS, BLOCKED if explicit signing/notary authority is unavailable or consequence is ambiguous"
+    - "exact task/base/report lineage"
+    - "accepted TASK-0171 source/review references and source-qualification reuse proof"
+    - "distribution build/notarization/stapling invocation counts"
+    - "non-secret signing identity label and TeamIdentifier"
+    - "notarization submission ID/status if available, without credentials"
+    - "candidate/handoff hashes, source revision/tree, manifest schema/contract and record count"
+    - "strict codesign, hardened runtime, timestamp, spctl, stapler, provenance and handoff validation evidence"
+    - "release installer substrate presence"
+    - "zero live Runtime/tunnel/release/source/credential effects"
+    - "report-only publication/final reconciliation"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
