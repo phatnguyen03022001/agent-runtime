@@ -1,0 +1,152 @@
+protocol_version: 3
+
+task_id: TASK-0175
+task_revision: 2
+report_revision: 2
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0175/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  pre_execution_head: "953beed8a019c0c5a8cb0804f954311daaf2f55f"
+  authorized_base_head: "953beed8a019c0c5a8cb0804f954311daaf2f55f"
+  final_execution_head: "953beed8a019c0c5a8cb0804f954311daaf2f55f"
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  authorized_revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+  observed_revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+
+preserved_source:
+  candidate_commit: "15ea3a19cb21ae8b104009dd49ebaefd89b0d8eb"
+  candidate_tree: "8ee09d9822c927ea032507187a439c121649ab86"
+  candidate_parent: "2be021bb07053ebcb96769e1ded2453dc9089b62"
+  changed_after_candidate:
+    - .agent/tasks/TASK-0175/report-r1.yaml
+    - .agent/tasks/TASK-0175/review.yaml
+    - .agent/tasks/TASK-0175/task.yaml
+  non_governance_drift_after_candidate: false
+
+revision_1_authority:
+  report_commit: "8964fe23e28af04de201f3650358b09037584b1a"
+  review_commit: "5f92036c0c8150603e7f956c7f055be2afec7210"
+  review_state: BLOCKED
+  blocker_id: "B-0175-001"
+  causal_red: "PASS"
+  focused_green: "1/1 PASS"
+  presentation_regression: "22/22 PASS"
+  full_swift: "81/81 PASS"
+  git_diff_check: "PASS"
+  architect_failing_module_recheck: "49/49 PASS outside Runtime durable carrier"
+  live_consequences: 0
+
+revision_1_canonical_verify:
+  result: FAIL
+  modules: "31/62"
+  tests: 477
+  duration_s: 78.413
+  failing_modules:
+    - tests.test_pressure_concurrency
+    - tests.test_terminal_session
+  classification: "CARRIER_CONTAMINATION"
+  evidence: "The revision-1 verifier was itself a runtime-restart durable Agent Runtime terminal job. Default TerminalSessionManager recovery saw that live durable job as a pre-existing active session, contaminating capacity-sensitive tests."
+
+clean_carrier_preflight:
+  result: PASS
+  carrier: "Remote Desktop Commander direct local process"
+  cwd: "/Users/tienphat/Developer/agent-runtime"
+  durable_state_env_present: false
+  ancestry: "Terminal.app -> login -> zsh -> npm desktop-commander remote -> Desktop Commander node process -> direct local Python process"
+  agent_runtime_process_in_carrier_ancestry: false
+  durable_runtime_state_read_or_mutated_for_isolation: false
+  evidence: "AGENT_RUNTIME_DURABLE_STATE_ROOT was absent and the selected process ancestry contained no agent_runtime, terminal_start, runtime-restart, or durable_pipe_runner carrier."
+
+revision_2_canonical_verify:
+  command: "./verify"
+  additional_invocations: 1
+  carrier: "Remote Desktop Commander direct local process"
+  result: PASS
+  exit_code: 0
+  selected_modules: 62
+  completed_modules: 62
+  classified_modules: 62
+  tests: 825
+  duration_s: 67.695
+  profile: qualification
+  requested_profile: qualification
+  prior_failure_modules:
+    tests_test_terminal_session: "PASS 48 tests"
+    tests_test_pressure_concurrency: "PASS 1 test"
+  lane_totals:
+    l1: "17/17 modules, 219 tests"
+    l2: "21/21 modules, 224 tests"
+    l3: "10/10 modules, 85 tests"
+    l4: "9/9 modules, 165 tests"
+    l5: "5/5 modules, 132 tests"
+
+effects:
+  product_source_mutation: 0
+  test_mutation: 0
+  documentation_mutation: 0
+  dependency_mutation: 0
+  durable_runtime_state_mutation: 0
+  live_system_settings_open: 0
+  live_service_management_mutation: 0
+  live_runtime_install_or_cutover: 0
+  live_runtime_restart: 0
+  live_runtime_configuration_mutation: 0
+  tunnel_client_mutation: 0
+  apple_signing_or_notary_credential_mutation: 0
+  apple_notarization_submission: 0
+  host_dependency_install: 0
+  tag_publication: 0
+  release_publication: 0
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "Candidate 15ea3a19cb21ae8b104009dd49ebaefd89b0d8eb still resolves to tree 8ee09d9822c927ea032507187a439c121649ab86. The only tracked changes from that candidate through the revision-2 base are TASK-0175 report/review/task governance artifacts. Revision-1 RED, focused GREEN, Presentation, full Swift, diff-check, behavior, documentation, and zero-effect evidence are therefore preserved."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "Read-only carrier preflight proved the selected verifier carrier is a direct local Desktop Commander process with AGENT_RUNTIME_DURABLE_STATE_ROOT absent and no Agent Runtime durable terminal process in its ancestry. Exactly one additional canonical ./verify invocation was dispatched."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "The one revision-2 canonical ./verify completed exit 0 with 62/62 modules, 825 tests, and profile qualification. The two revision-1 failing modules passed on this clean carrier."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "No Runtime durable-state cleanup or mutation occurred. Product source, tests, documentation, dependencies, Runtime lifecycle/configuration, ServiceManagement, tunnel, Apple credentials/notarization, tags, and releases remained unchanged."
+  - criterion_id: AC-5
+    status: EVIDENCE_INDEXED
+    evidence: "report-r2.yaml is the sole authorized tracked execution output. Pinned Foundation validation, report-only diff check, non-force publication, and final clean/synced reconciliation are performed after report authorship and are not self-attested in advance."
+
+executor_checks:
+  - check_id: CHECK-1
+    result: PASS
+    evidence: "Fresh Git proof bound revision-2 base 953beed8a019c0c5a8cb0804f954311daaf2f55f, BLOCKED review 5f92036c0c8150603e7f956c7f055be2afec7210, preserved candidate/tree, and governance-only post-candidate drift."
+  - check_id: CHECK-2
+    result: PASS
+    evidence: "Carrier preflight proved direct local non-Agent-Runtime-durable execution without durable-state mutation."
+  - check_id: CHECK-3
+    result: PASS
+    evidence: "Exactly one additional ./verify ran under revision-2 authority and passed 62/62 modules and 825 tests with exit code 0."
+  - check_id: CHECK-4
+    result: EVIDENCE_INDEXED
+    evidence: "Pinned report validation, report-only git diff check, non-force publication, and final reconciliation are consequence-boundary steps performed after this report content is authored."
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: NOT_REQUIRED
+  evidence: "Revision 2 requires the Executor canonical ./verify requalification, which passed. No separate authoritative verifier is designated."
+
+deviations_from_task: []
+blockers: []
+
+pushed: false
+
+result: NEEDS_REVIEW
