@@ -1,0 +1,172 @@
+protocol_version: 3
+task_id: TASK-0185
+task_revision: 1
+state: APPROVED
+title: "Qualify New Immutable v0.5.1 Prebuilt Artifact"
+
+origin:
+  type: architect_continuation
+  task_id: TASK-0185
+  gap_id: "F-0183-001"
+  predecessor_task: TASK-0184
+  predecessor_review: "1a22751c1e2f2fd720f0d36aec9e978b0fde5a3d"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+architect_analysis_skills:
+  - architect
+  - security-review
+  - verification
+execution_skills:
+  required:
+    - executor
+    - security-review
+    - verification
+  recommended:
+    - simplicity
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  preferred_transport: SENTINELX
+  reason: "Native macOS arm64 packaging and signing inspection require the operator Mac; Agent Runtime is the product under test."
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0184/review.yaml at 1a22751c1e2f2fd720f0d36aec9e978b0fde5a3d"
+    role: "Accepted source correction and canonical verification."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0183/review.yaml at c2039aee485b94a2f7488a685112529c6b050227"
+    role: "Public v0.5.0 preflight seal failure and requirement for new immutable artifact."
+    precedence: 2
+  - source: ".agent/tasks/TASK-0181/report-r9.yaml at 7bbc4a773d88728ba485ef55e086a41f8c3d0ff4"
+    role: "Prior zero-cost artifact qualification and interpreter contract."
+    precedence: 3
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing version SSOT, app plist, package_app.sh --zero-cost, provenance validator and focused version test."
+  rationale: "Use existing packaging paths and ignored build output without new machinery."
+objective: "Produce and qualify one new immutable macOS arm64 zero-cost archive from the accepted seal correction, with version 0.5.1 and strict ad-hoc trust preserved. Do not publish or install it."
+
+scope:
+  required_changes:
+    - "Reconcile exact clean synchronized main and accepted TASK-0184 review; preserve its source fix and regression unchanged."
+    - "Bump only Python Runtime version SSOT and matching CFBundleShortVersionString from 0.5.0 to 0.5.1, updating focused version contract test's expected value and single-source assertion. Keep the public v0.5.0 documentation until a new release exists."
+    - "Run focused version and prebuilt regressions, static checks and exactly one canonical ./verify on the source candidate. Stop BLOCKED on failure."
+    - "Commit bounded version/test candidate non-force. Validate absolute CPython 3.13 arm64 interpreter in the native carrier, then run package_app.sh --zero-cost at most once on exact clean candidate."
+    - "Independently audit every packaged regular Mach-O for strict valid ad-hoc signature, deterministic identifier and exact matching identifier-based designated requirement, absent TeamIdentifier. Validate app, schema-3 handoff and external initial payload with package_provenance.py validate-zero-cost, including source, requirements, tool surface and closures."
+    - "On a fresh candidate copy run normal packaged preflight to success with no sealed-app resource mutation and strict deep codesign PASS afterward. Exercise packaged installer helper from a sanitized environment only to a safe pre-cutover failure boundary; prove no added bytecode. Exercise genuine invalid trust as a negative control. Never invoke live cutover, commit, rollback or recover."
+    - "Only after gates pass, create one complete archive of app, handoff and sole initial payload under ignored build/TASK-0185-release; audit regular-file bytes/modes and record path, size and SHA-256."
+    - "Write and validate .agent/tasks/TASK-0185/report.yaml with exact pinned Foundation validator. Publish only a report direct child after source candidate, non-force to main, and reconcile clean synchronized Git state."
+  allowed_existing_files_or_components:
+    - "agent_runtime/version.py"
+    - "macos/AppBundle/Info.plist"
+    - "tests/test_capability_registry.py"
+    - ".agent/tasks/TASK-0185/report.yaml"
+    - "build/TASK-0185-release/ ignored qualification output"
+    - "build/candidates/ ignored package output"
+  expected_files_are_restrictive: true
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0185/report.yaml"
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "Only a report is added to Git."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+effect_authority:
+  canonical_verify_max: 1
+  distribution_build_max: 1
+  archive_build_max: 1
+  production_runtime_install_or_cutover_max: 0
+  production_runtime_restart_max: 0
+  runtime_env_mutation_max: 0
+  public_release_or_tag_mutation_max: 0
+  host_security_mutation_max: 0
+  host_dependency_install_max: 0
+invariants:
+  - "TASK-0184 bytecode prevention and strict release trust remain unchanged."
+  - "Archived package identifies exact committed v0.5.1 source and normal preflight adds no unsealed resource."
+  - "Public v0.5.0 tag and assets, healthy live predecessor and canonical runtime.env remain unchanged."
+  - "Main only; no branch, PR, force push, tag or public release."
+forbidden_changes:
+  - "Changing provenance/cutover, installer, native setup, docs, dependency locks, public tools or signing requirements."
+  - "Removing generated bytecode after execution as a substitute for prevention, or bypassing trust checks."
+  - "Second canonical verification, second distribution build or second archive build after a failed invocation."
+  - "Installing, restarting, reconfiguring or cutting over live Runtime; changing env, tunnel client, Gatekeeper/TCC or Apple authority."
+  - "Replacing public v0.5.0 assets or moving its tag."
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: revised_contract_required
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Version projection and verified source are exact."
+    evidence_required: "Only three authorized source/test files change, SSOT and plist agree at 0.5.1, focused tests and one ./verify PASS."
+  - id: AC-2
+    requirement: "Distribution is strictly signed and provenance-valid."
+    evidence_required: "One build PASS, interpreter identity, all-Mach-O signing audit and schema-3 zero-cost source/requirements/tool/payload closure."
+  - id: AC-3
+    requirement: "Prebuilt preflight preserves seal and one archive closes exactly."
+    evidence_required: "Fresh copy preflight and bounded shell carrier, deep codesign PASS, negative trust control, one archive file/mode audit and SHA-256."
+  - id: AC-4
+    requirement: "Git and live state remain bounded."
+    evidence_required: "Report-only direct child, pinned validator, clean synced main; zero release/tag/install/restart/env/security effects."
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Exact base, version diff, focused tests and one ./verify."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Interpreter preflight, one distribution build, all-Mach-O and provenance audit."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Fresh candidate seal/negative control and one complete archive closure/hash."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Pinned report validation, non-force publication, clean synced main/live scope."
+      required: true
+  authoritative_verification:
+    required: true
+    mechanism: "Canonical ./verify plus native package, signature, provenance, preflight and archive audits."
+    expected_signal: "One exact v0.5.1 archive is fit for separately reviewed release."
+report_requirements:
+  path: .agent/tasks/TASK-0185/report.yaml
+  record:
+    - "exact base, source candidate, report lineage and version projection"
+    - "focused/canonical checks and distribution/archive invocation counts"
+    - "interpreter, Mach-O, provenance, preflight seal and trust negative-control evidence"
+    - "app/handoff/payload/archive closures, bytes and SHA-256"
+    - "zero live and release effects; NEEDS_REVIEW on complete PASS, otherwise BLOCKED"
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+blocking_decisions: []
+execution_ready: true
