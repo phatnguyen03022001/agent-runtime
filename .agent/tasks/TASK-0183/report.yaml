@@ -1,0 +1,121 @@
+protocol_version: 3
+
+task_id: TASK-0183
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0183/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  authorized_base_head: "b22d6da995d06a8551227718a61aa6349644cc12"
+  final_execution_head: "b22d6da995d06a8551227718a61aa6349644cc12"
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  authorized_revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+
+public_release:
+  release_id: 398093294
+  tag: v0.5.0
+  tag_target: "092b761cdc7e3f1085abe38948d9613fefe9e875"
+  archive: Agent-Runtime-zero-cost-75e5cfdaceb9.tar.gz
+  archive_bytes: 17798699
+  downloaded_sha256: "3f179015534d81d6baee3faf78a57f8300451739afdda53a5940ee91ec7c3746"
+  checksum_asset_entry_matches: true
+  bundle_root: build/TASK-0183-install/Agent Runtime zero-cost
+  handoff_schema: 3
+  candidate_sha256: "75e5cfdaceb94b4d594673e2f6fe662f9ee46c8f1efe46e6d9c13c006ad53420"
+  initial_payload_closure: "7230e69bf6addcb8ff720e05cd199c76367170c559aff23c7481a8f7e6bd2804"
+  expected_public_tool_count: 20
+  initial_direct_validate_zero_cost: PASS
+
+predecessor:
+  package_owned_doctor: healthy
+  doctor_pass_count: 10
+  installed_runtime_version: "0.5.0"
+  installed_runtime_revision: "b1879b5c185e93457bb634a7ab0508f7220416af"
+  service_management_main_app: enabled
+  service_management_runtime_agent: enabled
+  readiness: ready
+  transaction_present_before: false
+  transaction_present_after: false
+  checkout_doctor_layout_distinction: "The checkout doctor expects the newer external payload layout and is not predecessor health authority."
+
+canonical_runtime_env:
+  path: "~/Library/Application Support/Agent Runtime/runtime.env"
+  exists_before: true
+  exists_after: true
+  sha256_before: "b3d0d67471f6d620f53ad1ed9ee6db21a1e906fff643dd94050b7cd8def97029"
+  sha256_after: "b3d0d67471f6d620f53ad1ed9ee6db21a1e906fff643dd94050b7cd8def97029"
+  owner_before: tienphat
+  owner_after: tienphat
+  mode_before: "0600"
+  mode_after: "0600"
+  packaged_config_inspector_git_identity_ready: true
+  packaged_config_inspector_workspace_root: /Users/tienphat/Developer
+  values_disclosed: false
+
+preflight_failure:
+  check: release_trust
+  status: fail
+  reason_code: RELEASE_TRUST_INVALID
+  action_class: STOP_AND_ESCALATE
+  direct_validation_before_preflight: "Packaged validate-zero-cost passed on the extracted app, handoff and payload."
+  cause: "Packaged install_preflight.py imports three Python modules and writes three bytecode files into its own sealed app resources. Subsequent strict deep codesign rejects the added files."
+  added_files:
+    - "Agent Runtime.app/Contents/Resources/runtime/macos/__pycache__/candidate_cutover.cpython-313.pyc"
+    - "Agent Runtime.app/Contents/Resources/runtime/macos/__pycache__/package_provenance.cpython-313.pyc"
+    - "Agent Runtime.app/Contents/Resources/runtime/macos/__pycache__/runtime_config.cpython-313.pyc"
+  independent_reproduction: "The packaged provenance API raises PackageProvenanceError: candidate failed strict deep code-signature verification; codesign --verify --deep --strict reports the same three added files and a sealed-resource failure."
+  response: "Stopped before install. Preserved the ignored extracted bundle and its bytecode evidence; did not remove generated files, suppress bytecode, bypass signing, or alter the public release."
+  follow_up: "Fix the package-owned prebuilt preflight and installer bytecode behavior in source, requalify a new archive and publish a new release under separate authority. Do not replace v0.5.0 assets."
+
+live_effects:
+  install_release_invocations: 0
+  commit_cutover_invocations: 0
+  rollback_cutover_invocations: 0
+  recover_partial_cutover_invocations: 0
+  production_runtime_restart: 0
+  runtime_env_mutations: 0
+  tunnel_client_mutations: 0
+  host_security_mutations: 0
+  source_builds: 0
+  canonical_verify_invocations: 0
+  distribution_builds: 0
+  archive_builds: 0
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: FAIL
+    evidence: "Public archive SHA, bundle and predecessor identity are exact, but package-owned prebuilt release_trust fails after preflight writes bytecode into the sealed app."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "Canonical runtime.env hash b3d0d67471f6d620f53ad1ed9ee6db21a1e906fff643dd94050b7cd8def97029, owner tienphat and mode 0600 remain unchanged; packaged inspector confirms Git identity and workspace."
+  - criterion_id: AC-3
+    status: NOT_PROVEN
+    evidence: "Preflight blocked before any install, commit, rollback or recovery invocation; predecessor remains ready and transaction absent."
+  - criterion_id: AC-4
+    status: NOT_PROVEN
+    evidence: "No public package was installed; existing predecessor remains healthy 10/10."
+  - criterion_id: AC-5
+    status: PASS
+    evidence: "Report-only direct child is validated with pinned Foundation artifact validator and published non-force; final main synchronization and clean worktree are checked after publication."
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: FAIL
+  evidence: "Exact public archive and direct schema-3 validation pass, but mandatory package-owned read-only prebuilt preflight fails release_trust/RELEASE_TRUST_INVALID. No live cutover evidence can be admitted."
+
+blockers:
+  - "Public v0.5.0 packaged preflight self-invalidates the ad-hoc signed app through three generated .pyc files."
+
+pushed: true
+
+result: BLOCKED
