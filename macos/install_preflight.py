@@ -3,6 +3,9 @@ from __future__ import annotations
 
 """Read-only installation prerequisite and operator-state preflight."""
 
+import sys
+sys.dont_write_bytecode = True
+
 import argparse
 import hashlib
 import json
@@ -12,7 +15,6 @@ import re
 import shutil
 import stat
 import subprocess
-import sys
 from pathlib import Path
 from typing import Mapping
 

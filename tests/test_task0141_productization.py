@@ -5,9 +5,11 @@ import importlib.util
 import json
 import os
 import re
+import shlex
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -403,6 +405,86 @@ class Task0141ProductizationTests(unittest.TestCase):
             for secret in secrets:
                 self.assertNotIn(secret, encoded)
                 self.assertNotIn(secret, human)
+
+    def test_prebuilt_entrypoints_preserve_sealed_app_and_reject_bad_trust(self) -> None:
+        build = ROOT / "build"
+        build.mkdir(exist_ok=True)
+        for carrier in ("direct", "installer"):
+            with self.subTest(carrier=carrier), tempfile.TemporaryDirectory(
+                prefix="task0184-", dir=build
+            ) as raw:
+                temp = Path(raw)
+                bundle = temp / "bundle"
+                app = bundle / "Agent Runtime.app"
+                runtime = app / "Contents" / "Resources" / "runtime"
+                macos = runtime / "macos"
+                macos.mkdir(parents=True)
+                python = runtime / ".venv" / "bin" / "python"
+                python.parent.mkdir(parents=True)
+                python.write_text(
+                    "#!/bin/sh\n"
+                    f"PYTHONPATH={shlex.quote(str(macos))} {shlex.quote(sys.executable)} "
+                    "-X pycache_prefix= -c 'import candidate_cutover'\n"
+                    f"exec {shlex.quote(sys.executable)} -X pycache_prefix= \"$@\"\n"
+                )
+                python.chmod(0o700)
+                shutil.copy2(ROOT / "macos" / "install_preflight.py", macos / "install_preflight.py")
+                shutil.copy2(ROOT / "macos" / "install_release.sh", macos / "install_release.sh")
+                (macos / "install_release.sh").chmod(0o700)
+                (macos / "candidate_cutover.py").write_text("# fixture module\n")
+                (macos / "runtime_config.py").write_text(
+                    "def prebuilt_values(*args, **kwargs):\n    raise SystemExit(2)\n"
+                )
+                (macos / "package_provenance.py").write_text(
+                    "class PackageProvenanceError(Exception):\n    pass\n"
+                    "def _load_zero_cost_candidate_handoff(path):\n"
+                    "    return {'initial_payload_closure': 'a' * 64}\n"
+                    "def validate_zero_cost_candidate(*args):\n"
+                    "    raise PackageProvenanceError('tampered fixture')\n"
+                )
+                (bundle / "Agent Runtime.candidate.json").write_text(
+                    json.dumps({"initial_payload_closure": "a" * 64}) + "\n"
+                )
+                (bundle / "payloads" / ("a" * 64)).mkdir(parents=True)
+                workspace = temp / "workspace"
+                workspace.mkdir()
+                home = temp / "home"
+                home.mkdir()
+                sealed_before = self._snapshot(app)
+                env = {"HOME": str(home), "PATH": os.environ.get("PATH", ""), "LANG": "C"}
+                if carrier == "direct":
+                    argv = [
+                        sys.executable,
+                        "-X",
+                        "pycache_prefix=",
+                        str(macos / "install_preflight.py"),
+                        "--prebuilt",
+                        "--bundle-root",
+                        str(bundle),
+                        "--workspace-root",
+                        str(workspace),
+                        "--json",
+                    ]
+                else:
+                    argv = [
+                        "/bin/bash",
+                        str(macos / "install_release.sh"),
+                        "--workspace-root",
+                        str(workspace),
+                    ]
+                result = subprocess.run(
+                    argv, env=env, capture_output=True, text=True, check=False, timeout=20
+                )
+                self.assertNotEqual(result.returncode, 0)
+                if carrier == "direct":
+                    report = json.loads(result.stdout)
+                    trust = next(item for item in report["checks"] if item["id"] == "release_trust")
+                    self.assertEqual(trust["reason_code"], "RELEASE_TRUST_INVALID")
+                    self.assertEqual(trust["status"], "fail")
+                else:
+                    self.assertIn("release_trust: fail (RELEASE_TRUST_INVALID)", result.stdout)
+                    self.assertIn("prebuilt installation preflight failed", result.stderr)
+                self.assertEqual(self._snapshot(app), sealed_before)
 
 
 if __name__ == "__main__":
