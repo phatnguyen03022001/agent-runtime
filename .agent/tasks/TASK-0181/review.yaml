@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0181
-task_revision: 3
-review_revision: 1
+task_revision: 4
+review_revision: 2
 state: BLOCKED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
-  path: .agent/tasks/TASK-0181/report-r3.yaml
-  commit: "290d8b44a7925329788f019a6cc22f0e406399e5"
-  report_revision: 3
+  path: .agent/tasks/TASK-0181/report-r4.yaml
+  commit: "bbfbe683fe5c0d2f381356271b30957aa7fe7627"
+  report_revision: 4
 
 independence:
   reviewer_role: ARCHITECT
@@ -24,45 +24,47 @@ contract_compliance:
   scope: PASS
   structure_policy: PASS
   git_authority: PASS
-  acceptance_criteria: BLOCKED_BY_CANONICAL_TEST_HARNESS_DRIFT
+  acceptance_criteria: BLOCKED_BY_LEGACY_RUNTIME_CONFIG_FIXTURES
   verifier_evidence: FAIL_RECONCILED
 
 blocking_findings:
-  - id: B-0181-REV3-VERIFY
+  - id: B-0181-REV4-VERIFY
     severity: BLOCKING
-    summary: "The sole revision-3 canonical ./verify invocation failed in tests.test_packaging_interpreter because four existing invalid-interpreter cases invoke macos/package_app.sh without the now-required --zero-cost argument, so the package exits at CLI usage before reaching the interpreter-validation predicate."
-    classification: TEST_CONTRACT_DRIFT
-    required_authority: "Revision 4 may correct only the stale packaging-interpreter test invocation contract, requalify that test surface, and consume exactly one additional canonical ./verify invocation. Product source must remain byte-identical unless a newly observed product defect forces a new Architect revision."
+    summary: "The sole revision-4 canonical verifier passed the corrected packaging-interpreter module and then failed three tests in tests.test_revision4_runtime_config because those fixtures still model the retired embedded first-party payload and bundled BundleProgram ServiceManagement-era LaunchAgent shapes."
+    classification: TEST_FIXTURE_DRIFT
+    required_authority: "Revision 5 may update only tests/test_revision4_runtime_config.py to model the accepted external-payload/current-user-LaunchAgent contracts, prove that full module, and consume exactly one additional canonical ./verify invocation."
 
 acceptance_basis:
-  - "GitHub canonical comparison proves report commit 290d8b44a7925329788f019a6cc22f0e406399e5 is exactly one commit ahead of source candidate 1b338cc6540befc8fb6eac620245380d44a429a9 and adds only .agent/tasks/TASK-0181/report-r3.yaml."
-  - "The reviewed report records focused qualification PASS: 207/207 affected Python tests, 47/47 Swift tests, bash -n start.sh, and git diff --check."
-  - "The canonical verifier was invoked exactly once at source candidate 1b338cc6540befc8fb6eac620245380d44a429a9 and failed after 10/62 modules and 226 tests with four failures in tests.test_packaging_interpreter."
-  - "Independent GitHub source inspection confirms the failing test directly executes subprocess.run([str(PACKAGE)], ...) without --zero-cost in the invalid identity loop, while package_app.sh now intentionally requires explicit --zero-cost mode."
-  - "The observed failure occurs before interpreter validation and therefore does not falsify the accepted zero-cost substrate/payload product behavior proven by the focused suites; it exposes stale test invocation semantics."
-  - "No real zero-cost distribution or archive was built after the failed gate; both counters remain zero."
-  - "The report records zero production Runtime install/cutover/restart/lifecycle/payload/config/tunnel/Apple/release/tag/host-install effects."
+  - "Revision-4 report commit bbfbe683fe5c0d2f381356271b30957aa7fe7627 records one bounded test-only source candidate 16a47068f0db094b3f7703dc8c87c7b1139b7ca8 with product bytes identical to preserved candidate 1b338cc6540befc8fb6eac620245380d44a429a9."
+  - "The exact revision-4 target module tests.test_packaging_interpreter passed 12/12 before canonical verification."
+  - "Canonical invocation 2 progressed past packaging_interpreter and failed only three cases in tests.test_revision4_runtime_config after 11/62 modules and 240 tests."
+  - "Independent source inspection confirms test_installed_serve_binds_revision_from_validated_package_manifest constructs first-party agent_runtime/server.py inside the installed app and no canonical external payload pointer/release, conflicting with the accepted external-python-v1 architecture."
+  - "Independent source inspection confirms _start_fixture writes Contents/Library/LaunchAgents/com.picmao.agent-runtime-runtime-service.plist with BundleProgram, while current start.sh requires a mode-0600 plist at ~/Library/LaunchAgents with ProgramArguments pointing to the embedded AgentRuntimeRuntimeService helper."
+  - "The observed errors therefore occur because the fixtures fail current preconditions before reaching their intended runtime-config/readiness assertions; they do not independently demonstrate a product-source regression."
+  - "Revision-3 focused product evidence remains applicable because product bytes are unchanged: 207/207 affected Python tests and 47/47 Swift tests PASS."
+  - "No distribution/archive was built and no live production Runtime/lifecycle/payload/config/tunnel/Apple/release/tag effect occurred."
 
 continuation:
   allowed: false
   preconditions:
-    - "TASK-0181 revision 3 is terminally BLOCKED and must not be resumed directly."
-    - "A revision-4 continuation may make the bounded test-contract correction and perform exactly one additional canonical verifier invocation."
+    - "TASK-0181 revision 4 is terminally BLOCKED and must not be resumed directly."
+    - "Revision 5 may make only the bounded runtime-config test-fixture correction before another canonical verifier."
   preserve:
-    source_candidate: "1b338cc6540befc8fb6eac620245380d44a429a9"
-    source_tree: "eebb50e282671415771d22cf68602c280637111e"
+    product_candidate: "1b338cc6540befc8fb6eac620245380d44a429a9"
+    revision_4_test_candidate: "16a47068f0db094b3f7703dc8c87c7b1139b7ca8"
     focused_python: "207/207 PASS"
     focused_swift: "47/47 PASS"
-    canonical_verify_invocations_consumed: 1
+    packaging_interpreter: "12/12 PASS"
+    canonical_verify_invocations_consumed: 2
     real_distribution_builds_consumed: 0
     complete_archive_builds_consumed: 0
     zero_live_production_effects: true
   forbidden:
-    - "Treating the failed revision-3 canonical invocation as if it had not occurred."
-    - "A broad product rewrite in response to this stale test invocation."
-    - "Changing product source before the focused packaging-interpreter correction proves the failure classification wrong."
-    - "Building distribution/archive before the additional canonical verifier passes."
-    - "Any live production Runtime/lifecycle/payload/config/tunnel mutation."
+    - "Changing product source to satisfy stale runtime-config fixtures."
+    - "Restoring embedded first-party payload or BundleProgram current lifecycle in product code."
+    - "Weakening readiness, payload provenance, or current LaunchAgent ownership checks."
+    - "Building distribution/archive before the next canonical verifier passes."
+    - "Any live production mutation."
 
 notes:
-  - "The additional canonical verifier is a new revision authority, not a retry hidden inside revision 3."
+  - "Repeated canonical failures are exposing legacy suite fixtures incrementally. Revision 5 must run the full corrected module before consuming another canonical verifier."
