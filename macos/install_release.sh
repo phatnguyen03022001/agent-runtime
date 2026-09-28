@@ -54,6 +54,24 @@ case "${1-}" in
     [[ "$#" == "2" ]] || fail "usage: install_release.sh --workspace-root <absolute-existing-directory>"
     [[ -f "$HANDOFF" && ! -L "$HANDOFF" ]] \
       || fail "release bundle candidate handoff is missing or unsafe."
+    PAYLOAD_RELEASE="$("$PYTHON" - "$HANDOFF" "$BUNDLE_ROOT" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+
+handoff = Path(sys.argv[1])
+bundle_root = Path(sys.argv[2])
+try:
+    value = json.loads(handoff.read_text(encoding="utf-8"))
+except (OSError, UnicodeError, json.JSONDecodeError):
+    raise SystemExit(2)
+closure = value.get("initial_payload_closure")
+if not isinstance(closure, str) or re.fullmatch(r"[0-9a-f]{64}", closure) is None:
+    raise SystemExit(2)
+print(bundle_root / "payloads" / closure)
+PY
+)" || fail "release bundle handoff does not identify a valid external payload."
     WORKSPACE_ROOT="$2"
     [[ "$WORKSPACE_ROOT" == /* && -d "$WORKSPACE_ROOT" ]] \
       || fail "workspace root must be an absolute existing directory."
@@ -62,10 +80,10 @@ case "${1-}" in
     "$PYTHON" "$CONFIG_HELPER" --prebuilt "$CANONICAL_ENV" "$WORKSPACE_ROOT" \
       || fail "canonical Runtime configuration initialization failed."
     unset CONTROL_PLANE_API_KEY CONTROL_PLANE_TUNNEL_ID AGENT_RUNTIME_GIT_NAME AGENT_RUNTIME_GIT_EMAIL
-    "$PYTHON" "$PROVENANCE" validate-candidate "$APP" "$HANDOFF" >/dev/null \
-      || fail "release candidate validation failed before cutover."
+    "$PYTHON" "$PROVENANCE" validate-zero-cost "$APP" "$HANDOFF" "$PAYLOAD_RELEASE" >/dev/null \
+      || fail "zero-cost release candidate validation failed before cutover."
     command -v launchctl >/dev/null 2>&1 || fail "launchctl is required for candidate cutover."
-    "$PYTHON" "$CUTOVER" cutover "$APP" "$HANDOFF" \
+    "$PYTHON" "$CUTOVER" cutover "$APP" "$HANDOFF" --payload-release "$PAYLOAD_RELEASE" \
       --home "$HOME" --launchctl "$(command -v launchctl)"
     echo "Prebuilt candidate is installed and pending explicit commit."
     ;;

@@ -2560,6 +2560,18 @@ def recover_partial_transaction(
     fail_stages: set[str] | None = None,
 ) -> dict[str, object]:
     failures = set(fail_stages or ())
+    raw = _read_transaction_metadata_unversioned(transaction_dir)
+    if raw.get("schema") == ZERO_COST_TRANSACTION_SCHEMA:
+        if raw.get("kind") != "zero-cost" or raw.get("status") != "PARTIAL":
+            raise CutoverError("partial recovery requires a PARTIAL zero-cost cutover transaction")
+        rollback_transaction(
+            transaction_dir,
+            target_app,
+            launchctl=launchctl,
+            uid=uid,
+            fail_stages=failures,
+        )
+        return {"status": "RECOVERED"}
     metadata = _load_metadata(
         transaction_dir,
         allowed_schemas={LEGACY_RECOVERY_SCHEMA, SCHEMA2_RECOVERY_SCHEMA, SCHEMA4_ROLLBACK_SCHEMA, TRANSACTION_SCHEMA},
@@ -2774,6 +2786,7 @@ def main() -> int:
     cutover = sub.add_parser("cutover")
     cutover.add_argument("candidate", type=Path)
     cutover.add_argument("handoff", type=Path)
+    cutover.add_argument("--payload-release", type=Path, required=True)
     cutover.add_argument("--expected-candidate-sha256")
     cutover.add_argument("--expected-handoff-sha256")
     cutover.add_argument("--home", type=Path, default=Path.home())
@@ -2800,6 +2813,7 @@ def main() -> int:
             result = cutover_candidate(
                 args.candidate,
                 args.handoff,
+                payload_release=args.payload_release,
                 expected_candidate_sha256=args.expected_candidate_sha256,
                 expected_handoff_sha256=args.expected_handoff_sha256,
                 target_app=target_app,

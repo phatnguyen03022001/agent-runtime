@@ -18,6 +18,29 @@ is_lower_sha256() {
   [[ "${#1}" -eq 64 && "$1" != *[!0-9a-f]* ]]
 }
 
+payload_release_from_handoff() {
+  local handoff="$1"
+  command -v python3 >/dev/null 2>&1 || fail "Python 3.11+ is required for candidate cutover."
+  "$(command -v python3)" - "$handoff" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+
+handoff = Path(sys.argv[1])
+if handoff.is_symlink() or not handoff.is_file():
+    raise SystemExit(2)
+try:
+    value = json.loads(handoff.read_text(encoding="utf-8"))
+except (OSError, UnicodeError, json.JSONDecodeError):
+    raise SystemExit(2)
+closure = value.get("initial_payload_closure")
+if not isinstance(closure, str) or re.fullmatch(r"[0-9a-f]{64}", closure) is None:
+    raise SystemExit(2)
+print(handoff.parent / "payloads" / closure)
+PY
+}
+
 show_help() {
   cat <<'EOF'
 Usage:
@@ -63,11 +86,13 @@ case "${1-}" in
     fi
     [[ "$(uname -s)" == "Darwin" ]] || fail "prebuilt candidate installation supports macOS only."
     command -v launchctl >/dev/null 2>&1 || fail "launchctl is required for candidate cutover."
+    PAYLOAD_RELEASE="$(payload_release_from_handoff "$3")" \
+      || fail "candidate handoff does not identify a valid external payload release."
     if [[ "$#" == "3" ]]; then
-      run_cutover_helper cutover "$2" "$3" --home "$HOME" \
+      run_cutover_helper cutover "$2" "$3" --payload-release "$PAYLOAD_RELEASE" --home "$HOME" \
         --launchctl "$(command -v launchctl)"
     else
-      run_cutover_helper cutover "$2" "$3" \
+      run_cutover_helper cutover "$2" "$3" --payload-release "$PAYLOAD_RELEASE" \
         --expected-candidate-sha256 "$5" \
         --expected-handoff-sha256 "$7" \
         --home "$HOME" --launchctl "$(command -v launchctl)"
@@ -309,12 +334,16 @@ if check.returncode != 0:
 PY
 
 echo "[4/8] Building package-owned Runtime payload and menu-bar app..."
-PACKAGE_OUTPUT="$("$ROOT/macos/package_app.sh")" || fail "candidate packaging failed."
+PACKAGE_OUTPUT="$("$ROOT/macos/package_app.sh" --zero-cost)" || fail "candidate packaging failed."
 SOURCE_APP="$(printf '%s\n' "$PACKAGE_OUTPUT" | sed -n 's/^candidate_app=//p')"
 CANDIDATE_HANDOFF="$(printf '%s\n' "$PACKAGE_OUTPUT" | sed -n 's/^candidate_handoff=//p')"
+INITIAL_PAYLOAD_RELEASE="$(printf '%s\n' "$PACKAGE_OUTPUT" | sed -n 's/^initial_payload_release=//p')"
+INITIAL_PAYLOAD_CLOSURE="$(printf '%s\n' "$PACKAGE_OUTPUT" | sed -n 's/^initial_payload_closure=//p')"
 CANDIDATE_SHA256="$(printf '%s\n' "$PACKAGE_OUTPUT" | sed -n 's/^candidate_sha256=//p')"
 [[ -n "$SOURCE_APP" && "$SOURCE_APP" != *$'\n'* ]] || fail "candidate package app result is invalid."
 [[ -n "$CANDIDATE_HANDOFF" && "$CANDIDATE_HANDOFF" != *$'\n'* ]] || fail "candidate package handoff result is invalid."
+[[ -n "$INITIAL_PAYLOAD_RELEASE" && "$INITIAL_PAYLOAD_RELEASE" != *$'\n'* ]] || fail "candidate payload release result is invalid."
+[[ "$INITIAL_PAYLOAD_CLOSURE" =~ ^[0-9a-f]{64}$ ]] || fail "candidate payload closure result is invalid."
 [[ "$CANDIDATE_SHA256" =~ ^[0-9a-f]{64}$ ]] || fail "candidate package SHA-256 result is invalid."
 EXPECTED_CANDIDATE_ROOT="$ROOT/build/candidates/$CANDIDATE_SHA256"
 [[ "$SOURCE_APP" == "$EXPECTED_CANDIDATE_ROOT/Agent Runtime.app" ]] || fail "candidate package app path is unexpected."

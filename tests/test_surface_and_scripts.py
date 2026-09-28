@@ -469,7 +469,9 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertNotIn('cp -R -L "$REPO_ROOT/.venv"', package)
         self.assertIn('/usr/bin/strip -S "$MACOS/AgentRuntimeMenuBar"', package)
         self.assertIn("find \"$PACKAGE_VENV\" -type d -name '__pycache__'", package)
-        self.assertIn('"$RUNTIME/agent_runtime/"', package)
+        self.assertIn('package_provenance.py" publish-payload', package)
+        self.assertNotIn('cp -R "$SOURCE_ROOT/agent_runtime"', package)
+        self.assertNotIn('"$RUNTIME/agent_runtime/"', package)
         self.assertNotIn("checkout-path.txt", package)
 
     def test_configurable_session_limit_is_documented_and_hard_capped_at_six(self) -> None:

@@ -2752,7 +2752,7 @@ class CandidateCutoverTests(unittest.TestCase):
         secret_clear = install_branch.index(
             "unset CONTROL_PLANE_API_KEY CONTROL_PLANE_TUNNEL_ID AGENT_RUNTIME_GIT_NAME AGENT_RUNTIME_GIT_EMAIL"
         )
-        provenance_check = install_branch.index('"$PYTHON" "$PROVENANCE" validate-candidate')
+        provenance_check = install_branch.index('"$PYTHON" "$PROVENANCE" validate-zero-cost')
         self.assertLess(config_write, secret_clear)
         self.assertLess(secret_clear, provenance_check)
         self.assertNotIn(" commit ", install_branch)
