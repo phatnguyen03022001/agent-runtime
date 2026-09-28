@@ -1,0 +1,104 @@
+protocol_version: 3
+
+task_id: TASK-0184
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0184/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  authorized_base_head: "c1ff74886e6ed9d5e846d6a1f535be157e9d0923"
+  final_execution_head: "8a11f6def04bafa1e099ba3c0e9484f5f504a044"
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  authorized_revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+
+candidate:
+  source_commit: "8a11f6def04bafa1e099ba3c0e9484f5f504a044"
+  source_parent: "c1ff74886e6ed9d5e846d6a1f535be157e9d0923"
+  changed_files:
+    - macos/install_preflight.py
+    - macos/install_release.sh
+    - tests/test_task0141_productization.py
+  package_provenance_changed: false
+  candidate_cutover_changed: false
+  native_swift_changed: false
+  version_changed: false
+  fix: "Direct preflight disables bytecode before imports; the packaged shell installer exports bytecode suppression before its first embedded Python invocation."
+
+regression:
+  root_cause: "Importing three local modules during public prebuilt preflight wrote Python bytecode inside the sealed app, causing strict deep codesign to reject added resources."
+  native_carrier: "FirstRunSetupController sanitizes child environment and invokes /bin/bash with install_release.sh. The subprocess regression uses /bin/bash and an environment without PYTHONDONTWRITEBYTECODE."
+  red_before_fix: "Both direct-preflight and shell-installer subtests failed because the app snapshot acquired __pycache__ files."
+  green_after_fix: "Both subtests preserve the complete app resource snapshot and still reject an intentionally invalid release_trust fixture with RELEASE_TRUST_INVALID."
+  productization_module: "10 tests PASS after final source edit."
+  candidate_cutover_module: "111 tests PASS in attributed background job job_fe6762ca45a1; prior synchronous call returned HTTP 502 without a test result, and no test process remained before the background run."
+  package_provenance_module: "20 tests PASS."
+  static_checks: "py_compile for changed Python files, bash -n macos/install_release.sh, and git diff --check PASS."
+
+canonical_verification:
+  command: "./verify"
+  invocation_count: 1
+  job_id: job_15e15dbe963b
+  result: FAIL
+  modules_completed: 34
+  modules_selected: 62
+  tests_in_completed_modules: 524
+  failing_module: tests.test_task0055_macos_contract
+  failing_module_tests: 6
+  failing_assertions: 1
+  failing_assertion: "The test requires the exact phrase 'no Apple Developer ID or notarization authority' in README.md."
+  base_evidence: "At the authorized base, README.md instead says the public v0.5.0 artifact is ad-hoc signed without Apple Developer ID or notarization; the unchanged test already requires the older exact phrase."
+  relation_to_change: "Unrelated pre-existing README wording assertion; README and that test are outside this task's authorized correction scope."
+  retry_count: 0
+
+effects:
+  source_builds: 0
+  distribution_builds: 0
+  archive_builds: 0
+  production_install_or_cutover: 0
+  production_runtime_restarts: 0
+  runtime_env_mutations: 0
+  public_release_or_tag_mutations: 0
+  host_security_mutations: 0
+  installed_predecessor_doctor: "healthy 10/10, version 0.5.0, revision b1879b5c185e93457bb634a7ab0508f7220416af"
+  installed_predecessor_readiness: ready
+  transaction_present: false
+  canonical_runtime_env_sha256: "b3d0d67471f6d620f53ad1ed9ee6db21a1e906fff643dd94050b7cd8def97029"
+  canonical_runtime_env_owner: tienphat
+  canonical_runtime_env_mode: "0600"
+  public_v0_5_0_tag_target: "092b761cdc7e3f1085abe38948d9613fefe9e875"
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "Red/green direct and sanitized native-shell regression proves no app resource writes across normal prebuilt helper entrypoints; genuine trust-invalid fixture remains rejected."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "Strict provenance/codesign implementation was untouched; package_provenance 20/20 and candidate_cutover 111/111 focused tests pass."
+  - criterion_id: AC-3
+    status: FAIL
+    evidence: "Focused and static checks pass, but the sole canonical ./verify invocation fails on a pre-existing README exact-phrase assertion after 34/62 modules."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "Candidate changes only three authorized source/test files; installed predecessor and runtime.env remain unchanged, public tag unchanged, and report publication is reconciled as a direct child on clean synchronized main."
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: FAIL
+  evidence: "One canonical ./verify invocation failed at tests.test_task0055_macos_contract on a base-existing README phrase mismatch. No canonical retry is authorized."
+
+blockers:
+  - "Canonical verification is not PASS; a narrowly revised continuation must address the pre-existing README assertion within its own authority and verification budget."
+
+pushed: true
+
+result: BLOCKED
