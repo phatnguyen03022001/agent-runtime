@@ -1,0 +1,181 @@
+protocol_version: 3
+
+task_id: TASK-0182
+task_revision: 1
+state: APPROVED
+title: "Publish Accepted Zero-Cost macOS Release"
+
+origin:
+  type: operator_request
+  request: "Cleanly prepare and publish the accepted Agent Runtime zero-cost artifact."
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+
+execution_skills:
+  required:
+    - executor
+    - security-review
+    - verification
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  preferred_transport: AGENT_RUNTIME
+  reason: "The accepted archive is local on the operator Mac; GitHub publication and remote asset verification require the existing authenticated gh CLI."
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0181/review.yaml at ca270b4e7ca207b15528e1f85c39881a447091e4"
+    role: "Accepted artifact identity and closed TASK-0181 budgets."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0181/report-r9.yaml at 7bbc4a773d88728ba485ef55e086a41f8c3d0ff4"
+    role: "Exact archive path, SHA-256, candidate/provenance identity and zero live effects."
+    precedence: 2
+  - source: "README.md and docs/INSTALL.md at ca270b4e7ca207b15528e1f85c39881a447091e4"
+    role: "Current prebuilt installation contract and truthful pre-release documentation."
+    precedence: 3
+
+objective: "Publish the accepted Agent Runtime 0.5.0 zero-cost macOS arm64 archive as a durable GitHub Release with checksum, exact packaged-source tag, truthful installation guidance and a report. Do not rebuild or activate production Runtime."
+
+scope:
+  required_changes:
+    - "Require exact clean synced main and fixed origin before mutation; confirm no preexisting v0.5.0 tag or release."
+    - "Preserve the accepted archive bytes and verify SHA-256 3f179015534d81d6baee3faf78a57f8300451739afdda53a5940ee91ec7c3746 immediately before upload."
+    - "Keep the release tag v0.5.0 bound to packaged source revision 092b761cdc7e3f1085abe38948d9613fefe9e875; do not point it at later governance/documentation commits."
+    - "Prepare a SHA-256 checksum asset and release notes under ignored build/TASK-0182-release. State macOS Apple silicon, ad-hoc signing without Apple publisher authentication or notarization, first-launch Open/Open Anyway possibility, official tunnel-client requirement and the complete app/handoff/payload bundle."
+    - "Create a draft GitHub Release with the exact archive and checksum assets. Read back the remote tag target, draft metadata and both assets. Download the remote archive and checksum under ignored build output and independently compare bytes/hash to the accepted local archive."
+    - "Only after the draft upload and remote checks PASS, publish the release. If any check fails, keep it draft and stop BLOCKED without representing it as public."
+    - "After publication, update only README.md and docs/INSTALL.md to replace their outdated no-public-release statements with a link to the exact v0.5.0 release, SHA-256, and honest ad-hoc/consumer limitations. Do not alter product or packaging bytes."
+    - "Record the release URL, immutable tag/source SHA, release asset names/sizes/checksums, remote download verification, docs commit and zero live effects in .agent/tasks/TASK-0182/report.yaml."
+    - "Validate the report with the pinned Foundation validator when available, publish docs/report non-force against fresh main, then prove local/remote main clean and synchronized."
+    - "Do not install, cut over, restart, reconfigure, or otherwise mutate the current production Runtime, lifecycle, payload pointer, credentials, tunnel or host security state."
+
+  allowed_existing_files_or_components:
+    - "README.md"
+    - "docs/INSTALL.md"
+    - ".agent/tasks/TASK-0182/report.yaml"
+    - "build/TASK-0182-release/ ignored release preparation and remote verification evidence"
+  expected_files_are_restrictive: true
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0182/report.yaml"
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "Only release documentation and canonical task report change in Git."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+effect_authority:
+  source_build_max: 0
+  canonical_verify_max: 0
+  distribution_build_max: 0
+  archive_build_max: 0
+  github_release_draft_create_max: 1
+  github_release_publish_max: 1
+  version_tag_create_max: 1
+  production_runtime_install_or_cutover_max: 0
+  production_runtime_restart_max: 0
+  production_lifecycle_mutation_max: 0
+  production_payload_pointer_mutation_max: 0
+  live_runtime_configuration_mutation_max: 0
+  tunnel_client_mutation_max: 0
+  apple_developer_authority_mutation_max: 0
+  host_dependency_install_max: 0
+
+invariants:
+  - "The public asset bytes match the TASK-0181 accepted archive hash exactly."
+  - "v0.5.0 resolves to the exact packaged source revision."
+  - "The release states ad-hoc signing and never claims Apple publisher identity or notarization."
+  - "A draft is not announced as published until remote asset verification passes."
+  - "No production Runtime or host security state changes."
+
+forbidden_changes:
+  - "Any product, package, provenance, test, dependency or locked-source mutation."
+  - "Rebuilding the distribution or archive, or rerunning canonical ./verify under TASK-0181."
+  - "Creating another branch or pull request, force pushing, moving an existing tag, or replacing a release asset after public publication."
+  - "Publishing a release with mismatched source, missing bundle component, missing checksum or failed remote download verification."
+  - "Installing or cutover of production Runtime, manipulating Gatekeeper, or using Apple signing/notarization authority."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: revised_contract_required
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "The exact accepted artifact is ready and the release tag identifies the packaged source."
+    evidence_required: "Clean source/remote identity, unchanged local SHA-256 and v0.5.0 tag target 092b761cdc7e3f1085abe38948d9613fefe9e875."
+  - id: AC-2
+    requirement: "GitHub durably hosts a truthful release with verified archive and checksum."
+    evidence_required: "Draft upload, remote asset download byte/hash match, checksum match, then public release URL and asset identities."
+  - id: AC-3
+    requirement: "Documentation and repository state reflect the public release."
+    evidence_required: "README/INSTALL links and limitations, report, non-force publication, clean synchronized main."
+  - id: AC-4
+    requirement: "No live product effects occur."
+    evidence_required: "Zero production install/cutover/restart/config/payload/tunnel/Apple authority effects."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Reconcile exact task base, release absence and accepted archive hash."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Create draft with tag at packaged source, upload archive and SHA-256."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Download remote assets and independently verify exact archive bytes/hash before publication."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Publish release, update docs, validate report and reconcile clean main."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+
+report_requirements:
+  path: ".agent/tasks/TASK-0182/report.yaml"
+  record:
+    - "exact base, accepted source and archive identity"
+    - "version tag target, release URL and public state"
+    - "remote archive and checksum asset identities and independent download verification"
+    - "documentation diff, publication and clean repository state"
+    - "zero live product effects"
+    - "result NEEDS_REVIEW on complete PASS, otherwise BLOCKED"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: true
+  mutate_repository_metadata: false
+  publish_release: true
+
+blocking_decisions: []
+execution_ready: true
