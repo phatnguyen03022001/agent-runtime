@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0181
-task_revision: 6
-review_revision: 4
+task_revision: 7
+review_revision: 5
 state: BLOCKED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
-  path: .agent/tasks/TASK-0181/report-r6.yaml
-  commit: "2263ce29a8df6cf6a632a8b3b15738a48f7991f3"
-  report_revision: 6
+  path: .agent/tasks/TASK-0181/report-r7.yaml
+  commit: "35297f08eaca80a5d6b16390c4d5ae64a209f3c8"
+  report_revision: 7
 
 independence:
   reviewer_role: ARCHITECT
@@ -24,47 +24,48 @@ contract_compliance:
   scope: PASS
   structure_policy: PASS
   git_authority: PASS
-  acceptance_criteria: BLOCKED_BY_ZERO_COST_POST_CUTOVER_VALIDATION_MISMATCH
-  verifier_evidence: NOT_CONSUMED_BY_REV6
+  acceptance_criteria: BLOCKED_BY_ZERO_COST_SIGNING_REQUIREMENT_MISMATCH
+  verifier_evidence: PASS_RECONCILED
+  report_serialization: PINNED_VALIDATOR_UNSUPPORTED_FLOW_STYLE
 
 blocking_findings:
-  - id: B-0181-REV6-ZERO-COST-POSTCHECK
+  - id: B-0181-REV7-ZERO-COST-DESIGNATED-REQUIREMENT
     severity: BLOCKING
-    classification: PRODUCT_SOURCE_POST_CUTOVER_VALIDATION_MISMATCH
-    summary: "The no-argument source installer performs the schema-3 zero-cost cutover successfully, then validates the installed app with the legacy schema-2 validate-candidate command. A valid schema-3 handoff is therefore rejected after cutover."
-    required_authority: "Revision 7 may correct the post-cutover validation path in install.sh to validate the installed zero-cost app together with the installed external payload using the existing validate-zero-cost command, then reapply the already-proven three test corrections and requalify."
+    classification: PRODUCT_SOURCE_ARTIFACT_SIGNING_MISMATCH
+    summary: "The source candidate passes the complete qualification surface and canonical invocation 3, but the first real zero-cost distribution build fails during seal-zero-cost because package_app.sh ad-hoc signs code with explicit identifiers only. macOS therefore synthesizes CDHash-based designated requirements instead of the stable identifier-based designated requirements required by the zero-cost provenance contract."
+    required_authority: "Revision 8 may correct only zero-cost ad-hoc signing in package_app.sh so every signed substrate Mach-O receives an explicit designated requirement equal to its deterministic identifier, add bounded regression coverage, requalify the changed source, and consume one new canonical verification plus one new distribution-build authority."
 
 acceptance_basis:
-  - "Revision-6 report commit 2263ce29a8df6cf6a632a8b3b15738a48f7991f3 is report-only over exact base e54e3b1c9122a3938a4d7eabce9b711c9b202d49 and records zero product/live consequences."
-  - "The exact revision-5 runtime-config correction reproduced with SHA-256 3dec150104fa395a5d9c28dd2d17a3a9c0d762a3e5424e49400d5446f5f7f4d6 and passed 12/12."
-  - "The task0055 current-contract convergence passed 6/6 while preserving historical TeamIdentifier compatibility coverage."
-  - "The tunnel-identity fixture reached the real no-argument installer path and seven successful-install cases failed deterministically only after zero-cost cutover with PROVENANCE ERROR: candidate handoff shape is invalid."
-  - "Current install.sh invokes package_provenance.py validate-candidate after cutover. That command uses legacy CANDIDATE_SCHEMA=2 and exact legacy key shape."
-  - "Current package_provenance.py already exposes validate-zero-cost and validate_zero_cost_candidate(app, handoff, payload_release), which validate ZERO_COST_CANDIDATE_SCHEMA=3, the bound external payload closure/source/requirements/Python/public-surface contract, strict app code identity, and repeat validation."
-  - "candidate_cutover.py installs the selected payload at ~/Library/Application Support/Agent Runtime/payloads/<initial_payload_closure>, and commit already validates the installed app against the installed payload with provenance.validate_zero_cost_candidate."
-  - "The smallest coherent correction is therefore post-cutover validation of the installed app plus installed payload through validate-zero-cost; no provenance schema or architecture change is required."
-  - "Canonical invocation 3 remains unconsumed; total canonical consumption is 2/3. Distribution/archive remain 0/0."
+  - "Report commit 35297f08eaca80a5d6b16390c4d5ae64a209f3c8 is the sole child of source candidate 8e7eebe2a5975ca61d7a07b1b0881e7f2784d9bf and adds only report-r7.yaml."
+  - "The source candidate focused suite passed 182 tests across six affected modules; static checks passed; the complete non-canonical pre-sweep passed 62/62 modules and 839 tests."
+  - "Canonical ./verify invocation 3 passed 62/62 modules and 839 tests against source candidate 8e7eebe2a5975ca61d7a07b1b0881e7f2784d9bf. Historical TASK-0181 canonical history is exactly FAIL, FAIL, PASS for invocations 1, 2 and 3."
+  - "Exactly one real zero-cost distribution build was attempted after canonical PASS. It reached Swift production build, ad-hoc signing and seal-zero-cost, then failed before publication with designated requirement is missing for AgentRuntimeMenuBar. No archive was built."
+  - "Current package_app.sh signs native substrate files and the outer app with --sign - and --identifier but without an explicit -r designated requirement."
+  - "Current package_provenance.py intentionally requires responsible code to have TeamIdentifier absent, exact identifiers, and exact designated requirements of the form designated => identifier \"<expected identifier>\". Existing unit tests encode this contract."
+  - "A disposable current-host probe proved that ad-hoc signing with only --identifier yields a generated CDHash requirement printed as '# designated => cdhash ...', while signing with -r='designated => identifier \"<id>\"' yields the exact stable identifier-based requirement and strict verification passes."
+  - "A disposable minimal app-bundle probe proved that applying the same explicit identifier-based requirement when signing the outer app preserves the exact requirement on the main executable after bundle signing."
+  - "Therefore provenance is not overly strict; package signing is incomplete relative to the accepted explicit-DR architecture. The correct fix is to make package_app.sh sign every native substrate code object with an explicit identifier-based DR, not to accept CDHash-default requirements."
+  - "The pinned Foundation validator exits 3 on report-r7.yaml because focused module records use flow-style YAML mappings. The report's substantive evidence was independently reconciled from the report-only commit, source, build logs and local probes; revision 8 must not rely on a false claim of mechanical report validation."
 
 continuation:
   allowed: false
   preconditions:
-    - "TASK-0181 revision 6 is terminally BLOCKED."
-    - "Revision 7 may make the bounded install.sh product correction and requalify."
+    - "TASK-0181 revision 7 is terminally BLOCKED."
+    - "Revision 8 may make the bounded package signing correction and requalify the changed source/artifact."
   preserve:
-    product_candidate_before_fix: "1b338cc6540befc8fb6eac620245380d44a429a9"
-    packaging_interpreter_correction_blob: "71c33fd3cb80f65e98bf92a4ecfaa1271816b79c"
-    runtime_config_corrected_sha256: "3dec150104fa395a5d9c28dd2d17a3a9c0d762a3e5424e49400d5446f5f7f4d6"
-    revision_6_test_attempt_patch_sha256: "adbfcea6f7af806bbe5aeabbe75772bf48e591884443824d439596b978f491e8"
-    canonical_verify_invocations_consumed: 2
-    canonical_verify_invocation_3_consumed: false
-    distribution_builds_consumed: 0
+    revision_7_source_candidate: "8e7eebe2a5975ca61d7a07b1b0881e7f2784d9bf"
+    revision_7_source_tree: "82f01bed9d3915535a7f1f031946103beaa8dc5d"
+    canonical_verify_invocations_consumed: 3
+    canonical_verify_invocation_3_result: PASS
+    distribution_builds_consumed: 1
+    distribution_build_1_result: FAIL
     archive_builds_consumed: 0
     zero_live_production_effects: true
   forbidden:
-    - "Changing package_provenance schema or weakening zero-cost validation when existing validate-zero-cost is sufficient."
-    - "Validating only the source payload after cutover instead of the installed selected payload."
-    - "Any architecture change, current ServiceManagement restoration, paid signing restoration, or embedded mutable payload restoration."
-    - "Canonical verify before the complete non-canonical pre-sweep passes."
+    - "Weakening package_provenance.py to accept generated CDHash designated requirements."
+    - "Changing the accepted zero-cost schema, lifecycle, payload architecture, install flow or current user LaunchAgent semantics."
+    - "Using paid signing, TeamIdentifier, notarization or stapling."
+    - "Building a second distribution before the changed source passes focused, full pre-sweep and new canonical verification."
 
 notes:
-  - "Revision 7 is a narrow product correction, not a redesign."
+  - "Revision 8 is an artifact-signing correction discovered only after source verification; a new source verification is required because package_app.sh is product source."
