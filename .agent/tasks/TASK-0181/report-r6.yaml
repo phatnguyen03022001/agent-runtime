@@ -1,0 +1,240 @@
+protocol_version: 3
+
+task_id: TASK-0181
+task_revision: 6
+report_revision: 6
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0181/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  authorized_base_head: "e54e3b1c9122a3938a4d7eabce9b711c9b202d49"
+  authorized_base_tree: "ca3797ecf4437991c4c079dbfceb2d45a78c72b9"
+  terminal_source_head: "e54e3b1c9122a3938a4d7eabce9b711c9b202d49"
+  source_candidate_frozen: false
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  authorized_revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+
+authority_lineage:
+  revision_5_report_commit: "30549e7e77209befe6b5db9e43b9122e36f44eca"
+  revision_5_review_commit: "bd8e4b4ec926393f40c667d4c87aca99399e35d7"
+  revision_5_report_ancestor: true
+  revision_5_review_ancestor: true
+  preserved_product_candidate: "1b338cc6540befc8fb6eac620245380d44a429a9"
+  preserved_product_tree: "eebb50e282671415771d22cf68602c280637111e"
+  packaging_interpreter_blob: "71c33fd3cb80f65e98bf92a4ecfaa1271816b79c"
+  proof: "Excluding TASK-0181 governance and tests/test_packaging_interpreter.py, the revision-6 base has zero path differences from the preserved product candidate."
+
+runtime_config_fixture_correction:
+  status: REPRODUCED_AND_PROVED_NOT_FROZEN
+  corrected_worktree_sha256: "3dec150104fa395a5d9c28dd2d17a3a9c0d762a3e5424e49400d5446f5f7f4d6"
+  ignored_patch_source:
+    path: build/TASK-0181-r5/runtime-config-fixture.patch
+    sha256: "32341494549ab31f5b0bb96135b6122ee54c61aa0f6b4796dc4ad0858a340b3f"
+  focused_module:
+    module: tests.test_revision4_runtime_config
+    tests: 12
+    result: PASS
+    log_sha256: "e3777feaf3ff8eb66346bd0897fcd179b0b98da5f218173732f7c9da0ecda9fe"
+  disposition: "Restored to the exact revision-6 base before report authorship because the corrected source candidate freeze gate was not reached."
+
+legacy_test_convergence:
+  allowed_paths:
+    - tests/test_revision4_runtime_config.py
+    - tests/test_task0055_macos_contract.py
+    - tests/test_tunnel_identity.py
+  attempted_non_governance_deltas_exactly_allowed_paths: true
+  ignored_attempt_patch:
+    path: build/TASK-0181-r6/blocked-test-convergence.patch
+    sha256: "adbfcea6f7af806bbe5aeabbe75772bf48e591884443824d439596b978f491e8"
+  ignored_focused_summary:
+    path: build/TASK-0181-r6/focused-summary.json
+    sha256: "c90a013420cc8c0faf92b24314ac93db4067bd3669ef4af9c167dd22dfda8cb0"
+  task0055:
+    convergence_summary:
+      - "Current packaging assertions were changed to explicit package_app.sh --zero-cost and ad-hoc --sign - semantics with no AGENT_RUNTIME_CODESIGN_IDENTITY or Keychain discovery requirement."
+      - "Current lifecycle/docs assertions were changed to the per-user LaunchAgent, predecessor-only ServiceManagement, Open/Open Anyway, ad-hoc non-publisher-authentication, and no Developer ID/notarization semantics."
+      - "Historical responsible-code TeamIdentifier compatibility coverage was preserved."
+    focused_module:
+      module: tests.test_task0055_macos_contract
+      tests: 6
+      result: PASS
+      log_sha256: "37d8a0769d6c800296764c21f8e08feca52d770d400afabe65713604062cf749"
+  tunnel_identity:
+    convergence_summary:
+      - "The fake package_app.sh was changed to emit candidate_app, candidate_handoff, initial_payload_release, initial_payload_closure, and candidate_sha256."
+      - "The fixture app substrate no longer embedded agent_runtime; first-party Python was modeled as a content-addressed external payload."
+      - "Current successful-install assertions were changed to the per-user mode-0600 LaunchAgent with exact ProgramArguments, RunAtLoad=false, KeepAlive SuccessfulExit=false, ProcessType=Interactive, ThrottleInterval=2, mode-0600 current-payload, and canonical runtime.env."
+      - "Current-generation BundleProgram and ServiceManagement state modeling were removed."
+    focused_module:
+      module: tests.test_tunnel_identity
+      tests: 15
+      failures: 7
+      result: FAIL
+      final_log_sha256: "8fdbaee187d5b81d52e2f7f2f35550fd3f3b976c4b70cc7036029fb15b35765e"
+      common_error: "PROVENANCE ERROR: candidate handoff shape is invalid"
+    root_cause:
+      classification: PRODUCT_SOURCE_POST_CUTOVER_VALIDATION_MISMATCH
+      evidence:
+        - "macos/package_app.sh emits a ZERO_COST_CANDIDATE_SCHEMA=3 handoff and the external initial payload."
+        - "install.sh --install-prebuilt derives the payload from initial_payload_closure and performs the real zero-cost cutover."
+        - "After that cutover returns successfully, the no-argument install path calls package_provenance.py validate-candidate on the same zero-cost handoff."
+        - "validate-candidate loads only legacy CANDIDATE_SCHEMA=2 with an exact ten-key shape, while ZERO_COST_CANDIDATE_SCHEMA=3 has seventeen keys; the key sets are not equal."
+        - "The final focused module therefore reaches the real post-cutover product check and deterministically fails in seven successful-install cases."
+      required_fix_class: "Product-source correction to the post-cutover validation path or equivalent current zero-cost validation."
+      disposition: "Outside revision-6 mutation authority. No test-only bypass of install.sh or package provenance was retained."
+
+focused_checks:
+  result: FAIL
+  passed_modules: 2
+  failed_modules: 1
+  modules:
+    - module: tests.test_revision4_runtime_config
+      tests: 12
+      result: PASS
+    - module: tests.test_task0055_macos_contract
+      tests: 6
+      result: PASS
+    - module: tests.test_tunnel_identity
+      tests: 15
+      failures: 7
+      result: FAIL
+
+diff_boundary:
+  attempted_worktree_git_diff_check: PASS
+  attempted_worktree_changed_paths:
+    - tests/test_revision4_runtime_config.py
+    - tests/test_task0055_macos_contract.py
+    - tests/test_tunnel_identity.py
+  terminal_worktree_test_deltas_restored: true
+
+static_precanonical_checks:
+  full_static_bundle_result: NOT_RUN
+  reason: "A mandatory focused module failed on a product-source contract mismatch outside revision-6 mutation authority, so execution stopped before the pre-canonical static gate."
+  partial_diagnostic_py_compile:
+    tests/test_tunnel_identity.py: PASS
+
+qualification_plan:
+  revision_6:
+    result: NOT_GENERATED
+    reason: "Focused-module gate failed before qualification planning."
+  inherited_revision_5:
+    discovered_modules: 62
+    selected_modules: 62
+    plan_sha256: "d0e05a46119af5f0bc0386f3ffc3a3acb453ac57fec04a7215117cd27e6a91a0"
+
+noncanonical_presweep:
+  historical_consumed: 1
+  revision_6_authorized_max: 1
+  revision_6_consumed: 0
+  revision_6_result: NOT_RUN
+  inherited_revision_5_result:
+    completed_modules: 62
+    selected_modules: 62
+    passed_modules: 60
+    failed_modules: 2
+    observed_tests: 839
+  reason: "Focused-module gate failed before the sole revision-6 pre-sweep."
+
+canonical_verify:
+  command: ./verify
+  historical:
+    invocation_1:
+      source_commit: "1b338cc6540befc8fb6eac620245380d44a429a9"
+      start_identity: "c3208a7f12af4459bc82816767c79981"
+      result: FAIL
+      completed_modules: 10
+      selected_modules: 62
+      completed_tests: 226
+      failing_module: tests.test_packaging_interpreter
+      failures: 4
+    invocation_2:
+      source_commit: "16a47068f0db094b3f7703dc8c87c7b1139b7ca8"
+      source_tree: "3cacb1022d3e5e534306604820e8f2daf48a4ef8"
+      start_identity: "a5c6d47ec8354a17963f4f48569704b4"
+      result: FAIL
+      completed_modules: 11
+      selected_modules: 62
+      completed_tests: 240
+      failing_module: tests.test_revision4_runtime_config
+      failures: 3
+  revision_6:
+    invocation_number: 3
+    authorized_max: 1
+    consumed: false
+    result: NOT_RUN
+    reason: "The focused gate failed before static checks and the complete qualification pre-sweep."
+  total_task_invocations_consumed: 2
+  total_task_maximum: 3
+
+source_candidate:
+  corrected_candidate: NOT_FROZEN
+  final_execution_head: "e54e3b1c9122a3938a4d7eabce9b711c9b202d49"
+  final_execution_tree: "ca3797ecf4437991c4c079dbfceb2d45a78c72b9"
+  product_bytes: "Preserved byte-for-byte from 1b338cc6540befc8fb6eac620245380d44a429a9."
+  revision_4_packaging_interpreter_correction: "Preserved at blob 71c33fd3cb80f65e98bf92a4ecfaa1271816b79c."
+  reason: "Candidate freeze requires all focused modules, static checks, and the complete revision-6 pre-sweep to pass."
+
+artifact_qualification:
+  real_zero_cost_distribution_build_total: 0
+  complete_archive_build_total: 0
+  result: NOT_RUN
+  reason: "Canonical verification invocation 3 was not eligible to run."
+  final_signing_identifiers: NOT_OBSERVED
+  final_designated_requirements: NOT_OBSERVED
+  team_identifier_absence: NOT_OBSERVED
+  substrate_closure: NOT_OBSERVED
+  initial_payload_closure: NOT_OBSERVED
+  candidate_handoff_sha256: NOT_OBSERVED
+  archive_sha256: NOT_OBSERVED
+  artifact_paths: NOT_CREATED
+  packaged_public_surface: NOT_OBSERVED
+
+live_effects:
+  production_runtime_install_or_cutover: 0
+  production_runtime_restart: 0
+  production_lifecycle_mutation: 0
+  production_payload_pointer_mutation: 0
+  live_runtime_configuration_mutation: 0
+  tunnel_client_mutation: 0
+  apple_developer_authority_mutation: 0
+  apple_notarization_submission: 0
+  release_or_tag_publication: 0
+  host_dependency_install: 0
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: BLOCKED
+    evidence: "The exact revision-5 runtime-config correction reproduced and passed 12/12; task0055 convergence passed 6/6. The tunnel fixture reached the real current zero-cost post-cutover path but failed because install.sh invokes legacy validate-candidate on a zero-cost handoff. Product mutation is forbidden, so no corrected candidate was frozen."
+  - criterion_id: AC-2
+    status: BLOCKED
+    evidence: "The mandatory focused gate failed before full static checks, revision-6 qualification planning, and the sole revision-6 pre-sweep."
+  - criterion_id: AC-3
+    status: BLOCKED
+    evidence: "Canonical invocation 3 was not consumed. Historical consumption remains exactly two of three."
+  - criterion_id: AC-4
+    status: BLOCKED
+    evidence: "No distribution or archive was built because canonical invocation 3 was not eligible."
+  - criterion_id: AC-5
+    status: EVIDENCE_INDEXED
+    evidence: "Product/test worktree deltas were restored before report authorship; zero live production, Apple, tag, release, dependency-install, distribution, and archive effects occurred. Publication closure is performed after this report commit."
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: NOT_REQUIRED
+
+pushed: false
+
+blockers:
+  - id: B-0181-REV6-ZERO-COST-POSTCHECK
+    reason: "The current no-argument source installer performs a successful schema-3 zero-cost cutover and then invokes legacy schema-2 package_provenance.py validate-candidate on the same handoff. The valid zero-cost handoff therefore fails with 'candidate handoff shape is invalid'. Correcting that product-source post-cutover validation path is outside revision-6 authority; test-only bypass is explicitly forbidden."
+
+result: BLOCKED
