@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0181
-task_revision: 5
-review_revision: 3
+task_revision: 6
+review_revision: 4
 state: BLOCKED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
-  path: .agent/tasks/TASK-0181/report-r5.yaml
-  commit: "30549e7e77209befe6b5db9e43b9122e36f44eca"
-  report_revision: 5
+  path: .agent/tasks/TASK-0181/report-r6.yaml
+  commit: "2263ce29a8df6cf6a632a8b3b15738a48f7991f3"
+  report_revision: 6
 
 independence:
   reviewer_role: ARCHITECT
@@ -24,51 +24,47 @@ contract_compliance:
   scope: PASS
   structure_policy: PASS
   git_authority: PASS
-  acceptance_criteria: BLOCKED_BY_TWO_LEGACY_TEST_MODULES
-  verifier_evidence: NOT_CONSUMED_BY_REV5
+  acceptance_criteria: BLOCKED_BY_ZERO_COST_POST_CUTOVER_VALIDATION_MISMATCH
+  verifier_evidence: NOT_CONSUMED_BY_REV6
 
 blocking_findings:
-  - id: B-0181-REV5-PRESWEEP
+  - id: B-0181-REV6-ZERO-COST-POSTCHECK
     severity: BLOCKING
-    summary: "The authorized qualification pre-sweep completed all 62 selected modules and 839 tests, with 60 modules passing. The only failures are tests.test_task0055_macos_contract and tests.test_tunnel_identity, both retaining retired Developer-ID/ServiceManagement/embedded-payload fixture assumptions."
-    classification: TEST_FIXTURE_AND_DOC_ASSERTION_DRIFT
-    required_authority: "Revision 6 may reapply the already-proven runtime-config fixture correction, update only the two remaining legacy test modules to current zero-cost external-payload/user-LaunchAgent contracts, run focused modules plus another complete qualification pre-sweep, and consume canonical invocation 3 only after that full sweep passes."
+    classification: PRODUCT_SOURCE_POST_CUTOVER_VALIDATION_MISMATCH
+    summary: "The no-argument source installer performs the schema-3 zero-cost cutover successfully, then validates the installed app with the legacy schema-2 validate-candidate command. A valid schema-3 handoff is therefore rejected after cutover."
+    required_authority: "Revision 7 may correct the post-cutover validation path in install.sh to validate the installed zero-cost app together with the installed external payload using the existing validate-zero-cost command, then reapply the already-proven three test corrections and requalify."
 
 acceptance_basis:
-  - "Revision-5 report records tests.test_revision4_runtime_config PASS 12/12 after a bounded test-only correction with product bytes unchanged. The correction was restored rather than frozen because the later full pre-sweep failed."
-  - "The report preserves the exact corrected runtime-config file SHA-256 3dec150104fa395a5d9c28dd2d17a3a9c0d762a3e5424e49400d5446f5f7f4d6 and ignored patch SHA-256 32341494549ab31f5b0bb96135b6122ee54c61aa0f6b4796dc4ad0858a340b3f."
-  - "The full qualification planning surface selected all 62 classified modules. The sequential pre-sweep ran every selected module rather than stopping early and observed 839 tests."
-  - "tests.test_task0055_macos_contract failed because current assertions still demand AGENT_RUNTIME_CODESIGN_IDENTITY/non-ad-hoc signing and README text for app-owned ServiceManagement/Developer-ID-era states, while accepted current product packaging is explicit --zero-cost ad-hoc and current lifecycle is one per-user LaunchAgent."
-  - "Independent source inspection confirms that module still asserts AGENT_RUNTIME_CODESIGN_IDENTITY, --sign $SIGNING_IDENTITY, absence of --sign -, and README phrases such as app-owned ServiceManagement/requires-approval/not-registered."
-  - "tests.test_tunnel_identity failed seven install cases at the same earlier gate because its fake package_app.sh emits only candidate_app, candidate_handoff and candidate_sha256; current install requires initial_payload_release from the external-payload package contract."
-  - "Independent source inspection confirms the same tunnel fixture still creates embedded runtime/agent_runtime, a bundled Contents/Library/LaunchAgents plist with BundleProgram, and a fake ServiceManagement control path for the current generation."
-  - "These two modules therefore fail before or at retired fixture boundaries and do not independently demonstrate product-source defects. Product source remains frozen at 1b338cc6540befc8fb6eac620245380d44a429a9."
-  - "Canonical invocation 3 was correctly NOT_RUN. Historical canonical consumption remains exactly two; distribution/archive counts remain zero."
-  - "No live production Runtime/lifecycle/payload/config/tunnel/Apple/release/tag/host-install effects occurred."
+  - "Revision-6 report commit 2263ce29a8df6cf6a632a8b3b15738a48f7991f3 is report-only over exact base e54e3b1c9122a3938a4d7eabce9b711c9b202d49 and records zero product/live consequences."
+  - "The exact revision-5 runtime-config correction reproduced with SHA-256 3dec150104fa395a5d9c28dd2d17a3a9c0d762a3e5424e49400d5446f5f7f4d6 and passed 12/12."
+  - "The task0055 current-contract convergence passed 6/6 while preserving historical TeamIdentifier compatibility coverage."
+  - "The tunnel-identity fixture reached the real no-argument installer path and seven successful-install cases failed deterministically only after zero-cost cutover with PROVENANCE ERROR: candidate handoff shape is invalid."
+  - "Current install.sh invokes package_provenance.py validate-candidate after cutover. That command uses legacy CANDIDATE_SCHEMA=2 and exact legacy key shape."
+  - "Current package_provenance.py already exposes validate-zero-cost and validate_zero_cost_candidate(app, handoff, payload_release), which validate ZERO_COST_CANDIDATE_SCHEMA=3, the bound external payload closure/source/requirements/Python/public-surface contract, strict app code identity, and repeat validation."
+  - "candidate_cutover.py installs the selected payload at ~/Library/Application Support/Agent Runtime/payloads/<initial_payload_closure>, and commit already validates the installed app against the installed payload with provenance.validate_zero_cost_candidate."
+  - "The smallest coherent correction is therefore post-cutover validation of the installed app plus installed payload through validate-zero-cost; no provenance schema or architecture change is required."
+  - "Canonical invocation 3 remains unconsumed; total canonical consumption is 2/3. Distribution/archive remain 0/0."
 
 continuation:
   allowed: false
   preconditions:
-    - "TASK-0181 revision 5 is terminally BLOCKED and must not be resumed directly."
-    - "Revision 6 may perform only bounded test convergence and subsequent requalification."
+    - "TASK-0181 revision 6 is terminally BLOCKED."
+    - "Revision 7 may make the bounded install.sh product correction and requalify."
   preserve:
-    product_candidate: "1b338cc6540befc8fb6eac620245380d44a429a9"
-    product_tree: "eebb50e282671415771d22cf68602c280637111e"
+    product_candidate_before_fix: "1b338cc6540befc8fb6eac620245380d44a429a9"
     packaging_interpreter_correction_blob: "71c33fd3cb80f65e98bf92a4ecfaa1271816b79c"
     runtime_config_corrected_sha256: "3dec150104fa395a5d9c28dd2d17a3a9c0d762a3e5424e49400d5446f5f7f4d6"
-    runtime_config_patch_sha256: "32341494549ab31f5b0bb96135b6122ee54c61aa0f6b4796dc4ad0858a340b3f"
-    revision_5_presweep: "62/62 modules executed, 60 PASS / 2 FAIL, 839 tests"
+    revision_6_test_attempt_patch_sha256: "adbfcea6f7af806bbe5aeabbe75772bf48e591884443824d439596b978f491e8"
     canonical_verify_invocations_consumed: 2
     canonical_verify_invocation_3_consumed: false
-    real_distribution_builds_consumed: 0
-    complete_archive_builds_consumed: 0
+    distribution_builds_consumed: 0
+    archive_builds_consumed: 0
     zero_live_production_effects: true
   forbidden:
-    - "Any product-source change in response to the two legacy test modules."
-    - "Restoring paid-signing, current ServiceManagement, embedded mutable payload, or BundleProgram current lifecycle semantics."
-    - "Weakening installer, provenance, payload, lifecycle, readiness, or security checks to satisfy fixtures."
-    - "Calling canonical ./verify before a complete full pre-sweep passes."
-    - "Building artifacts before canonical PASS."
+    - "Changing package_provenance schema or weakening zero-cost validation when existing validate-zero-cost is sufficient."
+    - "Validating only the source payload after cutover instead of the installed selected payload."
+    - "Any architecture change, current ServiceManagement restoration, paid signing restoration, or embedded mutable payload restoration."
+    - "Canonical verify before the complete non-canonical pre-sweep passes."
 
 notes:
-  - "Revision 5 successfully converted the verifier problem from incremental discovery to a complete known failing-module set. Revision 6 should converge that set before spending canonical invocation 3."
+  - "Revision 7 is a narrow product correction, not a redesign."
