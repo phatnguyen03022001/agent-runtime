@@ -1,0 +1,44 @@
+protocol_version: 3
+
+task_id: TASK-0183
+task_revision: 1
+review_revision: 1
+state: BLOCKED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0183/report.yaml
+  commit: "ac01d6ded3a1f971816fe228c0ba58a6fb68ba98"
+  report_revision: 1
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  skill_rules: PASS
+  scope: PASS
+  structure_policy: PASS
+  git_authority: PASS
+  acceptance_criteria: FAIL
+  verifier_evidence: FAIL
+
+acceptance_basis:
+  - "Report commit ac01d6ded3a1f971816fe228c0ba58a6fb68ba98 has the sole parent b22d6da995d06a8551227718a61aa6349644cc12 and changes only .agent/tasks/TASK-0183/report.yaml."
+  - "The exact public archive hash and direct schema-3 zero-cost validation passed before package-owned preflight. The packaged preflight then returned release_trust/RELEASE_TRUST_INVALID. Source inspection shows install_preflight.py imports candidate_cutover, package_provenance and runtime_config before invoking zero-cost candidate validation."
+  - "Independent strict deep codesign verification of the retained ignored extracted app fails with a sealed-resource error and identifies exactly three newly added __pycache__/*.cpython-313.pyc files for those imports. This confirms the public prebuilt path self-invalidates its sealed app."
+  - "The Executor stopped before invoking install_release.sh, commit, rollback or recovery. The report records zero live Runtime, configuration, tunnel and host security effects. The installed predecessor remained healthy 10/10 and ready, with no transaction; canonical runtime.env hash, owner and mode 0600 remained unchanged."
+  - "The pinned Foundation task and report artifact validator passed. Immediately after report publication, local and freshly observed remote main equaled the exact report commit with ahead/behind 0/0 and a clean worktree."
+
+findings:
+  - id: "F-0183-001"
+    severity: BLOCKING
+    summary: "Prebuilt preflight writes Python bytecode into the sealed ad-hoc app, invalidating release trust before installation."
+    disposition: "Correct the package-owned preflight/installer behavior in source, qualify a new package, publish a new immutable release and then rerun a separately authorized install trial. Do not replace v0.5.0 assets or bypass strict codesign."
+
+notes:
+  - "No public package installation occurred. This judgment does not authorize modifying the published v0.5.0 archive or the healthy predecessor."
