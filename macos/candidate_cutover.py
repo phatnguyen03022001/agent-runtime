@@ -64,10 +64,73 @@ SERVICE_ABSENCE_TIMEOUT_SECONDS = 5.0
 SERVICE_POLL_INTERVAL_SECONDS = 0.05
 LAUNCHCTL_DIAGNOSTIC_LIMIT = 1536
 SERVICE_MANAGEMENT_APPROVAL_EXIT_STATUS = 3
+CURRENT_LAUNCHAGENT_MODE = 0o600
 
 
 class CutoverError(RuntimeError):
     pass
+
+
+def _current_launchagent_path(home: Path) -> Path:
+    return home / "Library" / "LaunchAgents" / f"{MODERN_RUNTIME_LABEL}.plist"
+
+
+def _current_runtime_helper(home: Path) -> Path:
+    return home / "Applications" / "Agent Runtime.app" / MODERN_RUNTIME_BUNDLE_PROGRAM
+
+
+def _current_launchagent_payload(home: Path) -> dict[str, object]:
+    return {
+        "Label": MODERN_RUNTIME_LABEL,
+        "ProgramArguments": [str(_current_runtime_helper(home))],
+        "RunAtLoad": False,
+        "KeepAlive": {"SuccessfulExit": False},
+        "ProcessType": "Interactive",
+        "ThrottleInterval": 2,
+    }
+
+
+def _validate_current_launchagent(path: Path, home: Path, *, uid: int) -> dict[str, object]:
+    if path.is_symlink() or not path.is_file():
+        raise CutoverError("current Runtime LaunchAgent plist is missing, unsafe, or a symlink")
+    info = path.stat()
+    if info.st_uid != uid or stat.S_IMODE(info.st_mode) != CURRENT_LAUNCHAGENT_MODE:
+        raise CutoverError("current Runtime LaunchAgent ownership or mode is unsafe")
+    try:
+        value = plistlib.loads(path.read_bytes())
+    except (OSError, plistlib.InvalidFileException) as exc:
+        raise CutoverError("current Runtime LaunchAgent plist is malformed") from exc
+    expected = _current_launchagent_payload(home)
+    if value != expected:
+        raise CutoverError("current Runtime LaunchAgent has a foreign identity or contract")
+    helper = _current_runtime_helper(home)
+    if helper.is_symlink() or not helper.is_file() or not os.access(helper, os.X_OK):
+        raise CutoverError("current Runtime supervisor executable is missing or unsafe")
+    return value
+
+
+def _materialize_current_launchagent(home: Path, *, uid: int) -> Path:
+    path = _current_launchagent_path(home)
+    launch_dir = path.parent
+    if launch_dir.is_symlink() or (launch_dir.exists() and not launch_dir.is_dir()):
+        raise CutoverError("LaunchAgents directory is unsafe")
+    launch_dir.mkdir(parents=True, exist_ok=True)
+    if path.exists() or path.is_symlink():
+        _validate_current_launchagent(path, home, uid=uid)
+        return path
+    payload = plistlib.dumps(_current_launchagent_payload(home), fmt=plistlib.FMT_XML, sort_keys=False)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    if temporary.exists() or temporary.is_symlink():
+        raise CutoverError("current Runtime LaunchAgent staging path already exists")
+    try:
+        temporary.write_bytes(payload)
+        temporary.chmod(CURRENT_LAUNCHAGENT_MODE)
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists() and not temporary.is_symlink():
+            temporary.unlink()
+    _validate_current_launchagent(path, home, uid=uid)
+    return path
 
 
 def _run(argv: list[str]) -> subprocess.CompletedProcess[str]:

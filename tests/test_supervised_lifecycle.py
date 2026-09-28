@@ -331,5 +331,22 @@ esac
         self.assertIsNone(self.current_pid())
 
 
+    def test_native_supervisor_owns_exact_process_group_and_bounded_shutdown(self) -> None:
+        source = (ROOT / "macos/Sources/AgentRuntimeRuntimeService/main.swift").read_text()
+        self.assertIn("posix_spawn", source)
+        self.assertIn("POSIX_SPAWN_SETPGROUP", source)
+        self.assertIn("posix_spawnattr_setpgroup", source)
+        self.assertIn("waitpid", source)
+        self.assertIn("SIGTERM", source)
+        self.assertIn("SIGKILL", source)
+        self.assertIn("kill(-childPGID", source)
+        self.assertIn("childPID", source)
+        self.assertIn("childPGID", source)
+        self.assertNotIn("let child = Process()", source)
+        self.assertNotIn("killall", source)
+        self.assertNotIn("pkill", source)
+        self.assertNotIn("pgrep", source)
+
+
 if __name__ == "__main__":
     unittest.main()

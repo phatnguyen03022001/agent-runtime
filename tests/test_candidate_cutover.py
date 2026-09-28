@@ -29,6 +29,42 @@ def load_module(path: Path, name: str):
 
 
 class CandidateClosureTests(unittest.TestCase):
+    def test_current_user_launchagent_is_exact_owned_helper_contract_and_rejects_foreign_state(self) -> None:
+        cutover = load_module(CUTOVER_PATH, "candidate_cutover_launchagent_contract")
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw) / "home"
+            helper = home / "Applications/Agent Runtime.app/Contents/MacOS/AgentRuntimeRuntimeService"
+            helper.parent.mkdir(parents=True)
+            helper.write_text("#!/bin/sh\nexit 0\n")
+            helper.chmod(0o755)
+
+            payload = cutover._current_launchagent_payload(home)
+            self.assertEqual(payload["Label"], MODERN_RUNTIME_LABEL)
+            self.assertEqual(payload["ProgramArguments"], [str(helper)])
+            self.assertEqual(payload["KeepAlive"], {"SuccessfulExit": False})
+            self.assertIs(payload["RunAtLoad"], False)
+            self.assertNotIn("BundleProgram", payload)
+            self.assertNotIn("AssociatedBundleIdentifiers", payload)
+            self.assertNotIn("EnvironmentVariables", payload)
+
+            plist_path = cutover._materialize_current_launchagent(home, uid=os.getuid())
+            self.assertEqual(stat.S_IMODE(plist_path.stat().st_mode), 0o600)
+            self.assertEqual(plist_path.stat().st_uid, os.getuid())
+            self.assertEqual(plistlib.loads(plist_path.read_bytes()), payload)
+            cutover._validate_current_launchagent(plist_path, home, uid=os.getuid())
+
+            foreign = dict(payload)
+            foreign["ProgramArguments"] = ["/usr/bin/false"]
+            plist_path.chmod(0o600)
+            plist_path.write_bytes(plistlib.dumps(foreign))
+            with self.assertRaisesRegex(cutover.CutoverError, "foreign|identity|contract"):
+                cutover._materialize_current_launchagent(home, uid=os.getuid())
+
+            plist_path.unlink()
+            plist_path.symlink_to(helper)
+            with self.assertRaisesRegex(cutover.CutoverError, "symlink|unsafe"):
+                cutover._materialize_current_launchagent(home, uid=os.getuid())
+
     def _signed_app(
         self, provenance, root: Path, *, marker: str = "candidate", revision: str = "a" * 40,
         runtime_label: str = MODERN_RUNTIME_LABEL, manifest_schema: int = 2,

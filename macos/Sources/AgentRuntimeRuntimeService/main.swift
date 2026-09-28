@@ -13,6 +13,8 @@ private let desiredState = stateDirectory.appendingPathComponent(
     isDirectory: false
 )
 private let runtimeEnv = stateDirectory.appendingPathComponent("runtime.env", isDirectory: false)
+private let gracefulShutdownSeconds: TimeInterval = 3
+private let forcedShutdownSeconds: TimeInterval = 2
 
 private func fail(_ message: String) -> Never {
     fputs("RUNTIME SERVICE ERROR: \(message)\n", stderr)
@@ -29,6 +31,101 @@ private func findTunnelClient() -> String? {
         return path
     }
     return nil
+}
+
+@MainActor
+private func spawnRuntime(
+    lifecycle: String,
+    tunnelClient: String,
+    runtimeEnv: String
+) -> (childPID: pid_t, childPGID: pid_t) {
+    var attributes: posix_spawnattr_t?
+    guard posix_spawnattr_init(&attributes) == 0 else {
+        fail("could not initialize Runtime spawn attributes")
+    }
+    defer { posix_spawnattr_destroy(&attributes) }
+
+    let flags = Int16(POSIX_SPAWN_SETPGROUP)
+    guard posix_spawnattr_setflags(&attributes, flags) == 0,
+          posix_spawnattr_setpgroup(&attributes, 0) == 0 else {
+        fail("could not configure dedicated Runtime process group")
+    }
+
+    let arguments = ["/bin/bash", lifecycle, "--serve", tunnelClient, runtimeEnv]
+    var cArguments: [UnsafeMutablePointer<CChar>?] = arguments.map { strdup($0) }
+    cArguments.append(nil)
+    let environment = ProcessInfo.processInfo.environment
+        .map { "\($0.key)=\($0.value)" }
+        .sorted()
+    var cEnvironment: [UnsafeMutablePointer<CChar>?] = environment.map { strdup($0) }
+    cEnvironment.append(nil)
+    defer {
+        for pointer in cArguments {
+            if let pointer { free(pointer) }
+        }
+        for pointer in cEnvironment {
+            if let pointer { free(pointer) }
+        }
+    }
+
+    var childPID: pid_t = 0
+    let result = "/bin/bash".withCString { executable in
+        cArguments.withUnsafeMutableBufferPointer { argvBuffer in
+            cEnvironment.withUnsafeMutableBufferPointer { envBuffer in
+                posix_spawn(
+                    &childPID,
+                    executable,
+                    nil,
+                    &attributes,
+                    argvBuffer.baseAddress,
+                    envBuffer.baseAddress
+                )
+            }
+        }
+    }
+    guard result == 0, childPID > 0 else {
+        fail("could not launch installed Runtime: errno \(result)")
+    }
+    return (childPID, childPID)
+}
+
+private func ownedGroupAlive(_ childPGID: pid_t) -> Bool {
+    errno = 0
+    if kill(-childPGID, 0) == 0 {
+        return true
+    }
+    return errno == EPERM
+}
+
+private func signalOwnedGroup(_ childPGID: pid_t, _ signalNumber: Int32) {
+    if kill(-childPGID, signalNumber) != 0 && errno != ESRCH {
+        fail("could not signal owned Runtime process group")
+    }
+}
+
+private func waitForOwnedGroupAbsence(_ childPGID: pid_t, timeout: TimeInterval) -> Bool {
+    let deadline = Date().addingTimeInterval(timeout)
+    while ownedGroupAlive(childPGID) {
+        if Date() >= deadline {
+            return false
+        }
+        usleep(50_000)
+    }
+    return true
+}
+
+private func ensureOwnedGroupStopped(_ childPGID: pid_t, termAlreadySent: Bool) {
+    guard ownedGroupAlive(childPGID) else { return }
+    if !termAlreadySent {
+        signalOwnedGroup(childPGID, SIGTERM)
+    }
+    if waitForOwnedGroupAbsence(childPGID, timeout: gracefulShutdownSeconds) {
+        return
+    }
+    signalOwnedGroup(childPGID, SIGKILL)
+    guard waitForOwnedGroupAbsence(childPGID, timeout: forcedShutdownSeconds) else {
+        fail("owned Runtime process group survived bounded SIGKILL escalation")
+    }
 }
 
 guard fileManager.fileExists(atPath: desiredState.path) else {
@@ -49,31 +146,65 @@ guard fileManager.isReadableFile(atPath: runtimeEnv.path) else {
     fail("canonical runtime.env is unavailable")
 }
 
-let child = Process()
-child.executableURL = URL(fileURLWithPath: "/bin/bash")
-child.arguments = [lifecycle.path, "--serve", tunnelClient, runtimeEnv.path]
-child.standardOutput = FileHandle.standardOutput
-child.standardError = FileHandle.standardError
+let spawned = spawnRuntime(
+    lifecycle: lifecycle.path,
+    tunnelClient: tunnelClient,
+    runtimeEnv: runtimeEnv.path
+)
+let childPID = spawned.childPID
+let childPGID = spawned.childPGID
 
 signal(SIGTERM, SIG_IGN)
 signal(SIGINT, SIG_IGN)
-let termSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .global(qos: .userInitiated))
-let intSource = DispatchSource.makeSignalSource(signal: SIGINT, queue: .global(qos: .userInitiated))
-termSource.setEventHandler { if child.isRunning { child.terminate() } }
-intSource.setEventHandler { if child.isRunning { child.interrupt() } }
+let shutdownRequest = DispatchSemaphore(value: 0)
+let signalQueue = DispatchQueue(label: "com.picmao.agent-runtime.runtime-service.signals")
+let termSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: signalQueue)
+let intSource = DispatchSource.makeSignalSource(signal: SIGINT, queue: signalQueue)
+termSource.setEventHandler { shutdownRequest.signal() }
+intSource.setEventHandler { shutdownRequest.signal() }
 termSource.resume()
 intSource.resume()
 
-do {
-    try child.run()
-} catch {
-    fail("could not launch installed Runtime: \(error.localizedDescription)")
+var childStatus: Int32 = 0
+var childReaped = false
+var termSent = false
+var termDeadline: Date?
+var killSent = false
+
+while !childReaped {
+    let waitResult = waitpid(childPID, &childStatus, WNOHANG)
+    if waitResult == childPID {
+        childReaped = true
+        break
+    }
+    if waitResult == -1 {
+        if errno == EINTR {
+            continue
+        }
+        fail("waitpid failed for exact Runtime child")
+    }
+
+    if !termSent && shutdownRequest.wait(timeout: .now()) == .success {
+        signalOwnedGroup(childPGID, SIGTERM)
+        termSent = true
+        termDeadline = Date().addingTimeInterval(gracefulShutdownSeconds)
+    }
+    if termSent,
+       !killSent,
+       let deadline = termDeadline,
+       Date() >= deadline,
+       ownedGroupAlive(childPGID) {
+        signalOwnedGroup(childPGID, SIGKILL)
+        killSent = true
+    }
+    usleep(50_000)
 }
-child.waitUntilExit()
+
+ensureOwnedGroupStopped(childPGID, termAlreadySent: termSent)
 termSource.cancel()
 intSource.cancel()
 
-// KeepAlive uses SuccessfulExit=false. While desired state stays RUNNING,
-// any child exit becomes non-zero so launchd recovers it. Explicit Stop
-// removes the marker first and signals this service, which then exits zero.
+// KeepAlive uses SuccessfulExit=false. Explicit Stop removes the desired
+// marker before signaling this helper; any unexpected child exit while desired
+// remains RUNNING is non-zero so launchd may recover the one owned generation.
 exit(fileManager.fileExists(atPath: desiredState.path) ? 1 : 0)

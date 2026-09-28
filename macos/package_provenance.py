@@ -43,6 +43,23 @@ LEGACY_MANIFEST_KEYS = MANIFEST_KEYS - {"service_management_contract"}
 ENTRY_KEYS = {"path", "size", "sha256"}
 LIFECYCLE_CONTRACT = "user-launchagent-v1"
 PAYLOAD_CONTRACT = "external-python-v1"
+SUBSTRATE_SCHEMA = 3
+SUBSTRATE_MANIFEST_KEYS = {
+    "schema",
+    "owner",
+    "lifecycle_contract",
+    "payload_contract",
+    "runtime_revision",
+    "git_tree",
+    "requirements_lock_sha256",
+    "entrypoint",
+    "python",
+    "required_python_major_minor",
+    "expected_public_tool_count",
+    "expected_public_surface_sha256",
+    "files",
+    "substrate_sha256",
+}
 PAYLOAD_SCHEMA = 1
 PAYLOAD_MANIFEST_NAME = "payload-manifest.json"
 PAYLOAD_ENTRY_KEYS = {"path", "mode", "size", "sha256"}
@@ -59,6 +76,26 @@ PAYLOAD_MANIFEST_KEYS = {
     "expected_public_tool_count",
     "expected_public_surface_sha256",
     "files",
+}
+ZERO_COST_CANDIDATE_SCHEMA = 3
+ZERO_COST_CANDIDATE_KEYS = {
+    "schema",
+    "bundle_identifier",
+    "source_revision",
+    "source_tree",
+    "requirements_lock_sha256",
+    "signing_mode",
+    "team_identifier",
+    "responsible_code",
+    "lifecycle_contract",
+    "payload_contract",
+    "required_python_major_minor",
+    "expected_public_tool_count",
+    "expected_public_surface_sha256",
+    "initial_payload_closure",
+    "substrate_sha256",
+    "record_count",
+    "candidate_sha256",
 }
 CANDIDATE_KEYS = {
     "schema",
@@ -499,6 +536,127 @@ def publish_payload_release(
     return {"content_closure": closure, "release_path": str(final), "manifest": manifest}
 
 
+def write_substrate_manifest(
+    runtime: Path,
+    manifest_path: Path,
+    revision: str,
+    tree: str,
+    lock_sha: str,
+    *,
+    python_major_minor: str,
+    public_tool_count: int,
+    public_surface_sha256: str,
+) -> dict[str, object]:
+    _validate_identity(revision, HEX40, "substrate revision")
+    _validate_identity(tree, HEX40, "substrate tree")
+    _validate_identity(lock_sha, HEX64, "substrate requirements.lock")
+    _validate_identity(public_surface_sha256, HEX64, "substrate public surface")
+    if re.fullmatch(r"[1-9][0-9]*\.[0-9]+", python_major_minor) is None:
+        raise PackageProvenanceError("substrate required Python major/minor is invalid")
+    if type(public_tool_count) is not int or public_tool_count < 1:
+        raise PackageProvenanceError("substrate expected public tool count is invalid")
+    first_party = runtime / "agent_runtime"
+    if first_party.exists() or first_party.is_symlink():
+        raise PackageProvenanceError("immutable substrate must not contain first-party agent_runtime source")
+    entries = _runtime_entries(runtime)
+    paths = {str(entry["path"]) for entry in entries}
+    if "start.sh" not in paths or ".venv/bin/python" not in paths:
+        raise PackageProvenanceError("immutable substrate execution surface is incomplete")
+    data: dict[str, object] = {
+        "schema": SUBSTRATE_SCHEMA,
+        "owner": OWNER,
+        "lifecycle_contract": LIFECYCLE_CONTRACT,
+        "payload_contract": PAYLOAD_CONTRACT,
+        "runtime_revision": revision,
+        "git_tree": tree,
+        "requirements_lock_sha256": lock_sha,
+        "entrypoint": "runtime/start.sh",
+        "python": "runtime/.venv/bin/python",
+        "required_python_major_minor": python_major_minor,
+        "expected_public_tool_count": public_tool_count,
+        "expected_public_surface_sha256": public_surface_sha256,
+        "files": entries,
+        "substrate_sha256": aggregate_digest(entries),
+    }
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(json.dumps(data, indent=2, sort_keys=False) + "\n", encoding="utf-8")
+    manifest_path.chmod(0o600)
+    return data
+
+
+def _load_substrate_manifest(path: Path) -> dict[str, object]:
+    if path.is_symlink() or not path.is_file():
+        raise PackageProvenanceError("substrate manifest must be a regular non-symlink file")
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise PackageProvenanceError("substrate manifest is malformed") from exc
+    if not isinstance(value, dict) or set(value) != SUBSTRATE_MANIFEST_KEYS:
+        raise PackageProvenanceError("substrate manifest shape is invalid")
+    if value.get("schema") != SUBSTRATE_SCHEMA or value.get("owner") != OWNER:
+        raise PackageProvenanceError("substrate manifest ownership/schema is invalid")
+    return value
+
+
+def validate_substrate_manifest(
+    runtime: Path,
+    manifest_path: Path,
+    expected_revision: str,
+    expected_tree: str,
+    expected_lock_sha: str,
+) -> dict[str, object]:
+    _validate_identity(expected_revision, HEX40, "expected substrate revision")
+    _validate_identity(expected_tree, HEX40, "expected substrate tree")
+    _validate_identity(expected_lock_sha, HEX64, "expected substrate requirements.lock")
+    manifest = _load_substrate_manifest(manifest_path)
+    if manifest["lifecycle_contract"] != LIFECYCLE_CONTRACT or manifest["payload_contract"] != PAYLOAD_CONTRACT:
+        raise PackageProvenanceError("substrate lifecycle/payload contract is incompatible")
+    if manifest["entrypoint"] != "runtime/start.sh" or manifest["python"] != "runtime/.venv/bin/python":
+        raise PackageProvenanceError("substrate execution paths are invalid")
+    if manifest["runtime_revision"] != expected_revision or manifest["git_tree"] != expected_tree:
+        raise PackageProvenanceError("substrate source identity mismatch")
+    if manifest["requirements_lock_sha256"] != expected_lock_sha:
+        raise PackageProvenanceError("substrate requirements.lock identity mismatch")
+    python_major_minor = manifest["required_python_major_minor"]
+    if not isinstance(python_major_minor, str) or re.fullmatch(r"[1-9][0-9]*\.[0-9]+", python_major_minor) is None:
+        raise PackageProvenanceError("substrate Python contract is invalid")
+    if type(manifest["expected_public_tool_count"]) is not int or manifest["expected_public_tool_count"] < 1:
+        raise PackageProvenanceError("substrate public tool count is invalid")
+    _validate_identity(manifest["expected_public_surface_sha256"], HEX64, "substrate public surface")
+    files = manifest["files"]
+    if not isinstance(files, list):
+        raise PackageProvenanceError("substrate manifest files must be a list")
+    normalized: list[dict[str, object]] = []
+    previous: str | None = None
+    for entry in files:
+        if not isinstance(entry, dict) or set(entry) != ENTRY_KEYS:
+            raise PackageProvenanceError("substrate manifest file entry is malformed")
+        path = entry["path"]
+        size = entry["size"]
+        digest = entry["sha256"]
+        if not isinstance(path, str) or not path or path.startswith("agent_runtime/"):
+            raise PackageProvenanceError("substrate manifest contains first-party agent_runtime source")
+        pure = PurePosixPath(path)
+        if pure.is_absolute() or path != pure.as_posix() or ".." in pure.parts or "." in pure.parts:
+            raise PackageProvenanceError("substrate manifest file path is invalid")
+        if previous is not None and path <= previous:
+            raise PackageProvenanceError("substrate manifest file entries are not strictly sorted")
+        if type(size) is not int or size < 0:
+            raise PackageProvenanceError("substrate manifest file size is invalid")
+        _validate_identity(digest, HEX64, "substrate file hash")
+        previous = path
+        normalized.append({"path": path, "size": size, "sha256": digest})
+    actual = _runtime_entries(runtime)
+    if normalized != actual:
+        raise PackageProvenanceError("substrate manifest does not exactly close over immutable Runtime bytes")
+    expected_substrate_sha = _validate_identity(manifest["substrate_sha256"], HEX64, "substrate closure")
+    if aggregate_digest(normalized) != expected_substrate_sha:
+        raise PackageProvenanceError("substrate closure mismatch")
+    if any(str(entry["path"]).startswith("agent_runtime/") for entry in actual):
+        raise PackageProvenanceError("immutable substrate contains first-party agent_runtime source")
+    return manifest
+
+
 def write_manifest(
     runtime: Path,
     manifest_path: Path,
@@ -628,6 +786,277 @@ def _verify_codesign(app: Path) -> None:
 MAIN_EXECUTABLE_RELATIVE = "Contents/MacOS/AgentRuntimeMenuBar"
 RUNTIME_SERVICE_EXECUTABLE_RELATIVE = "Contents/MacOS/AgentRuntimeRuntimeService"
 SCREEN_CAPTURE_EXECUTABLE_RELATIVE = "Contents/MacOS/AgentRuntimeScreenCapture"
+RUNTIME_PYTHON_EXECUTABLE_RELATIVE = "Contents/Resources/runtime/.venv/bin/python"
+ZERO_COST_CODE_IDENTIFIERS = {
+    MAIN_EXECUTABLE_RELATIVE: OWNER,
+    RUNTIME_SERVICE_EXECUTABLE_RELATIVE: OWNER + ".runtime-service",
+    SCREEN_CAPTURE_EXECUTABLE_RELATIVE: OWNER + ".screen-capture",
+    RUNTIME_PYTHON_EXECUTABLE_RELATIVE: OWNER + ".python",
+}
+
+
+def _codesign_metadata(path: Path) -> dict[str, object]:
+    result = subprocess.run(
+        ["/usr/bin/codesign", "-d", "--verbose=4", "-r-", str(path)],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise PackageProvenanceError(f"could not inspect code-signing identity for {path.name}")
+    detail = result.stdout + "\n" + result.stderr
+    identifier_match = re.search(r"(?m)^Identifier=(.+)$", detail)
+    if identifier_match is None or not identifier_match.group(1).strip():
+        raise PackageProvenanceError(f"code-signing identifier is missing for {path.name}")
+    team_match = re.search(r"(?m)^TeamIdentifier=(.+)$", detail)
+    team: str | None = None
+    if team_match is not None:
+        candidate = team_match.group(1).strip()
+        if candidate and candidate.lower() not in {"not set", "none", "null"}:
+            team = candidate
+    requirement_match = re.search(r"(?m)^(designated => .+)$", detail)
+    if requirement_match is None:
+        raise PackageProvenanceError(f"designated requirement is missing for {path.name}")
+    return {
+        "identifier": identifier_match.group(1).strip(),
+        "team_identifier": team,
+        "designated_requirement": requirement_match.group(1).strip(),
+    }
+
+
+def zero_cost_responsible_code_identity(app: Path, identity_reader=None) -> dict[str, object]:
+    info_path = app / "Contents" / "Info.plist"
+    if info_path.is_symlink() or not info_path.is_file():
+        raise PackageProvenanceError("candidate Info.plist must be a regular non-symlink file")
+    try:
+        info = plistlib.loads(info_path.read_bytes())
+    except (OSError, plistlib.InvalidFileException) as exc:
+        raise PackageProvenanceError("candidate Info.plist is malformed") from exc
+    if info.get("CFBundleIdentifier") != OWNER or info.get("CFBundleExecutable") != "AgentRuntimeMenuBar":
+        raise PackageProvenanceError("candidate main app identity is not owned by agent-runtime")
+    reader = identity_reader or _codesign_metadata
+    responsible: dict[str, dict[str, str]] = {}
+    for relative, expected_identifier in ZERO_COST_CODE_IDENTIFIERS.items():
+        target = app / relative
+        if target.is_symlink() or not target.is_file() or not os.access(target, os.X_OK):
+            raise PackageProvenanceError(f"package executable is missing or unsafe: {target.name}")
+        value = reader(target)
+        if not isinstance(value, dict):
+            raise PackageProvenanceError("code-signing identity metadata is malformed")
+        identifier = value.get("identifier")
+        team = value.get("team_identifier")
+        requirement = value.get("designated_requirement")
+        if team is not None:
+            raise PackageProvenanceError("zero-cost candidate executable unexpectedly has a TeamIdentifier")
+        if identifier != expected_identifier:
+            raise PackageProvenanceError("zero-cost candidate executable identifier mismatch")
+        expected_requirement = f'designated => identifier "{expected_identifier}"'
+        if requirement != expected_requirement:
+            raise PackageProvenanceError("zero-cost candidate designated requirement mismatch")
+        responsible[relative] = {
+            "identifier": expected_identifier,
+            "designated_requirement": expected_requirement,
+        }
+    return {
+        "signing_mode": "adhoc",
+        "team_identifier": None,
+        "responsible_code": responsible,
+    }
+
+
+def zero_cost_candidate_handoff_data(
+    app: Path,
+    *,
+    initial_payload_closure: str,
+    identity_reader=None,
+) -> dict[str, object]:
+    payload_closure = _validate_identity(initial_payload_closure, HEX64, "initial payload closure")
+    manifest_path = app / "Contents" / "Resources" / "runtime-manifest.json"
+    runtime = app / "Contents" / "Resources" / "runtime"
+    manifest = _load_substrate_manifest(manifest_path)
+    revision = _validate_identity(manifest.get("runtime_revision"), HEX40, "substrate revision")
+    tree = _validate_identity(manifest.get("git_tree"), HEX40, "substrate tree")
+    lock_sha = _validate_identity(manifest.get("requirements_lock_sha256"), HEX64, "substrate requirements.lock")
+    validate_substrate_manifest(runtime, manifest_path, revision, tree, lock_sha)
+    code_identity = zero_cost_responsible_code_identity(app, identity_reader=identity_reader)
+    closure = candidate_closure(app)
+    return {
+        "schema": ZERO_COST_CANDIDATE_SCHEMA,
+        "bundle_identifier": OWNER,
+        "source_revision": revision,
+        "source_tree": tree,
+        "requirements_lock_sha256": lock_sha,
+        **code_identity,
+        "lifecycle_contract": LIFECYCLE_CONTRACT,
+        "payload_contract": PAYLOAD_CONTRACT,
+        "required_python_major_minor": manifest["required_python_major_minor"],
+        "expected_public_tool_count": manifest["expected_public_tool_count"],
+        "expected_public_surface_sha256": manifest["expected_public_surface_sha256"],
+        "initial_payload_closure": payload_closure,
+        "substrate_sha256": closure["candidate_sha256"],
+        **closure,
+    }
+
+
+def _load_zero_cost_candidate_handoff(path: Path) -> dict[str, object]:
+    if path.is_symlink() or not path.is_file():
+        raise PackageProvenanceError("zero-cost candidate handoff must be a regular non-symlink file")
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise PackageProvenanceError("zero-cost candidate handoff is malformed") from exc
+    if not isinstance(value, dict) or set(value) != ZERO_COST_CANDIDATE_KEYS:
+        raise PackageProvenanceError("zero-cost candidate handoff shape is invalid")
+    if value.get("schema") != ZERO_COST_CANDIDATE_SCHEMA or value.get("bundle_identifier") != OWNER:
+        raise PackageProvenanceError("zero-cost candidate handoff ownership/schema is invalid")
+    if value.get("signing_mode") != "adhoc" or value.get("team_identifier") is not None:
+        raise PackageProvenanceError("zero-cost candidate signing authority is invalid")
+    if value.get("lifecycle_contract") != LIFECYCLE_CONTRACT or value.get("payload_contract") != PAYLOAD_CONTRACT:
+        raise PackageProvenanceError("zero-cost candidate lifecycle/payload contract is invalid")
+    _validate_identity(value.get("source_revision"), HEX40, "zero-cost candidate revision")
+    _validate_identity(value.get("source_tree"), HEX40, "zero-cost candidate tree")
+    _validate_identity(value.get("requirements_lock_sha256"), HEX64, "zero-cost candidate requirements.lock")
+    _validate_identity(value.get("expected_public_surface_sha256"), HEX64, "zero-cost candidate public surface")
+    _validate_identity(value.get("initial_payload_closure"), HEX64, "zero-cost candidate initial payload")
+    substrate_sha = _validate_identity(value.get("substrate_sha256"), HEX64, "zero-cost substrate closure")
+    candidate_sha = _validate_identity(value.get("candidate_sha256"), HEX64, "zero-cost candidate closure")
+    if substrate_sha != candidate_sha:
+        raise PackageProvenanceError("zero-cost candidate substrate closure is inconsistent")
+    if type(value.get("expected_public_tool_count")) is not int or int(value["expected_public_tool_count"]) < 1:
+        raise PackageProvenanceError("zero-cost candidate public tool count is invalid")
+    python_version = value.get("required_python_major_minor")
+    if not isinstance(python_version, str) or re.fullmatch(r"[1-9][0-9]*\.[0-9]+", python_version) is None:
+        raise PackageProvenanceError("zero-cost candidate Python contract is invalid")
+    if type(value.get("record_count")) is not int or int(value["record_count"]) < 1:
+        raise PackageProvenanceError("zero-cost candidate record count is invalid")
+    responsible = value.get("responsible_code")
+    if not isinstance(responsible, dict) or set(responsible) != set(ZERO_COST_CODE_IDENTIFIERS):
+        raise PackageProvenanceError("zero-cost candidate responsible-code inventory is invalid")
+    for relative, expected_identifier in ZERO_COST_CODE_IDENTIFIERS.items():
+        expected_requirement = f'designated => identifier "{expected_identifier}"'
+        if responsible.get(relative) != {
+            "identifier": expected_identifier,
+            "designated_requirement": expected_requirement,
+        }:
+            raise PackageProvenanceError("zero-cost candidate responsible-code identity is invalid")
+    return value
+
+
+def validate_zero_cost_candidate(
+    app: Path,
+    handoff_path: Path,
+    payload_release: Path,
+    *,
+    identity_reader=None,
+) -> dict[str, object]:
+    expected = _load_zero_cost_candidate_handoff(handoff_path)
+    payload_manifest = validate_payload_release(
+        payload_release,
+        expected_closure=str(expected["initial_payload_closure"]),
+        expected_requirements_lock_sha256=str(expected["requirements_lock_sha256"]),
+        expected_python_major_minor=str(expected["required_python_major_minor"]),
+        expected_public_tool_count=int(expected["expected_public_tool_count"]),
+        expected_public_surface_sha256=str(expected["expected_public_surface_sha256"]),
+    )
+    if payload_manifest["source_revision"] != expected["source_revision"] or payload_manifest["source_tree"] != expected["source_tree"]:
+        raise PackageProvenanceError("initial payload source identity does not match substrate source")
+    _verify_codesign(app)
+    actual = zero_cost_candidate_handoff_data(
+        app,
+        initial_payload_closure=str(expected["initial_payload_closure"]),
+        identity_reader=identity_reader,
+    )
+    if actual != expected:
+        raise PackageProvenanceError("zero-cost candidate identity does not match external handoff")
+    _verify_codesign(app)
+    final = zero_cost_candidate_handoff_data(
+        app,
+        initial_payload_closure=str(expected["initial_payload_closure"]),
+        identity_reader=identity_reader,
+    )
+    if final != expected:
+        raise PackageProvenanceError("zero-cost candidate changed during validation")
+    return expected
+
+
+def seal_zero_cost_candidate(
+    app: Path,
+    handoff_path: Path,
+    payload_release: Path,
+    *,
+    identity_reader=None,
+) -> dict[str, object]:
+    app_real = app.resolve()
+    handoff_real = handoff_path.resolve(strict=False)
+    if handoff_real == app_real or app_real in handoff_real.parents:
+        raise PackageProvenanceError("candidate handoff must remain external to the app bundle")
+    payload_manifest = _load_payload_manifest(payload_release / PAYLOAD_MANIFEST_NAME)
+    payload_closure = _validate_identity(payload_manifest.get("content_closure"), HEX64, "initial payload closure")
+    validate_payload_release(
+        payload_release,
+        expected_closure=payload_closure,
+        expected_requirements_lock_sha256=str(payload_manifest.get("requirements_lock_sha256")),
+        expected_python_major_minor=str(payload_manifest.get("required_python_major_minor")),
+        expected_public_tool_count=int(payload_manifest.get("expected_public_tool_count")),
+        expected_public_surface_sha256=str(payload_manifest.get("expected_public_surface_sha256")),
+    )
+    _verify_codesign(app)
+    data = zero_cost_candidate_handoff_data(
+        app,
+        initial_payload_closure=payload_closure,
+        identity_reader=identity_reader,
+    )
+    handoff_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = handoff_path.with_name(handoff_path.name + ".tmp")
+    temporary.write_text(json.dumps(data, indent=2, sort_keys=False) + "\n", encoding="utf-8")
+    temporary.chmod(0o600)
+    os.replace(temporary, handoff_path)
+    validate_zero_cost_candidate(app, handoff_path, payload_release, identity_reader=identity_reader)
+    return data
+
+
+def publish_zero_cost_distribution(
+    app: Path,
+    handoff_path: Path,
+    payload_release: Path,
+    candidates_root: Path,
+    *,
+    identity_reader=None,
+) -> dict[str, object]:
+    if app.name != "Agent Runtime.app" or handoff_path.name != "Agent Runtime.candidate.json":
+        raise PackageProvenanceError("zero-cost distribution paths use unexpected names")
+    if app.parent != handoff_path.parent:
+        raise PackageProvenanceError("zero-cost app and handoff must share one staging directory")
+    staging_root = app.parent
+    if payload_release.parent.name != "payloads" or payload_release.parent.parent != staging_root:
+        raise PackageProvenanceError("initial payload release must be inside the distribution staging root")
+    if staging_root.is_symlink() or not staging_root.is_dir():
+        raise PackageProvenanceError("zero-cost distribution staging directory is unsafe")
+    candidate = validate_zero_cost_candidate(
+        app,
+        handoff_path,
+        payload_release,
+        identity_reader=identity_reader,
+    )
+    candidate_sha = str(candidate["candidate_sha256"])
+    final_root = candidates_root / candidate_sha
+    if final_root.exists() or final_root.is_symlink():
+        raise PackageProvenanceError("candidate output already exists")
+    candidates_root.mkdir(parents=True, exist_ok=True)
+    try:
+        _rename_candidate_no_replace(staging_root, final_root)
+    except FileExistsError as exc:
+        raise PackageProvenanceError("candidate output already exists") from exc
+    except OSError as exc:
+        raise PackageProvenanceError("candidate publication failed: " + str(exc)) from exc
+    final_payload = final_root / "payloads" / str(candidate["initial_payload_closure"])
+    return {
+        **candidate,
+        "candidate_app": str(final_root / app.name),
+        "candidate_handoff": str(final_root / handoff_path.name),
+        "initial_payload_release": str(final_payload),
+    }
 
 
 def _codesign_team_identifier(path: Path) -> str:
@@ -892,6 +1321,24 @@ def main() -> int:
     manifest.add_argument("revision")
     manifest.add_argument("tree")
     manifest.add_argument("lock", type=Path)
+    substrate_manifest = subparsers.add_parser("substrate-manifest")
+    substrate_manifest.add_argument("runtime", type=Path)
+    substrate_manifest.add_argument("manifest_path", type=Path)
+    substrate_manifest.add_argument("revision")
+    substrate_manifest.add_argument("tree")
+    substrate_manifest.add_argument("lock", type=Path)
+    substrate_manifest.add_argument("python_major_minor")
+    substrate_manifest.add_argument("public_tool_count", type=int)
+    substrate_manifest.add_argument("public_surface_sha256")
+    publish_payload = subparsers.add_parser("publish-payload")
+    publish_payload.add_argument("source_package", type=Path)
+    publish_payload.add_argument("releases_root", type=Path)
+    publish_payload.add_argument("revision")
+    publish_payload.add_argument("tree")
+    publish_payload.add_argument("lock", type=Path)
+    publish_payload.add_argument("python_major_minor")
+    publish_payload.add_argument("public_tool_count", type=int)
+    publish_payload.add_argument("public_surface_sha256")
     validate = subparsers.add_parser("validate")
     validate.add_argument("runtime", type=Path)
     validate.add_argument("manifest_path", type=Path)
@@ -905,6 +1352,19 @@ def main() -> int:
     publish.add_argument("app", type=Path)
     publish.add_argument("handoff", type=Path)
     publish.add_argument("candidates_root", type=Path)
+    zero_cost_seal = subparsers.add_parser("seal-zero-cost")
+    zero_cost_seal.add_argument("app", type=Path)
+    zero_cost_seal.add_argument("handoff", type=Path)
+    zero_cost_seal.add_argument("payload_release", type=Path)
+    zero_cost_publish = subparsers.add_parser("publish-zero-cost")
+    zero_cost_publish.add_argument("app", type=Path)
+    zero_cost_publish.add_argument("handoff", type=Path)
+    zero_cost_publish.add_argument("payload_release", type=Path)
+    zero_cost_publish.add_argument("candidates_root", type=Path)
+    zero_cost_validate = subparsers.add_parser("validate-zero-cost")
+    zero_cost_validate.add_argument("app", type=Path)
+    zero_cost_validate.add_argument("handoff", type=Path)
+    zero_cost_validate.add_argument("payload_release", type=Path)
     candidate_validate = subparsers.add_parser("validate-candidate")
     candidate_validate.add_argument("app", type=Path)
     candidate_validate.add_argument("handoff", type=Path)
@@ -920,6 +1380,29 @@ def main() -> int:
             print(f"{revision}\t{tree}")
         elif args.command == "manifest":
             write_manifest(args.runtime, args.manifest_path, args.revision, args.tree, lock_sha256(args.lock))
+        elif args.command == "substrate-manifest":
+            write_substrate_manifest(
+                args.runtime,
+                args.manifest_path,
+                args.revision,
+                args.tree,
+                lock_sha256(args.lock),
+                python_major_minor=args.python_major_minor,
+                public_tool_count=args.public_tool_count,
+                public_surface_sha256=args.public_surface_sha256,
+            )
+        elif args.command == "publish-payload":
+            published = publish_payload_release(
+                args.source_package,
+                args.releases_root,
+                revision=args.revision,
+                tree=args.tree,
+                requirements_lock_sha256=lock_sha256(args.lock),
+                python_major_minor=args.python_major_minor,
+                public_tool_count=args.public_tool_count,
+                public_surface_sha256=args.public_surface_sha256,
+            )
+            print(f"{published['content_closure']}\t{published['release_path']}")
         elif args.command == "validate":
             validate_manifest(
                 args.runtime,
@@ -935,6 +1418,31 @@ def main() -> int:
             print(
                 f"{published['candidate_app']}\t{published['candidate_handoff']}\t"
                 f"{published['candidate_sha256']}"
+            )
+        elif args.command == "seal-zero-cost":
+            print(
+                json.dumps(
+                    seal_zero_cost_candidate(args.app, args.handoff, args.payload_release),
+                    sort_keys=True,
+                )
+            )
+        elif args.command == "publish-zero-cost":
+            published = publish_zero_cost_distribution(
+                args.app,
+                args.handoff,
+                args.payload_release,
+                args.candidates_root,
+            )
+            print(
+                f"{published['candidate_app']}\t{published['candidate_handoff']}\t"
+                f"{published['initial_payload_release']}\t{published['candidate_sha256']}"
+            )
+        elif args.command == "validate-zero-cost":
+            print(
+                json.dumps(
+                    validate_zero_cost_candidate(args.app, args.handoff, args.payload_release),
+                    sort_keys=True,
+                )
             )
         elif args.command == "validate-candidate":
             print(json.dumps(validate_candidate(args.app, args.handoff), sort_keys=True))

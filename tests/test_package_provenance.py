@@ -5,6 +5,7 @@ import io
 import importlib.util
 import json
 import os
+import plistlib
 import shutil
 import subprocess
 import tempfile
@@ -400,78 +401,44 @@ class PackageProvenanceTests(unittest.TestCase):
 
     def test_package_contract_stages_then_publishes_without_singleton_deletion(self) -> None:
         package = (ROOT / "macos" / "package_app.sh").read_text()
-        self.assertIn('CANDIDATES_ROOT="$REPO_ROOT/build/candidates"', package)
+        self.assertIn('BUILD_ROOT="$REPO_ROOT/build"', package)
+        self.assertIn('CANDIDATES_ROOT="$BUILD_ROOT/candidates"', package)
         self.assertIn('STAGED_PUBLICATION="$TEMP_ROOT/candidate"', package)
-        self.assertIn('package_provenance.py" publish', package)
+        self.assertIn('package_provenance.py" publish-zero-cost', package)
         self.assertNotIn('rm -rf "$APP"', package)
         self.assertNotIn('rm -f "$CANDIDATE_HANDOFF"', package)
         self.assertNotIn('APP="$REPO_ROOT/build/Agent Runtime.app"', package)
         self.assertNotIn('CANDIDATE_HANDOFF="$REPO_ROOT/build/Agent Runtime.candidate.json"', package)
 
-    def test_distribution_packaging_is_explicit_and_seals_only_after_staple_verification(self) -> None:
-        verifier_path = ROOT / "macos" / "distribution_verify.py"
-        self.assertTrue(verifier_path.is_file(), "distribution verification helper must exist")
+    def test_zero_cost_packaging_is_explicit_external_payload_and_has_no_paid_authority_lane(self) -> None:
         package = (ROOT / "macos" / "package_app.sh").read_text()
-        self.assertIn("--distribution", package)
-        self.assertIn("--signing-identity", package)
-        self.assertIn("--notary-keychain-profile", package)
-        self.assertNotIn("security find-identity", package)
-        self.assertIn('/usr/bin/codesign --force --deep --sign "$SIGNING_IDENTITY" "$APP"', package)
-        runtime_sign = package.index(
-            '/usr/bin/codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$RUNTIME/.venv/bin/python"'
-        )
-        native_extension_sign = package.index('DISTRIBUTION_RUNTIME_CODE', runtime_sign)
-        manifest = package.index('package_provenance.py" manifest', native_extension_sign)
-        native_sign = package.index(
-            '/usr/bin/codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$executable"',
-            manifest,
-        )
-        distribution_sign = package.index(
-            '/usr/bin/codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$APP"',
-            native_sign,
-        )
-        self.assertLess(runtime_sign, native_extension_sign)
-        self.assertLess(native_extension_sign, manifest)
-        self.assertLess(manifest, native_sign)
-        self.assertLess(native_sign, distribution_sign)
-        notarize = package.index('notarytool submit', distribution_sign)
-        staple = package.index('stapler staple "$APP"', notarize)
-        verify = package.index('distribution_verify.py', staple)
-        seal = package.index('package_provenance.py" seal', verify)
-        publish = package.index('package_provenance.py" publish', seal)
-        self.assertLess(distribution_sign, notarize)
-        self.assertLess(notarize, staple)
-        self.assertLess(staple, verify)
-        self.assertLess(verify, seal)
-        self.assertLess(seal, publish)
+        self.assertIn("--zero-cost", package)
+        self.assertNotIn("AGENT_RUNTIME_CODESIGN_IDENTITY", package)
+        self.assertNotIn("Developer ID Application", package)
+        self.assertNotIn("notarytool", package)
+        self.assertNotIn("stapler", package)
+        self.assertNotIn("distribution_verify.py", package)
+        self.assertNotIn('"$RUNTIME/agent_runtime/"', package)
+        self.assertNotIn('mkdir -p "$RUNTIME/agent_runtime"', package)
+        self.assertIn("payloads", package)
+        self.assertIn("publish-payload", package)
+        self.assertIn("substrate-manifest", package)
+        self.assertIn("seal-zero-cost", package)
+        self.assertIn("publish-zero-cost", package)
+        self.assertIn('--sign -', package)
+        for identifier in (
+            "com.picmao.agent-runtime",
+            "com.picmao.agent-runtime.runtime-service",
+            "com.picmao.agent-runtime.screen-capture",
+            "com.picmao.agent-runtime.python",
+        ):
+            self.assertIn(identifier, package)
 
-    def test_distribution_mode_rejects_empty_authority_values_before_build(self) -> None:
+    def test_zero_cost_packaging_rejects_non_explicit_modes_before_build(self) -> None:
         package = ROOT / "macos" / "package_app.sh"
         env = dict(os.environ)
         env["AGENT_RUNTIME_PACKAGING_PYTHON"] = str(ROOT / ".venv" / "bin" / "python")
-        cases = (
-            (
-                [
-                    "--distribution",
-                    "--signing-identity",
-                    "Developer ID Application: ",
-                    "--notary-keychain-profile",
-                    "fixture-profile",
-                ],
-                "distribution signing identity must be an explicit Developer ID Application identity",
-            ),
-            (
-                [
-                    "--distribution",
-                    "--signing-identity",
-                    "Developer ID Application: Fixture Corp (ABCDE12345)",
-                    "--notary-keychain-profile",
-                    "   ",
-                ],
-                "distribution mode requires an explicit notary keychain profile locator",
-            ),
-        )
-        for argv, expected in cases:
+        for argv in ([], ["--distribution"], ["--signing-identity", "fixture"]):
             with self.subTest(argv=argv):
                 result = subprocess.run(
                     [str(package), *argv],
@@ -484,80 +451,281 @@ class PackageProvenanceTests(unittest.TestCase):
                     check=False,
                 )
                 self.assertEqual(result.returncode, 2)
-                self.assertIn(expected, result.stderr)
-                self.assertNotIn("notarytool submit", result.stderr)
+                self.assertIn("usage: package_app.sh --zero-cost", result.stderr)
 
-    def test_distribution_verifier_checks_hardened_developer_id_gatekeeper_staple_and_provenance(self) -> None:
+    def test_historical_paid_distribution_verifier_is_not_reachable_from_current_packaging(self) -> None:
         verifier_path = ROOT / "macos" / "distribution_verify.py"
-        self.assertTrue(verifier_path.is_file(), "distribution verification helper must exist")
-        spec = importlib.util.spec_from_file_location("distribution_verify_test", verifier_path)
-        assert spec is not None and spec.loader is not None
-        verifier = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(verifier)
+        self.assertTrue(verifier_path.is_file(), "historical distribution verifier must remain preserved")
+        package = (ROOT / "macos" / "package_app.sh").read_text()
+        self.assertNotIn("distribution_verify.py", package)
 
+
+    def test_zero_cost_distribution_seal_validate_publish_is_atomic_and_payload_bound(self) -> None:
+        provenance = load_module()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            stage = root / "stage"
+            app = stage / "Agent Runtime.app"
+            runtime = app / "Contents/Resources/runtime"
+            (runtime / ".venv/bin").mkdir(parents=True)
+            (runtime / "macos").mkdir(parents=True)
+            (app / "Contents/MacOS").mkdir(parents=True)
+            (app / "Contents/Info.plist").write_bytes(plistlib.dumps({
+                "CFBundleIdentifier": provenance.OWNER,
+                "CFBundleExecutable": "AgentRuntimeMenuBar",
+            }))
+            (runtime / "start.sh").write_text("#!/bin/sh\nexit 0\n")
+            (runtime / "start.sh").chmod(0o755)
+            (runtime / "macos/package_provenance.py").write_text("# bootstrap\n")
+            for relative in provenance.ZERO_COST_CODE_IDENTIFIERS:
+                target = app / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("#!/bin/sh\nexit 0\n")
+                target.chmod(0o755)
+            surface_sha = "d" * 64
+            provenance.write_substrate_manifest(
+                runtime,
+                app / "Contents/Resources/runtime-manifest.json",
+                "a" * 40,
+                "b" * 40,
+                "c" * 64,
+                python_major_minor="3.13",
+                public_tool_count=20,
+                public_surface_sha256=surface_sha,
+            )
+            source = root / "source-agent-runtime"
+            source.mkdir()
+            (source / "__init__.py").write_text("__all__ = []\n")
+            (source / "server.py").write_text("VALUE = 1\n")
+            payload = provenance.publish_payload_release(
+                source,
+                stage / "payloads",
+                revision="a" * 40,
+                tree="b" * 40,
+                requirements_lock_sha256="c" * 64,
+                python_major_minor="3.13",
+                public_tool_count=20,
+                public_surface_sha256=surface_sha,
+            )
+            payload_release = Path(payload["release_path"])
+            handoff = stage / "Agent Runtime.candidate.json"
+
+            def reader(path: Path) -> dict[str, object]:
+                relative = path.relative_to(app).as_posix()
+                identifier = provenance.ZERO_COST_CODE_IDENTIFIERS[relative]
+                return {
+                    "identifier": identifier,
+                    "team_identifier": None,
+                    "designated_requirement": f'designated => identifier "{identifier}"',
+                }
+
+            with mock.patch.object(provenance, "_verify_codesign", return_value=None):
+                sealed = provenance.seal_zero_cost_candidate(
+                    app,
+                    handoff,
+                    payload_release,
+                    identity_reader=reader,
+                )
+                validated = provenance.validate_zero_cost_candidate(
+                    app,
+                    handoff,
+                    payload_release,
+                    identity_reader=reader,
+                )
+                self.assertEqual(validated, sealed)
+                published = provenance.publish_zero_cost_distribution(
+                    app,
+                    handoff,
+                    payload_release,
+                    root / "candidates",
+                    identity_reader=reader,
+                )
+
+            final_root = Path(published["candidate_app"]).parent
+            self.assertEqual(final_root.name, sealed["candidate_sha256"])
+            self.assertEqual(Path(published["initial_payload_release"]).name, sealed["initial_payload_closure"])
+            self.assertTrue(Path(published["candidate_app"]).is_dir())
+            self.assertTrue(Path(published["candidate_handoff"]).is_file())
+            self.assertTrue(Path(published["initial_payload_release"]).is_dir())
+            self.assertFalse(stage.exists())
+
+            tampered = Path(published["initial_payload_release"]) / "agent_runtime/server.py"
+            tampered.chmod(0o644)
+            tampered.write_text("VALUE = 2\n")
+            with mock.patch.object(provenance, "_verify_codesign", return_value=None):
+                with self.assertRaises(provenance.PackageProvenanceError):
+                    provenance.validate_zero_cost_candidate(
+                        Path(published["candidate_app"]),
+                        Path(published["candidate_handoff"]),
+                        Path(published["initial_payload_release"]),
+                        identity_reader=reader,
+                    )
+
+
+    def test_zero_cost_candidate_handoff_binds_substrate_and_initial_payload_without_team_identifier(self) -> None:
+        provenance = load_module()
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
             app = root / "Agent Runtime.app"
-            executables = (
-                app / "Contents/MacOS/AgentRuntimeMenuBar",
-                app / "Contents/MacOS/AgentRuntimeRuntimeService",
-                app / "Contents/MacOS/AgentRuntimeScreenCapture",
-                app / "Contents/Resources/runtime/.venv/bin/python",
-                app / "Contents/Resources/runtime/.venv/lib/python3.13/site-packages/fixture_native.so",
+            runtime = app / "Contents/Resources/runtime"
+            (runtime / ".venv/bin").mkdir(parents=True)
+            (runtime / "macos").mkdir(parents=True)
+            (app / "Contents/MacOS").mkdir(parents=True)
+            (app / "Contents/Info.plist").write_bytes(plistlib.dumps({
+                "CFBundleIdentifier": provenance.OWNER,
+                "CFBundleExecutable": "AgentRuntimeMenuBar",
+            }))
+            (runtime / "start.sh").write_text("#!/bin/sh\nexit 0\n")
+            (runtime / "start.sh").chmod(0o755)
+            (runtime / "macos/package_provenance.py").write_text("# bootstrap\n")
+            for relative in provenance.ZERO_COST_CODE_IDENTIFIERS:
+                target = app / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("#!/bin/sh\nexit 0\n")
+                target.chmod(0o755)
+            surface_sha = "d" * 64
+            manifest = app / "Contents/Resources/runtime-manifest.json"
+            provenance.write_substrate_manifest(
+                runtime,
+                manifest,
+                "a" * 40,
+                "b" * 40,
+                "c" * 64,
+                python_major_minor="3.13",
+                public_tool_count=20,
+                public_surface_sha256=surface_sha,
             )
-            for executable in executables:
-                executable.parent.mkdir(parents=True, exist_ok=True)
-                executable.write_text("#!/bin/sh\n")
-                executable.chmod(0o700)
-            lock = root / "requirements.lock"
-            lock.write_text("fixture\n")
-            lock_sha = hashlib.sha256(lock.read_bytes()).hexdigest()
-            identity = "Developer ID Application: Fixture Corp (ABCDE12345)"
-            calls: list[tuple[str, ...]] = []
 
-            def fake_run(argv: list[str]) -> subprocess.CompletedProcess[str]:
-                calls.append(tuple(argv))
-                if argv[:3] == ["/usr/bin/codesign", "-d", "--verbose=4"]:
-                    detail = (
-                        f"Authority={identity}\n"
-                        "TeamIdentifier=ABCDE12345\n"
-                        "flags=0x10000(runtime)\n"
-                        "Timestamp=Sep 27, 2026 at 18:00:00\n"
-                    )
-                    return subprocess.CompletedProcess(argv, 0, "", detail)
-                return subprocess.CompletedProcess(argv, 0, "", "")
+            def reader(path: Path) -> dict[str, object]:
+                relative = path.relative_to(app).as_posix()
+                identifier = provenance.ZERO_COST_CODE_IDENTIFIERS[relative]
+                return {
+                    "identifier": identifier,
+                    "team_identifier": None,
+                    "designated_requirement": f'designated => identifier "{identifier}"',
+                }
 
-            embedded = {
-                "source_revision": "a" * 40,
-                "source_tree": "b" * 40,
-                "requirements_lock_sha256": lock_sha,
-                "team_identifier": "ABCDE12345",
-            }
-            with mock.patch.object(verifier, "_run", side_effect=fake_run), mock.patch.object(
-                verifier.provenance, "embedded_candidate_identity", return_value=embedded
-            ):
-                verifier.verify_distribution(
-                    app,
-                    signing_identity=identity,
-                    runtime_revision="a" * 40,
-                    runtime_tree="b" * 40,
-                    requirements_lock=lock,
+            data = provenance.zero_cost_candidate_handoff_data(
+                app,
+                initial_payload_closure="e" * 64,
+                identity_reader=reader,
+            )
+            self.assertEqual(data["schema"], provenance.ZERO_COST_CANDIDATE_SCHEMA)
+            self.assertEqual(data["signing_mode"], "adhoc")
+            self.assertIsNone(data["team_identifier"])
+            self.assertEqual(data["initial_payload_closure"], "e" * 64)
+            self.assertEqual(data["lifecycle_contract"], provenance.LIFECYCLE_CONTRACT)
+            self.assertEqual(data["payload_contract"], provenance.PAYLOAD_CONTRACT)
+            self.assertEqual(data["expected_public_tool_count"], 20)
+            self.assertEqual(data["expected_public_surface_sha256"], surface_sha)
+            self.assertEqual(data["substrate_sha256"], data["candidate_sha256"])
+            self.assertEqual(data["source_revision"], "a" * 40)
+            self.assertEqual(data["source_tree"], "b" * 40)
+
+
+    def test_substrate_manifest_binds_external_payload_contract_and_rejects_first_party_source(self) -> None:
+        provenance = load_module()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            runtime = root / "runtime"
+            (runtime / ".venv/bin").mkdir(parents=True)
+            (runtime / "macos").mkdir(parents=True)
+            (runtime / "start.sh").write_text("#!/bin/sh\nexit 0\n")
+            (runtime / "start.sh").chmod(0o755)
+            (runtime / ".venv/bin/python").write_text("#!/bin/sh\nexit 0\n")
+            (runtime / ".venv/bin/python").chmod(0o755)
+            (runtime / "macos/package_provenance.py").write_text("# bootstrap\n")
+            manifest = root / "runtime-manifest.json"
+            surface_sha = "d" * 64
+
+            data = provenance.write_substrate_manifest(
+                runtime,
+                manifest,
+                "a" * 40,
+                "b" * 40,
+                "c" * 64,
+                python_major_minor="3.13",
+                public_tool_count=20,
+                public_surface_sha256=surface_sha,
+            )
+            self.assertEqual(data["schema"], provenance.SUBSTRATE_SCHEMA)
+            self.assertEqual(data["lifecycle_contract"], provenance.LIFECYCLE_CONTRACT)
+            self.assertEqual(data["payload_contract"], provenance.PAYLOAD_CONTRACT)
+            self.assertEqual(data["expected_public_tool_count"], 20)
+            self.assertEqual(data["expected_public_surface_sha256"], surface_sha)
+            self.assertNotIn("mcp_package", data)
+            self.assertFalse(any(entry["path"].startswith("agent_runtime/") for entry in data["files"]))
+            self.assertEqual(
+                provenance.validate_substrate_manifest(
+                    runtime,
+                    manifest,
+                    "a" * 40,
+                    "b" * 40,
+                    "c" * 64,
+                ),
+                data,
+            )
+
+            (runtime / "agent_runtime").mkdir()
+            (runtime / "agent_runtime/server.py").write_text("VALUE = 1\n")
+            with self.assertRaisesRegex(provenance.PackageProvenanceError, "first-party|agent_runtime"):
+                provenance.write_substrate_manifest(
+                    runtime,
+                    root / "invalid.json",
+                    "a" * 40,
+                    "b" * 40,
+                    "c" * 64,
+                    python_major_minor="3.13",
+                    public_tool_count=20,
+                    public_surface_sha256=surface_sha,
                 )
 
-            self.assertIn(("/usr/bin/codesign", "--verify", "--deep", "--strict", str(app)), calls)
-            self.assertIn(("/usr/sbin/spctl", "--assess", "--type", "execute", "--verbose=4", str(app)), calls)
-            self.assertIn(("/usr/bin/xcrun", "stapler", "validate", str(app)), calls)
-            inspected = [call[-1] for call in calls if call[:3] == ("/usr/bin/codesign", "-d", "--verbose=4")]
-            self.assertEqual(inspected, [str(app), *(str(path) for path in executables)])
 
-            with self.assertRaisesRegex(verifier.DistributionVerificationError, "Developer ID Application"):
-                verifier.verify_distribution(
-                    app,
-                    signing_identity="Apple Development: Fixture",
-                    runtime_revision="a" * 40,
-                    runtime_tree="b" * 40,
-                    requirements_lock=lock,
-                )
+    def test_zero_cost_responsible_code_requires_adhoc_exact_identifiers_and_requirements(self) -> None:
+        provenance = load_module()
+        with tempfile.TemporaryDirectory() as raw:
+            app = Path(raw) / "Agent Runtime.app"
+            (app / "Contents/MacOS").mkdir(parents=True)
+            (app / "Contents/Resources/runtime/.venv/bin").mkdir(parents=True)
+            (app / "Contents/Info.plist").write_bytes(plistlib.dumps({
+                "CFBundleIdentifier": provenance.OWNER,
+                "CFBundleExecutable": "AgentRuntimeMenuBar",
+            }))
+            for relative in provenance.ZERO_COST_CODE_IDENTIFIERS:
+                target = app / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("#!/bin/sh\n")
+                target.chmod(0o755)
+
+            def reader(path: Path) -> dict[str, object]:
+                relative = path.relative_to(app).as_posix()
+                identifier = provenance.ZERO_COST_CODE_IDENTIFIERS[relative]
+                return {
+                    "identifier": identifier,
+                    "team_identifier": None,
+                    "designated_requirement": f'designated => identifier "{identifier}"',
+                }
+
+            identity = provenance.zero_cost_responsible_code_identity(app, identity_reader=reader)
+            self.assertEqual(identity["signing_mode"], "adhoc")
+            self.assertIsNone(identity["team_identifier"])
+            self.assertEqual(set(identity["responsible_code"]), set(provenance.ZERO_COST_CODE_IDENTIFIERS))
+
+            def wrong_team(path: Path) -> dict[str, object]:
+                value = reader(path)
+                value["team_identifier"] = "ABCDE12345"
+                return value
+
+            with self.assertRaisesRegex(provenance.PackageProvenanceError, "TeamIdentifier"):
+                provenance.zero_cost_responsible_code_identity(app, identity_reader=wrong_team)
+
+            def wrong_identifier(path: Path) -> dict[str, object]:
+                value = reader(path)
+                value["identifier"] = "com.example.foreign"
+                return value
+
+            with self.assertRaisesRegex(provenance.PackageProvenanceError, "identifier"):
+                provenance.zero_cost_responsible_code_identity(app, identity_reader=wrong_identifier)
 
 
     def test_external_payload_release_is_content_addressed_and_tamper_evident(self) -> None:
