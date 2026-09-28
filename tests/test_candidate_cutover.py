@@ -552,6 +552,169 @@ class CandidateCutoverTests(unittest.TestCase):
             self.assertEqual(pointer.read_text(), closure + "\n")
             self.assertTrue(installed_payload.is_dir())
 
+
+    def _payload_update_fixture(self, raw: str):
+        cutover = load_module(CUTOVER_PATH, "candidate_cutover_payload_update")
+        root = Path(raw)
+        home = root / "home"
+        target = home / "Applications" / "Agent Runtime.app"
+        runtime = target / "Contents" / "Resources" / "runtime"
+        runtime.mkdir(parents=True)
+        (runtime / "start.sh").write_text("#!/bin/sh\nexit 0\n")
+        (runtime / "start.sh").chmod(0o755)
+        helper = target / "Contents" / "MacOS" / "AgentRuntimeRuntimeService"
+        helper.parent.mkdir(parents=True)
+        helper.write_text("#!/bin/sh\nexit 0\n")
+        helper.chmod(0o755)
+
+        state_dir = home / "Library" / "Application Support" / "Agent Runtime"
+        state_dir.mkdir(parents=True)
+        runtime_env = state_dir / "runtime.env"
+        runtime_env.write_text("CONTROL_PLANE_API_KEY=fixture\n")
+        runtime_env.chmod(0o600)
+        desired = state_dir / "protected-runtime-running"
+        desired.touch()
+
+        old_closure = "a" * 64
+        new_closure = "b" * 64
+        old_release = state_dir / "payloads" / old_closure
+        old_release.mkdir(parents=True)
+        (old_release / "old.py").write_text("VALUE = 'old'\n")
+        pointer = state_dir / "current-payload"
+        pointer.write_text(old_closure + "\n")
+        pointer.chmod(0o600)
+
+        incoming = root / new_closure
+        incoming.mkdir()
+        (incoming / "new.py").write_text("VALUE = 'new'\n")
+        current_plist = home / "Library" / "LaunchAgents" / f"{MODERN_RUNTIME_LABEL}.plist"
+        current_plist.parent.mkdir(parents=True)
+        current_plist.write_bytes(b"fixture-plist\n")
+        current_plist.chmod(0o600)
+        return cutover, {
+            "home": home,
+            "target": target,
+            "state": state_dir,
+            "transaction": state_dir / "cutover-transaction",
+            "desired": desired,
+            "pointer": pointer,
+            "old_closure": old_closure,
+            "new_closure": new_closure,
+            "old_release": old_release,
+            "incoming": incoming,
+            "plist": current_plist,
+        }
+
+    def test_payload_activation_stops_before_pointer_switch_and_preserves_immutable_substrate(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            cutover, fx = self._payload_update_fixture(raw)
+            uid = os.getuid()
+            before = cutover._payload_update_witnesses(fx["target"], fx["state"], fx["plist"])
+            events: list[str] = []
+            real_pointer_write = cutover._write_payload_pointer_atomic
+
+            def validate_payload(path: Path, _substrate):
+                return {"content_closure": path.name}
+
+            def lifecycle(_target: Path, action: str) -> None:
+                if action == "stop":
+                    self.assertEqual(fx["pointer"].read_text(), fx["old_closure"] + "\n")
+                    fx["desired"].unlink(missing_ok=True)
+                elif action == "start":
+                    self.assertEqual(fx["pointer"].read_text(), fx["new_closure"] + "\n")
+                    fx["desired"].touch()
+                events.append(action)
+
+            def write_pointer(path: Path, closure: str, *, uid: int) -> None:
+                events.append("pointer:" + closure)
+                real_pointer_write(path, closure, uid=uid)
+
+            with (
+                mock.patch.object(cutover, "_current_substrate_manifest", return_value={"contract": "fixture"}),
+                mock.patch.object(cutover, "_validate_payload_for_substrate", side_effect=validate_payload),
+                mock.patch.object(cutover, "_validate_current_launchagent"),
+                mock.patch.object(cutover, "_require_service_identity"),
+                mock.patch.object(cutover, "_run_runtime_lifecycle", side_effect=lifecycle),
+                mock.patch.object(cutover, "_write_payload_pointer_atomic", side_effect=write_pointer),
+            ):
+                result = cutover.activate_payload_release(
+                    fx["incoming"],
+                    target_app=fx["target"],
+                    state_dir=fx["state"],
+                    transaction_dir=fx["transaction"],
+                    home=fx["home"],
+                    launchctl=Path("/bin/true"),
+                    uid=uid,
+                )
+
+            self.assertEqual(result, {"status": "ACTIVATED", "payload_closure": fx["new_closure"]})
+            self.assertEqual(events, ["stop", "pointer:" + fx["new_closure"], "start"])
+            self.assertEqual(fx["pointer"].read_text(), fx["new_closure"] + "\n")
+            self.assertTrue((fx["state"] / "payloads" / fx["new_closure"]).is_dir())
+            self.assertFalse(fx["transaction"].exists())
+            self.assertTrue(fx["desired"].is_file())
+            self.assertEqual(
+                cutover._payload_update_witnesses(fx["target"], fx["state"], fx["plist"]),
+                before,
+            )
+
+    def test_payload_activation_failure_after_pointer_switch_restores_previous_generation(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            cutover, fx = self._payload_update_fixture(raw)
+            uid = os.getuid()
+            events: list[str] = []
+            real_pointer_write = cutover._write_payload_pointer_atomic
+
+            def validate_payload(path: Path, _substrate):
+                return {"content_closure": path.name}
+
+            def lifecycle(_target: Path, action: str) -> None:
+                if action == "stop":
+                    fx["desired"].unlink(missing_ok=True)
+                elif action == "start":
+                    self.assertEqual(fx["pointer"].read_text(), fx["old_closure"] + "\n")
+                    fx["desired"].touch()
+                events.append(action)
+
+            def write_pointer(path: Path, closure: str, *, uid: int) -> None:
+                events.append("pointer:" + closure)
+                real_pointer_write(path, closure, uid=uid)
+
+            with (
+                mock.patch.object(cutover, "_current_substrate_manifest", return_value={"contract": "fixture"}),
+                mock.patch.object(cutover, "_validate_payload_for_substrate", side_effect=validate_payload),
+                mock.patch.object(cutover, "_validate_current_launchagent"),
+                mock.patch.object(cutover, "_require_service_identity"),
+                mock.patch.object(cutover, "_run_runtime_lifecycle", side_effect=lifecycle),
+                mock.patch.object(cutover, "_write_payload_pointer_atomic", side_effect=write_pointer),
+            ):
+                with self.assertRaisesRegex(cutover.CutoverError, "previous payload restored"):
+                    cutover.activate_payload_release(
+                        fx["incoming"],
+                        target_app=fx["target"],
+                        state_dir=fx["state"],
+                        transaction_dir=fx["transaction"],
+                        home=fx["home"],
+                        launchctl=Path("/bin/true"),
+                        uid=uid,
+                        fail_stages={"after_pointer_switch"},
+                    )
+
+            self.assertEqual(
+                events,
+                [
+                    "stop",
+                    "pointer:" + fx["new_closure"],
+                    "stop",
+                    "pointer:" + fx["old_closure"],
+                    "start",
+                ],
+            )
+            self.assertEqual(fx["pointer"].read_text(), fx["old_closure"] + "\n")
+            self.assertFalse((fx["state"] / "payloads" / fx["new_closure"]).exists())
+            self.assertFalse(fx["transaction"].exists())
+            self.assertTrue(fx["desired"].is_file())
+
     def test_current_cutover_uses_traditional_launchagent_and_service_management_only_for_predecessors(self) -> None:
         source = CUTOVER_PATH.read_text()
         current = source[source.index("def _cutover_zero_cost_candidate("):source.index("def cutover_candidate(")]

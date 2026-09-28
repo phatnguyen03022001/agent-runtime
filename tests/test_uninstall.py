@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import plistlib
 import tempfile
 import unittest
@@ -63,6 +64,9 @@ def make_app(home: Path, state_file: Path, *, modern: bool) -> Path:
         "else: raise SystemExit(2)\n"
     )
     main.chmod(0o755)
+    helper = macos / "AgentRuntimeRuntimeService"
+    helper.write_text("#!/bin/sh\nexit 0\n")
+    helper.chmod(0o755)
     (runtime / "start.sh").write_text("#!/bin/sh\nexit 0\n")
     if modern:
         plist = app / "Contents" / "Library" / "LaunchAgents" / f"{MODERN_RUNTIME_LABEL}.plist"
@@ -71,10 +75,58 @@ def make_app(home: Path, state_file: Path, *, modern: bool) -> Path:
             "Label": MODERN_RUNTIME_LABEL,
             "BundleProgram": "Contents/MacOS/AgentRuntimeRuntimeService",
         }))
-        helper = macos / "AgentRuntimeRuntimeService"
-        helper.write_text("#!/bin/sh\nexit 0\n")
-        helper.chmod(0o755)
     return app
+
+
+def make_current_product(home: Path, service_state: Path) -> tuple[Path, Path, Path, Path, Path]:
+    app = make_app(home, service_state, modern=False)
+    state = home / "Library" / "Application Support" / "Agent Runtime"
+    state.mkdir(parents=True, exist_ok=True)
+    env = state / "runtime.env"
+    env.write_text("CONTROL_PLANE_API_KEY=retained\n")
+    desired = state / "protected-runtime-running"
+    desired.touch()
+    lifecycle_log = state / "lifecycle.log"
+    start = app / "Contents" / "Resources" / "runtime" / "start.sh"
+    start.write_text(
+        "#!/bin/sh\n"
+        f"echo \"$1\" >> {str(lifecycle_log)!r}\n"
+        f"case \"$1\" in stop) rm -f {str(desired)!r} ;; start) : > {str(desired)!r} ;; *) exit 2 ;; esac\n"
+    )
+    start.chmod(0o755)
+
+    closure = "a" * 64
+    payloads = state / "payloads"
+    release = payloads / closure
+    package = release / "agent_runtime"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("")
+    (package / "server.py").write_text("VALUE = 1\n")
+    (release / "payload-manifest.json").write_text(
+        json.dumps({
+            "owner": "com.picmao.agent-runtime",
+            "content_closure": closure,
+        }) + "\n"
+    )
+    package.chmod(0o555)
+    release.chmod(0o555)
+    pointer = state / "current-payload"
+    pointer.write_text(closure + "\n")
+    pointer.chmod(0o600)
+
+    helper = app / "Contents" / "MacOS" / "AgentRuntimeRuntimeService"
+    plist = home / "Library" / "LaunchAgents" / f"{MODERN_RUNTIME_LABEL}.plist"
+    plist.parent.mkdir(parents=True)
+    plist.write_bytes(plistlib.dumps({
+        "Label": MODERN_RUNTIME_LABEL,
+        "ProgramArguments": [str(helper)],
+        "RunAtLoad": False,
+        "KeepAlive": {"SuccessfulExit": False},
+        "ProcessType": "Interactive",
+        "ThrottleInterval": 2,
+    }))
+    plist.chmod(0o600)
+    return app, state, env, plist, lifecycle_log
 
 
 def write_legacy_plist(path: Path, label: str, app: Path) -> None:
@@ -378,6 +430,82 @@ class UninstallTests(unittest.TestCase):
             self.assertFalse(runtime.exists())
             self.assertTrue(env.is_file())
             self.assertEqual(result["legacy_remnants_removed"], 2)
+
+    def test_current_launchagent_uninstall_reaps_and_removes_payload_state_but_retains_config(self) -> None:
+        uninstall = load_module()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home = root / "home"
+            home.mkdir()
+            service_state = root / "service-state.json"
+            service_state.write_text(json.dumps({"main_app": "enabled", "runtime_agent": "enabled"}) + "\n")
+            app, state, env, current_plist, lifecycle_log = make_current_product(home, service_state)
+            helper = app / "Contents" / "MacOS" / "AgentRuntimeRuntimeService"
+            launchctl = root / "launchctl"
+            launchctl.write_text(
+                "#!/bin/sh\n"
+                "case \"$1\" in\n"
+                f"  print) printf 'program = %s\\n' {str(helper)!r}; exit 0 ;;\n"
+                "  bootout) exit 0 ;;\n"
+                "esac\n"
+                "exit 2\n"
+            )
+            launchctl.chmod(0o755)
+
+            result = uninstall.uninstall_product(
+                home=home,
+                launchctl=launchctl,
+                uid=os.getuid(),
+            )
+
+            self.assertEqual(result["lifecycle_contract"], "launchagent-v1")
+            self.assertTrue(result["payload_state_removed"])
+            self.assertFalse(app.exists())
+            self.assertFalse(current_plist.exists())
+            self.assertFalse((state / "current-payload").exists())
+            self.assertFalse((state / "payloads").exists())
+            self.assertTrue(env.is_file())
+            self.assertEqual(lifecycle_log.read_text().splitlines(), ["stop"])
+            self.assertEqual(
+                json.loads(service_state.read_text()),
+                {"main_app": "enabled", "runtime_agent": "enabled"},
+            )
+
+    def test_current_launchagent_bootout_failure_restores_previous_desired_generation(self) -> None:
+        uninstall = load_module()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home = root / "home"
+            home.mkdir()
+            service_state = root / "service-state.json"
+            service_state.write_text(json.dumps({"main_app": "enabled", "runtime_agent": "enabled"}) + "\n")
+            app, state, env, current_plist, lifecycle_log = make_current_product(home, service_state)
+            helper = app / "Contents" / "MacOS" / "AgentRuntimeRuntimeService"
+            launchctl = root / "launchctl"
+            launchctl.write_text(
+                "#!/bin/sh\n"
+                "case \"$1\" in\n"
+                f"  print) printf 'program = %s\\n' {str(helper)!r}; exit 0 ;;\n"
+                "  bootout) echo failure >&2; exit 7 ;;\n"
+                "esac\n"
+                "exit 2\n"
+            )
+            launchctl.chmod(0o755)
+
+            with self.assertRaisesRegex(uninstall.UninstallError, "could not unregister owned legacy service"):
+                uninstall.uninstall_product(
+                    home=home,
+                    launchctl=launchctl,
+                    uid=os.getuid(),
+                )
+
+            self.assertTrue(app.is_dir())
+            self.assertTrue(current_plist.is_file())
+            self.assertTrue((state / "current-payload").is_file())
+            self.assertTrue((state / "payloads").is_dir())
+            self.assertTrue((state / "protected-runtime-running").is_file())
+            self.assertTrue(env.is_file())
+            self.assertEqual(lifecycle_log.read_text().splitlines(), ["stop", "start"])
 
 
 if __name__ == "__main__":

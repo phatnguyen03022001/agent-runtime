@@ -120,6 +120,8 @@ if match is None:
     fail("Current payload pointer is malformed.")
 closure = match.group(1)
 release = payloads_root / closure
+if release.is_symlink() or not release.is_dir():
+    fail("Selected external Runtime payload release is missing or unsafe.")
 try:
     payload = provenance.validate_payload_release(
         release,
@@ -221,9 +223,33 @@ installed_doctor() {
   [[ -f "$doctor_env" && ! -L "$doctor_env" ]] \
     || doctor_error "CANONICAL_CONFIG_MISSING" "Canonical runtime.env is missing or unsafe." "$json_mode"
 
-  local selection selected_payload runtime_revision
-  if ! selection="$(validate_installed_selection "$doctor_root" "$doctor_python")"; then
-    doctor_error "PAYLOAD_SELECTION_INVALID" "Selected external Runtime payload is invalid." "$json_mode"
+  local selection selected_payload runtime_revision selection_reason selection_message
+  if ! selection="$(validate_installed_selection "$doctor_root" "$doctor_python" 2>&1)"; then
+    selection_reason="PAYLOAD_RELEASE_INVALID"
+    selection_message="Selected external Runtime payload is invalid."
+    case "$selection" in
+      *"Installed Runtime substrate provenance is invalid."*)
+        selection_reason="INSTALLED_SUBSTRATE_INVALID"
+        selection_message="Installed immutable Runtime substrate is invalid."
+        ;;
+      *"Current payload pointer is missing."*)
+        selection_reason="PAYLOAD_POINTER_MISSING"
+        selection_message="Canonical current-payload pointer is missing."
+        ;;
+      *"Current payload pointer"*"unsafe."*|*"Current payload pointer"*"malformed."*|*"Current payload pointer"*"unreadable."*|*"Current payload pointer ownership or mode is unsafe."*)
+        selection_reason="PAYLOAD_POINTER_INVALID"
+        selection_message="Canonical current-payload pointer is invalid."
+        ;;
+      *"Selected external Runtime payload release is missing or unsafe."*)
+        selection_reason="PAYLOAD_RELEASE_MISSING"
+        selection_message="Selected external Runtime payload release is missing or unsafe."
+        ;;
+      *"public tool count is incompatible."*|*"public tool surface is incompatible."*|*"public tool contract is inconsistent."*)
+        selection_reason="PAYLOAD_SUBSTRATE_INCOMPATIBLE"
+        selection_message="Selected external Runtime payload is incompatible with the immutable substrate."
+        ;;
+    esac
+    doctor_error "$selection_reason" "$selection_message" "$json_mode"
   fi
   IFS=$'\t' read -r selected_payload runtime_revision <<< "$selection"
   [[ -f "$selected_payload/agent_runtime/doctor.py" ]] \

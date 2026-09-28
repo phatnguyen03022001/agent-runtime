@@ -23,6 +23,7 @@ import package_provenance as provenance
 
 TRANSACTION_SCHEMA = 5
 ZERO_COST_TRANSACTION_SCHEMA = 6
+PAYLOAD_UPDATE_TRANSACTION_SCHEMA = 7
 SCHEMA4_ROLLBACK_SCHEMA = 4
 SCHEMA2_RECOVERY_SCHEMA = 2
 LEGACY_RECOVERY_SCHEMA = 1
@@ -1643,6 +1644,25 @@ def rollback_transaction(
 ) -> dict[str, object]:
     failures = set(fail_stages or ())
     raw_metadata = _read_transaction_metadata_unversioned(transaction_dir)
+    if raw_metadata.get("schema") == PAYLOAD_UPDATE_TRANSACTION_SCHEMA:
+        try:
+            _rollback_payload_update(
+                transaction_dir,
+                target_app,
+                raw_metadata,
+                launchctl=launchctl,
+                uid=uid,
+            )
+        except Exception as exc:
+            raw_metadata["status"] = "PARTIAL"
+            raw_metadata["last_error"] = "payload rollback incomplete: " + str(exc)
+            _atomic_json(transaction_dir / "metadata.json", raw_metadata)
+            if isinstance(exc, CutoverError):
+                raise
+            raise CutoverError("payload rollback incomplete") from exc
+        shutil.rmtree(transaction_dir)
+        return {"status": "ROLLED_BACK"}
+
     if raw_metadata.get("schema") == ZERO_COST_TRANSACTION_SCHEMA:
         try:
             _rollback_zero_cost_transaction(
@@ -1687,6 +1707,307 @@ def rollback_transaction(
         raise CutoverError("rollback incomplete") from exc
     shutil.rmtree(transaction_dir)
     return {"status": "ROLLED_BACK"}
+
+
+def _current_payload_closure(pointer: Path, *, uid: int) -> str:
+    if pointer.is_symlink() or not pointer.is_file():
+        raise CutoverError("current payload pointer is missing or unsafe")
+    info = pointer.stat()
+    if info.st_uid != uid or stat.S_IMODE(info.st_mode) != 0o600:
+        raise CutoverError("current payload pointer ownership or mode is unsafe")
+    try:
+        raw = pointer.read_text(encoding="ascii")
+    except (OSError, UnicodeError) as exc:
+        raise CutoverError("current payload pointer is unreadable") from exc
+    match = re.fullmatch(r"([0-9a-f]{64})\n", raw)
+    if match is None:
+        raise CutoverError("current payload pointer is malformed")
+    return match.group(1)
+
+
+def _current_substrate_manifest(target_app: Path) -> dict[str, object]:
+    if target_app.is_symlink() or not target_app.is_dir():
+        raise CutoverError("installed zero-cost app is missing or unsafe")
+    runtime = target_app / "Contents" / "Resources" / "runtime"
+    manifest_path = target_app / "Contents" / "Resources" / "runtime-manifest.json"
+    try:
+        manifest = provenance._load_substrate_manifest(manifest_path)
+        provenance.validate_substrate_manifest(
+            runtime,
+            manifest_path,
+            str(manifest["runtime_revision"]),
+            str(manifest["git_tree"]),
+            str(manifest["requirements_lock_sha256"]),
+        )
+        provenance._verify_codesign(target_app)
+        provenance.zero_cost_responsible_code_identity(target_app)
+    except (KeyError, provenance.PackageProvenanceError) as exc:
+        raise CutoverError("installed zero-cost substrate is invalid") from exc
+    return manifest
+
+
+def _validate_payload_for_substrate(
+    payload_release: Path,
+    substrate: dict[str, object],
+) -> dict[str, object]:
+    try:
+        return provenance.validate_payload_release(
+            payload_release,
+            expected_closure=payload_release.name,
+            expected_requirements_lock_sha256=str(substrate["requirements_lock_sha256"]),
+            expected_python_major_minor=str(substrate["required_python_major_minor"]),
+            expected_public_tool_count=int(substrate["expected_public_tool_count"]),
+            expected_public_surface_sha256=str(substrate["expected_public_surface_sha256"]),
+        )
+    except (KeyError, TypeError, ValueError, provenance.PackageProvenanceError) as exc:
+        raise CutoverError("payload is incompatible with the installed immutable substrate") from exc
+
+
+def _run_runtime_lifecycle(target_app: Path, action: str) -> None:
+    if action not in {"start", "stop"}:
+        raise CutoverError("payload update lifecycle action is invalid")
+    lifecycle = target_app / "Contents" / "Resources" / "runtime" / "start.sh"
+    if lifecycle.is_symlink() or not lifecycle.is_file():
+        raise CutoverError("installed Runtime lifecycle helper is missing or unsafe")
+    try:
+        result = subprocess.run(
+            ["/bin/bash", str(lifecycle), action],
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=20,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise CutoverError(f"Runtime {action} lifecycle failed") from exc
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip().replace("\n", " ")
+        raise CutoverError(f"Runtime {action} lifecycle failed: {detail[:300]}")
+
+
+def _payload_update_witnesses(
+    target_app: Path,
+    state_dir: Path,
+    current_plist: Path,
+) -> dict[str, object]:
+    return {
+        "app_closure": provenance.candidate_closure(target_app),
+        "runtime_config": _runtime_config_identity(state_dir),
+        "launchagent_sha256": _sha256_file(current_plist, "current Runtime LaunchAgent"),
+    }
+
+
+def _validate_payload_update_witnesses(
+    expected: object,
+    target_app: Path,
+    state_dir: Path,
+    current_plist: Path,
+) -> None:
+    if not isinstance(expected, dict) or set(expected) != {
+        "app_closure",
+        "runtime_config",
+        "launchagent_sha256",
+    }:
+        raise CutoverError("payload update immutable witness metadata is malformed")
+    current = _payload_update_witnesses(target_app, state_dir, current_plist)
+    if current != expected:
+        raise CutoverError("immutable Runtime substrate changed during payload activation")
+
+
+def _rollback_payload_update(
+    transaction_dir: Path,
+    target_app: Path,
+    metadata: dict[str, object],
+    *,
+    launchctl: Path,
+    uid: int,
+) -> None:
+    if (
+        metadata.get("schema") != PAYLOAD_UPDATE_TRANSACTION_SCHEMA
+        or metadata.get("kind") != "payload-update"
+    ):
+        raise CutoverError("payload update transaction schema is invalid")
+    previous = metadata.get("previous")
+    payload = metadata.get("payload")
+    paths = metadata.get("paths")
+    witnesses = metadata.get("witnesses")
+    if not isinstance(previous, dict) or not isinstance(payload, dict) or not isinstance(paths, dict):
+        raise CutoverError("payload update rollback metadata is malformed")
+    required_paths = {"target_app", "state_dir", "pointer", "current_plist", "home"}
+    if set(paths) != required_paths or Path(str(paths["target_app"])) != target_app:
+        raise CutoverError("payload update rollback path metadata is invalid")
+    state_dir = Path(str(paths["state_dir"]))
+    pointer = Path(str(paths["pointer"]))
+    current_plist = Path(str(paths["current_plist"]))
+    home = Path(str(paths["home"]))
+    old_closure = previous.get("closure")
+    desired_before = previous.get("desired_state_present")
+    new_closure = payload.get("closure")
+    created = payload.get("created")
+    if (
+        not isinstance(old_closure, str)
+        or re.fullmatch(r"[0-9a-f]{64}", old_closure) is None
+        or not isinstance(new_closure, str)
+        or re.fullmatch(r"[0-9a-f]{64}", new_closure) is None
+        or not isinstance(desired_before, bool)
+        or not isinstance(created, bool)
+    ):
+        raise CutoverError("payload update rollback identity metadata is malformed")
+
+    _validate_current_launchagent(current_plist, home, uid=uid)
+    _run_runtime_lifecycle(target_app, "stop")
+    _write_payload_pointer_atomic(pointer, old_closure, uid=uid)
+    substrate = _current_substrate_manifest(target_app)
+    old_release = _payloads_root(state_dir) / old_closure
+    _validate_payload_for_substrate(old_release, substrate)
+    if desired_before:
+        _run_runtime_lifecycle(target_app, "start")
+    _validate_payload_update_witnesses(witnesses, target_app, state_dir, current_plist)
+
+    if created and new_closure != old_closure:
+        new_release = _payloads_root(state_dir) / new_closure
+        if new_release.exists() or new_release.is_symlink():
+            _remove_transaction_payload(new_release, new_release.parent, new_closure)
+
+
+def activate_payload_release(
+    payload_release: Path,
+    *,
+    target_app: Path,
+    state_dir: Path,
+    transaction_dir: Path,
+    home: Path,
+    launchctl: Path,
+    uid: int,
+    fail_stages: set[str] | None = None,
+) -> dict[str, object]:
+    failures = set(fail_stages or ())
+    if transaction_dir.exists() or transaction_dir.is_symlink():
+        raise CutoverError("a lifecycle transaction is already pending")
+
+    substrate = _current_substrate_manifest(target_app)
+    incoming = _validate_payload_for_substrate(payload_release, substrate)
+    new_closure = str(incoming["content_closure"])
+    pointer = _payload_pointer_path(state_dir)
+    old_closure = _current_payload_closure(pointer, uid=uid)
+    current_plist = _current_launchagent_path(home)
+    _validate_current_launchagent(current_plist, home, uid=uid)
+    service = f"gui/{uid}/{MODERN_RUNTIME_LABEL}"
+    _require_service_identity(launchctl, service, _current_runtime_helper(home))
+    old_release = _payloads_root(state_dir) / old_closure
+    _validate_payload_for_substrate(old_release, substrate)
+    desired_state = state_dir / "protected-runtime-running"
+    if desired_state.is_symlink() or (desired_state.exists() and not desired_state.is_file()):
+        raise CutoverError("desired Runtime state marker is unsafe")
+    desired_before = desired_state.exists()
+    witnesses = _payload_update_witnesses(target_app, state_dir, current_plist)
+
+    if new_closure == old_closure:
+        _validate_payload_update_witnesses(witnesses, target_app, state_dir, current_plist)
+        return {"status": "UNCHANGED", "payload_closure": old_closure}
+
+    created_transaction = False
+    try:
+        transaction_dir.mkdir(parents=True, mode=0o700)
+        created_transaction = True
+        staged_payload = transaction_dir / "payloads" / new_closure
+        staged_payload.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(payload_release, staged_payload, copy_function=shutil.copy2)
+        _validate_payload_for_substrate(staged_payload, substrate)
+        metadata: dict[str, object] = {
+            "schema": PAYLOAD_UPDATE_TRANSACTION_SCHEMA,
+            "kind": "payload-update",
+            "status": "RUNNING",
+            "phase": "PREPARED",
+            "previous": {
+                "closure": old_closure,
+                "desired_state_present": desired_before,
+            },
+            "payload": {"closure": new_closure, "created": False},
+            "witnesses": witnesses,
+            "paths": {
+                "target_app": str(target_app),
+                "state_dir": str(state_dir),
+                "pointer": str(pointer),
+                "current_plist": str(current_plist),
+                "home": str(home),
+            },
+            "last_error": "",
+        }
+        _atomic_json(transaction_dir / "metadata.json", metadata)
+
+        _run_runtime_lifecycle(target_app, "stop")
+        if desired_state.exists() or desired_state.is_symlink():
+            raise CutoverError("Runtime desired state remained present after bounded stop")
+        if _current_payload_closure(pointer, uid=uid) != old_closure:
+            raise CutoverError("payload pointer changed before activation authority")
+        metadata["phase"] = "OLD_GENERATION_STOPPED"
+        _atomic_json(transaction_dir / "metadata.json", metadata)
+        _inject(failures, "after_old_generation_stop")
+
+        payloads_root = _payloads_root(state_dir)
+        if payloads_root.is_symlink() or (payloads_root.exists() and not payloads_root.is_dir()):
+            raise CutoverError("canonical payload store is unsafe")
+        payloads_root.mkdir(parents=True, exist_ok=True)
+        final_payload = payloads_root / new_closure
+        if final_payload.exists() or final_payload.is_symlink():
+            _validate_payload_for_substrate(final_payload, substrate)
+        else:
+            os.replace(staged_payload, final_payload)
+            metadata["payload"] = {"closure": new_closure, "created": True}
+            _atomic_json(transaction_dir / "metadata.json", metadata)
+        _validate_payload_for_substrate(final_payload, substrate)
+        metadata["phase"] = "PAYLOAD_PUBLISHED"
+        _atomic_json(transaction_dir / "metadata.json", metadata)
+        _inject(failures, "after_payload_publish")
+
+        _write_payload_pointer_atomic(pointer, new_closure, uid=uid)
+        metadata["phase"] = "POINTER_SWITCHED"
+        _atomic_json(transaction_dir / "metadata.json", metadata)
+        _inject(failures, "after_pointer_switch")
+
+        if desired_before:
+            _run_runtime_lifecycle(target_app, "start")
+        if _current_payload_closure(pointer, uid=uid) != new_closure:
+            raise CutoverError("payload pointer did not remain on the validated new release")
+        _validate_payload_for_substrate(final_payload, substrate)
+        _validate_payload_update_witnesses(witnesses, target_app, state_dir, current_plist)
+        metadata["phase"] = "VALIDATED"
+        _atomic_json(transaction_dir / "metadata.json", metadata)
+        shutil.rmtree(transaction_dir)
+        return {"status": "ACTIVATED", "payload_closure": new_closure}
+    except Exception as exc:
+        if created_transaction and (transaction_dir / "metadata.json").is_file():
+            try:
+                metadata = _read_transaction_metadata_unversioned(transaction_dir)
+                _rollback_payload_update(
+                    transaction_dir,
+                    target_app,
+                    metadata,
+                    launchctl=launchctl,
+                    uid=uid,
+                )
+                shutil.rmtree(transaction_dir)
+            except Exception as rollback_exc:
+                try:
+                    partial = _read_transaction_metadata_unversioned(transaction_dir)
+                    partial["status"] = "PARTIAL"
+                    partial["last_error"] = "payload rollback incomplete: " + str(rollback_exc)
+                    _atomic_json(transaction_dir / "metadata.json", partial)
+                except Exception:
+                    pass
+                raise CutoverError(
+                    f"payload activation failed and rollback incomplete: {rollback_exc}"
+                ) from exc
+            raise CutoverError(
+                f"payload activation failed; previous payload restored: {exc}"
+            ) from exc
+        if created_transaction and transaction_dir.exists():
+            shutil.rmtree(transaction_dir)
+        if isinstance(exc, (CutoverError, provenance.PackageProvenanceError)):
+            raise CutoverError(str(exc)) from exc
+        raise
 
 
 def _cutover_zero_cost_candidate(
@@ -2561,6 +2882,17 @@ def recover_partial_transaction(
 ) -> dict[str, object]:
     failures = set(fail_stages or ())
     raw = _read_transaction_metadata_unversioned(transaction_dir)
+    if raw.get("schema") == PAYLOAD_UPDATE_TRANSACTION_SCHEMA:
+        if raw.get("kind") != "payload-update" or raw.get("status") != "PARTIAL":
+            raise CutoverError("partial recovery requires a PARTIAL payload-update transaction")
+        rollback_transaction(
+            transaction_dir,
+            target_app,
+            launchctl=launchctl,
+            uid=uid,
+            fail_stages=failures,
+        )
+        return {"status": "RECOVERED"}
     if raw.get("schema") == ZERO_COST_TRANSACTION_SCHEMA:
         if raw.get("kind") != "zero-cost" or raw.get("status") != "PARTIAL":
             raise CutoverError("partial recovery requires a PARTIAL zero-cost cutover transaction")
@@ -2792,6 +3124,11 @@ def main() -> int:
     cutover.add_argument("--home", type=Path, default=Path.home())
     cutover.add_argument("--launchctl", type=Path, required=True)
     cutover.add_argument("--uid", type=int, default=os.getuid())
+    activate = sub.add_parser("activate-payload")
+    activate.add_argument("payload_release", type=Path)
+    activate.add_argument("--home", type=Path, default=Path.home())
+    activate.add_argument("--launchctl", type=Path, required=True)
+    activate.add_argument("--uid", type=int, default=os.getuid())
     commit = sub.add_parser("commit")
     commit.add_argument("--home", type=Path, default=Path.home())
     resume = sub.add_parser("resume")
@@ -2819,6 +3156,16 @@ def main() -> int:
                 target_app=target_app,
                 ui_plist=ui_plist,
                 runtime_plist=runtime_plist,
+                state_dir=state_dir,
+                transaction_dir=transaction_dir,
+                home=args.home,
+                launchctl=args.launchctl,
+                uid=args.uid,
+            )
+        elif args.command == "activate-payload":
+            result = activate_payload_release(
+                args.payload_release,
+                target_app=target_app,
                 state_dir=state_dir,
                 transaction_dir=transaction_dir,
                 home=args.home,

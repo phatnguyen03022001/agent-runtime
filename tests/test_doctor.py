@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
 import plistlib
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -56,21 +58,23 @@ def make_installed_fixture(home: Path) -> Path:
     app = home / "Applications" / "Agent Runtime.app"
     resources = app / "Contents" / "Resources"
     runtime = resources / "runtime"
-    runtime_package = runtime / "agent_runtime"
     macos = app / "Contents" / "MacOS"
-    runtime_package.mkdir(parents=True)
+    python = runtime / ".venv" / "bin" / "python"
+    python.parent.mkdir(parents=True)
     macos.mkdir(parents=True)
 
     (runtime / "start.sh").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    (runtime_package / "server.py").write_text("print('ok')\n", encoding="utf-8")
+    (runtime / "start.sh").chmod(0o755)
+    python.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    python.chmod(0o755)
     for name in (
         "AgentRuntimeMenuBar",
         "AgentRuntimeRuntimeService",
         "AgentRuntimeScreenCapture",
     ):
-        path = macos / name
-        path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-        path.chmod(0o755)
+        executable = macos / name
+        executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        executable.chmod(0o755)
 
     info = {
         "CFBundleIdentifier": doctor.package_provenance.OWNER,
@@ -78,13 +82,42 @@ def make_installed_fixture(home: Path) -> Path:
         "CFBundleShortVersionString": RUNTIME_VERSION,
     }
     (app / "Contents" / "Info.plist").write_bytes(plistlib.dumps(info))
-    doctor.package_provenance.write_manifest(
+
+    surface_blob = ("\n".join(doctor.ADVERTISED_TOOL_NAMES) + "\n").encode("utf-8")
+    surface_sha = hashlib.sha256(surface_blob).hexdigest()
+    python_major_minor = f"{sys.version_info.major}.{sys.version_info.minor}"
+    lock_sha = "c" * 64
+    doctor.package_provenance.write_substrate_manifest(
         runtime,
         resources / "runtime-manifest.json",
         "a" * 40,
         "b" * 40,
-        "c" * 64,
+        lock_sha,
+        python_major_minor=python_major_minor,
+        public_tool_count=20,
+        public_surface_sha256=surface_sha,
     )
+
+    source_package = home / "payload-source" / "agent_runtime"
+    source_package.mkdir(parents=True)
+    for source in (ROOT / "agent_runtime").iterdir():
+        if source.is_file() and source.suffix == ".py":
+            shutil.copy2(source, source_package / source.name)
+    state_dir = home / "Library" / "Application Support" / "Agent Runtime"
+    published = doctor.package_provenance.publish_payload_release(
+        source_package,
+        state_dir / "payloads",
+        revision="d" * 40,
+        tree="e" * 40,
+        requirements_lock_sha256=lock_sha,
+        python_major_minor=python_major_minor,
+        public_tool_count=20,
+        public_surface_sha256=surface_sha,
+    )
+    pointer = state_dir / "current-payload"
+    pointer.write_text(str(published["content_closure"]) + "\n", encoding="ascii")
+    pointer.chmod(0o600)
+    doctor.candidate_cutover._materialize_current_launchagent(home, uid=os.getuid())
     return app
 
 
@@ -246,57 +279,34 @@ class DoctorLocalStateTests(unittest.TestCase):
             self.assertEqual(cutover.status, "pass")
             self.assertFalse(cutover.evidence["transaction_present"])
 
-    def test_valid_installed_package_uses_existing_provenance_authority(self) -> None:
+    def test_valid_installed_package_uses_zero_cost_substrate_and_external_payload(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             home = Path(raw)
             app = make_installed_fixture(home)
-            identity = {
-                "team_identifier": "TEAM",
-                "main_executable": doctor.package_provenance.MAIN_EXECUTABLE_RELATIVE,
-                "runtime_service_executable": doctor.package_provenance.RUNTIME_SERVICE_EXECUTABLE_RELATIVE,
-            }
-            with patch.object(
-                doctor.package_provenance,
-                "validate_manifest",
-                side_effect=AssertionError("full payload walk attempted"),
-            ):
+            with patch.object(doctor.package_provenance, "_verify_codesign", return_value=None):
                 with patch.object(
                     doctor.package_provenance,
-                    "responsible_code_identity",
-                    return_value=identity,
-                ) as responsible:
-                    with patch.object(
-                        doctor.package_provenance,
-                        "_verify_codesign",
-                        return_value=None,
-                    ) as codesign:
-                        check = doctor._installed_package_check(app)
+                    "zero_cost_responsible_code_identity",
+                    return_value={"signing_mode": "adhoc", "team_identifier": None, "responsible_code": {}},
+                ):
+                    check = doctor._installed_package_check(app)
             self.assertEqual(check.status, "pass")
-            self.assertEqual(check.evidence["runtime_revision"], "a" * 40)
+            self.assertEqual(check.evidence["substrate_revision"], "a" * 40)
             self.assertEqual(check.evidence["git_tree"], "b" * 40)
-            responsible.assert_called_once_with(app)
-            codesign.assert_called_once_with(app)
+            self.assertEqual(check.evidence["payload_revision"], "d" * 40)
+            self.assertIsNone(check.evidence["team_identifier"])
 
-    def test_exact_legacy_schema1_installed_package_remains_valid_during_schema2_migration(self) -> None:
+    def test_embedded_first_party_source_is_rejected_from_immutable_substrate(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             home = Path(raw)
             app = make_installed_fixture(home)
-            manifest_path = app / "Contents" / "Resources" / "runtime-manifest.json"
-            manifest = json.loads(manifest_path.read_text())
-            manifest["schema"] = doctor.package_provenance.LEGACY_SCHEMA
-            manifest.pop("service_management_contract")
-            manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
-            identity = {
-                "team_identifier": "TEAM",
-                "main_executable": doctor.package_provenance.MAIN_EXECUTABLE_RELATIVE,
-                "runtime_service_executable": doctor.package_provenance.RUNTIME_SERVICE_EXECUTABLE_RELATIVE,
-            }
-            with patch.object(doctor.package_provenance, "responsible_code_identity", return_value=identity):
-                with patch.object(doctor.package_provenance, "_verify_codesign", return_value=None):
-                    check = doctor._installed_package_check(app)
-            self.assertEqual(check.status, "pass")
-            self.assertEqual(check.reason_code, "OK")
-            self.assertEqual(check.evidence["runtime_revision"], "a" * 40)
+            embedded = app / "Contents" / "Resources" / "runtime" / "agent_runtime"
+            embedded.mkdir()
+            (embedded / "server.py").write_text("print('forbidden')\n")
+            with patch.object(doctor.package_provenance, "_verify_codesign", return_value=None):
+                check = doctor._installed_package_check(app)
+            self.assertEqual(check.status, "fail")
+            self.assertEqual(check.reason_code, "INSTALLED_SUBSTRATE_INVALID")
 
     def test_foreign_or_malformed_installed_package_fails(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -308,38 +318,47 @@ class DoctorLocalStateTests(unittest.TestCase):
             info_path.write_bytes(plistlib.dumps(info))
             check = doctor._installed_package_check(app)
             self.assertEqual(check.status, "fail")
-            self.assertEqual(check.reason_code, "INSTALLED_PACKAGE_INVALID")
+            self.assertEqual(check.reason_code, "INSTALLED_SUBSTRATE_INVALID")
 
-    def test_service_registration_uses_status_only_and_classifies_states(self) -> None:
+    def test_missing_selected_payload_has_actionable_reason(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             home = Path(raw)
-            app = home / "Applications" / "Agent Runtime.app"
-            app.mkdir(parents=True)
+            app = make_installed_fixture(home)
+            state = home / "Library" / "Application Support" / "Agent Runtime"
+            closure = (state / "current-payload").read_text().strip()
+            release = state / "payloads" / closure
+            for directory in (release / "agent_runtime", release):
+                directory.chmod(0o755)
+            for child in (release / "agent_runtime").iterdir():
+                child.chmod(0o644)
+            (release / doctor.package_provenance.PAYLOAD_MANIFEST_NAME).chmod(0o644)
+            shutil.rmtree(release)
+            with patch.object(doctor.package_provenance, "_verify_codesign", return_value=None):
+                with patch.object(
+                    doctor.package_provenance,
+                    "zero_cost_responsible_code_identity",
+                    return_value={"signing_mode": "adhoc", "team_identifier": None, "responsible_code": {}},
+                ):
+                    check = doctor._installed_package_check(app)
+            self.assertEqual(check.status, "fail")
+            self.assertEqual(check.reason_code, "PAYLOAD_RELEASE_MISSING")
 
-            cases = (
-                ({"main_app": "enabled", "runtime_agent": "enabled"}, "pass", "OK"),
-                (
-                    {"main_app": "enabled", "runtime_agent": "requires-approval"},
-                    "warn",
-                    "SERVICE_APPROVAL_REQUIRED",
-                ),
-                (
-                    {"main_app": "not-registered", "runtime_agent": "enabled"},
-                    "warn",
-                    "SERVICE_NOT_REGISTERED",
-                ),
-            )
-            for state, status, reason in cases:
-                with self.subTest(state=state):
-                    with patch.object(
-                        doctor.candidate_cutover,
-                        "_service_management",
-                        return_value=state,
-                    ) as service:
-                        check = doctor._service_registration_check(app)
-                    self.assertEqual(check.status, status)
-                    self.assertEqual(check.reason_code, reason)
-                    service.assert_called_once_with(app, "status")
+    def test_lifecycle_ownership_validates_exact_current_launchagent_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            app = make_installed_fixture(home)
+            check = doctor._service_registration_check(app)
+            self.assertEqual(check.status, "pass")
+            self.assertEqual(check.reason_code, "OK")
+            self.assertEqual(check.evidence["contract"], "launchagent-v1")
+
+            plist = doctor.candidate_cutover._current_launchagent_path(home)
+            value = plistlib.loads(plist.read_bytes())
+            value["Label"] = "com.example.foreign"
+            plist.write_bytes(plistlib.dumps(value))
+            failed = doctor._service_registration_check(app)
+            self.assertEqual(failed.status, "fail")
+            self.assertEqual(failed.reason_code, "LIFECYCLE_OWNERSHIP_INVALID")
 
     def test_cutover_schema5_valid_and_contradictory_states(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

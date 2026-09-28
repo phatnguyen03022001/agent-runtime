@@ -6,6 +6,7 @@ import json
 import os
 import plistlib
 import re
+import stat
 import subprocess
 import sys
 from collections.abc import Mapping
@@ -432,96 +433,151 @@ def _installed_package_check(app: Path) -> DoctorCheck:
         return _check(
             "installed_package_identity",
             "fail",
-            "INSTALLED_PACKAGE_INVALID",
+            "INSTALLED_SUBSTRATE_INVALID",
             "Canonical installed app path is unsafe.",
         )
 
+    home = app.parent.parent
+    state_dir = home / "Library" / "Application Support" / "Agent Runtime"
     info_path = app / "Contents" / "Info.plist"
+    runtime = app / "Contents" / "Resources" / "runtime"
     manifest_path = app / "Contents" / "Resources" / "runtime-manifest.json"
-    runtime_path = app / "Contents" / "Resources" / "runtime"
     try:
-        if (
-            info_path.is_symlink()
-            or not info_path.is_file()
-            or info_path.stat().st_size > _MAX_PACKAGE_METADATA_BYTES
-        ):
+        if info_path.is_symlink() or not info_path.is_file():
             raise ValueError("unsafe Info.plist")
         info = plistlib.loads(info_path.read_bytes())
         if (
             info.get("CFBundleIdentifier") != package_provenance.OWNER
             or info.get("CFBundleExecutable") != "AgentRuntimeMenuBar"
-            or info.get("CFBundleShortVersionString") != RUNTIME_VERSION
+            or not isinstance(info.get("CFBundleShortVersionString"), str)
         ):
             raise ValueError("foreign package identity")
-        if (
-            manifest_path.is_symlink()
-            or not manifest_path.is_file()
-            or manifest_path.stat().st_size > _MAX_PACKAGE_METADATA_BYTES
-        ):
-            raise ValueError("unsafe runtime manifest")
-        manifest = package_provenance._load_manifest(manifest_path)
-        revision = manifest.get("runtime_revision")
-        tree = manifest.get("git_tree")
-        lock_sha = manifest.get("requirements_lock_sha256")
-        payload_sha = manifest.get("payload_sha256")
-        files = manifest.get("files")
-        if (
-            manifest.get("schema") not in {
-                package_provenance.LEGACY_SCHEMA,
-                package_provenance.SCHEMA,
-            }
-            or manifest.get("owner") != package_provenance.OWNER
-            or manifest.get("entrypoint") != "runtime/start.sh"
-            or manifest.get("python") != "runtime/.venv/bin/python"
-            or manifest.get("mcp_package") != "runtime/agent_runtime"
-            or not isinstance(revision, str)
-            or _HEX40.fullmatch(revision) is None
-            or not isinstance(tree, str)
-            or _HEX40.fullmatch(tree) is None
-            or not isinstance(lock_sha, str)
-            or _HEX64.fullmatch(lock_sha) is None
-            or not isinstance(payload_sha, str)
-            or _HEX64.fullmatch(payload_sha) is None
-            or not isinstance(files, list)
-            or runtime_path.is_symlink()
-            or not runtime_path.is_dir()
-        ):
-            raise ValueError("runtime manifest identity mismatch")
-        for entry in files:
-            if (
-                not isinstance(entry, dict)
-                or set(entry) != package_provenance.ENTRY_KEYS
-                or not isinstance(entry.get("path"), str)
-                or not isinstance(entry.get("size"), int)
-                or entry["size"] < 0
-                or not isinstance(entry.get("sha256"), str)
-                or _HEX64.fullmatch(entry["sha256"]) is None
-            ):
-                raise ValueError("runtime manifest file metadata mismatch")
-        package_provenance.responsible_code_identity(app)
+        manifest = package_provenance._load_substrate_manifest(manifest_path)
+        revision = str(manifest["runtime_revision"])
+        tree = str(manifest["git_tree"])
+        lock_sha = str(manifest["requirements_lock_sha256"])
+        package_provenance.validate_substrate_manifest(
+            runtime,
+            manifest_path,
+            revision,
+            tree,
+            lock_sha,
+        )
         package_provenance._verify_codesign(app)
+        package_provenance.zero_cost_responsible_code_identity(app)
     except Exception:
         return _check(
             "installed_package_identity",
             "fail",
-            "INSTALLED_PACKAGE_INVALID",
-            "Installed Agent Runtime package identity is invalid.",
+            "INSTALLED_SUBSTRATE_INVALID",
+            "Installed immutable Runtime substrate or ad-hoc responsible-code identity is invalid.",
+        )
+
+    pointer = state_dir / "current-payload"
+    try:
+        pointer_info = pointer.lstat()
+    except OSError:
+        return _check(
+            "installed_package_identity",
+            "fail",
+            "PAYLOAD_POINTER_MISSING",
+            "Canonical current-payload pointer is missing.",
+        )
+    if (
+        pointer.is_symlink()
+        or not pointer.is_file()
+        or pointer_info.st_uid != os.getuid()
+        or stat.S_IMODE(pointer_info.st_mode) != 0o600
+    ):
+        return _check(
+            "installed_package_identity",
+            "fail",
+            "PAYLOAD_POINTER_INVALID",
+            "Canonical current-payload pointer ownership, mode, or file type is invalid.",
+        )
+    try:
+        raw_pointer = pointer.read_text(encoding="ascii")
+    except (OSError, UnicodeError):
+        raw_pointer = ""
+    match = re.fullmatch(r"([0-9a-f]{64})\n", raw_pointer)
+    if match is None:
+        return _check(
+            "installed_package_identity",
+            "fail",
+            "PAYLOAD_POINTER_INVALID",
+            "Canonical current-payload pointer content is malformed.",
+        )
+    closure = match.group(1)
+    release = state_dir / "payloads" / closure
+    if release.is_symlink() or not release.is_dir():
+        return _check(
+            "installed_package_identity",
+            "fail",
+            "PAYLOAD_RELEASE_MISSING",
+            "Selected external Runtime payload release is missing or unsafe.",
+            {"payload_closure": closure},
+        )
+
+    try:
+        payload_manifest = package_provenance._load_payload_manifest(
+            release / package_provenance.PAYLOAD_MANIFEST_NAME
+        )
+    except Exception:
+        return _check(
+            "installed_package_identity",
+            "fail",
+            "PAYLOAD_RELEASE_INVALID",
+            "Selected external Runtime payload manifest is malformed or unsafe.",
+            {"payload_closure": closure},
+        )
+    compatible = (
+        payload_manifest.get("lifecycle_contract") == manifest.get("lifecycle_contract")
+        and payload_manifest.get("payload_contract") == manifest.get("payload_contract")
+        and payload_manifest.get("requirements_lock_sha256") == manifest.get("requirements_lock_sha256")
+        and payload_manifest.get("required_python_major_minor") == manifest.get("required_python_major_minor")
+        and payload_manifest.get("expected_public_tool_count") == manifest.get("expected_public_tool_count")
+        and payload_manifest.get("expected_public_surface_sha256") == manifest.get("expected_public_surface_sha256")
+    )
+    if not compatible:
+        return _check(
+            "installed_package_identity",
+            "fail",
+            "PAYLOAD_SUBSTRATE_INCOMPATIBLE",
+            "Selected external Runtime payload contract is incompatible with the immutable substrate.",
+            {"payload_closure": closure},
+        )
+    try:
+        payload = package_provenance.validate_payload_release(
+            release,
+            expected_closure=closure,
+            expected_requirements_lock_sha256=str(manifest["requirements_lock_sha256"]),
+            expected_python_major_minor=str(manifest["required_python_major_minor"]),
+            expected_public_tool_count=int(manifest["expected_public_tool_count"]),
+            expected_public_surface_sha256=str(manifest["expected_public_surface_sha256"]),
+        )
+    except Exception:
+        return _check(
+            "installed_package_identity",
+            "fail",
+            "PAYLOAD_RELEASE_INVALID",
+            "Selected external Runtime payload bytes do not match their immutable manifest.",
+            {"payload_closure": closure},
         )
 
     return _check(
         "installed_package_identity",
         "pass",
         "OK",
-        "Installed Agent Runtime package identity is valid.",
+        "Immutable substrate and selected external Runtime payload are valid.",
         {
             "bundle_identifier": package_provenance.OWNER,
-            "runtime_version": RUNTIME_VERSION,
-            "runtime_revision": revision,
+            "substrate_revision": revision,
             "git_tree": tree,
-            "codesign_consistent": True,
+            "payload_closure": closure,
+            "payload_revision": payload["source_revision"],
+            "team_identifier": None,
         },
     )
-
 
 def _service_registration_check(app: Path) -> DoctorCheck:
     if not app.exists() and not app.is_symlink():
@@ -529,47 +585,35 @@ def _service_registration_check(app: Path) -> DoctorCheck:
             "service_registration",
             "not_applicable",
             "APP_NOT_INSTALLED",
-            "Service registration is not applicable without the canonical app.",
+            "Lifecycle ownership is not applicable without the canonical app.",
         )
+    home = app.parent.parent
+    plist = candidate_cutover._current_launchagent_path(home)
     try:
-        state = candidate_cutover._service_management(app, "status")
+        value = candidate_cutover._validate_current_launchagent(plist, home, uid=os.getuid())
     except Exception:
         return _check(
             "service_registration",
             "fail",
-            "SERVICE_STATUS_INVALID",
-            "Canonical read-only ServiceManagement status could not be validated.",
-        )
-    main_state = state.get("main_app")
-    runtime_state = state.get("runtime_agent")
-    evidence = {
-        "main_app": main_state,
-        "runtime_agent": runtime_state,
-    }
-    if main_state == "enabled" and runtime_state == "enabled":
-        return _check(
-            "service_registration",
-            "pass",
-            "OK",
-            "Agent Runtime services are registered and enabled.",
-            evidence,
-        )
-    if "requires-approval" in {main_state, runtime_state}:
-        return _check(
-            "service_registration",
-            "warn",
-            "SERVICE_APPROVAL_REQUIRED",
-            "Agent Runtime service registration requires user approval.",
-            evidence,
+            "LIFECYCLE_OWNERSHIP_INVALID",
+            "Current per-user LaunchAgent ownership is missing, foreign, or unsafe.",
+            {
+                "contract": "launchagent-v1",
+                "label": candidate_cutover.MODERN_RUNTIME_LABEL,
+                "plist_exact": False,
+            },
         )
     return _check(
         "service_registration",
-        "warn",
-        "SERVICE_NOT_REGISTERED",
-        "One or more Agent Runtime services are not registered.",
-        evidence,
+        "pass",
+        "OK",
+        "Current per-user LaunchAgent owns the exact Runtime supervisor helper contract.",
+        {
+            "contract": "launchagent-v1",
+            "label": candidate_cutover.MODERN_RUNTIME_LABEL,
+            "plist_exact": bool(value),
+        },
     )
-
 
 def _cutover_identity_check(transaction_dir: Path, app: Path) -> DoctorCheck:
     if not transaction_dir.exists() and not transaction_dir.is_symlink():
@@ -577,7 +621,7 @@ def _cutover_identity_check(transaction_dir: Path, app: Path) -> DoctorCheck:
             "cutover_identity",
             "pass",
             "OK",
-            "No cutover transaction is pending.",
+            "No lifecycle transaction is pending.",
             {"transaction_present": False},
         )
     if transaction_dir.is_symlink() or not transaction_dir.is_dir():
@@ -585,44 +629,75 @@ def _cutover_identity_check(transaction_dir: Path, app: Path) -> DoctorCheck:
             "cutover_identity",
             "fail",
             "CUTOVER_STATE_INVALID",
-            "Canonical cutover transaction path is unsafe.",
+            "Canonical lifecycle transaction path is unsafe.",
         )
+
     try:
-        metadata = candidate_cutover._load_metadata(transaction_dir)
-        phase = candidate_cutover._validate_transaction_phase(metadata.get("phase"))
-        status = metadata.get("status")
-        if status not in {"PREPARED", "AWAITING_APPROVAL", "PENDING", "PARTIAL"}:
-            raise ValueError("unknown transaction status")
-        paths = metadata.get("paths")
+        raw = candidate_cutover._read_transaction_metadata_unversioned(transaction_dir)
+        schema = raw.get("schema")
+        status = raw.get("status")
+        phase = raw.get("phase")
+        paths = raw.get("paths")
         if not isinstance(paths, dict) or Path(str(paths.get("target_app", ""))) != app:
             raise ValueError("target path contradiction")
-        if metadata.get("modern_runtime_label") != candidate_cutover.MODERN_RUNTIME_LABEL:
-            raise ValueError("runtime label contradiction")
-        if status == "PREPARED" and phase != "PRE_SWAP":
-            raise ValueError("prepared phase contradiction")
-        if status in {"AWAITING_APPROVAL", "PENDING"} and phase != "APP_SWAPPED":
-            raise ValueError("post-swap phase contradiction")
+        if schema == candidate_cutover.ZERO_COST_TRANSACTION_SCHEMA:
+            if raw.get("kind") != "zero-cost":
+                raise ValueError("zero-cost kind contradiction")
+            if status not in {"PREPARED", "PENDING", "PARTIAL"}:
+                raise ValueError("zero-cost status contradiction")
+            if phase not in {"PRE_SWAP", "APP_SWAPPED"}:
+                raise ValueError("zero-cost phase contradiction")
+            if status == "PREPARED" and phase != "PRE_SWAP":
+                raise ValueError("zero-cost prepared phase contradiction")
+            if status == "PENDING" and phase != "APP_SWAPPED":
+                raise ValueError("zero-cost pending phase contradiction")
+            kind = "zero-cost"
+        elif schema == candidate_cutover.PAYLOAD_UPDATE_TRANSACTION_SCHEMA:
+            if raw.get("kind") != "payload-update":
+                raise ValueError("payload-update kind contradiction")
+            if status not in {"RUNNING", "PARTIAL"}:
+                raise ValueError("payload-update status contradiction")
+            if phase not in {
+                "PREPARED",
+                "OLD_GENERATION_STOPPED",
+                "PAYLOAD_PUBLISHED",
+                "POINTER_SWITCHED",
+                "VALIDATED",
+            }:
+                raise ValueError("payload-update phase contradiction")
+            kind = "payload-update"
+        else:
+            metadata = candidate_cutover._load_metadata(transaction_dir)
+            phase = candidate_cutover._validate_transaction_phase(metadata.get("phase"))
+            status = metadata.get("status")
+            if status not in {"PREPARED", "AWAITING_APPROVAL", "PENDING", "PARTIAL"}:
+                raise ValueError("legacy transaction status contradiction")
+            paths = metadata.get("paths")
+            if not isinstance(paths, dict) or Path(str(paths.get("target_app", ""))) != app:
+                raise ValueError("legacy target path contradiction")
+            schema = metadata.get("schema")
+            kind = "legacy-servicemanagement"
     except Exception:
         return _check(
             "cutover_identity",
             "fail",
             "CUTOVER_STATE_INVALID",
-            "Present cutover transaction metadata is malformed or contradictory.",
+            "Present lifecycle transaction metadata is malformed or contradictory.",
             {"transaction_present": True},
         )
     return _check(
         "cutover_identity",
         "warn",
         "CUTOVER_TRANSACTION_PRESENT",
-        "A recognized cutover transaction is present.",
+        "A recognized lifecycle transaction is present.",
         {
             "transaction_present": True,
-            "schema": candidate_cutover.TRANSACTION_SCHEMA,
+            "schema": schema,
+            "kind": kind,
             "status": status,
             "phase": phase,
         },
     )
-
 
 def _governance_protection_check() -> DoctorCheck:
     descriptors = capability_descriptors()

@@ -357,8 +357,8 @@ final class PresentationTests: XCTestCase {
         XCTAssertFalse(FirstRunDoctorGate.postCommitIsHealthy(from: malformedHealthy))
     }
 
-    func testFirstRunDoctorGateSurfacesApprovalAndPartialRecoveryWithoutCommit() throws {
-        let approval = try doctorReport(
+    func testFirstRunDoctorGateRejectsObsoleteApprovalStateAndSurfacesPartialRecovery() throws {
+        let obsoleteApproval = try doctorReport(
             status: "degraded",
             checks: [
                 check("service_registration", "warn", "SERVICE_APPROVAL_REQUIRED"),
@@ -370,7 +370,7 @@ final class PresentationTests: XCTestCase {
                 ),
             ]
         )
-        XCTAssertEqual(FirstRunDoctorGate.preCommitDecision(from: approval), .approvalRequired)
+        XCTAssertEqual(FirstRunDoctorGate.preCommitDecision(from: obsoleteApproval), .blocked)
 
         let partial = try doctorReport(
             status: "degraded",
@@ -410,7 +410,10 @@ final class PresentationTests: XCTestCase {
         ])
         let pending = FirstRunSetupOrchestrator(paths: paths, runner: pendingRunner)
 
-        XCTAssertEqual(pending.perform(.resume), .approvalRequired)
+        XCTAssertEqual(
+            pending.perform(.resume),
+            .failure("Setup state is not safe to finalize. See recovery guidance for the bounded next action.")
+        )
         XCTAssertEqual(pendingRunner.invocations.first?.arguments, [paths.installer.path, "--resume-cutover"])
         XCTAssertFalse(
             pendingRunner.invocations.contains(where: { $0.arguments.contains("--commit-cutover") })
@@ -648,19 +651,17 @@ final class PresentationTests: XCTestCase {
     }
 
     @MainActor
-    func testApprovalRequiredOffersNativeSettingsHandoffAndKeepsResumeBounded() throws {
-        var handoffCount = 0
+    func testCurrentFirstRunHasNoBackgroundActivityApprovalHandoff() throws {
         var recoveryActions: [FirstRunRecoveryAction] = []
         var completionCount = 0
         let controller = FirstRunSetupController(
             mode: .fresh,
-            begin: { _ in .approvalRequired },
+            begin: { _ in .actionRequired("A partial cutover was detected.", .recover) },
             activateConfigured: { _ in .failure("not called") },
             performAction: { action in
                 recoveryActions.append(action)
-                return .approvalRequired
+                return .failure("recovery complete")
             },
-            openBackgroundActivitySettings: { handoffCount += 1 },
             completed: { completionCount += 1 }
         )
         controller.selectedWorkspace = URL(fileURLWithPath: "/")
@@ -668,28 +669,16 @@ final class PresentationTests: XCTestCase {
 
         try XCTUnwrap(button(titled: "Set Up", in: controller.view)).performClick(nil)
 
-        XCTAssertTrue(
+        XCTAssertFalse(
             labels(in: controller.view).contains(where: {
-                $0.contains("Background Activity") && $0.contains("macOS")
+                $0.contains("Background Activity") || $0.contains("ServiceManagement")
             })
         )
-        let openSettings = try XCTUnwrap(
-            button(titled: "Open Background Activity Settings…", in: controller.view)
-        )
-        let continueSetup = try XCTUnwrap(
-            button(titled: "Continue After Approval", in: controller.view)
-        )
-
-        openSettings.performClick(nil)
-        XCTAssertEqual(handoffCount, 1)
-        XCTAssertTrue(recoveryActions.isEmpty)
+        XCTAssertNil(button(titled: "Open Background Activity Settings…", in: controller.view))
+        let recover = try XCTUnwrap(button(titled: "Recover", in: controller.view))
+        recover.performClick(nil)
+        XCTAssertEqual(recoveryActions, [.recover])
         XCTAssertEqual(completionCount, 0)
-
-        continueSetup.performClick(nil)
-        XCTAssertEqual(recoveryActions, [.resume])
-        XCTAssertEqual(handoffCount, 1)
-        XCTAssertEqual(completionCount, 0)
-        XCTAssertNotNil(button(titled: "Open Background Activity Settings…", in: controller.view))
     }
 
     @MainActor

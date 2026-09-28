@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import shutil
 import stat
 import subprocess
@@ -367,13 +368,20 @@ def collect_report(
     transaction_valid = True
     if transaction_present:
         try:
-            candidate_cutover._load_metadata(
-                transaction,
-                allowed_schemas={
-                    candidate_cutover.SCHEMA4_ROLLBACK_SCHEMA,
-                    candidate_cutover.TRANSACTION_SCHEMA,
-                },
-            )
+            raw_transaction = candidate_cutover._read_transaction_metadata_unversioned(transaction)
+            schema = raw_transaction.get("schema")
+            if schema == candidate_cutover.ZERO_COST_TRANSACTION_SCHEMA:
+                transaction_valid = raw_transaction.get("kind") == "zero-cost"
+            elif schema == candidate_cutover.PAYLOAD_UPDATE_TRANSACTION_SCHEMA:
+                transaction_valid = raw_transaction.get("kind") == "payload-update"
+            else:
+                candidate_cutover._load_metadata(
+                    transaction,
+                    allowed_schemas={
+                        candidate_cutover.SCHEMA4_ROLLBACK_SCHEMA,
+                        candidate_cutover.TRANSACTION_SCHEMA,
+                    },
+                )
         except Exception:
             transaction_valid = False
 
@@ -408,62 +416,59 @@ def collect_report(
         )
     )
 
-    service_status = "pass"
-    service_reason = "OK"
-    service_message = "No installed app requires ServiceManagement inspection."
-    service_action = None
-    service_evidence: dict[str, object] = {"app_present": app_present}
+    lifecycle_status = "pass"
+    lifecycle_reason = "OK"
+    lifecycle_message = "No installed lifecycle ownership requires migration."
+    lifecycle_action = None
+    lifecycle_evidence: dict[str, object] = {"app_present": app_present}
     if app_safe and app_present:
+        current_plist = candidate_cutover._current_launchagent_path(home)
         try:
-            service = candidate_cutover._service_management(app, "status")
-            main_state = service.get("main_app")
-            runtime_state = service.get("runtime_agent")
-            service_evidence = {
-                "app_present": True,
-                "main_app": main_state,
-                "runtime_agent": runtime_state,
-            }
-            if "requires-approval" in {main_state, runtime_state}:
-                service_status = "fail"
-                service_reason = "SERVICE_APPROVAL_REQUIRED"
-                service_message = "Existing ServiceManagement registration requires operator approval."
-                service_action = ACTION_HUMAN
-            elif main_state == "enabled" and runtime_state == "enabled":
-                service_message = "Existing ServiceManagement registration is enabled."
-            elif main_state in {"not-registered", "not-found"} or runtime_state in {"not-registered", "not-found"}:
-                service_status = "fail"
-                service_reason = "SERVICE_NOT_REGISTERED"
-                service_message = "Existing installed app has incomplete ServiceManagement registration."
-                service_action = ACTION_STOP
+            if current_plist.exists() or current_plist.is_symlink():
+                candidate_cutover._validate_current_launchagent(current_plist, home, uid=os.getuid())
+                program = candidate_cutover._loaded_service_program(
+                    Path("/bin/launchctl"),
+                    f"gui/{os.getuid()}/{candidate_cutover.MODERN_RUNTIME_LABEL}",
+                )
+                expected = candidate_cutover._current_runtime_helper(home)
+                if program != expected:
+                    raise RuntimeError("current LaunchAgent loaded identity mismatch")
+                lifecycle_message = "Existing current LaunchAgent ownership is exact and migration-safe."
+                lifecycle_evidence = {"app_present": True, "contract": "launchagent-v1"}
             else:
-                service_status = "fail"
-                service_reason = "SERVICE_STATUS_INVALID"
-                service_message = "Existing ServiceManagement state is not recognized."
-                service_action = ACTION_STOP
+                predecessor_contract = candidate_cutover._predecessor_service_contract(app)
+                if predecessor_contract not in {"split-v1", "aggregate-v1"}:
+                    raise RuntimeError("unsupported predecessor contract")
+                predecessor = candidate_cutover._service_management(app, "status")
+                lifecycle_message = "Recognized predecessor ServiceManagement ownership can be migrated transactionally."
+                lifecycle_evidence = {
+                    "app_present": True,
+                    "contract": predecessor_contract,
+                    "main_app": predecessor.get("main_app"),
+                    "runtime_agent": predecessor.get("runtime_agent"),
+                }
         except Exception:
-            service_status = "fail"
-            service_reason = "SERVICE_STATUS_INVALID"
-            service_message = "Existing ServiceManagement state could not be inspected safely."
-            service_action = ACTION_STOP
+            lifecycle_status = "fail"
+            lifecycle_reason = "LIFECYCLE_OWNERSHIP_INVALID"
+            lifecycle_message = "Installed lifecycle ownership is foreign, incomplete, or unsafe."
+            lifecycle_action = ACTION_STOP
     checks.append(
         _check(
-            "service_management",
-            service_status,
-            service_reason,
-            service_message,
-            action_class=service_action,
-            evidence=service_evidence,
+            "lifecycle_ownership",
+            lifecycle_status,
+            lifecycle_reason,
+            lifecycle_message,
+            action_class=lifecycle_action,
+            evidence=lifecycle_evidence,
         )
     )
 
-    signing_ready = bool(env.get("AGENT_RUNTIME_CODESIGN_IDENTITY", "").strip())
     checks.append(
         _check(
-            "signing_prerequisite",
-            "pass" if signing_ready else "fail",
-            "OK" if signing_ready else "SIGNING_IDENTITY_REQUIRED",
-            "Explicit signing identity is supplied by the operator." if signing_ready else "Set AGENT_RUNTIME_CODESIGN_IDENTITY to an explicit non-ad-hoc identity; preflight never enumerates Keychain identities.",
-            action_class=ACTION_HUMAN,
+            "zero_cost_authority",
+            "pass",
+            "OK",
+            "Zero-cost source packaging uses exact ad-hoc responsible-code identities and requires no Developer ID or notary credentials.",
         )
     )
 
@@ -541,19 +546,22 @@ def collect_prebuilt_report(
             "release_bundle",
             "pass" if bundle_ok else "fail",
             "OK" if bundle_ok else "RELEASE_BUNDLE_INVALID",
-            "Signed release bundle contains the packaged Runtime installer substrate." if bundle_ok else "Release bundle is missing required app, handoff, embedded Python, or Runtime helpers.",
+            "Zero-cost release bundle contains the immutable Runtime installer substrate." if bundle_ok else "Release bundle is missing required app, handoff, embedded Python, or Runtime helpers.",
             action_class=ACTION_STOP,
         )
     )
 
     candidate_ok = False
+    payload_release: Path | None = None
     if bundle_ok:
         try:
-            package_provenance.validate_candidate(app, handoff)
-            gatekeeper = _run(
-                ["/usr/sbin/spctl", "--assess", "--type", "execute", "--verbose=4", str(app)]
-            )
-            candidate_ok = gatekeeper.returncode == 0
+            handoff_data = package_provenance._load_zero_cost_candidate_handoff(handoff)
+            closure = handoff_data.get("initial_payload_closure")
+            if not isinstance(closure, str) or re.fullmatch(r"[0-9a-f]{64}", closure) is None:
+                raise package_provenance.PackageProvenanceError("initial payload closure is invalid")
+            payload_release = bundle_root / "payloads" / closure
+            package_provenance.validate_zero_cost_candidate(app, handoff, payload_release)
+            candidate_ok = True
         except package_provenance.PackageProvenanceError:
             candidate_ok = False
     checks.append(
@@ -561,8 +569,9 @@ def collect_prebuilt_report(
             "release_trust",
             "pass" if candidate_ok else "fail",
             "OK" if candidate_ok else "RELEASE_TRUST_INVALID",
-            "Candidate handoff, strict code signature, provenance, and Gatekeeper assessment are valid." if candidate_ok else "Release candidate failed handoff, signature, provenance, or Gatekeeper validation.",
+            "Ad-hoc responsible-code identities, zero-cost handoff, immutable substrate, and initial external payload are valid." if candidate_ok else "Zero-cost release candidate, handoff, substrate, or initial payload validation failed.",
             action_class=ACTION_STOP,
+            evidence={"payload_present": payload_release is not None and payload_release.is_dir()},
         )
     )
 

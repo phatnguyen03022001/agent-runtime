@@ -34,6 +34,7 @@ show_help() {
   cat <<'EOF'
 Usage:
   install_release.sh --workspace-root <absolute-existing-directory>
+  install_release.sh --activate-payload <payload-release-directory>
   install_release.sh --resume-cutover
   install_release.sh --commit-cutover
   install_release.sh --rollback-cutover
@@ -86,6 +87,12 @@ PY
     "$PYTHON" "$CUTOVER" cutover "$APP" "$HANDOFF" --payload-release "$PAYLOAD_RELEASE" \
       --home "$HOME" --launchctl "$(command -v launchctl)"
     echo "Prebuilt candidate is installed and pending explicit commit."
+    ;;
+  --activate-payload)
+    [[ "$#" == "2" ]] || fail "usage: install_release.sh --activate-payload <payload-release-directory>"
+    [[ -d "$2" && ! -L "$2" ]] || fail "payload release directory is missing or unsafe."
+    command -v launchctl >/dev/null 2>&1 || fail "launchctl is required for payload activation."
+    run_cutover activate-payload "$2" --home "$HOME" --launchctl "$(command -v launchctl)"
     ;;
   --commit-cutover)
     [[ "$#" == "1" ]] || fail "usage: install_release.sh --commit-cutover"
