@@ -118,7 +118,14 @@ IFS=$'\t' read -r INITIAL_PAYLOAD_CLOSURE INITIAL_PAYLOAD_RELEASE <<< "$PAYLOAD_
 [[ "$INITIAL_PAYLOAD_CLOSURE" =~ ^[0-9a-f]{64}$ && -d "$INITIAL_PAYLOAD_RELEASE" ]] \
   || { echo "PACKAGE ERROR: initial payload publication result is invalid" >&2; exit 2; }
 
-# Sign every native substrate component ad-hoc with a deterministic identifier.
+sign_adhoc() {
+  local identifier="$1"
+  shift
+  /usr/bin/codesign --force --sign - --identifier "$identifier" \
+    -r="designated => identifier \"$identifier\"" "$@" >/dev/null
+}
+
+# Sign every native substrate component ad-hoc with a deterministic identifier and requirement.
 while IFS= read -r NATIVE_CODE; do
   [[ -n "$NATIVE_CODE" ]] || continue
   if [[ "$NATIVE_CODE" == "$RUNTIME/.venv/bin/python" ]]; then
@@ -128,7 +135,7 @@ while IFS= read -r NATIVE_CODE; do
     NATIVE_DIGEST="$(printf '%s' "$RELATIVE_NATIVE" | /usr/bin/shasum -a 256 | /usr/bin/awk '{print $1}')"
     CODE_IDENTIFIER="com.picmao.agent-runtime.native.${NATIVE_DIGEST:0:24}"
   fi
-  /usr/bin/codesign --force --sign - --identifier "$CODE_IDENTIFIER" "$NATIVE_CODE" >/dev/null
+  sign_adhoc "$CODE_IDENTIFIER" "$NATIVE_CODE"
 done < <(
   find "$RUNTIME/.venv" -type f -print0 |
     while IFS= read -r -d '' candidate; do
@@ -136,9 +143,9 @@ done < <(
     done | LC_ALL=C sort
 )
 
-/usr/bin/codesign --force --sign - --identifier com.picmao.agent-runtime "$MACOS/AgentRuntimeMenuBar" >/dev/null
-/usr/bin/codesign --force --sign - --identifier com.picmao.agent-runtime.runtime-service "$MACOS/AgentRuntimeRuntimeService" >/dev/null
-/usr/bin/codesign --force --sign - --identifier com.picmao.agent-runtime.screen-capture "$MACOS/AgentRuntimeScreenCapture" >/dev/null
+sign_adhoc com.picmao.agent-runtime "$MACOS/AgentRuntimeMenuBar"
+sign_adhoc com.picmao.agent-runtime.runtime-service "$MACOS/AgentRuntimeRuntimeService"
+sign_adhoc com.picmao.agent-runtime.screen-capture "$MACOS/AgentRuntimeScreenCapture"
 
 "$PYTHON_BIN" "$SOURCE_PACKAGE_ROOT/package_provenance.py" substrate-manifest \
   "$RUNTIME" "$RESOURCES/runtime-manifest.json" \
@@ -149,7 +156,8 @@ done < <(
 /usr/bin/plutil -lint "$CONTENTS/Info.plist" >/dev/null
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$CONTENTS/Info.plist")" == "true" ]] \
   || { echo "PACKAGE ERROR: LSUIElement must be true" >&2; exit 2; }
-/usr/bin/codesign --force --sign - --identifier com.picmao.agent-runtime "$APP" >/dev/null
+/usr/bin/codesign --force --sign - --identifier com.picmao.agent-runtime "$APP" \
+  -r='designated => identifier "com.picmao.agent-runtime"' >/dev/null
 /usr/bin/codesign --verify --deep --strict "$APP"
 
 "$PYTHON_BIN" "$SOURCE_PACKAGE_ROOT/package_provenance.py" seal-zero-cost \

@@ -434,6 +434,22 @@ class PackageProvenanceTests(unittest.TestCase):
         ):
             self.assertIn(identifier, package)
 
+    def test_zero_cost_packaging_signs_every_native_code_with_explicit_identifier_requirement(self) -> None:
+        package = (ROOT / "macos" / "package_app.sh").read_text()
+        self.assertIn('/usr/bin/codesign --force --sign - --identifier "$identifier"', package)
+        self.assertIn('-r="designated => identifier \\"$identifier\\"" "$@"', package)
+        self.assertEqual(package.count('/usr/bin/codesign --force --sign -'), 2)
+        self.assertIn('CODE_IDENTIFIER="com.picmao.agent-runtime.python"', package)
+        self.assertIn('CODE_IDENTIFIER="com.picmao.agent-runtime.native.${NATIVE_DIGEST:0:24}"', package)
+        for invocation in (
+            'sign_adhoc "$CODE_IDENTIFIER" "$NATIVE_CODE"',
+            'sign_adhoc com.picmao.agent-runtime "$MACOS/AgentRuntimeMenuBar"',
+            'sign_adhoc com.picmao.agent-runtime.runtime-service "$MACOS/AgentRuntimeRuntimeService"',
+            'sign_adhoc com.picmao.agent-runtime.screen-capture "$MACOS/AgentRuntimeScreenCapture"',
+            '/usr/bin/codesign --force --sign - --identifier com.picmao.agent-runtime "$APP" \\\n  -r=\'designated => identifier "com.picmao.agent-runtime"\'',
+        ):
+            self.assertEqual(package.count(invocation), 1, invocation)
+
     def test_zero_cost_packaging_rejects_non_explicit_modes_before_build(self) -> None:
         package = ROOT / "macos" / "package_app.sh"
         env = dict(os.environ)
