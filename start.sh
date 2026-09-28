@@ -334,6 +334,14 @@ service_loaded() {
   launchctl print "$SERVICE" >/dev/null 2>&1
 }
 
+service_quiescent() {
+  local state
+  state="$(launchctl print "$SERVICE" 2>/dev/null)" || return 1
+  [[ "$state" =~ (^|$'\n')[[:space:]]*state[[:space:]]*=[[:space:]]*(not[[:space:]]running|waiting)($|$'\n') ]] \
+    || return 1
+  [[ ! "$state" =~ (^|$'\n')[[:space:]]*pid[[:space:]]*=[[:space:]]*[0-9]+($|$'\n') ]]
+}
+
 set_running() {
   mkdir -p "$STATE_DIR"
   local tmp="$STATE_DIR/.protected-runtime-running.$$"
@@ -424,9 +432,9 @@ wait_until_ready() {
 
 wait_until_stopped() {
   local i owners pid
-  for i in {1..30}; do
+  for i in {1..70}; do
     owners="$(port_owner_pids)"
-    if [[ -z "$owners" ]]; then
+    if [[ -z "$owners" ]] && (! service_loaded || service_quiescent); then
       return 0
     fi
     while IFS= read -r pid; do
@@ -436,7 +444,7 @@ wait_until_stopped() {
     done <<< "$owners"
     sleep 0.1
   done
-  fail "Canonical Runtime listener did not stop within the bounded shutdown window."
+  fail "Canonical Runtime supervisor or listener did not stop within the bounded shutdown window."
 }
 
 serve() {

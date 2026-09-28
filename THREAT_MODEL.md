@@ -12,11 +12,11 @@ The filter reduces accidental or straightforward mutation of:
 
 - the canonical Runtime process/process group;
 - the canonical tunnel process;
-- the ServiceManagement-owned lifecycle;
+- the current per-user LaunchAgent and its supervisor-owned Runtime process group;
 - the listener on `127.0.0.1:8080`;
 - the intended protected singleton relationship among those components.
 
-Configuration, installed package ownership, desired state, signing authority, and tunnel identity remain governed by their product lifecycle boundaries.
+Configuration, installed package ownership, desired state, signing authority, external payload pointer/release, and tunnel identity remain governed by their product lifecycle boundaries. The ad-hoc signature seals native/substrate integrity but does not authenticate a publisher. The content-addressed pure-Python release is validated against the immutable substrate contract; a malicious same-UID actor remains outside this integrity claim.
 
 ## Governance
 
@@ -51,7 +51,7 @@ The Runtime does not claim to prevent:
 
 There are no blanket TCC permissions for normal Runtime operation. Production `screen_capture` is intentionally governance-blocked as `VISUAL_PERCEPTION_BLOCKED` before native capture. That state is not evidence that Screen Recording permission is missing and must not trigger TCC changes.
 
-Background Activity approval is separate ServiceManagement operator/platform state.
+The current lifecycle uses one traditional per-user LaunchAgent pointing to the helper embedded in the app. ServiceManagement is retained only for bounded predecessor migration and rollback. The first ad-hoc app launch may require macOS Open/Open Anyway; ordinary validated payload updates leave that app unchanged. A later native/substrate app release may require approval again.
 
 ## Future isolation
 

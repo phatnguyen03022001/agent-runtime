@@ -2249,7 +2249,10 @@ def _cutover_zero_cost_candidate(
 
         _write_payload_pointer_atomic(pointer, closure, uid=uid)
         _inject(fail_stages, "after_pointer_swap")
-        if bool(previous["desired_state_present"]):
+        if not target_present:
+            descriptor = os.open(desired_state, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            os.close(descriptor)
+        if not target_present or bool(previous["desired_state_present"]):
             _require_launchctl_ok(
                 _run([str(launchctl), "kickstart", current_service]),
                 "could not start selected current Runtime generation",

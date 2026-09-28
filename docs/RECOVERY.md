@@ -5,7 +5,7 @@ Recovery is reason-code driven. Do not replace a specific reason code with a bli
 ## Action classes
 
 - **SAFE_AUTOMATED** — bounded documented action may be executed without new operator judgment.
-- **HUMAN_ACTION_REQUIRED** — credentials, signing authority, platform approval, or commit-vs-rollback judgment is required.
+- **HUMAN_ACTION_REQUIRED** — credentials, first-app Gatekeeper action, or commit-vs-rollback judgment is required.
 - **STOP_AND_ESCALATE** — ownership/authority is ambiguous or corrupted; do not perform blind repair.
 
 ## Doctor reason-code routing
@@ -20,10 +20,16 @@ Each material non-OK doctor reason code has exactly one action class.
 | `GIT_UNAVAILABLE` | HUMAN_ACTION_REQUIRED | Install/select Apple developer tools so fixed Git is available. |
 | `GIT_IDENTITY_UNAVAILABLE` | HUMAN_ACTION_REQUIRED | Provide a valid Runtime Git name/email pair without printing it. |
 | `APP_NOT_INSTALLED` | SAFE_AUTOMATED | Run `./install.sh --check`; if READY, run the canonical installer. |
-| `INSTALLED_PACKAGE_INVALID` | STOP_AND_ESCALATE | Preserve evidence; do not overwrite or delete the ambiguous package. |
-| `SERVICE_APPROVAL_REQUIRED` | HUMAN_ACTION_REQUIRED | Approve Background Activity in macOS, then rerun doctor. |
-| `SERVICE_NOT_REGISTERED` | STOP_AND_ESCALATE | Inspect recognized cutover state before any registration/reinstall action. |
-| `SERVICE_STATUS_INVALID` | STOP_AND_ESCALATE | Preserve ServiceManagement evidence; do not guess registration state. |
+| `INSTALLED_PACKAGE_INVALID` | STOP_AND_ESCALATE | Preserve evidence; do not overwrite or delete the incomplete app. |
+| `INSTALLED_SUBSTRATE_INVALID` | STOP_AND_ESCALATE | Preserve immutable app and signing evidence; do not replace it blindly. |
+| `CANONICAL_CONFIG_MISSING` | HUMAN_ACTION_REQUIRED | Supply a valid canonical mode-0600 runtime.env through the supported config flow. |
+| `LIFECYCLE_OWNERSHIP_INVALID` | STOP_AND_ESCALATE | Preserve the current per-user LaunchAgent plist and loaded-service evidence; do not replace foreign same-label state. |
+| `PAYLOAD_POINTER_MISSING` | STOP_AND_ESCALATE | Preserve state and transaction evidence; never synthesize a closure. |
+| `PAYLOAD_POINTER_INVALID` | STOP_AND_ESCALATE | Preserve the unsafe pointer and transaction evidence; use recognized rollback/recovery. |
+| `PAYLOAD_RELEASE_MISSING` | STOP_AND_ESCALATE | Preserve selected release and pointer evidence; use recognized rollback/recovery. |
+| `PAYLOAD_RELEASE_INVALID` | STOP_AND_ESCALATE | Preserve the mutated release; reject activation. |
+| `PAYLOAD_SUBSTRATE_INCOMPATIBLE` | STOP_AND_ESCALATE | Reject the incompatible payload; require a separate substrate release. |
+| `PAYLOAD_SELECTION_INVALID` | STOP_AND_ESCALATE | Preserve the selected release; its doctor entrypoint is unavailable. |
 | `CUTOVER_TRANSACTION_PRESENT` | HUMAN_ACTION_REQUIRED | Inspect recognized transaction status and choose resume/commit/rollback as appropriate. |
 | `CUTOVER_STATE_INVALID` | STOP_AND_ESCALATE | Preserve the transaction directory; do not delete or reconstruct metadata blindly. |
 | `RUNTIME_IDENTITY_MISMATCH` | STOP_AND_ESCALATE | Stop product changes and review installed/source identity provenance. |
@@ -35,9 +41,7 @@ Each material non-OK doctor reason code has exactly one action class.
 
 ## Cutover states
 
-A recognized cutover may be `AWAITING_APPROVAL`, `PENDING`, or `PARTIAL`.
-
-- **AWAITING_APPROVAL**: HUMAN_ACTION_REQUIRED. Resolve the macOS approval boundary. Native first-run setup then continues through the existing resume path; the CLI remains available for maintainer/recovery use.
+A current zero-cost cutover may be `PREPARED`, `PENDING`, or `PARTIAL`; `AWAITING_APPROVAL` is historical ServiceManagement predecessor state only. If macOS blocks the first ad-hoc app launch, use Open/Open Anyway for the exact app and reopen the complete release bundle. Do not treat this as a current ServiceManagement registration state.
 - **PENDING**: native first-run setup commits only when readiness is `ready` and package-owned doctor has no failure and no warning except the recognized `CUTOVER_TRANSACTION_PRESENT` warning for `PENDING/APP_SWAPPED`. CLI recovery/maintainer use still requires an explicit commit-or-rollback decision.
 - **PARTIAL**: native setup surfaces the existing bounded recovery action. The equivalent CLI command is:
 
@@ -56,8 +60,9 @@ If port 8080 is owned by a foreign or ambiguous process, stop and escalate. Do n
 - Missing app: preflight first, then canonical install when READY.
 - Invalid installed package: STOP_AND_ESCALATE.
 - Missing/invalid canonical `runtime.env`: HUMAN_ACTION_REQUIRED unless ownership is ambiguous, in which case stop.
-- Service approval: HUMAN_ACTION_REQUIRED.
-- Unrecognized ServiceManagement state: STOP_AND_ESCALATE.
+- Missing or foreign current LaunchAgent ownership: STOP_AND_ESCALATE.
+- Unrecognized historical ServiceManagement predecessor state: STOP_AND_ESCALATE.
+- Missing, mutated, or incompatible selected external payload: STOP_AND_ESCALATE; use the recognized transaction rollback/recovery path if one exists.
 - Production `screen_capture=VISUAL_PERCEPTION_BLOCKED`: this is governance, not a permission failure. Do not request Screen Recording or alter TCC.
 
 ## Uninstall recovery

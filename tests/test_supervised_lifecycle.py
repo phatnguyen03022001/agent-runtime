@@ -187,7 +187,15 @@ PYDETACH
   return 3
 }
 case "$1" in
-  print) [[ "${2:-}" == "$service" && -f "$state/loaded" ]] ;;
+  print)
+    [[ "${2:-}" == "$service" && -f "$state/loaded" ]] || exit 1
+    if [[ -f "$state/runtime.pid" ]]; then
+      echo "state = running"
+      echo "pid = $(cat "$state/runtime.pid")"
+    else
+      echo "state = not running"
+    fi
+    ;;
   bootstrap) ( set -o noclobber; > "$state/loaded" ) 2>/dev/null || exit 5 ;;
   kickstart) [[ "${2:-}" == "$service" && -f "$state/loaded" ]] || exit 6; spawn ;;
   kill)
@@ -330,6 +338,26 @@ esac
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("STOPPED", result.stdout)
         self.assertIsNone(self.current_pid())
+
+    def test_stop_waits_for_supervisor_after_listener_disappears(self) -> None:
+        (self.state / "loaded").write_text("")
+        launchctl = self.bin / "launchctl"
+        source = launchctl.read_text()
+        source = source.replace(
+            'echo "state = not running"',
+            'if [[ ! -f "$state/quiescent" ]]; then echo "state = running"; echo "pid = 12345"; else echo "state = not running"; fi',
+        )
+        launchctl.write_text(source)
+        process = subprocess.Popen(
+            [str(self.repo / "start.sh"), "stop"],
+            env=self.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        time.sleep(0.2)
+        self.assertIsNone(process.poll(), "stop must wait while the supervisor is still running")
+        (self.state / "quiescent").touch()
+        output, error = process.communicate(timeout=10)
+        self.assertEqual(process.returncode, 0, error)
+        self.assertIn("STOPPED", output)
 
 
     def test_native_supervisor_owns_exact_process_group_and_bounded_shutdown(self) -> None:

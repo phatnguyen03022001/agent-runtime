@@ -30,9 +30,15 @@ DOCTOR_REASON_CODES = {
     "GIT_IDENTITY_UNAVAILABLE",
     "APP_NOT_INSTALLED",
     "INSTALLED_PACKAGE_INVALID",
-    "SERVICE_APPROVAL_REQUIRED",
-    "SERVICE_NOT_REGISTERED",
-    "SERVICE_STATUS_INVALID",
+    "INSTALLED_SUBSTRATE_INVALID",
+    "CANONICAL_CONFIG_MISSING",
+    "LIFECYCLE_OWNERSHIP_INVALID",
+    "PAYLOAD_POINTER_MISSING",
+    "PAYLOAD_POINTER_INVALID",
+    "PAYLOAD_RELEASE_MISSING",
+    "PAYLOAD_RELEASE_INVALID",
+    "PAYLOAD_SUBSTRATE_INCOMPATIBLE",
+    "PAYLOAD_SELECTION_INVALID",
     "CUTOVER_TRANSACTION_PRESENT",
     "CUTOVER_STATE_INVALID",
     "RUNTIME_IDENTITY_MISMATCH",
@@ -101,7 +107,6 @@ class Task0141ProductizationTests(unittest.TestCase):
         environ = {
             "PATH": str(tools),
             "HOME": str(home),
-            "AGENT_RUNTIME_CODESIGN_IDENTITY": "fixture-signing-identity",
         }
 
         def fake_run(argv: list[str], *, env=None):
@@ -159,7 +164,7 @@ class Task0141ProductizationTests(unittest.TestCase):
     def test_preflight_nonpass_has_reason_and_action_class(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             root, home, environ, patches, _ = self._ready_preflight_fixture(Path(td))
-            environ.pop("AGENT_RUNTIME_CODESIGN_IDENTITY")
+            (root / ".env").unlink()
             for patcher in patches:
                 patcher.start()
             try:
@@ -173,9 +178,9 @@ class Task0141ProductizationTests(unittest.TestCase):
             for item in failures:
                 self.assertRegex(item["reason_code"], r"^[A-Z0-9_]+$")
                 self.assertIn(item["action_class"], ACTION_CLASSES)
-            signing = next(item for item in failures if item["id"] == "signing_prerequisite")
-            self.assertEqual(signing["reason_code"], "SIGNING_IDENTITY_REQUIRED")
-            self.assertEqual(signing["action_class"], "HUMAN_ACTION_REQUIRED")
+            config = next(item for item in failures if item["id"] == "checkout_config")
+            self.assertEqual(config["reason_code"], "CHECKOUT_CONFIG_MISSING")
+            self.assertEqual(config["action_class"], "HUMAN_ACTION_REQUIRED")
 
     def test_install_check_help_and_dispatch_are_read_only_surfaces(self) -> None:
         installer = (ROOT / "install.sh").read_text()
@@ -192,7 +197,7 @@ class Task0141ProductizationTests(unittest.TestCase):
         self.assertIn("--check [--json]", help_result.stdout)
         self.assertIn("strict read-only", help_result.stdout)
 
-    def test_installed_doctor_uses_package_bytes_and_redacts_transport_secrets(self) -> None:
+    def test_installed_doctor_rejects_unqualified_substrate_without_leaking_secrets(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             temp = Path(td)
             home = temp / "home"
@@ -241,12 +246,9 @@ class Task0141ProductizationTests(unittest.TestCase):
                 capture_output=True,
                 check=False,
             )
-            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.returncode, 2, result.stderr)
             payload = json.loads(result.stdout)
-            self.assertIs(payload["installed"], True)
-            self.assertEqual(payload["bytecode"], "1")
-            self.assertEqual(payload["api_present"], "")
-            self.assertEqual(payload["tunnel_present"], "")
+            self.assertEqual(payload["error"]["reason_code"], "PAYLOAD_SELECTION_INVALID")
             self.assertNotIn("TASK0141_DOCTOR_SECRET", result.stdout + result.stderr)
             self.assertNotIn("TASK0141_DOCTOR_TUNNEL", result.stdout + result.stderr)
 
@@ -278,9 +280,9 @@ class Task0141ProductizationTests(unittest.TestCase):
         self.assertEqual(len(codes), len(set(codes)))
         self.assertTrue(all(action in ACTION_CLASSES for _, action in rows))
         mapped = dict(rows)
-        self.assertEqual(mapped["SERVICE_APPROVAL_REQUIRED"], "HUMAN_ACTION_REQUIRED")
+        self.assertEqual(mapped["LIFECYCLE_OWNERSHIP_INVALID"], "STOP_AND_ESCALATE")
         self.assertEqual(mapped["CUTOVER_STATE_INVALID"], "STOP_AND_ESCALATE")
-        self.assertEqual(mapped["INSTALLED_PACKAGE_INVALID"], "STOP_AND_ESCALATE")
+        self.assertEqual(mapped["INSTALLED_SUBSTRATE_INVALID"], "STOP_AND_ESCALATE")
         self.assertEqual(mapped["GIT_IDENTITY_UNAVAILABLE"], "HUMAN_ACTION_REQUIRED")
 
     def test_product_docs_are_current_and_history_independent(self) -> None:
@@ -341,7 +343,9 @@ class Task0141ProductizationTests(unittest.TestCase):
             embedded_python.chmod(0o700)
             for name in ("runtime_config.py", "package_provenance.py", "candidate_cutover.py", "install_preflight.py"):
                 (embedded_macos / name).write_text("# fixture\n")
-            handoff.write_text("{}\n")
+            closure = "a" * 64
+            handoff.write_text(json.dumps({"initial_payload_closure": closure}) + "\n")
+            (bundle / "payloads" / closure).mkdir(parents=True)
             tunnel_target = tools / "tunnel-client-real"
             tunnel_target.write_text("#!/bin/sh\nexit 0\n")
             tunnel_target.chmod(0o700)
@@ -375,7 +379,9 @@ class Task0141ProductizationTests(unittest.TestCase):
             ), mock.patch.object(preflight.shutil, "which", side_effect=fake_which), mock.patch.object(
                 preflight, "EXPECTED_TUNNEL_FINGERPRINT", hashlib.sha256(tunnel_id.encode()).hexdigest()[:12]
             ), mock.patch.object(
-                preflight.package_provenance, "validate_candidate", return_value={"candidate_sha256": "a" * 64}
+                preflight.package_provenance, "_load_zero_cost_candidate_handoff", return_value={"initial_payload_closure": closure}
+            ), mock.patch.object(
+                preflight.package_provenance, "validate_zero_cost_candidate", return_value={"candidate_sha256": "a" * 64}
             ), mock.patch.object(
                 preflight, "_run", return_value=subprocess.CompletedProcess([], 0, "", "")
             ):

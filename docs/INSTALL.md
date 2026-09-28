@@ -9,6 +9,7 @@ A qualified extracted release bundle has this minimal shape:
 ```text
 Agent Runtime.app/
 Agent Runtime.candidate.json
+payloads/<initial-closure>/
 ```
 
 The checkout-independent installer is sealed inside the app:
@@ -17,7 +18,7 @@ The checkout-independent installer is sealed inside the app:
 Agent Runtime.app/Contents/Resources/runtime/macos/install_release.sh
 ```
 
-The repository implements the source architecture for this lane. It does not claim that a public notarized release has already been qualified or published; release qualification and publication require separate authority.
+The repository implements this zero-cost ad-hoc source lane. It does not claim an Apple-authenticated publisher or a public release. The complete extracted bundle is required for installation.
 
 ### Target prerequisites
 
@@ -28,8 +29,9 @@ The target operator needs only:
 - ordinary macOS lifecycle tools used by the existing Runtime lifecycle;
 - an explicit existing absolute workspace root;
 - provisioned `CONTROL_PLANE_API_KEY` and `CONTROL_PLANE_TUNNEL_ID`;
-- an explicit Runtime Git name/email pair;
-- human Background Activity approval if macOS requires it.
+- an explicit Runtime Git name/email pair.
+
+The first ad-hoc app launch may require macOS Open/Open Anyway for that exact app. The traditional per-user LaunchAgent does not require current ServiceManagement Background Activity registration.
 
 The target does **not** need an agent-runtime Git clone, Git repository identity for an agent-runtime checkout, CPython 3.13, Xcode/Swift, or a local code-signing identity. The release installer uses the Python interpreter and lifecycle helpers packaged inside `Agent Runtime.app`.
 
@@ -38,13 +40,13 @@ https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
 
 ### First-run native setup
 
-Keep `Agent Runtime.app` beside `Agent Runtime.candidate.json` and open the app. A fresh prebuilt launch with no usable canonical configuration presents setup automatically.
+Keep `Agent Runtime.app`, `Agent Runtime.candidate.json`, and the `payloads` directory together and open the app. A fresh prebuilt launch with no usable canonical configuration presents setup automatically.
 
 1. Enter the provisioned `CONTROL_PLANE_API_KEY` in the secure API-key field.
 2. Enter the provisioned `CONTROL_PLANE_TUNNEL_ID` in the secure tunnel field.
 3. Provide the Runtime Git name/email pair when setup requires it.
 4. Choose an existing workspace with the macOS directory picker. The normal path does not accept a typed workspace path.
-5. Continue setup. If macOS requires Background Activity approval, setup explains the requirement and offers **Open Background Activity Settings…** to open the macOS Login Items/Background Activity control. Grant approval there, return to Agent Runtime, then use **Continue After Approval**.
+5. Continue setup. If macOS blocks the initial ad-hoc app launch, use its Open/Open Anyway control for this exact app, then reopen the complete bundle.
 
 Secrets cross from the native UI to the packaged configuration helper only through bounded stdin. They are not placed in argv, shell exports, UserDefaults, logs, diagnostics, or repository evidence. The canonical destination remains:
 
@@ -54,7 +56,7 @@ Secrets cross from the native UI to the packaged configuration helper only throu
 
 The existing `runtime_config.py` authority validates all values before publication and creates the canonical file privately and atomically at mode `0600`. Invalid input creates no partial canonical file and starts no cutover. An existing canonical file is inspected and preserved; setup never silently repairs or overwrites an invalid/unsafe existing file.
 
-The native flow then delegates to the packaged `install_release.sh`, provenance, and `candidate_cutover.py` implementation. The external candidate handoff is mandatory and must remain beside the app. Missing or unsafe handoff state fails closed with guidance to reopen the complete release bundle.
+The native flow then delegates to the packaged `install_release.sh`, provenance, and `candidate_cutover.py` implementation. The external candidate handoff and matching initial content-addressed payload are mandatory and must remain beside the app. Missing, unsafe, or mismatched state fails closed with guidance to reopen the complete release bundle.
 
 Before commit, setup requires:
 
@@ -64,7 +66,7 @@ Before commit, setup requires:
 
 The package-owned doctor therefore remains `degraded` at that boundary solely because the transaction still exists. Any additional warning or failure blocks commit. Only then may setup invoke the existing cutover commit. Terminal success additionally requires the transaction to be absent, readiness to remain `ready`, and package-owned doctor overall status to be `healthy`.
 
-Opening Background Activity settings is navigation only: it does not grant approval, mark setup complete, change Runtime configuration, or commit/resume/rollback/recover the cutover. If approval is still pending, **Continue After Approval** remains non-success and actionable; after approval it reuses the existing resume/doctor/readiness/cutover path. Setup does not bypass macOS approval and does not install or update the external `tunnel-client`.
+The app and initial payload are validated before cutover. Setup does not bypass Gatekeeper or install or update the external `tunnel-client`. Ordinary validated pure-Python payload activation changes the external release pointer only after the previous Runtime generation is fully stopped and reaped; it leaves the approved app, LaunchAgent plist, runtime.env, and tunnel-client unchanged.
 
 An already-valid installed configuration with no pending cutover bypasses onboarding and opens the current control panel directly.
 
@@ -88,16 +90,12 @@ The existing source-build path remains the maintainer path and is not made depen
 
 ### Maintainer prerequisites
 
-Source packaging requires Git, `launchctl`, `lsof`, `curl`, `xcrun`, Swift, the canonical CPython 3.13 arm64 packaging interpreter, the official OpenAI `tunnel-client`, and an explicit non-ad-hoc signing identity.
+Source packaging requires Git, `launchctl`, `lsof`, `curl`, `xcrun`, Swift, the canonical CPython 3.13 arm64 packaging interpreter, and the official OpenAI `tunnel-client`. It uses ad-hoc signing with deterministic responsible-code identifiers.
 
 Apple's Command Line Tools guidance is:
 https://developer.apple.com/documentation/xcode/installing-the-command-line-tools
 
-The preflight never installs/selects developer tools and never enumerates Keychain identities. Maintainers explicitly supply the local packaging identity:
-
-```bash
-export AGENT_RUNTIME_CODESIGN_IDENTITY="<explicit-non-ad-hoc-signing-identity>"
-```
+The preflight never installs/selects developer tools or enumerates Keychain identities. No signing identity or notary profile is required.
 
 Create checkout configuration from `.env.example`, mode `0600`, and provide the required transport/Runtime values. The source installer derives the canonical workspace from the checkout parent and may use repository-local Git identity only on this maintainer path.
 
@@ -124,32 +122,13 @@ This source lane verifies source, builds/signs a local candidate, initializes ca
 
 ## Distribution packaging authority
 
-Distribution packaging is an explicit opt-in release-authority mode; the default `macos/package_app.sh` behavior remains the local/source package lane.
-
-A release authority invokes the distribution lane with both an explicit Developer ID Application identity and an explicit existing notarytool keychain-profile locator:
+The supported packaging command is explicit:
 
 ```bash
-./macos/package_app.sh \
-  --distribution \
-  --signing-identity "Developer ID Application: ..." \
-  --notary-keychain-profile "<existing-notarytool-profile>"
+./macos/package_app.sh --zero-cost
 ```
 
-The distribution lane fails closed if either authority input is absent or malformed. It does not enumerate Keychain identities, create credentials, or place notary credentials in Runtime configuration or candidate metadata.
-
-Its mutation order is fixed:
-
-```text
-Developer ID + hardened runtime + timestamp signing
-  -> strict codesign verification
-  -> notarization submission
-  -> stapling
-  -> strict codesign + Developer ID/hardened-runtime + Gatekeeper + stapler + embedded provenance verification
-  -> final candidate seal
-  -> candidate publication
-```
-
-Stapling occurs before candidate sealing because it changes the app being distributed. The external handoff therefore binds the final post-staple candidate, not a pre-notarization app.
+It stages one exact clean Git source candidate, builds the immutable app substrate, signs native code ad-hoc with deterministic identifiers, publishes a first-party pure-Python release under its content closure, then seals and validates the external candidate handoff. The complete distribution consists of the app, handoff, and initial `payloads/<closure>` release. Ad-hoc signing proves integrity only; it supplies no TeamIdentifier or publisher authentication. A native/substrate change requires a separate app release and may require Gatekeeper approval again. No Developer ID, notarization, stapling, sudo, quarantine deletion, or global Gatekeeper disable is part of this lane.
 
 ## Installed-authority operation
 

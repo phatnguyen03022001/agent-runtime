@@ -2,40 +2,40 @@
 
 Agent Runtime is a **bounded local execution provider** for ChatGPT and other MCP clients on macOS. **MCP is the protocol**; the admitted product transport is OpenAI Secure MCP Tunnel, which keeps the Runtime private and uses outbound HTTPS rather than a public inbound listener.
 
-The qualified Runtime source and installed Runtime are version **0.5.0** with **exactly twenty public tools** and **twenty-one known capabilities**. The native app owns the installed lifecycle through **app-owned ServiceManagement**. The older LaunchAgent model is a **migration/rollback predecessor only**.
+The installed Runtime is version **0.5.0** with **exactly twenty public tools** and **twenty-one known capabilities**. The current zero-cost source lane packages an immutable ad-hoc app substrate and a separate content-addressed first-party Python payload. One per-user LaunchAgent starts the embedded supervisor; ServiceManagement remains only for predecessor migration and rollback.
 
 ## Supported product shape
 
 - macOS on Apple silicon.
 - Private OpenAI Secure MCP Tunnel transport through the official `tunnel-client`.
-- Package-owned Runtime bytes under `~/Applications/Agent Runtime.app`.
+- Immutable native, CPython 3.13, third-party and bootstrap substrate under `~/Applications/Agent Runtime.app`; selected first-party Python release under `~/Library/Application Support/Agent Runtime/payloads/<closure>` with one `current-payload` pointer.
 - Canonical operator configuration at `~/Library/Application Support/Agent Runtime/runtime.env`, mode `0600`.
 - One protected singleton tunnel/listener on `127.0.0.1:8080`.
 - Runtime source and installed Runtime version 0.5.0, ToolContract Kernel v2, twenty advertised MCP tools from twenty-one known capabilities; installation remains an explicit pinned transactional cutover rather than a side effect of source publication.
-- Runtime requires no blanket TCC permissions. Background Activity approval is operator/platform state.
+- Runtime requires no blanket TCC permissions. The current traditional user LaunchAgent does not use ServiceManagement Background Activity registration.
 - Homebrew is optional; it is not an architecture prerequisite.
 
-ServiceManagement may report `enabled`, `requires-approval`, `not-registered`, or `not-found`. Approval is a human/platform boundary. When approval is required, the native setup can open the macOS Login Items/Background Activity control through ServiceManagement; only macOS and the operator can grant approval.
+The first ad-hoc substrate launch may require the operator to use macOS Open/Open Anyway for that exact app. Ad-hoc signing seals code integrity but does not authenticate a publisher. Ordinary validated pure-Python payload activation does not replace the app; a later native/substrate release may require approval again.
 
 ## Installation paths
 
 ### Prebuilt release — newcomer path
 
-A qualified release bundle is checkout-independent. It contains the signed `Agent Runtime.app` plus its external `Agent Runtime.candidate.json` handoff. Keep those two items together and open `Agent Runtime.app`.
+A qualified release bundle is checkout-independent. It contains ad-hoc sealed `Agent Runtime.app`, external `Agent Runtime.candidate.json`, and `payloads/<initial-closure>/`. Keep the complete bundle together and open `Agent Runtime.app`.
 
 On a fresh machine the existing app opens native setup automatically. Enter the provisioned Control Plane API key and tunnel ID in secure fields, provide the Runtime Git name/email pair when requested, and choose the workspace with the macOS folder picker. The normal newcomer path does **not** require Terminal, shell exports, manual `runtime.env` editing, or typing a workspace path.
 
 The app delegates validation, canonical mode-`0600` configuration publication, release preflight/provenance, candidate cutover, resume/recovery, doctor, readiness, and commit to the existing package-owned helpers. It does not reimplement lifecycle semantics in Swift. A recognized pending cutover may be doctor `degraded` before commit only because of `CUTOVER_TRANSACTION_PRESENT`; any additional doctor warning or failure blocks commit. Setup reports success only after the existing commit resolves the transaction, readiness is `ready`, and package-owned doctor is `healthy`.
 
-If macOS requires Background Activity approval, setup explains why the Runtime service needs it and offers **Open Background Activity Settings…**, which opens the supported macOS Login Items/Background Activity control. Opening settings is navigation only: setup remains non-success until the operator grants approval and uses **Continue After Approval**, which reuses the existing bounded resume/doctor/readiness/cutover path. The official OpenAI `tunnel-client` remains an external prerequisite and is neither installed nor upgraded by setup.
+If macOS blocks the first ad-hoc app launch, use the platform's Open/Open Anyway control for the exact app and reopen the complete bundle. Setup then validates the external handoff and payload before cutover. The official OpenAI `tunnel-client` remains an external prerequisite and is neither installed nor upgraded by setup.
 
 An already-valid installed canonical configuration remains authoritative and goes directly to the current control panel without being rewritten or re-prompted. No agent-runtime Git clone, CPython 3.13, Swift/Xcode, local signing identity, or notary credentials are required on the consumer Mac.
 
-The repository contains the source architecture for this lane; that does **not** claim that a public notarized release has been qualified or published. Distribution qualification remains a separate release-authority step.
+The repository contains the source architecture for this lane; no public release is claimed. The ad-hoc artifact has no Apple Developer ID or notarization authority.
 
 ### Build from source — maintainers
 
-The existing maintainer lane remains independent of notarization. Clone the canonical repository, create `.env` from `.env.example`, provide an explicit non-ad-hoc `AGENT_RUNTIME_CODESIGN_IDENTITY`, then run:
+The source maintainer lane uses explicit zero-cost ad-hoc packaging. Clone the canonical repository, create `.env` from `.env.example`, then run:
 
 ```bash
 ./install.sh --check
@@ -141,6 +141,4 @@ Production `screen_capture` is governance-blocked as `VISUAL_PERCEPTION_BLOCKED`
 
 ## Packaging prerequisites
 
-Source packaging requires the canonical **CPython 3.13** arm64 interpreter, Apple developer tools with `xcrun` and Swift, and an explicit `AGENT_RUNTIME_CODESIGN_IDENTITY`.
-
-The opt-in distribution mode additionally requires an explicit `Developer ID Application: ...` identity and an explicit existing notarytool keychain-profile locator. It signs with hardened-runtime/timestamp semantics, submits for notarization, staples, runs strict code-signature/Gatekeeper/stapler/provenance verification, and only then seals the final candidate. The scripts never enumerate Keychain identities or create/modify signing or notary credentials. See [docs/INSTALL.md](docs/INSTALL.md).
+Source packaging requires the canonical **CPython 3.13** arm64 interpreter and Apple developer tools with `xcrun` and Swift. `./macos/package_app.sh --zero-cost` signs the immutable substrate ad-hoc, emits the external initial payload and handoff, and validates the candidate before publication. It requires no Developer ID or notary credentials. See [docs/INSTALL.md](docs/INSTALL.md).

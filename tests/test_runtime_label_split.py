@@ -32,14 +32,15 @@ class RuntimeLabelSplitTests(unittest.TestCase):
         self.assertEqual(payload["BundleProgram"], "Contents/MacOS/AgentRuntimeRuntimeService")
         self.assertEqual([path.name for path in launch_agents.glob("*.plist")], [f"{MODERN_RUNTIME_LABEL}.plist"])
 
-    def test_service_management_and_packaging_use_modern_plist_name(self) -> None:
+    def test_service_management_is_predecessor_only_and_current_package_omits_bundled_plist(self) -> None:
         swift = (ROOT / "macos/Sources/AgentRuntimeMenuBar/ServiceManagementController.swift").read_text()
         package = (ROOT / "macos/package_app.sh").read_text()
         self.assertIn(f'runtimePlistName = "{MODERN_RUNTIME_LABEL}.plist"', swift)
         self.assertNotIn(f'runtimePlistName = "{LEGACY_RUNTIME_LABEL}.plist"', swift)
-        self.assertIn(f"AppBundle/Library/LaunchAgents/{MODERN_RUNTIME_LABEL}.plist", package)
-        self.assertIn(f"$CONTENTS/Library/LaunchAgents/{MODERN_RUNTIME_LABEL}.plist", package)
-        self.assertNotIn(f"$CONTENTS/Library/LaunchAgents/{LEGACY_RUNTIME_LABEL}.plist", package)
+        self.assertNotIn("AppBundle/Library/LaunchAgents/", package)
+        self.assertNotIn("$CONTENTS/Library/LaunchAgents/", package)
+        cutover = (ROOT / "macos/candidate_cutover.py").read_text()
+        self.assertIn('home / "Library" / "LaunchAgents" / f"{MODERN_RUNTIME_LABEL}.plist"', cutover)
 
     def test_current_lifecycle_targets_only_modern_label(self) -> None:
         start = (ROOT / "start.sh").read_text()

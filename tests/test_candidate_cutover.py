@@ -507,7 +507,7 @@ class CandidateCutoverTests(unittest.TestCase):
             provenance.seal_zero_cost_candidate(
                 app, handoff, payload_release, identity_reader=identity_reader
             )
-            launchctl, launch_state, _ = make_fake_launchctl(
+            launchctl, launch_state, launch_log = make_fake_launchctl(
                 root, ui_loaded=False, runtime_loaded=False
             )
             service_management = mock.Mock(side_effect=AssertionError("current generation must not use ServiceManagement"))
@@ -542,6 +542,10 @@ class CandidateCutoverTests(unittest.TestCase):
             self.assertEqual(current["ProgramArguments"], [str(target / "Contents/MacOS/AgentRuntimeRuntimeService")])
             self.assertNotIn("BundleProgram", current)
             self.assertIn("gui/501/com.picmao.agent-runtime-runtime-service", json.loads(launch_state.read_text()))
+            desired_state = state_dir / "protected-runtime-running"
+            self.assertTrue(desired_state.is_file())
+            self.assertEqual(stat.S_IMODE(desired_state.stat().st_mode), 0o600)
+            self.assertIn("kickstart gui/501/com.picmao.agent-runtime-runtime-service", launch_log.read_text())
             metadata = json.loads((transaction / "metadata.json").read_text())
             self.assertEqual(metadata["schema"], cutover.ZERO_COST_TRANSACTION_SCHEMA)
             self.assertEqual(metadata["payload"]["closure"], closure)
