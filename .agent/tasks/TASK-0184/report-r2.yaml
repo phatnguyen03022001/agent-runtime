@@ -1,0 +1,94 @@
+protocol_version: 3
+
+task_id: TASK-0184
+task_revision: 2
+report_revision: 2
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0184/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  authorized_base_head: "d17f2e7a99109f115346ff1b8f26e2c594eee85b"
+  final_execution_head: "f9efba316483b5e31c0671aeac07661c4550c196"
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  authorized_revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+
+candidate:
+  source_commit: "f9efba316483b5e31c0671aeac07661c4550c196"
+  source_parent: "d17f2e7a99109f115346ff1b8f26e2c594eee85b"
+  changed_files:
+    - tests/test_task0055_macos_contract.py
+  stale_assertion_before: "no Apple Developer ID or notarization authority"
+  assertion_after: "The public v0.5.0 artifact is ad-hoc signed without Apple Developer ID or notarization."
+  readme_relation: "README.md already contains the exact assertion_after sentence; other contract assertions are unchanged."
+  preserved_rev1_source_commit: "8a11f6def04bafa1e099ba3c0e9484f5f504a044"
+  preserved_rev1_files:
+    - macos/install_preflight.py
+    - macos/install_release.sh
+    - tests/test_task0141_productization.py
+  preservation_evidence: "Git diff of the three rev 1 files from the rev 1 candidate through the rev 2 base was empty; the rev 2 candidate changes only the stale assertion."
+
+focused_verification:
+  command: ".venv/bin/python -m unittest discover -s tests -p test_task0055_macos_contract.py -v"
+  result: PASS
+  tests: 6
+  static_checks: "py_compile for the changed test and git diff --check PASS."
+
+canonical_verification:
+  command: "./verify"
+  invocation_count: 1
+  job_id: job_6b8725a01358
+  result: PASS
+  modules_completed: 62
+  modules_selected: 62
+  tests: 841
+  profile: qualification
+  duration_seconds: 103.935
+  retry_count: 0
+
+effects:
+  distribution_builds: 0
+  archive_builds: 0
+  production_install_or_cutover: 0
+  production_runtime_restarts: 0
+  runtime_env_mutations: 0
+  public_release_or_tag_mutations: 0
+  host_security_mutations: 0
+  installed_predecessor_doctor: "healthy 10/10, version 0.5.0, revision b1879b5c185e93457bb634a7ab0508f7220416af"
+  installed_predecessor_readiness: ready
+  transaction_present: false
+  canonical_runtime_env_sha256: "b3d0d67471f6d620f53ad1ed9ee6db21a1e906fff643dd94050b7cd8def97029"
+  canonical_runtime_env_owner: tienphat
+  canonical_runtime_env_mode: "0600"
+  public_v0_5_0_tag_target: "092b761cdc7e3f1085abe38948d9613fefe9e875"
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "The sole test assertion change matches the existing truthful README sentence, still requires absence of Apple Developer ID and notarization, and the focused macOS contract module passes 6/6."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "Rev 1 prebuilt seal source and regression files were unchanged through the rev 2 base, and the rev 2 commit touches only the authorized assertion."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "Exactly one rev 2 canonical ./verify invocation passes 62/62 modules and 841 tests; zero distribution or archive builds."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "Candidate is a sole test-file child of the exact rev 2 base. Installed Runtime remains healthy and ready, runtime.env SHA/mode/owner and public tag remain unchanged. The report is published as the sole direct child and main reconciled clean and synchronized."
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: PASS
+  evidence: "Focused macOS contract module passes 6/6; the single canonical ./verify run passes 62/62 modules and 841 tests at the exact candidate."
+
+pushed: true
+
+result: NEEDS_REVIEW
