@@ -23,7 +23,7 @@ The first ad-hoc substrate launch may require the operator to use macOS Open/Ope
 
 A qualified release bundle is checkout-independent. It contains ad-hoc sealed `Agent Runtime.app`, external `Agent Runtime.candidate.json`, and `payloads/<initial-closure>/`. Keep the complete bundle together and open `Agent Runtime.app`.
 
-Download the [v0.5.0 zero-cost release](https://github.com/phatnguyen03022001/agent-runtime/releases/tag/v0.5.0) and `SHA256SUMS.txt`. Verify the archive with `shasum -a 256 -c SHA256SUMS.txt` before extraction. Its SHA-256 is `3f179015534d81d6baee3faf78a57f8300451739afdda53a5940ee91ec7c3746`, and the release tag identifies packaged source revision `092b761cdc7e3f1085abe38948d9613fefe9e875`.
+Download the [v0.5.1 zero-cost release](https://github.com/phatnguyen03022001/agent-runtime/releases/tag/v0.5.1) and `SHA256SUMS.txt`. Verify the archive with `shasum -a 256 -c SHA256SUMS.txt` before extraction. Its SHA-256 is `9518e1cf4f28033cbec97b8906e55e1a4da6ad3a9067485fb6ef7c4fcfac58e8`, and the release tag identifies packaged source revision `674095e739533e100c2cf75f434dd0bc825a3de3`.
 
 On a fresh machine the existing app opens native setup automatically. Enter the provisioned Control Plane API key and tunnel ID in secure fields, provide the Runtime Git name/email pair when requested, and choose the workspace with the macOS folder picker. The normal newcomer path does **not** require Terminal, shell exports, manual `runtime.env` editing, or typing a workspace path.
 
@@ -33,7 +33,7 @@ If macOS blocks the first ad-hoc app launch, use the platform's Open/Open Anyway
 
 An already-valid installed canonical configuration remains authoritative and goes directly to the current control panel without being rewritten or re-prompted. No agent-runtime Git clone, CPython 3.13, Swift/Xcode, local signing identity, or notary credentials are required on the consumer Mac.
 
-The public v0.5.0 artifact is ad-hoc signed without Apple Developer ID or notarization. macOS may require Open/Open Anyway for the exact downloaded app.
+The public v0.5.1 artifact is ad-hoc signed without Apple Developer ID or notarization. macOS may require Open/Open Anyway for the exact downloaded app.
 
 ### Build from source — maintainers
 

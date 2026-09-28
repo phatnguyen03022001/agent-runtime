@@ -18,7 +18,7 @@ The checkout-independent installer is sealed inside the app:
 Agent Runtime.app/Contents/Resources/runtime/macos/install_release.sh
 ```
 
-The [v0.5.0 zero-cost release](https://github.com/phatnguyen03022001/agent-runtime/releases/tag/v0.5.0) provides this complete bundle for Apple silicon Macs. Download the archive and `SHA256SUMS.txt` together; from their directory run `shasum -a 256 -c SHA256SUMS.txt` before extracting the archive. The accepted archive SHA-256 is `3f179015534d81d6baee3faf78a57f8300451739afdda53a5940ee91ec7c3746`; the tag points to packaged source revision `092b761cdc7e3f1085abe38948d9613fefe9e875`. Keep the extracted app, handoff and payload together. This ad-hoc build does not claim an Apple-authenticated publisher or notarization.
+The [v0.5.1 zero-cost release](https://github.com/phatnguyen03022001/agent-runtime/releases/tag/v0.5.1) provides this complete bundle for Apple silicon Macs. Download the archive and `SHA256SUMS.txt` together; from their directory run `shasum -a 256 -c SHA256SUMS.txt` before extracting the archive. The accepted archive SHA-256 is `9518e1cf4f28033cbec97b8906e55e1a4da6ad3a9067485fb6ef7c4fcfac58e8`; the tag points to packaged source revision `674095e739533e100c2cf75f434dd0bc825a3de3`. Keep the extracted app, handoff and payload together. This ad-hoc build does not claim an Apple-authenticated publisher or notarization.
 
 ### Target prerequisites
 
