@@ -1,0 +1,154 @@
+protocol_version: 3
+
+task_id: TASK-0181
+task_revision: 3
+report_revision: 3
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0181/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  authorized_base_head: "8357b1b3e559b64c6c58d3da740c9b4424ded8b2"
+  final_execution_head: "1b338cc6540befc8fb6eac620245380d44a429a9"
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  authorized_revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - bounded_local_source_execution
+    - native_swift_verification
+    - canonical_direct_local_verification
+    - fresh_remote_observation
+    - repository_report_write_commit_publish
+  available:
+    - terminal_exec
+    - fs_read_batch
+    - fs_patch
+    - fs_write
+    - repo_observer
+    - repo_remote_observer
+    - local_xcrun_swift
+  missing: []
+  passed: true
+
+checkpoint_lineage:
+  revision_1_base: "ab0c4dd19dd5ce47f85d9b74f1bd3f8a35e710e7"
+  revision_2_base: "82b9320705fe4ea303eb16f98332a8ba0d2f89e6"
+  revision_3_base: "8357b1b3e559b64c6c58d3da740c9b4424ded8b2"
+  preserved:
+    - commit: "7c28f870fdacc622d6dadff842a142a802377417"
+      tree: "f75e29fac39e158160ebc6676e46ce42f23ca31a"
+    - commit: "4e429ee89cdc8ee0dafd86b8fd2c663bd9e3ab4d"
+      tree: "c50b1df417f3a10f880adaa109a8f1b62862d8c2"
+    - commit: "4fc6552f5b0cd526d67bb528eb74125892ff0b54"
+      tree: "cf92d508cba03d3316c199a4d3ed87efad2a83f9"
+    - commit: "ff97d2aec672d8ff20de91aa7adaddc191a63c4c"
+      tree: "2b3e3cf8c80e93dc5231739dd3b8e6961de5c684"
+    - commit: "54061c6e36a72ca7d23e22cd2c6104a647fd79e7"
+      tree: "ed7c4fb52e17582bb3a45f2e5405630b78180e34"
+  audit: "The exact ordered ancestry and checkpoint tree at the revision-3 base were proven. Checkpoints remained provisional; the source correction is one direct child of the revision-3 base."
+
+source_candidate:
+  commit: "1b338cc6540befc8fb6eac620245380d44a429a9"
+  tree: "eebb50e282671415771d22cf68602c280637111e"
+  changed_after_revision_3_base:
+    - README.md
+    - THREAT_MODEL.md
+    - docs/INSTALL.md
+    - docs/RECOVERY.md
+    - macos/candidate_cutover.py
+    - start.sh
+    - tests/test_candidate_cutover.py
+    - tests/test_runtime_label_split.py
+    - tests/test_supervised_lifecycle.py
+    - tests/test_task0141_productization.py
+  lifecycle_contract: user-launchagent-v1
+  payload_contract: external-python-v1
+  substrate_manifest_schema: 3
+  payload_manifest_schema: 1
+  zero_cost_candidate_schema: 3
+  initial_cutover_schema: 6
+  payload_update_schema: 7
+  status: PROVISIONAL_VERIFICATION_FAILED
+
+focused_evidence:
+  python: "207/207 affected tests PASS on the repository .venv interpreter."
+  swift: "47/47 native Swift tests PASS using xcrun swift test with ignored build/task0181-focused-swift scratch."
+  shell_and_diff: "bash -n start.sh and git diff --check PASS."
+  causal_findings: "Fresh install previously left desired state absent and never kickstarted the selected generation; the focused fresh-install test now asserts mode-0600 desired state and kickstart. Stop previously observed only listener absence; the focused lifecycle test now requires supervisor quiescence after listener disappearance."
+  covered_boundaries: "External payload closure/activation/rollback, legacy migration, current LaunchAgent ownership, newcomer doctor/preflight, uninstall, package provenance and Swift onboarding passed the affected focused suites."
+
+canonical_verify:
+  command: "./verify"
+  source_commit: "1b338cc6540befc8fb6eac620245380d44a429a9"
+  source_tree: "eebb50e282671415771d22cf68602c280637111e"
+  carrier: "Direct non-durable Agent Runtime terminal_exec, no terminal_start, Runtime restart, or durable job"
+  start_identity: "c3208a7f12af4459bc82816767c79981"
+  prior_revision_invocations_reconciled: 0
+  revision_3_invocations: 1
+  total_task_invocations: 1
+  profile: qualification
+  result: FAIL
+  exit_code: 1
+  completed_modules: 10
+  selected_modules: 62
+  completed_tests: 226
+  failing_module: tests.test_packaging_interpreter
+  failures: 4
+  failure_cause: "The existing test_package_fails_each_invalid_identity_before_dependency_install invokes macos/package_app.sh without its required --zero-cost argument for minor, ABI, platform, and architecture cases. The package exits with usage before the expected interpreter validation. This test was outside the focused set. The canonical run stopped at the mandatory gate; no second canonical invocation occurred."
+  source_locator: "tests/test_packaging_interpreter.py:96-101"
+  evidence: "The keyed terminal_exec result reports exit 1, 10/62 modules, 226 tests, and the four exact assertion failures. The source candidate and its test invocation are immutable Git evidence."
+
+artifact_qualification:
+  real_zero_cost_distribution_build_total: 0
+  complete_archive_build_total: 0
+  result: NOT_RUN
+  reason: "Canonical ./verify failed. No real artifact manufacture, signing identity/DR or TeamIdentifier observation, substrate/payload closure, handoff hash, or archive hash can be claimed."
+
+live_effects:
+  production_runtime_install_or_cutover: 0
+  production_runtime_restart: 0
+  production_lifecycle_mutation: 0
+  production_payload_pointer_mutation: 0
+  live_runtime_configuration_mutation: 0
+  tunnel_client_mutation: 0
+  apple_developer_authority_mutation: 0
+  apple_notarization_submission: 0
+  release_or_tag_publication: 0
+  host_dependency_install: 0
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "Exact revision-3 base and all five preserved checkpoint commits/trees resolve in order; none was reset, squashed, amended, or accepted as the final source."
+  - criterion_id: AC-2
+    status: BLOCKED
+    evidence: "Revision-1 AC-7 requires canonical ./verify PASS and AC-8 requires one final artifact. The sole authorized verifier failed, so final source and artifact acceptance are not proven."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "Architect reconciliation found no prior canonical invocation or final build; this execution made one canonical invocation, zero distribution builds, and zero archives across TASK-0181."
+  - criterion_id: AC-4
+    status: EVIDENCE_INDEXED
+    evidence: "No production Runtime, lifecycle, payload, config, tunnel, Apple, tag or release effect occurred. Report-only validation, publication and fresh clean-main reconciliation are consequence-boundary checks after report authorship."
+
+authoritative_verification:
+  required: false
+  performed: false
+  result: NOT_REQUIRED
+  evidence: "No separate authoritative verifier is designated. The Executor canonical ./verify is mandatory and failed as recorded above."
+
+pushed: false
+
+blockers:
+  - id: B-0181-REV3-VERIFY
+    reason: "The sole authorized canonical ./verify invocation failed. Revision 3 forbids a second canonical invocation and requires artifact manufacture to stop on failure. A revised continuation authority is required for source correction and requalification."
+
+result: BLOCKED
