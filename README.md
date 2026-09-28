@@ -23,6 +23,8 @@ The first ad-hoc substrate launch may require the operator to use macOS Open/Ope
 
 A qualified release bundle is checkout-independent. It contains ad-hoc sealed `Agent Runtime.app`, external `Agent Runtime.candidate.json`, and `payloads/<initial-closure>/`. Keep the complete bundle together and open `Agent Runtime.app`.
 
+Download the [v0.5.0 zero-cost release](https://github.com/phatnguyen03022001/agent-runtime/releases/tag/v0.5.0) and `SHA256SUMS.txt`. Verify the archive with `shasum -a 256 -c SHA256SUMS.txt` before extraction. Its SHA-256 is `3f179015534d81d6baee3faf78a57f8300451739afdda53a5940ee91ec7c3746`, and the release tag identifies packaged source revision `092b761cdc7e3f1085abe38948d9613fefe9e875`.
+
 On a fresh machine the existing app opens native setup automatically. Enter the provisioned Control Plane API key and tunnel ID in secure fields, provide the Runtime Git name/email pair when requested, and choose the workspace with the macOS folder picker. The normal newcomer path does **not** require Terminal, shell exports, manual `runtime.env` editing, or typing a workspace path.
 
 The app delegates validation, canonical mode-`0600` configuration publication, release preflight/provenance, candidate cutover, resume/recovery, doctor, readiness, and commit to the existing package-owned helpers. It does not reimplement lifecycle semantics in Swift. A recognized pending cutover may be doctor `degraded` before commit only because of `CUTOVER_TRANSACTION_PRESENT`; any additional doctor warning or failure blocks commit. Setup reports success only after the existing commit resolves the transaction, readiness is `ready`, and package-owned doctor is `healthy`.
@@ -31,7 +33,7 @@ If macOS blocks the first ad-hoc app launch, use the platform's Open/Open Anyway
 
 An already-valid installed canonical configuration remains authoritative and goes directly to the current control panel without being rewritten or re-prompted. No agent-runtime Git clone, CPython 3.13, Swift/Xcode, local signing identity, or notary credentials are required on the consumer Mac.
 
-The repository contains the source architecture for this lane; no public release is claimed. The ad-hoc artifact has no Apple Developer ID or notarization authority.
+The public v0.5.0 artifact is ad-hoc signed without Apple Developer ID or notarization. macOS may require Open/Open Anyway for the exact downloaded app.
 
 ### Build from source — maintainers
 
