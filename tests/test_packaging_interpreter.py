@@ -95,7 +95,7 @@ class PackagingInterpreterTests(unittest.TestCase):
                 env["FAKE_PYTHON_LOG"] = str(log)
                 env.pop("AGENT_RUNTIME_PACKAGING_PYTHON", None)
 
-                result = subprocess.run([str(PACKAGE)], cwd=ROOT, env=env, capture_output=True, text=True, check=False)
+                result = subprocess.run([str(PACKAGE), "--zero-cost"], cwd=ROOT, env=env, capture_output=True, text=True, check=False)
 
                 self.assertEqual(result.returncode, 2)
                 self.assertIn("unsupported packaging interpreter", result.stderr)
