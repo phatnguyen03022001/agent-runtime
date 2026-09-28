@@ -12,6 +12,7 @@ import json
 import os
 import plistlib
 import re
+import shutil
 import stat
 import subprocess
 import tarfile
@@ -40,6 +41,25 @@ MANIFEST_KEYS = {
 }
 LEGACY_MANIFEST_KEYS = MANIFEST_KEYS - {"service_management_contract"}
 ENTRY_KEYS = {"path", "size", "sha256"}
+LIFECYCLE_CONTRACT = "user-launchagent-v1"
+PAYLOAD_CONTRACT = "external-python-v1"
+PAYLOAD_SCHEMA = 1
+PAYLOAD_MANIFEST_NAME = "payload-manifest.json"
+PAYLOAD_ENTRY_KEYS = {"path", "mode", "size", "sha256"}
+PAYLOAD_MANIFEST_KEYS = {
+    "schema",
+    "owner",
+    "content_closure",
+    "source_revision",
+    "source_tree",
+    "requirements_lock_sha256",
+    "required_python_major_minor",
+    "lifecycle_contract",
+    "payload_contract",
+    "expected_public_tool_count",
+    "expected_public_surface_sha256",
+    "files",
+}
 CANDIDATE_KEYS = {
     "schema",
     "bundle_identifier",
@@ -205,6 +225,278 @@ def _validate_identity(value: object, pattern: re.Pattern[str], label: str) -> s
     if not isinstance(value, str) or pattern.fullmatch(value) is None:
         raise PackageProvenanceError(f"manifest {label} identity is invalid")
     return value
+
+
+def _payload_closure(entries: list[dict[str, object]]) -> str:
+    canonical = "".join(
+        f"{entry['path']}\\t{entry['mode']}\\t{entry['size']}\\t{entry['sha256']}\\n"
+        for entry in entries
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def _payload_source_inventory(source_package: Path) -> list[dict[str, object]]:
+    if source_package.is_symlink() or not source_package.is_dir():
+        raise PackageProvenanceError("payload source package must be a regular non-symlink directory")
+    entries: list[dict[str, object]] = []
+    names: set[str] = set()
+    for candidate in source_package.iterdir():
+        if candidate.is_symlink():
+            raise PackageProvenanceError("payload source must not contain symlinks")
+        if not candidate.is_file() or candidate.suffix != ".py" or candidate.name in {".", ".."}:
+            raise PackageProvenanceError("payload source contains an extra or unsupported entry")
+        info = candidate.stat()
+        if stat.S_IMODE(info.st_mode) & 0o111:
+            raise PackageProvenanceError("payload source Python files must not be executable")
+        if candidate.name in names:
+            raise PackageProvenanceError("payload source contains duplicate paths")
+        names.add(candidate.name)
+        entries.append(
+            {
+                "path": f"agent_runtime/{candidate.name}",
+                "mode": "0444",
+                "size": info.st_size,
+                "sha256": _sha256(candidate),
+            }
+        )
+    if not {"__init__.py", "server.py"}.issubset(names):
+        raise PackageProvenanceError("payload source package is incomplete")
+    entries.sort(key=lambda entry: str(entry["path"]).encode("utf-8"))
+    return entries
+
+
+def _payload_manifest_data(
+    entries: list[dict[str, object]],
+    *,
+    revision: str,
+    tree: str,
+    requirements_lock_sha256: str,
+    python_major_minor: str,
+    public_tool_count: int,
+    public_surface_sha256: str,
+) -> dict[str, object]:
+    _validate_identity(revision, HEX40, "payload source revision")
+    _validate_identity(tree, HEX40, "payload source tree")
+    _validate_identity(requirements_lock_sha256, HEX64, "payload requirements.lock")
+    _validate_identity(public_surface_sha256, HEX64, "payload public surface")
+    if re.fullmatch(r"[1-9][0-9]*\.[0-9]+", python_major_minor) is None:
+        raise PackageProvenanceError("payload required Python major/minor is invalid")
+    if type(public_tool_count) is not int or public_tool_count < 1:
+        raise PackageProvenanceError("payload expected public tool count is invalid")
+    return {
+        "schema": PAYLOAD_SCHEMA,
+        "owner": OWNER,
+        "content_closure": _payload_closure(entries),
+        "source_revision": revision,
+        "source_tree": tree,
+        "requirements_lock_sha256": requirements_lock_sha256,
+        "required_python_major_minor": python_major_minor,
+        "lifecycle_contract": LIFECYCLE_CONTRACT,
+        "payload_contract": PAYLOAD_CONTRACT,
+        "expected_public_tool_count": public_tool_count,
+        "expected_public_surface_sha256": public_surface_sha256,
+        "files": entries,
+    }
+
+
+def _load_payload_manifest(path: Path) -> dict[str, object]:
+    if path.is_symlink() or not path.is_file():
+        raise PackageProvenanceError("payload manifest must be a regular non-symlink file")
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise PackageProvenanceError("payload manifest is malformed") from exc
+    if not isinstance(value, dict) or set(value) != PAYLOAD_MANIFEST_KEYS:
+        raise PackageProvenanceError("payload manifest shape is invalid")
+    return value
+
+
+def validate_payload_release(
+    release: Path,
+    *,
+    expected_closure: str,
+    expected_requirements_lock_sha256: str,
+    expected_python_major_minor: str,
+    expected_public_tool_count: int,
+    expected_public_surface_sha256: str,
+    require_directory_name: bool = True,
+) -> dict[str, object]:
+    closure = _validate_identity(expected_closure, HEX64, "expected payload closure")
+    lock_sha = _validate_identity(
+        expected_requirements_lock_sha256, HEX64, "expected payload requirements.lock"
+    )
+    surface_sha = _validate_identity(
+        expected_public_surface_sha256, HEX64, "expected payload public surface"
+    )
+    if re.fullmatch(r"[1-9][0-9]*\.[0-9]+", expected_python_major_minor) is None:
+        raise PackageProvenanceError("expected payload Python major/minor is invalid")
+    if type(expected_public_tool_count) is not int or expected_public_tool_count < 1:
+        raise PackageProvenanceError("expected payload public tool count is invalid")
+    if release.is_symlink() or not release.is_dir():
+        raise PackageProvenanceError("payload release must be a regular non-symlink directory")
+    if require_directory_name and release.name != closure:
+        raise PackageProvenanceError("payload release directory name does not match closure")
+    if stat.S_IMODE(release.stat().st_mode) != 0o555:
+        raise PackageProvenanceError("payload release directory mode is invalid")
+
+    manifest_path = release / PAYLOAD_MANIFEST_NAME
+    if (
+        manifest_path.is_symlink()
+        or not manifest_path.is_file()
+        or stat.S_IMODE(manifest_path.stat().st_mode) != 0o444
+    ):
+        raise PackageProvenanceError("payload manifest mode is invalid")
+    manifest = _load_payload_manifest(manifest_path)
+    if manifest["schema"] != PAYLOAD_SCHEMA or manifest["owner"] != OWNER:
+        raise PackageProvenanceError("payload manifest ownership/schema is invalid")
+    if manifest["lifecycle_contract"] != LIFECYCLE_CONTRACT or manifest["payload_contract"] != PAYLOAD_CONTRACT:
+        raise PackageProvenanceError("payload substrate contract is incompatible")
+    if manifest["content_closure"] != closure:
+        raise PackageProvenanceError("payload manifest closure does not match selected release")
+    if manifest["requirements_lock_sha256"] != lock_sha:
+        raise PackageProvenanceError("payload requirements.lock identity is incompatible")
+    if manifest["required_python_major_minor"] != expected_python_major_minor:
+        raise PackageProvenanceError("payload Python contract is incompatible")
+    if manifest["expected_public_tool_count"] != expected_public_tool_count:
+        raise PackageProvenanceError("payload public tool count is incompatible")
+    if manifest["expected_public_surface_sha256"] != surface_sha:
+        raise PackageProvenanceError("payload public surface identity is incompatible")
+    _validate_identity(manifest["source_revision"], HEX40, "payload source revision")
+    _validate_identity(manifest["source_tree"], HEX40, "payload source tree")
+
+    package = release / "agent_runtime"
+    if package.is_symlink() or not package.is_dir() or stat.S_IMODE(package.stat().st_mode) != 0o555:
+        raise PackageProvenanceError("payload package directory is missing, unsafe, or mutated")
+    root_names = {item.name for item in release.iterdir()}
+    if root_names != {PAYLOAD_MANIFEST_NAME, "agent_runtime"}:
+        raise PackageProvenanceError("payload release contains extra files")
+
+    files = manifest["files"]
+    if not isinstance(files, list) or not files:
+        raise PackageProvenanceError("payload manifest inventory is invalid")
+    normalized: list[dict[str, object]] = []
+    previous: str | None = None
+    seen: set[str] = set()
+    for entry in files:
+        if not isinstance(entry, dict) or set(entry) != PAYLOAD_ENTRY_KEYS:
+            raise PackageProvenanceError("payload manifest inventory entry is malformed")
+        path = entry["path"]
+        mode = entry["mode"]
+        size = entry["size"]
+        digest = entry["sha256"]
+        if not isinstance(path, str) or re.fullmatch(r"agent_runtime/[^/]+\.py", path) is None:
+            raise PackageProvenanceError("payload manifest path is invalid")
+        if path in seen or (previous is not None and path <= previous):
+            raise PackageProvenanceError("payload manifest inventory is duplicate or unsorted")
+        if mode != "0444" or type(size) is not int or size < 0:
+            raise PackageProvenanceError("payload manifest mode or size is invalid")
+        _validate_identity(digest, HEX64, "payload file hash")
+        target = release / path
+        if target.is_symlink() or not target.is_file():
+            raise PackageProvenanceError("payload inventory member is missing or unsafe")
+        info = target.stat()
+        if stat.S_IMODE(info.st_mode) != 0o444 or info.st_size != size or _sha256(target) != digest:
+            raise PackageProvenanceError("payload inventory member was mutated")
+        seen.add(path)
+        previous = path
+        normalized.append({"path": path, "mode": mode, "size": size, "sha256": digest})
+    actual_names = {f"agent_runtime/{item.name}" for item in package.iterdir()}
+    if actual_names != seen:
+        raise PackageProvenanceError("payload release inventory does not close over package contents")
+    actual_closure = _payload_closure(normalized)
+    if actual_closure != closure:
+        raise PackageProvenanceError("payload content closure mismatch")
+    return manifest
+
+
+def publish_payload_release(
+    source_package: Path,
+    releases_root: Path,
+    *,
+    revision: str,
+    tree: str,
+    requirements_lock_sha256: str,
+    python_major_minor: str,
+    public_tool_count: int,
+    public_surface_sha256: str,
+) -> dict[str, object]:
+    entries = _payload_source_inventory(source_package)
+    manifest = _payload_manifest_data(
+        entries,
+        revision=revision,
+        tree=tree,
+        requirements_lock_sha256=requirements_lock_sha256,
+        python_major_minor=python_major_minor,
+        public_tool_count=public_tool_count,
+        public_surface_sha256=public_surface_sha256,
+    )
+    closure = str(manifest["content_closure"])
+    if releases_root.is_symlink() or (releases_root.exists() and not releases_root.is_dir()):
+        raise PackageProvenanceError("payload releases root is unsafe")
+    releases_root.mkdir(parents=True, exist_ok=True)
+    final = releases_root / closure
+    if final.exists() or final.is_symlink():
+        validated = validate_payload_release(
+            final,
+            expected_closure=closure,
+            expected_requirements_lock_sha256=requirements_lock_sha256,
+            expected_python_major_minor=python_major_minor,
+            expected_public_tool_count=public_tool_count,
+            expected_public_surface_sha256=public_surface_sha256,
+        )
+        if validated != manifest:
+            raise PackageProvenanceError("existing payload release does not match requested publication")
+        return {"content_closure": closure, "release_path": str(final), "manifest": validated}
+
+    staging = releases_root / f".{closure}.stage-{os.getpid()}"
+    if staging.exists() or staging.is_symlink():
+        raise PackageProvenanceError("payload staging path already exists")
+    try:
+        package = staging / "agent_runtime"
+        package.mkdir(parents=True, mode=0o755)
+        for entry in entries:
+            name = Path(str(entry["path"])).name
+            source = source_package / name
+            target = package / name
+            target.write_bytes(source.read_bytes())
+            target.chmod(0o444)
+        manifest_path = staging / PAYLOAD_MANIFEST_NAME
+        manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=False) + "\n", encoding="utf-8")
+        manifest_path.chmod(0o444)
+        package.chmod(0o555)
+        staging.chmod(0o555)
+        validate_payload_release(
+            staging,
+            expected_closure=closure,
+            expected_requirements_lock_sha256=requirements_lock_sha256,
+            expected_python_major_minor=python_major_minor,
+            expected_public_tool_count=public_tool_count,
+            expected_public_surface_sha256=public_surface_sha256,
+            require_directory_name=False,
+        )
+        try:
+            _rename_candidate_no_replace(staging, final)
+        except FileExistsError as exc:
+            raise PackageProvenanceError("payload release already exists") from exc
+        validate_payload_release(
+            final,
+            expected_closure=closure,
+            expected_requirements_lock_sha256=requirements_lock_sha256,
+            expected_python_major_minor=python_major_minor,
+            expected_public_tool_count=public_tool_count,
+            expected_public_surface_sha256=public_surface_sha256,
+        )
+    finally:
+        if staging.exists() and not staging.is_symlink():
+            for current, dirs, files in os.walk(staging, topdown=False):
+                root = Path(current)
+                for name in files:
+                    (root / name).chmod(0o600)
+                for name in dirs:
+                    (root / name).chmod(0o700)
+                root.chmod(0o700)
+            shutil.rmtree(staging)
+    return {"content_closure": closure, "release_path": str(final), "manifest": manifest}
 
 
 def write_manifest(

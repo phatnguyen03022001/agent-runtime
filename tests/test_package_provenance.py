@@ -560,5 +560,82 @@ class PackageProvenanceTests(unittest.TestCase):
                 )
 
 
+    def test_external_payload_release_is_content_addressed_and_tamper_evident(self) -> None:
+        provenance = load_module()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            source = root / "source" / "agent_runtime"
+            source.mkdir(parents=True)
+            (source / "__init__.py").write_text("__all__ = []\n")
+            (source / "server.py").write_text("VALUE = 1\n")
+            releases = root / "releases"
+            surface_sha = "d" * 64
+
+            published = provenance.publish_payload_release(
+                source,
+                releases,
+                revision="a" * 40,
+                tree="b" * 40,
+                requirements_lock_sha256="c" * 64,
+                python_major_minor="3.13",
+                public_tool_count=20,
+                public_surface_sha256=surface_sha,
+            )
+
+            closure = published["content_closure"]
+            release = Path(published["release_path"])
+            self.assertRegex(closure, r"^[0-9a-f]{64}$")
+            self.assertEqual(release.name, closure)
+            self.assertEqual(release.parent, releases)
+            manifest = provenance.validate_payload_release(
+                release,
+                expected_closure=closure,
+                expected_requirements_lock_sha256="c" * 64,
+                expected_python_major_minor="3.13",
+                expected_public_tool_count=20,
+                expected_public_surface_sha256=surface_sha,
+            )
+            self.assertEqual(manifest["content_closure"], closure)
+            self.assertEqual(manifest["source_revision"], "a" * 40)
+            self.assertEqual(manifest["source_tree"], "b" * 40)
+            self.assertEqual(manifest["lifecycle_contract"], provenance.LIFECYCLE_CONTRACT)
+            self.assertEqual(manifest["payload_contract"], provenance.PAYLOAD_CONTRACT)
+            self.assertEqual(
+                [entry["path"] for entry in manifest["files"]],
+                ["agent_runtime/__init__.py", "agent_runtime/server.py"],
+            )
+            self.assertTrue(all(entry["mode"] == "0444" for entry in manifest["files"]))
+            self.assertFalse(any(os.access(release / entry["path"], os.X_OK) for entry in manifest["files"]))
+
+            (release / "agent_runtime/server.py").chmod(0o644)
+            (release / "agent_runtime/server.py").write_text("VALUE = 2\n")
+            with self.assertRaisesRegex(provenance.PackageProvenanceError, "mutated|closure|inventory"):
+                provenance.validate_payload_release(
+                    release,
+                    expected_closure=closure,
+                    expected_requirements_lock_sha256="c" * 64,
+                    expected_python_major_minor="3.13",
+                    expected_public_tool_count=20,
+                    expected_public_surface_sha256=surface_sha,
+                )
+
+            unsafe_source = root / "unsafe" / "agent_runtime"
+            unsafe_source.mkdir(parents=True)
+            executable = unsafe_source / "server.py"
+            executable.write_text("VALUE = 1\n")
+            executable.chmod(0o755)
+            with self.assertRaisesRegex(provenance.PackageProvenanceError, "executable"):
+                provenance.publish_payload_release(
+                    unsafe_source,
+                    root / "unsafe-releases",
+                    revision="a" * 40,
+                    tree="b" * 40,
+                    requirements_lock_sha256="c" * 64,
+                    python_major_minor="3.13",
+                    public_tool_count=20,
+                    public_surface_sha256=surface_sha,
+                )
+
+
 if __name__ == "__main__":
     unittest.main()
