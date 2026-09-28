@@ -1,0 +1,68 @@
+protocol_version: 3
+
+task_id: TASK-0181
+task_revision: 3
+review_revision: 1
+state: BLOCKED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0181/report-r3.yaml
+  commit: "290d8b44a7925329788f019a6cc22f0e406399e5"
+  report_revision: 3
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  skill_rules: PASS
+  scope: PASS
+  structure_policy: PASS
+  git_authority: PASS
+  acceptance_criteria: BLOCKED_BY_CANONICAL_TEST_HARNESS_DRIFT
+  verifier_evidence: FAIL_RECONCILED
+
+blocking_findings:
+  - id: B-0181-REV3-VERIFY
+    severity: BLOCKING
+    summary: "The sole revision-3 canonical ./verify invocation failed in tests.test_packaging_interpreter because four existing invalid-interpreter cases invoke macos/package_app.sh without the now-required --zero-cost argument, so the package exits at CLI usage before reaching the interpreter-validation predicate."
+    classification: TEST_CONTRACT_DRIFT
+    required_authority: "Revision 4 may correct only the stale packaging-interpreter test invocation contract, requalify that test surface, and consume exactly one additional canonical ./verify invocation. Product source must remain byte-identical unless a newly observed product defect forces a new Architect revision."
+
+acceptance_basis:
+  - "GitHub canonical comparison proves report commit 290d8b44a7925329788f019a6cc22f0e406399e5 is exactly one commit ahead of source candidate 1b338cc6540befc8fb6eac620245380d44a429a9 and adds only .agent/tasks/TASK-0181/report-r3.yaml."
+  - "The reviewed report records focused qualification PASS: 207/207 affected Python tests, 47/47 Swift tests, bash -n start.sh, and git diff --check."
+  - "The canonical verifier was invoked exactly once at source candidate 1b338cc6540befc8fb6eac620245380d44a429a9 and failed after 10/62 modules and 226 tests with four failures in tests.test_packaging_interpreter."
+  - "Independent GitHub source inspection confirms the failing test directly executes subprocess.run([str(PACKAGE)], ...) without --zero-cost in the invalid identity loop, while package_app.sh now intentionally requires explicit --zero-cost mode."
+  - "The observed failure occurs before interpreter validation and therefore does not falsify the accepted zero-cost substrate/payload product behavior proven by the focused suites; it exposes stale test invocation semantics."
+  - "No real zero-cost distribution or archive was built after the failed gate; both counters remain zero."
+  - "The report records zero production Runtime install/cutover/restart/lifecycle/payload/config/tunnel/Apple/release/tag/host-install effects."
+
+continuation:
+  allowed: false
+  preconditions:
+    - "TASK-0181 revision 3 is terminally BLOCKED and must not be resumed directly."
+    - "A revision-4 continuation may make the bounded test-contract correction and perform exactly one additional canonical verifier invocation."
+  preserve:
+    source_candidate: "1b338cc6540befc8fb6eac620245380d44a429a9"
+    source_tree: "eebb50e282671415771d22cf68602c280637111e"
+    focused_python: "207/207 PASS"
+    focused_swift: "47/47 PASS"
+    canonical_verify_invocations_consumed: 1
+    real_distribution_builds_consumed: 0
+    complete_archive_builds_consumed: 0
+    zero_live_production_effects: true
+  forbidden:
+    - "Treating the failed revision-3 canonical invocation as if it had not occurred."
+    - "A broad product rewrite in response to this stale test invocation."
+    - "Changing product source before the focused packaging-interpreter correction proves the failure classification wrong."
+    - "Building distribution/archive before the additional canonical verifier passes."
+    - "Any live production Runtime/lifecycle/payload/config/tunnel mutation."
+
+notes:
+  - "The additional canonical verifier is a new revision authority, not a retry hidden inside revision 3."
