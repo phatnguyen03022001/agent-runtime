@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0181
-task_revision: 4
-review_revision: 2
+task_revision: 5
+review_revision: 3
 state: BLOCKED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
-  path: .agent/tasks/TASK-0181/report-r4.yaml
-  commit: "bbfbe683fe5c0d2f381356271b30957aa7fe7627"
-  report_revision: 4
+  path: .agent/tasks/TASK-0181/report-r5.yaml
+  commit: "30549e7e77209befe6b5db9e43b9122e36f44eca"
+  report_revision: 5
 
 independence:
   reviewer_role: ARCHITECT
@@ -24,47 +24,51 @@ contract_compliance:
   scope: PASS
   structure_policy: PASS
   git_authority: PASS
-  acceptance_criteria: BLOCKED_BY_LEGACY_RUNTIME_CONFIG_FIXTURES
-  verifier_evidence: FAIL_RECONCILED
+  acceptance_criteria: BLOCKED_BY_TWO_LEGACY_TEST_MODULES
+  verifier_evidence: NOT_CONSUMED_BY_REV5
 
 blocking_findings:
-  - id: B-0181-REV4-VERIFY
+  - id: B-0181-REV5-PRESWEEP
     severity: BLOCKING
-    summary: "The sole revision-4 canonical verifier passed the corrected packaging-interpreter module and then failed three tests in tests.test_revision4_runtime_config because those fixtures still model the retired embedded first-party payload and bundled BundleProgram ServiceManagement-era LaunchAgent shapes."
-    classification: TEST_FIXTURE_DRIFT
-    required_authority: "Revision 5 may update only tests/test_revision4_runtime_config.py to model the accepted external-payload/current-user-LaunchAgent contracts, prove that full module, and consume exactly one additional canonical ./verify invocation."
+    summary: "The authorized qualification pre-sweep completed all 62 selected modules and 839 tests, with 60 modules passing. The only failures are tests.test_task0055_macos_contract and tests.test_tunnel_identity, both retaining retired Developer-ID/ServiceManagement/embedded-payload fixture assumptions."
+    classification: TEST_FIXTURE_AND_DOC_ASSERTION_DRIFT
+    required_authority: "Revision 6 may reapply the already-proven runtime-config fixture correction, update only the two remaining legacy test modules to current zero-cost external-payload/user-LaunchAgent contracts, run focused modules plus another complete qualification pre-sweep, and consume canonical invocation 3 only after that full sweep passes."
 
 acceptance_basis:
-  - "Revision-4 report commit bbfbe683fe5c0d2f381356271b30957aa7fe7627 records one bounded test-only source candidate 16a47068f0db094b3f7703dc8c87c7b1139b7ca8 with product bytes identical to preserved candidate 1b338cc6540befc8fb6eac620245380d44a429a9."
-  - "The exact revision-4 target module tests.test_packaging_interpreter passed 12/12 before canonical verification."
-  - "Canonical invocation 2 progressed past packaging_interpreter and failed only three cases in tests.test_revision4_runtime_config after 11/62 modules and 240 tests."
-  - "Independent source inspection confirms test_installed_serve_binds_revision_from_validated_package_manifest constructs first-party agent_runtime/server.py inside the installed app and no canonical external payload pointer/release, conflicting with the accepted external-python-v1 architecture."
-  - "Independent source inspection confirms _start_fixture writes Contents/Library/LaunchAgents/com.picmao.agent-runtime-runtime-service.plist with BundleProgram, while current start.sh requires a mode-0600 plist at ~/Library/LaunchAgents with ProgramArguments pointing to the embedded AgentRuntimeRuntimeService helper."
-  - "The observed errors therefore occur because the fixtures fail current preconditions before reaching their intended runtime-config/readiness assertions; they do not independently demonstrate a product-source regression."
-  - "Revision-3 focused product evidence remains applicable because product bytes are unchanged: 207/207 affected Python tests and 47/47 Swift tests PASS."
-  - "No distribution/archive was built and no live production Runtime/lifecycle/payload/config/tunnel/Apple/release/tag effect occurred."
+  - "Revision-5 report records tests.test_revision4_runtime_config PASS 12/12 after a bounded test-only correction with product bytes unchanged. The correction was restored rather than frozen because the later full pre-sweep failed."
+  - "The report preserves the exact corrected runtime-config file SHA-256 3dec150104fa395a5d9c28dd2d17a3a9c0d762a3e5424e49400d5446f5f7f4d6 and ignored patch SHA-256 32341494549ab31f5b0bb96135b6122ee54c61aa0f6b4796dc4ad0858a340b3f."
+  - "The full qualification planning surface selected all 62 classified modules. The sequential pre-sweep ran every selected module rather than stopping early and observed 839 tests."
+  - "tests.test_task0055_macos_contract failed because current assertions still demand AGENT_RUNTIME_CODESIGN_IDENTITY/non-ad-hoc signing and README text for app-owned ServiceManagement/Developer-ID-era states, while accepted current product packaging is explicit --zero-cost ad-hoc and current lifecycle is one per-user LaunchAgent."
+  - "Independent source inspection confirms that module still asserts AGENT_RUNTIME_CODESIGN_IDENTITY, --sign $SIGNING_IDENTITY, absence of --sign -, and README phrases such as app-owned ServiceManagement/requires-approval/not-registered."
+  - "tests.test_tunnel_identity failed seven install cases at the same earlier gate because its fake package_app.sh emits only candidate_app, candidate_handoff and candidate_sha256; current install requires initial_payload_release from the external-payload package contract."
+  - "Independent source inspection confirms the same tunnel fixture still creates embedded runtime/agent_runtime, a bundled Contents/Library/LaunchAgents plist with BundleProgram, and a fake ServiceManagement control path for the current generation."
+  - "These two modules therefore fail before or at retired fixture boundaries and do not independently demonstrate product-source defects. Product source remains frozen at 1b338cc6540befc8fb6eac620245380d44a429a9."
+  - "Canonical invocation 3 was correctly NOT_RUN. Historical canonical consumption remains exactly two; distribution/archive counts remain zero."
+  - "No live production Runtime/lifecycle/payload/config/tunnel/Apple/release/tag/host-install effects occurred."
 
 continuation:
   allowed: false
   preconditions:
-    - "TASK-0181 revision 4 is terminally BLOCKED and must not be resumed directly."
-    - "Revision 5 may make only the bounded runtime-config test-fixture correction before another canonical verifier."
+    - "TASK-0181 revision 5 is terminally BLOCKED and must not be resumed directly."
+    - "Revision 6 may perform only bounded test convergence and subsequent requalification."
   preserve:
     product_candidate: "1b338cc6540befc8fb6eac620245380d44a429a9"
-    revision_4_test_candidate: "16a47068f0db094b3f7703dc8c87c7b1139b7ca8"
-    focused_python: "207/207 PASS"
-    focused_swift: "47/47 PASS"
-    packaging_interpreter: "12/12 PASS"
+    product_tree: "eebb50e282671415771d22cf68602c280637111e"
+    packaging_interpreter_correction_blob: "71c33fd3cb80f65e98bf92a4ecfaa1271816b79c"
+    runtime_config_corrected_sha256: "3dec150104fa395a5d9c28dd2d17a3a9c0d762a3e5424e49400d5446f5f7f4d6"
+    runtime_config_patch_sha256: "32341494549ab31f5b0bb96135b6122ee54c61aa0f6b4796dc4ad0858a340b3f"
+    revision_5_presweep: "62/62 modules executed, 60 PASS / 2 FAIL, 839 tests"
     canonical_verify_invocations_consumed: 2
+    canonical_verify_invocation_3_consumed: false
     real_distribution_builds_consumed: 0
     complete_archive_builds_consumed: 0
     zero_live_production_effects: true
   forbidden:
-    - "Changing product source to satisfy stale runtime-config fixtures."
-    - "Restoring embedded first-party payload or BundleProgram current lifecycle in product code."
-    - "Weakening readiness, payload provenance, or current LaunchAgent ownership checks."
-    - "Building distribution/archive before the next canonical verifier passes."
-    - "Any live production mutation."
+    - "Any product-source change in response to the two legacy test modules."
+    - "Restoring paid-signing, current ServiceManagement, embedded mutable payload, or BundleProgram current lifecycle semantics."
+    - "Weakening installer, provenance, payload, lifecycle, readiness, or security checks to satisfy fixtures."
+    - "Calling canonical ./verify before a complete full pre-sweep passes."
+    - "Building artifacts before canonical PASS."
 
 notes:
-  - "Repeated canonical failures are exposing legacy suite fixtures incrementally. Revision 5 must run the full corrected module before consuming another canonical verifier."
+  - "Revision 5 successfully converted the verifier problem from incremental discovery to a complete known failing-module set. Revision 6 should converge that set before spending canonical invocation 3."
