@@ -52,12 +52,17 @@ printf '{"main_app":"%s","runtime_agent":"%s"}\n' "$main_state" "$runtime_state"
         helper = installed_app / "Contents" / "MacOS" / "AgentRuntimeRuntimeService"
         helper.write_text("#!/bin/bash\nexit 0\n")
         helper.chmod(0o700)
-        service_plist = installed_app / "Contents" / "Library" / "LaunchAgents" / "com.picmao.agent-runtime-runtime-service.plist"
+        service_plist = self.home / "Library" / "LaunchAgents" / "com.picmao.agent-runtime-runtime-service.plist"
         service_plist.parent.mkdir(parents=True)
         service_plist.write_bytes(plistlib.dumps({
             "Label": "com.picmao.agent-runtime-runtime-service",
-            "BundleProgram": "Contents/MacOS/AgentRuntimeRuntimeService",
+            "ProgramArguments": [str(helper)],
+            "RunAtLoad": False,
+            "KeepAlive": {"SuccessfulExit": False},
+            "ProcessType": "Interactive",
+            "ThrottleInterval": 2,
         }))
+        service_plist.chmod(0o600)
         self.service_plist = service_plist
         (self.state / "loaded").write_text("")
         self._write_fakes()
@@ -268,51 +273,47 @@ esac
         self.assertEqual(len((self.state / "starts.log").read_text().splitlines()), 4)
 
 
-    def test_start_allows_main_app_not_found_when_runtime_agent_is_enabled(self) -> None:
-        result = self.run_start(
-            "start",
-            extra_env={"FAKE_MAIN_SM_STATE": "not-found", "FAKE_RUNTIME_SM_STATE": "enabled"},
-        )
+    def test_start_uses_traditional_launchagent_without_service_management_state(self) -> None:
+        result = self.run_start("start", extra_env={"FAKE_SM_STATE": "requires-approval"})
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIsNotNone(self.current_pid())
 
-    def test_restart_allows_main_app_not_found_when_runtime_agent_is_enabled(self) -> None:
+    def test_restart_uses_traditional_launchagent_without_service_management_state(self) -> None:
         started = self.run_start("start")
         self.assertEqual(started.returncode, 0, started.stderr)
         first = self.current_pid()
         self.assertIsNotNone(first)
-
-        restarted = self.run_start(
-            "restart",
-            extra_env={"FAKE_MAIN_SM_STATE": "not-found", "FAKE_RUNTIME_SM_STATE": "enabled"},
-        )
+        restarted = self.run_start("restart", extra_env={"FAKE_SM_STATE": "not-registered"})
         self.assertEqual(restarted.returncode, 0, restarted.stderr)
         self.assertNotEqual(self.wait_for_pid_change(first), first)
 
-    def test_start_fails_closed_when_modern_bundleprogram_contract_is_wrong(self) -> None:
+    def test_start_fails_closed_when_current_launchagent_program_is_foreign(self) -> None:
         payload = plistlib.loads(self.service_plist.read_bytes())
-        payload["BundleProgram"] = "Contents/MacOS/ForeignHelper"
+        payload["ProgramArguments"] = ["/usr/bin/false"]
         self.service_plist.write_bytes(plistlib.dumps(payload))
+        self.service_plist.chmod(0o600)
         result = self.run_start("start")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("BundleProgram", result.stderr)
+        self.assertIn("foreign", result.stderr)
         self.assertFalse((self.home / "Library/Application Support/Agent Runtime/protected-runtime-running").exists())
         self.assertFalse((self.state / "starts.log").exists())
 
-    def test_start_fails_closed_when_runtime_agent_is_not_registered_even_if_main_is_enabled(self) -> None:
-        result = self.run_start(
-            "start",
-            extra_env={"FAKE_MAIN_SM_STATE": "enabled", "FAKE_RUNTIME_SM_STATE": "not-registered"},
-        )
+    def test_start_fails_closed_when_current_launchagent_mode_is_unsafe(self) -> None:
+        self.service_plist.chmod(0o644)
+        result = self.run_start("start")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Runtime registration", result.stderr)
+        self.assertIn("mode", result.stderr)
         self.assertFalse((self.home / "Library/Application Support/Agent Runtime/protected-runtime-running").exists())
         self.assertFalse((self.state / "starts.log").exists())
 
-    def test_start_fails_closed_when_background_activity_requires_approval(self) -> None:
-        result = self.run_start("start", extra_env={"FAKE_SM_STATE": "requires-approval"})
+    def test_start_fails_closed_when_current_launchagent_is_symlink(self) -> None:
+        target = self.service_plist.with_name("foreign.plist")
+        target.write_bytes(self.service_plist.read_bytes())
+        self.service_plist.unlink()
+        self.service_plist.symlink_to(target)
+        result = self.run_start("start")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("ServiceManagement", result.stderr)
+        self.assertIn("unsafe", result.stderr)
         self.assertFalse((self.home / "Library/Application Support/Agent Runtime/protected-runtime-running").exists())
         self.assertFalse((self.state / "starts.log").exists())
 

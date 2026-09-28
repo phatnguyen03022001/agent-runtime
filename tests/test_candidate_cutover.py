@@ -432,16 +432,138 @@ def legacy_plist_bytes(
 
 
 class CandidateCutoverTests(unittest.TestCase):
-    def test_current_cutover_does_not_generate_legacy_launchagents(self) -> None:
+    def test_zero_cost_cutover_atomically_installs_app_payload_pointer_and_current_launchagent(self) -> None:
+        cutover = load_module(CUTOVER_PATH, "candidate_cutover_zero_cost_fresh")
+        provenance = cutover.provenance
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home = root / "home"
+            target = home / "Applications" / "Agent Runtime.app"
+            state_dir = home / "Library" / "Application Support" / "Agent Runtime"
+            transaction = state_dir / "cutover-transaction"
+            state_dir.mkdir(parents=True)
+            runtime_env = state_dir / "runtime.env"
+            runtime_env.write_text("CONTROL_PLANE_API_KEY=fixture\n")
+            runtime_env.chmod(0o600)
+
+            app = root / "candidate" / "Agent Runtime.app"
+            runtime = app / "Contents/Resources/runtime"
+            (runtime / ".venv/bin").mkdir(parents=True)
+            (runtime / "macos").mkdir(parents=True)
+            (app / "Contents/MacOS").mkdir(parents=True)
+            (app / "Contents/Info.plist").write_bytes(plistlib.dumps({
+                "CFBundleIdentifier": provenance.OWNER,
+                "CFBundleExecutable": "AgentRuntimeMenuBar",
+            }))
+            (runtime / "start.sh").write_text("#!/bin/sh\nexit 0\n")
+            (runtime / "start.sh").chmod(0o755)
+            (runtime / "macos/package_provenance.py").write_text("# bootstrap\n")
+            for relative in provenance.ZERO_COST_CODE_IDENTIFIERS:
+                target_code = app / relative
+                target_code.parent.mkdir(parents=True, exist_ok=True)
+                target_code.write_text("#!/bin/sh\nexit 0\n")
+                target_code.chmod(0o755)
+            surface_sha = "d" * 64
+            provenance.write_substrate_manifest(
+                runtime,
+                app / "Contents/Resources/runtime-manifest.json",
+                "a" * 40,
+                "b" * 40,
+                "c" * 64,
+                python_major_minor="3.13",
+                public_tool_count=20,
+                public_surface_sha256=surface_sha,
+            )
+            payload_source = root / "payload-source"
+            payload_source.mkdir()
+            (payload_source / "__init__.py").write_text("__all__ = []\n")
+            (payload_source / "server.py").write_text("VALUE = 1\n")
+            payload = provenance.publish_payload_release(
+                payload_source,
+                root / "payloads",
+                revision="a" * 40,
+                tree="b" * 40,
+                requirements_lock_sha256="c" * 64,
+                python_major_minor="3.13",
+                public_tool_count=20,
+                public_surface_sha256=surface_sha,
+            )
+            payload_release = Path(payload["release_path"])
+
+            def identity_reader(path: Path) -> dict[str, object]:
+                parts = path.parts
+                contents_index = parts.index("Contents")
+                relative = "/".join(parts[contents_index:])
+                identifier = provenance.ZERO_COST_CODE_IDENTIFIERS[relative]
+                return {
+                    "identifier": identifier,
+                    "team_identifier": None,
+                    "designated_requirement": f'designated => identifier "{identifier}"',
+                }
+
+            handoff = root / "candidate.json"
+            provenance._verify_codesign = lambda _app: None
+            provenance._codesign_metadata = identity_reader
+            provenance.seal_zero_cost_candidate(
+                app, handoff, payload_release, identity_reader=identity_reader
+            )
+            launchctl, launch_state, _ = make_fake_launchctl(
+                root, ui_loaded=False, runtime_loaded=False
+            )
+            service_management = mock.Mock(side_effect=AssertionError("current generation must not use ServiceManagement"))
+            cutover._service_management = service_management
+
+            result = cutover.cutover_candidate(
+                app,
+                handoff,
+                payload_release=payload_release,
+                target_app=target,
+                ui_plist=home / "Library/LaunchAgents/com.picmao.agent-runtime-ui.plist",
+                runtime_plist=home / "Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist",
+                state_dir=state_dir,
+                transaction_dir=transaction,
+                home=home,
+                launchctl=launchctl,
+                uid=501,
+            )
+
+            self.assertEqual(result["status"], "PENDING")
+            service_management.assert_not_called()
+            self.assertTrue(target.is_dir())
+            closure = payload["content_closure"]
+            installed_payload = state_dir / "payloads" / closure
+            self.assertTrue(installed_payload.is_dir())
+            pointer = state_dir / "current-payload"
+            self.assertEqual(pointer.read_text(), closure + "\n")
+            self.assertEqual(stat.S_IMODE(pointer.stat().st_mode), 0o600)
+            current_plist = home / "Library/LaunchAgents/com.picmao.agent-runtime-runtime-service.plist"
+            self.assertEqual(stat.S_IMODE(current_plist.stat().st_mode), 0o600)
+            current = plistlib.loads(current_plist.read_bytes())
+            self.assertEqual(current["ProgramArguments"], [str(target / "Contents/MacOS/AgentRuntimeRuntimeService")])
+            self.assertNotIn("BundleProgram", current)
+            self.assertIn("gui/501/com.picmao.agent-runtime-runtime-service", json.loads(launch_state.read_text()))
+            metadata = json.loads((transaction / "metadata.json").read_text())
+            self.assertEqual(metadata["schema"], cutover.ZERO_COST_TRANSACTION_SCHEMA)
+            self.assertEqual(metadata["payload"]["closure"], closure)
+            committed = cutover.commit_transaction(transaction, target)
+            self.assertEqual(committed["status"], "COMMITTED")
+            self.assertFalse(transaction.exists())
+            self.assertTrue(target.is_dir())
+            self.assertEqual(pointer.read_text(), closure + "\n")
+            self.assertTrue(installed_payload.is_dir())
+
+    def test_current_cutover_uses_traditional_launchagent_and_service_management_only_for_predecessors(self) -> None:
         source = CUTOVER_PATH.read_text()
-        current = source[source.index("def cutover_candidate("):source.index("def commit_transaction(")]
-        self.assertIn('_service_management(target_app, "register-main")', current)
-        self.assertIn('_service_management(target_app, "register-runtime")', current)
-        self.assertNotIn('_service_management(target_app, "register")', current)
+        current = source[source.index("def _cutover_zero_cost_candidate("):source.index("def cutover_candidate(")]
+        self.assertIn("_materialize_current_launchagent(", current)
+        self.assertIn('"bootstrap"', current)
+        self.assertIn('_service_management(target_app, "unregister-runtime")', current)
+        self.assertIn('_service_management(target_app, "unregister-main")', current)
+        self.assertNotIn('_service_management(target_app, "register-runtime")', current)
+        self.assertNotIn('_service_management(target_app, "register-main")', current)
         self.assertIn("_remove_legacy_predecessor(", current)
         self.assertNotIn("_ui_plist(", source)
         self.assertNotIn("_runtime_plist(", source)
-        self.assertNotIn('"bootstrap"', current)
 
     def _fixture(
         self, raw: str, *, predecessor_revision: str = "a" * 40, aggregate_only_predecessor: bool = False,
@@ -2550,30 +2672,31 @@ class CandidateCutoverTests(unittest.TestCase):
         self.assertIn('is_lower_sha256 "$7"', branch)
         self.assertIn('--expected-candidate-sha256 "$5"', branch)
         self.assertIn('--expected-handoff-sha256 "$7"', branch)
+        self.assertIn('PAYLOAD_RELEASE=', branch)
+        self.assertIn('--payload-release "$PAYLOAD_RELEASE"', branch)
         self.assertNotIn("PINNED_ARGS", branch)
         self.assertNotIn("--skip-trust", branch)
         self.assertNotIn("--no-verify", branch)
 
     def test_package_script_seals_external_candidate_only_after_final_integrity_checks(self) -> None:
         text = (ROOT / "macos" / "package_app.sh").read_text()
-        sign = text.index('/usr/bin/codesign --force --deep --sign "$SIGNING_IDENTITY" "$APP"')
+        sign = text.index('/usr/bin/codesign --force --sign - --identifier com.picmao.agent-runtime "$APP"')
         verify = text.index('/usr/bin/codesign --verify --deep --strict "$APP"', sign)
-        final_manifest = text.index('package_provenance.py" validate', verify)
-        seal = text.index('package_provenance.py" seal', final_manifest)
+        seal = text.index('package_provenance.py" seal-zero-cost', verify)
+        publish = text.index('package_provenance.py" publish-zero-cost', seal)
         self.assertLess(sign, verify)
-        self.assertLess(verify, final_manifest)
-        self.assertIn('package_provenance.py" publish', text)
-        publish = text.index('package_provenance.py" publish', seal)
-        self.assertLess(final_manifest, seal)
+        self.assertLess(verify, seal)
         self.assertLess(seal, publish)
+        self.assertIn('package_provenance.py" substrate-manifest', text)
+        self.assertIn('package_provenance.py" publish-payload', text)
         self.assertIn('STAGED_PUBLICATION="$TEMP_ROOT/candidate"', text)
         self.assertNotIn('CANDIDATE_HANDOFF="$REPO_ROOT/build/Agent Runtime.candidate.json"', text)
         self.assertNotIn('APP="$REPO_ROOT/build/Agent Runtime.app"', text)
 
     def test_default_install_composes_build_and_prebuilt_cutover_but_leaves_transaction_pending(self) -> None:
         text = (ROOT / "install.sh").read_text()
-        self.assertIn('PACKAGE_OUTPUT="$("$ROOT/macos/package_app.sh")"', text)
-        build = text.index('PACKAGE_OUTPUT="$("$ROOT/macos/package_app.sh")"')
+        self.assertIn('PACKAGE_OUTPUT="$("$ROOT/macos/package_app.sh" --zero-cost)"', text)
+        build = text.index('PACKAGE_OUTPUT="$("$ROOT/macos/package_app.sh" --zero-cost)"')
         source_app = text.index('candidate_app=', build)
         source_handoff = text.index('candidate_handoff=', source_app)
         prebuilt = text.index('"$ROOT/install.sh" --install-prebuilt "$SOURCE_APP" "$CANDIDATE_HANDOFF"', source_handoff)
@@ -2600,8 +2723,10 @@ class CandidateCutoverTests(unittest.TestCase):
         self.assertIn('CUTOVER="$SCRIPT_DIR/candidate_cutover.py"', text)
         self.assertIn('"$PYTHON" "$PREFLIGHT" --prebuilt', text)
         self.assertIn('"$PYTHON" "$CONFIG_HELPER" --prebuilt', text)
-        self.assertIn('"$PYTHON" "$PROVENANCE" validate-candidate', text)
+        self.assertIn('PAYLOAD_RELEASE=', text)
+        self.assertIn('"$PYTHON" "$PROVENANCE" validate-zero-cost', text)
         self.assertIn('"$PYTHON" "$CUTOVER" cutover', text)
+        self.assertIn('--payload-release "$PAYLOAD_RELEASE"', text)
         self.assertIn("--commit-cutover", text)
         self.assertIn("--rollback-cutover", text)
         self.assertIn("pending explicit commit", text.lower())

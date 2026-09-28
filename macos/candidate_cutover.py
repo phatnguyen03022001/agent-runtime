@@ -22,6 +22,7 @@ if str(MACOS_ROOT) not in sys.path:
 import package_provenance as provenance
 
 TRANSACTION_SCHEMA = 5
+ZERO_COST_TRANSACTION_SCHEMA = 6
 SCHEMA4_ROLLBACK_SCHEMA = 4
 SCHEMA2_RECOVERY_SCHEMA = 2
 LEGACY_RECOVERY_SCHEMA = 1
@@ -1388,6 +1389,250 @@ def _restore_transaction(
         )
 
 
+def _zero_cost_validate_input(
+    candidate_app: Path,
+    handoff_path: Path,
+    payload_release: Path,
+    *,
+    expected_candidate_sha256: str | None,
+    expected_handoff_sha256: str | None,
+) -> dict[str, object]:
+    try:
+        expected = provenance.validate_zero_cost_candidate(candidate_app, handoff_path, payload_release)
+    except provenance.PackageProvenanceError as exc:
+        raise CutoverError("zero-cost candidate validation failed") from exc
+    if expected_candidate_sha256 is not None:
+        if re.fullmatch(r"[0-9a-f]{64}", expected_candidate_sha256) is None:
+            raise CutoverError("expected candidate SHA-256 is malformed")
+        if expected.get("candidate_sha256") != expected_candidate_sha256:
+            raise CutoverError("zero-cost candidate SHA-256 does not match pinned authority")
+    if expected_handoff_sha256 is not None:
+        if re.fullmatch(r"[0-9a-f]{64}", expected_handoff_sha256) is None:
+            raise CutoverError("expected handoff SHA-256 is malformed")
+        if _sha256_file(handoff_path, "candidate handoff") != expected_handoff_sha256:
+            raise CutoverError("zero-cost candidate handoff SHA-256 does not match pinned authority")
+    return expected
+
+
+def _payload_pointer_path(state_dir: Path) -> Path:
+    return state_dir / "current-payload"
+
+
+def _payloads_root(state_dir: Path) -> Path:
+    return state_dir / "payloads"
+
+
+def _write_payload_pointer_atomic(pointer: Path, closure: str, *, uid: int) -> None:
+    if re.fullmatch(r"[0-9a-f]{64}", closure) is None:
+        raise CutoverError("payload pointer closure is invalid")
+    if pointer.is_symlink() or (pointer.exists() and not pointer.is_file()):
+        raise CutoverError("payload pointer target is unsafe")
+    pointer.parent.mkdir(parents=True, exist_ok=True)
+    temporary = pointer.with_name(f".{pointer.name}.{os.getpid()}.tmp")
+    if temporary.exists() or temporary.is_symlink():
+        raise CutoverError("payload pointer staging path already exists")
+    try:
+        temporary.write_text(closure + "\n", encoding="ascii")
+        temporary.chmod(0o600)
+        if temporary.stat().st_uid != uid:
+            raise CutoverError("payload pointer staging ownership is invalid")
+        os.replace(temporary, pointer)
+    finally:
+        if temporary.exists() and not temporary.is_symlink():
+            temporary.unlink()
+    info = pointer.stat()
+    if info.st_uid != uid or stat.S_IMODE(info.st_mode) != 0o600:
+        raise CutoverError("payload pointer ownership or mode is invalid")
+    if pointer.read_text(encoding="ascii") != closure + "\n":
+        raise CutoverError("payload pointer publication did not converge")
+
+
+def _validate_zero_cost_payload_for_candidate(
+    payload_release: Path,
+    candidate: dict[str, object],
+) -> dict[str, object]:
+    try:
+        payload = provenance.validate_payload_release(
+            payload_release,
+            expected_closure=str(candidate["initial_payload_closure"]),
+            expected_requirements_lock_sha256=str(candidate["requirements_lock_sha256"]),
+            expected_python_major_minor=str(candidate["required_python_major_minor"]),
+            expected_public_tool_count=int(candidate["expected_public_tool_count"]),
+            expected_public_surface_sha256=str(candidate["expected_public_surface_sha256"]),
+        )
+    except (KeyError, ValueError, TypeError, provenance.PackageProvenanceError) as exc:
+        raise CutoverError("zero-cost external payload validation failed") from exc
+    if payload.get("source_revision") != candidate.get("source_revision") or payload.get("source_tree") != candidate.get("source_tree"):
+        raise CutoverError("initial payload source identity does not match candidate substrate")
+    return payload
+
+
+def _remove_transaction_payload(path: Path, expected_root: Path, closure: str) -> None:
+    if path != expected_root / closure or path.is_symlink() or not path.is_dir():
+        raise CutoverError("transaction-created payload path is unsafe for rollback")
+    for current, dirs, files in os.walk(path, topdown=False):
+        root = Path(current)
+        root.chmod(0o755)
+        for name in files:
+            target = root / name
+            if target.is_symlink():
+                raise CutoverError("transaction-created payload contains a symlink during rollback")
+            target.chmod(0o644)
+        for name in dirs:
+            child = root / name
+            if child.is_symlink():
+                raise CutoverError("transaction-created payload contains a symlink directory during rollback")
+            child.chmod(0o755)
+    shutil.rmtree(path)
+
+
+def _read_transaction_metadata_unversioned(transaction_dir: Path) -> dict[str, object]:
+    path = transaction_dir / "metadata.json"
+    if path.is_symlink() or not path.is_file():
+        raise CutoverError("cutover transaction metadata is missing or unsafe")
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise CutoverError("cutover transaction metadata is malformed") from exc
+    if not isinstance(value, dict):
+        raise CutoverError("cutover transaction metadata is malformed")
+    return value
+
+
+def _rollback_zero_cost_transaction(
+    transaction_dir: Path,
+    target_app: Path,
+    metadata: dict[str, object],
+    *,
+    launchctl: Path,
+    uid: int,
+) -> None:
+    if metadata.get("schema") != ZERO_COST_TRANSACTION_SCHEMA or metadata.get("kind") != "zero-cost":
+        raise CutoverError("zero-cost rollback transaction schema is invalid")
+    previous = metadata.get("previous")
+    payload = metadata.get("payload")
+    paths = metadata.get("paths")
+    if not isinstance(previous, dict) or not isinstance(payload, dict) or not isinstance(paths, dict):
+        raise CutoverError("zero-cost rollback metadata is malformed")
+    required_paths = {"target_app", "current_plist", "pointer", "desired_state", "ui_plist", "runtime_plist", "home"}
+    if set(paths) != required_paths or Path(str(paths["target_app"])) != target_app:
+        raise CutoverError("zero-cost rollback path metadata is invalid")
+    home = Path(str(paths["home"]))
+    current_plist = Path(str(paths["current_plist"]))
+    pointer = Path(str(paths["pointer"]))
+    desired_state = Path(str(paths["desired_state"]))
+    ui_plist = Path(str(paths["ui_plist"]))
+    runtime_plist = Path(str(paths["runtime_plist"]))
+    service = f"gui/{uid}/{MODERN_RUNTIME_LABEL}"
+
+    if _service_loaded(launchctl, service):
+        if current_plist.exists() and not current_plist.is_symlink() and target_app.exists():
+            _validate_current_launchagent(current_plist, home, uid=uid)
+        _require_launchctl_ok(
+            _run([str(launchctl), "bootout", service]),
+            "could not remove transaction-owned current Runtime LaunchAgent",
+        )
+        _wait_for_service_absence(launchctl, service)
+
+    pointer_snapshot = previous.get("pointer")
+    current_snapshot = previous.get("current_plist")
+    ui_snapshot = previous.get("ui_plist")
+    runtime_snapshot = previous.get("runtime_plist")
+    for value in (pointer_snapshot, current_snapshot, ui_snapshot, runtime_snapshot):
+        if not isinstance(value, dict) or set(value) != {"present", "mode"}:
+            raise CutoverError("zero-cost rollback file snapshot metadata is malformed")
+
+    _restore_file(pointer_snapshot, transaction_dir / "previous-pointer", pointer)
+
+    app_present = previous.get("app_present")
+    if not isinstance(app_present, bool):
+        raise CutoverError("zero-cost rollback previous app metadata is malformed")
+    if target_app.exists() or target_app.is_symlink():
+        if target_app.is_symlink() or not target_app.is_dir():
+            raise CutoverError("zero-cost rollback installed app target is unsafe")
+        shutil.rmtree(target_app)
+    if app_present:
+        closure = _require_rollback_app_closure(previous.get("app_closure"))
+        backup = transaction_dir / "previous-app"
+        if _rollback_app_closure(backup) != closure:
+            raise CutoverError("zero-cost rollback app snapshot closure changed")
+        _copy_rollback_app(backup, target_app)
+        if _rollback_app_closure(target_app) != closure:
+            raise CutoverError("zero-cost rollback restored app closure mismatch")
+
+    _restore_file(current_snapshot, transaction_dir / "previous-current.plist", current_plist)
+    _restore_file(ui_snapshot, transaction_dir / "previous-ui.plist", ui_plist)
+    _restore_file(runtime_snapshot, transaction_dir / "previous-runtime.plist", runtime_plist)
+
+    desired_before = previous.get("desired_state_present")
+    if not isinstance(desired_before, bool):
+        raise CutoverError("zero-cost rollback desired-state metadata is malformed")
+    if desired_before:
+        desired_state.parent.mkdir(parents=True, exist_ok=True)
+        desired_state.touch(exist_ok=True)
+    elif desired_state.exists() or desired_state.is_symlink():
+        if desired_state.is_symlink() or not desired_state.is_file():
+            raise CutoverError("zero-cost rollback desired-state target is unsafe")
+        desired_state.unlink()
+
+    if bool(previous.get("ui_loaded")) or bool(previous.get("legacy_runtime_loaded")):
+        _restore_loaded_state(
+            launchctl=launchctl,
+            uid=uid,
+            ui_plist=ui_plist,
+            runtime_plist=runtime_plist,
+            ui_loaded=bool(previous.get("ui_loaded")),
+            runtime_loaded=bool(previous.get("legacy_runtime_loaded")),
+        )
+
+    predecessor = previous.get("predecessor_service_management")
+    if not isinstance(predecessor, dict) or set(predecessor) != {"contract", "main_app", "runtime_agent"}:
+        raise CutoverError("zero-cost rollback predecessor ServiceManagement metadata is malformed")
+    contract = predecessor["contract"]
+    if app_present and contract in {"split-v1", "aggregate-v1"}:
+        main_state = str(predecessor["main_app"])
+        runtime_state = str(predecessor["runtime_agent"])
+        if contract == "aggregate-v1":
+            if main_state in REGISTERED_SERVICE_STATES or runtime_state in REGISTERED_SERVICE_STATES:
+                restored = _service_management(target_app, "register")
+                if restored["main_app"] not in REGISTERED_SERVICE_STATES or restored["runtime_agent"] not in REGISTERED_SERVICE_STATES:
+                    raise CutoverError("zero-cost rollback could not restore aggregate predecessor ownership")
+        else:
+            if main_state in REGISTERED_SERVICE_STATES:
+                restored = _service_management(target_app, "register-main")
+                if restored["main_app"] not in REGISTERED_SERVICE_STATES:
+                    raise CutoverError("zero-cost rollback could not restore predecessor main-app ownership")
+            if runtime_state in REGISTERED_SERVICE_STATES:
+                restored = _service_management(target_app, "register-runtime")
+                if restored["runtime_agent"] not in REGISTERED_SERVICE_STATES:
+                    raise CutoverError("zero-cost rollback could not restore predecessor Runtime ownership")
+
+    current_was_loaded = previous.get("current_loaded")
+    if not isinstance(current_was_loaded, bool):
+        raise CutoverError("zero-cost rollback current LaunchAgent metadata is malformed")
+    if current_was_loaded:
+        _validate_current_launchagent(current_plist, home, uid=uid)
+        _require_launchctl_ok(
+            _run([str(launchctl), "bootstrap", f"gui/{uid}", str(current_plist)]),
+            "could not restore previous current Runtime LaunchAgent",
+        )
+        _require_service_identity(launchctl, service, _current_runtime_helper(home))
+        if desired_before:
+            _require_launchctl_ok(
+                _run([str(launchctl), "kickstart", service]),
+                "could not restart restored current Runtime generation",
+            )
+
+    closure = payload.get("closure")
+    created = payload.get("created")
+    if not isinstance(closure, str) or re.fullmatch(r"[0-9a-f]{64}", closure) is None or not isinstance(created, bool):
+        raise CutoverError("zero-cost rollback payload metadata is malformed")
+    if created:
+        final_payload = _payloads_root(Path(str(paths["home"])) / "Library" / "Application Support" / "Agent Runtime") / closure
+        if final_payload.exists() or final_payload.is_symlink():
+            _remove_transaction_payload(final_payload, final_payload.parent, closure)
+
+
 def rollback_transaction(
     transaction_dir: Path,
     target_app: Path,
@@ -1397,6 +1642,33 @@ def rollback_transaction(
     fail_stages: set[str] | None = None,
 ) -> dict[str, object]:
     failures = set(fail_stages or ())
+    raw_metadata = _read_transaction_metadata_unversioned(transaction_dir)
+    if raw_metadata.get("schema") == ZERO_COST_TRANSACTION_SCHEMA:
+        try:
+            _rollback_zero_cost_transaction(
+                transaction_dir,
+                target_app,
+                raw_metadata,
+                launchctl=launchctl,
+                uid=uid,
+            )
+        except Exception as exc:
+            raw_metadata["status"] = "PARTIAL"
+            raw_metadata["last_error"] = "rollback incomplete: " + str(exc)
+            _atomic_json(transaction_dir / "metadata.json", raw_metadata)
+            if isinstance(exc, CutoverError):
+                raise
+            raise CutoverError("rollback incomplete") from exc
+        payload = raw_metadata.get("payload")
+        if isinstance(payload, dict):
+            closure = payload.get("closure")
+            if isinstance(closure, str) and re.fullmatch(r"[0-9a-f]{64}", closure):
+                staged_payload = transaction_dir / "payloads" / closure
+                if staged_payload.exists() and not staged_payload.is_symlink():
+                    _remove_transaction_payload(staged_payload, staged_payload.parent, closure)
+        shutil.rmtree(transaction_dir)
+        return {"status": "ROLLED_BACK"}
+
     metadata = _load_metadata(transaction_dir, allowed_schemas={SCHEMA4_ROLLBACK_SCHEMA, TRANSACTION_SCHEMA})
     try:
         _restore_transaction(
@@ -1417,10 +1689,291 @@ def rollback_transaction(
     return {"status": "ROLLED_BACK"}
 
 
+def _cutover_zero_cost_candidate(
+    candidate_app: Path,
+    handoff_path: Path,
+    payload_release: Path,
+    *,
+    expected_candidate_sha256: str | None,
+    expected_handoff_sha256: str | None,
+    target_app: Path,
+    ui_plist: Path,
+    runtime_plist: Path,
+    state_dir: Path,
+    transaction_dir: Path,
+    home: Path,
+    launchctl: Path,
+    uid: int,
+    fail_stages: set[str],
+) -> dict[str, object]:
+    if transaction_dir.exists() or transaction_dir.is_symlink():
+        raise CutoverError("a cutover transaction is already pending")
+    if candidate_app.resolve() == target_app.resolve(strict=False):
+        raise CutoverError("prebuilt candidate must be external to the installed app path")
+    expected = _zero_cost_validate_input(
+        candidate_app,
+        handoff_path,
+        payload_release,
+        expected_candidate_sha256=expected_candidate_sha256,
+        expected_handoff_sha256=expected_handoff_sha256,
+    )
+    payload_manifest = _validate_zero_cost_payload_for_candidate(payload_release, expected)
+    closure = str(expected["initial_payload_closure"])
+    if payload_manifest["content_closure"] != closure:
+        raise CutoverError("initial payload closure is inconsistent")
+
+    desired_state = state_dir / "protected-runtime-running"
+    pointer = _payload_pointer_path(state_dir)
+    current_plist = _current_launchagent_path(home)
+    current_service = f"gui/{uid}/{MODERN_RUNTIME_LABEL}"
+    ui_service = f"gui/{uid}/{UI_LABEL}"
+    legacy_runtime_service = f"gui/{uid}/{LEGACY_RUNTIME_LABEL}"
+    if desired_state.is_symlink() or (desired_state.exists() and not desired_state.is_file()):
+        raise CutoverError("desired Runtime state marker is unsafe")
+    if pointer.exists() or pointer.is_symlink():
+        if pointer.is_symlink() or not pointer.is_file():
+            raise CutoverError("existing payload pointer is unsafe")
+        pointer_info = pointer.stat()
+        if pointer_info.st_uid != uid or stat.S_IMODE(pointer_info.st_mode) != 0o600:
+            raise CutoverError("existing payload pointer ownership or mode is unsafe")
+        try:
+            pointer_value = pointer.read_text(encoding="ascii")
+        except (OSError, UnicodeError) as exc:
+            raise CutoverError("existing payload pointer is unreadable") from exc
+        if re.fullmatch(r"[0-9a-f]{64}\n", pointer_value) is None:
+            raise CutoverError("existing payload pointer is malformed")
+
+    current_present = current_plist.exists() or current_plist.is_symlink()
+    if current_present:
+        _validate_current_launchagent(current_plist, home, uid=uid)
+    current_loaded = _service_loaded(launchctl, current_service) if current_present else False
+
+    ui_present = _validate_previous_launchagent(ui_plist, UI_LABEL, target_app)
+    runtime_present = _validate_previous_launchagent(runtime_plist, LEGACY_RUNTIME_LABEL, target_app)
+    ui_loaded_program = _loaded_service_program(launchctl, ui_service)
+    runtime_loaded_program = _loaded_service_program(launchctl, legacy_runtime_service)
+    ui_expected_program = _launchagent_program(ui_plist, UI_LABEL) if ui_present else None
+    runtime_expected_program = _launchagent_program(runtime_plist, LEGACY_RUNTIME_LABEL) if runtime_present else None
+    if ui_loaded_program is not None and ui_loaded_program != ui_expected_program:
+        raise CutoverError("legacy UI LaunchAgent loaded identity is ambiguous")
+    if runtime_loaded_program is not None and runtime_loaded_program != runtime_expected_program:
+        raise CutoverError("legacy Runtime LaunchAgent loaded identity is ambiguous")
+    ui_loaded = ui_loaded_program is not None
+    legacy_runtime_loaded = runtime_loaded_program is not None
+
+    predecessor_contract = "none"
+    predecessor_state = {"main_app": "not-registered", "runtime_agent": "not-registered"}
+    target_present = target_app.exists() or target_app.is_symlink()
+    if target_present:
+        if target_app.is_symlink() or not target_app.is_dir():
+            raise CutoverError("existing installed app path is unsafe")
+        if not current_present:
+            predecessor_contract = _predecessor_service_contract(target_app)
+            if predecessor_contract not in {"split-v1", "aggregate-v1"}:
+                raise CutoverError("installed predecessor lifecycle contract is unsupported for zero-cost migration")
+            predecessor_state = _service_management(target_app, "status")
+            if predecessor_state["main_app"] not in SERVICE_STATES or predecessor_state["runtime_agent"] not in SERVICE_STATES:
+                raise CutoverError("predecessor ServiceManagement state is invalid")
+            if predecessor_state["runtime_agent"] in REGISTERED_SERVICE_STATES and not _service_loaded(launchctl, current_service):
+                raise CutoverError("registered predecessor Runtime has no loaded current-label job")
+    elif current_present or ui_present or runtime_present:
+        raise CutoverError("lifecycle state exists without an installed app rollback target")
+
+    runtime_config = _runtime_config_identity(state_dir)
+    previous: dict[str, object] = {
+        "app_present": target_present,
+        "app_closure": None,
+        "desired_state_present": desired_state.exists(),
+        "current_loaded": current_loaded,
+        "ui_loaded": ui_loaded,
+        "legacy_runtime_loaded": legacy_runtime_loaded,
+        "predecessor_service_management": {
+            "contract": predecessor_contract,
+            "main_app": predecessor_state["main_app"],
+            "runtime_agent": predecessor_state["runtime_agent"],
+        },
+    }
+    created_transaction = False
+    mutation_started = False
+    try:
+        transaction_dir.mkdir(parents=True, mode=0o700)
+        created_transaction = True
+        previous["pointer"] = _snapshot_file(pointer, transaction_dir / "previous-pointer")
+        previous["current_plist"] = _snapshot_file(current_plist, transaction_dir / "previous-current.plist")
+        previous["ui_plist"] = _snapshot_file(ui_plist, transaction_dir / "previous-ui.plist")
+        previous["runtime_plist"] = _snapshot_file(runtime_plist, transaction_dir / "previous-runtime.plist")
+        if target_present:
+            previous_closure = _rollback_app_closure(target_app)
+            _copy_rollback_app(target_app, transaction_dir / "previous-app")
+            if _rollback_app_closure(transaction_dir / "previous-app") != previous_closure:
+                raise CutoverError("previous app rollback copy changed closure")
+            previous["app_closure"] = previous_closure
+
+        shutil.copy2(handoff_path, transaction_dir / "candidate-handoff.json")
+        staged_app = transaction_dir / "staged-candidate"
+        _copy_app(candidate_app, staged_app)
+        staged_payload = transaction_dir / "payloads" / closure
+        staged_payload.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(payload_release, staged_payload, copy_function=shutil.copy2)
+        staged_expected = _zero_cost_validate_input(
+            staged_app,
+            transaction_dir / "candidate-handoff.json",
+            staged_payload,
+            expected_candidate_sha256=expected_candidate_sha256,
+            expected_handoff_sha256=expected_handoff_sha256,
+        )
+        if staged_expected != expected:
+            raise CutoverError("staged zero-cost candidate identity changed")
+
+        metadata: dict[str, object] = {
+            "schema": ZERO_COST_TRANSACTION_SCHEMA,
+            "kind": "zero-cost",
+            "status": "PREPARED",
+            "phase": "PRE_SWAP",
+            "candidate": expected,
+            "payload": {"closure": closure, "created": False},
+            "previous": previous,
+            "runtime_config": runtime_config,
+            "paths": {
+                "target_app": str(target_app),
+                "current_plist": str(current_plist),
+                "pointer": str(pointer),
+                "desired_state": str(desired_state),
+                "ui_plist": str(ui_plist),
+                "runtime_plist": str(runtime_plist),
+                "home": str(home),
+            },
+            "last_error": "",
+        }
+        _atomic_json(transaction_dir / "metadata.json", metadata)
+        mutation_started = True
+
+        if current_loaded:
+            _require_launchctl_ok(
+                _run([str(launchctl), "bootout", current_service]),
+                "could not stop previous current Runtime LaunchAgent",
+            )
+            _wait_for_service_absence(launchctl, current_service)
+
+        if predecessor_contract == "split-v1":
+            if predecessor_state["runtime_agent"] in REGISTERED_SERVICE_STATES:
+                state = _service_management(target_app, "unregister-runtime")
+                if state["runtime_agent"] not in ABSENT_SERVICE_STATES:
+                    raise CutoverError("predecessor Runtime ServiceManagement unregister did not converge")
+                _wait_for_service_absence(launchctl, current_service)
+            if predecessor_state["main_app"] in REGISTERED_SERVICE_STATES:
+                state = _service_management(target_app, "unregister-main")
+                if state["main_app"] not in ABSENT_SERVICE_STATES:
+                    raise CutoverError("predecessor main-app ServiceManagement unregister did not converge")
+        elif predecessor_contract == "aggregate-v1" and (
+            predecessor_state["main_app"] in REGISTERED_SERVICE_STATES
+            or predecessor_state["runtime_agent"] in REGISTERED_SERVICE_STATES
+        ):
+            state = _service_management(target_app, "unregister")
+            if state["main_app"] not in ABSENT_SERVICE_STATES or state["runtime_agent"] not in ABSENT_SERVICE_STATES:
+                raise CutoverError("aggregate predecessor ServiceManagement unregister did not converge")
+            _wait_for_service_absence(launchctl, current_service)
+
+        _remove_legacy_predecessor(
+            launchctl=launchctl,
+            uid=uid,
+            ui_plist=ui_plist,
+            runtime_plist=runtime_plist,
+            ui_present=ui_present,
+            runtime_present=runtime_present,
+            ui_was_loaded=ui_loaded,
+            runtime_was_loaded=legacy_runtime_loaded,
+        )
+        _inject(fail_stages, "after_predecessor_shutdown")
+
+        target_app.parent.mkdir(parents=True, exist_ok=True)
+        if target_app.exists():
+            shutil.rmtree(target_app)
+        os.replace(staged_app, target_app)
+        metadata["phase"] = "APP_SWAPPED"
+        _atomic_json(transaction_dir / "metadata.json", metadata)
+        _zero_cost_validate_input(
+            target_app,
+            transaction_dir / "candidate-handoff.json",
+            staged_payload,
+            expected_candidate_sha256=expected_candidate_sha256,
+            expected_handoff_sha256=expected_handoff_sha256,
+        )
+        _inject(fail_stages, "after_app_swap")
+
+        payloads_root = _payloads_root(state_dir)
+        if payloads_root.is_symlink() or (payloads_root.exists() and not payloads_root.is_dir()):
+            raise CutoverError("canonical payload store is unsafe")
+        payloads_root.mkdir(parents=True, exist_ok=True)
+        final_payload = payloads_root / closure
+        if final_payload.exists() or final_payload.is_symlink():
+            _validate_zero_cost_payload_for_candidate(final_payload, expected)
+        else:
+            staged_payload.chmod(0o755)
+            os.replace(staged_payload, final_payload)
+            final_payload.chmod(0o555)
+            metadata["payload"] = {"closure": closure, "created": True}
+            _atomic_json(transaction_dir / "metadata.json", metadata)
+        _validate_zero_cost_payload_for_candidate(final_payload, expected)
+
+        _materialize_current_launchagent(home, uid=uid)
+        if _service_loaded(launchctl, current_service):
+            raise CutoverError("current Runtime LaunchAgent became loaded before transaction bootstrap")
+        _require_launchctl_ok(
+            _run([str(launchctl), "bootstrap", f"gui/{uid}", str(current_plist)]),
+            "could not bootstrap current Runtime LaunchAgent",
+        )
+        _require_service_identity(launchctl, current_service, _current_runtime_helper(home))
+        _inject(fail_stages, "after_launchagent_bootstrap")
+
+        _write_payload_pointer_atomic(pointer, closure, uid=uid)
+        _inject(fail_stages, "after_pointer_swap")
+        if bool(previous["desired_state_present"]):
+            _require_launchctl_ok(
+                _run([str(launchctl), "kickstart", current_service]),
+                "could not start selected current Runtime generation",
+            )
+
+        _zero_cost_validate_input(
+            target_app,
+            transaction_dir / "candidate-handoff.json",
+            final_payload,
+            expected_candidate_sha256=expected_candidate_sha256,
+            expected_handoff_sha256=expected_handoff_sha256,
+        )
+        _validate_current_launchagent(current_plist, home, uid=uid)
+        _validate_runtime_config_identity(runtime_config, state_dir)
+        metadata["status"] = "PENDING"
+        _atomic_json(transaction_dir / "metadata.json", metadata)
+        return {"status": "PENDING", "candidate": expected, "payload_closure": closure}
+    except Exception as exc:
+        if mutation_started and created_transaction and (transaction_dir / "metadata.json").is_file():
+            try:
+                rollback_transaction(
+                    transaction_dir,
+                    target_app,
+                    launchctl=launchctl,
+                    uid=uid,
+                    fail_stages=fail_stages,
+                )
+            except Exception as rollback_exc:
+                raise CutoverError(f"zero-cost cutover failed and rollback incomplete: {rollback_exc}") from exc
+            raise CutoverError(f"zero-cost cutover failed; rollback restored previous state: {exc}") from exc
+        if created_transaction and transaction_dir.exists():
+            staged_payload = transaction_dir / "payloads" / closure
+            if staged_payload.exists() and not staged_payload.is_symlink():
+                _remove_transaction_payload(staged_payload, staged_payload.parent, closure)
+            shutil.rmtree(transaction_dir)
+        if isinstance(exc, (CutoverError, provenance.PackageProvenanceError)):
+            raise CutoverError(str(exc)) from exc
+        raise
+
+
 def cutover_candidate(
     candidate_app: Path,
     handoff_path: Path,
     *,
+    payload_release: Path | None = None,
     expected_candidate_sha256: str | None = None,
     expected_handoff_sha256: str | None = None,
     target_app: Path,
@@ -1434,6 +1987,23 @@ def cutover_candidate(
     fail_stages: set[str] | None = None,
 ) -> dict[str, object]:
     failures = set(fail_stages or ())
+    if payload_release is not None:
+        return _cutover_zero_cost_candidate(
+            candidate_app,
+            handoff_path,
+            payload_release,
+            expected_candidate_sha256=expected_candidate_sha256,
+            expected_handoff_sha256=expected_handoff_sha256,
+            target_app=target_app,
+            ui_plist=ui_plist,
+            runtime_plist=runtime_plist,
+            state_dir=state_dir,
+            transaction_dir=transaction_dir,
+            home=home,
+            launchctl=launchctl,
+            uid=uid,
+            fail_stages=failures,
+        )
     candidate_validation = _candidate_validation_authority(
         expected_candidate_sha256,
         expected_handoff_sha256,
@@ -2131,6 +2701,45 @@ def resume_transaction(
 
 
 def commit_transaction(transaction_dir: Path, target_app: Path) -> dict[str, object]:
+    raw = _read_transaction_metadata_unversioned(transaction_dir)
+    if raw.get("schema") == ZERO_COST_TRANSACTION_SCHEMA:
+        if raw.get("kind") != "zero-cost" or raw.get("status") != "PENDING":
+            raise CutoverError("only a pending zero-cost cutover transaction can be committed")
+        paths = raw.get("paths")
+        candidate = raw.get("candidate")
+        payload = raw.get("payload")
+        runtime_config = raw.get("runtime_config")
+        if not isinstance(paths, dict) or not isinstance(candidate, dict) or not isinstance(payload, dict):
+            raise CutoverError("zero-cost commit metadata is malformed")
+        expected_target = Path(str(paths.get("target_app", "")))
+        if expected_target != target_app:
+            raise CutoverError("commit target does not match pending zero-cost cutover transaction")
+        home = Path(str(paths.get("home", "")))
+        pointer = Path(str(paths.get("pointer", "")))
+        current_plist = Path(str(paths.get("current_plist", "")))
+        closure = payload.get("closure")
+        if not isinstance(closure, str) or re.fullmatch(r"[0-9a-f]{64}", closure) is None:
+            raise CutoverError("zero-cost commit payload closure is malformed")
+        final_payload = _payloads_root(pointer.parent) / closure
+        validated = provenance.validate_zero_cost_candidate(
+            target_app,
+            transaction_dir / "candidate-handoff.json",
+            final_payload,
+        )
+        if validated != candidate:
+            raise CutoverError("installed zero-cost candidate no longer matches pending transaction")
+        _validate_current_launchagent(current_plist, home, uid=os.getuid())
+        if pointer.is_symlink() or not pointer.is_file():
+            raise CutoverError("zero-cost commit payload pointer is missing or unsafe")
+        pointer_info = pointer.stat()
+        if pointer_info.st_uid != os.getuid() or stat.S_IMODE(pointer_info.st_mode) != 0o600:
+            raise CutoverError("zero-cost commit payload pointer ownership or mode is invalid")
+        if pointer.read_text(encoding="ascii") != closure + "\n":
+            raise CutoverError("zero-cost commit payload pointer does not select the pending payload")
+        _validate_runtime_config_identity(runtime_config, pointer.parent)
+        shutil.rmtree(transaction_dir)
+        return {"status": "COMMITTED"}
+
     metadata = _load_metadata(transaction_dir)
     if metadata.get("status") != "PENDING":
         raise CutoverError("only a pending cutover transaction can be committed")

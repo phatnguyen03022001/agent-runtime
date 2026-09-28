@@ -9,11 +9,9 @@ fail() {
 SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 INSTALLED_RUNTIME_ROOT="${HOME}/Applications/Agent Runtime.app/Contents/Resources/runtime"
 
-# The source checkout remains a bounded operator CLI and test/development
-# entrypoint. Once the product is installed, all operator lifecycle actions
-# converge on the package-owned helper so the LaunchAgent and menu bar use the
-# same installed execution bytes. The internal --serve path is never delegated
-# because launchd supplies the package-owned script directly.
+# Source checkout commands converge on installed lifecycle bytes when present.
+# --serve is private to the installed supervisor and doctor always checks the
+# installed authority explicitly.
 if [[ "${1:-start}" != "--serve" \
       && "${1:-start}" != "doctor" \
       && "${1:-start}" != "--help" \
@@ -26,7 +24,10 @@ fi
 
 ROOT="$SOURCE_ROOT"
 cd "$ROOT"
-CANONICAL_ENV_FILE="$HOME/Library/Application Support/Agent Runtime/runtime.env"
+STATE_DIR="$HOME/Library/Application Support/Agent Runtime"
+CANONICAL_ENV_FILE="$STATE_DIR/runtime.env"
+PAYLOADS_ROOT="$STATE_DIR/payloads"
+PAYLOAD_POINTER="$STATE_DIR/current-payload"
 if [[ "$SOURCE_ROOT" == "$INSTALLED_RUNTIME_ROOT" ]]; then
   ENV_FILE="$CANONICAL_ENV_FILE"
 else
@@ -36,14 +37,11 @@ LEGACY_CONFIG="$HOME/.config/tunnel-client/agent-runtime.yaml"
 CURRENT_RUNTIME_LAUNCHD_LABEL="com.picmao.agent-runtime-runtime-service"
 DOMAIN="gui/$(id -u)"
 SERVICE="$DOMAIN/$CURRENT_RUNTIME_LAUNCHD_LABEL"
-STATE_DIR="$HOME/Library/Application Support/Agent Runtime"
 DESIRED_STATE="$STATE_DIR/protected-runtime-running"
 LOCK_DIR="$STATE_DIR/lifecycle.lock"
 INSTALLED_APP="$HOME/Applications/Agent Runtime.app"
-SERVICE_MANAGEMENT_EXECUTABLE="$INSTALLED_APP/Contents/MacOS/AgentRuntimeMenuBar"
-RUNTIME_SERVICE_PLIST="$INSTALLED_APP/Contents/Library/LaunchAgents/$CURRENT_RUNTIME_LAUNCHD_LABEL.plist"
+RUNTIME_SERVICE_PLIST="$HOME/Library/LaunchAgents/$CURRENT_RUNTIME_LAUNCHD_LABEL.plist"
 RUNTIME_SERVICE_HELPER="$INSTALLED_APP/Contents/MacOS/AgentRuntimeRuntimeService"
-RUNTIME_BUNDLE_PROGRAM="Contents/MacOS/AgentRuntimeRuntimeService"
 ACTION="${1:-start}"
 RUNTIME_PYTHON="$ROOT/.venv/bin/python"
 MCP_COMMAND="command=${RUNTIME_PYTHON// /\\ } -m agent_runtime.server,channel=main"
@@ -64,6 +62,143 @@ doctor_error() {
   exit 2
 }
 
+validate_installed_selection() {
+  local runtime_root="$1"
+  local runtime_python="$2"
+  [[ -x "$runtime_python" && ! -L "$runtime_python" ]] \
+    || fail "Bundled Runtime Python is missing or unsafe."
+  "$runtime_python" - "$runtime_root" "$PAYLOADS_ROOT" "$PAYLOAD_POINTER" <<'PY'
+import hashlib
+import os
+import re
+import stat
+import sys
+from pathlib import Path
+
+runtime_root = Path(sys.argv[1])
+payloads_root = Path(sys.argv[2])
+pointer = Path(sys.argv[3])
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(runtime_root / "macos"))
+
+def fail(message):
+    print("START ERROR: " + message, file=sys.stderr)
+    raise SystemExit(2)
+
+try:
+    import package_provenance as provenance
+except ImportError:
+    fail("Installed Runtime package provenance is unavailable.")
+
+manifest_path = runtime_root.parent / "runtime-manifest.json"
+try:
+    manifest = provenance._load_substrate_manifest(manifest_path)
+    provenance.validate_substrate_manifest(
+        runtime_root,
+        manifest_path,
+        manifest.get("runtime_revision"),
+        manifest.get("git_tree"),
+        manifest.get("requirements_lock_sha256"),
+    )
+except (OSError, provenance.PackageProvenanceError):
+    fail("Installed Runtime substrate provenance is invalid.")
+
+try:
+    info = pointer.lstat()
+except OSError:
+    fail("Current payload pointer is missing.")
+if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+    fail("Current payload pointer is unsafe.")
+if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600:
+    fail("Current payload pointer ownership or mode is unsafe.")
+try:
+    raw_pointer = pointer.read_text(encoding="ascii")
+except (OSError, UnicodeError):
+    fail("Current payload pointer is unreadable.")
+match = re.fullmatch(r"([0-9a-f]{64})\n", raw_pointer)
+if match is None:
+    fail("Current payload pointer is malformed.")
+closure = match.group(1)
+release = payloads_root / closure
+try:
+    payload = provenance.validate_payload_release(
+        release,
+        expected_closure=closure,
+        expected_requirements_lock_sha256=manifest["requirements_lock_sha256"],
+        expected_python_major_minor=manifest["required_python_major_minor"],
+        expected_public_tool_count=manifest["expected_public_tool_count"],
+        expected_public_surface_sha256=manifest["expected_public_surface_sha256"],
+    )
+except (OSError, provenance.PackageProvenanceError):
+    fail("Selected external Runtime payload provenance is invalid.")
+
+# The selected release is the only first-party import root. Validate the actual
+# advertised surface before the tunnel is allowed to execute the module.
+sys.path.insert(0, str(release))
+try:
+    from agent_runtime.capability_registry import ADVERTISED_TOOL_NAMES
+except Exception:
+    fail("Selected external Runtime payload cannot expose the public tool registry.")
+blob = ("\n".join(ADVERTISED_TOOL_NAMES) + "\n").encode("utf-8")
+actual_count = len(ADVERTISED_TOOL_NAMES)
+actual_surface = hashlib.sha256(blob).hexdigest()
+if actual_count != manifest["expected_public_tool_count"] or actual_count != 20:
+    fail("Selected Runtime payload public tool count is incompatible.")
+if actual_surface != manifest["expected_public_surface_sha256"]:
+    fail("Selected Runtime payload public tool surface is incompatible.")
+if payload["expected_public_tool_count"] != actual_count or payload["expected_public_surface_sha256"] != actual_surface:
+    fail("Selected Runtime payload manifest public tool contract is inconsistent.")
+print(f"{release}\t{payload['source_revision']}")
+PY
+}
+
+require_current_launchagent() {
+  [[ -x "$RUNTIME_SERVICE_HELPER" && -f "$RUNTIME_SERVICE_HELPER" && ! -L "$RUNTIME_SERVICE_HELPER" ]] \
+    || fail "Current Runtime supervisor executable is missing or unsafe."
+  [[ -f "$RUNTIME_SERVICE_PLIST" && ! -L "$RUNTIME_SERVICE_PLIST" ]] \
+    || fail "Current Runtime LaunchAgent plist is missing or unsafe."
+  /usr/bin/python3 - "$RUNTIME_SERVICE_PLIST" "$RUNTIME_SERVICE_HELPER" "$CURRENT_RUNTIME_LAUNCHD_LABEL" "$(id -u)" <<'PY'
+import os
+import plistlib
+import stat
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+helper = sys.argv[2]
+label = sys.argv[3]
+uid = int(sys.argv[4])
+
+def fail(message):
+    print("START ERROR: " + message, file=sys.stderr)
+    raise SystemExit(2)
+
+try:
+    info = path.lstat()
+except OSError:
+    fail("Current Runtime LaunchAgent plist is unavailable.")
+if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+    fail("Current Runtime LaunchAgent plist is unsafe.")
+if info.st_uid != uid or stat.S_IMODE(info.st_mode) != 0o600:
+    fail("Current Runtime LaunchAgent ownership or mode is unsafe.")
+try:
+    value = plistlib.loads(path.read_bytes())
+except (OSError, plistlib.InvalidFileException):
+    fail("Current Runtime LaunchAgent plist is malformed.")
+expected = {
+    "Label": label,
+    "ProgramArguments": [helper],
+    "RunAtLoad": False,
+    "KeepAlive": {"SuccessfulExit": False},
+    "ProcessType": "Interactive",
+    "ThrottleInterval": 2,
+}
+if value != expected:
+    fail("Current Runtime LaunchAgent identity or contract is foreign.")
+PY
+  service_loaded || fail "Current Runtime LaunchAgent is not loaded."
+}
+
 installed_doctor() {
   local json_mode=0
   local doctor_arg=""
@@ -81,10 +216,20 @@ installed_doctor() {
   if [[ ! -e "$installed_app" && ! -L "$installed_app" ]]; then
     doctor_error "APP_NOT_INSTALLED" "Canonical Agent Runtime app is not installed." "$json_mode"
   fi
-  [[ -d "$installed_app" && ! -L "$installed_app" && -x "$doctor_python" && -f "$doctor_root/agent_runtime/doctor.py" ]]     || doctor_error "INSTALLED_PACKAGE_INVALID" "Installed Runtime payload is incomplete or unsafe." "$json_mode"
-  [[ -f "$doctor_env" && ! -L "$doctor_env" ]]     || doctor_error "CANONICAL_CONFIG_MISSING" "Canonical runtime.env is missing or unsafe." "$json_mode"
+  [[ -d "$installed_app" && ! -L "$installed_app" && -x "$doctor_python" ]] \
+    || doctor_error "INSTALLED_PACKAGE_INVALID" "Installed Runtime substrate is incomplete or unsafe." "$json_mode"
+  [[ -f "$doctor_env" && ! -L "$doctor_env" ]] \
+    || doctor_error "CANONICAL_CONFIG_MISSING" "Canonical runtime.env is missing or unsafe." "$json_mode"
 
-  exec /usr/bin/python3 - "$doctor_env" "$doctor_python" "$doctor_root" "$RUNTIME_PATH" "$json_mode" "$doctor_arg" <<'PY'
+  local selection selected_payload runtime_revision
+  if ! selection="$(validate_installed_selection "$doctor_root" "$doctor_python")"; then
+    doctor_error "PAYLOAD_SELECTION_INVALID" "Selected external Runtime payload is invalid." "$json_mode"
+  fi
+  IFS=$'\t' read -r selected_payload runtime_revision <<< "$selection"
+  [[ -f "$selected_payload/agent_runtime/doctor.py" ]] \
+    || doctor_error "PAYLOAD_SELECTION_INVALID" "Selected external Runtime doctor is unavailable." "$json_mode"
+
+  exec /usr/bin/python3 - "$doctor_env" "$doctor_python" "$doctor_root" "$selected_payload" "$runtime_revision" "$RUNTIME_PATH" "$json_mode" "$doctor_arg" <<'PY'
 import os
 import sys
 from pathlib import Path
@@ -92,9 +237,11 @@ from pathlib import Path
 env_file = Path(sys.argv[1])
 runtime_python = sys.argv[2]
 runtime_root = sys.argv[3]
-runtime_path = sys.argv[4]
-json_mode = sys.argv[5] == "1"
-doctor_arg = sys.argv[6]
+selected_payload = sys.argv[4]
+runtime_revision = sys.argv[5]
+runtime_path = sys.argv[6]
+json_mode = sys.argv[7] == "1"
+doctor_arg = sys.argv[8]
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, runtime_root)
@@ -118,11 +265,12 @@ except SystemExit:
 doctor_env = {
     "PATH": runtime_path,
     "HOME": os.environ.get("HOME", str(Path.home())),
-    "PYTHONPATH": runtime_root,
+    "PYTHONPATH": selected_payload,
     "PYTHONDONTWRITEBYTECODE": "1",
     "AGENT_RUNTIME_WORKSPACE_ROOT": values["AGENT_RUNTIME_WORKSPACE_ROOT"],
     "AGENT_RUNTIME_GIT_NAME": values["AGENT_RUNTIME_GIT_NAME"],
     "AGENT_RUNTIME_GIT_EMAIL": values["AGENT_RUNTIME_GIT_EMAIL"],
+    "AGENT_RUNTIME_REVISION": runtime_revision,
 }
 for key in ("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS", "AGENT_RUNTIME_MAX_PARALLELISM"):
     if key in values:
@@ -160,36 +308,6 @@ service_loaded() {
   launchctl print "$SERVICE" >/dev/null 2>&1
 }
 
-require_modern_package_ownership() {
-  [[ -x "$SERVICE_MANAGEMENT_EXECUTABLE" && ! -L "$SERVICE_MANAGEMENT_EXECUTABLE" ]] \
-    || fail "ServiceManagement owner app is missing; install/activate the current Agent Runtime generation first."
-  [[ -f "$RUNTIME_SERVICE_PLIST" && ! -L "$RUNTIME_SERVICE_PLIST" ]] \
-    || fail "ServiceManagement Runtime plist is missing or unsafe."
-  [[ -x "$RUNTIME_SERVICE_HELPER" && -f "$RUNTIME_SERVICE_HELPER" && ! -L "$RUNTIME_SERVICE_HELPER" ]] \
-    || fail "ServiceManagement Runtime helper is missing or unsafe."
-  local plist_label bundle_program
-  plist_label="$(/usr/libexec/PlistBuddy -c 'Print :Label' "$RUNTIME_SERVICE_PLIST" 2>/dev/null)" \
-    || fail "ServiceManagement Runtime plist Label is unavailable."
-  bundle_program="$(/usr/libexec/PlistBuddy -c 'Print :BundleProgram' "$RUNTIME_SERVICE_PLIST" 2>/dev/null)" \
-    || fail "ServiceManagement Runtime plist BundleProgram is unavailable."
-  [[ "$plist_label" == "$CURRENT_RUNTIME_LAUNCHD_LABEL" ]] \
-    || fail "ServiceManagement Runtime plist Label does not match the current Runtime identity."
-  [[ "$bundle_program" == "$RUNTIME_BUNDLE_PROGRAM" ]] \
-    || fail "ServiceManagement Runtime BundleProgram does not match the installed helper."
-}
-
-require_modern_registration() {
-  require_modern_package_ownership
-  local snapshot
-  if ! snapshot="$("$SERVICE_MANAGEMENT_EXECUTABLE" --service-management status 2>/dev/null)"; then
-    fail "ServiceManagement registration status is unavailable."
-  fi
-  if ! printf '%s\n' "$snapshot" | grep -Eq '"runtime_agent"[[:space:]]*:[[:space:]]*"enabled"'; then
-    fail "ServiceManagement Runtime registration is not enabled: $snapshot"
-  fi
-  service_loaded || fail "ServiceManagement Runtime LaunchAgent is enabled but not loaded; refusing legacy bootstrap fallback."
-}
-
 set_running() {
   mkdir -p "$STATE_DIR"
   local tmp="$STATE_DIR/.protected-runtime-running.$$"
@@ -218,8 +336,6 @@ port_owner_pids() {
 is_canonical_port_owner() {
   local pid="$1" command executable
   command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
-  # macOS truncates `comm` to a short display width. The full command line
-  # remains the authoritative executable identity for this narrow check.
   command="${command//\\ / }"
   executable="${command%% *}"
   [[ "${executable##*/}" == "tunnel-client" ]] || return 1
@@ -301,17 +417,22 @@ serve() {
   local tunnel_client="${1:-}"
   local env_file="${2:-$ENV_FILE}"
   local require_git_identity=0
+  local selected_payload="$ROOT"
+  local runtime_revision=""
+
   [[ "$SOURCE_ROOT" != "$INSTALLED_RUNTIME_ROOT" || "$env_file" == "$CANONICAL_ENV_FILE" ]] \
     || fail "Installed Runtime configuration must use the canonical per-user file."
-  [[ -f "$env_file" && ! -L "$env_file" ]] || fail "Missing or invalid canonical Runtime configuration; run ./install.sh first."
+  [[ -f "$env_file" && ! -L "$env_file" ]] \
+    || fail "Missing or invalid canonical Runtime configuration; run ./install.sh first."
   if [[ "$SOURCE_ROOT" == "$INSTALLED_RUNTIME_ROOT" ]]; then
     require_git_identity=1
+    local selection
+    selection="$(validate_installed_selection "$ROOT" "$RUNTIME_PYTHON")"
+    IFS=$'\t' read -r selected_payload runtime_revision <<< "$selection"
     /usr/bin/python3 - "$env_file" <<'PY'
-import os
 import stat
 import sys
 from pathlib import Path
-
 path = Path(sys.argv[1])
 try:
     mode = stat.S_IMODE(path.stat().st_mode)
@@ -325,10 +446,10 @@ PY
     || fail "Legacy tunnel configuration must remain absent at $LEGACY_CONFIG."
   [[ "$tunnel_client" == /* && -x "$tunnel_client" && "${tunnel_client##*/}" == "tunnel-client" ]] \
     || fail "LaunchAgent must provide an absolute executable tunnel-client path."
-  [[ -x "$RUNTIME_PYTHON" && -f "$ROOT/agent_runtime/server.py" ]] \
-    || fail "Installed Runtime payload is incomplete."
+  [[ -x "$RUNTIME_PYTHON" && -f "$selected_payload/agent_runtime/server.py" ]] \
+    || fail "Selected Runtime payload is incomplete."
 
-  exec /usr/bin/python3 - "$env_file" "$tunnel_client" "$RUNTIME_PYTHON" "$RUNTIME_PATH" "$ROOT" "$require_git_identity" <<'PY'
+  exec /usr/bin/python3 - "$env_file" "$tunnel_client" "$RUNTIME_PYTHON" "$RUNTIME_PATH" "$selected_payload" "$runtime_revision" "$require_git_identity" <<'PY'
 import os
 import re
 import subprocess
@@ -339,8 +460,9 @@ env_file = Path(sys.argv[1])
 tunnel_client = sys.argv[2]
 runtime_python = sys.argv[3]
 runtime_path = sys.argv[4]
-runtime_root = sys.argv[5]
-require_git_identity = sys.argv[6] == "1"
+selected_payload = sys.argv[5]
+runtime_revision = sys.argv[6]
+require_git_identity = sys.argv[7] == "1"
 sys.dont_write_bytecode = True
 
 def fail(message):
@@ -350,7 +472,7 @@ def fail(message):
 try:
     lines = env_file.read_text(encoding="utf-8").splitlines()
 except OSError as exc:
-    fail("Could not read canonical Runtime configuration: " + str(exc))
+    fail("Could not read Runtime configuration: " + str(exc))
 
 required = {
     "CONTROL_PLANE_API_KEY",
@@ -400,36 +522,13 @@ if identity_required:
         if len(raw) > 256 or any(ch in value for ch in ("\x00", "\r", "\n")):
             fail("Runtime Git identity is malformed.")
 
-runtime_revision = None
-if require_git_identity:
-    sys.path.insert(0, runtime_root)
-    try:
-        from macos import package_provenance
-    except ImportError:
-        fail("Installed Runtime package provenance is invalid.")
-    try:
-        manifest_path = Path(runtime_root).parent / "runtime-manifest.json"
-        manifest = package_provenance._load_manifest(manifest_path)
-        validated_manifest = package_provenance.validate_manifest(
-            Path(runtime_root),
-            manifest_path,
-            manifest.get("runtime_revision"),
-            manifest.get("git_tree"),
-            manifest.get("requirements_lock_sha256"),
-        )
-        runtime_revision = validated_manifest["runtime_revision"]
-    except (OSError, package_provenance.PackageProvenanceError):
-        fail("Installed Runtime package provenance is invalid.")
-
 runtime_env = {
     "PATH": runtime_path,
     "HOME": os.environ.get("HOME", str(Path.home())),
     "CONTROL_PLANE_API_KEY": values["CONTROL_PLANE_API_KEY"],
     "CONTROL_PLANE_TUNNEL_ID": values["CONTROL_PLANE_TUNNEL_ID"],
     "AGENT_RUNTIME_WORKSPACE_ROOT": values["AGENT_RUNTIME_WORKSPACE_ROOT"],
-    "PYTHONPATH": runtime_root,
-    # The signed installed payload is immutable at runtime; do not create
-    # bytecode resources inside the app bundle.
+    "PYTHONPATH": selected_payload,
     "PYTHONDONTWRITEBYTECODE": "1",
     "OPEN_WEB_UI": "false",
     "AGENT_RUNTIME_TELEMETRY": telemetry_mode,
@@ -441,7 +540,7 @@ if values.get("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS") is not None:
     runtime_env["AGENT_RUNTIME_MAX_ACTIVE_SESSIONS"] = values["AGENT_RUNTIME_MAX_ACTIVE_SESSIONS"]
 if values.get("AGENT_RUNTIME_MAX_PARALLELISM") is not None:
     runtime_env["AGENT_RUNTIME_MAX_PARALLELISM"] = values["AGENT_RUNTIME_MAX_PARALLELISM"]
-if runtime_revision is not None:
+if runtime_revision:
     runtime_env["AGENT_RUNTIME_REVISION"] = runtime_revision
 for key in ("USER", "TMPDIR", "LANG"):
     value = os.environ.get(key)
@@ -470,12 +569,19 @@ os.execve(tunnel_client, [tunnel_client, "run"] + common, runtime_env)
 PY
 }
 
+validate_current_runtime_before_start() {
+  require_current_launchagent
+  if [[ "$SOURCE_ROOT" == "$INSTALLED_RUNTIME_ROOT" ]]; then
+    validate_installed_selection "$ROOT" "$RUNTIME_PYTHON" >/dev/null
+  fi
+}
+
 case "$ACTION" in
   --help|-h)
     cat <<'EOF'
 Usage: ./start.sh [start|stop|restart|status|session-limit|doctor [--json]]
-The installed-authority doctor uses package-owned Runtime bytes plus canonical runtime.env.
---serve is an internal ServiceManagement entrypoint and is not an operator command.
+The installed Runtime uses one exact per-user LaunchAgent and one validated external payload selection.
+--serve is an internal supervisor entrypoint and is not an operator command.
 EOF
     ;;
   doctor)
@@ -487,8 +593,8 @@ EOF
     ;;
   start)
     acquire_lock
+    validate_current_runtime_before_start
     preflight_protected_port
-    require_modern_registration
     if runtime_ready_once; then
       echo "Agent Runtime desired state: RUNNING"
       exit 0
@@ -502,8 +608,6 @@ EOF
     acquire_lock
     rm -f "$DESIRED_STATE"
     if service_loaded; then
-      # A loaded PathState job may already have no live process to signal.
-      # The bounded listener proof below is the authoritative STOPPED result.
       launchctl kill SIGTERM "$SERVICE" >/dev/null 2>&1 || true
     fi
     wait_until_stopped
@@ -511,10 +615,8 @@ EOF
     ;;
   restart)
     acquire_lock
+    validate_current_runtime_before_start
     preflight_protected_port
-    require_modern_registration
-    # PathState KeepAlive would otherwise resurrect the old instance before
-    # Restart can prove it stopped. This is an explicit operator transition.
     rm -f "$DESIRED_STATE"
     if service_loaded; then
       launchctl kill SIGTERM "$SERVICE" >/dev/null 2>&1 || true
@@ -526,6 +628,9 @@ EOF
     echo "Agent Runtime desired state: RUNNING"
     ;;
   status)
+    if [[ "$SOURCE_ROOT" == "$INSTALLED_RUNTIME_ROOT" ]]; then
+      validate_installed_selection "$ROOT" "$RUNTIME_PYTHON" >/dev/null
+    fi
     if [[ -f "$DESIRED_STATE" ]]; then
       echo "RUNNING (persistent terminal sessions: $(effective_session_limit))"
     else
