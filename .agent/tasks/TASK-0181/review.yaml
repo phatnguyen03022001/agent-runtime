@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0181
-task_revision: 8
-review_revision: 6
-state: BLOCKED
+task_revision: 9
+review_revision: 7
+state: ACCEPTED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
-  path: .agent/tasks/TASK-0181/report-r8.yaml
-  commit: "e0efdb82e74fa77334446b73066cc2eef7eae6c6"
-  report_revision: 8
+  path: .agent/tasks/TASK-0181/report-r9.yaml
+  commit: "7bbc4a773d88728ba485ef55e086a41f8c3d0ff4"
+  report_revision: 9
 
 independence:
   reviewer_role: ARCHITECT
@@ -20,47 +20,56 @@ contract_compliance:
   protocol_version: PASS
   identity: PASS
   execution_base: PASS
+  skill_rules: PASS
   scope: PASS
-  verification_budget: PASS
-  artifact_budget: PASS
-  acceptance_criteria: BLOCKED_BY_PACKAGING_INTERPRETER_PREFLIGHT
-
-blocking_findings:
-  - id: B-0181-REV8-DISTRIBUTION-BUILD-2-PREFLIGHT
-    severity: BLOCKING
-    classification: EXECUTION_ENVIRONMENT_PACKAGING_INTERPRETER
-    summary: "Build 2 exited at the packaging interpreter resolver before source staging or product build. The carrier omitted AGENT_RUNTIME_PACKAGING_PYTHON and python3.13 was absent from PATH; the reported checkout .venv/bin/python is CPython 3.13.5 arm64."
-    required_authority: "Revision 9 may permit one additional distribution invocation on the unchanged revision-8 product candidate, gated by read-only validation of the exact absolute interpreter path in the same carrier. No source mutation or canonical verification retry is justified."
+  structure_policy: PASS
+  git_authority: PASS
+  acceptance_criteria: PASS
+  verifier_evidence: PASS_REUSED_EXACT_SOURCE
+  artifact_evidence: PASS_INDEPENDENT_READ_ONLY_AUDIT
 
 acceptance_basis:
-  - "Report commit e0efdb82e74fa77334446b73066cc2eef7eae6c6 is the direct child of source candidate db0ae500bc52a62d77a44b351395e2b55806209e and adds only report-r8.yaml."
-  - "Revision-8 non-governance changes are limited to macos/package_app.sh and tests/test_package_provenance.py. The provenance implementation was preserved."
-  - "Five focused modules passed 168 tests; static checks passed; the complete 62-module non-canonical pre-sweep and canonical ./verify invocation 4 each passed 840 tests."
-  - "The canonical history is invocation 1 FAIL, 2 FAIL, 3 PASS, 4 PASS; all four authorized invocations are consumed."
-  - "Build 1 failed during provenance sealing. Build 2 exited 2 at interpreter preflight, before source staging or product build; no app, handoff or payload artifact was published."
-  - "macos/package_app.sh invokes resolve_packaging_python before creating BUILD_ROOT. macos/packaging_python.sh accepts an absolute executable path through AGENT_RUNTIME_PACKAGING_PYTHON and validates CPython 3.13, cp313, Darwin and arm64."
-  - "The available .venv interpreter identity and build-2 failure are evidenced by the Executor report; the next Executor must recheck the interpreter on the actual macOS carrier before build."
-  - "Build 2 consumed its authorization despite failing at preflight. No all-Mach-O artifact audit or archive occurred, and the report records zero live production effects."
-  - "The report uses block-style YAML and the Executor states that the pinned validator accepted it; exact report commit and sole-file delta were independently resolved."
+  - "Report commit 7bbc4a773d88728ba485ef55e086a41f8c3d0ff4 is the single-parent direct child of revision-9 base 092b761cdc7e3f1085abe38948d9613fefe9e875 and changes only .agent/tasks/TASK-0181/report-r9.yaml."
+  - "GitHub comparison from verified source db0ae500bc52a62d77a44b351395e2b55806209e to the report commit contains only four .agent/tasks/TASK-0181 governance files. The revision-8 candidate's non-governance bytes remain unchanged."
+  - "Revision-8 source qualification remains 168 focused tests, 62 modules and 840 tests in the full pre-sweep, and canonical ./verify invocation 4 PASS on the unchanged implementation. Historical canonical results remain FAIL, FAIL, PASS, PASS; revision 9 consumed no fifth invocation."
+  - "The report records validation of the absolute checkout CPython 3.13.5 arm64 interpreter, explicit AGENT_RUNTIME_PACKAGING_PYTHON in the build carrier, and a recheck immediately before packaging."
+  - "Distribution build history is build 1 FAIL at designated-requirement sealing, build 2 FAIL at interpreter preflight, build 3 PASS. The read-only build log ends in the published app, handoff, initial payload and matching candidate closure."
+  - "Independent read-only enumeration of the emitted app found exactly 12 regular Mach-O objects. All 12 passed strict codesign verification with Signature=adhoc, TeamIdentifier not set, nonempty Identifier and an exact displayed designated requirement of designated => identifier of that same identifier. No CDHash-default requirement was accepted."
+  - "Independent execution of package_provenance.py validate-zero-cost against the final app, handoff and initial payload returned schema 3, the exact 20-tool public surface, ad-hoc/no-TeamIdentifier identity, source revision 092b761cdc7e3f1085abe38948d9613fefe9e875, substrate closure 75e5cfdaceb94b4d594673e2f6fe662f9ee46c8f1efe46e6d9c13c006ad53420 and payload closure 7230e69bf6addcb8ff720e05cd199c76367170c559aff23c7481a8f7e6bd2804."
+  - "The final archive was hashed independently: SHA-256 3f179015534d81d6baee3faf78a57f8300451739afdda53a5940ee91ec7c3746. A read-only tar comparison found exactly 1720 regular files, with exact candidate bytes and modes, no missing or extra files, no mismatches and no symlinks."
+  - "The local repository observer and GitHub remote ref both resolved main at the exact report commit before review, with local ahead/behind 0/0, clean index/worktree and one worktree. The report records zero production Runtime, lifecycle, payload pointer, config, tunnel, Apple authority, host install, tag or release effects."
+  - "The report uses block-style YAML and records successful pinned Foundation validation. The Architect separately resolved its exact commit and file delta; the validator result is Executor evidence rather than an independently rerun pinned validator."
+
+findings: []
+
+accepted_artifact:
+  candidate_sha256: "75e5cfdaceb94b4d594673e2f6fe662f9ee46c8f1efe46e6d9c13c006ad53420"
+  initial_payload_closure: "7230e69bf6addcb8ff720e05cd199c76367170c559aff23c7481a8f7e6bd2804"
+  handoff_sha256: "e5f4b85e89d579afca1db933708490a033fc264cafbe3737e3376076429c59a1"
+  archive_path: "build/TASK-0181-r9/Agent-Runtime-zero-cost-75e5cfdaceb9.tar.gz"
+  archive_sha256: "3f179015534d81d6baee3faf78a57f8300451739afdda53a5940ee91ec7c3746"
+  archive_regular_files: 1720
+  macho_count: 12
+  public_tool_count: 20
+  signing_mode: adhoc
+  team_identifier: absent
 
 continuation:
   allowed: false
   preconditions:
-    - "Revision 8 is terminally BLOCKED."
-    - "Revision 9 must preserve all non-governance bytes from source candidate db0ae500bc52a62d77a44b351395e2b55806209e."
-    - "Read-only packaging interpreter preflight must PASS in the same carrier before distribution build 3."
+    - "TASK-0181 artifact qualification is accepted and complete."
+    - "Any production install or cutover requires separately scoped authority and fresh host evidence."
   preserve:
-    source_candidate: "db0ae500bc52a62d77a44b351395e2b55806209e"
+    accepted_report_commit: "7bbc4a773d88728ba485ef55e086a41f8c3d0ff4"
+    verified_source_candidate: "db0ae500bc52a62d77a44b351395e2b55806209e"
     canonical_verify_invocations_consumed: 4
-    canonical_verify_invocation_4_result: PASS
-    distribution_builds_consumed: 2
-    archive_builds_consumed: 0
+    distribution_builds_consumed: 3
+    archive_builds_consumed: 1
     zero_live_production_effects: true
   forbidden:
-    - "Canonical ./verify invocation 5 or any unqualified new product source."
-    - "Distribution build 3 before the interpreter preflight or build 4 after any failure."
-    - "Archive before successful distribution and complete artifact audit."
-    - "Live Runtime, payload, lifecycle, configuration, tunnel, Apple authority, tag or release mutation."
+    - "Treating artifact acceptance as install, cutover, release or notarization authority."
+    - "Another canonical verifier, distribution build or archive under TASK-0181."
+    - "Changing provenance to accept CDHash-default designated requirements."
 
 notes:
-  - "The failure is in the invocation environment. Keep the packaging interpreter contract strict and pass the existing validated interpreter explicitly."
+  - "The archive is a local ignored build artifact on the operator Mac, not a GitHub Release or durable repository item. Its accepted identity is its exact SHA-256 and candidate closure."
