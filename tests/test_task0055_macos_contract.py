@@ -117,7 +117,7 @@ class Task0055MacOSContractTests(unittest.TestCase):
             "ServiceManagement remains only for predecessor migration and rollback",
             "Open/Open Anyway",
             "Ad-hoc signing seals code integrity but does not authenticate a publisher",
-            "no Apple Developer ID or notarization authority",
+            "The public v0.5.0 artifact is ad-hoc signed without Apple Developer ID or notarization.",
             "requires no Developer ID or notary credentials",
             "no blanket TCC permissions",
             "Homebrew is optional",
