@@ -1,0 +1,210 @@
+protocol_version: 3
+
+task_id: TASK-0183
+task_revision: 1
+state: APPROVED
+title: "Reinstall Public Zero-Cost Release With Preserved Runtime Configuration"
+
+origin:
+  type: operator_request
+  task_id: TASK-0183
+  gap_id: "PUBLIC-RELEASE-LIVE-INSTALL-TRIAL"
+  request: "Keep the existing runtime.env and test reinstalling the public release from its archive."
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - security-review
+  - verification
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - security-review
+    - verification
+  recommended:
+    - simplicity
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  preferred_transport: AGENT_RUNTIME
+  consequence_bearing_carrier: SENTINELX
+  reason: "The installation replaces the active Agent Runtime carrier; use the independent connected Mac carrier for live actions and post-cutover reconciliation."
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0182/review.yaml at 123cb6fe8b3f5db4c41392e945e8f55c0c89b57e"
+    role: "Accepted public v0.5.0 release, exact tag and downloaded archive checksum."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0181/review.yaml at ca270b4e7ca207b15528e1f85c39881a447091e4"
+    role: "Accepted zero-cost package provenance and closed build/verification budgets."
+    precedence: 2
+  - source: "docs/INSTALL.md and docs/RECOVERY.md at 123cb6fe8b3f5db4c41392e945e8f55c0c89b57e"
+    role: "Package-owned prebuilt installation, cutover and fail-closed recovery contract."
+    precedence: 3
+  - source: "Read-only installed-package doctor and runtime.env metadata before task authorship"
+    role: "Current healthy predecessor and existing valid canonical configuration."
+    precedence: 4
+
+structure_authority:
+  status: NOT_APPLICABLE
+  source: "Activation-only trial of the accepted public release"
+  rationale: "No product or repository source structure change is authorized."
+
+objective: "Install the exact public v0.5.0 zero-cost archive through its package-owned prebuilt transactional path over the healthy installed predecessor, preserving the existing canonical runtime.env byte-for-byte, then prove the new installed Runtime is healthy. Extract the published archive into ignored repository build output; do not rebuild or perform a blind uninstall."
+
+scope:
+  required_changes:
+    - "Freshly bind clean synchronized main, exact task base, fixed origin, public release ID 398093294, tag v0.5.0 at source 092b761cdc7e3f1085abe38948d9613fefe9e875, and archive SHA-256 3f179015534d81d6baee3faf78a57f8300451739afdda53a5940ee91ec7c3746."
+    - "Freshly prove the installed predecessor is Runtime 0.5.0 revision b1879b5c185e93457bb634a7ab0508f7220416af, its package-owned doctor is healthy 10/10, transaction absent, and its ServiceManagement state unambiguous. The newer checkout doctor expects an external payload and is not the predecessor health authority."
+    - "Record only hash, mode, owner and existence of canonical runtime.env before the operation; never print or copy its contents. Validate its existing Git identity and workspace through the package-owned prebuilt helper. Require the same bytes, owner and mode 0600 after every consequential step."
+    - "Download or reuse a freshly hash-checked public archive, verify its checksum, extract exactly one complete app/handoff/payload bundle under ignored build/TASK-0183-install, and validate schema-3 zero-cost provenance before live mutation."
+    - "Run the packaged read-only prebuilt preflight against the existing configured workspace. Fail closed on any actionable preflight failure, unknown predecessor, foreign service/port, changed configuration, or unrecognized transaction."
+    - "Use SentinelX as the independent live carrier. Invoke the packaged install_release.sh --workspace-root at most once and reconcile its transaction status before any further action. Do not uninstall first, clear configuration, or simulate a new user's missing-configuration onboarding."
+    - "At PENDING, require readiness ready and package-owned doctor with no failures and only recognized CUTOVER_TRANSACTION_PRESENT warning for the exact transaction. Then invoke the packaged commit-cutover at most once. If the supported transaction cannot pass, use one recognized rollback/recovery path only when its state is unambiguous; otherwise stop BLOCKED preserving evidence."
+    - "After commit, prove no transaction, readiness ready, doctor healthy, Runtime 0.5.0 with twenty public tools, strict ad-hoc codesign/provenance, selected payload and exact packaged source identity. Prove canonical runtime.env retains the exact original bytes, owner and mode 0600."
+    - "Do not consume canonical ./verify or any package/archive build; reuse accepted TASK-0181 qualification and independently validate this downloaded artifact."
+    - "Publish only .agent/tasks/TASK-0183/report.yaml as the report-only direct child of the execution base, using pinned Foundation validation and non-force main publication. Record precise live invocation/effect counts, failures/recovery if any, env preservation and final clean synchronized Git state."
+
+  allowed_existing_files_or_components:
+    - "Public v0.5.0 archive and SHA256SUMS.txt, read-only source assets"
+    - "build/TASK-0183-install/ ignored extraction and verification evidence"
+    - "Canonical installed Agent Runtime app, selected payload, per-user lifecycle and transaction state through package-owned installer only"
+    - "Canonical runtime.env, read-only preservation check"
+    - ".agent/tasks/TASK-0183/report.yaml"
+  expected_files_are_restrictive: true
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0183/report.yaml"
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "Only a canonical report is tracked; extraction remains ignored build output."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+effect_authority:
+  source_build_max: 0
+  canonical_verify_max: 0
+  distribution_build_max: 0
+  archive_build_max: 0
+  install_release_max: 1
+  commit_cutover_max: 1
+  rollback_cutover_max: 1
+  recover_partial_cutover_max: 1
+  blind_retry: false
+  production_runtime_restart_only_as_package_owned_cutover: true
+  runtime_env_mutation_max: 0
+  tunnel_client_mutation_max: 0
+  host_security_mutation_max: 0
+
+invariants:
+  - "Canonical runtime.env bytes, owner and mode 0600 remain unchanged."
+  - "The accepted public archive and source tag identities remain exact; no rebuild, asset replacement or tag movement."
+  - "All live changes go through package-owned transactional installation/recovery; no manual deletion of app, pointer, payload, service or transaction."
+  - "No tunnel-client, credentials, Gatekeeper/TCC/Keychain, host dependency or sibling-repository mutation."
+  - "Main-only topology; no branch, PR, force push, amend or release mutation."
+
+forbidden_changes:
+  - "Any tracked product, package, test, dependency, documentation or task-authority edit during execution."
+  - "Blind uninstall, configuration reset, credentials disclosure or rewriting runtime.env to force fresh onboarding."
+  - "Unrecognized transaction repair, foreign process/service takeover, manual payload pointer synthesis, or disabling security controls."
+  - "Repeating install or commit after an unknown effect without exact reconciliation."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: revised_contract_required
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "The exact public release bundle and healthy predecessor are proven before mutation."
+    evidence_required: "Remote tag/asset identity, downloaded SHA-256, full bundle/provenance, package-owned predecessor doctor and no transaction."
+  - id: AC-2
+    requirement: "Existing canonical configuration is preserved."
+    evidence_required: "runtime.env hash, owner, mode 0600 and configured workspace/Git identity checks before and after cutover, without content disclosure."
+  - id: AC-3
+    requirement: "One transactional prebuilt installation succeeds or safely fails closed."
+    evidence_required: "At most one install and commit, recognized PENDING checks, precise rollback/recovery if needed, final transaction and service evidence."
+  - id: AC-4
+    requirement: "The installed public package is healthy and matches the accepted artifact."
+    evidence_required: "Package-owned doctor healthy, readiness ready, Runtime identity and 20-tool surface, strict codesign and zero-cost provenance after commit."
+  - id: AC-5
+    requirement: "Canonical report and Git state are closed."
+    evidence_required: "Pinned report validation, report-only direct child, non-force publication, local/remote main equal and clean."
+
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Fresh Git, predecessor, transaction and runtime.env preservation baseline."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Independently hash and extract exact public archive; validate complete bundle and read-only prebuilt preflight."
+      required: true
+    - id: CHECK-3
+      command_or_check: "One package-owned install; reconcile PENDING and require readiness/doctor gates."
+      required: true
+    - id: CHECK-4
+      command_or_check: "At most one commit or bounded recognized recovery; prove final health, provenance, env preservation and no transaction."
+      required: true
+    - id: CHECK-5
+      command_or_check: "Validate and publish exact report-only child, then reconcile clean synchronized main."
+      required: true
+  authoritative_verification:
+    required: true
+    mechanism: "Exact public archive/provenance plus package-owned transactional live health and environment preservation."
+    expected_signal: "Installed v0.5.0 public package healthy, exact 20-tool surface, transaction absent, runtime.env hash/mode/owner unchanged."
+
+report_requirements:
+  path: .agent/tasks/TASK-0183/report.yaml
+  record:
+    - "exact task base, report child and public archive/tag identity"
+    - "predecessor doctor/ServiceManagement/transaction and source doctor layout distinction"
+    - "runtime.env before/after hash, owner and mode only; no values"
+    - "preflight, install/commit/rollback/recovery invocation counts and observed states"
+    - "final doctor/readiness/provenance/codesign/capability and clean Git evidence"
+    - "result NEEDS_REVIEW on complete PASS, otherwise BLOCKED"
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
