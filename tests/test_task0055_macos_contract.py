@@ -19,23 +19,21 @@ def load_provenance():
 
 
 class Task0055MacOSContractTests(unittest.TestCase):
-    def test_service_metadata_uses_bundle_program_for_signed_runtime_helper(self) -> None:
-        plist_path = ROOT / "macos" / "AppBundle" / "Library" / "LaunchAgents" / "com.picmao.agent-runtime-runtime-service.plist"
-        self.assertTrue(plist_path.is_file())
-        payload = plistlib.loads(plist_path.read_bytes())
-        self.assertEqual(payload["Label"], "com.picmao.agent-runtime-runtime-service")
-        self.assertEqual(payload["BundleProgram"], "Contents/MacOS/AgentRuntimeRuntimeService")
-        self.assertNotIn("Program", payload)
-        self.assertNotIn("AssociatedBundleIdentifiers", payload)
-        self.assertEqual(payload["KeepAlive"], {"SuccessfulExit": False})
-        self.assertIs(payload["RunAtLoad"], False)
+    def test_current_runtime_lifecycle_uses_per_user_launchagent_contract(self) -> None:
+        source = (ROOT / "macos" / "candidate_cutover.py").read_text()
+        self.assertIn('return home / "Library" / "LaunchAgents" / f"{MODERN_RUNTIME_LABEL}.plist"', source)
+        self.assertIn('"ProgramArguments": [str(_current_runtime_helper(home))]', source)
+        self.assertIn('"RunAtLoad": False', source)
+        self.assertIn('"KeepAlive": {"SuccessfulExit": False}', source)
+        self.assertIn('"ProcessType": "Interactive"', source)
+        self.assertIn('"ThrottleInterval": 2', source)
+        self.assertIn("CURRENT_LAUNCHAGENT_MODE = 0o600", source)
 
-    def test_package_script_requires_explicit_non_adhoc_identity_without_keychain_discovery(self) -> None:
+    def test_package_script_uses_explicit_zero_cost_adhoc_signing_without_keychain_discovery(self) -> None:
         package = (ROOT / "macos" / "package_app.sh").read_text()
-        self.assertIn("AGENT_RUNTIME_CODESIGN_IDENTITY", package)
-        self.assertIn('[[ -n "$SIGNING_IDENTITY"', package)
-        self.assertIn('--sign "$SIGNING_IDENTITY"', package)
-        self.assertNotIn("--sign -", package)
+        self.assertIn('"$1" != "--zero-cost"', package)
+        self.assertIn("--sign -", package)
+        self.assertNotIn("AGENT_RUNTIME_CODESIGN_IDENTITY", package)
         self.assertNotIn("security find-identity", package)
         self.assertNotIn("security find-certificate", package)
 
@@ -115,17 +113,16 @@ class Task0055MacOSContractTests(unittest.TestCase):
             "bounded local execution provider",
             "MCP is the protocol",
             "transport",
-            "app-owned ServiceManagement",
-            "migration/rollback predecessor only",
-            "requires-approval",
-            "not-registered",
-            "not-found",
-            "operator/platform state",
+            "One per-user LaunchAgent starts the embedded supervisor",
+            "ServiceManagement remains only for predecessor migration and rollback",
+            "Open/Open Anyway",
+            "Ad-hoc signing seals code integrity but does not authenticate a publisher",
+            "no Apple Developer ID or notarization authority",
+            "requires no Developer ID or notary credentials",
             "no blanket TCC permissions",
             "Homebrew is optional",
-            "AGENT_RUNTIME_CODESIGN_IDENTITY",
             "CPython 3.13",
-            "runtime.env is retained by default",
+            "Canonical `runtime.env` is retained by default during uninstall",
             "build, package, candidate freeze, install/cutover, activation, update, rollback, uninstall, and cleanup",
         )
         for text in required:

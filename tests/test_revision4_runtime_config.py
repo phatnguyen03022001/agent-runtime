@@ -12,6 +12,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from agent_runtime.capability_registry import ADVERTISED_TOOL_NAMES
+
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_SPEC = importlib.util.spec_from_file_location(
     "runtime_config_revision4",
@@ -167,22 +169,25 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             temp = Path(raw)
             home = (temp / "home").resolve()
-            runtime = home / "Applications/Agent Runtime.app/Contents/Resources/runtime"
-            (runtime / "agent_runtime").mkdir(parents=True)
-            (runtime / "macos").mkdir()
+            resources = home / "Applications/Agent Runtime.app/Contents/Resources"
+            runtime = resources / "runtime"
+            (runtime / "macos").mkdir(parents=True)
             (runtime / ".venv/bin").mkdir(parents=True)
             shutil.copy2(ROOT / "start.sh", runtime / "start.sh")
             (runtime / "start.sh").chmod(0o700)
             shutil.copy2(ROOT / "macos/runtime_config.py", runtime / "macos/runtime_config.py")
             shutil.copy2(ROOT / "macos/package_provenance.py", runtime / "macos/package_provenance.py")
-            (runtime / "agent_runtime/server.py").write_text("# fixture runtime payload\n")
-            fake_python = runtime / ".venv/bin/python"
-            fake_python.write_text("#!/bin/sh\nexit 0\n")
-            fake_python.chmod(0o700)
+            runtime_python = runtime / ".venv/bin/python"
+            runtime_python.write_text(
+                "#!/bin/sh\n"
+                f"exec {sys.executable!r} \"$@\"\n"
+            )
+            runtime_python.chmod(0o700)
 
             workspace = temp / "workspace"
             workspace.mkdir()
-            config = home / "Library/Application Support/Agent Runtime/runtime.env"
+            state_dir = home / "Library/Application Support/Agent Runtime"
+            config = state_dir / "runtime.env"
             config.parent.mkdir(parents=True)
             config.write_text(
                 "CONTROL_PLANE_API_KEY=test-key\n"
@@ -190,7 +195,7 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
                 f"AGENT_RUNTIME_WORKSPACE_ROOT={workspace}\n"
                 "AGENT_RUNTIME_GIT_NAME=Runtime Fixture\n"
                 "AGENT_RUNTIME_GIT_EMAIL=runtime-fixture@example.invalid\n"
-                f"AGENT_RUNTIME_REVISION={'e' * 40}\n"
+                f"AGENT_RUNTIME_REVISION={'f' * 40}\n"
             )
             config.chmod(0o600)
 
@@ -200,25 +205,51 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
             tunnel = tools / "tunnel-client"
             tunnel.write_text(
                 "#!/bin/bash\n"
-                f"printf 'revision=%s\\n' \"${{AGENT_RUNTIME_REVISION-}}\" >> {str(capture)!r}\n"
+                f"printf 'revision=%s\\n' \"$" + "{AGENT_RUNTIME_REVISION-}\" >> " + repr(str(capture)) + "\n"
                 "exit 0\n"
             )
             tunnel.chmod(0o700)
 
-            revision = "a" * 40
-            tree = "b" * 40
-            package_provenance.write_manifest(
+            surface_blob = ("\n".join(ADVERTISED_TOOL_NAMES) + "\n").encode("utf-8")
+            surface_sha = hashlib.sha256(surface_blob).hexdigest()
+            python_major_minor = f"{sys.version_info.major}.{sys.version_info.minor}"
+            lock_sha = "c" * 64
+            package_provenance.write_substrate_manifest(
                 runtime,
-                runtime.parent / "runtime-manifest.json",
-                revision,
-                tree,
-                "c" * 64,
+                resources / "runtime-manifest.json",
+                "a" * 40,
+                "b" * 40,
+                lock_sha,
+                python_major_minor=python_major_minor,
+                public_tool_count=20,
+                public_surface_sha256=surface_sha,
             )
+
+            payload_source = temp / "payload-source/agent_runtime"
+            payload_source.mkdir(parents=True)
+            for source in (ROOT / "agent_runtime").iterdir():
+                if source.is_file() and source.suffix == ".py":
+                    shutil.copy2(source, payload_source / source.name)
+            payload_revision = "d" * 40
+            published = package_provenance.publish_payload_release(
+                payload_source,
+                state_dir / "payloads",
+                revision=payload_revision,
+                tree="e" * 40,
+                requirements_lock_sha256=lock_sha,
+                python_major_minor=python_major_minor,
+                public_tool_count=20,
+                public_surface_sha256=surface_sha,
+            )
+            payload_release = Path(str(published["release_path"]))
+            pointer = state_dir / "current-payload"
+            pointer.write_text(str(published["content_closure"]) + "\n", encoding="ascii")
+            pointer.chmod(0o600)
 
             env = {
                 "HOME": str(home),
                 "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
-                "AGENT_RUNTIME_REVISION": "d" * 40,
+                "AGENT_RUNTIME_REVISION": "9" * 40,
             }
             result = subprocess.run(
                 [str(runtime / "start.sh"), "--serve", str(tunnel), str(config)],
@@ -228,10 +259,15 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(capture.read_text().splitlines(), [f"revision={revision}", f"revision={revision}"])
+            self.assertEqual(
+                capture.read_text().splitlines(),
+                [f"revision={payload_revision}", f"revision={payload_revision}"],
+            )
 
             capture.unlink()
-            (runtime / "agent_runtime/server.py").write_text("# tampered fixture runtime payload\n")
+            tampered = payload_release / "agent_runtime/server.py"
+            tampered.chmod(0o644)
+            tampered.write_text("# tampered external fixture runtime payload\n")
             rejected = subprocess.run(
                 [str(runtime / "start.sh"), "--serve", str(tunnel), str(config)],
                 env=env,
@@ -241,7 +277,7 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
             )
             self.assertNotEqual(rejected.returncode, 0)
             self.assertFalse(capture.exists())
-            self.assertIn("Installed Runtime package provenance is invalid", rejected.stderr)
+            self.assertIn("Selected external Runtime payload provenance is invalid", rejected.stderr)
 
     def test_packaged_doctor_import_is_checkout_free(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -296,27 +332,22 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
         (repo / "start.sh").chmod(0o700)
         (repo / "agent_runtime").mkdir()
         (repo / "agent_runtime/server.py").write_text("# fixture runtime payload\n")
-        service_owner = home / "Applications/Agent Runtime.app/Contents/MacOS/AgentRuntimeMenuBar"
-        service_owner.parent.mkdir(parents=True)
-        service_owner.write_text(
-            "#!/bin/sh\n"
-            "if [ \"${1-}\" = \"--service-management\" ] && [ \"${2-}\" = \"status\" ]; then\n"
-            "  printf '%s\n' '{\"main_app\":\"enabled\",\"runtime_agent\":\"enabled\"}'\n"
-            "  exit 0\n"
-            "fi\n"
-            "exit 2\n"
-        )
-        service_owner.chmod(0o700)
         installed_app = home / "Applications/Agent Runtime.app"
         helper = installed_app / "Contents/MacOS/AgentRuntimeRuntimeService"
+        helper.parent.mkdir(parents=True)
         helper.write_text("#!/bin/sh\nexit 0\n")
         helper.chmod(0o700)
-        service_plist = installed_app / "Contents/Library/LaunchAgents/com.picmao.agent-runtime-runtime-service.plist"
+        service_plist = home / "Library/LaunchAgents/com.picmao.agent-runtime-runtime-service.plist"
         service_plist.parent.mkdir(parents=True)
         service_plist.write_bytes(plistlib.dumps({
             "Label": "com.picmao.agent-runtime-runtime-service",
-            "BundleProgram": "Contents/MacOS/AgentRuntimeRuntimeService",
+            "ProgramArguments": [str(helper)],
+            "RunAtLoad": False,
+            "KeepAlive": {"SuccessfulExit": False},
+            "ProcessType": "Interactive",
+            "ThrottleInterval": 2,
         }))
+        service_plist.chmod(0o600)
         command = (
             "/opt/homebrew/bin/tunnel-client run "
             "--control-plane.poll-channel main "

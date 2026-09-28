@@ -196,6 +196,8 @@ fi
         shutil.copy2(ROOT / ".env.example", repo / ".env.example")
         self._write(repo / "requirements.txt", "mcp==2.2.0\n")
         shutil.copy2(ROOT / "requirements.lock", repo / "requirements.lock")
+        self._write(repo / "agent_runtime" / "__init__.py", "# fixture external runtime package\n")
+        self._write(repo / "agent_runtime" / "server.py", "# fixture external runtime payload\n")
         self._write(repo / "verify", "#!/usr/bin/env bash\nexit 0\n", 0o700)
         venv_python = repo / ".venv" / "bin" / "python"
         canonical_python = (
@@ -214,15 +216,27 @@ fi
         provenance_copy = repo / "macos" / "package_provenance.py"
         shutil.copy2(ROOT / "macos/package_provenance.py", provenance_copy)
         provenance_source = provenance_copy.read_text()
-        team_reader = "def _codesign_team_identifier(path: Path) -> str:\n"
-        if team_reader not in provenance_source:
-            raise AssertionError("package provenance TeamIdentifier reader fixture hook is unavailable")
+        metadata_reader = "def _codesign_metadata(path: Path) -> dict[str, object]:\n"
+        if metadata_reader not in provenance_source:
+            raise AssertionError("package provenance zero-cost metadata fixture hook is unavailable")
         provenance_source = provenance_source.replace(
-            team_reader,
-            team_reader
-            + '    fixture_team = os.environ.get("AGENT_RUNTIME_TEST_TEAM_IDENTIFIER")\n'
-            + '    if fixture_team:\n'
-            + '        return fixture_team\n',
+            metadata_reader,
+            metadata_reader
+            + '    if os.environ.get("AGENT_RUNTIME_TEST_ZERO_COST_CODESIGN_METADATA") == "1":\n'
+            + '        fixture_identifiers = {\n'
+            + '            "AgentRuntimeMenuBar": "com.picmao.agent-runtime",\n'
+            + '            "AgentRuntimeRuntimeService": "com.picmao.agent-runtime.runtime-service",\n'
+            + '            "AgentRuntimeScreenCapture": "com.picmao.agent-runtime.screen-capture",\n'
+            + '            "python": "com.picmao.agent-runtime.python",\n'
+            + '        }\n'
+            + '        identifier = fixture_identifiers.get(path.name)\n'
+            + '        if identifier is None:\n'
+            + '            raise PackageProvenanceError("fixture code-signing identity is unknown")\n'
+            + '        return {\n'
+            + '            "identifier": identifier,\n'
+            + '            "team_identifier": None,\n'
+            + '            "designated_requirement": f\'designated => identifier "{identifier}"\',\n'
+            + '        }\n',
             1,
         )
         verify_reader = "def _verify_codesign(app: Path) -> None:\n"
@@ -240,14 +254,15 @@ fi
         shutil.copy2(ROOT / "macos/candidate_cutover.py", repo / "macos" / "candidate_cutover.py")
         self._write(package, r'''#!/usr/bin/env bash
 set -euo pipefail
+[[ "$#" == "1" && "$1" == "--zero-cost" ]] || exit 2
 BUILD_ROOT="$PWD/build"
 CANDIDATES_ROOT="$BUILD_ROOT/candidates"
 STAGE="$BUILD_ROOT/.fixture-package.$$"
 APP="$STAGE/Agent Runtime.app"
 HANDOFF="$STAGE/Agent Runtime.candidate.json"
+PAYLOADS_ROOT="$STAGE/payloads"
 RUNTIME="$APP/Contents/Resources/runtime"
-SERVICE_DIR="$APP/Contents/Library/LaunchAgents"
-mkdir -p "$APP/Contents/MacOS" "$SERVICE_DIR" "$RUNTIME/agent_runtime" "$RUNTIME/.venv/bin"
+mkdir -p "$APP/Contents/MacOS" "$RUNTIME/.venv/bin" "$PAYLOADS_ROOT"
 cat > "$APP/Contents/Info.plist" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -256,100 +271,45 @@ cat > "$APP/Contents/Info.plist" <<'EOF'
 <key>CFBundleExecutable</key><string>AgentRuntimeMenuBar</string>
 </dict></plist>
 EOF
-cat > "$APP/Contents/MacOS/AgentRuntimeMenuBar" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-[[ "${1-}" == "--service-management" ]] || exit 0
-STATE="$HOME/Library/Application Support/Agent Runtime/test-service-state.json"
-LAUNCHCTL_BIN="$(command -v launchctl)"
-FAKE_BIN="$(dirname "$LAUNCHCTL_BIN")"
-LOADED="$FAKE_BIN/launchd-loaded"
-PROGRAMS="$FAKE_BIN/launchd-programs"
-MACOS_DIR="${0%/*}"
-CONTENTS_DIR="${MACOS_DIR%/*}"
-APP_ROOT="${CONTENTS_DIR%/*}"
-SERVICE="gui/$(id -u)/com.picmao.agent-runtime-runtime-service"
-PROGRAM="$APP_ROOT/Contents/MacOS/AgentRuntimeRuntimeService"
-mkdir -p "$(dirname "$STATE")"
-update_state() {
-  /usr/bin/python3 - "$STATE" "$1" "$2" <<'PY'
-import json, sys
-from pathlib import Path
-path, key, value = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
-state = {"main_app": "not-registered", "runtime_agent": "not-registered"}
-if path.is_file(): state.update(json.loads(path.read_text()))
-state[key] = value
-path.write_text(json.dumps(state, sort_keys=True) + "\n")
-print(json.dumps(state, sort_keys=True))
-PY
-}
-load_runtime() {
-  touch "$LOADED"
-  mkdir -p "$PROGRAMS"
-  grep -Fxq -- "$SERVICE" "$LOADED" || printf '%s\n' "$SERVICE" >> "$LOADED"
-  printf '%s\n' "$PROGRAM" > "$PROGRAMS/com.picmao.agent-runtime-runtime-service"
-}
-unload_runtime() {
-  if [[ -f "$LOADED" ]]; then
-    tmp="$LOADED.tmp"
-    grep -Fvx -- "$SERVICE" "$LOADED" > "$tmp" || true
-    mv "$tmp" "$LOADED"
-  fi
-  rm -f "$PROGRAMS/com.picmao.agent-runtime-runtime-service"
-}
-case "${2-}" in
-  status)
-    if [[ -f "$STATE" ]]; then cat "$STATE"; else printf '%s\n' '{"main_app":"not-registered","runtime_agent":"not-registered"}'; fi
-    ;;
-  register-main) update_state main_app enabled ;;
-  register-runtime) load_runtime; update_state runtime_agent enabled ;;
-  unregister-main) update_state main_app not-registered ;;
-  unregister-runtime) unload_runtime; update_state runtime_agent not-registered ;;
-  register)
-    load_runtime
-    printf '%s\n' '{"main_app":"enabled","runtime_agent":"enabled"}' > "$STATE"
-    cat "$STATE"
-    ;;
-  unregister)
-    unload_runtime
-    printf '%s\n' '{"main_app":"not-registered","runtime_agent":"not-registered"}' > "$STATE"
-    cat "$STATE"
-    ;;
-  *) exit 2 ;;
-esac
-EOF
-printf '#!/usr/bin/env bash\nexit 0\n' > "$APP/Contents/MacOS/AgentRuntimeRuntimeService"
-printf '#!/usr/bin/env bash\nexit 0\n' > "$APP/Contents/MacOS/AgentRuntimeScreenCapture"
-chmod +x "$APP/Contents/MacOS/AgentRuntimeMenuBar" "$APP/Contents/MacOS/AgentRuntimeRuntimeService" "$APP/Contents/MacOS/AgentRuntimeScreenCapture"
-cat > "$SERVICE_DIR/com.picmao.agent-runtime-runtime-service.plist" <<'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-<key>Label</key><string>com.picmao.agent-runtime-runtime-service</string>
-<key>BundleProgram</key><string>Contents/MacOS/AgentRuntimeRuntimeService</string>
-<key>RunAtLoad</key><false/>
-<key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
-</dict></plist>
-EOF
-printf '#!/usr/bin/env bash\nexit 0\n' > "$RUNTIME/start.sh"
-printf '#!/usr/bin/env bash\nexit 0\n' > "$RUNTIME/.venv/bin/python"
-printf '# fixture runtime payload\n' > "$RUNTIME/agent_runtime/server.py"
-chmod +x "$RUNTIME/start.sh" "$RUNTIME/.venv/bin/python"
+printf '#!/usr/bin/env bash
+exit 0
+' > "$APP/Contents/MacOS/AgentRuntimeMenuBar"
+printf '#!/usr/bin/env bash
+exit 0
+' > "$APP/Contents/MacOS/AgentRuntimeRuntimeService"
+printf '#!/usr/bin/env bash
+exit 0
+' > "$APP/Contents/MacOS/AgentRuntimeScreenCapture"
+printf '#!/usr/bin/env bash
+exit 0
+' > "$RUNTIME/start.sh"
+printf '#!/usr/bin/env bash
+exit 0
+' > "$RUNTIME/.venv/bin/python"
+chmod +x "$APP/Contents/MacOS/AgentRuntimeMenuBar"   "$APP/Contents/MacOS/AgentRuntimeRuntimeService"   "$APP/Contents/MacOS/AgentRuntimeScreenCapture"   "$RUNTIME/start.sh" "$RUNTIME/.venv/bin/python"
 REVISION="$(git rev-parse HEAD)"
 TREE="$(git rev-parse 'HEAD^{tree}')"
-/usr/bin/python3 "$PWD/macos/package_provenance.py" manifest \
-  "$RUNTIME" "$APP/Contents/Resources/runtime-manifest.json" \
-  "$REVISION" "$TREE" "$PWD/requirements.lock"
-printf '%s\n' "$$" > "$APP/Contents/Resources/fixture-build-id"
-/usr/bin/codesign --force --deep --sign - "$APP" >/dev/null 2>&1
-/usr/bin/python3 "$PWD/macos/package_provenance.py" seal \
-  "$APP" "$HANDOFF" >/dev/null
-PUBLISHED="$(/usr/bin/python3 "$PWD/macos/package_provenance.py" publish \
-  "$APP" "$HANDOFF" "$CANDIDATES_ROOT")"
-IFS=$'\t' read -r FINAL_APP FINAL_HANDOFF CANDIDATE_SHA256 <<< "$PUBLISHED"
-printf 'candidate_app=%s\n' "$FINAL_APP"
-printf 'candidate_handoff=%s\n' "$FINAL_HANDOFF"
-printf 'candidate_sha256=%s\n' "$CANDIDATE_SHA256"
+PYTHON_MM="3.13"
+PUBLIC_TOOL_COUNT="20"
+PUBLIC_SURFACE_SHA256="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+PAYLOAD_PUBLICATION="$(/usr/bin/python3 "$PWD/macos/package_provenance.py" publish-payload   "$PWD/agent_runtime" "$PAYLOADS_ROOT"   "$REVISION" "$TREE" "$PWD/requirements.lock"   "$PYTHON_MM" "$PUBLIC_TOOL_COUNT" "$PUBLIC_SURFACE_SHA256")"
+IFS=$'	' read -r INITIAL_PAYLOAD_CLOSURE INITIAL_PAYLOAD_RELEASE <<< "$PAYLOAD_PUBLICATION"
+/usr/bin/python3 "$PWD/macos/package_provenance.py" substrate-manifest   "$RUNTIME" "$APP/Contents/Resources/runtime-manifest.json"   "$REVISION" "$TREE" "$PWD/requirements.lock"   "$PYTHON_MM" "$PUBLIC_TOOL_COUNT" "$PUBLIC_SURFACE_SHA256"
+printf '%s
+' "$$" > "$APP/Contents/Resources/fixture-build-id"
+/usr/bin/python3 "$PWD/macos/package_provenance.py" seal-zero-cost   "$APP" "$HANDOFF" "$INITIAL_PAYLOAD_RELEASE" >/dev/null
+PUBLISHED="$(/usr/bin/python3 "$PWD/macos/package_provenance.py" publish-zero-cost   "$APP" "$HANDOFF" "$INITIAL_PAYLOAD_RELEASE" "$CANDIDATES_ROOT")"
+IFS=$'	' read -r FINAL_APP FINAL_HANDOFF FINAL_PAYLOAD CANDIDATE_SHA256 <<< "$PUBLISHED"
+printf 'candidate_app=%s
+' "$FINAL_APP"
+printf 'candidate_handoff=%s
+' "$FINAL_HANDOFF"
+printf 'initial_payload_release=%s
+' "$FINAL_PAYLOAD"
+printf 'initial_payload_closure=%s
+' "$INITIAL_PAYLOAD_CLOSURE"
+printf 'candidate_sha256=%s
+' "$CANDIDATE_SHA256"
 ''', 0o700)
         subprocess.run(["git", "-C", str(repo), "config", "user.email", "test@example.invalid"], check=True)
         subprocess.run(["git", "-C", str(repo), "config", "user.name", "Test"], check=True)
@@ -416,7 +376,7 @@ esac
         env.update({
             "HOME": str(home),
             "PATH": f"{bin_dir}:{env['PATH']}",
-            "AGENT_RUNTIME_TEST_TEAM_IDENTIFIER": "TEAMTEST",
+            "AGENT_RUNTIME_TEST_ZERO_COST_CODESIGN_METADATA": "1",
             "AGENT_RUNTIME_TEST_SKIP_CODESIGN_VERIFY": "1",
         })
         for key in (
@@ -508,15 +468,29 @@ esac
             self.assertIn("argv=doctor --control-plane.poll-channel main", capture.read_text())
             legacy_plist = home / "Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist"
             self.assertFalse(legacy_plist.exists())
-            bundled_plist = home / "Applications/Agent Runtime.app/Contents/Library/LaunchAgents/com.picmao.agent-runtime-runtime-service.plist"
-            service = plistlib.loads(bundled_plist.read_bytes())
-            self.assertEqual(service["BundleProgram"], "Contents/MacOS/AgentRuntimeRuntimeService")
-            service_state = home / "Library/Application Support/Agent Runtime/test-service-state.json"
+            current_plist = home / "Library/LaunchAgents/com.picmao.agent-runtime-runtime-service.plist"
+            helper = home / "Applications/Agent Runtime.app/Contents/MacOS/AgentRuntimeRuntimeService"
+            service = plistlib.loads(current_plist.read_bytes())
             self.assertEqual(
-                json.loads(service_state.read_text()),
-                {"main_app": "enabled", "runtime_agent": "enabled"},
+                service,
+                {
+                    "Label": "com.picmao.agent-runtime-runtime-service",
+                    "ProgramArguments": [str(helper)],
+                    "RunAtLoad": False,
+                    "KeepAlive": {"SuccessfulExit": False},
+                    "ProcessType": "Interactive",
+                    "ThrottleInterval": 2,
+                },
             )
-            canonical = home / "Library/Application Support/Agent Runtime/runtime.env"
+            self.assertEqual(current_plist.stat().st_mode & 0o777, 0o600)
+            state_dir = home / "Library/Application Support/Agent Runtime"
+            pointer = state_dir / "current-payload"
+            self.assertEqual(pointer.stat().st_mode & 0o777, 0o600)
+            selected_closure = pointer.read_text().strip()
+            selected_payload = state_dir / "payloads" / selected_closure
+            self.assertTrue(selected_payload.is_dir())
+            self.assertEqual(selected_payload.stat().st_mode & 0o777, 0o555)
+            canonical = state_dir / "runtime.env"
             self.assertEqual(canonical.stat().st_mode & 0o777, 0o600)
             self.assertEqual(env_file.read_bytes(), source_before)
             canonical_text = canonical.read_text()
@@ -559,11 +533,9 @@ esac
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue(client.is_symlink())
             self.assertFalse((home / "Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist").exists())
-            service_state = home / "Library/Application Support/Agent Runtime/test-service-state.json"
-            self.assertEqual(
-                json.loads(service_state.read_text()),
-                {"main_app": "enabled", "runtime_agent": "enabled"},
-            )
+            current_plist = home / "Library/LaunchAgents/com.picmao.agent-runtime-runtime-service.plist"
+            self.assertTrue(current_plist.is_file())
+            self.assertEqual(current_plist.stat().st_mode & 0o777, 0o600)
 
     def test_install_rejects_reappeared_legacy_configuration_without_starting_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

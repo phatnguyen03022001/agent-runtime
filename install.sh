@@ -357,7 +357,8 @@ echo "[5/8] Installing the sealed prebuilt candidate transactionally..."
 echo "[6/8] Prebuilt candidate is installed and pending explicit commit."
 TARGET_APP="$HOME/Applications/Agent Runtime.app"
 RUNTIME_ROOT="$TARGET_APP/Contents/Resources/runtime"
-/usr/bin/python3 "$ROOT/macos/package_provenance.py" validate-candidate "$TARGET_APP" "$CANDIDATE_HANDOFF" \
+INSTALLED_PAYLOAD="$HOME/Library/Application Support/Agent Runtime/payloads/$INITIAL_PAYLOAD_CLOSURE"
+/usr/bin/python3 "$ROOT/macos/package_provenance.py" validate-zero-cost "$TARGET_APP" "$CANDIDATE_HANDOFF" "$INSTALLED_PAYLOAD" \
   || fail "installed candidate changed before commit."
 
 echo "[7/8] Candidate integrity verified; rollback remains available."
