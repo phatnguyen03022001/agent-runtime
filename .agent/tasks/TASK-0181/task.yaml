@@ -1,14 +1,14 @@
 protocol_version: 3
 
 task_id: TASK-0181
-task_revision: 8
+task_revision: 9
 state: APPROVED
-title: "Explicit Designated-Requirement Zero-Cost Packaging Correction"
+title: "Zero-Cost Artifact Build Interpreter Continuation"
 
 origin:
   type: architect_continuation
   task_id: "TASK-0181"
-  gap_id: "B-0181-REV7-ZERO-COST-DESIGNATED-REQUIREMENT"
+  gap_id: "B-0181-REV8-DISTRIBUTION-BUILD-2-PREFLIGHT"
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -32,7 +32,6 @@ architect_analysis_skills:
   - architect
   - design-review
   - simplicity
-  - security-review
   - verification
 
 execution_skills:
@@ -52,107 +51,81 @@ execution_surface:
   id: CHATGPT_LOCAL
   controller: CHATGPT
   preferred_transport: AGENT_RUNTIME
-  reason: "Bounded zero-cost packaging correction, full source requalification, and one replacement artifact-build authority. No live Runtime mutation."
+  reason: "Artifact-only continuation on the already verified source, requiring a macOS arm64 native build and direct signing audit."
 
 authority_sources:
-  - source: ".agent/tasks/TASK-0181/review.yaml at a7ae50b513ba9f78dd3514b654466a19e549c192"
-    role: "Architect root-cause classification: provenance contract is correct; package signing omits explicit designated requirements."
+  - source: ".agent/tasks/TASK-0181/review.yaml at 8e4385553d9a44a9f19c78c2923c7302197189f6"
+    role: "Architect classification and bounded continuation."
     precedence: 1
-  - source: ".agent/tasks/TASK-0181/report-r7.yaml at 35297f08eaca80a5d6b16390c4d5ae64a209f3c8"
-    role: "Revision-7 source qualification, canonical invocation 3 PASS, first distribution build failure, zero archive and zero live effects. Report serialization requires manual review due flow-style YAML."
+  - source: ".agent/tasks/TASK-0181/report-r8.yaml at e0efdb82e74fa77334446b73066cc2eef7eae6c6"
+    role: "Canonical verifier PASS, build-2 preflight failure, consumed counts and zero live effects."
     precedence: 2
-  - source: "Revision-7 source candidate 8e7eebe2a5975ca61d7a07b1b0881e7f2784d9bf"
-    role: "Preserve all implementation/test bytes except the explicitly authorized packaging correction and bounded regression test."
+  - source: "Revision-8 source candidate db0ae500bc52a62d77a44b351395e2b55806209e"
+    role: "Frozen non-governance source bytes for artifact qualification."
     precedence: 3
-  - source: "macos/package_provenance.py zero_cost_responsible_code_identity and _codesign_metadata"
-    role: "Accepted fail-closed contract: TeamIdentifier absent, exact deterministic identifier, exact identifier-based designated requirement."
+  - source: "macos/packaging_python.sh resolve_packaging_python and validate_packaging_python"
+    role: "Existing strict interpreter contract and explicit environment override."
     precedence: 4
-  - source: "Architect disposable current-host codesign probes"
-    role: "Ad-hoc --identifier alone yields generated '# designated => cdhash ...'; adding -r with designated => identifier <id> yields exact stable DR and strict verification, including after outer app-bundle signing."
+  - source: ".agent/tasks/TASK-0181/task.yaml revision 8 at c01869062c02d4a98f8136cb1da448aed35624a0"
+    role: "All-Mach-O, provenance, archive and production-effect gates retained."
     precedence: 5
-  - source: ".agent/tasks/TASK-0180/review.yaml at ab8cbfedbc1ff54b05f770b66bea2627697da0df"
-    role: "Accepted zero-cost architecture requires stable explicit identifiers/designated requirements on immutable executable/native substrate."
-    precedence: 6
 
 structure_authority:
   status: RESOLVED
-  source: "Existing macos/package_app.sh signing loop and final app signing"
-  rationale: "Correct the existing signing commands in place. Do not change provenance schema, lifecycle, payload architecture, installer, or introduce a new signing subsystem."
+  source: "Existing package_app.sh --zero-cost and packaging_python.sh interpreter resolver"
+  rationale: "Use the existing environment variable for the existing interpreter. No package script, provenance or product change is needed."
 
-objective: "Make the zero-cost package implementation satisfy its already-accepted explicit designated-requirement contract. Every ad-hoc signed Mach-O in the immutable substrate must be signed with its deterministic identifier and an explicit designated requirement exactly equal to that identifier. Requalify the changed source, consume exactly one new canonical verifier invocation, then consume exactly one replacement distribution build. On successful build, audit every Mach-O's ad-hoc identity/DR before creating the single final archive."
+objective: "Complete the zero-cost distribution and archive qualification of the exact revision-8 product candidate. Before a single replacement build, prove the absolute packaging interpreter on the actual macOS carrier and pass it explicitly to the build. Preserve all prior verification/build history and audit every artifact before archiving."
 
 scope:
   required_changes:
-    - "TASK-0181 revisions 1-7 are superseded for execution. Preserve every historical report/review, canonical-verifier result and artifact-build count."
-    - "Resolve exact revision-8 base and prove review a7ae50b513ba9f78dd3514b654466a19e549c192 and report 35297f08eaca80a5d6b16390c4d5ae64a209f3c8 are ancestors."
-    - "Preserve every non-governance byte from revision-7 source candidate 8e7eebe2a5975ca61d7a07b1b0881e7f2784d9bf except macos/package_app.sh and tests/test_package_provenance.py."
-    - "Do not modify macos/package_provenance.py. Its requirement that responsible code expose exact identifier-based designated requirements remains authoritative."
-    - "In macos/package_app.sh, centralize or otherwise consistently apply ad-hoc signing so each signed Mach-O receives: --sign -, the existing deterministic --identifier, and a codesign requirement argument of the proven form -r=<requirement>, where requirement is exactly designated => identifier \"<same identifier>\"."
-    - "Apply the explicit requirement to every Mach-O discovered in the bundled Python/native environment, including bundled Python itself and native extensions/libraries."
-    - "Apply the explicit requirement to AgentRuntimeMenuBar, AgentRuntimeRuntimeService and AgentRuntimeScreenCapture."
-    - "Apply the explicit requirement when signing the outer Agent Runtime.app so the final main executable retains designated => identifier \"com.picmao.agent-runtime\" after bundle signing."
-    - "Do not use long-form --requirements with an inline expression; the current host probe showed that form is interpreted as a path. Use the proven -r=<expression> form."
-    - "Do not accept, normalize or synthesize CDHash-default designated requirements in provenance. A generated '# designated => cdhash ...' requirement remains a packaging failure."
-    - "Do not add certificates, TeamIdentifier, paid signing, notarization, stapling, custom trust roots or any external signing authority."
-    - "Extend tests/test_package_provenance.py only enough to lock the explicit-DR packaging contract. Preserve all existing zero-cost candidate/provenance validation coverage."
-    - "Regression coverage must prove package_app.sh still uses deterministic identifiers, ad-hoc signing, and explicit identifier-based DR construction for native-loop signing and final responsible-code/app signing. Do not weaken existing provenance expectations."
-    - "Run focused tests.test_package_provenance and tests.test_task0055_macos_contract. Also run tests.test_packaging_interpreter unchanged, tests.test_surface_and_scripts, and tests.test_candidate_cutover to protect the packaging/install boundary."
-    - "Run git diff --check and prove pre-report non-governance changes are exactly macos/package_app.sh and tests/test_package_provenance.py."
-    - "Run py_compile over verify_tests.py, agent_runtime/*.py and tests/*.py plus bash -n macos/package_app.sh, install.sh, start.sh and verify."
-    - "Generate the exact qualification plan through the repository planning API without invoking ./verify."
-    - "Run one complete qualification-selected non-canonical sequential pre-sweep, one module per fresh process. Every selected module must PASS before canonical verification."
-    - "Freeze one corrected source candidate only after focused tests, static checks and full pre-sweep PASS."
-    - "Canonical ./verify history is invocation 1 FAIL, invocation 2 FAIL, invocation 3 PASS. Because revision 8 changes product source after the artifact-only defect was discovered, revision 8 authorizes exactly one new canonical invocation 4. No invocation 5 is authorized."
-    - "Run canonical invocation 4 only through the approved direct-local non-durable carrier after the full pre-sweep PASS. Any failure stops BLOCKED and consumes the authority."
-    - "Historical real zero-cost distribution build count is 1 and failed during provenance sealing. Revision 8 authorizes exactly one replacement distribution build, making the total maximum 2. No third distribution build is authorized."
-    - "Build distribution #2 only after canonical invocation 4 PASSes."
-    - "If distribution #2 fails at any stage, stop BLOCKED. Do not manufacture the archive."
-    - "After distribution #2 succeeds, independently enumerate every regular Mach-O file under Agent Runtime.app. For each, require strict codesign verification, Signature=adhoc, TeamIdentifier absent/not set, a non-empty Identifier, and an exact displayed designated requirement equal to designated => identifier \"<that same Identifier>\"."
-    - "The post-build audit must reject any '# designated => cdhash ...' default requirement, any certificate authority, any TeamIdentifier, any identifier mismatch, any missing DR, or any native file that cannot be inspected."
-    - "Independently re-run zero-cost candidate validation against the emitted app, external handoff and initial payload and confirm the exact 20-tool surface, substrate closure, payload closure and source/requirements contracts."
-    - "Only after distribution #2 and the all-Mach-O DR/provenance audit PASS, build exactly one complete archive. Historical archive count is 0; total maximum remains 1."
-    - "Independently record archive SHA-256 and verify the archive closes over exactly the final app, handoff and initial payload release required by the original TASK-0181 contract."
-    - "Do not install, activate, cut over, restart, reconfigure or mutate the live production Runtime/lifecycle/payload/config/tunnel. Do not tag or publish a GitHub Release."
-    - "Create .agent/tasks/TASK-0181/report-r8.yaml only at terminal state. It must use constrained block-style YAML compatible with the pinned Foundation validator; flow-style mappings such as {key: value} are forbidden."
-    - "The report must preserve canonical invocation history 1-4 and distribution-build history 1-2, including prior failures rather than rewriting them."
-    - "Validate report-r8 with the exact pinned Foundation validator revision, publish non-force after fresh remote CAS proof, and reconcile clean synced main."
+    - "Treat revisions 1-8 as terminal history. Preserve reports/reviews and the exact source candidate db0ae500bc52a62d77a44b351395e2b55806209e."
+    - "Resolve the exact revision-9 base and prove revision-8 report and review are ancestors; require clean synchronized main and no concurrent writer before work."
+    - "Prove every non-governance tracked byte remains identical to the revision-8 source candidate. No implementation, test, dependency, packaging script or provenance edits are permitted."
+    - "Reuse the rev8 focused/static/full pre-sweep and canonical invocation-4 PASS evidence only for the exact unchanged non-governance source. Do not run ./verify again."
+    - "In the same macOS build carrier, before consuming build 3, resolve an absolute executable CPython 3.13 arm64 interpreter path. Prefer the existing repository .venv/bin/python when it passes packaging_python.sh validate_packaging_python; do not install or switch dependencies."
+    - "Record implementation, version, cache tag, SOABI, Darwin platform, arm64 architecture, executable path and interpreter validation result. Require AGENT_RUNTIME_PACKAGING_PYTHON to contain that exact absolute path, export it, and revalidate in the build process immediately before invoking package_app.sh --zero-cost."
+    - "If interpreter validation, repository identity, source preservation, carrier availability or prior artifact-count reconciliation fails, stop BLOCKED without consuming build 3."
+    - "Run exactly one real zero-cost distribution build 3 after preflight PASS. This is the only additional build authorization and is consumed on invocation regardless of failure; no build 4."
+    - "On build failure, stop BLOCKED. Do not modify source, retry, manufacture an artifact or build the archive."
+    - "After build success, independently enumerate every regular Mach-O file in Agent Runtime.app. For each require strict codesign verification, Signature=adhoc, absent TeamIdentifier, non-empty deterministic Identifier, and exact displayed designated requirement equal to designated => identifier of the same Identifier."
+    - "Reject CDHash-default requirements, certificate authority, TeamIdentifier, identifier mismatch, missing DR and any native file that cannot be inspected."
+    - "Independently validate the emitted zero-cost app, schema-3 handoff and external initial payload through the existing provenance validator, including exact 20-tool surface and substrate/payload/source/requirements closures."
+    - "Only after distribution, all-Mach-O audit and provenance validation PASS, build exactly one complete archive and independently record SHA-256 and exact app/handoff/payload closure."
+    - "Do not install, activate, cut over, restart, reconfigure or mutate production Runtime, lifecycle, payload pointer, configuration, tunnel or Apple authority. Do not tag or publish a release."
+    - "Write .agent/tasks/TASK-0181/report-r9.yaml only at terminal state, using block-style YAML compatible with the pinned Foundation validator. Preserve the exact history of canonical invocations 1-4 and distribution builds 1-3."
+    - "Validate the report with the exact pinned Foundation validator, publish non-force after fresh remote CAS proof, and reconcile clean synchronized main."
 
   allowed_existing_files_or_components:
-    - "macos/package_app.sh"
-    - "tests/test_package_provenance.py"
-    - "tests/test_task0055_macos_contract.py read-only"
-    - "tests/test_packaging_interpreter.py read-only"
-    - "tests/test_surface_and_scripts.py read-only"
-    - "tests/test_candidate_cutover.py read-only"
+    - "macos/package_app.sh read-only"
+    - "macos/packaging_python.sh read-only"
     - "macos/package_provenance.py read-only"
-    - "verify"
-    - "verify_tests.py"
-    - "verification_policy.py"
-    - "build/ ignored focused/pre-sweep/verify/distribution/archive/audit evidence"
-    - ".agent/tasks/TASK-0181/report-r8.yaml"
+    - "verify and verification policy read-only"
+    - "build/ ignored interpreter, build, audit and archive evidence"
+    - ".agent/tasks/TASK-0181/report-r9.yaml"
   expected_files_are_restrictive: true
 
 structure_policy:
   expected_new_files:
-    - ".agent/tasks/TASK-0181/report-r8.yaml"
+    - ".agent/tasks/TASK-0181/report-r9.yaml"
   unlisted_new_files:
     allowed: false
     max: 0
     within: []
-    purpose: "Only the package signing implementation and its regression test may change; generated artifacts/evidence stay under ignored build output."
+    purpose: "This continuation qualifies the frozen candidate without source changes."
   allow_new_top_level_directories: false
   allow_new_shared_modules: false
 
 effect_authority:
-  canonical_verify_historical_consumed: 3
-  canonical_verify_revision_8_max: 1
+  canonical_verify_historical_consumed: 4
+  canonical_verify_revision_9_max: 0
   canonical_verify_total_max: 4
-  noncanonical_qualification_presweep_revision_8_max: 1
-  real_zero_cost_distribution_build_historical_consumed: 1
-  real_zero_cost_distribution_build_revision_8_max: 1
-  real_zero_cost_distribution_build_total_max: 2
+  noncanonical_qualification_presweep_revision_9_max: 0
+  real_zero_cost_distribution_build_historical_consumed: 2
+  real_zero_cost_distribution_build_revision_9_max: 1
+  real_zero_cost_distribution_build_total_max: 3
   complete_archive_build_historical_consumed: 0
-  complete_archive_build_revision_8_max: 1
+  complete_archive_build_revision_9_max: 1
   complete_archive_build_total_max: 1
   production_runtime_install_or_cutover_max: 0
   production_runtime_restart_max: 0
@@ -166,29 +139,23 @@ effect_authority:
   host_dependency_install_max: 0
 
 invariants:
-  - "Zero-cost provenance remains fail-closed on exact stable identifier-based designated requirements."
-  - "Every packaged native Mach-O is ad-hoc signed with a deterministic identifier and an explicit DR equal to that identifier."
-  - "No TeamIdentifier or paid publisher authority exists in the current zero-cost lane."
-  - "Accepted immutable-substrate/external-payload/user-LaunchAgent architecture remains unchanged."
-  - "Canonical invocation 4 is the only new source-verification authority; no invocation 5."
-  - "Distribution build 2 is the only replacement artifact-build authority; no build 3."
-  - "No archive is built until distribution and all-Mach-O DR audit PASS."
-  - "No live production consequence occurs."
-  - "MAIN_ONLY topology remains unchanged."
+  - "Every non-governance byte equals the revision-8 verified candidate."
+  - "Canonical invocations 1-4 are historical and no invocation 5 is authorized."
+  - "Distribution builds 1-2 are historical and only build 3 is authorized after interpreter preflight."
+  - "No archive before successful build, complete all-Mach-O DR audit and provenance validation."
+  - "No live production consequence and no branch beyond main."
 
 forbidden_changes:
-  - "Any product-source modification outside macos/package_app.sh."
-  - "Any test modification outside tests/test_package_provenance.py."
-  - "Weakening package_provenance.py or accepting CDHash-default requirements."
-  - "Changing signing identifiers, zero-cost schemas, lifecycle, payload, installer or current LaunchAgent contracts."
-  - "Developer ID, Apple Development/Personal Team as supported artifact authority, notarization, stapling or custom trust roots."
-  - "Calling canonical ./verify before full pre-sweep PASS or after invocation 4."
-  - "A third distribution build."
-  - "Archive manufacture after failed distribution/audit."
-  - "Production Runtime/config/tunnel/lifecycle/payload mutation, branch, PR, force push, amend, squash, tag or public release."
+  - "Any implementation, test, packaging, provenance, dependency or product source modification."
+  - "Weakening the packaging interpreter or provenance contracts."
+  - "Canonical ./verify invocation 5 or a new non-canonical full pre-sweep."
+  - "Distribution build before interpreter preflight or any fourth distribution build."
+  - "Archive manufacture after build or audit failure."
+  - "Host dependency installation or production Runtime/config/tunnel/lifecycle/payload mutation."
+  - "Branch, PR, force push, amend, squash, tag or public release."
 
 gap_policy:
-  local_auto_fix: true
+  local_auto_fix: false
   scope_expansion: forbidden
   architecture_change: forbidden
   spec_change: revised_contract_required
@@ -198,44 +165,37 @@ gap_policy:
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "Zero-cost package signing emits exact stable identifier-based designated requirements without changing provenance semantics."
-    evidence_required: "Exact diff limited to package_app.sh and its regression test; focused packaging/provenance tests PASS; no package_provenance.py delta."
-
+    requirement: "The exact verified source is preserved and build interpreter identity is qualified before invoking packaging."
+    evidence_required: "Non-governance comparison to db0ae500; actual carrier interpreter validation and explicit absolute AGENT_RUNTIME_PACKAGING_PYTHON."
   - id: AC-2
-    requirement: "The changed source fully requalifies."
-    evidence_required: "Static checks PASS; complete qualification-selected pre-sweep PASS; canonical invocation 4 PASSes; historical invocations 1/2/3 remain recorded."
-
+    requirement: "The single replacement distribution build succeeds and every packaged Mach-O satisfies zero-cost signing."
+    evidence_required: "Build history 1 FAIL, 2 FAIL at preflight, 3 PASS; all-Mach-O strict ad-hoc, absent TeamIdentifier, exact identifier and identifier-based DR audit."
   - id: AC-3
-    requirement: "Replacement distribution build succeeds and every packaged Mach-O satisfies the explicit-DR zero-cost contract."
-    evidence_required: "Distribution build history records build 1 FAIL and build 2 PASS; direct audit of every Mach-O proves adhoc signature, no TeamIdentifier, deterministic identifier and exact designated => identifier same-id DR; zero-cost candidate validation PASSes."
-
+    requirement: "Zero-cost app, handoff and payload pass provenance and one complete archive closes exactly over them."
+    evidence_required: "Independent validate-zero-cost PASS, exact 20-tool surface and closure evidence; archive count 1 and SHA-256."
   - id: AC-4
-    requirement: "One final complete archive is frozen only after artifact audit PASS."
-    evidence_required: "Archive build total equals 1; archive SHA-256 and exact app/handoff/payload closure recorded."
-
-  - id: AC-5
-    requirement: "Repository and host close cleanly."
-    evidence_required: "Pinned validator accepts block-style report-r8; fresh CAS/non-force publication; clean synced main; zero live production effects."
+    requirement: "Governance and host close cleanly."
+    evidence_required: "Pinned validator accepts block-style report-r9; fresh CAS non-force publication; clean synced main; zero live production effects."
 
 verification:
   executor_checks:
     - id: CHECK-1
-      command_or_check: "Correct only package_app.sh explicit-DR signing and tests/test_package_provenance.py regression coverage; run focused/static checks."
+      command_or_check: "Confirm exact base, clean remote main, unchanged non-governance bytes and consumed history."
       required: true
     - id: CHECK-2
-      command_or_check: "Run one complete qualification-selected non-canonical pre-sweep and require all modules PASS."
+      command_or_check: "Validate absolute CPython 3.13 arm64 interpreter in the same carrier, export AGENT_RUNTIME_PACKAGING_PYTHON and revalidate before packaging."
       required: true
     - id: CHECK-3
-      command_or_check: "Freeze source and run canonical ./verify invocation 4 exactly once."
+      command_or_check: "Invoke package_app.sh --zero-cost exactly once as build 3; stop on failure."
       required: true
     - id: CHECK-4
-      command_or_check: "After canonical PASS, run distribution build 2 exactly once; audit every packaged Mach-O DR and zero-cost provenance."
+      command_or_check: "Audit every Mach-O and validate-zero-cost only after successful distribution."
       required: true
     - id: CHECK-5
-      command_or_check: "Only after artifact audit PASS, build one complete archive and independently validate archive identity."
+      command_or_check: "Build the sole complete archive only after all audits pass, record SHA-256 and exact closure."
       required: true
     - id: CHECK-6
-      command_or_check: "Write block-style report-r8, validate with pinned Foundation, publish non-force and reconcile clean remote main."
+      command_or_check: "Write block-style report-r9, validate at pinned Foundation revision, publish non-force and reconcile remote main."
       required: true
   authoritative_verification:
     required: false
@@ -243,19 +203,16 @@ verification:
     expected_signal: ""
 
 report_requirements:
-  path: ".agent/tasks/TASK-0181/report-r8.yaml"
+  path: ".agent/tasks/TASK-0181/report-r9.yaml"
   record:
-    - "task_revision=8 and exact base"
-    - "rev7 report/review identities and pinned-validator serialization caveat"
-    - "exact package_app.sh signing correction and regression-test delta"
-    - "focused/static/full pre-sweep evidence"
-    - "canonical invocation history 1/2/3/4 and invocation 4 result"
-    - "source candidate revision/tree"
-    - "distribution build history 1/2 and build 2 result"
-    - "all-Mach-O signing audit totals and exact failure/pass criteria"
-    - "responsible signing identifiers/DRs and TeamIdentifier absence"
-    - "substrate/payload/handoff/archive identities and exact artifact paths"
-    - "archive build total and SHA-256"
+    - "task revision 9 and exact base"
+    - "revision-8 report/review and unchanged source identity"
+    - "interpreter preflight identity, path, validation and explicit build environment"
+    - "focused/pre-sweep/canonical invocations 1-4 historical results; no invocation 5"
+    - "distribution build history 1/2/3 and exact build-3 result"
+    - "all-Mach-O signing audit totals and failure/pass criteria"
+    - "app/handoff/payload, substrate and source closure identities"
+    - "archive total and SHA-256"
     - "zero live production effects"
     - "result NEEDS_REVIEW on complete PASS, otherwise BLOCKED"
 
