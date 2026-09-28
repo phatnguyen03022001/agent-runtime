@@ -1,0 +1,170 @@
+protocol_version: 3
+task_id: TASK-0186
+task_revision: 1
+state: APPROVED
+title: "Publish Verified v0.5.1 Prebuilt Release"
+
+origin:
+  type: architect_continuation
+  task_id: TASK-0186
+  gap_id: "F-0183-001"
+  predecessor_task: TASK-0185
+  predecessor_review: "84414a45358fefcafbe3b38172e49b36792d31a4"
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "0083d1383bfc0326729e615a85844b7b2004950d"
+architect_analysis_skills:
+  - architect
+  - security-review
+  - verification
+execution_skills:
+  required:
+    - executor
+    - security-review
+    - verification
+  recommended:
+    - simplicity
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  preferred_transport: SENTINELX
+  reason: "The accepted archive is local to operator Mac and authenticated GitHub release requires the host gh CLI."
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0185/review.yaml at 84414a45358fefcafbe3b38172e49b36792d31a4"
+    role: "Accepted archive identity, signing and preflight seal qualification."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0185/report.yaml at 20ce2119eeaf0db139cfed84827bcd0b27c1f9f5"
+    role: "Exact archive path/hash, packaged source, candidate and zero live effects."
+    precedence: 2
+  - source: ".agent/tasks/TASK-0182/review.yaml at 123cb6fe8b3f5db4c41392e945e8f55c0c89b57e"
+    role: "Prior v0.5.0 release publication and immutable predecessor assets."
+    precedence: 3
+structure_authority:
+  status: RESOLVED
+  source: "Existing GitHub Release channel and README.md/docs/INSTALL.md consumer contract."
+  rationale: "Publish the accepted archive using the existing draft/download/verify/public flow without new release machinery."
+objective: "Publish the exact accepted v0.5.1 macOS arm64 archive and checksum as a new immutable public release, with truthful documentation. Do not install or cut over live Runtime."
+
+scope:
+  required_changes:
+    - "Reconcile clean synced main and fixed origin; confirm no preexisting v0.5.1 tag or release. Independently hash accepted local archive build/TASK-0185-release/Agent-Runtime-zero-cost-v0.5.1-a3b912a465d2.tar.gz as 9518e1cf4f28033cbec97b8906e55e1a4da6ad3a9067485fb6ef7c4fcfac58e8, size 17798890, immediately before upload."
+    - "Keep v0.5.1 tag bound directly to packaged source commit 674095e739533e100c2cf75f434dd0bc825a3de3, not later governance or docs commits. Preserve v0.5.0 tag and assets unchanged."
+    - "Prepare SHA256SUMS.txt and notes under ignored build/TASK-0186-release. State Apple silicon, ad-hoc signing without Apple publisher authentication/notarization, possible Open/Open Anyway, complete app/handoff/payload bundle and official tunnel-client requirement."
+    - "Create draft GitHub Release v0.5.1 with exact archive and checksum. Read back remote tag, draft metadata and both assets; independently download both and compare archive hash/bytes to accepted local archive and checksum contents. If any check fails, leave draft and report BLOCKED."
+    - "Publish only after remote draft checks pass. Then update README.md and docs/INSTALL.md public release link/hash/source identity and signing limitations. Keep installed Runtime version 0.5.0 references truthful until a separate install/cutover; do not claim v0.5.1 installed."
+    - "Update only the existing exact public release sentence assertion in tests/test_task0055_macos_contract.py to match truthful current README v0.5.1 wording, retaining explicit lack of Apple Developer ID and notarization. Run focused module and diff/static checks; no package rebuild or canonical ./verify under this release-only task."
+    - "Record exact tag/source, public release URL, remote asset identities/download hash, documentation/test commit, pinned report validation and zero live effects in .agent/tasks/TASK-0186/report.yaml. Publish docs/test candidate and sole report child non-force; reconcile clean synchronized main."
+  allowed_existing_files_or_components:
+    - "README.md"
+    - "docs/INSTALL.md"
+    - "tests/test_task0055_macos_contract.py"
+    - ".agent/tasks/TASK-0186/report.yaml"
+    - "build/TASK-0186-release/ ignored release evidence"
+  expected_files_are_restrictive: true
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0186/report.yaml"
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "Only release docs, existing test and report change in Git."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+effect_authority:
+  source_build_max: 0
+  canonical_verify_max: 0
+  distribution_build_max: 0
+  archive_build_max: 0
+  github_release_draft_create_max: 1
+  github_release_publish_max: 1
+  version_tag_create_max: 1
+  production_runtime_install_or_cutover_max: 0
+  production_runtime_restart_max: 0
+  runtime_env_mutation_max: 0
+  host_security_mutation_max: 0
+  host_dependency_install_max: 0
+invariants:
+  - "Published archive bytes equal accepted TASK-0185 SHA-256 exactly and tag points to packaged source."
+  - "Public release never claims Apple-authenticated publisher or notarization."
+  - "v0.5.0 remains immutable and live predecessor/runtime.env remain unchanged."
+  - "Draft is not announced as public until independent remote download verification passes."
+  - "Main only; no branch, PR, force push or asset replacement."
+forbidden_changes:
+  - "Any product/package/provenance/dependency/version source change, package rebuild or canonical ./verify."
+  - "Changing installed Runtime version claims to v0.5.1 before installation."
+  - "Moving v0.5.0 tag, replacing existing assets, publishing release with mismatched source or failed remote download."
+  - "Installing, restarting, reconfiguring or cutting over live Runtime, tunnel client, runtime.env or host security."
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: revised_contract_required
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact accepted archive and source tag are bound."
+    evidence_required: "Local SHA/size unchanged, v0.5.1 tag target 674095e739533e100c2cf75f434dd0bc825a3de3."
+  - id: AC-2
+    requirement: "Remote release assets are independently verified before public state."
+    evidence_required: "Draft metadata, both assets, remote archive byte/hash and checksum matching, then public URL."
+  - id: AC-3
+    requirement: "Consumer docs and test are accurate."
+    evidence_required: "README/INSTALL latest link, hash/source, ad-hoc limitations, 0.5.0 installed truth and focused contract module PASS."
+  - id: AC-4
+    requirement: "Git and host close cleanly."
+    evidence_required: "Pinned report, report-only direct child, clean synced main; zero live effects, unchanged v0.5.0."
+verification:
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Exact main/release absence and accepted local archive identity."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Draft/tag/assets, independent remote downloads and hash/byte checks before publication."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Public release, docs/test correction and focused contract checks."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Pinned report, non-force publication, clean synced Git and zero live effects."
+      required: true
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+report_requirements:
+  path: .agent/tasks/TASK-0186/report.yaml
+  record:
+    - "exact base, accepted source/archive identity and public tag"
+    - "draft assets, downloaded archive/checksum evidence and public release URL"
+    - "docs/test diff, focused checks, report-only lineage and clean Git"
+    - "zero live effects; NEEDS_REVIEW on complete PASS, otherwise BLOCKED"
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+release_authority:
+  create_version_tag: true
+  mutate_repository_metadata: false
+  publish_release: true
+blocking_decisions: []
+execution_ready: true
