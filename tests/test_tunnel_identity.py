@@ -271,9 +271,31 @@ cat > "$APP/Contents/Info.plist" <<'EOF'
 <key>CFBundleExecutable</key><string>AgentRuntimeMenuBar</string>
 </dict></plist>
 EOF
-printf '#!/usr/bin/env bash
-exit 0
-' > "$APP/Contents/MacOS/AgentRuntimeMenuBar"
+cat > "$APP/Contents/MacOS/AgentRuntimeMenuBar" <<'SERVICE_MANAGEMENT_FIXTURE'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "${1-}" == "--service-management" && "$#" == "2" ]] || exit 2
+STATE_FILE="$HOME/.agent-runtime-test-service-management-state"
+MAIN_APP="not-found"
+RUNTIME_AGENT="not-found"
+if [[ -f "$STATE_FILE" ]]; then
+  IFS=$'\t' read -r MAIN_APP RUNTIME_AGENT < "$STATE_FILE"
+fi
+case "$2" in
+  status) ;;
+  register) MAIN_APP="enabled"; RUNTIME_AGENT="enabled" ;;
+  unregister) MAIN_APP="not-registered"; RUNTIME_AGENT="not-registered" ;;
+  register-main) MAIN_APP="enabled" ;;
+  unregister-main) MAIN_APP="not-registered" ;;
+  register-runtime) RUNTIME_AGENT="enabled" ;;
+  unregister-runtime) RUNTIME_AGENT="not-registered" ;;
+  *) exit 2 ;;
+esac
+if [[ "$2" != "status" ]]; then
+  printf '%s\t%s\n' "$MAIN_APP" "$RUNTIME_AGENT" > "$STATE_FILE"
+fi
+printf '{"main_app":"%s","runtime_agent":"%s"}\n' "$MAIN_APP" "$RUNTIME_AGENT"
+SERVICE_MANAGEMENT_FIXTURE
 printf '#!/usr/bin/env bash
 exit 0
 ' > "$APP/Contents/MacOS/AgentRuntimeRuntimeService"
