@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0190
-task_revision: 2
-review_revision: 2
+task_revision: 3
+review_revision: 3
 state: REVISION_REQUIRED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0190/report.yaml
-  commit: "7b31774baa5246c832536d2ccc2c51244e60faad"
-  report_revision: 2
+  commit: "518b32394442dcabad80cd7f4f20b0848edd0c18"
+  report_revision: 3
 
 independence:
   reviewer_role: ARCHITECT
@@ -25,23 +25,23 @@ contract_compliance:
   structure_policy: PASS
   git_authority: PASS
   acceptance_criteria: FAIL
-  verifier_evidence: NOT_PROVEN
+  verifier_evidence: FAIL
 
 acceptance_basis:
-  - "Implementation 338d9790f1467a2d62349a9de52d26f10111286a is the direct child of revision-2 base 669550c2c4bb71b139794a1db57011ed3ea92ab2 and changes only tests/test_task0055_macos_contract.py and tests/test_tunnel_identity.py."
-  - "Published report 7b31774baa5246c832536d2ccc2c51244e60faad is the sole direct child of that implementation and changes only TASK-0190/report.yaml; fresh local and origin/main resolved to the report commit with a clean worktree."
-  - "The report preserves revision-1 canonical ./verify invocation #1 as FAIL at 36/62 modules and 549 completed-module tests. Its revision-2 focused RED reproduced nine failures, and both corrected regression modules are GREEN."
-  - "A separate focused test in tests/test_task0141_productization.py compares the documented recovery matrix with a hard-coded DOCTOR_REASON_CODES set. The set omits LIFECYCLE_OWNERSHIP_CONTRADICTORY, MAIN_APP_REGISTRATION_ABSENT, and MAIN_APP_APPROVAL_REQUIRED, while agent_runtime/doctor.py emits them and docs/RECOVERY.md maps each exactly once. This is a stale test inventory, outside revision-2 restrictive file authority."
-  - "The invalid focused invocation tests.test_install_preflight names a nonexistent module. It is a command-selection error, not a product defect; use only repository-discovered test modules in the continuation."
-  - "Revision-2 canonical ./verify was not invoked because the focused gate failed. Its one authorized invocation remains unconsumed; the corrected distribution build, live cutover, commit-cutover, bounded restarts and physical reboot were also not consumed. No live corrected-candidate state or reboot survival is claimed."
-  - "The revision-2 report is valid YAML and binds task/report revision 2, exact candidate and BLOCKED result. The pinned constrained Foundation validator blob 7912f88ba3e14d53e80ff2b0048a94f4ed596c18 cannot parse dotted mapping keys at report line 115, so mechanical validation is inconclusive under Task Protocol v3 compatibility semantics; do not claim validator PASS for this report."
+  - "Implementation f1ab93d051530a7f5ea7b8c417b5a445fc15d04a is the direct child of revision-3 task base f96e325cd07bba438986ce2f950c5fdd880026d7 and changes only tests/test_task0141_productization.py. Report-only commit 518b32394442dcabad80cd7f4f20b0848edd0c18 is its direct child; clean local and remote main matched that commit at review."
+  - "The published report correctly records what the Executor could establish then: one keyed ./verify dispatch, two same-identity polls returning DURABLE_OWNER_LOST/effect_state=unknown, no retry, and zero remaining revision-3 verifier budget. Do not rewrite that historical report."
+  - "Independent read-only reconciliation found the exact start_identity c0190a6b10bd4d979cfbeabf13baf64d in the Runtime durable-job store. DurableStore.read_for_identity validated ownership/mode, state integrity, journal digest/generation and identity. Its terminal state is COMPLETED/exited, natural_exit, exit_code=1, completed_at_epoch=1790660039.8453782, with no dropped output."
+  - "The integrity-validated journal shows canonical ./verify revision-3 invocation #1 actually FAIL: tests.test_terminal_session has 1 failure and 4 RuntimeCapacityError errors; 28/62 modules, 481 completed-module tests, qualification profile. Other selected modules continued until the 80.797-second verifier result. No second invocation occurred."
+  - "Five capacity assertions in tests/test_terminal_session.py create TerminalSessionManager instances with the production default durable root. During the durable verifier job, those fixtures recover the verifier's active durable session, consuming one of their configured slots. Exact source and failure counts support a test isolation root cause, subject to focused RED/GREEN proof. The live API's sticky DURABLE_OWNER_LOST despite later integrity-valid terminal state is a separate bounded reconciliation defect candidate; require a focused causal test before any source correction."
+  - "Revision-1 verify #1 remains FAIL, revision-2 verify remains NOT_RUN, and revision-3 verify #1 is now independently reconciled as FAIL. The historical report's UNKNOWN reflects evidence available at its publication; the later finding is additive review evidence."
+  - "No corrected distribution build, live cutover, bounded service restart or physical reboot was reported in revision 3. Live current state and unchanged v0.5.1 publication must be refreshed at their consequence gates."
 
 findings:
-  - id: "F-0190-002"
+  - id: "F-0190-003"
     severity: "BLOCKING"
-    description: "A stale hard-coded doctor reason-code inventory fails a selected productization test outside revision-2 mutation authority."
-    disposition: "Revise TASK-0190 narrowly for tests/test_task0141_productization.py; carry forward the single unconsumed canonical verify and other unconsumed effect budgets."
+    description: "Canonical revision-3 verifier failed on five capacity fixture assertions contaminated by its own active durable job; the durable poll surface retained owner-lost uncertainty after the job had terminalized."
+    disposition: "Revise TASK-0190 narrowly for isolated terminal-session fixtures and conditional durable terminal reconciliation, preserving revision-3 FAIL and granting one new bounded verifier invocation only after focused gates pass."
 
 notes:
-  - "Revision-1 implementation and revision-2 two-test correction remain the continuation candidate; neither is accepted as fully qualified."
-  - "Revision-1 report/review and revision-2 report remain immutable Git history. This review creates no build, install, restart, reboot or release authority."
+  - "This review does not accept lifecycle qualification or claim package, live, reboot, or release proof."
+  - "The exact durable journal remains local operational evidence; this review records its relevant identity, integrity result, terminal exit and verifier failure without mutating the historical report."
