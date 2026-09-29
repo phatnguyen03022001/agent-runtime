@@ -1,8 +1,8 @@
 protocol_version: 3
 
 task_id: TASK-0190
-task_revision: 6
-report_revision: 6
+task_revision: 7
+report_revision: 7
 state: REPORTED
 
 task_source:
@@ -13,53 +13,41 @@ execution:
   branch:
     name: main
     role: canonical
-  authorized_base_head: "71f58b211f0966ee0326a58fd1f52b3544d7bee6"
-  final_execution_head: "71f58b211f0966ee0326a58fd1f52b3544d7bee6"
+  authorized_base_head: "6fa21e876f17e7aae21f762070b01f10abeae48d"
+  final_execution_head: "6fa21e876f17e7aae21f762070b01f10abeae48d"
 
 skill_library:
   repository: phatnguyen03022001/agent-foundation
-  authorized_revision: "e74e3b958779b995506f1004709b824812e455fd"
-
-external_engineering_how:
-  repository: affaan-m/ECC
-  authorized_revision: "bf70150eb2df8070024e5bdf08e4aa08959e2735"
-  required_capabilities:
-    - tdd-workflow
-    - verification-loop
-    - security-review
-    - code-reviewer
-    - agent-introspection-debugging
+  authorized_revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
 
 capability_preflight:
   phase: EXECUTION
   required:
     - repository_observation
-    - local_test_execution
+    - independent_carrier_observation
     - scoped_repository_write
     - non_force_main_publication
-    - authoritative_verification
   available:
     - repository_observation
-    - local_test_execution
+    - independent_carrier_observation
     - scoped_repository_write
     - non_force_main_publication
-    - authoritative_verification
   missing: []
   passed: true
 
 authoritative_verification:
   required: true
-  performed: true
+  performed: false
   result: PASS
   command: "./verify"
-  invocation_count: 1
+  invocation_count: 0
   modules_selected: 62
   modules_completed: 62
   tests_completed: 848
   retry_count: 0
-  evidence: "Revision-4 canonical invocation #1 completed with exit 0 and PASS across all 62 modules and 848 tests. No retry was run."
+  evidence: "Revision 7 reused the immutable revision-4 exact-source PASS across all 62 modules and 848 tests. Revision 7 did not invoke ./verify."
 
-pushed: true
+pushed: false
 
 historical_evidence:
   revision_1:
@@ -533,30 +521,20 @@ revision_4_blockers:
   - "Fresh physical reboot/login restoration proof is outstanding."
 
 blockers:
-  - "Doctor acceptance failed at installed_package_identity/INSTALLED_SUBSTRATE_INVALID while the schema-6 transaction was PENDING / APP_SWAPPED; commit-cutover was not dispatched."
-  - "Packaged-Python doctor and diagnostic imports added 325 .pyc files inside the installed app runtime. Closure changed from candidate b2a3a79b99f6dad0b8bf14765d73df869f01610a8c6f65eab50d424534ac1a7d / 1,686 records to bc9af5656d0daab518c8db5912835916c3e5e0407a4f2dfebe899ddd6d514457 / 2,011 records."
-  - "The transaction remains open. Revision-5 rollback and candidate-cutover caps are consumed; no second rollback, manual app cleanup, or reboot was attempted."
-  - "Candidate-scoped LaunchServices cleanup and physical reboot/login proof remain outstanding."
+  - "Fresh revision-7 pre-reboot LaunchServices observation found two records for bundle identifier com.picmao.agent-runtime: the canonical installed app and the task candidate path. This violates the mandatory sole-canonical-registration precondition."
+  - "Revision 7 authorizes zero LaunchServices cleanup, repair, reinstall, restart, cutover, rollback, cache cleanup, verifier, build or source effects. The failed pre-reboot gate therefore terminates this binding BLOCKED before reboot dispatch."
+  - "Operator-presence confirmation and the physical reboot/login gate were not entered because the earlier mandatory installed-product preflight had already failed. Physical reboot count remains zero."
 
 acceptance_evidence:
   - criterion_id: AC-1
-    status: PASS
-    evidence: "Exact source candidate, provenance, strict codesign and 12/12 Mach-O audits passed before cutover. Revision-4 ./verify PASS 62/62 and 848 tests and all earlier outcomes remain preserved; rev5 ran no verify or build."
+    status: BLOCKED
+    evidence: "No physical reboot or sign-in was dispatched. SentinelX mac-tphat-mb was connected, operational and pingable at session sess_6c269849a563; pre-reboot boot epoch was { sec = 1790675443, usec = 862731 } Tue Sep 29 16:50:43 2026, but the mandatory LaunchServices preflight failed before operator-presence confirmation or reboot authority was exercised."
   - criterion_id: AC-2
-    status: PASS
-    evidence: "Independent-carrier and PRE_SWAP gates passed. The one durable rollback returned ROLLED_BACK/exit 0, closed the old transaction, and restored the exact previous app closure, lifecycle, pointer, runtime.env and readyz."
+    status: BLOCKED
+    evidence: "Fresh pre-reboot evidence passed supported doctor healthy 10/10, readyz, absent transaction, main_app enabled/runtime_agent not-found, loaded current Runtime LaunchAgent, exact runtime.env hash, exact b2a3a79b99f6dad0b8bf14765d73df869f01610a8c6f65eab50d424534ac1a7d / 1686 installed closure, zero generated bytecode, strict codesign and provenance. It failed the required sole canonical LaunchServices registration, so no post-login restoration proof exists."
   - criterion_id: AC-3
     status: BLOCKED
-    evidence: "The sole rev5 cutover returned PENDING / APP_SWAPPED. readyz and lifecycle passed, but doctor returned one substrate failure in addition to the expected transaction warning; commit was withheld."
-  - criterion_id: AC-4
-    status: BLOCKED
-    evidence: "No rev5 LaunchServices cleanup was attempted because the transaction is open; the prior report recorded the candidate-path duplicate."
-  - criterion_id: AC-5
-    status: BLOCKED
-    evidence: "No physical reboot was attempted because the transaction is open and doctor failed."
-  - criterion_id: AC-6
-    status: PASS
-    evidence: "The report-only change binds the exact base, historical report/review commits, and separate effect counts; it is published with non-force CAS. No v0.5.1 release or tag mutation occurred."
+    evidence: "Revision-4 ./verify PASS 62/62 modules and 848 tests was reused without rerun; revision 7 performed zero build/install/cutover/rollback/restart/cleanup/sudo/source/release effects; v0.5.1 tag and release assets were freshly reobserved unchanged. The report does not self-attest its own later publication or final synchronized-main consequence."
 
 revision_5:
   execution:
@@ -894,4 +872,127 @@ revision_6:
     force_push: false
     branch_count: 1
     clean_single_worktree_before_report: true
+
+revision_7:
+  disposition: BLOCKED
+  task_revision: 7
+  execution:
+    phase: "EXECUTOR / TASK-0190 REVISION 7 PHYSICAL REBOOT/LOGIN QUALIFICATION"
+    exact_execution_base: "6fa21e876f17e7aae21f762070b01f10abeae48d"
+    branch: main
+    local_head_before_report: "6fa21e876f17e7aae21f762070b01f10abeae48d"
+    remote_head_before_report: "6fa21e876f17e7aae21f762070b01f10abeae48d"
+    branch_count: 1
+    worktree_count: 1
+    worktree_clean_before_report: true
+    git_index_lock_present: false
+    competing_writer_matches: 0
+    source_changes: 0
+    report_only_path: ".agent/tasks/TASK-0190/report.yaml"
+    revision_6_report_commit: "1e632887fbc6e2b1b5315f6d38f522a8e97f937f"
+    revision_6_review_commit: "393996d0a034bef0f73a659101b59a7c64b51f6e"
+    historical_revisions_1_through_6_preserved: true
+  independent_carrier:
+    provider: SentinelX
+    host_id: "mac-tphat-mb"
+    session_id: "sess_6c269849a563"
+    agent_version: "0.13.2"
+    connected_and_operational: true
+    ping: PASS
+    uid: 501
+    current_runtime_launchagent_label: "com.picmao.agent-runtime-runtime-service"
+    current_runtime_launchagent_observation: "Unprivileged launchctl print gui/501/com.picmao.agent-runtime-runtime-service."
+    current_runtime_launchagent_state: running
+    current_runtime_launchagent_program: "/Users/tienphat/Applications/Agent Runtime.app/Contents/MacOS/AgentRuntimeRuntimeService"
+    pre_reboot_boot_epoch: "{ sec = 1790675443, usec = 862731 } Tue Sep 29 16:50:43 2026"
+  pre_reboot_product_proof:
+    execution_bundle_start_identity: "0190a700000000000000000000000008"
+    result: FAIL
+    failed_check: launchservices_not_sole_canonical
+    transaction: absent
+    readyz: ready
+    service_management:
+      main_app: enabled
+      runtime_agent: not-found
+    runtime_launchagent: loaded-running
+    runtime_env_sha256: "b3d0d67471f6d620f53ad1ed9ee6db21a1e906fff643dd94050b7cd8def97029"
+    supported_doctor: "healthy / 10 of 10 PASS"
+    installed_candidate_closure: "b2a3a79b99f6dad0b8bf14765d73df869f01610a8c6f65eab50d424534ac1a7d / 1686 regular files"
+    provenance: PASS
+    runtime_revision: "5286bbb6d1942ff7eed13190bd38ee5efcc0e621"
+    selected_payload: "85b82b2c88e9bc0bfdf0c240a7b47b17abfd260609d88a7e5dafecab042e2483"
+    strict_codesign: PASS
+    generated_pyc_files_before_launchservices_check: 0
+    pycache_directories_before_launchservices_check: 0
+    generated_pyc_files_after_bundle: 0
+    pycache_directories_after_bundle: 0
+    launchservices_bundle_identifier: "com.picmao.agent-runtime"
+    launchservices_records:
+      - "/Users/tienphat/Applications/Agent Runtime.app"
+      - "/Users/tienphat/Developer/agent-runtime/build/candidates/b2a3a79b99f6dad0b8bf14765d73df869f01610a8c6f65eab50d424534ac1a7d/Agent Runtime.app"
+    sole_canonical_production_registration: false
+    mutation_effects: 0
+  operator_presence_confirmation:
+    status: NOT_OBTAINED
+    reason: "Not entered because the earlier mandatory pre-reboot installed-product gate failed; no reboot dispatch authority was exercised."
+  reboot_login:
+    status: BLOCKED_BEFORE_DISPATCH
+    physical_reboots_revision_7: 0
+    reboot_dispatches: 0
+    process_or_service_restarts_substituted: 0
+    post_reboot_boot_epoch: null
+    post_reboot_sentinel_session_id: null
+    physical_reboot_budget_remaining: 1
+  authoritative_verification:
+    source_revision: "5286bbb6d1942ff7eed13190bd38ee5efcc0e621"
+    reused_revision: 4
+    command: "./verify"
+    revision_7_invocations: 0
+    result: PASS
+    modules_completed: 62
+    tests_completed: 848
+  public_v051_truth:
+    reobserved: true
+    tag: "v0.5.1"
+    tag_target: "674095e739533e100c2cf75f434dd0bc825a3de3"
+    release_id: 398229165
+    release_name: "Agent Runtime 0.5.1 — zero-cost macOS arm64"
+    published_at: "2026-09-28T12:31:20Z"
+    archive_asset: "Agent-Runtime-zero-cost-v0.5.1-a3b912a465d2.tar.gz"
+    archive_digest: "sha256:9518e1cf4f28033cbec97b8906e55e1a4da6ad3a9067485fb6ef7c4fcfac58e8"
+    checksum_asset: "SHA256SUMS.txt"
+    checksum_digest: "sha256:3da6a20d35b369c722c182a8a4afd3b31ee216a65c7ae31e08aa9c486626f83e"
+    revision_7_mutations: NONE
+  revision_7_effect_accounting:
+    verify_invocations: 0
+    distribution_builds: 0
+    install_or_cutover_dispatches: 0
+    rollback_or_recovery_dispatches: 0
+    manual_service_restarts: 0
+    cache_cleanups: 0
+    launchservices_cleanups: 0
+    launchservices_global_resets: 0
+    physical_reboots: 0
+    runtime_env_mutations: 0
+    tunnel_identity_or_config_mutations: 0
+    host_dependency_mutations: 0
+    auto_login_or_persistence_mutations: 0
+    root_or_sudo_invocations: 0
+    source_or_test_changes: 0
+    v051_release_or_tag_mutations: 0
+    branch_or_pr_creations: 0
+  report_validation:
+    validator_repository: "phatnguyen03022001/agent-foundation"
+    validator_revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+    validator_path: "skills/scripts/validate_skill_library.py"
+    result: PASS
+    evidence: "The exact pinned Foundation validator blob returned exit 0 for --artifact report before commit."
+  publication:
+    method: "Non-force compare-and-swap to origin/main"
+    prior_local_head: "6fa21e876f17e7aae21f762070b01f10abeae48d"
+    prior_remote_head: "6fa21e876f17e7aae21f762070b01f10abeae48d"
+    force_push: false
+    prepublication_branch_count: 1
+    pushed: false
+    note: "Publication consequence is proven after this report's bytes are committed and is not self-attested here."
 result: BLOCKED
