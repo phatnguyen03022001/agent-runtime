@@ -1,0 +1,179 @@
+protocol_version: 3
+
+task_id: TASK-0189
+task_revision: 1
+state: APPROVED
+title: "GitHub Release-Integrity Hardening Closure"
+
+origin:
+  type: architect_continuation
+  task_id: TASK-0189
+  gap_id: "GITHUB-RELEASE-INTEGRITY-NOT-ENFORCED"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "e74e3b958779b995506f1004709b824812e455fd"
+
+architect_analysis_skills:
+  - architect
+  - security-review
+  - verification
+
+execution_skills:
+  required:
+    - executor
+    - security-review
+    - verification
+  recommended:
+    - simplicity
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0188/review.yaml at 6e806b1fc3889434ce3a0d688329ab65db195de3"
+    role: "Accepted source/package/runtime/document truth closure for Runtime 0.5.1."
+    precedence: 1
+  - source: "GitHub release v0.5.1 and repository metadata observed immediately before task authorship"
+    role: "Current GitHub publication and integrity-policy truth."
+    precedence: 2
+  - source: "GitHub REST API version 2026-03-10 rulesets and immutable-releases contracts"
+    role: "Platform mechanism authority for tag protection and future immutable releases."
+    precedence: 3
+
+structure_authority:
+  status: NOT_APPLICABLE
+  source: ""
+  rationale: "GitHub repository metadata and release-integrity policy hardening only; no product/source structure change is authorized."
+
+objective: "Close the remaining GitHub publication-integrity debt without rewriting the already-published v0.5.1 release. Add platform-enforced protection against update/delete of version tags, enable immutable releases for future publications, and populate concise repository About metadata. Preserve the exact existing v0.5.1 tag target, release record, release assets, source/package/runtime bytes, and main ruleset."
+
+scope:
+  required_changes:
+    - "Freshly bind clean synchronized main at the exact task base and re-read GitHub truth before mutation: v0.5.1 release immutable=false; tag refs/tags/v0.5.1 targets commit 674095e739533e100c2cf75f434dd0bc825a3de3; archive asset 595362326 is 17,798,890 bytes with SHA-256 9518e1cf4f28033cbec97b8906e55e1a4da6ad3a9067485fb6ef7c4fcfac58e8; checksum asset 595362324 has SHA-256 3da6a20d35b369c722c182a8a4afd3b31ee216a65c7ae31e08aa9c486626f83e; repository immutable releases are disabled; ruleset 22462972 remains main-ref-integrity targeting only refs/heads/main."
+    - "Create exactly one active repository tag ruleset named release-tag-integrity targeting refs/tags/v* with no bypass actors and exactly the update and deletion restriction rules. Do not restrict tag creation: future version tags must remain creatable through the authorized release flow, but once created they must not be movable or deletable under the ruleset."
+    - "Enable repository immutable releases using the official repository-level immutable-releases setting. Freshly verify enabled=true after the mutation. Record enforced_by_owner exactly as GitHub returns it."
+    - "Do not claim or attempt retroactive conversion of v0.5.1 into an immutable release. Freshly prove the already-published v0.5.1 release still reports immutable=false if GitHub continues to expose it that way; this is an expected platform limitation, not a task failure."
+    - "Update the GitHub repository About description to exactly: Bounded local execution runtime for ChatGPT and MCP on macOS — 20 tools, transactional installs, package provenance, and OpenAI Secure MCP Tunnel."
+    - "Set repository topics to exactly this normalized set, with no duplicates: agent-runtime, chatgpt, developer-tools, local-execution, macos, mcp, openai, python, secure-tunnel, swift."
+    - "Leave homepageUrl unchanged unless GitHub requires an existing value to be preserved during the metadata mutation. Do not invent a homepage."
+    - "After every GitHub metadata/policy mutation, re-read remote state. If a request returns unknown/ambiguous status, reconcile actual GitHub state before any retry. Never blindly repeat a metadata mutation."
+    - "After completion, prove refs/tags/v0.5.1 still targets exactly 674095e739533e100c2cf75f434dd0bc825a3de3; the release ID, archive/checksum asset IDs, byte sizes and SHA-256 digests are unchanged; public release remains non-draft/non-prerelease; main-ref-integrity ruleset 22462972 is byte-semantically unchanged; new release-tag-integrity is active and targets refs/tags/v* with only update+deletion restrictions; repository immutable releases are enabled."
+    - "Freshly prove installed Runtime remains 0.5.1/revision 674095e739533e100c2cf75f434dd0bc825a3de3, doctor healthy 10/10, readiness ready, transaction absent, and runtime.env hash/owner/mode unchanged. This task must have zero source/package/runtime lifecycle effects."
+    - "Do not create, move, delete, annotate, sign, replace or otherwise mutate v0.5.1 or any existing tag. Do not edit the v0.5.1 release body, name, assets, checksum, draft/prerelease state or timestamps. Do not manufacture a new release solely to obtain retroactive attestation."
+    - "Write and validate only .agent/tasks/TASK-0189/report.yaml as tracked execution output. The task performs GitHub repository metadata/policy effects only; no implementation/source/docs/test commit is authorized. Report exact before/after GitHub identities, ruleset ID returned by GitHub, immutable-release setting, repository About metadata, zero forbidden effects, and the non-retroactive v0.5.1 limitation. Publish the report as the sole direct child of the unchanged execution base, non-force to main, then reconcile clean synchronized main."
+  allowed_existing_files_or_components:
+    - "GitHub repository About description and topics"
+    - "GitHub repository immutable-releases setting"
+    - "GitHub repository rulesets"
+    - "Read-only existing v0.5.1 release/tag/assets"
+    - "Read-only installed Runtime state"
+    - ".agent/tasks/TASK-0189/report.yaml"
+  expected_files_are_restrictive: true
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0189/report.yaml"
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "Only canonical task report evidence may be newly tracked."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+invariants:
+  - "Existing v0.5.1 tag target, release record, release assets, archive bytes and checksum bytes remain unchanged."
+  - "Existing main-ref-integrity ruleset 22462972 remains unchanged."
+  - "The new tag ruleset protects release tags without blocking creation of future version tags."
+  - "Enabling repository immutable releases is future-facing and must not be represented as retroactively making v0.5.1 immutable."
+  - "Architecture, source, docs, tests, dependencies, package bytes, Runtime state and operator configuration remain unchanged."
+  - "Main-only topology; no branch, PR, force push or amend."
+
+forbidden_changes:
+  - "Any edit, replacement, deletion, movement, annotation or signing conversion of v0.5.1 or any existing tag."
+  - "Any edit/delete/re-upload of the existing v0.5.1 release or its assets."
+  - "Any product/source/docs/test/dependency/package/archive change or canonical ./verify invocation."
+  - "Any Runtime install, cutover, restart, rollback, recovery, runtime.env mutation, tunnel-client mutation, host-security mutation or dependency installation."
+  - "Any modification or replacement of ruleset 22462972 main-ref-integrity."
+  - "Any tag-creation restriction in release-tag-integrity; only update and deletion restrictions are authorized."
+  - "Any bypass actor in release-tag-integrity."
+  - "Any claim that v0.5.1 itself has acquired GitHub immutable-release attestation after this task."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: revised_contract_required
+  dependency_change: forbidden
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Existing v0.5.1 publication identity is unchanged."
+    evidence_required: "Fresh before/after tag target, release ID/state, asset IDs/sizes/digests and lightweight-tag object identity are byte/semantically identical."
+  - id: AC-2
+    requirement: "Version tags gain platform-enforced no-update/no-delete protection without blocking future tag creation."
+    evidence_required: "One active release-tag-integrity tag ruleset targets refs/tags/v*, has no bypass actors, and contains exactly update and deletion restriction rules."
+  - id: AC-3
+    requirement: "Future GitHub releases are configured for immutable publication."
+    evidence_required: "Repository immutable-releases endpoint returns enabled=true after the authorized mutation; report records enforced_by_owner exactly."
+  - id: AC-4
+    requirement: "GitHub About metadata describes the product clearly without changing product semantics."
+    evidence_required: "Exact description and exact ten-topic set are visible in fresh GitHub readback; homepage remains unchanged."
+  - id: AC-5
+    requirement: "Non-retroactive limitation is explicit and no forbidden effects occurred."
+    evidence_required: "Existing v0.5.1 remains unchanged and may still report immutable=false; report states it is retroactively tag-protected but not a GitHub immutable release/attested immutable publication. Source/package/runtime/release assets remain untouched."
+  - id: AC-6
+    requirement: "Repository and Runtime closure remain exact."
+    evidence_required: "Only report.yaml tracked; report validator PASS; clean synchronized main; Runtime 0.5.1 healthy/ready with transaction absent and runtime.env unchanged."
+
+verification:
+  authoritative_verification:
+    required: false
+    mechanism: ""
+    expected_signal: ""
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Fresh GitHub API readback of v0.5.1 release/tag/assets and ruleset 22462972 before and after mutation"
+      required: true
+    - id: CHECK-2
+      command_or_check: "Fresh GitHub API readback proving release-tag-integrity exact target/rules/bypass state and immutable releases enabled=true"
+      required: true
+    - id: CHECK-3
+      command_or_check: "Fresh GitHub repository metadata readback proving exact description/topics and unchanged homepage"
+      required: true
+    - id: CHECK-4
+      command_or_check: "Read-only live Runtime capabilities/doctor/readiness/runtime.env closure"
+      required: true
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: true
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
