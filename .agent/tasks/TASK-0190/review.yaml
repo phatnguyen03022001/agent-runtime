@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0190
-task_revision: 5
-review_revision: 5
-state: REVISION_REQUIRED
+task_revision: 6
+review_revision: 6
+state: BLOCKED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0190/report.yaml
-  commit: "748915011fe3f07e1529d0998f5030ef800391b0"
-  report_revision: 5
+  commit: "1e632887fbc6e2b1b5315f6d38f522a8e97f937f"
+  report_revision: 6
 
 independence:
   reviewer_role: ARCHITECT
@@ -21,28 +21,27 @@ contract_compliance:
   identity: PASS
   execution_base: PASS
   skill_rules: PASS
-  scope: PASS
+  scope: FAIL
   structure_policy: PASS
   git_authority: PASS
   acceptance_criteria: FAIL
   verifier_evidence: PASS
 
 acceptance_basis:
-  - "Report-only commit 748915011fe3f07e1529d0998f5030ef800391b0 followed revision-5 task base 998f0c60d9c3e41eb9cb4a0138452b228ad28c0b and changed only report.yaml. Fresh local and remote main matched the report commit with a clean single worktree at review."
-  - "Revision-5 independent SentinelX carrier survived Runtime bootout. Its one rollback completed ROLLED_BACK and closed the old transaction, then its one new cutover returned PENDING / APP_SWAPPED. The latter transaction remains open. Neither effect may be replayed as an unused revision-5 budget."
-  - "Revision-4 ./verify PASS 62/62 modules and 848 tests and candidate provenance, strict codesign and 12/12 Mach-O audits bind unchanged source 5286bbb6d1942ff7eed13190bd38ee5efcc0e621. Revision 5 used no verify or build. No commit-cutover, LaunchServices cleanup or physical reboot occurred."
-  - "Fresh read-only transaction inspection found schema 6 PENDING / APP_SWAPPED, metadata SHA-256 614599da09a33337aa9d2291b7ce0d2c884790cfa6fa3d43c35fae541884c497. Its previous-app rollback copy still exactly matches the recorded 2000-record closure 4f96b9d260553b54773bf28c91fade01b0dfaa5fd43ae8d10bcd6055531a1f10."
-  - "Independent comparison with the exact audited candidate found the installed app has all 1686 candidate files with identical bytes and modes, no missing or changed candidate files, and exactly 325 extra .pyc files. Installed rollback closure is 2386 records at bbf8d81cbf87a554eed5134ff71e65c3a81da6ff44b5c899c50e9524947d248c, reflecting the added files and cache directories. This is the proven current difference; recheck immediately before any cleanup."
-  - "The published report records a direct packaged-Python doctor invocation and further diagnostic imports. Source start.sh doctor explicitly sets PYTHONDONTWRITEBYTECODE=1, while the direct Python entry has no such inherited guarantee. Python bytecode caching in the installed immutable substrate is consistent with the observed extra .pyc files. The closed-world substrate manifest correctly rejected them as INSTALLED_SUBSTRATE_INVALID; do not weaken provenance or call the failed doctor a PASS."
-  - "The transaction warning CUTOVER_TRANSACTION_PRESENT is expected before commit and makes doctor degraded; final healthy doctor requires the transaction to close. Revision-5 stopped before commit on the additional substrate failure. Safe continuation must restore exact candidate closure first, use the supported start.sh doctor entry, then re-evaluate commit eligibility and post-commit doctor truth."
-  - "The v0.5.1 tag/release/assets and runtime.env remain unchanged in the report. This review spends no live effect and does not rewrite revision-5 evidence."
+  - "Revision-6 report-only commit 1e632887fbc6e2b1b5315f6d38f522a8e97f937f is the direct child of task base 71f58b211f0966ee0326a58fd1f52b3544d7bee6 and changes only report.yaml. The exact pinned Foundation validator blob 7912f88ba3e14d53e80ff2b0048a94f4ed596c18 independently accepted the published report. Fresh local and remote main matched that commit with one clean worktree and only main."
+  - "The report records the exact 325 .pyc files in 61 __pycache__ directories before cleanup. One no-effect attempt deleted nothing; one bounded effect removed those files and empty directories. Installed candidate closure returned to b2a3a79b99f6dad0b8bf14765d73df869f01610a8c6f65eab50d424534ac1a7d / 1686 regular files. Supported doctor produced no further bytecode."
+  - "One commit-cutover returned COMMITTED with no retry and closed the schema-6 transaction. Post-commit doctor was healthy, readyz ready, strict codesign and provenance PASS, 12/12 Mach-O audited, main_app enabled, current user LaunchAgent loaded, and current Runtime ServiceManagement agent absent. Independent read-only review reconfirmed the installed candidate closure, absent transaction path, and unchanged runtime.env SHA-256 b3d0d67471f6d620f53ad1ed9ee6db21a1e906fff643dd94050b7cd8def97029."
+  - "One candidate-scoped LaunchServices cleanup returned exit 0; a fresh dump reported only the canonical installed app registration. No global reset was performed. Revision-4 canonical ./verify PASS 62/62 modules and 848 tests remains bound to unchanged source; revision 6 did not run verify, build, rollback or install-prebuilt. Historical revision-1 FAIL, revision-2 NOT_RUN, revision-3 published UNKNOWN plus later FAIL, revision-4 PASS and revision-5 BLOCKED remain preserved."
+  - "Physical reboot/login was not attempted. SentinelX is a gui/501 LaunchAgent and autoLoginUser is not configured; reconnect after full reboot requires an interactive sign-in not established by this execution surface. The one physical-reboot budget remains unconsumed. Current readyz and process continuity cannot substitute for a reboot/login observation."
+  - "The report also discloses two read-only sudo launchctl diagnostics. Revision-6 forbidden_changes names root/sudo, so this is a literal scope deviation even though the report records zero privileged state mutations. Preserve this evidence; it neither supplies reboot proof nor warrants repeating privileged probes."
+  - "v0.5.1 tag, release and assets are unchanged. The live installation is committed and healthy at the observed boundary, but the task's mandatory reboot-survival criterion is not proven."
 
 findings:
-  - id: "F-0190-005"
+  - id: "F-0190-006"
     severity: "BLOCKING"
-    description: "Packaged-Python diagnostic imports wrote 325 .pyc files into the installed candidate and violated exact substrate closure while the zero-cost transaction remained PENDING / APP_SWAPPED."
-    disposition: "Revise TASK-0190 only for evidence-gated removal of the 325 proven cache files and their empty cache directories, exact closure revalidation, supported doctor entry, and carried-forward commit/LaunchServices/reboot gates. Stop on any non-cache drift. No source change, build, canonical verify, rollback or install replay is authorized by this finding."
+    description: "Actual physical reboot/login restoration remains unproven because the independent carrier is user-session scoped and requires an interactive sign-in after reboot."
+    disposition: "Keep TASK-0190 BLOCKED. Do not consume the remaining reboot or revise authority merely to replay the same unsafe gate. A later continuation needs a concrete operator-present sign-in/reconnect arrangement and fresh preflight; persist new authority only when that capability exists."
 
 notes:
-  - "Preserve the revision-5 BLOCKED report and all prior verifier and live-effect outcomes as immutable history."
-  - "The supported doctor entry and cache attribution must be causally checked without generating further bytecode. Do not run an unguarded embedded Python diagnostic during recovery."
+  - "The two read-only sudo diagnostics are recorded as a scope deviation with no reported mutation; future qualification should use unprivileged read-only checks."
+  - "No rollback, reinstall, source change, verifier rerun, build, LaunchServices reset or release action is authorized by this review."
