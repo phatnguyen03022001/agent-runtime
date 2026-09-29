@@ -298,6 +298,8 @@ class Task0141ProductizationTests(unittest.TestCase):
             ROOT / "docs" / "AGENT.md",
         ]
         combined = "\n".join(path.read_text() for path in paths)
+        readme = (ROOT / "README.md").read_text()
+        recovery = (ROOT / "docs" / "RECOVERY.md").read_text()
         self.assertIsNone(re.search(r"TASK-\d+", combined))
         self.assertNotIn("cloudflare", combined.lower())
         self.assertIn("OpenAI Secure MCP Tunnel", combined)
@@ -306,6 +308,12 @@ class Task0141ProductizationTests(unittest.TestCase):
         self.assertIn("HUMAN_ACTION_REQUIRED", combined)
         self.assertIn("STOP_AND_ESCALATE", combined)
         self.assertIn("VISUAL_PERCEPTION_BLOCKED", combined)
+        self.assertIn("installed Runtime is version **0.5.1**", readme)
+        self.assertIn("Runtime source and installed Runtime version 0.5.1", readme)
+        self.assertIn("installed Runtime 0.5.1", recovery)
+        self.assertNotIn("installed Runtime is version **0.5.0**", readme)
+        self.assertNotIn("Runtime source and installed Runtime version 0.5.0", readme)
+        self.assertNotIn("installed Runtime 0.5.0", recovery)
 
     def test_cli_and_documentation_agree_on_public_operator_commands(self) -> None:
         readme = (ROOT / "README.md").read_text()

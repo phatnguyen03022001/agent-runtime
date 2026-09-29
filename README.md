@@ -2,7 +2,7 @@
 
 Agent Runtime is a **bounded local execution provider** for ChatGPT and other MCP clients on macOS. **MCP is the protocol**; the admitted product transport is OpenAI Secure MCP Tunnel, which keeps the Runtime private and uses outbound HTTPS rather than a public inbound listener.
 
-The installed Runtime is version **0.5.0** with **exactly twenty public tools** and **twenty-one known capabilities**. The current zero-cost source lane packages an immutable ad-hoc app substrate and a separate content-addressed first-party Python payload. One per-user LaunchAgent starts the embedded supervisor; ServiceManagement remains only for predecessor migration and rollback.
+The installed Runtime is version **0.5.1** with **exactly twenty public tools** and **twenty-one known capabilities**. The current zero-cost source lane packages an immutable ad-hoc app substrate and a separate content-addressed first-party Python payload. One per-user LaunchAgent starts the embedded supervisor; ServiceManagement remains only for predecessor migration and rollback.
 
 ## Supported product shape
 
@@ -11,7 +11,7 @@ The installed Runtime is version **0.5.0** with **exactly twenty public tools** 
 - Immutable native, CPython 3.13, third-party and bootstrap substrate under `~/Applications/Agent Runtime.app`; selected first-party Python release under `~/Library/Application Support/Agent Runtime/payloads/<closure>` with one `current-payload` pointer.
 - Canonical operator configuration at `~/Library/Application Support/Agent Runtime/runtime.env`, mode `0600`.
 - One protected singleton tunnel/listener on `127.0.0.1:8080`.
-- Runtime source and installed Runtime version 0.5.0, ToolContract Kernel v2, twenty advertised MCP tools from twenty-one known capabilities; installation remains an explicit pinned transactional cutover rather than a side effect of source publication.
+- Runtime source and installed Runtime version 0.5.1, ToolContract Kernel v2, twenty advertised MCP tools from twenty-one known capabilities; installation remains an explicit pinned transactional cutover rather than a side effect of source publication.
 - Runtime requires no blanket TCC permissions. The current traditional user LaunchAgent does not use ServiceManagement Background Activity registration.
 - Homebrew is optional; it is not an architecture prerequisite.
 
