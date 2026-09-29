@@ -1,8 +1,8 @@
 protocol_version: 3
 
 task_id: TASK-0190
-task_revision: 3
-report_revision: 3
+task_revision: 4
+report_revision: 4
 state: REPORTED
 
 task_source:
@@ -13,8 +13,8 @@ execution:
   branch:
     name: main
     role: canonical
-  authorized_base_head: "f96e325cd07bba438986ce2f950c5fdd880026d7"
-  final_execution_head: "f1ab93d051530a7f5ea7b8c417b5a445fc15d04a"
+  authorized_base_head: "9bb7acafab7d2077ae5c5d6d55353f2b70043190"
+  final_execution_head: "5286bbb6d1942ff7eed13190bd38ee5efcc0e621"
 
 skill_library:
   repository: phatnguyen03022001/agent-foundation
@@ -49,9 +49,15 @@ capability_preflight:
 
 authoritative_verification:
   required: true
-  performed: false
-  result: UNKNOWN
-  evidence: "One keyed terminal_start dispatch attempt for ./verify returned UNAVAILABLE / DURABLE_OWNER_LOST with effect_state=unknown. terminal_poll using the same start_identity returned the same result twice. No process completion, exit code, or verifier result could be established. The attempt was not replayed."
+  performed: true
+  result: PASS
+  command: "./verify"
+  invocation_count: 1
+  modules_selected: 62
+  modules_completed: 62
+  tests_completed: 848
+  retry_count: 0
+  evidence: "Revision-4 canonical invocation #1 completed with exit 0 and PASS across all 62 modules and 848 tests. No retry was run."
 
 pushed: true
 
@@ -249,7 +255,207 @@ revision_3:
     result: PASS
     evidence: "The exact validator blob loaded from the pinned Foundation Git object accepted this report with --artifact report before commit."
 
-acceptance_evidence:
+revision_4:
+  implementation:
+    commit: "5286bbb6d1942ff7eed13190bd38ee5efcc0e621"
+    parent: "9bb7acafab7d2077ae5c5d6d55353f2b70043190"
+    changed_files:
+      - agent_runtime/session.py
+      - tests/test_terminal_session.py
+    publication:
+      status: PUBLISHED
+      method: "Non-force compare-and-swap to main"
+      prior_remote_head: "9bb7acafab7d2077ae5c5d6d55353f2b70043190"
+      remote_head_after: "5286bbb6d1942ff7eed13190bd38ee5efcc0e621"
+      force_push: false
+      branch_count: 1
+      worktree_clean: true
+  historical_verifier_reconciliation:
+    revision_1:
+      report_commit: "46f48397fa32f1ebaf42bbe2f674d313d745991a"
+      review_commit: "865abec0e0ca63cc81aa325c0b7d2c6617f1453a"
+      result: FAIL
+      modules_completed: 36
+      tests_completed: 549
+    revision_2:
+      report_commit: "7b31774baa5246c832536d2ccc2c51244e60faad"
+      review_commit: "578836fe4f74c7e3b3fc3145e4566fbb63fc4835"
+      result: NOT_RUN
+    revision_3:
+      report_commit: "518b32394442dcabad80cd7f4f20b0848edd0c18"
+      review_commit: "1a1189c17131972a0f63baaaf8e455510e991dd9"
+      report_result_at_publication: UNKNOWN
+      start_identity: "c0190a6b10bd4d979cfbeabf13baf64d"
+      reconciled_result: FAIL
+      exit_code: 1
+      modules_completed: 28
+      tests_completed: 481
+      failures: 1
+      errors: 4
+      failing_module: tests.test_terminal_session
+      preservation: "The revision-3 report UNKNOWN and independent review FAIL are both retained as separate dated evidence."
+  focused_verification:
+    durable_fixture_isolation:
+      file: tests/test_terminal_session.py
+      result: PASS
+      red_green: true
+      affected_capacity_cases: 5
+      evidence: "The five capacity regressions were reproduced with fixture managers sharing the production durable root. The fixture now points each test manager at its own temporary durable root; admission limits and owner checks are unchanged."
+    durable_terminal_reconciliation:
+      source_file: agent_runtime/session.py
+      test_file: tests/test_terminal_session.py
+      test: "tests.test_terminal_session.TerminalSessionTests.test_owner_lost_recovers_integrity_valid_terminal_snapshot"
+      result: PASS
+      red_green: true
+      evidence: "An integrity-valid exited snapshot now reconciles after owner loss. A still-running owner remains DURABLE_OWNER_LOST; corrupt snapshots and identity mismatches remain fail-closed."
+    scope: "The implementation commit changes only the two listed files; no release, package, public contract, or lifecycle source was changed."
+  canonical_verification:
+    command: "./verify"
+    invocation_count: 1
+    result: PASS
+    exit_code: 0
+    modules_selected: 62
+    modules_completed: 62
+    tests_completed: 848
+    retry_count: 0
+    evidence: "The one authorized revision-4 invocation completed and passed. No replay occurred."
+  candidate_build:
+    corrected_build_attempts: 1
+    candidate_path: "/Users/tienphat/Developer/agent-runtime/build/candidates/b2a3a79b99f6dad0b8bf14765d73df869f01610a8c6f65eab50d424534ac1a7d/Agent Runtime.app"
+    candidate_sha256: "b2a3a79b99f6dad0b8bf14765d73df869f01610a8c6f65eab50d424534ac1a7d"
+    source_revision: "5286bbb6d1942ff7eed13190bd38ee5efcc0e621"
+    provenance: PASS
+    strict_codesign: PASS
+    macho_audit:
+      result: PASS
+      audited: 12
+      passed: 12
+    build_script:
+      exit_code: 2
+      failing_stage: "LaunchServices unregister"
+      candidate_scoped_unregister_retry: "The prior execution record reports success for the bounded candidate-specific retry."
+      launchservices_reobservation: "The current LaunchServices dump still contains a record for the candidate path; cleanup is not claimed complete."
+  live_cutover:
+    install_prebuilt_dispatches: 1
+    start_identity: "cdd877ef96ce4ae1b8ec3dff78548dbb"
+    terminal_result: UNKNOWN
+    terminal_poll_reconciliation: "START_IDENTITY_UNKNOWN; this is not evidence that the install was not dispatched."
+    observed_effect: "The handoff records that cutover bootout disconnected the Runtime-hosted tunnel."
+    independent_recovery:
+      actor: "Separate Architect session using SentinelX"
+      action: "Bootstrap the existing canonical Runtime LaunchAgent once"
+      target: "/Users/tienphat/Library/LaunchAgents/com.picmao.agent-runtime-runtime-service.plist"
+      service_effects: 1
+      outcome: "Runtime MCP calls responded again after bootstrap."
+    running_cutover_process_at_reobservation: false
+    additional_install_dispatches: 0
+    commit_cutover_dispatches: 0
+  live_reconciliation:
+    transaction:
+      path: "/Users/tienphat/Library/Application Support/Agent Runtime/cutover-transaction"
+      schema: 6
+      kind: zero-cost
+      status: PREPARED
+      phase: PRE_SWAP
+      metadata_sha256: "503cb34bc7c48c5d6c17f7975a66924b7abd5d92c216b7b8162f5c5fe4026fc4"
+      staged_candidate_present: true
+      staged_candidate_sha256: "b2a3a79b99f6dad0b8bf14765d73df869f01610a8c6f65eab50d424534ac1a7d"
+      transaction_preserved: true
+    installed_app:
+      path: "/Users/tienphat/Applications/Agent Runtime.app"
+      matches_previous_snapshot: true
+      record_count: 2000
+      closure_sha256: "4f96b9d260553b54773bf28c91fade01b0dfaa5fd43ae8d10bcd6055531a1f10"
+      backup_matches_same_closure: true
+    payload:
+      current_pointer: "6a17fb035429f12bff026fdbd6cb87f38df13163a5ed2127185415913baf935d"
+      previous_pointer_matches: true
+      staged_candidate_payload: "85b82b2c88e9bc0bfdf0c240a7b47b17abfd260609d88a7e5dafecab042e2483"
+    runtime_config:
+      runtime_env_sha256: "b3d0d67471f6d620f53ad1ed9ee6db21a1e906fff643dd94050b7cd8def97029"
+      matches_transaction_snapshot: true
+      mutations: 0
+    service_management:
+      installed_app_status:
+        main_app: enabled
+        runtime_agent: not-found
+      transaction_previous_snapshot:
+        contract: none
+        main_app: not-registered
+        runtime_agent: not-registered
+      main_app_registration_owned: false
+      current_runtime_launchagent_loaded: true
+      current_runtime_launchagent_program: "/Users/tienphat/Applications/Agent Runtime.app/Contents/MacOS/AgentRuntimeRuntimeService"
+      current_runtime_launchagent_plist_sha256: "3503d551e327fd311b584432efc36215c933dda7dbeeadc054270ac7a3a9fa2c"
+      current_runtime_launchagent_matches_snapshot: true
+      legacy_runtime_loaded: false
+      ui_launchagent_loaded: false
+    tunnel_readiness:
+      runtime_version: "0.5.1"
+      runtime_revision: "674095e739533e100c2cf75f434dd0bc825a3de3"
+      advertised_tools: 20
+      available_tools: 20
+      known_capabilities: 21
+      observed: "Runtime MCP capability and terminal calls succeeded after the independent bootstrap."
+    launchservices:
+      observation: "Read-only lsregister dump"
+      matching_app_records: 2
+      canonical_app_path: "/Users/tienphat/Applications/Agent Runtime.app"
+      task_candidate_path: "/Users/tienphat/Developer/agent-runtime/build/candidates/b2a3a79b99f6dad0b8bf14765d73df869f01610a8c6f65eab50d424534ac1a7d/Agent Runtime.app"
+      candidate_record_present: true
+      global_reset: 0
+    rollback:
+      attempted: false
+      result: BLOCKED
+      exact_blocker: "Transaction snapshot records main_app=not-registered and main_app_registration_owned=false, while the installed app currently reports main_app=enabled. The bounded rollback code unregisters main-app state only when the transaction ownership flag is true; running it would not restore the recorded predecessor ServiceManagement state and would remove the transaction evidence. No manual unregister, transaction edit, or cleanup was attempted."
+      transaction_closed: false
+    physical_reboot:
+      attempted: false
+      result: OUTSTANDING
+      reason: "The partial transaction and rollback ownership mismatch remain unresolved; no process restart is represented as reboot proof."
+  public_v051_truth:
+    reobserved: true
+    version: "0.5.1"
+    tag: "v0.5.1"
+    tag_target: "674095e739533e100c2cf75f434dd0bc825a3de3"
+    release_id: 398229165
+    release_name: "Agent Runtime 0.5.1 — zero-cost macOS arm64"
+    published_at: "2026-09-28T12:31:20Z"
+    updated_at: "2026-09-28T12:31:20Z"
+    archive_asset: "Agent-Runtime-zero-cost-v0.5.1-a3b912a465d2.tar.gz"
+    archive_digest: "sha256:9518e1cf4f28033cbec97b8906e55e1a4da6ad3a9067485fb6ef7c4fcfac58e8"
+    checksum_asset: "SHA256SUMS.txt"
+    checksum_digest: "sha256:3da6a20d35b369c722c182a8a4afd3b31ee216a65c7ae31e08aa9c486626f83e"
+    revision_4_mutations: NONE
+  effect_accounting:
+    revision_4_canonical_verify_invocations: 1
+    revision_4_canonical_verify_remaining: 0
+    corrected_zero_cost_distribution_builds: 1
+    corrected_zero_cost_distribution_builds_remaining: 0
+    live_corrected_candidate_cutovers: 1
+    live_corrected_candidate_cutovers_remaining: 0
+    live_commit_cutovers: 0
+    live_commit_cutovers_remaining: 1
+    bounded_service_restarts: 1
+    bounded_service_restarts_remaining: 1
+    independent_launchagent_bootstraps: 1
+    physical_reboots: 0
+    physical_reboots_remaining: 1
+    launchservices_global_resets: 0
+    runtime_env_mutations: 0
+    tunnel_identity_or_config_mutations: 0
+    host_dependency_mutations: 0
+    v051_release_or_tag_mutations: 0
+  report_validation:
+    validator_repository: phatnguyen03022001/agent-foundation
+    validator_revision: "e74e3b958779b995506f1004709b824812e455fd"
+    validator_path: skills/scripts/validate_skill_library.py
+    validator_git_blob: "7912f88ba3e14d53e80ff2b0048a94f4ed596c18"
+    serialization_uses_dotted_mapping_keys: false
+    result: PASS
+    evidence: "The exact pinned Foundation validator blob 7912f88ba3e14d53e80ff2b0048a94f4ed596c18 returned exit 0 for this report with --artifact report before commit."
+
+revision_3_acceptance_evidence:
   - criterion_id: AC-1
     status: BLOCKED
     evidence: "Revision-3 candidate-cutover and package-provenance suites passed, but corrected package installation and current main-app/Runtime ownership were not live-qualified."
@@ -281,9 +487,49 @@ acceptance_evidence:
     status: PASS
     evidence: "Focused RED/GREEN proves exact unique matrix coverage; direct source/document inspection confirmed the three codes and their unchanged action classes."
 
-blockers:
+revision_3_blockers:
   - "Revision-3 authoritative ./verify dispatch has unknown effect: terminal_start and same-key terminal_poll returned DURABLE_OWNER_LOST without a process result; the one-invocation budget is conservatively exhausted."
   - "Corrected distribution build, live install/cutover, live commit-cutover, and reboot/login proof remain unperformed."
   - "Current runtime.env, ServiceManagement, readiness, and transaction state were not reobserved in revision 3."
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: BLOCKED
+    evidence: "The corrected candidate is staged but not installed; the live transaction remains PREPARED / PRE_SWAP."
+  - criterion_id: AC-2
+    status: BLOCKED
+    evidence: "The observed main-app status conflicts with the transaction snapshot, and the corrected candidate was not installed for lifecycle qualification."
+  - criterion_id: AC-3
+    status: BLOCKED
+    evidence: "Focused regressions pass, but the bounded rollback was unsafe under the recorded ownership mismatch; the transaction remains open."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "The staged candidate passed zero-cost provenance validation, strict codesign, and all 12 Mach-O identity checks."
+  - criterion_id: AC-5
+    status: BLOCKED
+    evidence: "The LaunchServices dump still contains a record for the task-created candidate alongside the canonical app."
+  - criterion_id: AC-6
+    status: PASS
+    evidence: "Revision-4 canonical ./verify completed once: 62 of 62 modules and 848 tests passed. Historical revision-1 FAIL, revision-2 NOT_RUN, and revision-3 UNKNOWN-at-publication plus review-reconciled FAIL are preserved."
+  - criterion_id: AC-7
+    status: BLOCKED
+    evidence: "No completed install/cutover is proven; transaction state remains PREPARED / PRE_SWAP and the predecessor app remains installed."
+  - criterion_id: AC-8
+    status: BLOCKED
+    evidence: "Physical reboot/login survival remains outstanding; no reboot was attempted."
+  - criterion_id: AC-9
+    status: PASS
+    evidence: "The revision-2 README and ServiceManagement fixture corrections remain in history and the revision-4 canonical verifier passed."
+  - criterion_id: AC-10
+    status: PASS
+    evidence: "The revision-3 recovery-matrix inventory correction remains in history and the revision-4 canonical verifier passed."
+  - criterion_id: AC-11
+    status: PASS
+    evidence: "The isolated durable fixture and fail-closed terminal owner-reconciliation changes passed focused proof and the revision-4 canonical verifier."
+blockers:
+  - "The one authorized install-prebuilt cutover was dispatched under cdd877ef96ce4ae1b8ec3dff78548dbb. Its terminal result is unavailable; START_IDENTITY_UNKNOWN does not prove non-dispatch. Do not replay it."
+  - "The schema-6 zero-cost transaction remains PREPARED / PRE_SWAP. Current main_app=enabled conflicts with the transaction snapshot main_app=not-registered while main_app_registration_owned=false, so bounded rollback cannot safely restore and close it."
+  - "The LaunchServices database dump contains both the canonical app and the task-created candidate path for the same bundle identifier; no cleanup was attempted."
+  - "Fresh physical reboot/login restoration proof is outstanding."
 
 result: BLOCKED
