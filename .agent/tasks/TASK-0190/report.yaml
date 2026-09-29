@@ -1,0 +1,153 @@
+protocol_version: 3
+
+task_id: TASK-0190
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0190/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  authorized_base_head: "31832b1fd0bccc3117a6eb0c158e64c649f0ce16"
+  final_execution_head: "78d1216d7418f6cb9b472b23fd3573c906b0d061"
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  authorized_revision: "e74e3b958779b995506f1004709b824812e455fd"
+
+external_engineering_how:
+  repository: affaan-m/ECC
+  revision: "bf70150eb2df8070024e5bdf08e4aa08959e2735"
+  capabilities:
+    - tdd-workflow
+    - verification-loop
+    - security-review
+    - code-reviewer
+    - agent-introspection-debugging
+    - orch-fix-defect
+
+candidate:
+  source_commit: "78d1216d7418f6cb9b472b23fd3573c906b0d061"
+  source_parent: "31832b1fd0bccc3117a6eb0c158e64c649f0ce16"
+  changed_files:
+    - README.md
+    - agent_runtime/doctor.py
+    - docs/INSTALL.md
+    - docs/OPERATIONS.md
+    - docs/RECOVERY.md
+    - macos/Tests/AgentRuntimeMenuBarTests/ServiceManagementTests.swift
+    - macos/candidate_cutover.py
+    - macos/install_preflight.py
+    - macos/package_app.sh
+    - macos/package_provenance.py
+    - macos/uninstall.py
+    - tests/test_candidate_cutover.py
+    - tests/test_doctor.py
+    - tests/test_package_provenance.py
+    - tests/test_surface_and_scripts.py
+    - tests/test_task0141_productization.py
+    - tests/test_uninstall.py
+  version_changed: false
+  public_tool_contract_changed: false
+  lifecycle_model: "SMAppService.mainApp owns menu-bar login startup; user-launchagent-v1 owns the current Runtime supervisor; SMAppService.agent is predecessor compatibility only."
+
+regression:
+  root_cause: "Zero-cost cutover bootstrapped user-launchagent-v1 but did not establish SMAppService.mainApp after app swap, so immediate Runtime readiness did not prove login persistence."
+  doctor_gap: "Doctor proved only the Runtime LaunchAgent and could false-green missing main-app registration."
+  preflight_gap: "Prebuilt preflight had no lifecycle-ownership check."
+  provenance_gap: "Zero-cost provenance did not reject contradictory embedded Runtime ServiceManagement material."
+  qualification_gap: "Immediate post-install operation was checked without login/reboot restoration or deterministic LaunchServices candidate cleanup."
+  correction: "Cutover now establishes main registration with write-ahead rollback ownership; doctor/preflight reject contradictory ownership; provenance rejects embedded Runtime SM material; uninstall removes/compensates main registration; packaging exact-path unregisters retained candidates."
+  code_review_correction: "ECC review found the main-registration write-after-consequence crash window; the ownership ledger is now persisted before register-main."
+
+focused_verification:
+  candidate_cutover: "112/112 PASS on final bytes"
+  doctor: "21/21 PASS"
+  uninstall: "14/14 PASS"
+  productization: "11/11 PASS"
+  affected_python_sweep: "198/198 PASS before the final write-ahead-only cutover correction; complete candidate_cutover rerun passed 112/112 after it"
+  swift: "xcrun swift test --package-path macos exit 0; AgentRuntimeMenuBar suite 48 tests PASS"
+  static_checks: "git diff --check, py_compile for changed Python surfaces, and bash -n macos/package_app.sh PASS"
+
+canonical_verification:
+  command: "./verify"
+  invocation_count: 1
+  result: FAIL
+  modules_selected: 62
+  modules_completed: 36
+  tests_in_completed_modules: 549
+  retry_count: 0
+  failures:
+    - "tests.test_task0055_macos_contract: 2 stale README exact-string assertions encode superseded lifecycle wording."
+    - "tests.test_tunnel_identity: 7 install-fixture failures because the fake AgentRuntimeMenuBar emits malformed ServiceManagement diagnostics instead of the current status schema."
+  scope_gap: "Both failing regression files are outside revision-1's restrictive file authority."
+  preserved_passes: "candidate_cutover 112/112; doctor 21/21; package_provenance 20/20 inside the canonical run."
+
+effects:
+  corrected_distribution_builds: 0
+  production_install_or_cutover: 0
+  production_runtime_restarts: 0
+  physical_reboots: 0
+  launchservices_global_resets: 0
+  runtime_env_mutations: 0
+  tunnel_config_mutations: 0
+  release_or_tag_mutations: 0
+  task_owned_launchservices_probe: "Exact-path unregistered and removed."
+  live_service_management: '{"main_app":"enabled","runtime_agent":"not-found"}'
+  live_readiness: ready
+  live_transaction_present: false
+  runtime_env_sha256_before: "b3d0d67471f6d620f53ad1ed9ee6db21a1e906fff643dd94050b7cd8def97029"
+  runtime_env_sha256_after: "b3d0d67471f6d620f53ad1ed9ee6db21a1e906fff643dd94050b7cd8def97029"
+
+public_v051_truth:
+  tag_target: "674095e739533e100c2cf75f434dd0bc825a3de3"
+  release_id: 398229165
+  archive_digest: "sha256:9518e1cf4f28033cbec97b8906e55e1a4da6ad3a9067485fb6ef7c4fcfac58e8"
+  checksum_digest: "sha256:3da6a20d35b369c722c182a8a4afd3b31ee216a65c7ae31e08aa9c486626f83e"
+  mutation: NONE
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "Current source enforces mainApp login ownership plus user-launchagent-v1 Runtime ownership with no current Runtime SM agent."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "Doctor/preflight focused tests cover missing, approval-required and contradictory lifecycle truth."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "Focused fresh-install, rollback, uninstall and compensation coverage passes."
+  - criterion_id: AC-4
+    status: BLOCKED
+    evidence: "Source provenance regression passes, but final distribution validation is ineligible after canonical verification FAIL."
+  - criterion_id: AC-5
+    status: BLOCKED
+    evidence: "LaunchServices cleanup behavior is implemented/tested, but no corrected final distribution candidate was built."
+  - criterion_id: AC-6
+    status: FAIL
+    evidence: "Sole canonical ./verify invocation failed after 36/62 modules on two out-of-scope stale regression files."
+  - criterion_id: AC-7
+    status: BLOCKED
+    evidence: "Corrected live install is forbidden until source verification passes."
+  - criterion_id: AC-8
+    status: BLOCKED
+    evidence: "No corrected live install or fresh login/reboot-survival proof exists."
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: FAIL
+  evidence: "One canonical ./verify invocation completed 36/62 selected modules and 549 tests; no retry was authorized in revision 1."
+
+blockers:
+  - "Revision 1 does not authorize correcting tests/test_task0055_macos_contract.py or tests/test_tunnel_identity.py."
+  - "Canonical verification is not PASS, so package build, live cutover and reboot/login-survival gates remain ineligible."
+  - "A narrow continuation with explicit regression-fixture authority and a fresh verification budget is required."
+
+pushed: true
+
+result: BLOCKED
