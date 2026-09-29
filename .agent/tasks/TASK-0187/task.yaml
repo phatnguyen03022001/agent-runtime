@@ -1,0 +1,164 @@
+protocol_version: 3
+
+task_id: TASK-0187
+task_revision: 1
+state: APPROVED
+title: "Qualify Public v0.5.1 Transactional Installation"
+
+origin:
+  type: architect_continuation
+  task_id: TASK-0187
+  gap_id: "PUBLIC-V0.5.1-LIVE-INSTALL-QUALIFICATION"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "e74e3b958779b995506f1004709b824812e455fd"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - security-review
+  - verification
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - security-review
+    - verification
+  recommended:
+    - simplicity
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0186/review.yaml at c7b29383b99cb3175a5668b87efc3a398e68827c"
+    role: "Accepted immutable public v0.5.1 release closure and exact asset identity."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0185/review.yaml at 84414a45358fefcafbe3b38172e49b36792d31a4"
+    role: "Accepted v0.5.1 package qualification, signing, provenance, preflight-seal and archive evidence."
+    precedence: 2
+  - source: ".agent/tasks/TASK-0183/review.yaml at c2039aee485b94a2f7488a685112529c6b050227"
+    role: "Prior public v0.5.0 install trial that exposed sealed-app bytecode mutation and established the required real-target regression boundary."
+    precedence: 3
+  - source: "Current package-owned installation, recovery and doctor contracts in the target repository."
+    role: "Transactional install/cutover/recovery semantics and live health authority."
+    precedence: 4
+
+structure_authority:
+  status: NOT_APPLICABLE
+  source: ""
+  rationale: "Qualification-only activation of the already accepted public v0.5.1 package; no product/source structure change is authorized."
+
+objective: "Install and transactionally activate the exact accepted public v0.5.1 macOS arm64 release over the healthy installed v0.5.0 predecessor while preserving canonical runtime.env byte-for-byte, then prove the installed package is healthy and matches the accepted public artifact. Do not change architecture, product source, documentation, package bytes, release assets or host security policy."
+
+scope:
+  required_changes:
+    - "Freshly bind clean synchronized main at the exact task base and accepted TASK-0186 review. Re-resolve public release v0.5.1, tag target 674095e739533e100c2cf75f434dd0bc825a3de3, archive asset 595362326, checksum asset 595362324, archive size 17798890 and SHA-256 9518e1cf4f28033cbec97b8906e55e1a4da6ad3a9067485fb6ef7c4fcfac58e8 before any live mutation."
+    - "Freshly prove the installed predecessor is Runtime 0.5.0 revision b1879b5c185e93457bb634a7ab0508f7220416af, package-owned doctor is healthy with its expected complete PASS set, readiness is ready, no cutover transaction exists, and Runtime/tunnel/listener ownership is unambiguous."
+    - "Record only canonical runtime.env existence, SHA-256, owner and mode before mutation; never print or copy credential/configuration values. Require the exact original bytes, owner and mode 0600 after every consequential live step."
+    - "Download or reuse a freshly remote-verified public v0.5.1 archive only after matching its exact accepted SHA-256 and size. Extract one complete bundle under ignored build/TASK-0187-install and validate the app, external handoff and initial payload with the package-owned zero-cost provenance path before live mutation."
+    - "Run the packaged read-only prebuilt preflight on a fresh extracted bundle against the existing configured workspace. Prove normal preflight does not add or modify sealed app resources, strict deep codesign remains valid afterward, release trust/provenance remains PASS, and no cutover transaction was created."
+    - "Use an independent connected host carrier for all consequence-bearing install/cutover/recovery actions because Agent Runtime itself is the product being replaced. Invoke the packaged install_release.sh transactional install at most once. After the invocation, reconcile the actual transaction/service state before any further consequence; an unknown response never authorizes a blind retry."
+    - "If the installation reaches the recognized PENDING state, require readiness ready and package-owned doctor with no failure and no warning other than the exact recognized CUTOVER_TRANSACTION_PRESENT condition attributable to this transaction. Then invoke package-owned commit-cutover at most once."
+    - "If the supported transaction cannot complete, use at most one package-owned rollback-cutover or one package-owned recover-partial-cutover only when the observed transaction state deterministically selects that documented recovery. If state is ambiguous or recovery would require manual lifecycle surgery, stop BLOCKED and preserve evidence."
+    - "After successful commit, prove the cutover transaction is absent, readiness is ready, package-owned doctor is healthy, Runtime reports version 0.5.1 with twenty advertised public tools and twenty-one known capabilities, and installed package/provenance identifies the accepted v0.5.1 source and payload. Prove canonical runtime.env retains its exact pre-task bytes, owner and mode 0600."
+    - "Do not consume canonical ./verify, rebuild source/package/archive, modify release/tag/assets, modify product/docs/tests, mutate tunnel-client or host security state, or install dependencies. This task qualifies only the already accepted public artifact."
+    - "Write and validate only .agent/tasks/TASK-0187/report.yaml as tracked execution output. Publish the report as the sole direct child of the unchanged execution base, non-force to main, then reconcile clean synchronized main. Record exact invocation/effect counts, any recognized recovery, final live identity, environment preservation and result NEEDS_REVIEW only on complete PASS; otherwise BLOCKED."
+  allowed_existing_files_or_components:
+    - "Public v0.5.1 release archive, checksum, app, handoff and initial payload as immutable read-only inputs"
+    - "Installed Agent Runtime app, package-owned lifecycle, transaction and recovery state"
+    - "Canonical runtime.env for read-only preservation evidence"
+    - "build/TASK-0187-install/ ignored qualification evidence"
+    - ".agent/tasks/TASK-0187/report.yaml"
+  expected_files_are_restrictive: true
+
+structure_policy:
+  expected_new_files:
+    - ".agent/tasks/TASK-0187/report.yaml"
+  unlisted_new_files:
+    allowed: false
+    max: 0
+    within: []
+    purpose: "Only the canonical report may be newly tracked; qualification artifacts remain ignored build output."
+  allow_new_top_level_directories: false
+  allow_new_shared_modules: false
+
+invariants:
+  - "Architecture, package design, signing/provenance semantics, lifecycle semantics, public tool contracts and accepted release bytes remain unchanged."
+  - "The exact public v0.5.1 archive/tag/assets are immutable inputs and must never be replaced, edited or republished."
+  - "Canonical runtime.env bytes, owner and mode 0600 remain unchanged."
+  - "Every live Runtime consequence uses package-owned transactional install/cutover/recovery; no manual app, payload pointer, LaunchAgent, service, process or transaction surgery."
+  - "No tunnel-client, credentials, Gatekeeper, TCC, Keychain, Apple signing/notarization, host dependency or sibling-repository mutation."
+  - "Main-only topology; no branch, PR, force push or amend."
+
+forbidden_changes:
+  - "Any product source, package, provenance, test, documentation, dependency, version or public-contract change."
+  - "Any package/archive rebuild, canonical ./verify invocation, new tag, release publication, asset replacement or v0.5.0/v0.5.1 tag movement."
+  - "Blind reinstall, repeated commit after unknown effect, blind rollback/recovery, uninstall-first flow, configuration reset, runtime.env rewrite or credentials disclosure."
+  - "Bypassing strict codesign/provenance, deleting generated evidence to manufacture PASS, disabling security controls, or widening host permissions."
+  - "Using the Agent Runtime process being replaced as the sole consequence-bearing carrier for its own install/cutover."
+  - "Continuing into documentation/version-truth cleanup after live qualification; that is a separate post-review task."
+
+gap_policy:
+  local_auto_fix: false
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: revised_contract_required
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Exact accepted public v0.5.1 artifact and healthy predecessor are proven before mutation."
+    evidence_required: "Fresh remote tag/release/asset identity, archive hash/size, complete bundle/provenance, installed 0.5.0 package-owned doctor/readiness and no transaction."
+  - id: AC-2
+    requirement: "Prebuilt preflight preserves the accepted app seal and release trust."
+    evidence_required: "Fresh-copy preflight PASS, sealed app snapshot unchanged, strict deep codesign and zero-cost provenance PASS afterward, zero live cutover effects."
+  - id: AC-3
+    requirement: "One bounded transactional public-release installation succeeds or fails closed with exact reconciliation."
+    evidence_required: "At most one install and one commit, recognized PENDING gates, no blind retry, and only deterministic package-owned rollback/recovery when actually required."
+  - id: AC-4
+    requirement: "Successful activation matches the accepted public v0.5.1 package and preserves operator configuration."
+    evidence_required: "No transaction, readiness ready, package-owned doctor healthy, Runtime 0.5.1, 20 advertised tools/21 known capabilities, accepted package/provenance identity, and unchanged runtime.env SHA/owner/mode."
+  - id: AC-5
+    requirement: "Repository and effect closure are exact."
+    evidence_required: "Only report.yaml tracked during execution, validated report-only direct child, clean synchronized main, exact live invocation/effect counts, and zero unauthorized release/source/security/dependency effects."
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "Exact public v0.5.1 artifact/provenance plus package-owned transactional preflight, live cutover, readiness and doctor evidence on the installed package."
+    expected_signal: "Installed public v0.5.1 package is healthy with 20 advertised tools and 21 known capabilities, transaction absent, accepted provenance identity exact, and runtime.env bytes/owner/mode unchanged."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
