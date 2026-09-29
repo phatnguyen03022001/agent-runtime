@@ -12,7 +12,7 @@ This document owns normal installed-product operation.
 ./start.sh session-limit
 ```
 
-After installation, source-checkout lifecycle commands delegate to the package-owned helper. The internal service entrypoint is not a normal operator command.
+After installation, source-checkout lifecycle commands delegate to the package-owned helper. The internal service entrypoint is not a normal operator command. Current ownership is intentionally split by responsibility: `SMAppService.mainApp` restores the menu-bar app at user login, while `~/Library/LaunchAgents/com.picmao.agent-runtime-runtime-service.plist` owns the Runtime supervisor. A current Runtime `SMAppService.agent` registration is contradictory ownership, not redundancy.
 
 Desired state is explicit and persistent:
 

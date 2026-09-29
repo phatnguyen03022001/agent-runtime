@@ -1525,6 +1525,9 @@ def _rollback_zero_cost_transaction(
     ui_plist = Path(str(paths["ui_plist"]))
     runtime_plist = Path(str(paths["runtime_plist"]))
     service = f"gui/{uid}/{MODERN_RUNTIME_LABEL}"
+    main_owned = metadata.get("main_app_registration_owned", False)
+    if not isinstance(main_owned, bool):
+        raise CutoverError("zero-cost rollback main-app registration ownership metadata is malformed")
 
     if _service_loaded(launchctl, service):
         if current_plist.exists() and not current_plist.is_symlink() and target_app.exists():
@@ -1551,6 +1554,14 @@ def _rollback_zero_cost_transaction(
     if target_app.exists() or target_app.is_symlink():
         if target_app.is_symlink() or not target_app.is_dir():
             raise CutoverError("zero-cost rollback installed app target is unsafe")
+        if main_owned:
+            state = _service_management(target_app, "status")
+            if state["runtime_agent"] not in ABSENT_SERVICE_STATES:
+                raise CutoverError("zero-cost rollback found contradictory Runtime ServiceManagement ownership")
+            if state["main_app"] in REGISTERED_SERVICE_STATES:
+                state = _service_management(target_app, "unregister-main")
+            if state["main_app"] not in ABSENT_SERVICE_STATES:
+                raise CutoverError("zero-cost rollback could not remove transaction-created main-app registration")
         shutil.rmtree(target_app)
     if app_present:
         closure = _require_rollback_app_closure(previous.get("app_closure"))
@@ -2084,11 +2095,22 @@ def _cutover_zero_cost_candidate(
 
     predecessor_contract = "none"
     predecessor_state = {"main_app": "not-registered", "runtime_agent": "not-registered"}
+    current_main_before = "not-registered"
     target_present = target_app.exists() or target_app.is_symlink()
     if target_present:
         if target_app.is_symlink() or not target_app.is_dir():
             raise CutoverError("existing installed app path is unsafe")
-        if not current_present:
+        if current_present:
+            current_service_state = _service_management(target_app, "status")
+            if (
+                current_service_state["main_app"] not in SERVICE_STATES
+                or current_service_state["runtime_agent"] not in SERVICE_STATES
+            ):
+                raise CutoverError("current ServiceManagement state is invalid")
+            if current_service_state["runtime_agent"] not in ABSENT_SERVICE_STATES:
+                raise CutoverError("current Runtime ServiceManagement ownership contradicts user-launchagent-v1")
+            current_main_before = current_service_state["main_app"]
+        else:
             predecessor_contract = _predecessor_service_contract(target_app)
             if predecessor_contract not in {"split-v1", "aggregate-v1"}:
                 raise CutoverError("installed predecessor lifecycle contract is unsupported for zero-cost migration")
@@ -2108,6 +2130,7 @@ def _cutover_zero_cost_candidate(
         "current_loaded": current_loaded,
         "ui_loaded": ui_loaded,
         "legacy_runtime_loaded": legacy_runtime_loaded,
+        "current_main_app": current_main_before,
         "predecessor_service_management": {
             "contract": predecessor_contract,
             "main_app": predecessor_state["main_app"],
@@ -2153,6 +2176,7 @@ def _cutover_zero_cost_candidate(
             "phase": "PRE_SWAP",
             "candidate": expected,
             "payload": {"closure": closure, "created": False},
+            "main_app_registration_owned": False,
             "previous": previous,
             "runtime_config": runtime_config,
             "paths": {
@@ -2221,6 +2245,18 @@ def _cutover_zero_cost_candidate(
             expected_handoff_sha256=expected_handoff_sha256,
         )
         _inject(fail_stages, "after_app_swap")
+
+        current_service_state = _service_management(target_app, "status")
+        if current_service_state["runtime_agent"] not in ABSENT_SERVICE_STATES:
+            raise CutoverError("installed Runtime ServiceManagement ownership contradicts user-launchagent-v1")
+        if current_service_state["main_app"] in ABSENT_SERVICE_STATES:
+            metadata["main_app_registration_owned"] = True
+            _atomic_json(transaction_dir / "metadata.json", metadata)
+            current_service_state = _service_management(target_app, "register-main")
+        if current_service_state["main_app"] not in REGISTERED_SERVICE_STATES:
+            raise CutoverError("installed main-app ServiceManagement registration did not converge")
+        if current_service_state["runtime_agent"] not in ABSENT_SERVICE_STATES:
+            raise CutoverError("main-app registration created competing Runtime ServiceManagement ownership")
 
         payloads_root = _payloads_root(state_dir)
         if payloads_root.is_symlink() or (payloads_root.exists() and not payloads_root.is_dir()):
@@ -3076,6 +3112,11 @@ def commit_transaction(transaction_dir: Path, target_app: Path) -> dict[str, obj
         if validated != candidate:
             raise CutoverError("installed zero-cost candidate no longer matches pending transaction")
         _validate_current_launchagent(current_plist, home, uid=os.getuid())
+        service_state = _service_management(target_app, "status")
+        if service_state["main_app"] not in REGISTERED_SERVICE_STATES:
+            raise CutoverError("zero-cost commit main-app registration is absent")
+        if service_state["runtime_agent"] not in ABSENT_SERVICE_STATES:
+            raise CutoverError("zero-cost commit found competing Runtime ServiceManagement ownership")
         if pointer.is_symlink() or not pointer.is_file():
             raise CutoverError("zero-cost commit payload pointer is missing or unsafe")
         pointer_info = pointer.stat()

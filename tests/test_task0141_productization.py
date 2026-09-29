@@ -184,6 +184,60 @@ class Task0141ProductizationTests(unittest.TestCase):
             self.assertEqual(config["reason_code"], "CHECKOUT_CONFIG_MISSING")
             self.assertEqual(config["action_class"], "HUMAN_ACTION_REQUIRED")
 
+    def test_preflight_current_lifecycle_repairs_missing_main_and_rejects_competing_runtime_sm(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root, home, environ, patches, _ = self._ready_preflight_fixture(Path(td))
+            app = home / "Applications" / "Agent Runtime.app"
+            app.mkdir(parents=True)
+            current_plist = home / "Library" / "LaunchAgents" / "com.picmao.agent-runtime-runtime-service.plist"
+            current_plist.parent.mkdir(parents=True)
+            current_plist.write_text("fixture\n")
+            helper = app / "Contents" / "MacOS" / "AgentRuntimeRuntimeService"
+            state = {"main_app": "not-found", "runtime_agent": "not-found"}
+
+            extra = (
+                mock.patch.object(
+                    preflight.candidate_cutover,
+                    "_validate_current_launchagent",
+                    return_value={"Label": preflight.candidate_cutover.MODERN_RUNTIME_LABEL},
+                ),
+                mock.patch.object(
+                    preflight.candidate_cutover,
+                    "_loaded_service_program",
+                    return_value=helper,
+                ),
+                mock.patch.object(
+                    preflight.candidate_cutover,
+                    "_current_runtime_helper",
+                    return_value=helper,
+                ),
+                mock.patch.object(
+                    preflight.candidate_cutover,
+                    "_service_management",
+                    side_effect=lambda _app, operation: dict(state) if operation == "status" else None,
+                ),
+            )
+            entered = [patcher.start() for patcher in (*patches, *extra)]
+            try:
+                repairable = preflight.collect_report(root, home, environ=environ)
+                lifecycle = next(item for item in repairable["checks"] if item["id"] == "lifecycle_ownership")
+                self.assertEqual(repairable["status"], "ready")
+                self.assertEqual(lifecycle["status"], "pass")
+                self.assertEqual(lifecycle["evidence"]["contract"], "user-launchagent-v1")
+                self.assertEqual(lifecycle["evidence"]["main_app"], "not-found")
+                self.assertEqual(lifecycle["evidence"]["runtime_agent"], "not-found")
+
+                state["main_app"] = "enabled"
+                state["runtime_agent"] = "enabled"
+                contradictory = preflight.collect_report(root, home, environ=environ)
+                failed = next(item for item in contradictory["checks"] if item["id"] == "lifecycle_ownership")
+                self.assertEqual(contradictory["status"], "blocked")
+                self.assertEqual(failed["reason_code"], "LIFECYCLE_OWNERSHIP_INVALID")
+            finally:
+                for patcher in reversed((*patches, *extra)):
+                    patcher.stop()
+                del entered
+
     def test_install_check_help_and_dispatch_are_read_only_surfaces(self) -> None:
         installer = (ROOT / "install.sh").read_text()
         self.assertIn("./install.sh --check [--json]", installer)
@@ -404,6 +458,10 @@ class Task0141ProductizationTests(unittest.TestCase):
 
             self.assertEqual(report["status"], "ready")
             ids = {item["id"] for item in report["checks"]}
+            self.assertIn("lifecycle_ownership", ids)
+            lifecycle = next(item for item in report["checks"] if item["id"] == "lifecycle_ownership")
+            self.assertEqual(lifecycle["status"], "pass")
+            self.assertFalse(lifecycle["evidence"]["app_present"])
             self.assertNotIn("repository", ids)
             self.assertNotIn("packaging_python", ids)
             self.assertNotIn("developer_toolchain", ids)
@@ -413,6 +471,44 @@ class Task0141ProductizationTests(unittest.TestCase):
             for secret in secrets:
                 self.assertNotIn(secret, encoded)
                 self.assertNotIn(secret, human)
+
+            installed = home / "Applications" / "Agent Runtime.app"
+            installed.mkdir(parents=True)
+            current_plist = home / "Library" / "LaunchAgents" / "com.picmao.agent-runtime-runtime-service.plist"
+            current_plist.parent.mkdir(parents=True)
+            current_plist.write_text("fixture\n")
+            helper = installed / "Contents" / "MacOS" / "AgentRuntimeRuntimeService"
+            service_state = {"main_app": "enabled", "runtime_agent": "enabled"}
+            with mock.patch.object(preflight.platform, "system", return_value="Darwin"), mock.patch.object(
+                preflight.platform, "machine", return_value="arm64"
+            ), mock.patch.object(preflight.shutil, "which", side_effect=fake_which), mock.patch.object(
+                preflight, "EXPECTED_TUNNEL_FINGERPRINT", hashlib.sha256(tunnel_id.encode()).hexdigest()[:12]
+            ), mock.patch.object(
+                preflight.package_provenance, "_load_zero_cost_candidate_handoff", return_value={"initial_payload_closure": closure}
+            ), mock.patch.object(
+                preflight.package_provenance, "validate_zero_cost_candidate", return_value={"candidate_sha256": "a" * 64}
+            ), mock.patch.object(
+                preflight, "_run", return_value=subprocess.CompletedProcess([], 0, "", "")
+            ), mock.patch.object(
+                preflight.candidate_cutover, "_validate_current_launchagent", return_value={}
+            ), mock.patch.object(
+                preflight.candidate_cutover, "_loaded_service_program", return_value=helper
+            ), mock.patch.object(
+                preflight.candidate_cutover, "_current_runtime_helper", return_value=helper
+            ), mock.patch.object(
+                preflight.candidate_cutover,
+                "_service_management",
+                return_value=service_state,
+            ):
+                contradictory = preflight.collect_prebuilt_report(
+                    bundle,
+                    workspace,
+                    home,
+                    environ=environ,
+                )
+            failed = next(item for item in contradictory["checks"] if item["id"] == "lifecycle_ownership")
+            self.assertEqual(contradictory["status"], "blocked")
+            self.assertEqual(failed["reason_code"], "LIFECYCLE_OWNERSHIP_INVALID")
 
     def test_prebuilt_entrypoints_preserve_sealed_app_and_reject_bad_trust(self) -> None:
         build = ROOT / "build"

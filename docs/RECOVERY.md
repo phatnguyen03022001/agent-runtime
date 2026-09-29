@@ -23,7 +23,10 @@ Each material non-OK doctor reason code has exactly one action class.
 | `INSTALLED_PACKAGE_INVALID` | STOP_AND_ESCALATE | Preserve evidence; do not overwrite or delete the incomplete app. |
 | `INSTALLED_SUBSTRATE_INVALID` | STOP_AND_ESCALATE | Preserve immutable app and signing evidence; do not replace it blindly. |
 | `CANONICAL_CONFIG_MISSING` | HUMAN_ACTION_REQUIRED | Supply a valid canonical mode-0600 runtime.env through the supported config flow. |
-| `LIFECYCLE_OWNERSHIP_INVALID` | STOP_AND_ESCALATE | Preserve the current per-user LaunchAgent plist and loaded-service evidence; do not replace foreign same-label state. |
+| `LIFECYCLE_OWNERSHIP_INVALID` | STOP_AND_ESCALATE | Preserve the current lifecycle evidence; do not replace foreign, incomplete, or unsafe ownership. |
+| `LIFECYCLE_OWNERSHIP_CONTRADICTORY` | STOP_AND_ESCALATE | Preserve both ownership records; current Runtime `SMAppService.agent` must not compete with `user-launchagent-v1`. |
+| `MAIN_APP_REGISTRATION_ABSENT` | SAFE_AUTOMATED | Run the canonical validated installer/cutover, which establishes `SMAppService.mainApp`; do not substitute a one-time manual app open. |
+| `MAIN_APP_APPROVAL_REQUIRED` | HUMAN_ACTION_REQUIRED | Complete the macOS approval required for the canonical main-app login item, then rerun doctor. |
 | `PAYLOAD_POINTER_MISSING` | STOP_AND_ESCALATE | Preserve state and transaction evidence; never synthesize a closure. |
 | `PAYLOAD_POINTER_INVALID` | STOP_AND_ESCALATE | Preserve the unsafe pointer and transaction evidence; use recognized rollback/recovery. |
 | `PAYLOAD_RELEASE_MISSING` | STOP_AND_ESCALATE | Preserve selected release and pointer evidence; use recognized rollback/recovery. |
@@ -61,6 +64,9 @@ If port 8080 is owned by a foreign or ambiguous process, stop and escalate. Do n
 - Invalid installed package: STOP_AND_ESCALATE.
 - Missing/invalid canonical `runtime.env`: HUMAN_ACTION_REQUIRED unless ownership is ambiguous, in which case stop.
 - Missing or foreign current LaunchAgent ownership: STOP_AND_ESCALATE.
+- Missing current main-app login registration: rerun the canonical validated installer/cutover; a one-time `open` is not persistence.
+- Main-app registration requiring macOS approval: HUMAN_ACTION_REQUIRED; doctor remains degraded until approval is reflected as enabled.
+- Current Runtime `SMAppService.agent` ownership alongside the traditional LaunchAgent: STOP_AND_ESCALATE as contradictory ownership.
 - Unrecognized historical ServiceManagement predecessor state: STOP_AND_ESCALATE.
 - Missing, mutated, or incompatible selected external payload: STOP_AND_ESCALATE; use the recognized transaction rollback/recovery path if one exists.
 - Production `screen_capture=VISUAL_PERCEPTION_BLOCKED`: this is governance, not a permission failure. Do not request Screen Recording or alter TCC.

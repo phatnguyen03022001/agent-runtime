@@ -284,6 +284,7 @@ def uninstall_product(*, home: Path, launchctl: Path, uid: int | None = None) ->
     current_loaded = False
     pointer: Path | None = None
     payloads: Path | None = None
+    current_service_before: dict[str, str] | None = None
     desired_state = state_dir / "protected-runtime-running"
     desired_before = desired_state.exists() and not desired_state.is_symlink()
 
@@ -303,6 +304,11 @@ def uninstall_product(*, home: Path, launchctl: Path, uid: int | None = None) ->
                 launchctl, uid, MODERN_RUNTIME_LABEL, current_helper
             )
             pointer, payloads = _validate_payload_state(state_dir, uid=uid)
+            current_service_before = _service_snapshot(app, "status")
+            if current_service_before["runtime_agent"] not in ABSENT_SERVICE_STATES:
+                raise UninstallError(
+                    "current Runtime ServiceManagement ownership contradicts launchagent-v1"
+                )
     elif current_plist.exists() or current_plist.is_symlink():
         raise UninstallError("current LaunchAgent exists outside its owned product contract")
 
@@ -342,6 +348,7 @@ def uninstall_product(*, home: Path, launchctl: Path, uid: int | None = None) ->
 
     booted_out: list[tuple[Path, str, Path]] = []
     current_stopped = False
+    current_main_unregistered = False
     try:
         if lifecycle_contract == "launchagent-v1":
             _runtime_lifecycle(app, "stop")
@@ -357,6 +364,17 @@ def uninstall_product(*, home: Path, launchctl: Path, uid: int | None = None) ->
             if loaded:
                 _bootout(launchctl, uid, label)
                 booted_out.append((legacy_path, label, expected_program))
+
+        if lifecycle_contract == "launchagent-v1" and current_service_before is not None:
+            if current_service_before["main_app"] in REGISTERED_SERVICE_STATES:
+                after = _service_snapshot(app, "unregister-main")
+                if after["main_app"] not in ABSENT_SERVICE_STATES:
+                    raise UninstallError("current main-app registration did not unregister")
+                if after["runtime_agent"] not in ABSENT_SERVICE_STATES:
+                    raise UninstallError(
+                        "current Runtime ServiceManagement ownership changed during main-app unregister"
+                    )
+                current_main_unregistered = True
     except UninstallError as exc:
         compensation_errors: list[str] = []
         for restore_path, label, expected_program in reversed(booted_out):
@@ -369,6 +387,11 @@ def uninstall_product(*, home: Path, launchctl: Path, uid: int | None = None) ->
         if current_stopped and lifecycle_contract == "launchagent-v1" and desired_before:
             try:
                 _runtime_lifecycle(app, "start")
+            except UninstallError as compensation_error:
+                compensation_errors.append(str(compensation_error))
+        if current_main_unregistered and current_service_before is not None:
+            try:
+                _restore_modern_registration(app, current_service_before)
             except UninstallError as compensation_error:
                 compensation_errors.append(str(compensation_error))
         if predecessor_unregistered and predecessor_before is not None:
@@ -411,6 +434,7 @@ def uninstall_product(*, home: Path, launchctl: Path, uid: int | None = None) ->
         "lifecycle_contract": lifecycle_contract,
         "legacy_remnants_removed": len(legacy),
         "payload_state_removed": lifecycle_contract == "launchagent-v1",
+        "main_app_registration_removed": current_main_unregistered,
         "retained_configuration": str(runtime_env) if runtime_env.exists() else None,
         "configuration_removed": False,
     }

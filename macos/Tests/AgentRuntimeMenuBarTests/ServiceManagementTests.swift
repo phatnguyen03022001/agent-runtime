@@ -89,6 +89,26 @@ final class ServiceManagementTests: XCTestCase {
     }
 
 
+    func testRegisterMainAppReconcilesApprovalWithoutTouchingRuntimeAgent() throws {
+        let main = FakeService(
+            status: .notFound,
+            registerError: FixtureError.failed,
+            statusAfterRegisterError: .requiresApproval
+        )
+        let runtime = FakeService(status: .notFound)
+        let coordinator = ServiceRegistrationCoordinator(mainApp: main, runtimeAgent: runtime)
+
+        let snapshot = try coordinator.registerMainApp()
+
+        XCTAssertEqual(
+            snapshot,
+            ServiceRegistrationSnapshot(mainApp: .requiresApproval, runtimeAgent: .notFound)
+        )
+        XCTAssertEqual(main.registerCount, 1)
+        XCTAssertEqual(runtime.registerCount, 0)
+        XCTAssertEqual(runtime.unregisterCount, 0)
+    }
+
     func testRegisterRuntimeFromNotRegisteredReportsCreatedEnabledState() throws {
         let main = FakeService(status: .enabled)
         let runtime = FakeService(status: .notRegistered)

@@ -146,6 +146,78 @@ def _effective_values(
     return values
 
 
+def _lifecycle_ownership_check(
+    home: Path,
+    app: Path,
+    *,
+    app_safe: bool,
+    app_present: bool,
+) -> dict[str, object]:
+    status = "pass"
+    reason = "OK"
+    message = "No installed lifecycle ownership requires migration."
+    action = None
+    evidence: dict[str, object] = {"app_present": app_present}
+    if app_safe and app_present:
+        current_plist = candidate_cutover._current_launchagent_path(home)
+        try:
+            if current_plist.exists() or current_plist.is_symlink():
+                candidate_cutover._validate_current_launchagent(
+                    current_plist,
+                    home,
+                    uid=os.getuid(),
+                )
+                program = candidate_cutover._loaded_service_program(
+                    Path("/bin/launchctl"),
+                    f"gui/{os.getuid()}/{candidate_cutover.MODERN_RUNTIME_LABEL}",
+                )
+                expected = candidate_cutover._current_runtime_helper(home)
+                if program != expected:
+                    raise RuntimeError("current LaunchAgent loaded identity mismatch")
+                service_state = candidate_cutover._service_management(app, "status")
+                if service_state["runtime_agent"] not in candidate_cutover.ABSENT_SERVICE_STATES:
+                    raise RuntimeError(
+                        "current Runtime ServiceManagement ownership contradicts user-launchagent-v1"
+                    )
+                message = (
+                    "Existing current Runtime LaunchAgent ownership is exact; "
+                    "main-app login registration is exact or repairable by cutover."
+                )
+                evidence = {
+                    "app_present": True,
+                    "contract": "user-launchagent-v1",
+                    "main_app": service_state["main_app"],
+                    "runtime_agent": service_state["runtime_agent"],
+                }
+            else:
+                predecessor_contract = candidate_cutover._predecessor_service_contract(app)
+                if predecessor_contract not in {"split-v1", "aggregate-v1"}:
+                    raise RuntimeError("unsupported predecessor contract")
+                predecessor = candidate_cutover._service_management(app, "status")
+                message = (
+                    "Recognized predecessor ServiceManagement ownership can be migrated transactionally."
+                )
+                evidence = {
+                    "app_present": True,
+                    "contract": predecessor_contract,
+                    "main_app": predecessor.get("main_app"),
+                    "runtime_agent": predecessor.get("runtime_agent"),
+                }
+        except Exception:
+            status = "fail"
+            reason = "LIFECYCLE_OWNERSHIP_INVALID"
+            message = "Installed lifecycle ownership is foreign, incomplete, or unsafe."
+            action = ACTION_STOP
+    return _check(
+        "lifecycle_ownership",
+        status,
+        reason,
+        message,
+        action_class=action,
+        evidence=evidence,
+    )
+
+
 def collect_report(
     root: Path,
     home: Path,
@@ -418,50 +490,12 @@ def collect_report(
         )
     )
 
-    lifecycle_status = "pass"
-    lifecycle_reason = "OK"
-    lifecycle_message = "No installed lifecycle ownership requires migration."
-    lifecycle_action = None
-    lifecycle_evidence: dict[str, object] = {"app_present": app_present}
-    if app_safe and app_present:
-        current_plist = candidate_cutover._current_launchagent_path(home)
-        try:
-            if current_plist.exists() or current_plist.is_symlink():
-                candidate_cutover._validate_current_launchagent(current_plist, home, uid=os.getuid())
-                program = candidate_cutover._loaded_service_program(
-                    Path("/bin/launchctl"),
-                    f"gui/{os.getuid()}/{candidate_cutover.MODERN_RUNTIME_LABEL}",
-                )
-                expected = candidate_cutover._current_runtime_helper(home)
-                if program != expected:
-                    raise RuntimeError("current LaunchAgent loaded identity mismatch")
-                lifecycle_message = "Existing current LaunchAgent ownership is exact and migration-safe."
-                lifecycle_evidence = {"app_present": True, "contract": "launchagent-v1"}
-            else:
-                predecessor_contract = candidate_cutover._predecessor_service_contract(app)
-                if predecessor_contract not in {"split-v1", "aggregate-v1"}:
-                    raise RuntimeError("unsupported predecessor contract")
-                predecessor = candidate_cutover._service_management(app, "status")
-                lifecycle_message = "Recognized predecessor ServiceManagement ownership can be migrated transactionally."
-                lifecycle_evidence = {
-                    "app_present": True,
-                    "contract": predecessor_contract,
-                    "main_app": predecessor.get("main_app"),
-                    "runtime_agent": predecessor.get("runtime_agent"),
-                }
-        except Exception:
-            lifecycle_status = "fail"
-            lifecycle_reason = "LIFECYCLE_OWNERSHIP_INVALID"
-            lifecycle_message = "Installed lifecycle ownership is foreign, incomplete, or unsafe."
-            lifecycle_action = ACTION_STOP
     checks.append(
-        _check(
-            "lifecycle_ownership",
-            lifecycle_status,
-            lifecycle_reason,
-            lifecycle_message,
-            action_class=lifecycle_action,
-            evidence=lifecycle_evidence,
+        _lifecycle_ownership_check(
+            home,
+            app,
+            app_safe=app_safe,
+            app_present=app_present,
         )
     )
 
@@ -674,6 +708,14 @@ def collect_prebuilt_report(
             ),
             action_class=ACTION_HUMAN if transaction_present else ACTION_STOP,
             evidence={"app_present": target_app.exists() or target_app.is_symlink(), "cutover_present": transaction_present},
+        )
+    )
+    checks.append(
+        _lifecycle_ownership_check(
+            home,
+            target_app,
+            app_safe=target_safe,
+            app_present=target_app.exists() or target_app.is_symlink(),
         )
     )
 

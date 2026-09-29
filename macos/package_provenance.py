@@ -793,6 +793,36 @@ ZERO_COST_CODE_IDENTIFIERS = {
     SCREEN_CAPTURE_EXECUTABLE_RELATIVE: OWNER + ".screen-capture",
     RUNTIME_PYTHON_EXECUTABLE_RELATIVE: OWNER + ".python",
 }
+CURRENT_RUNTIME_SERVICE_PLIST_RELATIVE = (
+    "Contents/Library/LaunchAgents/com.picmao.agent-runtime-runtime-service.plist"
+)
+
+
+def validate_zero_cost_lifecycle_structure(app: Path) -> dict[str, object]:
+    if app.is_symlink() or not app.is_dir():
+        raise PackageProvenanceError("zero-cost app must be a regular non-symlink directory")
+    embedded_runtime_service = app / CURRENT_RUNTIME_SERVICE_PLIST_RELATIVE
+    if embedded_runtime_service.exists() or embedded_runtime_service.is_symlink():
+        raise PackageProvenanceError(
+            "zero-cost lifecycle contradicts user-launchagent-v1 with embedded Runtime ServiceManagement LaunchAgent"
+        )
+    launchagents = app / "Contents" / "Library" / "LaunchAgents"
+    if launchagents.exists() or launchagents.is_symlink():
+        if launchagents.is_symlink() or not launchagents.is_dir():
+            raise PackageProvenanceError("zero-cost ServiceManagement lifecycle directory is unsafe")
+        try:
+            if any(launchagents.iterdir()):
+                raise PackageProvenanceError(
+                    "zero-cost lifecycle contains unexpected embedded ServiceManagement LaunchAgent material"
+                )
+        except OSError as exc:
+            raise PackageProvenanceError(
+                "zero-cost ServiceManagement lifecycle directory cannot be inspected"
+            ) from exc
+    return {
+        "lifecycle_contract": LIFECYCLE_CONTRACT,
+        "runtime_service_management_embedded": False,
+    }
 
 
 def _codesign_metadata(path: Path) -> dict[str, object]:
@@ -872,6 +902,7 @@ def zero_cost_candidate_handoff_data(
     identity_reader=None,
 ) -> dict[str, object]:
     payload_closure = _validate_identity(initial_payload_closure, HEX64, "initial payload closure")
+    validate_zero_cost_lifecycle_structure(app)
     manifest_path = app / "Contents" / "Resources" / "runtime-manifest.json"
     runtime = app / "Contents" / "Resources" / "runtime"
     manifest = _load_substrate_manifest(manifest_path)

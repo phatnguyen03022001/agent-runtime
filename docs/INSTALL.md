@@ -31,7 +31,7 @@ The target operator needs only:
 - provisioned `CONTROL_PLANE_API_KEY` and `CONTROL_PLANE_TUNNEL_ID`;
 - an explicit Runtime Git name/email pair.
 
-The first ad-hoc app launch may require macOS Open/Open Anyway for that exact app. The traditional per-user LaunchAgent does not require current ServiceManagement Background Activity registration.
+The first ad-hoc app launch may require macOS Open/Open Anyway for that exact app. The Runtime supervisor uses the traditional per-user LaunchAgent and does not require current ServiceManagement Background Activity registration. Separately, installation establishes `SMAppService.mainApp` for menu-bar login startup; a macOS `requires-approval` state is surfaced as explicit human action required rather than accepted as healthy.
 
 The target does **not** need an agent-runtime Git clone, Git repository identity for an agent-runtime checkout, CPython 3.13, Xcode/Swift, or a local code-signing identity. The release installer uses the Python interpreter and lifecycle helpers packaged inside `Agent Runtime.app`.
 
@@ -66,7 +66,7 @@ Before commit, setup requires:
 
 The package-owned doctor therefore remains `degraded` at that boundary solely because the transaction still exists. Any additional warning or failure blocks commit. Only then may setup invoke the existing cutover commit. Terminal success additionally requires the transaction to be absent, readiness to remain `ready`, and package-owned doctor overall status to be `healthy`.
 
-The app and initial payload are validated before cutover. Setup does not bypass Gatekeeper or install or update the external `tunnel-client`. Ordinary validated pure-Python payload activation changes the external release pointer only after the previous Runtime generation is fully stopped and reaped; it leaves the approved app, LaunchAgent plist, runtime.env, and tunnel-client unchanged.
+The app and initial payload are validated before cutover. Setup does not bypass Gatekeeper or install or update the external `tunnel-client`. Native/substrate cutover requires coherent lifecycle ownership: `SMAppService.mainApp` for menu-bar login startup, the canonical per-user LaunchAgent for the Runtime supervisor, and no current Runtime `SMAppService.agent` registration. Ordinary validated pure-Python payload activation changes the external release pointer only after the previous Runtime generation is fully stopped and reaped; it leaves the approved app, LaunchAgent plist, runtime.env, and tunnel-client unchanged.
 
 An already-valid installed configuration with no pending cutover bypasses onboarding and opens the current control panel directly.
 

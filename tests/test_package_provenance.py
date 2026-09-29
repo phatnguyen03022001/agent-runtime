@@ -638,6 +638,28 @@ class PackageProvenanceTests(unittest.TestCase):
             self.assertEqual(data["source_revision"], "a" * 40)
             self.assertEqual(data["source_tree"], "b" * 40)
 
+            service = (
+                app
+                / "Contents"
+                / "Library"
+                / "LaunchAgents"
+                / "com.picmao.agent-runtime-runtime-service.plist"
+            )
+            service.parent.mkdir(parents=True)
+            service.write_bytes(plistlib.dumps({
+                "Label": "com.picmao.agent-runtime-runtime-service",
+                "BundleProgram": "Contents/MacOS/AgentRuntimeRuntimeService",
+            }))
+            with self.assertRaisesRegex(
+                provenance.PackageProvenanceError,
+                "lifecycle|ServiceManagement|LaunchAgent",
+            ):
+                provenance.zero_cost_candidate_handoff_data(
+                    app,
+                    initial_payload_closure="e" * 64,
+                    identity_reader=reader,
+                )
+
 
     def test_substrate_manifest_binds_external_payload_contract_and_rejects_first_party_source(self) -> None:
         provenance = load_module()

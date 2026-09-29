@@ -378,6 +378,18 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertNotIn("--profile-file", combined)
         self.assertNotIn("tunnel-client init", combined)
 
+    def test_zero_cost_packaging_bounds_launchservices_registration_for_retained_candidate(self) -> None:
+        package = (ROOT / "macos" / "package_app.sh").read_text()
+        self.assertIn(
+            "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",
+            package,
+        )
+        self.assertIn('"$LSREGISTER" -u "$FINAL_APP"', package)
+        self.assertNotIn('"$LSREGISTER" -delete', package)
+        self.assertNotIn('"$LSREGISTER" -seed', package)
+        self.assertNotIn('"$LSREGISTER" -r ', package)
+        self.assertNotIn('"$LSREGISTER" -R ', package)
+
     def test_verify_is_deterministic_and_does_not_start_tunnel(self) -> None:
         text = (ROOT / "verify").read_text()
         self.assertIn("verify_tests.py", text)

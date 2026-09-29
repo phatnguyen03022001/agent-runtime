@@ -510,7 +510,18 @@ class CandidateCutoverTests(unittest.TestCase):
             launchctl, launch_state, launch_log = make_fake_launchctl(
                 root, ui_loaded=False, runtime_loaded=False
             )
-            service_management = mock.Mock(side_effect=AssertionError("current generation must not use ServiceManagement"))
+            modern_state = {"main_app": "not-found", "runtime_agent": "not-found"}
+            service_operations: list[str] = []
+
+            def service_management(_app: Path, operation: str) -> dict[str, str]:
+                service_operations.append(operation)
+                if operation == "status":
+                    return dict(modern_state)
+                if operation == "register-main":
+                    modern_state["main_app"] = "enabled"
+                    return dict(modern_state)
+                raise AssertionError(f"current generation must not use Runtime ServiceManagement: {operation}")
+
             cutover._service_management = service_management
 
             result = cutover.cutover_candidate(
@@ -528,7 +539,9 @@ class CandidateCutoverTests(unittest.TestCase):
             )
 
             self.assertEqual(result["status"], "PENDING")
-            service_management.assert_not_called()
+            self.assertIn("register-main", service_operations)
+            self.assertNotIn("register-runtime", service_operations)
+            self.assertEqual(modern_state, {"main_app": "enabled", "runtime_agent": "not-found"})
             self.assertTrue(target.is_dir())
             closure = payload["content_closure"]
             installed_payload = state_dir / "payloads" / closure
@@ -549,6 +562,7 @@ class CandidateCutoverTests(unittest.TestCase):
             metadata = json.loads((transaction / "metadata.json").read_text())
             self.assertEqual(metadata["schema"], cutover.ZERO_COST_TRANSACTION_SCHEMA)
             self.assertEqual(metadata["payload"]["closure"], closure)
+            self.assertIs(metadata["main_app_registration_owned"], True)
             committed = cutover.commit_transaction(transaction, target)
             self.assertEqual(committed["status"], "COMMITTED")
             self.assertFalse(transaction.exists())
@@ -556,6 +570,86 @@ class CandidateCutoverTests(unittest.TestCase):
             self.assertEqual(pointer.read_text(), closure + "\n")
             self.assertTrue(installed_payload.is_dir())
 
+
+    def test_zero_cost_rollback_removes_transaction_created_main_registration(self) -> None:
+        cutover = load_module(CUTOVER_PATH, "candidate_cutover_zero_cost_main_rollback")
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw) / "home"
+            target = home / "Applications" / "Agent Runtime.app"
+            target.mkdir(parents=True)
+            state_dir = home / "Library" / "Application Support" / "Agent Runtime"
+            transaction = state_dir / "cutover-transaction"
+            transaction.mkdir(parents=True)
+            launch_dir = home / "Library" / "LaunchAgents"
+            current = launch_dir / f"{MODERN_RUNTIME_LABEL}.plist"
+            pointer = state_dir / "current-payload"
+            desired = state_dir / "protected-runtime-running"
+            ui = launch_dir / "com.picmao.agent-runtime-ui.plist"
+            runtime = launch_dir / f"{LEGACY_RUNTIME_LABEL}.plist"
+            snapshots = {"present": False, "mode": None}
+            metadata = {
+                "schema": cutover.ZERO_COST_TRANSACTION_SCHEMA,
+                "kind": "zero-cost",
+                "main_app_registration_owned": True,
+                "previous": {
+                    "app_present": False,
+                    "app_closure": None,
+                    "desired_state_present": False,
+                    "current_loaded": False,
+                    "ui_loaded": False,
+                    "legacy_runtime_loaded": False,
+                    "current_main_app": "not-registered",
+                    "predecessor_service_management": {
+                        "contract": "none",
+                        "main_app": "not-registered",
+                        "runtime_agent": "not-registered",
+                    },
+                    "pointer": dict(snapshots),
+                    "current_plist": dict(snapshots),
+                    "ui_plist": dict(snapshots),
+                    "runtime_plist": dict(snapshots),
+                },
+                "payload": {"closure": "a" * 64, "created": False},
+                "paths": {
+                    "target_app": str(target),
+                    "current_plist": str(current),
+                    "pointer": str(pointer),
+                    "desired_state": str(desired),
+                    "ui_plist": str(ui),
+                    "runtime_plist": str(runtime),
+                    "home": str(home),
+                },
+            }
+            service_state = {"main_app": "enabled", "runtime_agent": "not-found"}
+            operations: list[str] = []
+
+            def service_management(_app: Path, operation: str) -> dict[str, str]:
+                operations.append(operation)
+                if operation == "status":
+                    return dict(service_state)
+                if operation == "unregister-main":
+                    service_state["main_app"] = "not-registered"
+                    return dict(service_state)
+                raise AssertionError(operation)
+
+            cutover._service_loaded = lambda *_args, **_kwargs: False
+            cutover._restore_file = lambda *_args, **_kwargs: None
+            cutover._service_management = service_management
+
+            cutover._rollback_zero_cost_transaction(
+                transaction,
+                target,
+                metadata,
+                launchctl=Path("/bin/launchctl"),
+                uid=501,
+            )
+
+            self.assertEqual(operations, ["status", "unregister-main"])
+            self.assertEqual(
+                service_state,
+                {"main_app": "not-registered", "runtime_agent": "not-found"},
+            )
+            self.assertFalse(target.exists())
 
     def _payload_update_fixture(self, raw: str):
         cutover = load_module(CUTOVER_PATH, "candidate_cutover_payload_update")
@@ -727,7 +821,11 @@ class CandidateCutoverTests(unittest.TestCase):
         self.assertIn('_service_management(target_app, "unregister-runtime")', current)
         self.assertIn('_service_management(target_app, "unregister-main")', current)
         self.assertNotIn('_service_management(target_app, "register-runtime")', current)
-        self.assertNotIn('_service_management(target_app, "register-main")', current)
+        self.assertIn('_service_management(target_app, "register-main")', current)
+        self.assertLess(
+            current.index('metadata["main_app_registration_owned"] = True'),
+            current.index('_service_management(target_app, "register-main")'),
+        )
         self.assertIn("_remove_legacy_predecessor(", current)
         self.assertNotIn("_ui_plist(", source)
         self.assertNotIn("_runtime_plist(", source)

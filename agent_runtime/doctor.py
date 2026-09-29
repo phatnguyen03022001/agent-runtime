@@ -591,28 +591,68 @@ def _service_registration_check(app: Path) -> DoctorCheck:
     plist = candidate_cutover._current_launchagent_path(home)
     try:
         value = candidate_cutover._validate_current_launchagent(plist, home, uid=os.getuid())
+        service_state = candidate_cutover._service_management(app, "status")
     except Exception:
         return _check(
             "service_registration",
             "fail",
             "LIFECYCLE_OWNERSHIP_INVALID",
-            "Current per-user LaunchAgent ownership is missing, foreign, or unsafe.",
+            "Current lifecycle ownership is missing, foreign, or unsafe.",
             {
-                "contract": "launchagent-v1",
+                "contract": package_provenance.LIFECYCLE_CONTRACT,
                 "label": candidate_cutover.MODERN_RUNTIME_LABEL,
                 "plist_exact": False,
             },
         )
+
+    main_state = service_state["main_app"]
+    runtime_sm_state = service_state["runtime_agent"]
+    evidence: dict[str, object] = {
+        "contract": package_provenance.LIFECYCLE_CONTRACT,
+        "label": candidate_cutover.MODERN_RUNTIME_LABEL,
+        "plist_exact": bool(value),
+        "main_app": main_state,
+        "runtime_service_management": runtime_sm_state,
+    }
+    if runtime_sm_state not in candidate_cutover.ABSENT_SERVICE_STATES:
+        return _check(
+            "service_registration",
+            "fail",
+            "LIFECYCLE_OWNERSHIP_CONTRADICTORY",
+            "Current Runtime has competing ServiceManagement ownership.",
+            evidence,
+        )
+    if main_state in candidate_cutover.ABSENT_SERVICE_STATES:
+        return _check(
+            "service_registration",
+            "fail",
+            "MAIN_APP_REGISTRATION_ABSENT",
+            "Canonical menu-bar login registration is absent.",
+            evidence,
+        )
+    if main_state == "requires-approval":
+        return _check(
+            "service_registration",
+            "warn",
+            "MAIN_APP_APPROVAL_REQUIRED",
+            "Canonical menu-bar login registration requires user approval.",
+            evidence,
+        )
+    if main_state != "enabled":
+        return _check(
+            "service_registration",
+            "fail",
+            "LIFECYCLE_OWNERSHIP_INVALID",
+            "Canonical menu-bar login registration state is invalid.",
+            evidence,
+        )
+
     return _check(
         "service_registration",
         "pass",
         "OK",
-        "Current per-user LaunchAgent owns the exact Runtime supervisor helper contract.",
-        {
-            "contract": "launchagent-v1",
-            "label": candidate_cutover.MODERN_RUNTIME_LABEL,
-            "plist_exact": bool(value),
-        },
+        "Menu-bar login registration and current Runtime LaunchAgent ownership are coherent.",
+        evidence,
     )
 
 def _cutover_identity_check(transaction_dir: Path, app: Path) -> DoctorCheck:

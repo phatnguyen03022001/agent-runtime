@@ -57,6 +57,10 @@ def make_app(home: Path, state_file: Path, *, modern: bool) -> Path:
         "  if value['main_app'] in ('not-found', 'not-registered'): value['main_app'] = 'enabled'\n"
         "  state.write_text(json.dumps(value) + '\\n')\n"
         "  print(json.dumps(value, sort_keys=True))\n"
+        "elif sys.argv[-1] == 'unregister-main':\n"
+        "  if value['main_app'] in ('enabled', 'requires-approval'): value['main_app'] = 'not-registered'\n"
+        "  state.write_text(json.dumps(value) + '\\n')\n"
+        "  print(json.dumps(value, sort_keys=True))\n"
         "elif sys.argv[-1] == 'register-runtime':\n"
         "  if value['runtime_agent'] in ('not-found', 'not-registered'): value['runtime_agent'] = 'enabled'\n"
         "  state.write_text(json.dumps(value) + '\\n')\n"
@@ -438,7 +442,7 @@ class UninstallTests(unittest.TestCase):
             home = root / "home"
             home.mkdir()
             service_state = root / "service-state.json"
-            service_state.write_text(json.dumps({"main_app": "enabled", "runtime_agent": "enabled"}) + "\n")
+            service_state.write_text(json.dumps({"main_app": "enabled", "runtime_agent": "not-found"}) + "\n")
             app, state, env, current_plist, lifecycle_log = make_current_product(home, service_state)
             helper = app / "Contents" / "MacOS" / "AgentRuntimeRuntimeService"
             launchctl = root / "launchctl"
@@ -468,6 +472,39 @@ class UninstallTests(unittest.TestCase):
             self.assertEqual(lifecycle_log.read_text().splitlines(), ["stop"])
             self.assertEqual(
                 json.loads(service_state.read_text()),
+                {"main_app": "not-registered", "runtime_agent": "not-found"},
+            )
+
+    def test_current_launchagent_rejects_competing_runtime_service_management(self) -> None:
+        uninstall = load_module()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home = root / "home"
+            home.mkdir()
+            service_state = root / "service-state.json"
+            service_state.write_text(json.dumps({"main_app": "enabled", "runtime_agent": "enabled"}) + "\n")
+            app, _, env, _, _ = make_current_product(home, service_state)
+            helper = app / "Contents" / "MacOS" / "AgentRuntimeRuntimeService"
+            launchctl = root / "launchctl"
+            launchctl.write_text(
+                "#!/bin/sh\n"
+                "case \"$1\" in\n"
+                f"  print) printf 'program = %s\\n' {str(helper)!r}; exit 0 ;;\n"
+                "esac\n"
+                "exit 2\n"
+            )
+            launchctl.chmod(0o755)
+
+            with self.assertRaisesRegex(
+                uninstall.UninstallError,
+                "ServiceManagement ownership contradicts",
+            ):
+                uninstall.uninstall_product(home=home, launchctl=launchctl, uid=os.getuid())
+
+            self.assertTrue(app.is_dir())
+            self.assertTrue(env.is_file())
+            self.assertEqual(
+                json.loads(service_state.read_text()),
                 {"main_app": "enabled", "runtime_agent": "enabled"},
             )
 
@@ -478,7 +515,7 @@ class UninstallTests(unittest.TestCase):
             home = root / "home"
             home.mkdir()
             service_state = root / "service-state.json"
-            service_state.write_text(json.dumps({"main_app": "enabled", "runtime_agent": "enabled"}) + "\n")
+            service_state.write_text(json.dumps({"main_app": "enabled", "runtime_agent": "not-found"}) + "\n")
             app, state, env, current_plist, lifecycle_log = make_current_product(home, service_state)
             helper = app / "Contents" / "MacOS" / "AgentRuntimeRuntimeService"
             launchctl = root / "launchctl"

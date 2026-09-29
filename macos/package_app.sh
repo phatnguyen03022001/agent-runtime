@@ -169,6 +169,12 @@ IFS=$'\t' read -r FINAL_APP FINAL_HANDOFF FINAL_PAYLOAD CANDIDATE_SHA256 <<< "$P
 [[ -n "$FINAL_APP" && -n "$FINAL_HANDOFF" && -n "$FINAL_PAYLOAD" && "$CANDIDATE_SHA256" =~ ^[0-9a-f]{64}$ ]] \
   || { echo "PACKAGE ERROR: zero-cost distribution publication result is invalid" >&2; exit 2; }
 
+LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+[[ -x "$LSREGISTER" ]] \
+  || { echo "PACKAGE ERROR: LaunchServices unregister authority is unavailable" >&2; exit 2; }
+"$LSREGISTER" -u "$FINAL_APP" >/dev/null 2>&1 \
+  || { echo "PACKAGE ERROR: could not unregister retained candidate from LaunchServices" >&2; exit 2; }
+
 printf 'candidate_app=%s\n' "$FINAL_APP"
 printf 'candidate_handoff=%s\n' "$FINAL_HANDOFF"
 printf 'initial_payload_release=%s\n' "$FINAL_PAYLOAD"

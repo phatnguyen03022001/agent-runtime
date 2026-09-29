@@ -75,6 +75,17 @@ def make_installed_fixture(home: Path) -> Path:
         executable = macos / name
         executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         executable.chmod(0o755)
+    menu = macos / "AgentRuntimeMenuBar"
+    menu.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$1\" = --service-management ] && [ \"$2\" = status ]; then\n"
+        "  printf '%s\\n' '{\"main_app\":\"enabled\",\"runtime_agent\":\"not-found\"}'\n"
+        "  exit 0\n"
+        "fi\n"
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    menu.chmod(0o755)
 
     info = {
         "CFBundleIdentifier": doctor.package_provenance.OWNER,
@@ -350,7 +361,7 @@ class DoctorLocalStateTests(unittest.TestCase):
             check = doctor._service_registration_check(app)
             self.assertEqual(check.status, "pass")
             self.assertEqual(check.reason_code, "OK")
-            self.assertEqual(check.evidence["contract"], "launchagent-v1")
+            self.assertEqual(check.evidence["contract"], doctor.package_provenance.LIFECYCLE_CONTRACT)
 
             plist = doctor.candidate_cutover._current_launchagent_path(home)
             value = plistlib.loads(plist.read_bytes())
@@ -359,6 +370,32 @@ class DoctorLocalStateTests(unittest.TestCase):
             failed = doctor._service_registration_check(app)
             self.assertEqual(failed.status, "fail")
             self.assertEqual(failed.reason_code, "LIFECYCLE_OWNERSHIP_INVALID")
+
+    def test_lifecycle_ownership_fails_when_main_app_login_registration_is_absent(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            app = make_installed_fixture(home)
+            with patch.object(
+                doctor.candidate_cutover,
+                "_service_management",
+                return_value={"main_app": "not-found", "runtime_agent": "not-found"},
+            ):
+                failed = doctor._service_registration_check(app)
+            self.assertEqual(failed.status, "fail")
+            self.assertEqual(failed.reason_code, "MAIN_APP_REGISTRATION_ABSENT")
+
+    def test_lifecycle_ownership_rejects_competing_runtime_service_management(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            app = make_installed_fixture(home)
+            with patch.object(
+                doctor.candidate_cutover,
+                "_service_management",
+                return_value={"main_app": "enabled", "runtime_agent": "enabled"},
+            ):
+                failed = doctor._service_registration_check(app)
+            self.assertEqual(failed.status, "fail")
+            self.assertEqual(failed.reason_code, "LIFECYCLE_OWNERSHIP_CONTRADICTORY")
 
     def test_cutover_schema5_valid_and_contradictory_states(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

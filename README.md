@@ -2,7 +2,7 @@
 
 Agent Runtime is a **bounded local execution provider** for ChatGPT and other MCP clients on macOS. **MCP is the protocol**; the admitted product transport is OpenAI Secure MCP Tunnel, which keeps the Runtime private and uses outbound HTTPS rather than a public inbound listener.
 
-The installed Runtime is version **0.5.1** with **exactly twenty public tools** and **twenty-one known capabilities**. The current zero-cost source lane packages an immutable ad-hoc app substrate and a separate content-addressed first-party Python payload. One per-user LaunchAgent starts the embedded supervisor; ServiceManagement remains only for predecessor migration and rollback.
+The installed Runtime is version **0.5.1** with **exactly twenty public tools** and **twenty-one known capabilities**. The current zero-cost source lane packages an immutable ad-hoc app substrate and a separate content-addressed first-party Python payload. `SMAppService.mainApp` owns menu-bar login startup, while one traditional per-user LaunchAgent owns the Runtime supervisor. `SMAppService.agent` remains predecessor-migration compatibility only.
 
 ## Supported product shape
 
@@ -12,7 +12,7 @@ The installed Runtime is version **0.5.1** with **exactly twenty public tools** 
 - Canonical operator configuration at `~/Library/Application Support/Agent Runtime/runtime.env`, mode `0600`.
 - One protected singleton tunnel/listener on `127.0.0.1:8080`.
 - Runtime source and installed Runtime version 0.5.1, ToolContract Kernel v2, twenty advertised MCP tools from twenty-one known capabilities; installation remains an explicit pinned transactional cutover rather than a side effect of source publication.
-- Runtime requires no blanket TCC permissions. The current traditional user LaunchAgent does not use ServiceManagement Background Activity registration.
+- Runtime requires no blanket TCC permissions. The current Runtime supervisor uses the traditional per-user LaunchAgent rather than ServiceManagement Background Activity registration; menu-bar login persistence is independently owned by `SMAppService.mainApp`.
 - Homebrew is optional; it is not an architecture prerequisite.
 
 The first ad-hoc substrate launch may require the operator to use macOS Open/Open Anyway for that exact app. Ad-hoc signing seals code integrity but does not authenticate a publisher. Ordinary validated pure-Python payload activation does not replace the app; a later native/substrate release may require approval again.
