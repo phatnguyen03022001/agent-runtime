@@ -1,7 +1,7 @@
 protocol_version: 3
 
 task_id: TASK-0190
-task_revision: 2
+task_revision: 3
 state: APPROVED
 title: "Reboot-Survival and Lifecycle Corrective Closure"
 
@@ -14,7 +14,10 @@ revision_basis:
   implementation_candidate: "78d1216d7418f6cb9b472b23fd3573c906b0d061"
   revision_1_report_commit: "46f48397fa32f1ebaf42bbe2f674d313d745991a"
   revision_1_review_commit: "865abec0e0ca63cc81aa325c0b7d2c6617f1453a"
-  disposition: "Revision 1 is terminal BLOCKED and reviewed REVISION_REQUIRED; preserve its published FAIL and continue the accepted lifecycle correction without replaying implementation."
+  revision_2_implementation_candidate: "338d9790f1467a2d62349a9de52d26f10111286a"
+  revision_2_report_commit: "7b31774baa5246c832536d2ccc2c51244e60faad"
+  revision_2_review_commit: "578836fe4f74c7e3b3fc3145e4566fbb63fc4835"
+  disposition: "Revisions 1 and 2 are terminal BLOCKED and reviewed REVISION_REQUIRED. Preserve revision-1 canonical FAIL, revision-2 NOT_RUN and both published corrections; continue only the remaining focused test-inventory closure."
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -94,9 +97,9 @@ objective: "Correct the reproduced reboot/login lifecycle defect without changin
 
 scope:
   required_changes:
-    - "Freshly bind the revision-2 handoff to clean synchronized main, the published revision-1 BLOCKED report and REVISION_REQUIRED review, no concurrent writer, and the same exact Foundation and ECC revisions. Preserve 78d1216d7418f6cb9b472b23fd3573c906b0d061 as the published revision-1 implementation candidate; do not recreate its 17-file change."
+    - "Freshly bind the revision-3 handoff to clean synchronized main, both published BLOCKED reports and REVISION_REQUIRED reviews, no concurrent writer, and the same exact Foundation and ECC revisions. Preserve revision-1 implementation 78d1216d7418f6cb9b472b23fd3573c906b0d061 and revision-2 corrective implementation 338d9790f1467a2d62349a9de52d26f10111286a; do not recreate either change."
     - "Preserve current architecture: SMAppService.mainApp for menu-bar login, user-launchagent-v1 for Runtime. Never restore SMAppService.agent as current Runtime ownership; retain split-v1/aggregate-v1 only for predecessor migration/rollback."
-    - "Preserve revision-1 TDD and focused proof for fresh-install main registration, absent-main repair, rollback/uninstall compensation, doctor lifecycle truth, provenance contradiction and task-owned duplicate-app cleanup. Recheck affected predicates on revision-2 final bytes; do not replay the 17-file implementation."
+    - "Preserve revision-1 TDD and focused proof for fresh-install main registration, absent-main repair, rollback/uninstall compensation, doctor lifecycle truth, provenance contradiction and task-owned duplicate-app cleanup. Recheck affected predicates on revision-3 final bytes; do not replay the 17-file implementation."
     - "Correct zero-cost cutover so the canonical installed app establishes main-app registration after app swap. enabled is healthy; requires-approval is explicit human action required, not healthy. Record transaction-owned registration state so rollback removes/restores only owned state."
     - "Preserve the exact current Runtime LaunchAgent at ~/Library/LaunchAgents/com.picmao.agent-runtime-runtime-service.plist, canonical helper identity, mode/ownership, desired-state behavior and transactional recovery."
     - "Strengthen lifecycle inspection to prove canonical app identity/path, main-app ServiceManagement state, exact current Runtime LaunchAgent and loaded helper identity when required, absent current runtime_agent SM ownership, no contradictory legacy/current owner, and active transaction truth."
@@ -104,15 +107,15 @@ scope:
     - "Install preflight must distinguish recognized predecessor ServiceManagement migration from current user-launchagent-v1 and include main-app truth without treating runtime_agent=not-found as a current-generation defect."
     - "Zero-cost provenance must bind lifecycle_contract=user-launchagent-v1 to structural package truth and reject contradictory current Runtime ServiceManagement material/metadata while preserving strict codesign, explicit designated requirements, external-python-v1, twenty advertised tools and twenty-one capabilities."
     - "Qualification/build handling must not leave task-created disposable Agent Runtime.app copies persistently registered in LaunchServices. Use only bounded unregister/removal for proven task-owned copies; never reset LaunchServices globally or delete unrelated applications."
-    - "Diagnose the two README assertions and seven tunnel installer-fixture failures from revision-1 canonical verify. Correct only the stale expectation and fake ServiceManagement diagnostics in the two newly admitted test files unless direct root-cause evidence proves a product defect in an already-authorized revision-1 source component. Preserve identity, lifecycle, provenance and secret protections; show focused RED on the old assumption where appropriate and GREEN on final bytes."
-    - "Run exact focused tests, relevant static/Swift/Python and package/provenance source checks, then exactly one new complete canonical ./verify for revision 2 after all focused gates pass. Revision-1 invocation #1 remains consumed as FAIL; never retry or erase it. A new canonical failure stops this revision under BLOCKED policy."
+    - "Preserve revision-2 corrections for the two README assertions and seven ServiceManagement fixture failures. Diagnose the focused failure in tests/test_task0141_productization.py: its hard-coded DOCTOR_REASON_CODES set omits LIFECYCLE_OWNERSHIP_CONTRADICTORY, MAIN_APP_REGISTRATION_ABSENT, and MAIN_APP_APPROVAL_REQUIRED, all present in doctor.py and the recovery matrix. Correct only that test inventory unless direct evidence proves a real product defect. Preserve the exact reason-code action classifications, uniqueness, lifecycle ownership and security guarantees; show focused RED/GREEN."
+    - "Discover actual tests/test_*.py modules before selecting focused commands; do not invoke nonexistent tests.test_install_preflight. Run corrected focused suites, relevant static/Swift/Python and package/provenance source checks, then at most one complete canonical ./verify for revision 3 after all focused gates pass. Revision-1 invocation #1 remains consumed as FAIL; revision 2 invoked none. Any revision-3 canonical failure stops under BLOCKED policy without rerun."
     - "After verification PASS, build at most one corrected zero-cost candidate with the canonical CPython 3.13 authority, audit every Mach-O/provenance, and clean/unregister failed/disposable task copies after evidence capture."
     - "Perform at most one bounded live corrected-candidate install/cutover. Preserve runtime.env byte identity, tunnel identity/config, credentials and unrelated host state. Prove canonical installed path, package identity, main_app truth, current Runtime LaunchAgent truth, absent current Runtime SM ownership, readyz, transaction closure and no duplicate app registration."
     - "Physical reboot is authorized only if a fresh reconnect-safety preflight proves this execution carrier can survive/reconnect without an asynchronous promise. Otherwise do not reboot; use only the closest safe repository-authorized lifecycle boundary and report physical reboot proof as outstanding. A process restart is not reboot proof."
     - "Do not bump Runtime version or mutate tag v0.5.1, release ID 398229165, release name/body/assets/digests/timestamps. Corrected release publication is a separate future task."
     - "Record the regression: zero-cost Runtime ownership moved to user-launchagent-v1, but zero-cost cutover did not retain/establish main-app login registration; doctor/preflight proved only Runtime LaunchAgent ownership; qualification tested immediate operation rather than login/reboot restoration; build candidates used the production bundle identifier without LaunchServices cleanup/acceptance proof."
-    - "Publish only evidence-driven revision-2 corrective implementation deltas under fresh remote CAS, then update .agent/tasks/TASK-0190/report.yaml as the sole report-only direct successor under a second fresh CAS. Preserve its published revision-1 historical blob at report commit 46f48397fa32f1ebaf42bbe2f674d313d745991a. Reconcile clean synchronized main."
-    - "Final report revision 2 must retain revision-1 canonical ./verify invocation #1 = FAIL, exact published report/review commits, and revision-2 canonical ./verify invocation #1 = its actual result. Record both root causes, exact base/final candidate, corrective diff, RED/GREEN/static/Swift/Python evidence, package/live evidence only if eligible, runtime.env and lifecycle/reboot truth, unchanged v0.5.1 publication, and truthful final result."
+    - "Publish only the evidence-driven revision-3 test correction under fresh remote CAS, then update .agent/tasks/TASK-0190/report.yaml as the sole report-only direct successor under a second fresh CAS. Preserve revision-1 report at 46f48397fa32f1ebaf42bbe2f674d313d745991a and revision-2 report at 7b31774baa5246c832536d2ccc2c51244e60faad as immutable Git history. Reconcile clean synchronized main."
+    - "Final report revision 3 must retain revision-1 canonical ./verify #1 = FAIL, revision-2 canonical ./verify = NOT_RUN, and revision-3 canonical ./verify = actual result, with exact historical report/review commits. Record three-code inventory root cause, corrective diff, focused RED/GREEN/static/Swift/Python and package/live evidence only if eligible, runtime.env and lifecycle/reboot truth, unchanged v0.5.1 publication, and truthful final result. Validate revision-3 report with the exact pinned Foundation validator using supported serialization; revision-2 historical report remains unmodified even though its dotted mapping keys are outside that validator subset."
   allowed_existing_files_or_components:
     - "macos/candidate_cutover.py"
     - "macos/install_preflight.py"
@@ -124,10 +127,10 @@ scope:
     - "agent_runtime/doctor.py"
     - "tests/test_candidate_cutover.py"
     - "tests/test_doctor.py"
-    - "tests/test_install_preflight.py"
     - "tests/test_package_provenance.py"
     - "tests/test_uninstall.py"
     - "tests/test_task0055_macos_contract.py"
+    - "tests/test_task0141_productization.py"
     - "tests/test_tunnel_identity.py"
     - "tests/test_surface_and_scripts.py"
     - "tests/test_candidate_freeze.py"
@@ -162,15 +165,16 @@ effect_authority:
   existing_v051_release_or_tag_mutation_max: 0
   branch_or_pr_creation_max: 0
 
-revision_2_effect_accounting:
-  revision_1_canonical_verify: "Invocation #1 consumed once; FAIL; 36/62 modules, 549 tests in completed modules; zero authorized retries."
-  revision_2_canonical_verify: "At most one new invocation after focused gates pass; stop on any FAIL without retry."
+revision_3_effect_accounting:
+  revision_1_canonical_verify: "Invocation #1 consumed once; FAIL; 36/62 modules and 549 tests in completed modules; zero authorized retries."
+  revision_2_canonical_verify: "Zero invocations; NOT_RUN because focused gate failed; one authorized invocation remains unconsumed."
+  revision_3_canonical_verify: "Carry forward at most one unconsumed invocation, only after focused gates pass; stop on any FAIL without retry."
   corrected_zero_cost_distribution_build_remaining: 1
   live_corrected_candidate_cutover_remaining: 1
   live_commit_cutover_remaining: 1
   bounded_service_restart_remaining: 2
   physical_reboot_remaining: 1
-  basis: "Revision-1 published report records zero corrected builds, live cutovers, production restarts and physical reboots; refresh live consequence evidence before spending any remaining budget."
+  basis: "Revision-2 published report records zero canonical verify, corrected builds, live cutovers, production restarts and physical reboots. These are carry-forward balances, not reset budgets; refresh live consequence evidence before spending any balance."
 
 invariants:
   - "Current Runtime lifecycle remains user-launchagent-v1; SMAppService.agent is predecessor-only."
@@ -217,8 +221,8 @@ acceptance_criteria:
     requirement: "Qualification artifacts leave no duplicate production app registration."
     evidence_required: "Bounded task-owned cleanup is tested; canonical installed app is the only production owner after live qualification."
   - id: AC-6
-    requirement: "Repository-native verification is fully green on revision-2 corrective bytes."
-    evidence_required: "Exact nine-failure root-cause mapping; focused RED/GREEN where appropriate; git diff --check, Python/static, shell, focused Python, relevant Swift and provenance gates, then exactly one new revision-2 canonical ./verify PASS. Preserve revision-1 verify #1 FAIL as historical evidence."
+    requirement: "Repository-native verification is fully green on revision-3 corrective bytes."
+    evidence_required: "Three-code inventory root cause and focused RED/GREEN; preserved nine-failure correction suites; git diff --check, Python/static, shell, focused Python, relevant Swift and provenance gates, then at most one carried-forward revision-3 canonical ./verify PASS. Preserve revision-1 FAIL and revision-2 NOT_RUN as historical evidence."
   - id: AC-7
     requirement: "Live corrected installation preserves operator state and reaches coherent lifecycle truth."
     evidence_required: "Canonical install only; main_app enabled or explicit approval-required; exact active Runtime LaunchAgent; current runtime_agent SM absent; readyz ready; transaction closed; runtime.env unchanged; no duplicate registration."
@@ -226,8 +230,11 @@ acceptance_criteria:
     requirement: "Fresh login/reboot-survival evidence is truthful."
     evidence_required: "Actual reboot/login restoration when reconnect-safe. If unsafe from CHATGPT_LOCAL, exact physical-reboot proof remains outstanding and final result is BLOCKED rather than process-restart equivalence."
   - id: AC-9
-    requirement: "The nine revision-1 canonical verify failures are corrected without weakening product guarantees."
-    evidence_required: "Show two obsolete README exact-string expectations and seven fake ServiceManagement status fixture failures; preserve main_app/runtime_agent schema validation, fail-closed behavior, tunnel identity, lifecycle, provenance, rollback and secret guarantees."
+    requirement: "The nine revision-1 canonical verify failures remain corrected without weakening product guarantees."
+    evidence_required: "The two README assertions and seven fake ServiceManagement fixture failures remain GREEN; preserve main_app/runtime_agent schema validation, fail-closed behavior, tunnel identity, lifecycle, provenance, rollback and secret guarantees."
+  - id: AC-10
+    requirement: "The recovery matrix test enumerates all current doctor reason codes exactly once with correct action classes."
+    evidence_required: "The three missing lifecycle codes match doctor.py and docs/RECOVERY.md; focused RED/GREEN proves complete unique coverage and unchanged STOP_AND_ESCALATE, SAFE_AUTOMATED and HUMAN_ACTION_REQUIRED routing."
 
 verification:
   authoritative_verification:
@@ -236,13 +243,13 @@ verification:
     expected_signal: "exit 0; complete current qualification profile PASS on exact implementation candidate"
   executor_checks:
     - id: CHECK-1
-      command_or_check: "Focused RED/GREEN for the two obsolete README assertions and seven fake ServiceManagement installer fixture failures, plus applicable existing lifecycle regression tests."
+      command_or_check: "Focused RED/GREEN for the three-code productization test inventory; rerun both revision-2 corrected regression modules and applicable lifecycle tests on final bytes."
       required: true
     - id: CHECK-2
       command_or_check: "git diff --check; Python compile/static; shell syntax; relevant Swift tests and focused Python tests."
       required: true
     - id: CHECK-3
-      command_or_check: "Exactly one new revision-2 canonical ./verify after focused/static gates pass; do not replay revision-1 FAIL or rerun a revision-2 failure."
+      command_or_check: "At most one carried-forward revision-3 canonical ./verify after all focused/static/Swift gates pass; preserve revision-1 FAIL, revision-2 NOT_RUN and stop without rerun on revision-3 FAIL."
       required: true
     - id: CHECK-4
       command_or_check: "One corrected zero-cost build; validate-zero-cost; strict codesign; all-Mach-O identity audit."
