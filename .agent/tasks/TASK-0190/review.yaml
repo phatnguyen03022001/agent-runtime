@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0190
-task_revision: 3
-review_revision: 3
+task_revision: 4
+review_revision: 4
 state: REVISION_REQUIRED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0190/report.yaml
-  commit: "518b32394442dcabad80cd7f4f20b0848edd0c18"
-  report_revision: 3
+  commit: "f0361727bdcbc0883dfd3fabad6faac58226e2d6"
+  report_revision: 4
 
 independence:
   reviewer_role: ARCHITECT
@@ -25,23 +25,23 @@ contract_compliance:
   structure_policy: PASS
   git_authority: PASS
   acceptance_criteria: FAIL
-  verifier_evidence: FAIL
+  verifier_evidence: PASS
 
 acceptance_basis:
-  - "Implementation f1ab93d051530a7f5ea7b8c417b5a445fc15d04a is the direct child of revision-3 task base f96e325cd07bba438986ce2f950c5fdd880026d7 and changes only tests/test_task0141_productization.py. Report-only commit 518b32394442dcabad80cd7f4f20b0848edd0c18 is its direct child; clean local and remote main matched that commit at review."
-  - "The published report correctly records what the Executor could establish then: one keyed ./verify dispatch, two same-identity polls returning DURABLE_OWNER_LOST/effect_state=unknown, no retry, and zero remaining revision-3 verifier budget. Do not rewrite that historical report."
-  - "Independent read-only reconciliation found the exact start_identity c0190a6b10bd4d979cfbeabf13baf64d in the Runtime durable-job store. DurableStore.read_for_identity validated ownership/mode, state integrity, journal digest/generation and identity. Its terminal state is COMPLETED/exited, natural_exit, exit_code=1, completed_at_epoch=1790660039.8453782, with no dropped output."
-  - "The integrity-validated journal shows canonical ./verify revision-3 invocation #1 actually FAIL: tests.test_terminal_session has 1 failure and 4 RuntimeCapacityError errors; 28/62 modules, 481 completed-module tests, qualification profile. Other selected modules continued until the 80.797-second verifier result. No second invocation occurred."
-  - "Five capacity assertions in tests/test_terminal_session.py create TerminalSessionManager instances with the production default durable root. During the durable verifier job, those fixtures recover the verifier's active durable session, consuming one of their configured slots. Exact source and failure counts support a test isolation root cause, subject to focused RED/GREEN proof. The live API's sticky DURABLE_OWNER_LOST despite later integrity-valid terminal state is a separate bounded reconciliation defect candidate; require a focused causal test before any source correction."
-  - "Revision-1 verify #1 remains FAIL, revision-2 verify remains NOT_RUN, and revision-3 verify #1 is now independently reconciled as FAIL. The historical report's UNKNOWN reflects evidence available at its publication; the later finding is additive review evidence."
-  - "No corrected distribution build, live cutover, bounded service restart or physical reboot was reported in revision 3. Live current state and unchanged v0.5.1 publication must be refreshed at their consequence gates."
+  - "Implementation 5286bbb6d1942ff7eed13190bd38ee5efcc0e621 is the direct child of revision-4 base 9bb7acafab7d2077ae5c5d6d55353f2b70043190 and changes only agent_runtime/session.py and tests/test_terminal_session.py. Report-only commit f0361727bdcbc0883dfd3fabad6faac58226e2d6 is its direct child and changes only report.yaml. Fresh local and remote main matched f036172 with a clean single worktree at review."
+  - "Revision-4 canonical ./verify invocation #1 PASS is recorded as 62/62 modules and 848 tests, without retry. Revision-1 FAIL, revision-2 NOT_RUN, and revision-3 UNKNOWN at report publication with later exact-identity FAIL reconciliation remain separate historical evidence."
+  - "One corrected build was consumed. The candidate passed provenance, strict codesign and 12/12 Mach-O identity checks despite the packaging script exit 2 at candidate LaunchServices unregister. One install-prebuilt cutover was dispatched with identity cdd877ef96ce4ae1b8ec3dff78548dbb and its terminal result remains UNKNOWN; no replay is authorized by this review."
+  - "Independent read-only inspection of schema-6 metadata.json at sha256 503cb34bc7c48c5d6c17f7975a66924b7abd5d92c216b7b8162f5c5fe4026fc4 found previous.current_main_app=enabled, previous.predecessor_service_management={contract:none,main_app:not-registered,runtime_agent:not-registered}, main_app_registration_owned=false, status=PREPARED and phase=PRE_SWAP. Fresh installed-app status was main_app=enabled and runtime_agent=not-found. The current main-app status matches the current-generation snapshot."
+  - "The reported ownership mismatch compared the live current-generation main-app status with the predecessor-only snapshot. In _rollback_zero_cost_transaction, predecessor ServiceManagement restoration applies only to split-v1 or aggregate-v1; contract none does not require main-app unregister. The false mismatch does not prove rollback safe end to end: rollback may bootout the Runtime LaunchAgent carrying this tunnel, recopy the app, and delete transaction evidence. A separate durable carrier and fresh identity/closure/ownership preflight are mandatory before a bounded recovery action."
+  - "The transaction remains open and the task-created candidate LaunchServices record remains beside the canonical app. No physical reboot/login proof exists. The report's BLOCKED result is truthful for these outstanding live acceptance predicates, while its specific rollback ownership explanation requires correction in review rather than rewriting the historical report."
+  - "The v0.5.1 tag/release/assets remain immutable historical input. This review neither claims installed corrected bytes nor spends a verifier, build, cutover, restart, or reboot effect."
 
 findings:
-  - id: "F-0190-003"
+  - id: "F-0190-004"
     severity: "BLOCKING"
-    description: "Canonical revision-3 verifier failed on five capacity fixture assertions contaminated by its own active durable job; the durable poll surface retained owner-lost uncertainty after the job had terminalized."
-    disposition: "Revise TASK-0190 narrowly for isolated terminal-session fixtures and conditional durable terminal reconciliation, preserving revision-3 FAIL and granting one new bounded verifier invocation only after focused gates pass."
+    description: "Partial zero-cost cutover left a PREPARED/PRE_SWAP transaction, duplicate task-candidate LaunchServices registration and no reboot/login proof. Reported main-app ownership conflict is a comparison against the predecessor-only snapshot; the current-generation snapshot already records enabled."
+    disposition: "Revise TASK-0190 narrowly for independently carried, evidence-gated transaction recovery and one corrected-candidate cutover continuation. Preserve revision-4 verifier/build evidence and all consumed effects; stop on unexpected live drift or unsafe carrier."
 
 notes:
-  - "This review does not accept lifecycle qualification or claim package, live, reboot, or release proof."
-  - "The exact durable journal remains local operational evidence; this review records its relevant identity, integrity result, terminal exit and verifier failure without mutating the historical report."
+  - "Do not run rollback, unregister, install-prebuilt, commit-cutover, verifier, build or reboot in this Architect review."
+  - "Do not alter the published revision-4 report. The corrected interpretation is additive review evidence."
