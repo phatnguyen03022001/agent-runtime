@@ -1,8 +1,8 @@
 protocol_version: 3
 
 task_id: TASK-0190
-task_revision: 4
-report_revision: 4
+task_revision: 5
+report_revision: 5
 state: REPORTED
 
 task_source:
@@ -13,8 +13,8 @@ execution:
   branch:
     name: main
     role: canonical
-  authorized_base_head: "9bb7acafab7d2077ae5c5d6d55353f2b70043190"
-  final_execution_head: "5286bbb6d1942ff7eed13190bd38ee5efcc0e621"
+  authorized_base_head: "998f0c60d9c3e41eb9cb4a0138452b228ad28c0b"
+  final_execution_head: "998f0c60d9c3e41eb9cb4a0138452b228ad28c0b"
 
 skill_library:
   repository: phatnguyen03022001/agent-foundation
@@ -492,7 +492,7 @@ revision_3_blockers:
   - "Corrected distribution build, live install/cutover, live commit-cutover, and reboot/login proof remain unperformed."
   - "Current runtime.env, ServiceManagement, readiness, and transaction state were not reobserved in revision 3."
 
-acceptance_evidence:
+revision_4_acceptance_evidence:
   - criterion_id: AC-1
     status: BLOCKED
     evidence: "The corrected candidate is staged but not installed; the live transaction remains PREPARED / PRE_SWAP."
@@ -526,10 +526,174 @@ acceptance_evidence:
   - criterion_id: AC-11
     status: PASS
     evidence: "The isolated durable fixture and fail-closed terminal owner-reconciliation changes passed focused proof and the revision-4 canonical verifier."
-blockers:
+revision_4_blockers:
   - "The one authorized install-prebuilt cutover was dispatched under cdd877ef96ce4ae1b8ec3dff78548dbb. Its terminal result is unavailable; START_IDENTITY_UNKNOWN does not prove non-dispatch. Do not replay it."
   - "The schema-6 zero-cost transaction remains PREPARED / PRE_SWAP. Current main_app=enabled conflicts with the transaction snapshot main_app=not-registered while main_app_registration_owned=false, so bounded rollback cannot safely restore and close it."
   - "The LaunchServices database dump contains both the canonical app and the task-created candidate path for the same bundle identifier; no cleanup was attempted."
   - "Fresh physical reboot/login restoration proof is outstanding."
 
+blockers:
+  - "Doctor acceptance failed at installed_package_identity/INSTALLED_SUBSTRATE_INVALID while the schema-6 transaction was PENDING / APP_SWAPPED; commit-cutover was not dispatched."
+  - "Packaged-Python doctor and diagnostic imports added 325 .pyc files inside the installed app runtime. Closure changed from candidate b2a3a79b99f6dad0b8bf14765d73df869f01610a8c6f65eab50d424534ac1a7d / 1,686 records to bc9af5656d0daab518c8db5912835916c3e5e0407a4f2dfebe899ddd6d514457 / 2,011 records."
+  - "The transaction remains open. Revision-5 rollback and candidate-cutover caps are consumed; no second rollback, manual app cleanup, or reboot was attempted."
+  - "Candidate-scoped LaunchServices cleanup and physical reboot/login proof remain outstanding."
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "Exact source candidate, provenance, strict codesign and 12/12 Mach-O audits passed before cutover. Revision-4 ./verify PASS 62/62 and 848 tests and all earlier outcomes remain preserved; rev5 ran no verify or build."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "Independent-carrier and PRE_SWAP gates passed. The one durable rollback returned ROLLED_BACK/exit 0, closed the old transaction, and restored the exact previous app closure, lifecycle, pointer, runtime.env and readyz."
+  - criterion_id: AC-3
+    status: BLOCKED
+    evidence: "The sole rev5 cutover returned PENDING / APP_SWAPPED. readyz and lifecycle passed, but doctor returned one substrate failure in addition to the expected transaction warning; commit was withheld."
+  - criterion_id: AC-4
+    status: BLOCKED
+    evidence: "No rev5 LaunchServices cleanup was attempted because the transaction is open; the prior report recorded the candidate-path duplicate."
+  - criterion_id: AC-5
+    status: BLOCKED
+    evidence: "No physical reboot was attempted because the transaction is open and doctor failed."
+  - criterion_id: AC-6
+    status: PASS
+    evidence: "The report-only change binds the exact base, historical report/review commits, and separate effect counts; it is published with non-force CAS. No v0.5.1 release or tag mutation occurred."
+
+revision_5:
+  execution:
+    repository: phatnguyen03022001/agent-runtime
+    branch: main
+    authorized_base_head: "998f0c60d9c3e41eb9cb4a0138452b228ad28c0b"
+    final_source_head: "998f0c60d9c3e41eb9cb4a0138452b228ad28c0b"
+    implementation_candidate: "5286bbb6d1942ff7eed13190bd38ee5efcc0e621"
+    prior_report_commit: "f0361727bdcbc0883dfd3fabad6faac58226e2d6"
+    prior_review_commit: "c7dea9d1546fd4db4ca473082608060b9d3db29e"
+    prepublication_remote_head: "998f0c60d9c3e41eb9cb4a0138452b228ad28c0b"
+    worktree_clean_before_report: true
+    source_changes: 0
+    report_only_path: ".agent/tasks/TASK-0190/report.yaml"
+  authoritative_verification:
+    command: "./verify"
+    revision_5_invocations: 0
+    result: NOT_RUN
+    reason: "The rev5 canonical verification budget is zero; exact rev4 PASS is retained."
+  old_cutover:
+    start_identity: "cdd877ef96ce4ae1b8ec3dff78548dbb"
+    historical_result: UNKNOWN
+    terminal_poll: "START_IDENTITY_UNKNOWN"
+    live_process_found: false
+    replayed: false
+    preflight_transaction: "schema 6, PREPARED / PRE_SWAP, metadata sha256 503cb34bc7c48c5d6c17f7975a66924b7abd5d92c216b7b8162f5c5fe4026fc4"
+  independent_carrier:
+    provider: SentinelX
+    host_id: "mac-tphat-mb"
+    agent_version: "0.13.2"
+    durable_probe_job: "job_d79cdf0f5e83"
+    durable_probe_result: PASS
+    pre_rollback_evidence_job: "job_5f435bf856cb"
+    pre_rollback_all_pass: true
+    sentinel_pid: 1322
+    runtime_service_pid_after_rollback: 91949
+    separate_processes: true
+    survived_bootout_and_reconnected: true
+  recovery_rollback:
+    dispatches: 1
+    durable_job_id: "job_a13d629f126a"
+    result: ROLLED_BACK
+    exit_code: 0
+    retries: 0
+    post_transaction_closed: true
+    restored_app_records: 2000
+    restored_app_closure_sha256: "4f96b9d260553b54773bf28c91fade01b0dfaa5fd43ae8d10bcd6055531a1f10"
+    main_app: enabled
+    runtime_agent: not-found
+    launchagent_sha256: "3503d551e327fd311b584432efc36215c933dda7dbeeadc054270ac7a3a9fa2c"
+    previous_payload: "6a17fb035429f12bff026fdbd6cb87f38df13163a5ed2127185415913baf935d"
+    runtime_env_sha256: "b3d0d67471f6d620f53ad1ed9ee6db21a1e906fff643dd94050b7cd8def97029"
+    readyz: ready
+  candidate_audit:
+    candidate_sha256: "b2a3a79b99f6dad0b8bf14765d73df869f01610a8c6f65eab50d424534ac1a7d"
+    source_revision: "5286bbb6d1942ff7eed13190bd38ee5efcc0e621"
+    source_tree: "4093367bfaaf499b880e98076d5904decae51375"
+    handoff_sha256: "bded7bde094ffa6eb3118afb75a417601fca1b73c7ae7b185404b80b0f1dfcd8"
+    payload_closure: "85b82b2c88e9bc0bfdf0c240a7b47b17abfd260609d88a7e5dafecab042e2483"
+    provenance: PASS
+    strict_codesign: PASS
+    macho_audit: "12/12 PASS"
+  candidate_cutover:
+    dispatches: 1
+    durable_job_id: "job_452c887597d1"
+    interface: "./install.sh --install-prebuilt with both expected SHA-256 values"
+    installer_python: "Python 3.14.6 at /opt/homebrew/bin/python3"
+    result: PENDING
+    exit_code: 0
+    transaction: "schema 6 / PENDING / APP_SWAPPED; metadata sha256 614599da09a33337aa9d2291b7ce0d2c884790cfa6fa3d43c35fae541884c497"
+    before_doctor_candidate_closure: "b2a3a79b99f6dad0b8bf14765d73df869f01610a8c6f65eab50d424534ac1a7d / 1,686 records"
+    lifecycle: "main_app enabled; runtime_agent not-found; exact LaunchAgent loaded"
+    current_payload: "85b82b2c88e9bc0bfdf0c240a7b47b17abfd260609d88a7e5dafecab042e2483"
+    runtime_env_sha256: "b3d0d67471f6d620f53ad1ed9ee6db21a1e906fff643dd94050b7cd8def97029"
+    readyz: ready
+    runtime_capabilities: "0.5.1; revision 5286bbb6d1942ff7eed13190bd38ee5efcc0e621; 20 advertised, 21 known, 20 available"
+  doctor:
+    invocations: 1
+    command: "python -m agent_runtime.doctor --json"
+    status: unhealthy
+    exit_code: 1
+    checks: "8 pass, 1 fail, 1 warn"
+    failure: "installed_package_identity / INSTALLED_SUBSTRATE_INVALID"
+    warning: "cutover_identity / CUTOVER_TRANSACTION_PRESENT"
+    commit_cutover_dispatches: 0
+    embedded_helper_error: "validate_substrate_manifest: substrate manifest does not exactly close over immutable Runtime bytes"
+  installed_app_after_diagnostic:
+    candidate_closure: "bc9af5656d0daab518c8db5912835916c3e5e0407a4f2dfebe899ddd6d514457 / 2,011 records"
+    rollback_closure: "bbf8d81cbf87a554eed5134ff71e65c3a81da6ff44b5c899c50e9524947d248c / 2,386 records"
+    generated_pyc_files: 325
+    pyc_in_embedded_venv: 323
+    pyc_in_embedded_macos_helpers: 2
+    pycache_directories: 61
+    transaction_still_pending: true
+    runtime_env_unchanged: true
+    readyz: ready
+  unperformed_gates:
+    commit_cutovers: 0
+    candidate_scoped_launchservices_cleanups: 0
+    physical_reboots: 0
+    reason: "The doctor gate failed while the transaction remained open. Rev5 stopped before commit, cleanup, and reboot."
+  effect_accounting:
+    verify_invocations: 0
+    distribution_builds: 0
+    recovery_rollbacks: 1
+    corrected_candidate_cutover_dispatches: 1
+    commit_cutovers: 0
+    manual_service_restarts: 0
+    recovery_internal_service_bootouts: 1
+    recovery_internal_service_bootstraps: 1
+    cutover_internal_service_bootouts: 1
+    cutover_internal_service_bootstraps: 1
+    physical_reboots: 0
+    physical_reboots_remaining: 1
+    candidate_scoped_launchservices_cleanups: 0
+    candidate_scoped_launchservices_cleanups_remaining: 1
+    launchservices_global_resets: 0
+    runtime_env_mutations: 0
+    tunnel_identity_or_config_mutations: 0
+    host_dependency_mutations: 0
+    v051_release_or_tag_mutations: 0
+    branch_or_pr_creations: 0
+    report_only_files_changed: 1
+    report_only_commits: 1
+  report_validation:
+    validator_repository: phatnguyen03022001/agent-foundation
+    validator_revision: "e74e3b958779b995506f1004709b824812e455fd"
+    validator_path: skills/scripts/validate_skill_library.py
+    validator_git_blob: "7912f88ba3e14d53e80ff2b0048a94f4ed596c18"
+    serialization_uses_dotted_mapping_keys: false
+    result: PASS
+    evidence: "Pinned validator blob 7912f88ba3e14d53e80ff2b0048a94f4ed596c18 returned exit 0 for --artifact report before commit."
+  publication:
+    method: "Non-force compare-and-swap to origin/main"
+    prior_local_head: "998f0c60d9c3e41eb9cb4a0138452b228ad28c0b"
+    prior_remote_head: "998f0c60d9c3e41eb9cb4a0138452b228ad28c0b"
+    force_push: false
+    branch_count: 1
+    clean_single_worktree_before_report: true
 result: BLOCKED
