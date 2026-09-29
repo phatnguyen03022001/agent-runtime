@@ -1,7 +1,8 @@
 protocol_version: 3
+
 task_id: TASK-0190
-task_revision: 2
-report_revision: 2
+task_revision: 3
+report_revision: 3
 state: REPORTED
 
 task_source:
@@ -12,226 +13,277 @@ execution:
   branch:
     name: main
     role: canonical
-  authorized_base_head: "669550c2c4bb71b139794a1db57011ed3ea92ab2"
-  revision_1_implementation_candidate: "78d1216d7418f6cb9b472b23fd3573c906b0d061"
-  final_execution_head: "338d9790f1467a2d62349a9de52d26f10111286a"
+  authorized_base_head: "f96e325cd07bba438986ce2f950c5fdd880026d7"
+  final_execution_head: "f1ab93d051530a7f5ea7b8c417b5a445fc15d04a"
 
 skill_library:
   repository: phatnguyen03022001/agent-foundation
   authorized_revision: "e74e3b958779b995506f1004709b824812e455fd"
-  pinned_execution_skill_blobs_verified_identical: true
 
 external_engineering_how:
   repository: affaan-m/ECC
-  revision: "bf70150eb2df8070024e5bdf08e4aa08959e2735"
-  capabilities:
+  authorized_revision: "bf70150eb2df8070024e5bdf08e4aa08959e2735"
+  required_capabilities:
     - tdd-workflow
     - verification-loop
     - security-review
     - code-reviewer
     - agent-introspection-debugging
-    - orch-fix-defect
 
-candidate:
-  source_commit: "338d9790f1467a2d62349a9de52d26f10111286a"
-  source_parent: "669550c2c4bb71b139794a1db57011ed3ea92ab2"
-  changed_files:
-    - tests/test_task0055_macos_contract.py
-    - tests/test_tunnel_identity.py
-  version_changed: false
-  public_tool_contract_changed: false
-  lifecycle_model: "Preserved revision-1 architecture: SMAppService.mainApp owns menu-bar login startup; user-launchagent-v1 owns the current Runtime supervisor; SMAppService.agent is predecessor compatibility only."
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - repository_observation
+    - local_test_execution
+    - scoped_repository_write
+    - non_force_main_publication
+    - authoritative_verification
+  available:
+    - repository_observation
+    - local_test_execution
+    - scoped_repository_write
+    - non_force_main_publication
+    - authoritative_verification
+  missing: []
+  passed: true
 
-revision_1_historical_record:
-  implementation_commit: "78d1216d7418f6cb9b472b23fd3573c906b0d061"
-  report_commit: "46f48397fa32f1ebaf42bbe2f674d313d745991a"
-  report_blob_oid: "cd08ba0ecf913172ec7e15a4e6f5d5094fe47580"
-  review_commit: "865abec0e0ca63cc81aa325c0b7d2c6617f1453a"
-  canonical_verification:
-    command: "./verify"
-    invocation_count: 1
-    result: FAIL
-    modules_selected: 62
-    modules_completed: 36
-    tests_in_completed_modules: 549
-    retry_count: 0
+authoritative_verification:
+  required: true
+  performed: false
+  result: UNKNOWN
+  evidence: "One keyed terminal_start dispatch attempt for ./verify returned UNAVAILABLE / DURABLE_OWNER_LOST with effect_state=unknown. terminal_poll using the same start_identity returned the same result twice. No process completion, exit code, or verifier result could be established. The attempt was not replayed."
+
+pushed: true
+
+historical_evidence:
+  revision_1:
+    implementation_candidate: "78d1216d7418f6cb9b472b23fd3573c906b0d061"
+    report_commit: "46f48397fa32f1ebaf42bbe2f674d313d745991a"
+    report_blob_oid: "cd08ba0ecf913172ec7e15a4e6f5d5094fe47580"
+    review_commit: "865abec0e0ca63cc81aa325c0b7d2c6617f1453a"
+    canonical_verification:
+      command: "./verify"
+      invocation_count: 1
+      result: FAIL
+      modules_selected: 62
+      modules_completed: 36
+      tests_in_completed_modules: 549
+      retry_count: 0
     regression_roots:
-      - root_cause: "Two README exact-string expectations still encoded superseded Runtime ownership wording."
-        failure_count: 2
-        path: tests/test_task0055_macos_contract.py
-      - root_cause: "The fake AgentRuntimeMenuBar returned exit 0 with empty stdout instead of the current ServiceManagement status JSON."
-        failure_count: 7
-        path: tests/test_tunnel_identity.py
-  historical_live_observation:
-    service_management:
-      main_app: enabled
-      runtime_agent: not-found
-    readiness: ready
-    transaction_present: false
-    runtime_env_sha256_before: "b3d0d67471f6d620f53ad1ed9ee6db21a1e906fff643dd94050b7cd8def97029"
-    runtime_env_sha256_after: "b3d0d67471f6d620f53ad1ed9ee6db21a1e906fff643dd94050b7cd8def97029"
-
-revision_2_correction:
-  implementation_commit: "338d9790f1467a2d62349a9de52d26f10111286a"
-  corrective_diff:
-    - path: tests/test_task0055_macos_contract.py
-      change: "Replaced the two superseded exact-string README assertions with the current LaunchAgent and predecessor-only ServiceManagement wording."
-    - path: tests/test_tunnel_identity.py
-      change: "Replaced the no-output fake app with a stateful fixture that emits the exact main_app/runtime_agent JSON shape and stores simulated registration state under the test-owned temporary HOME, outside the packaged app."
-  root_cause_mapping:
-    - id: README-EXPECTATION
-      failures: 2
-      status: CORRECTED
-      evidence: "The new assertions match the current README ownership contract."
-    - id: SERVICE-MANAGEMENT-FIXTURE
-      failures: 7
-      status: CORRECTED
-      evidence: "The fixture now emits valid states for status/register/unregister operations without mutating packaged app contents."
-    - id: PRODUCTIZATION-REASON-INVENTORY
-      status: BLOCKING_OUT_OF_SCOPE
-      evidence: "The full focused bundle found a separate stale DOCTOR_REASON_CODES literal in tests/test_task0141_productization.py. The recovery matrix and agent_runtime/doctor.py both contain LIFECYCLE_OWNERSHIP_CONTRADICTORY, MAIN_APP_REGISTRATION_ABSENT, and MAIN_APP_APPROVAL_REQUIRED, while that test's expected set omits all three. This test file is outside revision-2 mutation authority; no product source defect was shown."
-
-verification:
-  red:
-    command: "PYTHONPATH=. python -m unittest tests.test_task0055_macos_contract tests.test_tunnel_identity"
-    result: FAIL
-    tests_run: 21
-    failures: 9
-    failure_mapping:
-      stale_readme_assertions: 2
-      malformed_service_management_fixture_cases: 7
-  revision_2_focused:
-    static_checks:
-      git_diff_check: PASS
-      python_compile: PASS
-      shell_syntax: PASS
-    python:
+      - file: tests/test_task0055_macos_contract.py
+        failures: 2
+        cause: "Two README exact-string assertions still encoded superseded Runtime ownership wording."
+      - file: tests/test_tunnel_identity.py
+        failures: 7
+        cause: "The fake AgentRuntimeMenuBar returned exit 0 with empty stdout instead of the current ServiceManagement status JSON."
+  revision_2:
+    implementation_candidate: "338d9790f1467a2d62349a9de52d26f10111286a"
+    report_commit: "7b31774baa5246c832536d2ccc2c51244e60faad"
+    review_commit: "578836fe4f74c7e3b3fc3145e4566fbb63fc4835"
+    corrections_preserved:
+      - tests/test_task0055_macos_contract.py
+      - tests/test_tunnel_identity.py
+    focused_gate:
       result: BLOCKED
       tests_reported: 228
       passed: 226
       failures: 1
       errors: 1
-      corrected_regression_modules:
-        tests.test_task0055_macos_contract: PASS
-        tests.test_tunnel_identity: PASS
-      other_focused_modules:
-        tests.test_candidate_cutover: PASS
-        tests.test_doctor: PASS
-        tests.test_package_provenance: PASS
-        tests.test_uninstall: PASS
-        tests.test_surface_and_scripts: PASS
-        tests.test_candidate_freeze: PASS
-      blocking_failure:
-        module: tests.test_task0141_productization
-        test: test_recovery_matrix_covers_each_doctor_reason_once
-        result: FAIL
-        reason: "The documented recovery matrix includes three current doctor codes absent from the test's hard-coded DOCTOR_REASON_CODES set."
-      invocation_error:
-        requested_module: tests.test_install_preflight
-        result: ERROR
-        reason: "No tests/test_install_preflight.py file exists; this was an invalid focused-module name, not a product test failure."
-    swift:
-      command: "xcrun swift test --package-path macos"
-      result: NOT_RUN
-      reason: "The required focused Python gate did not pass."
-    qualification_discovery:
-      evidence: "verify_tests.py discovers every tests/test_*.py module and the qualification profile selects the complete classified module set, so the out-of-scope productization assertion is a predictable canonical-verification failure."
-      canonical_modules_selected: 62
-  authoritative_verification:
-    required: true
-    revision_1:
-      performed: true
-      invocation: 1
-      result: FAIL
-      evidence: "Published revision-1 report 46f48397fa32f1ebaf42bbe2f674d313d745991a records 36/62 modules and 549 tests in completed modules."
-    revision_2:
-      performed: false
+      blocker: "tests.test_task0141_productization.test_recovery_matrix_covers_each_doctor_reason_once omitted three current lifecycle reason codes."
+      invalid_module_request: "tests.test_install_preflight did not exist; this was a command-selection error."
+    canonical_verification:
+      command: "./verify"
       invocation_count: 0
       result: NOT_RUN
-      reason: "Revision-2 focused gates were not all green; the qualification suite would select an out-of-scope failing test."
-      authorized_invocation_budget_remaining: 1
-      retry_count: 0
+      authorized_invocation_remaining: 1
+    package_build_cutover_reboot:
+      result: NOT_RUN
 
-package_qualification:
-  corrected_zero_cost_distribution_build: NOT_RUN
-  validate_zero_cost: NOT_RUN
-  strict_codesign_audit: NOT_RUN
-  all_macho_identity_audit: NOT_RUN
-  reason: "Blocked before the authoritative verification gate."
-
-live_qualification:
-  corrected_candidate_install_or_cutover: NOT_RUN
-  live_commit_cutover: NOT_RUN
-  bounded_service_restarts: 0
-  launchservices_global_reset: 0
-  runtime_env_mutations: 0
-  tunnel_identity_or_config_mutations: 0
-  current_live_state_reobserved: false
-  reason: "No live effect was eligible after the focused verification blocker."
-
-physical_reboot:
-  attempted: false
-  result: OUTSTANDING
-  reason: "No corrected candidate was installed; no process restart was treated as reboot proof."
-
-revision_2_effect_accounting:
-  canonical_verify_invocations: 0
-  canonical_verify_remaining: 1
-  corrected_zero_cost_distribution_builds: 0
-  corrected_zero_cost_distribution_builds_remaining: 1
-  live_corrected_candidate_cutovers: 0
-  live_corrected_candidate_cutovers_remaining: 1
-  live_commit_cutovers: 0
-  live_commit_cutovers_remaining: 1
-  bounded_service_restarts: 0
-  bounded_service_restarts_remaining: 2
-  physical_reboots: 0
-  physical_reboots_remaining: 1
-  launchservices_global_resets: 0
-  runtime_env_mutations: 0
-  tunnel_identity_or_config_mutations: 0
-  host_dependency_mutations: 0
-  v051_release_or_tag_mutations: 0
-
-public_v051_truth:
-  tag_target: "674095e739533e100c2cf75f434dd0bc825a3de3"
-  release_id: 398229165
-  archive_digest: "sha256:9518e1cf4f28033cbec97b8906e55e1a4da6ad3a9067485fb6ef7c4fcfac58e8"
-  checksum_digest: "sha256:3da6a20d35b369c722c182a8a4afd3b31ee216a65c7ae31e08aa9c486626f83e"
-  revision_2_mutation: NONE
+revision_3:
+  runtime_preflight:
+    runtime_version: "0.5.1"
+    runtime_revision: "674095e739533e100c2cf75f434dd0bc825a3de3"
+    advertised_tool_count: 20
+    known_capability_count: 21
+    terminal_start_available: true
+    terminal_poll_available: true
+  candidate:
+    implementation_commit: "f1ab93d051530a7f5ea7b8c417b5a445fc15d04a"
+    parent: "f96e325cd07bba438986ce2f950c5fdd880026d7"
+    publication: "Published to origin/main by non-force CAS from the exact authorized base."
+    changed_file: tests/test_task0141_productization.py
+    product_source_changed: false
+  correction:
+    added_reason_codes:
+      - LIFECYCLE_OWNERSHIP_CONTRADICTORY
+      - MAIN_APP_REGISTRATION_ABSENT
+      - MAIN_APP_APPROVAL_REQUIRED
+    scope: "Only the hard-coded DOCTOR_REASON_CODES test inventory changed."
+  root_cause:
+    doctor_source: "agent_runtime/doctor.py emits all three reason codes."
+    recovery_matrix:
+      - code: LIFECYCLE_OWNERSHIP_CONTRADICTORY
+        action: STOP_AND_ESCALATE
+      - code: MAIN_APP_REGISTRATION_ABSENT
+        action: SAFE_AUTOMATED
+      - code: MAIN_APP_APPROVAL_REQUIRED
+        action: HUMAN_ACTION_REQUIRED
+    product_defect_found: false
+  red_green:
+    test: "tests.test_task0141_productization.Task0141ProductizationTests.test_recovery_matrix_covers_each_doctor_reason_once"
+    red:
+      result: FAIL
+      tests_run: 1
+      evidence: "The matrix contained exactly the three codes absent from DOCTOR_REASON_CODES."
+    green:
+      result: PASS
+      tests_run: 1
+      evidence: "The same test passed after adding the three current codes; uniqueness, set equality, and action-class coverage assertions remain unchanged."
+  focused_verification:
+    diff_check: PASS
+    python_compile:
+      result: PASS
+      evidence: "CPython 3.13.5 py_compile completed for every tracked Python file selected by git ls-files."
+    shell_syntax:
+      result: PASS
+      evidence: "bash -n passed for all five tracked shell scripts."
+    python_suite:
+      result: PASS
+      tests_run: 227
+      modules:
+        - tests.test_candidate_cutover
+        - tests.test_candidate_freeze
+        - tests.test_doctor
+        - tests.test_package_provenance
+        - tests.test_surface_and_scripts
+        - tests.test_task0055_macos_contract
+        - tests.test_task0141_productization
+        - tests.test_tunnel_identity
+        - tests.test_uninstall
+      evidence: "Both revision-2 corrected regression modules and the applicable lifecycle/productization modules passed on the revision-3 candidate."
+    swift_suite:
+      command: "xcrun swift test --package-path macos"
+      result: PASS
+      tests_run: 34
+      failures: 0
+  canonical_verification:
+    command: "./verify"
+    dispatch_attempts: 1
+    start_identity: "c0190a6b10bd4d979cfbeabf13baf64d"
+    start_result: "UNAVAILABLE / DURABLE_OWNER_LOST"
+    effect_state: unknown
+    reconciliation:
+      attempts: 2
+      result: "DURABLE_OWNER_LOST; durable job ownership or state could not be established."
+    process_completion_proven: false
+    exit_code: unavailable
+    result: UNKNOWN
+    retry_count: 0
+    budget_remaining: 0
+    disposition: "Treat the sole carried-forward invocation as consumed conservatively; do not replay an unknown effect."
+  package_qualification:
+    corrected_zero_cost_build: NOT_RUN
+    validate_zero_cost: NOT_RUN
+    strict_codesign_audit: NOT_RUN
+    all_macho_identity_audit: NOT_RUN
+    reason: "The canonical verifier outcome could not be established, so build and later live gates were not entered."
+  live_qualification:
+    corrected_candidate_install_or_cutover: NOT_RUN
+    live_commit_cutover: NOT_RUN
+    current_lifecycle_reobserved: false
+    readiness_reobserved: false
+    transaction_state_reobserved: false
+    runtime_env:
+      revision_3_reobserved: false
+      revision_3_mutations: 0
+    service_management_restarts: 0
+    launchservices_global_reset: 0
+    tunnel_identity_or_config_mutations: 0
+    host_dependency_mutations: 0
+  historical_live_observation:
+    source_report_commit: "46f48397fa32f1ebaf42bbe2f674d313d745991a"
+    main_app: enabled
+    runtime_agent: not-found
+    readiness: ready
+    transaction_present: false
+    runtime_env_sha256_before: "b3d0d67471f6d620f53ad1ed9ee6db21a1e906fff643dd94050b7cd8def97029"
+    runtime_env_sha256_after: "b3d0d67471f6d620f53ad1ed9ee6db21a1e906fff643dd94050b7cd8def97029"
+    applicability: "Historical revision-1 evidence only; revision 3 did not reobserve current live state."
+  physical_reboot:
+    attempted: false
+    result: OUTSTANDING
+    reason: "No corrected candidate was installed and reconnect-safety preflight was not reached. A process restart was not treated as reboot proof."
+  public_v051_truth:
+    version: "0.5.1"
+    tag_target: "674095e739533e100c2cf75f434dd0bc825a3de3"
+    release_id: 398229165
+    archive_digest: "sha256:9518e1cf4f28033cbec97b8906e55e1a4da6ad3a9067485fb6ef7c4fcfac58e8"
+    checksum_digest: "sha256:3da6a20d35b369c722c182a8a4afd3b31ee216a65c7ae31e08aa9c486626f83e"
+    revision_3_mutations: NONE
+    revision_3_reobserved: false
+  effect_accounting:
+    canonical_verify_dispatch_attempts: 1
+    canonical_verify_process_result: UNKNOWN
+    canonical_verify_remaining: 0
+    corrected_zero_cost_distribution_builds: 0
+    corrected_zero_cost_distribution_builds_remaining: 1
+    live_corrected_candidate_cutovers: 0
+    live_corrected_candidate_cutovers_remaining: 1
+    live_commit_cutovers: 0
+    live_commit_cutovers_remaining: 1
+    bounded_service_restarts: 0
+    bounded_service_restarts_remaining: 2
+    physical_reboots: 0
+    physical_reboots_remaining: 1
+    launchservices_global_resets: 0
+    runtime_env_mutations: 0
+    tunnel_identity_or_config_mutations: 0
+    host_dependency_mutations: 0
+    v051_release_or_tag_mutations: 0
+  report_validation:
+    validator_repository: phatnguyen03022001/agent-foundation
+    validator_revision: "e74e3b958779b995506f1004709b824812e455fd"
+    validator_path: skills/scripts/validate_skill_library.py
+    validator_git_blob: "7912f88ba3e14d53e80ff2b0048a94f4ed596c18"
+    serialization_uses_dotted_mapping_keys: false
+    result: PASS
+    evidence: "The exact validator blob loaded from the pinned Foundation Git object accepted this report with --artifact report before commit."
 
 acceptance_evidence:
   - criterion_id: AC-1
-    status: PASS
-    evidence: "Candidate-cutover and package-provenance focused suites passed on the revision-2 tree; no lifecycle source changed."
+    status: BLOCKED
+    evidence: "Revision-3 candidate-cutover and package-provenance suites passed, but corrected package installation and current main-app/Runtime ownership were not live-qualified."
   - criterion_id: AC-2
     status: BLOCKED
-    evidence: "Doctor tests passed, but a corrected live installation was not eligible after the focused verification blocker."
+    evidence: "Doctor and productization tests passed, but no corrected live installation or current lifecycle observation followed the unknown verifier outcome."
   - criterion_id: AC-3
     status: PASS
-    evidence: "Candidate-cutover and uninstall focused suites passed on the revision-2 tree."
+    evidence: "The exact revision-3 focused bundle reran candidate-cutover and uninstall suites successfully; revision-1 and revision-2 transaction and compensation evidence remains preserved."
   - criterion_id: AC-4
     status: BLOCKED
-    evidence: "Package-provenance unit coverage passed; final built-candidate validation, codesign, and Mach-O audits were not eligible."
+    evidence: "Focused package-provenance tests passed; final validate-zero-cost, codesign, and all-Mach-O checks were not run."
   - criterion_id: AC-5
     status: BLOCKED
-    evidence: "Candidate-freeze and surface/script tests passed; no corrected distribution candidate or live LaunchServices cleanup proof was produced."
+    evidence: "Candidate-freeze and surface/script suites passed; no corrected package build, task-owned LaunchServices cleanup, or live duplicate-registration proof was produced."
   - criterion_id: AC-6
     status: BLOCKED
-    evidence: "One required focused module remains red outside revision-2 mutation authority; revision-2 ./verify was correctly not invoked."
+    evidence: "Focused, static, Python, and Swift gates passed, but the sole canonical ./verify attempt remained UNKNOWN because Runtime could not establish durable operation ownership or state."
   - criterion_id: AC-7
     status: BLOCKED
-    evidence: "No corrected live installation/cutover was attempted."
+    evidence: "No corrected live install/cutover was attempted; current runtime.env and lifecycle state were not reobserved or mutated."
   - criterion_id: AC-8
     status: BLOCKED
-    evidence: "Fresh login/reboot-survival proof remains outstanding; no physical reboot was attempted."
+    evidence: "Physical reboot/login restoration remains outstanding; no process restart was represented as reboot proof."
   - criterion_id: AC-9
     status: PASS
-    evidence: "Both newly authorized regression modules pass with the corrected README assertions and ServiceManagement fixture."
+    evidence: "Both revision-2 correction modules passed in the revision-3 focused suite: the two README assertions and seven ServiceManagement fixture failures remain corrected."
+  - criterion_id: AC-10
+    status: PASS
+    evidence: "Focused RED/GREEN proves exact unique matrix coverage; direct source/document inspection confirmed the three codes and their unchanged action classes."
 
 blockers:
-  - "tests/test_task0141_productization.py:test_recovery_matrix_covers_each_doctor_reason_once fails because its hard-coded expected reason set omits three current doctor lifecycle codes."
-  - "That test file is outside revision-2 mutation authority. A new approved revision must explicitly authorize correcting this expectation before the one remaining canonical ./verify invocation."
-  - "No revision-2 canonical ./verify invocation, distribution build, live corrected cutover, or reboot proof was performed."
+  - "Revision-3 authoritative ./verify dispatch has unknown effect: terminal_start and same-key terminal_poll returned DURABLE_OWNER_LOST without a process result; the one-invocation budget is conservatively exhausted."
+  - "Corrected distribution build, live install/cutover, live commit-cutover, and reboot/login proof remain unperformed."
+  - "Current runtime.env, ServiceManagement, readiness, and transaction state were not reobserved in revision 3."
 
 result: BLOCKED
