@@ -485,7 +485,8 @@ class TerminalSessionManager:
         raise error
 
     def _refresh_durable_session(self, session: _Session) -> DurableSnapshot:
-        if session.durable_fault_reason is not None:
+        owner_loss_pending = session.durable_fault_reason == "DURABLE_OWNER_LOST"
+        if session.durable_fault_reason is not None and not owner_loss_pending:
             self._raise_durable_unknown(
                 session.durable_fault_reason,
                 "durable job ownership or state cannot be established",
@@ -505,6 +506,11 @@ class TerminalSessionManager:
                 "durable job state is corrupt or incomplete",
             )
         previous_status = session.status
+        if owner_loss_pending and snapshot.state["status"] != "exited":
+            self._raise_durable_unknown(
+                "DURABLE_OWNER_LOST",
+                "durable job owner identity cannot be established while execution remains active",
+            )
         if snapshot.state["status"] in {"starting", "running"} and not self._snapshot_owner_valid(snapshot):
             transition_deadline = (
                 time.monotonic() + _DURABLE_FINALIZATION_GRACE_SECONDS
@@ -532,6 +538,8 @@ class TerminalSessionManager:
                 "DURABLE_STATE_CORRUPT",
                 "durable recovery identity binding changed",
             )
+        if owner_loss_pending:
+            session.durable_fault_reason = None
         if previous_status != "exited" and session.status == "exited":
             self._release_lease(session)
             if session.timing_context is not None and not session.durable_timing_emitted:

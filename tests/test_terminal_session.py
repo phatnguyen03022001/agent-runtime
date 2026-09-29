@@ -25,6 +25,12 @@ class TerminalSessionTests(unittest.TestCase):
         self.root = Path(self.temp.name).resolve()
         self.cwd = self.root / "project"
         self.cwd.mkdir()
+        self.durable_state_root = self.root / "durable-jobs"
+        self.durable_root_patch = patch(
+            "agent_runtime.durable_pipe.default_durable_root",
+            return_value=self.durable_state_root,
+        )
+        self.durable_root_patch.start()
         self.env_patch = patch.dict(
             os.environ,
             {"AGENT_RUNTIME_WORKSPACE_ROOT": str(self.root)},
@@ -40,6 +46,7 @@ class TerminalSessionTests(unittest.TestCase):
             except (ValueError, ProcessLookupError, OSError):
                 pass
         self.env_patch.stop()
+        self.durable_root_patch.stop()
         self.temp.cleanup()
 
     def start(self, argv: list[str]) -> dict[str, object]:
@@ -1544,6 +1551,70 @@ server._main()
             {event["termination_state"] for event in process_events},
             {"hard_wall_timeout", "shutdown"},
         )
+
+
+    def test_owner_lost_recovers_integrity_valid_terminal_snapshot(self) -> None:
+        from agent_runtime.capacity import HeavyExecutionAdmission
+        from agent_runtime.durable_pipe import DurableStore
+        from agent_runtime.errors import RuntimeStateError
+        from agent_runtime.session import TerminalSessionManager
+
+        identity = "8" * 32
+        manager_a = TerminalSessionManager(
+            max_active_sessions=1,
+            admission=HeavyExecutionAdmission(1),
+            durable_state_root=self.durable_state_root,
+            start_reaper=False,
+        )
+        self.addCleanup(manager_a.shutdown)
+        started = manager_a.start(
+            [sys.executable, "-u", "-c", "import time; time.sleep(0.5); print('done', flush=True)"],
+            str(self.cwd),
+            identity,
+            "pipe",
+            "runtime_restart",
+        )
+        self.assertEqual(started["status"], "running")
+
+        with patch("agent_runtime.session.verify_process_identity", return_value=False):
+            manager_b = TerminalSessionManager(
+                max_active_sessions=1,
+                admission=HeavyExecutionAdmission(1),
+                durable_state_root=self.durable_state_root,
+                start_reaper=False,
+            )
+        self.addCleanup(manager_b.shutdown)
+
+        recovered = manager_b._sessions[str(started["session_id"])]
+        self.assertEqual(recovered.durable_fault_reason, "DURABLE_OWNER_LOST")
+        with self.assertRaises(RuntimeStateError) as running_owner_error:
+            manager_b.poll(start_identity=identity, wait_ms=0, output="none")
+        self.assertEqual(running_owner_error.exception.reason_code, "DURABLE_OWNER_LOST")
+
+        deadline = time.monotonic() + 4.0
+        final: dict[str, object] | None = None
+        while time.monotonic() < deadline:
+            final = manager_a.poll(
+                start_identity=identity,
+                wait_ms=100,
+                wait_for="terminal_or_deadline",
+                output="none",
+            )
+            if final["status"] == "exited":
+                break
+        self.assertIsNotNone(final)
+        assert final is not None
+        self.assertEqual(final["exit_code"], 0)
+
+        terminal = DurableStore(self.durable_state_root).read_for_identity(identity)
+        self.assertEqual(terminal.state["status"], "exited")
+        self.assertEqual(terminal.state["exit_code"], 0)
+
+        reconciled = manager_b.poll(start_identity=identity, wait_ms=0, output="none")
+        self.assertEqual(reconciled["session_id"], started["session_id"])
+        self.assertEqual(reconciled["status"], "exited")
+        self.assertEqual(reconciled["exit_code"], 0)
+        self.assertIsNone(recovered.durable_fault_reason)
 
 
 def shutil_rmtree(path: Path) -> None:
