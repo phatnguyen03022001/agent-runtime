@@ -1,9 +1,9 @@
 protocol_version: 3
 
 task_id: TASK-0190
-task_revision: 7
+task_revision: 8
 state: APPROVED
-title: "Physical Reboot/Login Qualification Closure"
+title: "Reboot/Login Qualification with LaunchServices Discovery Classification"
 
 origin:
   type: user_request
@@ -11,11 +11,11 @@ origin:
   gap_id: "REBOOT-LOGIN-LIFECYCLE-FALSE-GREEN"
 
 revision_basis:
-  revision_6_task_base: "71f58b211f0966ee0326a58fd1f52b3544d7bee6"
-  revision_6_report_commit: "1e632887fbc6e2b1b5315f6d38f522a8e97f937f"
-  revision_6_review_commit: "393996d0a034bef0f73a659101b59a7c64b51f6e"
-  blocking_finding: "F-0190-006"
-  disposition: "Revision 6 committed the pending cutover, restored the exact audited candidate closure, passed supported doctor/provenance/codesign checks, and removed the task-owned duplicate LaunchServices registration. Its binding terminated BLOCKED before physical reboot. Preserve all revision 1-6 evidence and consumed effects. Revision 7 exists only to prove actual reboot/login restoration under an explicit operator-present sign-in arrangement."
+  revision_7_task_base: "6fa21e876f17e7aae21f762070b01f10abeae48d"
+  revision_7_report_commit: "da6c74f0eb63805dbc8347113ef53640e479d81f"
+  revision_7_review_commit: "918ff8575646c61030df2ea80968a74e50e98c84"
+  blocking_finding: "F-0190-007"
+  disposition: "Revision 7 correctly stopped before reboot when the retained frozen candidate reappeared in LaunchServices. Architect review established that sole LaunchServices-record absence is not a durable lifecycle invariant: macOS may automatically register valid discoverable app bundles. Preserve all prior evidence and effects. Revision 8 replaces that over-strong discovery-cache predicate with exact lifecycle ownership/path proof while retaining fail-closed classification of any additional record."
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -60,37 +60,41 @@ execution_surface:
   preferred_transport: AGENT_RUNTIME
 
 authority_sources:
-  - source: "Operator request to resolve remaining agent-runtime debt, 2026-09-29"
-    role: "Current objective to close the sole remaining reboot/login qualification debt without widening product scope."
+  - source: ".agent/tasks/TASK-0190/review.yaml at 918ff8575646c61030df2ea80968a74e50e98c84"
+    role: "Durable revision-7 REVISION_REQUIRED judgment and F-0190-007 LaunchServices discovery-vs-ownership correction."
     precedence: 1
-  - source: ".agent/tasks/TASK-0190/review.yaml at 393996d0a034bef0f73a659101b59a7c64b51f6e"
-    role: "Durable revision-6 BLOCKED judgment, F-0190-006, remaining physical-reboot budget and continuation requirements."
+  - source: ".agent/tasks/TASK-0190/report.yaml at da6c74f0eb63805dbc8347113ef53640e479d81f"
+    role: "Exact healthy pre-reboot state, retained-candidate LaunchServices record, unconsumed reboot budget and zero revision-7 mutation effects."
     precedence: 2
-  - source: ".agent/tasks/TASK-0190/report.yaml at 1e632887fbc6e2b1b5315f6d38f522a8e97f937f"
-    role: "Exact committed runtime, installed-candidate, LaunchServices and effect-accounting evidence to preserve."
+  - source: "Apple Launch Services Programming Guide — Application Registration"
+    role: "Platform evidence that macOS/Finder/boot/login may automatically register discoverable applications; LaunchServices record absence is not durable ownership proof."
     precedence: 3
   - source: ".agent/tasks/TASK-0180/review.yaml and .agent/tasks/TASK-0181/review.yaml"
-    role: "Accepted lifecycle ownership: SMAppService.mainApp for login and user-launchagent-v1 for current Runtime."
+    role: "Accepted lifecycle ownership: SMAppService.mainApp owns login startup and user-launchagent-v1 owns the current Runtime."
     precedence: 4
 
 structure_authority:
   status: NOT_APPLICABLE
-  source: "Revision-6 accepted lifecycle/product structure; revision 7 authorizes observation and report evidence only."
-  rationale: "Revision 7 authorizes no source, test, documentation, dependency, package, service topology or repository structure change; only reboot/login qualification and report evidence may change."
+  source: "Revision-7 accepted product/source structure; revision 8 authorizes qualification evidence only."
+  rationale: "No source, test, documentation, dependency, package, service topology or repository structure mutation is authorized."
 
-objective: "Close F-0190-006 by proving one actual physical macOS reboot followed by operator sign-in restores the already committed v0.5.1 lifecycle without repair, replay, reinstall, restart substitution, authority widening or source mutation."
+objective: "Close TASK-0190 by proving one actual physical macOS reboot plus operator sign-in restores the already committed v0.5.1 lifecycle without repair. Treat LaunchServices as discovery state, not lifecycle authority: permit only the exact known retained frozen candidate record and prove real ownership from ServiceManagement/Background Task Management and exact loaded executable paths."
 
 scope:
   required_changes:
-    - "Bind exact clean synchronized main at the revision-7 task handoff base and preserve every revision 1-6 task/report/review artifact and effect count. Detect competing repository writers before report authorship."
-    - "Before any reboot action, prove SentinelX host mac-tphat-mb is connected, operational and pingable as an independent carrier; prove its user-session LaunchAgent is loaded using unprivileged read-only observation; capture its current session identity and the current macOS boot epoch."
-    - "Before dispatch, obtain explicit current-interaction confirmation from the operator that they are physically present at the target Mac, can complete the ordinary macOS user sign-in after restart, and will return to this task after login. If this confirmation is absent, ambiguous or withdrawn, stop BLOCKED before reboot. Do not configure auto-login, a system-domain carrier, a new LaunchDaemon, credentials or any persistence change."
-    - "Fresh pre-reboot product proof must show supported ./start.sh doctor --json healthy with ten passing checks, readyz ready, no cutover transaction, SMAppService.mainApp enabled, current Runtime ServiceManagement agent absent, the user-launchagent-v1 Runtime helper loaded, runtime.env SHA-256 b3d0d67471f6d620f53ad1ed9ee6db21a1e906fff643dd94050b7cd8def97029, exact installed candidate closure b2a3a79b99f6dad0b8bf14765d73df869f01610a8c6f65eab50d424534ac1a7d / 1686 regular files, zero generated .pyc/__pycache__ entries, strict codesign/provenance PASS, and only the canonical installed LaunchServices record. Use only unprivileged read-only checks."
-    - "Consume at most one physical reboot. The reboot is an explicit operator-visible macOS restart followed by the operator's ordinary interactive sign-in. Do not use sudo/root probes, auto-login changes, process/service restart as a substitute, or a second reboot. Loss of the Agent Runtime transport during reboot is expected and is not retry authority."
-    - "After sign-in, fresh-bind the same task revision and reconcile consequence before any mutation: require a changed macOS boot epoch and a newly connected operational SentinelX session for mac-tphat-mb. If reboot dispatch/result is ambiguous, use boot-epoch and carrier evidence to determine whether the reboot occurred; never replay the reboot blindly."
-    - "Post-login proof must establish, without repair, the same supported doctor healthy 10/10, readyz ready, absent transaction, main_app enabled, absent current Runtime ServiceManagement agent, loaded user-launchagent-v1 Runtime helper, unchanged runtime.env hash, exact 1686-file candidate closure, zero generated .pyc/__pycache__, strict codesign/provenance PASS, and sole canonical LaunchServices registration. Any manual service start/restart, reinstall, cutover, rollback, cache cleanup, LaunchServices cleanup or source change invalidates reboot-survival proof and must terminate BLOCKED."
-    - "Reuse the immutable revision-4 canonical ./verify PASS of 62/62 modules and 848 tests because source is unchanged. Do not invoke ./verify, build, package, install-prebuilt, commit-cutover, rollback, recovery, restart, or release mutation in revision 7."
-    - "Write report revision 7 truthfully. Preserve revision 1-6 historical results and consumed-effect accounting; record operator-presence confirmation, pre/post boot epochs, pre/post SentinelX session identities, physical reboot count, exact post-login evidence and any interruption/rebind reconciliation. Validate with Foundation revision 66bf111951b6b467d8c78db7985e18ef47f59a5b. Publish only report.yaml as the direct child of the revision-7 task base using non-force main CAS, then prove clean synchronized main."
+    - "Bind exact clean synchronized main at the revision-8 handoff base. Preserve revisions 1-7 and all consumed-effect accounting. Detect competing repository writers before report authorship."
+    - "Before reboot, prove SentinelX host mac-tphat-mb is connected, operational and pingable; capture its current session identity and the current macOS boot epoch using unprivileged read-only observation."
+    - "Before reboot, obtain explicit current-interaction operator confirmation that the operator is physically present at the target Mac, can perform the ordinary macOS restart/sign-in flow, and will return to this task after login. If confirmation is absent, ambiguous or withdrawn, stop BLOCKED before reboot."
+    - "Fresh pre-reboot product proof must show supported ./start.sh doctor --json healthy with ten PASS checks, readyz ready, no cutover transaction, SMAppService.mainApp enabled, current Runtime SMAppService.agent absent, current user LaunchAgent loaded/running, runtime.env SHA-256 b3d0d67471f6d620f53ad1ed9ee6db21a1e906fff643dd94050b7cd8def97029, exact installed closure b2a3a79b99f6dad0b8bf14765d73df869f01610a8c6f65eab50d424534ac1a7d / 1686 regular files, zero generated .pyc/__pycache__, strict codesign PASS and provenance PASS."
+    - "Use unprivileged Background Task Management readback (for example sfltool dumpbtm) to prove the main-app login item for bundle identifier com.picmao.agent-runtime resolves to the canonical installed Agent Runtime.app for the current user and the Runtime LaunchAgent executable resolves inside that same canonical installed app. The current LaunchAgent Program path must likewise resolve to /Users/tienphat/Applications/Agent Runtime.app/Contents/MacOS/AgentRuntimeRuntimeService."
+    - "Classify LaunchServices records for com.picmao.agent-runtime instead of requiring sole-record absence. The canonical installed app must be present. Any additional record is acceptable only when it is exactly /Users/tienphat/Developer/agent-runtime/build/candidates/b2a3a79b99f6dad0b8bf14765d73df869f01610a8c6f65eab50d424534ac1a7d/Agent Runtime.app, remains the exact frozen candidate closure/identity, is owned by the current user with safe ordinary modes, is not the Program/Executable Path of any current lifecycle owner, and has no running process from that candidate path. Any other matching record, candidate drift, candidate execution or lifecycle reference is BLOCKING."
+    - "Do not unregister, delete, rename, move or otherwise mutate the retained candidate merely to influence LaunchServices. Apple documents automatic application registration when apps become known to Finder/system/boot/login, so candidate record presence by itself is informational discovery state after the exact classification above."
+    - "Consume at most one physical reboot. Use the ordinary operator-visible macOS restart followed by ordinary interactive sign-in. Do not configure auto-login or persistence, use sudo/root, substitute process/service restart, or replay reboot after an ambiguous outcome. Loss of Agent Runtime transport during reboot is expected and is not retry authority."
+    - "After sign-in, fresh-bind revision 8 and reconcile the consequence before any mutation. Require a changed macOS boot epoch and a newly connected operational SentinelX session for mac-tphat-mb. If the prior reboot action is ambiguous, boot-epoch evidence decides whether it occurred; never issue a second reboot."
+    - "Post-login, repeat the full product and lifecycle ownership proof without repair: doctor healthy 10/10, readyz ready, transaction absent, main_app enabled, current Runtime SM agent absent, user LaunchAgent loaded/running from the canonical installed app, Background Task Management main-app URL and LaunchAgent executable bound to the canonical installed app, runtime.env unchanged, exact 1686-file installed closure, zero generated bytecode, codesign/provenance PASS. Classify LaunchServices with the same bounded rule; the exact frozen candidate record may be present or absent and is not a failure by itself."
+    - "A manual service start/restart, reinstall, install-prebuilt, cutover, rollback, recovery, cache cleanup, LaunchServices unregister/reset, candidate mutation or source change before post-login evidence invalidates reboot-survival proof and must terminate BLOCKED."
+    - "Reuse revision-4 canonical ./verify PASS 62/62 modules and 848 tests because source is unchanged. Do not invoke ./verify, build, package or any source/test verification that creates a new candidate."
+    - "Write report revision 8 truthfully with operator-presence confirmation, pre/post boot epochs, pre/post SentinelX sessions, physical reboot count, pre/post lifecycle ownership/path evidence, LaunchServices classification, exact no-repair effect accounting and publication closure. Validate with Foundation revision 66bf111951b6b467d8c78db7985e18ef47f59a5b. Publish only report.yaml as the direct child of the revision-8 task base using non-force main CAS, then prove clean synchronized main."
   allowed_existing_files_or_components:
     - ".agent/tasks/TASK-0190/report.yaml"
   expected_files_are_restrictive: true
@@ -125,6 +129,7 @@ effect_authority:
   cache_cleanup_max: 0
   launchservices_cleanup_max: 0
   launchservices_global_reset_max: 0
+  candidate_mutation_max: 0
   physical_reboot_max: 1
   runtime_env_mutation_max: 0
   tunnel_identity_or_config_mutation_max: 0
@@ -135,32 +140,33 @@ effect_authority:
   branch_or_pr_creation_max: 0
 
 historical_effect_accounting:
-  revision_4_verify: "PASS 62/62 modules and 848 tests; no revision-7 invocation."
-  revision_5_recovery_rollback: "One ROLLED_BACK dispatch consumed; no revision-7 rollback."
-  revision_5_install_prebuilt: "One PENDING/APP_SWAPPED cutover consumed; no revision-7 install."
-  revision_6_cache_cleanup: "One bounded mutating cleanup removed 325 .pyc files and 61 empty __pycache__ directories after one no-effect attempt."
-  revision_6_commit_cutover: "One COMMITTED dispatch consumed; no remaining commit-cutover budget."
-  revision_6_launchservices_cleanup: "One candidate-scoped cleanup consumed; no remaining cleanup budget."
-  physical_reboots_consumed_before_revision_7: 0
-  physical_reboots_available_revision_7: 1
-  basis: "Revision 7 carries only the single unconsumed physical reboot needed for AC-4. Historical unused restart capacity is intentionally not authorized because repair would invalidate reboot-survival proof."
+  revision_4_verify: "PASS 62/62 modules and 848 tests; no revision-8 invocation."
+  revision_5_recovery_rollback: "One ROLLED_BACK dispatch consumed."
+  revision_5_install_prebuilt: "One PENDING/APP_SWAPPED cutover consumed."
+  revision_6_cache_cleanup: "One bounded cleanup removed the proven 325 .pyc files and 61 empty __pycache__ directories."
+  revision_6_commit_cutover: "One COMMITTED dispatch consumed; no remaining cutover budget."
+  revision_6_launchservices_cleanup: "One candidate-scoped unregister consumed; later automatic rediscovery demonstrated that absence is not a durable lifecycle invariant."
+  revision_7_physical_reboots: 0
+  physical_reboots_available_revision_8: 1
+  basis: "Only the previously unconsumed physical reboot is carried forward. No repair or cleanup authority is carried because it would invalidate reboot-survival proof."
 
 invariants:
-  - "Installed Runtime remains v0.5.1 with source/runtime revision 5286bbb6d1942ff7eed13190bd38ee5efcc0e621 and twenty advertised tools from twenty-one known capabilities."
-  - "SMAppService.mainApp is the menu-bar login owner; user-launchagent-v1 is the sole current Runtime owner; current SMAppService.agent ownership remains absent."
-  - "The exact audited installed candidate closure is b2a3a79b99f6dad0b8bf14765d73df869f01610a8c6f65eab50d424534ac1a7d / 1686 regular files with no generated Python bytecode."
+  - "Installed Runtime remains v0.5.1 with runtime/source revision 5286bbb6d1942ff7eed13190bd38ee5efcc0e621 and twenty advertised tools from twenty-one known capabilities."
+  - "SMAppService.mainApp is the menu-bar login owner; user-launchagent-v1 is the sole current Runtime owner; current SMAppService.agent Runtime ownership remains absent."
+  - "Lifecycle ownership is proven by exact ServiceManagement/Background Task Management and loaded executable paths, not inferred from LaunchServices discovery-cache uniqueness."
+  - "The exact audited installed closure remains b2a3a79b99f6dad0b8bf14765d73df869f01610a8c6f65eab50d424534ac1a7d / 1686 regular files with no generated Python bytecode."
   - "runtime.env, tunnel identity/config and credentials remain byte-identical and secret."
   - "v0.5.1 tag, release and assets remain unchanged."
-  - "Actual reboot evidence requires a changed boot epoch; process restart, logout/login without reboot, or service restart is insufficient."
+  - "Actual reboot evidence requires a changed boot epoch; logout/login or process/service restart is insufficient."
   - "MAIN ONLY; no branch, PR, force push, reset, rebase or history rewrite."
 
 forbidden_changes:
   - "Any source, test, documentation, dependency, package, manifest, helper, service topology or architecture mutation."
-  - "Any verifier rerun, build, package, install-prebuilt, cutover, rollback, recovery, cache cleanup, LaunchServices cleanup/reset, service start/restart or manual repair."
-  - "Any sudo/root invocation, privileged read-only probe, auto-login change, new system/user persistence, TCC/FDA widening or host dependency mutation."
+  - "Any verifier rerun, build, package, install/cutover, rollback/recovery, cache cleanup, LaunchServices unregister/cleanup/reset, retained-candidate mutation, service start/restart or manual repair."
+  - "Any sudo/root invocation, privileged probe, auto-login change, new persistence, TCC/FDA widening or host dependency mutation."
   - "Any v0.5.1 tag/release/asset mutation or new release."
   - "Any second physical reboot or blind replay after ambiguous reboot consequence."
-  - "Any report claim that replaces actual boot-epoch evidence with process continuity or current health."
+  - "Any acceptance claim based only on LaunchServices record absence/presence without exact lifecycle ownership proof."
 
 gap_policy:
   local_auto_fix: false
@@ -173,29 +179,35 @@ gap_policy:
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "One actual physical reboot and interactive operator sign-in are proven without persistence changes or privileged workaround."
-    evidence_required: "Explicit current-interaction operator-presence confirmation; SentinelX operational before reboot; pre/post boot epochs differ; SentinelX reconnects after login with fresh session evidence; physical_reboots=1 and no replay."
+    requirement: "One actual physical reboot and interactive operator sign-in are proven without repair or persistence changes."
+    evidence_required: "Explicit operator-presence confirmation; operational SentinelX before reboot; changed pre/post boot epoch; fresh post-login SentinelX session; exactly one physical reboot and no replay."
   - id: AC-2
-    requirement: "The committed v0.5.1 lifecycle restores itself after reboot/login with no repair."
-    evidence_required: "Post-login supported doctor healthy 10/10, readyz ready, transaction absent, main_app enabled, current Runtime ServiceManagement agent absent, user-launchagent-v1 helper loaded, runtime.env unchanged, exact 1686-file candidate closure, zero generated bytecode, strict codesign/provenance PASS, and sole canonical LaunchServices registration."
+    requirement: "Canonical login and Runtime lifecycle ownership restore after reboot/login."
+    evidence_required: "Post-login doctor healthy 10/10 and readyz ready; transaction absent; main_app enabled; current Runtime SM agent absent; Background Task Management main-app record bound to canonical installed app; Runtime LaunchAgent Program/Executable Path bound to canonical installed helper and loaded/running."
   - id: AC-3
-    requirement: "Historical verification/effects, Git topology and release identity remain exact."
-    evidence_required: "Revision-4 ./verify PASS is reused without rerun; zero revision-7 build/install/cutover/rollback/restart/cleanup/sudo/source/release effects; report-only direct-child non-force publication; clean synchronized main with only main; v0.5.1 publication unchanged."
+    requirement: "Installed package identity and operator state remain exact with no repair."
+    evidence_required: "runtime.env unchanged; exact 1686-file installed closure; zero generated bytecode; strict codesign/provenance PASS; zero revision-8 service/install/cutover/rollback/cleanup/candidate/source/release mutations."
+  - id: AC-4
+    requirement: "LaunchServices discovery state is bounded without being mistaken for lifecycle authority."
+    evidence_required: "Canonical installed record present; every additional com.picmao.agent-runtime record is either absent or exactly the fingerprinted retained candidate path with unchanged candidate identity, safe ownership/mode, no running process and no lifecycle Program/Executable Path reference; no foreign record."
+  - id: AC-5
+    requirement: "Historical verification, Git topology and release identity remain exact."
+    evidence_required: "Revision-4 ./verify PASS reused without rerun; report-only direct-child non-force publication; clean synchronized main with only main; v0.5.1 publication unchanged."
 
 verification:
   authoritative_verification:
     required: true
     mechanism: "./verify"
-    expected_signal: "Reuse revision-4 exact-source PASS: 62/62 modules and 848 tests. Revision 7 must not invoke ./verify."
+    expected_signal: "Reuse revision-4 exact-source PASS: 62/62 modules and 848 tests. Revision 8 must not invoke ./verify."
   executor_checks:
     - id: CHECK-1
-      command_or_check: "Fresh operator-presence, SentinelX, boot-epoch and pre-reboot installed-product preflight."
+      command_or_check: "Fresh operator-presence, SentinelX, boot-epoch, installed-product, BTM/lifecycle-path and bounded LaunchServices classification preflight."
       required: true
     - id: CHECK-2
-      command_or_check: "One physical reboot plus interactive login, then consequence reconciliation using changed boot epoch and SentinelX reconnect."
+      command_or_check: "One physical reboot plus ordinary interactive login, followed by boot-epoch and fresh SentinelX-session consequence reconciliation."
       required: true
     - id: CHECK-3
-      command_or_check: "Fresh post-login lifecycle, candidate closure, provenance/codesign, LaunchServices, runtime.env and Git/report closure."
+      command_or_check: "Fresh post-login doctor/readyz/lifecycle ownership paths, candidate classification, package closure/provenance/codesign/runtime.env and Git/report closure with zero repair."
       required: true
 
 git_authority:
