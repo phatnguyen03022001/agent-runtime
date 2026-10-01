@@ -441,6 +441,7 @@ STATUS_CONTROL="none"
 STATUS_PIDS=""
 STATUS_HEALTH="unverified"
 STATUS_READY="unverified"
+STATUS_TUNNEL_TRANSPORT="not-running"
 STATUS_DETAIL="Runtime status has not been observed."
 
 status_pid_json() {
@@ -451,6 +452,38 @@ status_pid_json() {
   '
 }
 
+observe_tunnel_transport() {
+  local response body http_code schema component status
+  STATUS_TUNNEL_TRANSPORT="unconfirmed"
+
+  response="$(curl -sS --max-time 1 -w $'\n%{http_code}' "$HEALTH_URL/health/control-plane" 2>/dev/null)" || return 0
+  http_code="${response##*$'\n'}"
+  body="${response%$'\n'*}"
+  [[ "$http_code" == "200" ]] || return 0
+  [[ -n "$body" ]] || return 0
+  [[ -x /usr/bin/plutil ]] || return 0
+
+  schema="$(printf '%s' "$body" | /usr/bin/plutil -extract schema_version raw -o - - 2>/dev/null)" || return 0
+  component="$(printf '%s' "$body" | /usr/bin/plutil -extract component raw -o - - 2>/dev/null)" || return 0
+  status="$(printf '%s' "$body" | /usr/bin/plutil -extract status raw -o - - 2>/dev/null)" || return 0
+  [[ "$schema" == "1" && "$component" == "control-plane" ]] || return 0
+
+  case "$status" in
+    ok)
+      STATUS_TUNNEL_TRANSPORT="healthy"
+      ;;
+    degraded)
+      STATUS_TUNNEL_TRANSPORT="degraded"
+      ;;
+    unknown|disabled|unobserved)
+      STATUS_TUNNEL_TRANSPORT="unconfirmed"
+      ;;
+    *)
+      STATUS_TUNNEL_TRANSPORT="unconfirmed"
+      ;;
+  esac
+}
+
 observe_runtime_status() {
   local owners count pid
   STATUS_STATE="attention"
@@ -458,6 +491,7 @@ observe_runtime_status() {
   STATUS_PIDS=""
   STATUS_HEALTH="unverified"
   STATUS_READY="unverified"
+  STATUS_TUNNEL_TRANSPORT="not-running"
   STATUS_DETAIL="Runtime status is unavailable."
 
   owners="$(port_owner_pids)"
@@ -501,6 +535,7 @@ observe_runtime_status() {
   else
     STATUS_CONTROL="read-only"
   fi
+  observe_tunnel_transport
 }
 
 require_lifecycle_control_authority() {
@@ -525,16 +560,16 @@ emit_runtime_status() {
   observe_runtime_status
   pids_json="$(status_pid_json)"
   if [[ "$json_mode" == "1" ]]; then
-    printf '{"schema":2,"state":"%s","control":"%s","pids":%s,"health":"%s","ready":"%s","detail":"%s"}\n' \
-      "$STATUS_STATE" "$STATUS_CONTROL" "$pids_json" "$STATUS_HEALTH" "$STATUS_READY" "$STATUS_DETAIL"
+    printf '{"schema":3,"state":"%s","control":"%s","pids":%s,"health":"%s","ready":"%s","tunnel_transport":"%s","detail":"%s"}\n' \
+      "$STATUS_STATE" "$STATUS_CONTROL" "$pids_json" "$STATUS_HEALTH" "$STATUS_READY" "$STATUS_TUNNEL_TRANSPORT" "$STATUS_DETAIL"
     return 0
   fi
   case "$STATUS_STATE/$STATUS_CONTROL" in
     running/managed)
-      echo "RUNNING (managed; persistent terminal sessions: $(effective_session_limit))"
+      echo "RUNNING (managed; tunnel: $STATUS_TUNNEL_TRANSPORT; persistent terminal sessions: $(effective_session_limit))"
       ;;
     running/read-only)
-      echo "RUNNING (read-only/external; persistent terminal sessions: $(effective_session_limit))"
+      echo "RUNNING (read-only/external; tunnel: $STATUS_TUNNEL_TRANSPORT; persistent terminal sessions: $(effective_session_limit))"
       ;;
     stopped/*)
       echo "STOPPED (persistent terminal sessions: $(effective_session_limit))"

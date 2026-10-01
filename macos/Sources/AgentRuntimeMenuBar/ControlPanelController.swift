@@ -8,12 +8,18 @@ struct RuntimeFact: Equatable {
 
 enum RuntimeStatusIndicator: Equatable {
     case online
+    case attention
     case offlineOrUnconfirmed
 
-    init(status: RuntimeStatus) {
-        switch status {
+    init(observation: RuntimeObservation) {
+        switch observation.status {
         case .owned, .external:
-            self = .online
+            switch observation.tunnelTransport {
+            case .healthy:
+                self = .online
+            case .degraded, .unconfirmed, .notRunning:
+                self = .attention
+            }
         case .stopped, .ambiguous:
             self = .offlineOrUnconfirmed
         }
@@ -23,14 +29,14 @@ enum RuntimeStatusIndicator: Equatable {
         switch self {
         case .online:
             return "bolt.horizontal.circle.fill"
-        case .offlineOrUnconfirmed:
+        case .attention, .offlineOrUnconfirmed:
             return "bolt.horizontal.circle"
         }
     }
 
     var appearsDisabled: Bool {
         switch self {
-        case .online:
+        case .online, .attention:
             return false
         case .offlineOrUnconfirmed:
             return true
@@ -40,7 +46,9 @@ enum RuntimeStatusIndicator: Equatable {
     var accessibilityLabel: String {
         switch self {
         case .online:
-            return "Serving; health live and readiness ready"
+            return "Serving; health live, readiness ready, Tunnel transport healthy"
+        case .attention:
+            return "Serving; Tunnel transport is degraded or unconfirmed"
         case .offlineOrUnconfirmed:
             return "Not serving or health and readiness are unconfirmed"
         }
@@ -49,12 +57,18 @@ enum RuntimeStatusIndicator: Equatable {
 
 enum RuntimePopoverStatusIndicator: Equatable {
     case online
+    case attention
     case offlineOrUnconfirmed
 
-    init(status: RuntimeStatus) {
-        switch status {
+    init(observation: RuntimeObservation) {
+        switch observation.status {
         case .owned, .external:
-            self = .online
+            switch observation.tunnelTransport {
+            case .healthy:
+                self = .online
+            case .degraded, .unconfirmed, .notRunning:
+                self = .attention
+            }
         case .stopped, .ambiguous:
             self = .offlineOrUnconfirmed
         }
@@ -65,14 +79,19 @@ enum RuntimePopoverStatusIndicator: Equatable {
     var color: NSColor {
         switch self {
         case .online: return .systemGreen
+        case .attention: return .systemYellow
         case .offlineOrUnconfirmed: return .systemRed
         }
     }
 
     var accessibilityLabel: String {
         switch self {
-        case .online: return "Online; Runtime is live and ready"
-        case .offlineOrUnconfirmed: return "Offline or unconfirmed; Runtime ownership is not confirmed online"
+        case .online:
+            return "Online; Runtime is live and ready; Tunnel transport healthy"
+        case .attention:
+            return "Attention; Runtime is live and ready; Tunnel transport degraded or unconfirmed"
+        case .offlineOrUnconfirmed:
+            return "Offline or unconfirmed; Runtime availability is not confirmed online"
         }
     }
 }
@@ -97,11 +116,12 @@ struct RuntimePopoverPresentation {
     let lifecycleSlot: RuntimeLifecycleSlot
 
     static func make(
-        status: RuntimeStatus,
+        observation: RuntimeObservation,
         audit: ProtectionAuditSnapshot,
         sessionLimit: Int,
         parallelLimit: Int = RuntimeConfiguredParallelism.fallback
     ) -> RuntimePopoverPresentation {
+        let status = observation.status
         let availability = RuntimePolicy.actions(for: status)
         let lifecycleSlot: RuntimeLifecycleSlot
         if availability.canStop {
@@ -113,6 +133,7 @@ struct RuntimePopoverPresentation {
         }
 
         let protection = audit.blockedCount == 0 ? "Clear" : "\(audit.blockedCount) retained"
+        let tunnel = tunnelFactValue(observation.tunnelTransport)
         let facts: [RuntimeFact]
         switch status {
         case .stopped:
@@ -121,6 +142,7 @@ struct RuntimePopoverPresentation {
                 RuntimeFact(label: "PID", value: "—"),
                 RuntimeFact(label: "Health", value: "—"),
                 RuntimeFact(label: "Ready", value: "—"),
+                RuntimeFact(label: "Tunnel", value: tunnel),
                 RuntimeFact(label: "Sessions", value: "\(sessionLimit) max"),
                 RuntimeFact(label: "Parallel", value: "\(parallelLimit) max"),
                 RuntimeFact(label: "Protection", value: protection),
@@ -131,6 +153,7 @@ struct RuntimePopoverPresentation {
                 RuntimeFact(label: "PID", value: "\(identity.pid)"),
                 RuntimeFact(label: "Health", value: "live"),
                 RuntimeFact(label: "Ready", value: "ready"),
+                RuntimeFact(label: "Tunnel", value: tunnel),
                 RuntimeFact(label: "Sessions", value: "\(sessionLimit) max"),
                 RuntimeFact(label: "Parallel", value: "\(parallelLimit) max"),
                 RuntimeFact(label: "Protection", value: protection),
@@ -142,6 +165,7 @@ struct RuntimePopoverPresentation {
                 RuntimeFact(label: "PID", value: "External \(identities)"),
                 RuntimeFact(label: "Health", value: "live"),
                 RuntimeFact(label: "Ready", value: "ready"),
+                RuntimeFact(label: "Tunnel", value: tunnel),
                 RuntimeFact(label: "Sessions", value: "\(sessionLimit) max"),
                 RuntimeFact(label: "Parallel", value: "\(parallelLimit) max"),
                 RuntimeFact(label: "Protection", value: protection),
@@ -152,6 +176,7 @@ struct RuntimePopoverPresentation {
                 RuntimeFact(label: "PID", value: "—"),
                 RuntimeFact(label: "Health", value: "Unverified"),
                 RuntimeFact(label: "Ready", value: "Unverified"),
+                RuntimeFact(label: "Tunnel", value: tunnel),
                 RuntimeFact(label: "Sessions", value: "\(sessionLimit) max"),
                 RuntimeFact(label: "Parallel", value: "\(parallelLimit) max"),
                 RuntimeFact(label: "Protection", value: protection),
@@ -159,24 +184,45 @@ struct RuntimePopoverPresentation {
         }
 
         return RuntimePopoverPresentation(
-            indicator: RuntimePopoverStatusIndicator(status: status),
-            accessibilitySummary: accessibilitySummary(for: status),
+            indicator: RuntimePopoverStatusIndicator(observation: observation),
+            accessibilitySummary: accessibilitySummary(for: observation),
             facts: facts,
             lifecycleSlot: lifecycleSlot
         )
     }
 
-    static func accessibilitySummary(for status: RuntimeStatus) -> String {
-        switch status {
+    static func accessibilitySummary(for observation: RuntimeObservation) -> String {
+        let tunnel = tunnelSummary(observation.tunnelTransport)
+        switch observation.status {
         case .stopped:
-            return "Offline; Runtime is not serving."
+            return "Offline; Runtime is not serving; tunnel transport \(tunnel)."
         case .owned(let identity):
-            return "Connected; endpoint 127.0.0.1:8080; PID \(identity.pid); live and ready."
+            let prefix = observation.tunnelTransport == .healthy ? "Runtime serving" : "Attention; Runtime serving"
+            return "\(prefix); endpoint 127.0.0.1:8080; PID \(identity.pid); live and ready; tunnel transport \(tunnel). ChatGPT connection is not proven."
         case .external(let pids):
             let identities = pids.map(String.init).joined(separator: ", ")
-            return "Connected; endpoint 127.0.0.1:8080; PID(s) \(identities); live and ready; read-only/external."
+            let prefix = observation.tunnelTransport == .healthy ? "Runtime serving" : "Attention; Runtime serving"
+            return "\(prefix); endpoint 127.0.0.1:8080; PID(s) \(identities); live and ready; read-only/external; tunnel transport \(tunnel). ChatGPT connection is not proven."
         case .ambiguous(let message):
-            return "Attention; unavailable; \(message)"
+            return "Attention; Runtime availability is unconfirmed; tunnel transport \(tunnel); \(message)"
+        }
+    }
+
+    private static func tunnelFactValue(_ status: TunnelTransportStatus) -> String {
+        switch status {
+        case .notRunning: return "Not running"
+        case .healthy: return "Healthy"
+        case .degraded: return "Degraded"
+        case .unconfirmed: return "Unconfirmed"
+        }
+    }
+
+    private static func tunnelSummary(_ status: TunnelTransportStatus) -> String {
+        switch status {
+        case .notRunning: return "not running"
+        case .healthy: return "healthy (observed control-plane polling)"
+        case .degraded: return "degraded"
+        case .unconfirmed: return "unconfirmed"
         }
     }
 }
@@ -270,13 +316,13 @@ final class ControlPanelController: NSViewController {
     }
 
     func apply(
-        status: RuntimeStatus,
+        observation: RuntimeObservation,
         audit: ProtectionAuditSnapshot = ProtectionAuditSnapshot(),
         sessionLimit: Int = RuntimeSessionCapacity.fallback,
         parallelLimit: Int = RuntimeConfiguredParallelism.fallback
     ) {
         let presentation = RuntimePopoverPresentation.make(
-            status: status,
+            observation: observation,
             audit: audit,
             sessionLimit: sessionLimit,
             parallelLimit: parallelLimit
@@ -314,7 +360,7 @@ final class ControlPanelController: NSViewController {
     }
 
     private func makeFactsGrid() -> NSGridView {
-        let labels = ["Endpoint", "PID", "Health", "Ready", "Sessions", "Parallel", "Protection"]
+        let labels = ["Endpoint", "PID", "Health", "Ready", "Tunnel", "Sessions", "Parallel", "Protection"]
         let rows: [[NSView]] = labels.map { label in
             let labelField = NSTextField(labelWithString: label)
             labelField.font = .systemFont(ofSize: NSFont.smallSystemFontSize)

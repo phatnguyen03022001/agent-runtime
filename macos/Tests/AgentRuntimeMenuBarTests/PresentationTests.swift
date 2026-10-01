@@ -66,21 +66,24 @@ final class PresentationTests: XCTestCase {
         XCTAssertEqual(RuntimeFactLayout.valueAlignment, .right)
 
         let presentation = RuntimePopoverPresentation.make(
-            status: .owned(servingIdentity),
+            observation: RuntimeObservation(status: .owned(servingIdentity), tunnelTransport: .healthy),
             audit: ProtectionAuditSnapshot(),
             sessionLimit: 64,
             parallelLimit: 4
         )
         XCTAssertEqual(
             presentation.facts.map(\.label),
-            ["Endpoint", "PID", "Health", "Ready", "Sessions", "Parallel", "Protection"]
+            ["Endpoint", "PID", "Health", "Ready", "Tunnel", "Sessions", "Parallel", "Protection"]
         )
-        XCTAssertEqual(presentation.facts.map(\.value), ["127.0.0.1:8080", "42", "live", "ready", "64 max", "4 max", "Clear"])
+        XCTAssertEqual(
+            presentation.facts.map(\.value),
+            ["127.0.0.1:8080", "42", "live", "ready", "Healthy", "64 max", "4 max", "Clear"]
+        )
     }
 
     func testLifecyclePresentationKeepsOneStablePolicyControlledActionSlot() {
         let connected = RuntimePopoverPresentation.make(
-            status: .owned(servingIdentity),
+            observation: RuntimeObservation(status: .owned(servingIdentity), tunnelTransport: .healthy),
             audit: ProtectionAuditSnapshot(),
             sessionLimit: 64
         )
@@ -88,16 +91,19 @@ final class PresentationTests: XCTestCase {
         XCTAssertTrue(connected.lifecycleSlot.isEnabled)
 
         let stopped = RuntimePopoverPresentation.make(
-            status: .stopped,
+            observation: RuntimeObservation(status: .stopped, tunnelTransport: .notRunning),
             audit: ProtectionAuditSnapshot(),
             sessionLimit: 64
         )
         if case .start = stopped.lifecycleSlot.action {} else { XCTFail("stopped Runtime should expose Start") }
         XCTAssertTrue(stopped.lifecycleSlot.isEnabled)
 
-        for status in [RuntimeStatus.external([99]), .ambiguous("unavailable")] {
+        for observation in [
+            RuntimeObservation(status: .external([99]), tunnelTransport: .healthy),
+            RuntimeObservation(status: .ambiguous("unavailable"), tunnelTransport: .unconfirmed),
+        ] {
             let unavailable = RuntimePopoverPresentation.make(
-                status: status,
+                observation: observation,
                 audit: ProtectionAuditSnapshot(),
                 sessionLimit: 64
             )
@@ -107,10 +113,10 @@ final class PresentationTests: XCTestCase {
     }
 
     func testHealthyReadOnlyRuntimeIsPresentedAsServingWithoutLifecycleControl() {
-        let status = RuntimeStatus.external([99])
-        let menuIndicator = RuntimeStatusIndicator(status: status)
+        let observation = RuntimeObservation(status: .external([99]), tunnelTransport: .healthy)
+        let menuIndicator = RuntimeStatusIndicator(observation: observation)
         let popover = RuntimePopoverPresentation.make(
-            status: status,
+            observation: observation,
             audit: ProtectionAuditSnapshot(),
             sessionLimit: 6
         )
@@ -121,18 +127,63 @@ final class PresentationTests: XCTestCase {
         XCTAssertEqual(popover.facts[0], RuntimeFact(label: "Endpoint", value: "127.0.0.1:8080"))
         XCTAssertEqual(popover.facts[2], RuntimeFact(label: "Health", value: "live"))
         XCTAssertEqual(popover.facts[3], RuntimeFact(label: "Ready", value: "ready"))
+        XCTAssertEqual(popover.facts[4], RuntimeFact(label: "Tunnel", value: "Healthy"))
         XCTAssertFalse(popover.lifecycleSlot.isEnabled)
         XCTAssertTrue(popover.accessibilitySummary.contains("read-only"))
+        XCTAssertFalse(popover.accessibilitySummary.contains("Connected"))
+    }
+
+    func testTunnelTransportAttentionDoesNotChangeLifecycleAuthority() {
+        for tunnel in [TunnelTransportStatus.degraded, .unconfirmed] {
+            let owned = RuntimeObservation(status: .owned(servingIdentity), tunnelTransport: tunnel)
+            let ownedPresentation = RuntimePopoverPresentation.make(
+                observation: owned,
+                audit: ProtectionAuditSnapshot(),
+                sessionLimit: 6
+            )
+            XCTAssertEqual(RuntimeStatusIndicator(observation: owned), .attention)
+            XCTAssertEqual(ownedPresentation.indicator, .attention)
+            XCTAssertEqual(ownedPresentation.facts[4].label, "Tunnel")
+            XCTAssertEqual(
+                ownedPresentation.facts[4].value,
+                tunnel == .degraded ? "Degraded" : "Unconfirmed"
+            )
+            if case .stop = ownedPresentation.lifecycleSlot.action {} else {
+                XCTFail("owned Runtime must keep Stop authority regardless of tunnel transport")
+            }
+            XCTAssertTrue(ownedPresentation.lifecycleSlot.isEnabled)
+
+            let readOnly = RuntimeObservation(status: .external([99]), tunnelTransport: tunnel)
+            let readOnlyPresentation = RuntimePopoverPresentation.make(
+                observation: readOnly,
+                audit: ProtectionAuditSnapshot(),
+                sessionLimit: 6
+            )
+            XCTAssertEqual(RuntimeStatusIndicator(observation: readOnly), .attention)
+            XCTAssertFalse(readOnlyPresentation.lifecycleSlot.isEnabled)
+        }
     }
 
     func testPopoverHeaderUsesCircleStatusDotWithTruthfulSemantics() {
-        let online = RuntimePopoverStatusIndicator(status: .owned(servingIdentity))
+        let online = RuntimePopoverStatusIndicator(
+            observation: RuntimeObservation(status: .owned(servingIdentity), tunnelTransport: .healthy)
+        )
         XCTAssertEqual(online.symbolName, "circle.fill")
         XCTAssertEqual(online.color, .systemGreen)
         XCTAssertTrue(online.accessibilityLabel.contains("Online"))
 
-        for status in [RuntimeStatus.stopped, .ambiguous("health unavailable")] {
-            let unavailable = RuntimePopoverStatusIndicator(status: status)
+        let attention = RuntimePopoverStatusIndicator(
+            observation: RuntimeObservation(status: .owned(servingIdentity), tunnelTransport: .degraded)
+        )
+        XCTAssertEqual(attention.symbolName, "circle.fill")
+        XCTAssertEqual(attention.color, .systemYellow)
+        XCTAssertTrue(attention.accessibilityLabel.contains("Tunnel transport"))
+
+        for observation in [
+            RuntimeObservation(status: .stopped, tunnelTransport: .notRunning),
+            RuntimeObservation(status: .ambiguous("health unavailable"), tunnelTransport: .unconfirmed),
+        ] {
+            let unavailable = RuntimePopoverStatusIndicator(observation: observation)
             XCTAssertEqual(unavailable.symbolName, "circle.fill")
             XCTAssertEqual(unavailable.color, .systemRed)
             XCTAssertTrue(unavailable.accessibilityLabel.contains("Offline or unconfirmed"))
@@ -140,14 +191,27 @@ final class PresentationTests: XCTestCase {
     }
 
     func testMenuBarStatusItemFollowsNativeAppearanceAndCommunicatesState() {
-        let online = RuntimeStatusIndicator(status: .owned(servingIdentity))
+        let online = RuntimeStatusIndicator(
+            observation: RuntimeObservation(status: .owned(servingIdentity), tunnelTransport: .healthy)
+        )
         XCTAssertEqual(online, .online)
         XCTAssertEqual(online.symbolName, "bolt.horizontal.circle.fill")
         XCTAssertFalse(online.appearsDisabled)
         XCTAssertTrue(online.accessibilityLabel.contains("Serving"))
 
-        for status in [RuntimeStatus.stopped, .ambiguous("health unavailable")] {
-            let offline = RuntimeStatusIndicator(status: status)
+        let attention = RuntimeStatusIndicator(
+            observation: RuntimeObservation(status: .owned(servingIdentity), tunnelTransport: .unconfirmed)
+        )
+        XCTAssertEqual(attention, .attention)
+        XCTAssertEqual(attention.symbolName, "bolt.horizontal.circle")
+        XCTAssertFalse(attention.appearsDisabled)
+        XCTAssertTrue(attention.accessibilityLabel.contains("Tunnel transport"))
+
+        for observation in [
+            RuntimeObservation(status: .stopped, tunnelTransport: .notRunning),
+            RuntimeObservation(status: .ambiguous("health unavailable"), tunnelTransport: .unconfirmed),
+        ] {
+            let offline = RuntimeStatusIndicator(observation: observation)
             XCTAssertEqual(offline, .offlineOrUnconfirmed)
             XCTAssertEqual(offline.symbolName, "bolt.horizontal.circle")
             XCTAssertTrue(offline.appearsDisabled)
@@ -162,7 +226,12 @@ final class PresentationTests: XCTestCase {
         onlineImage?.isTemplate = true
         XCTAssertTrue(onlineImage?.isTemplate == true)
 
-        let offlineImage = NSImage(systemSymbolName: RuntimeStatusIndicator(status: .stopped).symbolName, accessibilityDescription: nil)?
+        let offlineImage = NSImage(
+            systemSymbolName: RuntimeStatusIndicator(
+                observation: RuntimeObservation(status: .stopped, tunnelTransport: .notRunning)
+            ).symbolName,
+            accessibilityDescription: nil
+        )?
             .withSymbolConfiguration(config)
         XCTAssertNotNil(offlineImage)
         offlineImage?.isTemplate = true
@@ -177,13 +246,13 @@ final class PresentationTests: XCTestCase {
         }
 
         // Simulate online update
-        let onlineStatus = RuntimeStatus.owned(servingIdentity)
-        let onlineIndicator = RuntimeStatusIndicator(status: onlineStatus)
+        let onlineObservation = RuntimeObservation(status: .owned(servingIdentity), tunnelTransport: .healthy)
+        let onlineIndicator = RuntimeStatusIndicator(observation: onlineObservation)
         button.image = NSImage(systemSymbolName: onlineIndicator.symbolName, accessibilityDescription: onlineIndicator.accessibilityLabel)
         button.image?.isTemplate = true
         button.contentTintColor = nil
         button.appearsDisabled = onlineIndicator.appearsDisabled
-        let onlineSummary = RuntimePopoverPresentation.accessibilitySummary(for: onlineStatus)
+        let onlineSummary = RuntimePopoverPresentation.accessibilitySummary(for: onlineObservation)
         button.toolTip = onlineSummary
         button.setAccessibilityValue(onlineSummary)
 
@@ -193,13 +262,13 @@ final class PresentationTests: XCTestCase {
         XCTAssertEqual(button.toolTip, onlineSummary)
 
         // Simulate offline update
-        let stoppedStatus = RuntimeStatus.stopped
-        let offlineIndicator = RuntimeStatusIndicator(status: stoppedStatus)
+        let stoppedObservation = RuntimeObservation(status: .stopped, tunnelTransport: .notRunning)
+        let offlineIndicator = RuntimeStatusIndicator(observation: stoppedObservation)
         button.image = NSImage(systemSymbolName: offlineIndicator.symbolName, accessibilityDescription: offlineIndicator.accessibilityLabel)
         button.image?.isTemplate = true
         button.contentTintColor = nil
         button.appearsDisabled = offlineIndicator.appearsDisabled
-        let stoppedSummary = RuntimePopoverPresentation.accessibilitySummary(for: stoppedStatus)
+        let stoppedSummary = RuntimePopoverPresentation.accessibilitySummary(for: stoppedObservation)
         button.toolTip = stoppedSummary
         button.setAccessibilityValue(stoppedSummary)
 
@@ -252,22 +321,31 @@ final class PresentationTests: XCTestCase {
     }
 
     func testAccessibilitySummaryCarriesStateWithoutDependingOnColor() {
-        let connected = RuntimePopoverPresentation.accessibilitySummary(for: .owned(servingIdentity))
-        XCTAssertTrue(connected.contains("Connected"))
-        XCTAssertTrue(connected.contains("live and ready"))
+        let healthy = RuntimePopoverPresentation.accessibilitySummary(
+            for: RuntimeObservation(status: .owned(servingIdentity), tunnelTransport: .healthy)
+        )
+        XCTAssertFalse(healthy.contains("Connected"))
+        XCTAssertTrue(healthy.contains("live and ready"))
+        XCTAssertTrue(healthy.contains("tunnel transport healthy"))
+        XCTAssertTrue(healthy.contains("ChatGPT connection is not proven"))
 
-        let stopped = RuntimePopoverPresentation.accessibilitySummary(for: .stopped)
+        let stopped = RuntimePopoverPresentation.accessibilitySummary(
+            for: RuntimeObservation(status: .stopped, tunnelTransport: .notRunning)
+        )
         XCTAssertTrue(stopped.contains("Offline"))
         XCTAssertTrue(stopped.contains("not serving"))
 
-        let attention = RuntimePopoverPresentation.accessibilitySummary(for: .ambiguous("health unavailable"))
+        let attention = RuntimePopoverPresentation.accessibilitySummary(
+            for: RuntimeObservation(status: .owned(servingIdentity), tunnelTransport: .degraded)
+        )
         XCTAssertTrue(attention.contains("Attention"))
-        XCTAssertTrue(attention.contains("health unavailable"))
+        XCTAssertTrue(attention.contains("tunnel transport degraded"))
+        XCTAssertTrue(attention.contains("ChatGPT connection is not proven"))
     }
 
     func testProtectionPresentationUsesRetainedBoundedHistoryWithoutRawCategory() {
         let presentation = RuntimePopoverPresentation.make(
-            status: .owned(servingIdentity),
+            observation: RuntimeObservation(status: .owned(servingIdentity), tunnelTransport: .healthy),
             audit: ProtectionAuditSnapshot(
                 blockedCount: 25,
                 lastCategory: "canonical_process_signal",

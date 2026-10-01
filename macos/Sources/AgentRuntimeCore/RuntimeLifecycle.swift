@@ -61,6 +61,23 @@ public enum RuntimeStatus: Equatable, Sendable {
     case ambiguous(String)
 }
 
+public enum TunnelTransportStatus: Equatable, Sendable {
+    case notRunning
+    case healthy
+    case degraded
+    case unconfirmed
+}
+
+public struct RuntimeObservation: Equatable, Sendable {
+    public let status: RuntimeStatus
+    public let tunnelTransport: TunnelTransportStatus
+
+    public init(status: RuntimeStatus, tunnelTransport: TunnelTransportStatus) {
+        self.status = status
+        self.tunnelTransport = tunnelTransport
+    }
+}
+
 public enum RuntimeAction: Sendable {
     case start
     case stop
@@ -116,9 +133,24 @@ public enum RuntimeLifecycleError: Error, Equatable, LocalizedError, Sendable {
 
 public protocol RuntimeBackend: AnyObject {
     func observeStatus() throws -> RuntimeStatus
+    func observeRuntimeObservation() throws -> RuntimeObservation
     func startOwned() throws
     func stopOwned() throws
     func restartOwned() throws
+}
+
+public extension RuntimeBackend {
+    func observeRuntimeObservation() throws -> RuntimeObservation {
+        let status = try observeStatus()
+        let tunnelTransport: TunnelTransportStatus
+        switch status {
+        case .stopped:
+            tunnelTransport = .notRunning
+        case .owned, .external, .ambiguous:
+            tunnelTransport = .unconfirmed
+        }
+        return RuntimeObservation(status: status, tunnelTransport: tunnelTransport)
+    }
 }
 
 public final class RuntimeController: @unchecked Sendable {
@@ -129,10 +161,17 @@ public final class RuntimeController: @unchecked Sendable {
     }
 
     public func refresh() -> RuntimeStatus {
+        refreshObservation().status
+    }
+
+    public func refreshObservation() -> RuntimeObservation {
         do {
-            return try backend.observeStatus()
+            return try backend.observeRuntimeObservation()
         } catch {
-            return .ambiguous(error.localizedDescription)
+            return RuntimeObservation(
+                status: .ambiguous(error.localizedDescription),
+                tunnelTransport: .unconfirmed
+            )
         }
     }
 

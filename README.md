@@ -131,6 +131,8 @@ The internal service entrypoint is not an operator command.
 
 Foreign or ambiguous ownership of protected port 8080 fails closed. The Runtime never treats occupancy alone as permission to kill or rebind another process.
 
+Runtime status keeps local availability, lifecycle ownership, and tunnel transport separate. When the local Runtime is serving, the independent `Tunnel` status comes only from the existing loopback `/health/control-plane` snapshot and may be healthy, degraded, or unconfirmed; when Runtime is not serving it is not-running. Tunnel state never changes Start/Stop/Restart authority. A healthy local Runtime or tunnel snapshot does not prove a specific ChatGPT/workspace link or guarantee a future tool call; end-to-end proof requires an actual product-originated MCP request.
+
 Use `./install.sh --uninstall` for owner-safe removal. Canonical runtime.env is retained by default.
 
 ## Security boundary

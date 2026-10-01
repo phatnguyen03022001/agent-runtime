@@ -19,7 +19,7 @@ Runtime execution is manual and session-scoped:
 - `start` explicitly launches one owned Runtime generation and waits for canonical readiness.
 - `stop` signals only positively proven canonical lifecycle ownership, waits for listener/supervisor absence, and is a safe no-op when already stopped.
 - `restart` is one bounded explicit Stop plus Start operation.
-- `status` reports current serving/control truth and effective persistent-session capacity; it carries no persistent desired-state intent.
+- `status` reports current local serving/control truth, the independent tunnel control-plane transport observation, and effective persistent-session capacity; it carries no persistent desired-state intent.
 
 The menu-bar app may start at user login, but Runtime does not start because of login/reboot and does not automatically restart after an unexpected child exit. A leftover pre-task `protected-runtime-running` marker is not current availability truth; it is relevant only to bounded predecessor rollback/recovery compatibility.
 
@@ -32,18 +32,27 @@ Foreign or ambiguous ownership of `127.0.0.1:8080` fails closed. Do not kill/reb
 ./start.sh doctor --json
 ```
 
-This is the operator diagnostic authority. It uses installed package bytes plus canonical `runtime.env`; it does not repair state.
+This is the operator diagnostic authority. It uses installed package bytes plus canonical `runtime.env`; it does not repair state. Doctor validates the installed package/configuration boundary; it is not an end-to-end ChatGPT connectivity check, and a stopped or transport-unobserved Runtime does not manufacture a transport failure.
 
 Direct `python -m agent_runtime.doctor` is a source/development diagnostic and is not the installed-product operator entrypoint.
 
 ## OpenAI tunnel health
 
-The product transport is OpenAI Secure MCP Tunnel. `tunnel-client` connects outbound to OpenAI and keeps the Runtime private. Ordinary readiness requires exactly one canonical loopback listener and green:
+The product transport is OpenAI Secure MCP Tunnel. `tunnel-client` connects outbound to OpenAI and keeps the Runtime private. Status keeps three facts separate:
+
+1. **Local Runtime availability** comes from one canonical listener plus green loopback `/healthz` and `/readyz`.
+2. **Lifecycle ownership** is independently classified as managed, read-only/external, stopped, or ambiguous. Tunnel transport never grants Start/Stop/Restart authority.
+3. **Tunnel control-plane transport** is read only from the existing loopback `/health/control-plane` component after the Runtime is locally serving.
 
 ```text
 http://127.0.0.1:8080/healthz
 http://127.0.0.1:8080/readyz
+http://127.0.0.1:8080/health/control-plane
 ```
+
+The status transport axis is `healthy`, `degraded`, `unconfirmed`, or `not-running`. A supported schema-1 control-plane snapshot with component status `ok` maps to `healthy`; `degraded` maps to `degraded`. Unknown/disabled state, an unsupported or absent health route, timeout, malformed data, unsupported schema, or another bounded local read failure maps to `unconfirmed`. When the local Runtime is not serving, transport is `not-running` and the component route is not probed.
+
+These are passive local observations. Green local readiness or a healthy control-plane snapshot does **not** prove that a particular ChatGPT app, workspace, or conversation is linked, and it does not guarantee a future MCP tool call. End-to-end product proof requires an actual product-originated MCP request and its observed result.
 
 Do not expose the local health/admin surface publicly.
 

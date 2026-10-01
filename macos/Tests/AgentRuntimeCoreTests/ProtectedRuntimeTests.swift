@@ -64,9 +64,9 @@ final class ProtectedRuntimeTests: XCTestCase {
           status)
             [[ "$2" == "--json" ]] || exit 9
             if [[ -f "\(running.path)" ]]; then
-              printf '%s\n' '{"schema":2,"state":"running","control":"managed","pids":[501],"health":"live","ready":"ready","detail":"Canonical Runtime is serving and ready."}'
+              printf '%s\n' '{"schema":3,"state":"running","control":"managed","pids":[501],"health":"live","ready":"ready","tunnel_transport":"healthy","detail":"Canonical Runtime is serving and ready."}'
             else
-              printf '%s\n' '{"schema":2,"state":"stopped","control":"none","pids":[],"health":"unverified","ready":"unverified","detail":"No Runtime listener is serving."}'
+              printf '%s\n' '{"schema":3,"state":"stopped","control":"none","pids":[],"health":"unverified","ready":"unverified","tunnel_transport":"not-running","detail":"No Runtime listener is serving."}'
             fi
             ;;
           *) exit 9 ;;
@@ -112,17 +112,38 @@ final class ProtectedRuntimeTests: XCTestCase {
             discovery: ThrowingDiscovery()
         )
 
-        try #"{"schema":2,"state":"running","control":"managed","pids":[501],"health":"live","ready":"ready","detail":"Canonical Runtime is serving and ready."}"#.write(to: statusFile, atomically: true, encoding: .utf8)
-        XCTAssertEqual(try backend.observeStatus(), .owned(identity))
+        try #"{"schema":3,"state":"running","control":"managed","pids":[501],"health":"live","ready":"ready","tunnel_transport":"healthy","detail":"Canonical Runtime is serving and ready."}"#.write(to: statusFile, atomically: true, encoding: .utf8)
+        XCTAssertEqual(
+            try backend.observeRuntimeObservation(),
+            RuntimeObservation(status: .owned(identity), tunnelTransport: .healthy)
+        )
 
-        try #"{"schema":2,"state":"running","control":"read-only","pids":[501],"health":"live","ready":"ready","detail":"Canonical Runtime is serving and ready."}"#.write(to: statusFile, atomically: true, encoding: .utf8)
-        XCTAssertEqual(try backend.observeStatus(), .external([501]))
+        try #"{"schema":3,"state":"running","control":"read-only","pids":[501],"health":"live","ready":"ready","tunnel_transport":"degraded","detail":"Canonical Runtime is serving and ready."}"#.write(to: statusFile, atomically: true, encoding: .utf8)
+        XCTAssertEqual(
+            try backend.observeRuntimeObservation(),
+            RuntimeObservation(status: .external([501]), tunnelTransport: .degraded)
+        )
 
-        try #"{"schema":2,"state":"attention","control":"none","pids":[501],"health":"live","ready":"failed","detail":"Canonical Runtime identity is present, but readyz is not green."}"#.write(to: statusFile, atomically: true, encoding: .utf8)
-        XCTAssertEqual(try backend.observeStatus(), .ambiguous("Canonical Runtime identity is present, but readyz is not green."))
+        try #"{"schema":3,"state":"running","control":"managed","pids":[501],"health":"live","ready":"ready","tunnel_transport":"future-status","detail":"Canonical Runtime is serving and ready."}"#.write(to: statusFile, atomically: true, encoding: .utf8)
+        XCTAssertEqual(
+            try backend.observeRuntimeObservation(),
+            RuntimeObservation(status: .owned(identity), tunnelTransport: .unconfirmed)
+        )
 
-        try #"{"schema":2,"state":"stopped","control":"none","pids":[],"health":"unverified","ready":"unverified","detail":"No Runtime listener is serving."}"#.write(to: statusFile, atomically: true, encoding: .utf8)
-        XCTAssertEqual(try backend.observeStatus(), .stopped)
+        try #"{"schema":3,"state":"attention","control":"none","pids":[501],"health":"live","ready":"failed","tunnel_transport":"not-running","detail":"Canonical Runtime identity is present, but readyz is not green."}"#.write(to: statusFile, atomically: true, encoding: .utf8)
+        XCTAssertEqual(
+            try backend.observeRuntimeObservation(),
+            RuntimeObservation(
+                status: .ambiguous("Canonical Runtime identity is present, but readyz is not green."),
+                tunnelTransport: .notRunning
+            )
+        )
+
+        try #"{"schema":3,"state":"stopped","control":"none","pids":[],"health":"unverified","ready":"unverified","tunnel_transport":"not-running","detail":"No Runtime listener is serving."}"#.write(to: statusFile, atomically: true, encoding: .utf8)
+        XCTAssertEqual(
+            try backend.observeRuntimeObservation(),
+            RuntimeObservation(status: .stopped, tunnelTransport: .notRunning)
+        )
     }
 
     func testCanonicalServingObservationRemainsReadOnlyExternalWhenControlIsUnproven() throws {
@@ -134,7 +155,7 @@ final class ProtectedRuntimeTests: XCTestCase {
         try """
         #!/bin/bash
         [[ "$1" == "status" && "$2" == "--json" ]] || exit 9
-        printf '%s\n' '{"schema":2,"state":"running","control":"read-only","pids":[601],"health":"live","ready":"ready","detail":"Canonical Runtime is serving and ready."}'
+        printf '%s\n' '{"schema":3,"state":"running","control":"read-only","pids":[601],"health":"live","ready":"ready","tunnel_transport":"healthy","detail":"Canonical Runtime is serving and ready."}'
         """.write(to: script, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: script.path)
 
@@ -145,6 +166,10 @@ final class ProtectedRuntimeTests: XCTestCase {
             discovery: ThrowingDiscovery()
         )
         XCTAssertEqual(try backend.observeStatus(), .external([601]))
+        XCTAssertEqual(
+            try backend.observeRuntimeObservation(),
+            RuntimeObservation(status: .external([601]), tunnelTransport: .healthy)
+        )
     }
 }
 

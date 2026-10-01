@@ -186,7 +186,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         button.target = self
         button.action = #selector(togglePopover)
         button.setAccessibilityLabel("Agent Runtime status")
-        updateStatusItem(for: .ambiguous("Refreshing Runtime status…"))
+        updateStatusItem(
+            for: RuntimeObservation(
+                status: .ambiguous("Refreshing Runtime status…"),
+                tunnelTransport: .unconfirmed
+            )
+        )
     }
 
     private func configurePopover() {
@@ -281,8 +286,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let sessionLimit = runtimeConfiguration?.sessionLimit ?? RuntimeSessionCapacity.fallback
         let parallelLimit = runtimeConfiguration?.parallelLimit ?? RuntimeConfiguredParallelism.fallback
         guard let controller else {
-            let status = RuntimeStatus.ambiguous(configurationError ?? "Configuration unavailable")
-            present(status, sessionLimit: sessionLimit, parallelLimit: parallelLimit)
+            let observation = RuntimeObservation(
+                status: .ambiguous(configurationError ?? "Configuration unavailable"),
+                tunnelTransport: .unconfirmed
+            )
+            present(observation, sessionLimit: sessionLimit, parallelLimit: parallelLimit)
             return
         }
         guard statusRefreshCoalescer.request() else { return }
@@ -291,10 +299,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func enqueueStatusRefresh(_ controller: RuntimeController) {
         runtimeQueue.async { [weak self, controller] in
-            let status = controller.refresh()
+            let observation = controller.refreshObservation()
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
-                self.present(status)
+                self.present(observation)
                 if self.statusRefreshCoalescer.complete() {
                     self.refreshStatus()
                 }
@@ -312,11 +320,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case .stop: result = controller.stop()
             case .restart: result = controller.restart()
             }
+            let observation: RuntimeObservation?
+            if case .success = result {
+                observation = controller.refreshObservation()
+            } else {
+                observation = nil
+            }
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 switch result {
-                case .success(let status):
-                    self.present(status)
+                case .success:
+                    if let observation {
+                        self.present(observation)
+                    }
                 case .failure(let error):
                     self.refreshStatus()
                     self.showError(error.localizedDescription)
@@ -326,18 +342,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func present(
-        _ status: RuntimeStatus,
+        _ observation: RuntimeObservation,
         sessionLimit: Int? = nil,
         parallelLimit: Int? = nil
     ) {
         controlPanel.apply(
-            status: status,
+            observation: observation,
             audit: auditReader.read(),
             sessionLimit: sessionLimit ?? runtimeConfiguration?.sessionLimit ?? RuntimeSessionCapacity.fallback,
             parallelLimit: parallelLimit ?? runtimeConfiguration?.parallelLimit ?? RuntimeConfiguredParallelism.fallback
         )
-        updateStatusItem(for: status)
-        playOfflineNotificationIfNeeded(for: status)
+        updateStatusItem(for: observation)
+        playOfflineNotificationIfNeeded(for: observation.status)
     }
 
     private func playOfflineNotificationIfNeeded(for status: RuntimeStatus) {
@@ -350,9 +366,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notificationSound?.play()
     }
 
-    private func updateStatusItem(for status: RuntimeStatus) {
+    private func updateStatusItem(for observation: RuntimeObservation) {
         guard let button = statusItem.button else { return }
-        let indicator = RuntimeStatusIndicator(status: status)
+        let indicator = RuntimeStatusIndicator(observation: observation)
         let configuration = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
         let image = NSImage(systemSymbolName: indicator.symbolName, accessibilityDescription: indicator.accessibilityLabel)?
             .withSymbolConfiguration(configuration)
@@ -360,7 +376,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         button.image = image
         button.contentTintColor = nil
         button.appearsDisabled = indicator.appearsDisabled
-        let summary = RuntimePopoverPresentation.accessibilitySummary(for: status)
+        let summary = RuntimePopoverPresentation.accessibilitySummary(for: observation)
         button.toolTip = summary
         button.setAccessibilityValue(summary)
     }

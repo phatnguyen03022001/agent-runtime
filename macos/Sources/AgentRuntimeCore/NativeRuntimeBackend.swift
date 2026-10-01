@@ -234,7 +234,19 @@ private struct CanonicalRuntimeObservation: Decodable {
     let pids: [Int32]
     let health: String
     let ready: String
+    let tunnelTransport: String?
     let detail: String
+
+    enum CodingKeys: String, CodingKey {
+        case schema
+        case state
+        case control
+        case pids
+        case health
+        case ready
+        case tunnelTransport = "tunnel_transport"
+        case detail
+    }
 }
 
 public final class NativeRuntimeBackend: RuntimeBackend, @unchecked Sendable {
@@ -282,30 +294,42 @@ public final class NativeRuntimeBackend: RuntimeBackend, @unchecked Sendable {
     }
 
     public func observeStatus() throws -> RuntimeStatus {
+        try observeRuntimeObservation().status
+    }
+
+    public func observeRuntimeObservation() throws -> RuntimeObservation {
         if let store = legacyStore {
+            let status: RuntimeStatus
             if let record = try store.load(),
                record.checkoutRoot == configuration.checkoutRoot,
                let current = inspector.snapshot(pid: record.rootProcess.pid),
                record.matches(current) {
-                return .owned(current)
+                status = .owned(current)
+            } else {
+                guard let discovery else {
+                    throw RuntimeLifecycleError.operationFailed("Legacy Runtime discovery is unavailable.")
+                }
+                let external = try discovery.matchingRuntimePIDs(checkoutRoot: configuration.runtimeRoot)
+                status = external.isEmpty ? .stopped : .external(external)
             }
-            guard let discovery else {
-                throw RuntimeLifecycleError.operationFailed("Legacy Runtime discovery is unavailable.")
-            }
-            let external = try discovery.matchingRuntimePIDs(checkoutRoot: configuration.runtimeRoot)
-            return external.isEmpty ? .stopped : .external(external)
+            return RuntimeObservation(
+                status: status,
+                tunnelTransport: Self.legacyTunnelTransport(for: status)
+            )
         }
 
         let observation = try canonicalObservation()
-        guard observation.schema == 2 else {
+        guard observation.schema == 3 else {
             throw RuntimeLifecycleError.operationFailed("Canonical Runtime status schema is unsupported.")
         }
+
+        let status: RuntimeStatus
         switch observation.state {
         case "stopped":
             guard observation.control == "none", observation.pids.isEmpty else {
                 throw RuntimeLifecycleError.operationFailed("Canonical Runtime stopped status is inconsistent.")
             }
-            return .stopped
+            status = .stopped
         case "running":
             guard observation.health == "live",
                   observation.ready == "ready",
@@ -315,19 +339,56 @@ public final class NativeRuntimeBackend: RuntimeBackend, @unchecked Sendable {
             let pid = observation.pids[0]
             switch observation.control {
             case "managed":
-                guard let identity = inspector.snapshot(pid: pid) else {
-                    return .external([pid])
+                if let identity = inspector.snapshot(pid: pid) {
+                    status = .owned(identity)
+                } else {
+                    status = .external([pid])
                 }
-                return .owned(identity)
             case "read-only":
-                return .external([pid])
+                status = .external([pid])
             default:
                 throw RuntimeLifecycleError.operationFailed("Canonical Runtime control status is unsupported.")
             }
         case "attention":
-            return .ambiguous(observation.detail)
+            status = .ambiguous(observation.detail)
         default:
             throw RuntimeLifecycleError.operationFailed("Canonical Runtime state is unsupported.")
+        }
+
+        return RuntimeObservation(
+            status: status,
+            tunnelTransport: Self.tunnelTransport(
+                for: status,
+                canonicalValue: observation.tunnelTransport
+            )
+        )
+    }
+
+    private static func legacyTunnelTransport(for status: RuntimeStatus) -> TunnelTransportStatus {
+        switch status {
+        case .stopped:
+            return .notRunning
+        case .owned, .external, .ambiguous:
+            return .unconfirmed
+        }
+    }
+
+    private static func tunnelTransport(
+        for status: RuntimeStatus,
+        canonicalValue: String?
+    ) -> TunnelTransportStatus {
+        switch status {
+        case .stopped, .ambiguous:
+            return .notRunning
+        case .owned, .external:
+            switch canonicalValue {
+            case "healthy":
+                return .healthy
+            case "degraded":
+                return .degraded
+            default:
+                return .unconfirmed
+            }
         }
     }
 
