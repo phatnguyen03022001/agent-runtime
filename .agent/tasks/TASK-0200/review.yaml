@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0200
-task_revision: 4
-review_revision: 4
-state: REVISION_REQUIRED
+task_revision: 5
+review_revision: 5
+state: REVERIFY_REQUIRED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0200/report.yaml
-  commit: "2b067228b6f62847f3bb8a3cebda7a0e655bd158"
-  report_revision: 4
+  commit: "4d8bf34206a0a85db7a7d7ee4889edc789de12f6"
+  report_revision: 5
 
 independence:
   reviewer_role: ARCHITECT
@@ -22,30 +22,27 @@ contract_compliance:
   execution_base: PASS
   scope: PASS
   git_authority: PASS
-  acceptance_criteria: BLOCKED
-  verifier_evidence: FAIL_POLICY_CLASSIFICATION
+  acceptance_criteria: REVERIFY_REQUIRED
+  verifier_evidence: ENVIRONMENT_FAILURE
 
 acceptance_basis:
-  - "Revision-4 candidate 09c2e0cea6421405ab01a1343ccdcd17eddaaa55 is the single direct child of exact revision-4 base dc1cf7562603c8f89b7884cfdf85413b6c46bf22 and changes only macos/candidate_cutover.py plus the two authorized test files."
-  - "Report commit 2b067228b6f62847f3bb8a3cebda7a0e655bd158 follows the implementation candidate and truthfully records the single verifier invocation."
-  - "F-0200-003 is CLOSED: valid sealed payload publication now reaches the intended checkpoints on Darwin, canonical payload returns to mode 0555 before pointer authority advances, and payload-update cleanup preserves typed transaction evidence."
-  - "Q01 through Q14 all PASS; full product qualification module PASS 16/16; exact reused doctor/uninstall/preflight owners PASS 36/36; final cutover owner selection PASS 12/12."
-  - "F-0200-001 and F-0200-002 remain closed under rerun evidence."
-  - "git diff --check PASS and no live/release effect occurred."
-  - "The one authorized canonical ./verify invocation exited 2 before test execution because strict verification classification found tests.test_product_qualification unclassified."
-  - "Source inspection confirms verify_tests.validate_classification requires exact equality between discovered test modules and verification_policy.MODULE_POLICIES. The new qualification module is absent from MODULE_POLICY_ENTRIES."
-  - "The appropriate existing lane is L5_QUALIFICATION_CHAOS_CUTOVER with qualification isolation: the module intentionally composes cutover, rollback, payload recovery, doctor and productization failure qualification."
-  - "tests/test_verify_harness.py independently hard-codes the exact classified inventory and lane counts; current expected inventory is 62 modules with 5 L5 modules, so adding this legitimate module requires 63 total and 6 L5."
-  - "The Executor correctly did not alter verification policy outside revision-4 authority and did not replay the verifier."
+  - "Revision-5 implementation candidate 2c64319d14a4d5b66e4dda5ef6a3a82eb66584bf is the single direct child of exact revision-5 base 43d25a5dcf33cd3533f1d055f1bdefef212cc0d5 and changes only verification_policy.py and tests/test_verify_harness.py."
+  - "Exactly one tests.test_product_qualification classification was added: L5_QUALIFICATION_CHAOS_CUTOVER, isolation_key=qualification, timeout=180.0, with truthful qualification/cutover/recovery/productization tags."
+  - "Focused verifier-harness proof PASS 22/22; strict unknown-module and duplicate-classification behavior remains intact; inventory is 63 total modules and 6 L5 modules."
+  - "Revision-4 product candidate, Q01-Q14 predicates and F-0200-001/002/003 closures are byte-for-byte preserved."
+  - "The one authorized canonical ./verify invocation selected all 63 modules but failed in tests.test_fs_read_batch_adversarial before tests.test_product_qualification was scheduled."
+  - "The failure is attributable to the Executor-selected TMPDIR, not repository behavior: TMPDIR=/private/tmp/task0200-r5-canonical-verify-h8jb3amr produces the fixture socket path at approximately 105 bytes, while the same test passes with a short TMPDIR."
+  - "Architect path calculation against the exact fixture prefix confirms a repo-local TMPDIR $PWD/.v yields an approximately 97-byte socket path for the same fixture, safely below the observed failing length."
+  - "No verifier replay occurred and no product/live/release effect occurred."
 
 findings:
-  - id: F-0200-004
+  - id: F-0200-005
     severity: BLOCKING
-    classification: verifier_policy_integration_gap
-    description: "The accepted TASK-0200 qualification module exists in the repository test inventory but is absent from strict verification policy classification, causing canonical ./verify to fail before executing the suite."
-    required_closure: "Classify tests.test_product_qualification in the existing L5 qualification lane with qualification isolation and an adequate bounded timeout; update only the verifier-harness inventory/lane assertions. Do not exempt, skip, rename or weaken the module. Then run the focused verifier-harness proof and exactly one new canonical ./verify under revision-5 authority."
+    classification: canonical_verification_environment_path_bound
+    description: "Canonical verification remains unproven because the sole revision-5 invocation used an executor-selected TMPDIR that made an AF_UNIX fixture path too long on Darwin."
+    required_closure: "No source change. Re-run exactly one canonical ./verify under a separately authorized revision using a short run-owned synthetic HOME/TMPDIR inside the repository, with deterministic cleanup. The verifier must execute all 63 classified modules including tests.test_product_qualification. Any genuine test failure must stop BLOCKED."
 
 notes:
-  - "TASK-0200 revision 4 is not accepted solely because AC-6 canonical verification is not satisfied."
-  - "Product qualification Q01-Q14 and F-0200-001/002/003 are accepted as revision-4 evidence and must not be reopened absent new contradictory evidence."
+  - "TASK-0200 revision 5 is not accepted solely because canonical verification did not complete."
+  - "F-0200-004 policy integration is otherwise closed and must not be reopened absent contradictory evidence."
   - "TASK-0196 remains paused."
