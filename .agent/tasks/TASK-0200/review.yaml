@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0200
-task_revision: 1
-review_revision: 1
+task_revision: 2
+review_revision: 2
 state: REVISION_REQUIRED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0200/report.yaml
-  commit: "8f5e8cce410bf51fa0f9f3b0f0232e5b5f49422e"
-  report_revision: 1
+  commit: "e7d925e8594751e79925d14965d66e423bc428f0"
+  report_revision: 2
 
 independence:
   reviewer_role: ARCHITECT
@@ -26,23 +26,24 @@ contract_compliance:
   verifier_evidence: NOT_RUN_BY_GATE
 
 acceptance_basis:
-  - "Qualification candidate f711ee6fd5b65e072cd6c93f01245afd1ff0a39f is the single direct child of exact TASK-0200 revision-1 base 91572b19572cd797a5c235a4f1a502f688e25db9 and changes only tests/test_product_qualification.py."
-  - "Report commit 8f5e8cce410bf51fa0f9f3b0f0232e5b5f49422e follows the qualification candidate and truthfully stops at the first proven product gap."
-  - "Q01 through Q03 pass with synthetic isolated state and no real control-plane or credential use."
-  - "Q04 reproduces a real production contract defect: non-UTF8 tunnel-client output causes UnicodeDecodeError before the existing structured CONTROL_PLANE_UNAVAILABLE mapping."
-  - "Canonical configuration remains absent or byte-identical and submitted secret content is not exposed, so the failure is typed-error robustness rather than persistence corruption."
-  - "Source inspection confirms macos/runtime_config.py invokes tunnel-client with subprocess.run(text=True); decoding occurs before the existing response bound/JSON mapping, while the catch handles OSError/subprocess.SubprocessError but not UnicodeDecodeError."
-  - "The Executor correctly stopped before Q05-Q14 and did not invoke canonical ./verify, as required by the revision-1 stop rule."
-  - "No production/live/release effect occurred."
+  - "Revision-2 candidate 86d0f0f6bb9da0b4a4f5dbecaa5d5d1b10045de7 is the single direct child of exact revision-2 base f0fdacc7a79b10accf4928914cf7c163da9c20df and changes only macos/runtime_config.py plus the two authorized test files."
+  - "Report commit e7d925e8594751e79925d14965d66e423bc428f0 follows the implementation candidate and truthfully stops at Q07."
+  - "F-0200-001 is CLOSED: undecodable tunnel-client stdout/stderr now map to structured CONTROL_PLANE_UNAVAILABLE/exit 2, with fresh canonical absent, existing canonical byte/device/inode/mode preserved, and no malformed response or submitted secret disclosure."
+  - "Focused runtime_config owner suite PASS 26/26 and the revision-1 non-UTF8 reproducer remains intact and PASS."
+  - "Q01 through Q06 pass under isolated synthetic consumer state."
+  - "Q07 exposes a distinct zero-cost rollback safety asymmetry. The general/current rollback path validates an APP_SWAPPED installed candidate before compensation/replacement; _rollback_zero_cost_transaction currently performs service/pointer/app rollback mutations without an equivalent installed-candidate provenance check."
+  - "The qualification mutates the synthetic installed candidate so provenance.validate_zero_cost_candidate rejects it. rollback_transaction nevertheless returns ROLLED_BACK, replaces the unverified target with the predecessor and removes transaction evidence."
+  - "The Executor correctly stopped before Q08-Q14 and did not invoke canonical ./verify."
+  - "No live/release effect occurred."
 
 findings:
-  - id: F-0200-001
+  - id: F-0200-002
     severity: BLOCKING
-    classification: typed_admission_error_contract_gap
-    description: "Undecodable tunnel-client stdout/stderr can bypass the stable configuration-admission error envelope and produce traceback/exit 1 instead of bounded CONTROL_PLANE_UNAVAILABLE/exit 2."
-    required_closure: "Normalize response decode failure inside the existing runtime_config tunnel-validation seam. Do not expose raw malformed output or secrets. Preserve canonical configuration non-publication/preservation semantics, all existing 401/403/404 mappings, timeout/missing-client behavior and user/org tunnel semantics. Then continue the full Q01-Q14 qualification."
+    classification: zero_cost_rollback_identity_gap
+    description: "An APP_SWAPPED zero-cost transaction can rollback over an installed generation that no longer matches the sealed transaction candidate identity, destroying the unverified generation and deleting transaction evidence."
+    required_closure: "Before any destructive zero-cost rollback action for an APP_SWAPPED generation, validate the installed target against the transaction's candidate-handoff and exact transaction payload witness using the existing zero-cost provenance validator, and require the validated identity to equal metadata.candidate. On mismatch or unverifiable identity, fail closed before service/pointer/app mutation; rollback_transaction must retain the transaction as PARTIAL with bounded error evidence. Preserve normal rollback for a valid unchanged transaction candidate."
 
 notes:
-  - "TASK-0200 revision 1 is not accepted."
-  - "This finding was intentionally discovered by qualification; production repair requires revision-2 authority."
+  - "TASK-0200 revision 2 is not accepted."
+  - "F-0200-001 remains closed and must not be reopened."
   - "TASK-0196 remains paused."
