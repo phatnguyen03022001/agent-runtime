@@ -237,6 +237,30 @@ class VerifyHarnessTests(unittest.TestCase):
                     set(verification_policy.MODULE_POLICIES),
                 )
 
+    def test_github_workflow_change_is_classified_and_forces_qualification(self) -> None:
+        path = ".github/workflows/release-gate.yml"
+        rules = verification_policy.matching_path_rules(path)
+        self.assertEqual(len(rules), 1)
+        self.assertEqual(rules[0].pattern, ".github/workflows/**")
+        self.assertEqual(
+            set(rules[0].subsystem_tags),
+            {"package", "release", "verification"},
+        )
+        self.assertTrue(rules[0].force_qualification)
+        self.assertFalse(rules[0].docs_only)
+
+        plan = verify_tests.build_plan(
+            requested_profile=verify_tests.PROFILE_QUICK,
+            base=self.BASE,
+            head=self.HEAD,
+            paths=(path,),
+        )
+        self.assertEqual(plan.effective_profile, verify_tests.PROFILE_QUALIFICATION)
+        self.assertEqual(
+            {item.module for item in plan.selected},
+            set(verification_policy.MODULE_POLICIES),
+        )
+
     def test_repo_change_has_deterministic_quick_and_candidate_selection(self) -> None:
         path = "agent_runtime/repo_commit.py"
         quick = verify_tests.build_plan(

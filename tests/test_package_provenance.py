@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import hashlib
 import io
 import importlib.util
@@ -7,6 +8,7 @@ import json
 import os
 import plistlib
 import shutil
+import stat
 import subprocess
 import tempfile
 import tarfile
@@ -841,6 +843,349 @@ class PackageProvenanceTests(unittest.TestCase):
                     public_tool_count=20,
                     public_surface_sha256=surface_sha,
                 )
+
+
+class ReleaseBundleContractTests(unittest.TestCase):
+    def _load_release_bundle(self):
+        module_path = ROOT / "macos" / "release_bundle.py"
+        self.assertTrue(module_path.is_file(), "macos/release_bundle.py must exist")
+        spec = importlib.util.spec_from_file_location("release_bundle", module_path)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def _identity_reader(self, provenance):
+        def reader(path: Path) -> dict[str, object]:
+            value = path.as_posix()
+            for relative, identifier in provenance.ZERO_COST_CODE_IDENTIFIERS.items():
+                if value.endswith("/" + relative):
+                    return {
+                        "identifier": identifier,
+                        "team_identifier": None,
+                        "designated_requirement": f'designated => identifier "{identifier}"',
+                    }
+            raise AssertionError(f"unexpected identity target: {path}")
+
+        return reader
+
+    def _candidate_fixture(self, temp: Path, *, payload_server: str = "VALUE = 1\n"):
+        release = self._load_release_bundle()
+        provenance = release.provenance
+        stage = temp / "candidate-stage"
+        app = stage / "Agent Runtime.app"
+        runtime = app / "Contents/Resources/runtime"
+        (runtime / ".venv/bin").mkdir(parents=True)
+        (app / "Contents/MacOS").mkdir(parents=True)
+        (app / "Contents/Info.plist").write_bytes(
+            plistlib.dumps(
+                {
+                    "CFBundleIdentifier": provenance.OWNER,
+                    "CFBundleExecutable": "AgentRuntimeMenuBar",
+                    "CFBundleShortVersionString": "0.5.1",
+                }
+            )
+        )
+        (runtime / "start.sh").write_text("#!/bin/sh\nexit 0\n")
+        (runtime / "start.sh").chmod(0o755)
+        for relative in provenance.ZERO_COST_CODE_IDENTIFIERS:
+            target = app / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("#!/bin/sh\nexit 0\n")
+            target.chmod(0o755)
+
+        surface_sha = "d" * 64
+        provenance.write_substrate_manifest(
+            runtime,
+            app / "Contents/Resources/runtime-manifest.json",
+            "a" * 40,
+            "b" * 40,
+            "c" * 64,
+            python_major_minor="3.13",
+            public_tool_count=20,
+            public_surface_sha256=surface_sha,
+        )
+        source = temp / "source" / "agent_runtime"
+        source.mkdir(parents=True)
+        (source / "__init__.py").write_text("__all__ = []\n")
+        (source / "server.py").write_text(payload_server)
+        payload = provenance.publish_payload_release(
+            source,
+            stage / "payloads",
+            revision="a" * 40,
+            tree="b" * 40,
+            requirements_lock_sha256="c" * 64,
+            python_major_minor="3.13",
+            public_tool_count=20,
+            public_surface_sha256=surface_sha,
+        )
+        reader = self._identity_reader(provenance)
+        with mock.patch.object(provenance, "_verify_codesign", return_value=None):
+            provenance.seal_zero_cost_candidate(
+                app,
+                stage / "Agent Runtime.candidate.json",
+                Path(payload["release_path"]),
+                identity_reader=reader,
+            )
+            published = provenance.publish_zero_cost_distribution(
+                app,
+                stage / "Agent Runtime.candidate.json",
+                Path(payload["release_path"]),
+                temp / "candidates",
+                identity_reader=reader,
+            )
+        return release, provenance, Path(published["candidate_app"]).parent, reader
+
+    def _build_fixture(self, temp: Path):
+        release, provenance, candidate_root, reader = self._candidate_fixture(temp)
+        output = temp / "release"
+        output.mkdir()
+        with mock.patch.object(provenance, "_verify_codesign", return_value=None):
+            result = release.build_release_bundle(candidate_root, output, identity_reader=reader)
+        archive = Path(result["archive"])
+        return release, provenance, candidate_root, reader, output, archive
+
+    def _rewrite_archive_with_extra(self, release, source: Path, destination: Path, kind: str) -> None:
+        with source.open("rb") as raw:
+            with gzip.GzipFile(fileobj=raw, mode="rb") as compressed:
+                with tarfile.open(fileobj=compressed, mode="r:") as original:
+                    members = original.getmembers()
+                    with destination.open("wb") as target_raw:
+                        with gzip.GzipFile(
+                            filename="", fileobj=target_raw, mode="wb", mtime=0
+                        ) as target_gzip:
+                            with tarfile.open(
+                                fileobj=target_gzip, mode="w", format=tarfile.PAX_FORMAT
+                            ) as target:
+                                for member in members:
+                                    payload = original.extractfile(member) if member.isreg() else None
+                                    target.addfile(member, payload)
+                                    if payload is not None:
+                                        payload.close()
+                                if kind == "duplicate":
+                                    member = members[0]
+                                    payload = original.extractfile(member) if member.isreg() else None
+                                    target.addfile(member, payload)
+                                    if payload is not None:
+                                        payload.close()
+                                elif kind == "traversal":
+                                    info = tarfile.TarInfo("../escape")
+                                    info.uid = info.gid = 0
+                                    info.uname = info.gname = ""
+                                    info.mtime = 0
+                                    info.mode = 0o600
+                                    data = b"x"
+                                    info.size = len(data)
+                                    target.addfile(info, io.BytesIO(data))
+                                elif kind == "symlink":
+                                    info = tarfile.TarInfo("Agent Runtime.app/unsafe-link")
+                                    info.type = tarfile.SYMTYPE
+                                    info.linkname = "Contents/Info.plist"
+                                    info.uid = info.gid = 0
+                                    info.uname = info.gname = ""
+                                    info.mtime = 0
+                                    info.mode = 0o700
+                                    target.addfile(info)
+                                elif kind == "fifo":
+                                    info = tarfile.TarInfo("Agent Runtime.app/unsafe-fifo")
+                                    info.type = tarfile.FIFOTYPE
+                                    info.uid = info.gid = 0
+                                    info.uname = info.gname = ""
+                                    info.mtime = 0
+                                    info.mode = 0o600
+                                    target.addfile(info)
+                                elif kind == "extra-root":
+                                    info = tarfile.TarInfo("unexpected.txt")
+                                    info.uid = info.gid = 0
+                                    info.uname = info.gname = ""
+                                    info.mtime = 0
+                                    info.mode = 0o600
+                                    data = b"x"
+                                    info.size = len(data)
+                                    target.addfile(info, io.BytesIO(data))
+                                else:
+                                    raise AssertionError(kind)
+
+    def _refresh_asset_metadata(self, release, directory: Path, archive: Path) -> None:
+        manifest_path = directory / release.MANIFEST_NAME
+        manifest = json.loads(manifest_path.read_text())
+        digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+        with tarfile.open(archive, "r:gz") as bundle:
+            member_count = len(bundle.getmembers())
+        manifest["archive_sha256"] = digest
+        manifest["archive_size_bytes"] = archive.stat().st_size
+        manifest["archive_member_count"] = member_count
+        manifest_path.write_bytes(release._canonical_manifest_bytes(manifest))
+        (directory / release.CHECKSUMS_NAME).write_text(
+            f"{digest}  {archive.name}\n", encoding="utf-8"
+        )
+
+    def test_release_bundle_module_exposes_build_and_verify_contract(self) -> None:
+        module = self._load_release_bundle()
+        self.assertEqual(module.MANIFEST_SCHEMA, 1)
+        self.assertTrue(callable(module.build_release_bundle))
+        self.assertTrue(callable(module.verify_release_bundle))
+
+    def test_release_bundle_double_build_is_byte_deterministic_and_round_trip_safe(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            release, provenance, candidate_root, reader = self._candidate_fixture(temp)
+            first = temp / "first"
+            second = temp / "second"
+            extracted = temp / "extracted"
+            first.mkdir()
+            second.mkdir()
+            extracted.mkdir()
+            with mock.patch.object(provenance, "_verify_codesign", return_value=None):
+                one = release.build_release_bundle(candidate_root, first, identity_reader=reader)
+                two = release.build_release_bundle(candidate_root, second, identity_reader=reader)
+                verified = release.verify_release_bundle(
+                    Path(one["archive"]),
+                    first / release.MANIFEST_NAME,
+                    first / release.CHECKSUMS_NAME,
+                    extract_dir=extracted,
+                    identity_reader=reader,
+                )
+
+            first_names = sorted(item.name for item in first.iterdir())
+            second_names = sorted(item.name for item in second.iterdir())
+            self.assertEqual(first_names, second_names)
+            self.assertEqual(len(first_names), 3)
+            for name in first_names:
+                self.assertEqual((first / name).read_bytes(), (second / name).read_bytes())
+
+            manifest = json.loads((first / release.MANIFEST_NAME).read_text())
+            self.assertEqual(manifest["schema"], 1)
+            self.assertEqual(manifest["owner"], provenance.OWNER)
+            self.assertEqual(manifest["runtime_version"], "0.5.1")
+            self.assertEqual(manifest["source_revision"], "a" * 40)
+            self.assertEqual(manifest["source_tree"], "b" * 40)
+            self.assertEqual(manifest["requirements_lock_sha256"], "c" * 64)
+            self.assertEqual(manifest["substrate_manifest_schema"], provenance.SUBSTRATE_SCHEMA)
+            self.assertEqual(manifest["candidate_handoff_schema"], provenance.ZERO_COST_CANDIDATE_SCHEMA)
+            self.assertEqual(manifest["payload_schema"], provenance.PAYLOAD_SCHEMA)
+            self.assertEqual(verified["candidate_sha256"], manifest["candidate_sha256"])
+
+            archive = Path(one["archive"])
+            self.assertEqual(
+                archive.name,
+                release.archive_filename("0.5.1", manifest["candidate_sha256"]),
+            )
+            with tarfile.open(archive, "r:gz") as bundle:
+                names = [member.name for member in bundle.getmembers()]
+            joined = "\n".join(names).lower()
+            for forbidden in (
+                ".git",
+                ".agent",
+                ".env",
+                "runtime.env",
+                "__pycache__",
+                ".pyc",
+                "credentials",
+            ):
+                self.assertNotIn(forbidden, joined)
+            self.assertNotIn(str(Path.home()).lower(), joined)
+            self.assertEqual(
+                (first / release.CHECKSUMS_NAME).read_text().count("\n"),
+                1,
+            )
+
+    def test_release_bundle_rejects_checksum_manifest_root_content_and_mode_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            release, provenance, candidate_root, reader, output, archive = self._build_fixture(temp)
+
+            checksum = output / release.CHECKSUMS_NAME
+            original_checksum = checksum.read_text()
+            checksum.write_text(("0" if original_checksum[0] != "0" else "1") + original_checksum[1:])
+            with mock.patch.object(provenance, "_verify_codesign", return_value=None):
+                with self.assertRaisesRegex(release.ReleaseBundleError, "checksum"):
+                    release.verify_release_bundle(
+                        archive,
+                        output / release.MANIFEST_NAME,
+                        checksum,
+                        identity_reader=reader,
+                    )
+            checksum.write_text(original_checksum)
+
+            manifest_path = output / release.MANIFEST_NAME
+            manifest = json.loads(manifest_path.read_text())
+            manifest["source_revision"] = "e" * 40
+            manifest_path.write_bytes(release._canonical_manifest_bytes(manifest))
+            with mock.patch.object(provenance, "_verify_codesign", return_value=None):
+                with self.assertRaisesRegex(release.ReleaseBundleError, "source_revision"):
+                    release.verify_release_bundle(
+                        archive,
+                        manifest_path,
+                        checksum,
+                        identity_reader=reader,
+                    )
+
+            (candidate_root / "unexpected.txt").write_text("x")
+            empty = temp / "unexpected-output"
+            empty.mkdir()
+            with mock.patch.object(provenance, "_verify_codesign", return_value=None):
+                with self.assertRaisesRegex(release.ReleaseBundleError, "inventory"):
+                    release.build_release_bundle(candidate_root, empty, identity_reader=reader)
+            (candidate_root / "unexpected.txt").unlink()
+
+            target = candidate_root / "Agent Runtime.app/Contents/MacOS/AgentRuntimeMenuBar"
+            original_bytes = target.read_bytes()
+            original_mode = stat.S_IMODE(target.stat().st_mode)
+            target.write_bytes(original_bytes + b"x")
+            with mock.patch.object(provenance, "_verify_codesign", return_value=None):
+                with self.assertRaises(provenance.PackageProvenanceError):
+                    release.build_release_bundle(candidate_root, empty, identity_reader=reader)
+            target.write_bytes(original_bytes)
+            target.chmod(original_mode)
+            target.chmod(0o700)
+            with mock.patch.object(provenance, "_verify_codesign", return_value=None):
+                with self.assertRaises(provenance.PackageProvenanceError):
+                    release.build_release_bundle(candidate_root, empty, identity_reader=reader)
+
+    def test_release_bundle_rejects_embedded_operator_home_path(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            release, provenance, candidate_root, reader = self._candidate_fixture(
+                temp,
+                payload_server=f'HOME_MARKER = {str(Path.home())!r}\n',
+            )
+            output = temp / "release-home"
+            output.mkdir()
+            with mock.patch.object(provenance, "_verify_codesign", return_value=None):
+                with self.assertRaisesRegex(release.ReleaseBundleError, "operator HOME"):
+                    release.build_release_bundle(candidate_root, output, identity_reader=reader)
+
+    def test_release_bundle_verify_rejects_traversal_duplicate_symlink_special_and_extra_root(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            release, provenance, _, reader, output, archive = self._build_fixture(temp)
+            original_manifest = (output / release.MANIFEST_NAME).read_bytes()
+            original_checksums = (output / release.CHECKSUMS_NAME).read_bytes()
+
+            for kind, pattern in (
+                ("traversal", "unsafe"),
+                ("duplicate", "duplicate"),
+                ("symlink", "symlink|special"),
+                ("fifo", "symlink|special"),
+                ("extra-root", "root inventory"),
+            ):
+                with self.subTest(kind=kind):
+                    case = temp / kind
+                    case.mkdir()
+                    bad_archive = case / archive.name
+                    self._rewrite_archive_with_extra(release, archive, bad_archive, kind)
+                    (case / release.MANIFEST_NAME).write_bytes(original_manifest)
+                    (case / release.CHECKSUMS_NAME).write_bytes(original_checksums)
+                    self._refresh_asset_metadata(release, case, bad_archive)
+                    with mock.patch.object(provenance, "_verify_codesign", return_value=None):
+                        with self.assertRaisesRegex(release.ReleaseBundleError, pattern):
+                            release.verify_release_bundle(
+                                bad_archive,
+                                case / release.MANIFEST_NAME,
+                                case / release.CHECKSUMS_NAME,
+                                identity_reader=reader,
+                            )
 
 
 if __name__ == "__main__":

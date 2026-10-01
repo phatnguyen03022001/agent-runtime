@@ -12,6 +12,8 @@ Agent Runtime.candidate.json
 payloads/<initial-closure>/
 ```
 
+The manual source release gate for a future publication qualifies exactly three release assets from one already-frozen candidate: the deterministic `.tar.gz` archive, `release-manifest.json`, and `SHA256SUMS.txt`. The manifest binds the archive to candidate/payload/source identity; the checksum file contains exactly the archive checksum. This does not retroactively change the currently published v0.5.1 assets. See [COMPATIBILITY.md](COMPATIBILITY.md) for supported versus continuously qualified macOS versions.
+
 The checkout-independent installer is sealed inside the app:
 
 ```text

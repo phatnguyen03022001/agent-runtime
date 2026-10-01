@@ -496,6 +496,64 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertIn("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS", docs)
         self.assertIn("session-limit", docs)
 
+    def test_release_gate_is_manual_read_only_arm64_and_non_publishing(self) -> None:
+        workflow = (ROOT / ".github/workflows/release-gate.yml").read_text()
+        self.assertEqual(workflow.count("workflow_dispatch:"), 1)
+        for forbidden_trigger in ("\n  push:", "\n  pull_request:", "\n  schedule:", "\n  release:"):
+            self.assertNotIn(forbidden_trigger, workflow)
+        self.assertIn("permissions:\n  contents: read", workflow)
+        self.assertIn("runs-on: macos-26", workflow)
+        for lane in ("macos-14", "macos-15", "macos-26"):
+            self.assertIn(lane, workflow)
+        self.assertGreaterEqual(workflow.count('test "$(uname -m)" = "arm64"'), 2)
+        self.assertEqual(workflow.count("./macos/package_app.sh --zero-cost"), 1)
+        self.assertEqual(workflow.count("release_bundle.py build"), 2)
+        self.assertGreaterEqual(workflow.count("release_bundle.py verify"), 2)
+        self.assertIn("python -m pip install --require-hashes -r requirements.lock", workflow)
+        self.assertIn("/usr/bin/codesign --verify --deep --strict", workflow)
+        self.assertIn("package_provenance.py validate-zero-cost", workflow)
+        self.assertIn(".venv/bin/python", workflow)
+        for forbidden in (
+            "secrets.",
+            "gh release",
+            "create-release",
+            "notarytool",
+            "Developer ID",
+            "--commit-cutover",
+            "--install-prebuilt",
+            "start.sh restart",
+        ):
+            self.assertNotIn(forbidden, workflow)
+
+    def test_compatibility_document_separates_supported_and_qualified_contracts(self) -> None:
+        docs = (ROOT / "docs/COMPATIBILITY.md").read_text()
+        package = (ROOT / "macos/Package.swift").read_text()
+        info = __import__("plistlib").loads((ROOT / "macos/AppBundle/Info.plist").read_bytes())
+        version = (ROOT / "agent_runtime/version.py").read_text()
+        self.assertIn(".macOS(.v13)", package)
+        self.assertEqual(info["LSMinimumSystemVersion"], "13.0")
+        self.assertIn('RUNTIME_VERSION = "0.5.1"', version)
+        for text in (
+            "Apple Silicon / arm64",
+            "macOS 13",
+            "Intel/x86_64 Macs are unsupported",
+            "macOS 14",
+            "macOS 15",
+            "macOS 26",
+            "not continuously CI-qualified",
+            "latest public release remains **v0.5.1**",
+            "does not publish v0.5.2",
+            "substrate manifest schema = **2**",
+            "candidate handoff schema = **2**",
+            "payload schema = **1**",
+            "zero-cost transaction schema = **6**",
+            "same frozen zero-cost candidate",
+            "No claim is made that two independent Swift/compiler builds are byte-for-byte identical",
+        ):
+            with self.subTest(text=text):
+                self.assertIn(text, docs)
+        self.assertIn("docs/COMPATIBILITY.md", (ROOT / "README.md").read_text())
+        self.assertIn("COMPATIBILITY.md", (ROOT / "docs/INSTALL.md").read_text())
 
 
 if __name__ == "__main__":

@@ -1,0 +1,146 @@
+name: Agent Runtime Release Gate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-release:
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Assert ARM64 runner
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = "arm64"
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install locked dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --require-hashes -r requirements.lock
+          PYTHON_BIN="$(python -c 'import sys; print(sys.executable)')"
+          test -x "$PYTHON_BIN"
+          echo "AGENT_RUNTIME_PACKAGING_PYTHON=$PYTHON_BIN" >> "$GITHUB_ENV"
+
+      - name: Canonical verify
+        run: PYTHON=python PYTHONDONTWRITEBYTECODE=1 ./verify
+
+      - name: Build one frozen zero-cost candidate
+        id: candidate
+        run: |
+          set -euo pipefail
+          PACKAGE_OUTPUT="$(./macos/package_app.sh --zero-cost)"
+          printf '%s\n' "$PACKAGE_OUTPUT"
+          CANDIDATE_APP="$(printf '%s\n' "$PACKAGE_OUTPUT" | awk -F= '$1 == "candidate_app" {print substr($0, index($0, "=") + 1)}')"
+          CANDIDATE_SHA="$(printf '%s\n' "$PACKAGE_OUTPUT" | awk -F= '$1 == "candidate_sha256" {print $2}')"
+          test -n "$CANDIDATE_APP"
+          test "$CANDIDATE_SHA" != ""
+          CANDIDATE_ROOT="$(dirname "$CANDIDATE_APP")"
+          test "$(basename "$CANDIDATE_ROOT")" = "$CANDIDATE_SHA"
+          printf 'candidate_root=%s\n' "$CANDIDATE_ROOT" >> "$GITHUB_OUTPUT"
+
+      - name: Build deterministic release assets twice
+        run: |
+          set -euo pipefail
+          mkdir -p build/release-gate/first build/release-gate/second
+          python macos/release_bundle.py build \
+            --candidate-root "${{ steps.candidate.outputs.candidate_root }}" \
+            --output-dir build/release-gate/first
+          python macos/release_bundle.py build \
+            --candidate-root "${{ steps.candidate.outputs.candidate_root }}" \
+            --output-dir build/release-gate/second
+
+          test "$(find build/release-gate/first -maxdepth 1 -type f -name '*.tar.gz' | wc -l | tr -d ' ')" = "1"
+          test "$(find build/release-gate/second -maxdepth 1 -type f -name '*.tar.gz' | wc -l | tr -d ' ')" = "1"
+          FIRST_ARCHIVE="$(find build/release-gate/first -maxdepth 1 -type f -name '*.tar.gz' -print)"
+          SECOND_ARCHIVE="$(find build/release-gate/second -maxdepth 1 -type f -name '*.tar.gz' -print)"
+          test "$(basename "$FIRST_ARCHIVE")" = "$(basename "$SECOND_ARCHIVE")"
+          cmp -s "$FIRST_ARCHIVE" "$SECOND_ARCHIVE"
+          cmp -s build/release-gate/first/release-manifest.json build/release-gate/second/release-manifest.json
+          cmp -s build/release-gate/first/SHA256SUMS.txt build/release-gate/second/SHA256SUMS.txt
+
+          mkdir -p build/release-gate/verified
+          python macos/release_bundle.py verify \
+            --archive "$FIRST_ARCHIVE" \
+            --manifest build/release-gate/first/release-manifest.json \
+            --checksums build/release-gate/first/SHA256SUMS.txt \
+            --extract-dir build/release-gate/verified
+
+      - name: Upload release assets only
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-runtime-release-assets
+          path: |
+            build/release-gate/first/*.tar.gz
+            build/release-gate/first/release-manifest.json
+            build/release-gate/first/SHA256SUMS.txt
+          if-no-files-found: error
+
+  compatibility:
+    needs: build-release
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-14
+          - macos-15
+          - macos-26
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout verifier authority
+        uses: actions/checkout@v4
+
+      - name: Assert ARM64 runner
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = "arm64"
+
+      - name: Set up verifier Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Download exact release assets
+        uses: actions/download-artifact@v4
+        with:
+          name: agent-runtime-release-assets
+          path: release-assets
+
+      - name: Validate checksums and release bundle
+        run: |
+          set -euo pipefail
+          cd release-assets
+          /usr/bin/shasum -a 256 -c SHA256SUMS.txt
+          test "$(find . -maxdepth 1 -type f -name '*.tar.gz' | wc -l | tr -d ' ')" = "1"
+          ARCHIVE="$(find . -maxdepth 1 -type f -name '*.tar.gz' -print)"
+          cd ..
+          EXTRACTED="$RUNNER_TEMP/agent-runtime-release-extracted"
+          mkdir "$EXTRACTED"
+          python macos/release_bundle.py verify \
+            --archive "release-assets/$ARCHIVE" \
+            --manifest release-assets/release-manifest.json \
+            --checksums release-assets/SHA256SUMS.txt \
+            --extract-dir "$EXTRACTED"
+
+          APP="$EXTRACTED/Agent Runtime.app"
+          HANDOFF="$EXTRACTED/Agent Runtime.candidate.json"
+          PAYLOAD="$(find "$EXTRACTED/payloads" -mindepth 1 -maxdepth 1 -type d -print)"
+          test -n "$PAYLOAD"
+          test "$(find "$EXTRACTED/payloads" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" = "1"
+
+          /usr/bin/codesign --verify --deep --strict "$APP"
+          python macos/package_provenance.py validate-zero-cost "$APP" "$HANDOFF" "$PAYLOAD" >/dev/null
+          "$APP/Contents/Resources/runtime/.venv/bin/python" -c 'import platform, sys; assert platform.machine() == "arm64"; assert sys.version_info[:2] == (3, 13)'

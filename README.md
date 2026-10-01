@@ -158,6 +158,10 @@ The threat model explicitly excludes `root/sudo`, a **malicious local administra
 
 Production `screen_capture` is governance-blocked as `VISUAL_PERCEPTION_BLOCKED`; this is not a missing Screen Recording permission and must not be “fixed” by widening TCC permissions.
 
+## Release compatibility and assets
+
+The supported macOS contract and the narrower continuously qualified release-gate matrix are documented in [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md). The deterministic release gate emits exactly one prebuilt archive plus `release-manifest.json` and `SHA256SUMS.txt`; reproducibility is defined from the same frozen zero-cost candidate, not across independent compiler builds.
+
 ## Packaging prerequisites
 
 Source packaging requires the canonical **CPython 3.13** arm64 interpreter and Apple developer tools with `xcrun` and Swift. `./macos/package_app.sh --zero-cost` signs the immutable substrate ad-hoc, emits the external initial payload and handoff, and validates the candidate before publication. It requires no Developer ID or notary credentials. See [docs/INSTALL.md](docs/INSTALL.md).

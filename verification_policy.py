@@ -505,6 +505,12 @@ PATH_RULES: tuple[PathRule, ...] = (
         reason="macOS package/cutover surface changed",
     ),
     PathRule(
+        ".github/workflows/**",
+        ("package", "release", "verification"),
+        force_qualification=True,
+        reason="GitHub release/verification workflow changed",
+    ),
+    PathRule(
         "requirements.lock",
         ("package", "release"),
         force_qualification=True,
