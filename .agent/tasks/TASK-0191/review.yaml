@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0191
-task_revision: 3
-review_revision: 3
-state: REVISION_REQUIRED
+task_revision: 4
+review_revision: 4
+state: ACCEPTED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0191/report.yaml
-  commit: "c9eed07820150a4fc656b25521c9af0ad4fed928"
-  report_revision: 3
+  commit: "3efc65723b7f48b3e8fbaea1fd63fa84e22cb1b7"
+  report_revision: 4
 
 independence:
   reviewer_role: ARCHITECT
@@ -24,28 +24,23 @@ contract_compliance:
   scope: PASS
   structure_policy: PASS
   git_authority: PASS
-  acceptance_criteria: FAIL
+  acceptance_criteria: PASS
   verifier_evidence: PASS
 
 acceptance_basis:
-  - "Revision-3 implementation candidate bf7ce294573cd615f059ade8ee2caa28a2792f1c is the single direct child of exact revision-3 base df4800efdad3275effa283b4466b74c72fd69bb7 and changes only tests/test_pressure_concurrency.py."
-  - "Report commit c9eed07820150a4fc656b25521c9af0ad4fed928 is the single direct child of the implementation candidate and changes only .agent/tasks/TASK-0191/report.yaml."
-  - "F-0191-002 is closed without weakening semantics: the test still executes six real concurrent terminal_exec operations under a six-slot fixture ceiling, focused standalone proof passes, focused runtime_restart proof passes, and tests.test_pressure_concurrency passes inside the canonical durable verifier."
-  - "Revision-1 production Runtime-status bytes and revision-2 protected-runtime fixture bytes remain unchanged."
-  - "The sole revision-3 ./verify invocation conclusively failed after 41/62 modules and 572 tests in two different out-of-scope modules and was not replayed."
-  - "tests.test_failure_effect_contract creates several TerminalSessionManager fixtures without a fixture-owned durable_state_root. Those managers therefore scan the production-default durable store and can recover the outer canonical verifier session before the intended failure/effect assertions execute."
-  - "tests.test_task0057_admission patches the process-global heavy admission object but continues to route executor.execute_terminal through process-global session._MANAGER while also constructing separate managers without fixture-owned durable roots. Under the durable verifier this mixes outer-session state, fixture admission leases, local-manager state, and cleanup ownership."
-  - "Both failures are the same material defect class: verification tests that intend test-owned session/capacity semantics are not hermetic from the live process-global/default durable Runtime state. No evidence supports changing the product six-slot ceiling, durable recovery semantics, or production session implementation."
+  - "Revision-4 implementation candidate 7dfcd49fa0caa614e9a3ec6171194cb48f74affe is the single direct child of exact revision-4 base b7233a5553e657765de1e08945deeb674c835d5b and changes only tests/test_failure_effect_contract.py and tests/test_task0057_admission.py."
+  - "Report commit 3efc65723b7f48b3e8fbaea1fd63fa84e22cb1b7 is the single direct child of the implementation candidate and changes only .agent/tasks/TASK-0191/report.yaml."
+  - "F-0191-003 is closed by fixture isolation only. failure-effect managers use fixture-owned durable state; task0057 admission binds executor terminal execution to fixture-owned session/admission state and local managers use fixture-owned durable roots."
+  - "Standalone focused proof passed: tests.test_failure_effect_contract 18/18 and tests.test_task0057_admission 6/6. Combined runtime_restart proof passed 24/24 with one attributable execution and no replay."
+  - "The required pre-verifier read-only same-class audit covered all 62 qualification-selected modules and did not establish another concrete ambient default-durable/global-session/shared-admission blocker before canonical verification."
+  - "Exactly one revision-4 canonical ./verify invocation completed with exit 0: 62/62 modules and 857 tests PASS, retry count 0. Previously repaired protected-runtime and pressure-concurrency modules also passed inside the canonical verifier."
+  - "Revision-1 production Runtime-status bytes, revision-2 protected-runtime fixture bytes, and revision-3 pressure-concurrency fixture bytes remained unchanged through revision 4."
+  - "No live Runtime install, cutover, restart, repair, or reboot occurred, and TASK-0190 revision-8 effect authority was not consumed."
+  - "Fresh remote observation before this review showed canonical main at exact report commit 3efc65723b7f48b3e8fbaea1fd63fa84e22cb1b7."
 
-findings:
-  - id: "F-0191-003"
-    severity: "BLOCKING"
-    description: "tests.test_failure_effect_contract and tests.test_task0057_admission are non-hermetic from ambient default durable/session/capacity state when canonical verification itself runs through Agent Runtime."
-    disposition: "Preserve all production semantics and prior accepted fixture fixes. Revise TASK-0191 to isolate only these two proven modules with fixture-owned durable/session/admission state. Before spending a new canonical verifier invocation, perform a bounded read-only audit for the same contamination class across the selected verification surface; if another concrete module is proven vulnerable, stop before ./verify and return it for revised authority rather than consuming the verifier budget."
+findings: []
 
 notes:
-  - "Do not fix this by changing verify_tests.py HOME semantics globally in revision 4; that would alter the environment contract for unrelated host/lifecycle tests without proof."
-  - "Do not increase product/test capacity ceilings, reduce concurrency assertions, or weaken recovery/capacity enforcement."
-  - "Revision-3 canonical verifier budget is consumed; do not replay it."
-  - "Do not install, cut over, restart, reboot, or otherwise mutate the live Runtime."
-  - "TASK-0190 revision 8 remains superseded for the current objective and its physical reboot budget remains untouched."
+  - "TASK-0191 is accepted at revision 4. No further task revision is required for the Runtime-truth/status objective."
+  - "Acceptance is repository/task acceptance only; it does not authorize install, release, cutover, or live Runtime mutation."
+  - "TASK-0190 revision 8 remains superseded for the current operator objective and must not be resumed without new explicit authority."
