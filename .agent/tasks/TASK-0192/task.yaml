@@ -1,0 +1,207 @@
+protocol_version: 3
+
+task_id: TASK-0192
+task_revision: 1
+state: APPROVED
+title: "Manual Runtime Lifecycle and Menu-Bar Refresh Simplification"
+
+origin:
+  type: user_request
+  task_id: ""
+  gap_id: "RUNTIME-LIFECYCLE-PERSISTENCE-AND-REFRESH-COMPLEXITY"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - verification
+  - simplicity
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - verification
+    - simplicity
+  recommended: []
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "Current operator instruction in the active Architect session."
+    role: "Runtime does not need to survive restart/reboot; it must report truth correctly and remain simple/stable."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0191/review.yaml at 99e5c249b2b7c829c5db3f818ff7be9fc592361a"
+    role: "Accepted canonical Runtime truth/status contract and verifier fixture closure."
+    precedence: 2
+  - source: "agent-runtime main at 99e5c249b2b7c829c5db3f818ff7be9fc592361a"
+    role: "Current lifecycle truth: persistent protected-runtime-running desired marker, KeepAlive SuccessfulExit=false Runtime LaunchAgent, helper crash-restart semantics, and 2-second menu-bar refresh invoking a status probe with a bounded 4-second deadline."
+    precedence: 3
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing start.sh lifecycle owner, Runtime supervisor helper, native menu-bar app, candidate cutover/uninstall lifecycle ownership, and existing tests/docs."
+  rationale: "Simplify existing owners in place. Do not add another daemon, supervisor, state store, status service, registry, or orchestration layer."
+
+objective: "Make Runtime lifecycle explicitly manual and session-scoped while preserving TASK-0191 status truth and positive ownership safety. The menu-bar app may continue to launch at user login for visibility, but Runtime itself must never rely on persistent desired-state, reboot/login survival, or automatic crash restart. Menu-bar refresh must remain truthful without allowing slow probes to build an unbounded stale-work queue."
+
+scope:
+  required_changes:
+    - "Preserve TASK-0191 availability/control separation and canonical status ownership. Runtime serving truth still comes from the package-owned status observation; lifecycle intent must not become availability truth again."
+    - "Remove the steady-state protected-runtime-running desired-state marker from the current lifecycle contract. New Runtime start/stop/restart/status behavior must not create, require, restore, or infer current availability from that marker."
+    - "Keep the menu-bar main-app login item behavior unchanged so the operator can still see Runtime status after login. This task removes Runtime persistence, not operator-visible UI startup."
+    - "Keep one exact per-user Runtime LaunchAgent as the explicit invocation/ownership mechanism, but change the current contract to RunAtLoad=false and KeepAlive=false. It may be loaded/registered while idle; it must run only after explicit Start/Restart or other separately authorized lifecycle action."
+    - "Change AgentRuntimeRuntimeService so an explicit launch runs one owned Runtime generation, performs the existing bounded child/process-group cleanup, then exits. Unexpected child exit must not request automatic launchd restart. Reboot/login must not start Runtime automatically."
+    - "Keep Start explicit and fail-closed: validate installed/current lifecycle identity, refuse foreign/ambiguous port ownership, launch exactly one owned generation, and wait for canonical readiness."
+    - "Keep Stop explicit and fail-closed: signal only positively proven canonical lifecycle ownership, wait for owned listener/supervisor absence, and treat an already-stopped canonical state as a safe no-op. Never kill or adopt foreign/read-only Runtime state."
+    - "Keep Restart as explicit Stop plus Start semantics if the CLI retains it; no implicit restart policy may remain."
+    - "Simplify the canonical status JSON so it no longer carries persistent desired-state as a semantic field. If the shape changes, use an explicit internal schema revision and update the Swift decoder/tests together. MCP public tool contracts must not change."
+    - "Update current install/cutover/uninstall lifecycle ownership for the new non-persistent LaunchAgent contract. New committed steady state must contain no desired-state marker. Predecessor rollback compatibility may preserve or restore predecessor desired-state only when strictly necessary to restore an older pre-task lifecycle during an in-progress rollback; it must not leak into the new steady-state contract."
+    - "Do not redesign candidate cutover. Delete/merge obsolete desired-state accounting where it is no longer required; retain only narrowly proven predecessor compatibility needed for safe rollback."
+    - "Make menu-bar refresh coalescing explicit. At most one status observation may be running/queued at a time, with at most one pending follow-up request. Timer ticks or popover refreshes arriving during an in-flight observation must coalesce rather than accumulate stale status work."
+    - "Lifecycle button actions must not be trapped behind an unbounded refresh backlog. Preserve serialized lifecycle mutation and truthful post-action refresh."
+    - "Keep the existing refresh cadence unless focused evidence requires a small adjustment; do not add event monitors, filesystem watchers, XPC, sockets, background daemons, or new status processes merely to avoid polling."
+    - "Update focused shell/Python/Swift tests and operator documentation for the new manual lifecycle semantics. Required proof includes: login/UI may start while Runtime remains stopped; explicit Start reaches running managed; explicit Stop reaches stopped; crash/child failure does not auto-restart; reboot/login semantics do not claim Runtime survival; external/read-only state remains non-controllable; repeated slow refresh requests remain bounded/coalesced."
+    - "Run focused lifecycle, cutover/uninstall contract, Swift Core/MenuBar and relevant regression tests before canonical verification."
+    - "Run exactly one new canonical ./verify invocation only after focused tests pass. The verifier must run through a durable/reconcilable path; if outcome becomes unknown, reconcile existing execution before any retry and never blind-replay."
+    - "Do not install, cut over, restart, stop, or otherwise mutate the operator's live installed Runtime while implementing or verifying this source task."
+    - "TASK-0190 revision 8 remains superseded. Do not consume its physical reboot or lifecycle effect authority."
+
+  allowed_existing_files_or_components:
+    - "start.sh"
+    - "macos/Sources/AgentRuntimeRuntimeService/"
+    - "macos/Sources/AgentRuntimeCore/"
+    - "macos/Sources/AgentRuntimeMenuBar/"
+    - "macos/candidate_cutover.py"
+    - "macos/uninstall.py"
+    - "existing lifecycle/cutover/uninstall/menu-bar tests"
+    - "README.md"
+    - "docs/"
+
+invariants:
+  - "TASK-0191 Runtime truth/status behavior remains correct: healthy canonical serving is Running; ownership uncertainty affects controls, not availability."
+  - "Menu-bar UI startup at login remains permitted; Runtime startup at login/reboot does not."
+  - "Runtime has no steady-state persistent RUNNING intent after this task."
+  - "No automatic Runtime crash restart remains in the current lifecycle contract."
+  - "Foreign or ambiguous port/process ownership remains fail-closed and non-destructive."
+  - "The six-session/product capacity semantics and all twenty advertised MCP tools remain unchanged."
+  - "No dependency or new service/topology is introduced."
+  - "MAIN ONLY; no branch or PR creation."
+  - "TASK-0190 revision-8 effect budgets remain untouched."
+
+forbidden_changes:
+  - "Any MCP public tool addition/removal/schema change."
+  - "Any new daemon, supervisor, XPC service, status server, registry, database, cache, watcher, scheduler, or orchestration layer."
+  - "Removing the positive lifecycle-ownership checks merely to make Start/Stop simpler."
+  - "Treating listener occupancy or arbitrary HTTP 200 as sufficient destructive-control authority."
+  - "Disabling menu-bar login startup as a shortcut; UI visibility after login is intentionally preserved."
+  - "Any live install/cutover/rollback/recovery/service restart/reboot during this task."
+  - "Any release/tag/asset/version publication."
+  - "Any continuation of TASK-0190 revision 8."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: revised_contract_required
+  spec_change: revised_contract_required
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions:
+    - BLOCKED
+    - STALE_STATE
+    - AUTHORITY_REQUIRED
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    - REVIEW_REQUIRED
+    - REVERIFY_REQUIRED
+    - USER_STOP
+
+effect_authority:
+  canonical_verify_max: 1
+  live_install_or_cutover_max: 0
+  live_service_restart_max: 0
+  physical_reboot_max: 0
+  launchservices_cleanup_max: 0
+  branch_or_pr_creation_max: 0
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Current Runtime lifecycle is manual/session-scoped, not persistent."
+    evidence_required: "Source/tests prove the new current LaunchAgent is RunAtLoad=false and KeepAlive=false; no steady-state desired-state marker is created or required; Runtime does not auto-start after login/reboot or auto-restart after an unexpected child exit."
+  - id: AC-2
+    requirement: "Explicit lifecycle control remains safe and correct."
+    evidence_required: "Focused tests prove Start reaches one healthy managed Runtime, Stop safely no-ops when already stopped and stops only positive canonical ownership when running, Restart is explicit bounded Stop+Start, and foreign/read-only Runtime remains non-controllable."
+  - id: AC-3
+    requirement: "TASK-0191 status truth is preserved without persistent-intent baggage."
+    evidence_required: "Canonical status and Swift presentation tests prove Running/Stopped/Attention/read-only semantics remain correct and no persistent desired-state field drives availability; any internal status schema change is exact and synchronized."
+  - id: AC-4
+    requirement: "Menu-bar refresh cannot accumulate stale work."
+    evidence_required: "Deterministic Swift tests prove many timer/popover refresh requests during a slow in-flight observation produce at most one active observation plus one coalesced follow-up, and lifecycle actions are not queued behind an unbounded refresh backlog."
+  - id: AC-5
+    requirement: "Install/cutover/uninstall ownership matches the simplified current lifecycle without weakening rollback safety."
+    evidence_required: "Focused tests prove new current-state materialization/validation uses the non-persistent LaunchAgent contract and no current desired marker; any predecessor marker handling exists only in bounded rollback compatibility and new committed steady state is marker-free."
+  - id: AC-6
+    requirement: "No live operator state or unrelated product contract is mutated."
+    evidence_required: "Execution report records zero live install/cutover/restart/reboot effects, unchanged MCP public surface/capacity contract, and unchanged TASK-0190 effect accounting."
+  - id: AC-7
+    requirement: "Canonical source verification passes without replay ambiguity."
+    evidence_required: "Focused relevant suites PASS, then exactly one new durable/reconcilable ./verify invocation completes PASS with no blind retry."
+  - id: AC-8
+    requirement: "Repository closure is minimal and canonical."
+    evidence_required: "One reviewable implementation candidate, truthful report, non-force publication on main, final clean synchronized MAIN ONLY topology."
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "./verify"
+    expected_signal: "PASS from exactly one new invocation after focused lifecycle/menu-bar/cutover tests pass."
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Run focused shell/Python lifecycle and candidate-cutover/uninstall contract tests for manual non-persistent Runtime semantics."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Run focused Swift Core/MenuBar/RuntimeService tests including bounded refresh coalescing and explicit lifecycle behavior."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Run xcrun swift test --package-path macos after focused changes are green."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Run the single authorized durable/reconcilable ./verify invocation and reconcile its exact outcome without blind replay."
+      required: true
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
