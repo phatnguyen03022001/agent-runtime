@@ -1,0 +1,156 @@
+protocol_version: 3
+task_id: TASK-0201
+task_revision: 1
+state: APPROVED
+title: "Deterministic Release Bundle Gate and Compatibility Contract"
+
+origin:
+  type: architect_continuation
+  predecessor_task: TASK-0200
+  goal: "Make public release artifacts mechanically provenance-bound, checksum-verifiable and deterministic from one frozen candidate, and codify the supported/qualified macOS compatibility boundary before v0.5.2 publication."
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+
+execution_skills:
+  required: [executor, verification, reliability, security-review, simplicity]
+
+revision_basis:
+  accepted_task_0200_review: "a732b99b09b7e40f3d160a474bd6560f160df308"
+  paused_release_task: TASK-0196
+  current_runtime_version: "0.5.1"
+  current_contracts:
+    substrate_manifest_schema: 2
+    candidate_handoff_schema: 2
+    payload_schema: 1
+    zero_cost_transaction_schema: 6
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing package_provenance zero-cost candidate closure/validation, package_app.sh, workflow_dispatch governance and docs/INSTALL.md."
+  rationale: "Add one deterministic bundle helper and one manual release-gate workflow. Do not introduce a release service, updater framework, database, signer/notary system or alternate provenance model."
+
+objective: "Create one deterministic, secret-free release-bundle gate for an already frozen zero-cost candidate; prove archive/manifest/checksum reproducibility from that candidate; add a manual ARM64 GitHub Actions release-gate workflow and an explicit compatibility contract. Do not claim compiler-level reproducible builds across toolchains: the reproducibility claim is frozen-candidate -> release assets."
+
+scope:
+  required_changes:
+    - "Fresh-bind exact revision-1 base with clean synchronized MAIN ONLY. TASK-0196 remains paused."
+    - "Add macos/release_bundle.py as the only new release-bundle implementation."
+    - "The helper must consume one already-published zero-cost candidate root containing exactly Agent Runtime.app, Agent Runtime.candidate.json and payloads/<initial-closure> plus no unsafe/symlink/device entries."
+    - "Reuse macos/package_provenance.py validation. Do not duplicate candidate/payload provenance algorithms."
+    - "Before archive creation, validate the app + external handoff + exact initial payload release and require the handoff candidate_sha256/content identity to match the frozen input."
+    - "Derive Runtime version from the candidate app Info.plist and preserve source_revision/source_tree, candidate_sha256, initial_payload_closure, requirements_lock_sha256, expected public-tool count/surface and relevant contract schemas in a release manifest."
+    - "Build a deterministic .tar.gz from the frozen candidate: stable UTF-8 byte ordering; gzip mtime=0 and empty original filename; tar uid/gid=0, empty uname/gname, mtime=0; preserve safe file/directory permission bits required by the candidate; reject symlink/device/FIFO/socket/unsupported entries; no xattr/quarantine dependence."
+    - "Archive members must contain exactly the zero-cost bundle root shape needed by the prebuilt installer. Do not embed repository checkout files, .git, .env, logs, task artifacts, build caches or credentials."
+    - "Emit exactly three release assets into an empty caller-owned output directory: deterministic archive, release-manifest.json, SHA256SUMS.txt."
+    - "Archive filename must be deterministic from Runtime version and full or collision-safe candidate identity; no wall-clock timestamp or random component."
+    - "release-manifest.json schema 1 must be deterministic canonical JSON and include at minimum: owner, runtime_version, source_revision, source_tree, candidate_sha256, initial_payload_closure, requirements_lock_sha256, expected_public_tool_count, expected_public_surface_sha256, substrate_manifest_schema, candidate_handoff_schema, payload_schema, archive_filename, archive_sha256, archive_size_bytes and archive_member_count."
+    - "SHA256SUMS.txt must contain exactly the archive SHA-256 and deterministic archive filename, newline-terminated, with no absolute path."
+    - "Provide a verify operation that consumes archive + release-manifest + SHA256SUMS, verifies checksum/manifest agreement, safely extracts into a private temporary directory without path traversal/symlink/special-file acceptance, and reuses package_provenance validation on the extracted app/handoff/payload."
+    - "Verify operation must reject any manifest/archive mismatch, extra archive root entry, duplicate member, unsafe path, non-regular unsupported member, wrong mode-sensitive candidate closure, wrong payload closure, wrong source identity or checksum mismatch."
+    - "Building the three assets twice from the same frozen candidate into two distinct empty output directories must produce byte-identical archive, release-manifest.json and SHA256SUMS.txt."
+    - "Do not claim two independent Swift/package compilations are byte-identical. Candidate compilation reproducibility is outside this task; candidate closure/provenance remains the build identity."
+    - "Add owner tests to existing tests/test_package_provenance.py and/or tests/test_candidate_freeze.py; do not add a new test module unless Architect revision is required."
+    - "Tests must prove deterministic double-build bytes, safe round-trip verification, candidate/provenance binding, checksum mismatch rejection, traversal/symlink/special-member rejection, extra-root rejection and no secret/config/check-out material in the archive."
+    - "Add .github/workflows/release-gate.yml with workflow_dispatch only and contents:read permission. It must not run on push/pull_request/tag automatically and must not create tags/releases."
+    - "The workflow must use standard ARM64 macOS runners. One build job on macos-26 must assert uname -m == arm64, set up CPython 3.13, install requirements.lock with hashes, run canonical ./verify, build exactly one zero-cost candidate, run release_bundle build twice and cmp all three outputs, verify one output, then upload only the three release assets."
+    - "A downstream compatibility matrix must run on macos-14, macos-15 and macos-26 ARM64, download the release assets, assert arm64, run release_bundle verify against the downloaded archive, run strict codesign verification of the extracted app through the existing provenance verifier, and smoke the bundled Python interpreter. Do not install/cut over or launch the menu-bar app in CI."
+    - "The workflow must preserve workflow_dispatch-only governance and must not require repository secrets, Developer ID, notarization, admin credentials, Runtime API key or Tunnel ID."
+    - "Add docs/COMPATIBILITY.md. Distinguish contract support from continuous release-gate qualification: minimum supported macOS 13/Apple Silicon from Package.swift + Info.plist; release-gate lanes macOS 14/15/26 ARM64; Intel unsupported; macOS 13 supported by deployment contract but not continuously qualified by the current standard CI matrix."
+    - "The compatibility document must state the current source contract without pretending v0.5.2 is published: Runtime 0.5.1 source SSOT until TASK-0196 changes it, substrate manifest schema 2, candidate handoff schema 2, payload schema 1, zero-cost transaction schema 6, public latest release remains v0.5.1."
+    - "Update README.md and docs/INSTALL.md minimally to link the compatibility contract and describe release-manifest/SHA256SUMS assets. Do not rewrite onboarding or release history."
+    - "Update verification policy only if existing path classification genuinely requires it; do not add exemptions or weaken qualification selection."
+    - "Run focused package provenance/freeze/workflow contract tests, release-bundle tests and shell/YAML/static checks first."
+    - "Run exactly one canonical ./verify through the proven short-path HOME=$PWD/.h TMPDIR=$PWD/.v environment. Remove .h/.v before closure. Never blind-replay ambiguity."
+    - "Do not dispatch the new GitHub workflow in revision 1. Remote workflow execution is a separate evidence boundary after source acceptance."
+    - "Publish one implementation candidate and truthful TASK-0201 report. Final main clean/synchronized MAIN ONLY."
+
+  allowed_existing_files_or_components:
+    - "macos/release_bundle.py"
+    - ".github/workflows/release-gate.yml"
+    - "tests/test_package_provenance.py"
+    - "tests/test_candidate_freeze.py"
+    - "tests/test_surface_and_scripts.py"
+    - "verification_policy.py only if required by existing path-classification contract"
+    - "tests/test_verify_harness.py only if verification_policy.py must change"
+    - "docs/COMPATIBILITY.md"
+    - "docs/INSTALL.md"
+    - "README.md"
+    - ".agent/tasks/TASK-0201/report.yaml"
+
+invariants:
+  - "Existing zero-cost candidate closure/handoff/payload provenance remains authoritative."
+  - "Release assets contain no credentials, runtime.env, Git identity values, operator HOME paths, .env content or repository metadata."
+  - "Bundle determinism is claimed only from the same frozen candidate, not across independent compiler/toolchain builds."
+  - "Public latest release remains v0.5.1; Runtime source version remains 0.5.1 in this task."
+  - "No tag/release/live install/cutover/lifecycle/plugin/reboot/permission/credential effect."
+  - "TASK-0196 remains paused."
+  - "MAIN ONLY."
+
+forbidden_changes:
+  - "Changing package candidate provenance/closure algorithms merely to make archive reproducibility easier."
+  - "Changing Runtime version, public tool schemas, payload/candidate/substrate/transaction schemas or lifecycle behavior."
+  - "Developer ID signing, notarization, Apple credentials, GitHub release publication or auto-updater work."
+  - "A release database/service/daemon or third-party archive dependency."
+  - "Claiming macOS 13 is continuously qualified when no CI lane executes it."
+  - "Claiming Intel support."
+  - "Any real Runtime API key/Tunnel ID use."
+  - "Any live installed Runtime mutation."
+  - "Any automatic workflow trigger beyond workflow_dispatch."
+  - "Any second canonical ./verify after a conclusive result or blind replay."
+  - "Any branch or PR."
+
+effect_authority:
+  canonical_verify_max: 1
+  local_distribution_build_max: 0
+  github_workflow_dispatch_max: 0
+  install_prebuilt_max: 0
+  commit_cutover_max: 0
+  rollback_cutover_max: 0
+  menu_bar_relaunch_max: 0
+  runtime_restart_max: 0
+  runtime_explicit_start_max: 0
+  runtime_explicit_stop_max: 0
+  plugin_reload_or_reconnect_max: 0
+  credential_rotation_max: 0
+  physical_reboot_max: 0
+  new_security_permission_max: 0
+  version_tag_create_max: 0
+  github_release_publish_max: 0
+  branch_or_pr_creation_max: 0
+
+acceptance_criteria:
+  - {id: AC-1, requirement: "Frozen-candidate release assets are deterministic and provenance-bound.", evidence_required: "Two builds from one synthetic/frozen candidate produce byte-identical archive/manifest/sums; round-trip verify re-establishes exact candidate and payload identity."}
+  - {id: AC-2, requirement: "Release bundle verification fails closed.", evidence_required: "Checksum, traversal, duplicate/extra entry, symlink/special member, mode/content/provenance mismatches are rejected without unsafe extraction."}
+  - {id: AC-3, requirement: "Manual CI release gate is encoded without release authority.", evidence_required: "workflow_dispatch-only ARM64 macOS 26 build + macOS 14/15/26 compatibility matrix; no secrets/signing/notary/tag/release mutation; workflow contract tests PASS."}
+  - {id: AC-4, requirement: "Compatibility truth is explicit.", evidence_required: "COMPATIBILITY.md distinguishes supported minimum macOS 13/arm64 from continuously qualified 14/15/26 lanes and records current Runtime/schema contract without claiming v0.5.2 publication."}
+  - {id: AC-5, requirement: "Existing product/release semantics remain unchanged.", evidence_required: "No Runtime version/schema/lifecycle/provenance algorithm change and no live/release effect."}
+  - {id: AC-6, requirement: "Canonical verification passes.", evidence_required: "Focused tests/diff-check PASS followed by exactly one short-path ./verify PASS."}
+  - {id: AC-7, requirement: "Canonical closure.", evidence_required: "Truthful report; final main clean/synchronized MAIN ONLY."}
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "Focused release-bundle/workflow/compatibility proof plus exactly one canonical short-path ./verify."
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions: [BLOCKED, STALE_STATE, AUTHORITY_REQUIRED, CURRENT_PHASE_CAPABILITY_UNAVAILABLE, REVIEW_REQUIRED, REVERIFY_REQUIRED, USER_STOP]
+
+git_authority: {create_branch: false, commit: true, push: true, promote_to_main: false}
+release_authority: {create_version_tag: false, mutate_repository_metadata: false, publish_release: false}
+blocking_decisions: []
+execution_ready: true
