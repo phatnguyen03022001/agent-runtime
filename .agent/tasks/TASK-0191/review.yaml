@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0191
-task_revision: 1
-review_revision: 1
+task_revision: 2
+review_revision: 2
 state: REVISION_REQUIRED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0191/report.yaml
-  commit: "bfab23127ea06dfb19fd0918b7d76c22e7f47cf9"
-  report_revision: 1
+  commit: "323f6b0d4eb50fbef4b4f858d50b0408ab7e6409"
+  report_revision: 2
 
 independence:
   reviewer_role: ARCHITECT
@@ -28,20 +28,21 @@ contract_compliance:
   verifier_evidence: PASS
 
 acceptance_basis:
-  - "Implementation candidate f17813b9a2573cc8307195235dcd1406eccc3939 is the single direct child of exact task base 4ca431794cd034c4336e96f082ed46309a7e9963 and contains only the bounded status/lifecycle implementation and tests authorized by TASK-0191 revision 1."
-  - "Report commit bfab23127ea06dfb19fd0918b7d76c22e7f47cf9 is the single direct child of the implementation candidate and adds only .agent/tasks/TASK-0191/report.yaml."
-  - "AC-1 through AC-4 are supported by focused evidence: shell/status 19/19 PASS, Swift MenuBar 49/49 PASS, Swift Core 35/35 PASS, Python contract-focused 50/50 PASS, and full xcrun swift test PASS. Healthy managed and healthy read-only states no longer render Unavailable solely from ownership/process-discovery uncertainty; unsafe mutation remains fail-closed."
-  - "The sole authorized revision-1 ./verify invocation is conclusively FAIL with exit 1 and was not replayed. Therefore AC-5 cannot pass under revision 1."
-  - "The canonical failure is isolated to tests.test_protected_runtime.ProtectedRuntimeGuardTests.test_executor_and_session_boundaries_call_guard_before_spawn. The test constructs TerminalSessionManager without an isolated durable_state_root. TerminalSessionManager.__init__ recovers the ambient durable store, and start() checks recovery blocking before _PROTECTED_GUARD.check. When ./verify itself is running as the required durable session, the fixture can observe that ambient running durable job and fail on recovery capacity before reaching the assertion under test."
-  - "The exact failing test passes after the enclosing durable verifier terminates, consistent with ambient durable-state coupling rather than a Runtime-status implementation regression."
+  - "Revision-2 fixture candidate 4ec736792c8322b37a5387157a0fd636f13d437c is the single direct child of exact revision-2 base 145243c8a3e8c823dadd36e3ea4d2d2be3d40f7f and changes only tests/test_protected_runtime.py."
+  - "Report commit 323f6b0d4eb50fbef4b4f858d50b0408ab7e6409 is the single direct child of the fixture candidate and changes only .agent/tasks/TASK-0191/report.yaml."
+  - "F-0191-001 is closed: the exact formerly failing test passes 1/1, the full protected-runtime module passes 20/20, and that module also passes 20/20 inside the durable canonical verifier."
+  - "Revision-1 production status implementation remains unchanged; no production source mutation occurred in revision 2."
+  - "The sole authorized revision-2 ./verify invocation conclusively failed in tests.test_pressure_concurrency with RuntimeCapacityError after 28/62 modules and 427 tests; it was not replayed."
+  - "The new failure is fixture coupling, not evidence that the six-slot product contract is wrong. tests.test_pressure_concurrency calls the terminal_exec facade through the process-global session._MANAGER. During the durable canonical verifier, that manager already contains the verifier's own active Runtime session. The test then starts six additional operations, so the seventh retained active session trips TerminalSessionManager.max_active_sessions=6 before the test can prove its intended six-operation concurrency predicate."
+  - "Changing the product limit to seven, reducing the test to five operations, or weakening capacity enforcement would hide the fixture defect and is not justified."
 
 findings:
-  - id: "F-0191-001"
+  - id: "F-0191-002"
     severity: "BLOCKING"
-    description: "The protected-guard unit test is not hermetic with respect to durable Runtime recovery state. Its intended predicate is guard-before-spawn, but ambient durable verifier state can preempt that predicate."
-    disposition: "Preserve the revision-1 product implementation. Revise TASK-0191 narrowly to isolate the affected test fixture from ambient durable state and authorize exactly one fresh canonical ./verify invocation after focused RED/GREEN proof. Do not change product/runtime behavior unless focused causal evidence contradicts this diagnosis."
+    description: "tests.test_pressure_concurrency is not hermetic from the process-global Runtime session manager. The durable verifier itself consumes one active slot, contaminating a test whose intended subject is six independent terminal_exec operations within the supported six-slot ceiling."
+    disposition: "Preserve the product limit and revision-1 production implementation. Revise TASK-0191 narrowly so the pressure-concurrency test exercises six terminal_exec operations against fixture-owned session/capacity/durable state, then authorize one fresh canonical ./verify invocation. Do not reduce concurrency, raise the product ceiling, or change production session/capacity semantics."
 
 notes:
-  - "Do not replay ./verify under revision 1; its verification budget is consumed."
+  - "Revision-2 canonical verifier budget is consumed; do not replay it."
   - "Do not install, cut over, restart, reboot, or otherwise mutate the live Runtime."
-  - "TASK-0190 revision 8 remains superseded for the current objective; its physical reboot budget remains untouched."
+  - "TASK-0190 revision 8 remains superseded for the current objective and its physical reboot budget remains untouched."
