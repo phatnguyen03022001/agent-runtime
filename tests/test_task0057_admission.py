@@ -34,6 +34,18 @@ class HeavyExecutionAdmissionTests(unittest.TestCase):
         )
         self._global_admission.start()
         self.addCleanup(self._global_admission.stop)
+        self.session_manager = session.TerminalSessionManager(
+            max_active_sessions=6,
+            admission=self.admission,
+            durable_state_root=self.root / "global-durable-state",
+            start_reaper=False,
+        )
+        self._global_session_manager = mock.patch.object(
+            session, "_MANAGER", self.session_manager
+        )
+        self._global_session_manager.start()
+        self.addCleanup(self._global_session_manager.stop)
+        self.addCleanup(self.session_manager.shutdown)
 
     def _wait_for(self, paths: list[Path], timeout: float = 5.0) -> None:
         deadline = time.monotonic() + timeout
@@ -62,7 +74,10 @@ class HeavyExecutionAdmissionTests(unittest.TestCase):
             "    time.sleep(.01)\n"
         )
         manager = session.TerminalSessionManager(
-            max_active_sessions=6, admission=self.admission, start_reaper=False
+            max_active_sessions=6,
+            admission=self.admission,
+            durable_state_root=self.root / "mixed-durable-state",
+            start_reaper=False,
         )
         self.addCleanup(manager.shutdown)
         with ThreadPoolExecutor(max_workers=3) as workers:
@@ -141,7 +156,10 @@ class HeavyExecutionAdmissionTests(unittest.TestCase):
             "while not release.exists(): time.sleep(.005)\n"
         )
         manager = session.TerminalSessionManager(
-            max_active_sessions=6, admission=self.admission, start_reaper=False
+            max_active_sessions=6,
+            admission=self.admission,
+            durable_state_root=self.root / "task0078-durable-state",
+            start_reaper=False,
         )
         self.addCleanup(manager.shutdown)
         sessions = [
@@ -213,7 +231,10 @@ class HeavyExecutionAdmissionTests(unittest.TestCase):
         self.assertEqual(self.admission.active, 0)
 
         manager = session.TerminalSessionManager(
-            max_active_sessions=6, admission=self.admission, start_reaper=False
+            max_active_sessions=6,
+            admission=self.admission,
+            durable_state_root=self.root / "terminal-paths-durable-state",
+            start_reaper=False,
         )
         self.addCleanup(manager.shutdown)
         with mock.patch.object(session._PROTECTED_GUARD, "check"), mock.patch.object(
@@ -247,7 +268,11 @@ class HeavyExecutionAdmissionTests(unittest.TestCase):
 
         now = [100.0]
         idle = session.TerminalSessionManager(
-            clock=lambda: now[0], max_active_sessions=6, admission=self.admission, start_reaper=False
+            clock=lambda: now[0],
+            max_active_sessions=6,
+            admission=self.admission,
+            durable_state_root=self.root / "idle-durable-state",
+            start_reaper=False,
         )
         self.addCleanup(idle.shutdown)
         expiring = idle.start(
@@ -357,7 +382,10 @@ server._main()
 
     def test_repeated_x6_pty_cycles_leave_no_owned_leases_fds_or_workers(self) -> None:
         manager = session.TerminalSessionManager(
-            max_active_sessions=6, admission=self.admission, start_reaper=False
+            max_active_sessions=6,
+            admission=self.admission,
+            durable_state_root=self.root / "repeated-durable-state",
+            start_reaper=False,
         )
         self.addCleanup(manager.shutdown)
         fd_before = len(os.listdir("/dev/fd"))

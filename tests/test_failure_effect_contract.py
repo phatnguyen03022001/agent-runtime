@@ -221,6 +221,7 @@ class FailureEffectBoundaryTests(unittest.TestCase):
         self.workspace = Path(self._tmp.name)
         self.cwd = self.workspace / "cwd"
         self.cwd.mkdir()
+        self.durable_state_root = self.workspace / "durable-state"
         self._env = patch.dict(
             os.environ,
             {
@@ -358,7 +359,11 @@ class FailureEffectBoundaryTests(unittest.TestCase):
         admission = HeavyExecutionAdmission(1)
         held = admission.acquire()
         self.addCleanup(held.release)
-        manager = TerminalSessionManager(admission=admission, start_reaper=False)
+        manager = TerminalSessionManager(
+            admission=admission,
+            durable_state_root=self.durable_state_root,
+            start_reaper=False,
+        )
         self.addCleanup(manager.shutdown)
         with patch("agent_runtime.session.subprocess.Popen") as popen:
             with self.assertRaises(RuntimeCapacityError) as raised:
@@ -379,6 +384,7 @@ class FailureEffectBoundaryTests(unittest.TestCase):
     def test_pre_effect_process_start_failure_is_absent_and_keyed(self) -> None:
         manager = TerminalSessionManager(
             admission=HeavyExecutionAdmission(1),
+            durable_state_root=self.durable_state_root,
             start_reaper=False,
         )
         self.addCleanup(manager.shutdown)
@@ -403,6 +409,7 @@ class FailureEffectBoundaryTests(unittest.TestCase):
     def test_post_effect_start_failure_is_unknown_and_reconcile(self) -> None:
         manager = TerminalSessionManager(
             admission=HeavyExecutionAdmission(1),
+            durable_state_root=self.durable_state_root,
             start_reaper=False,
         )
         self.addCleanup(manager.shutdown)
