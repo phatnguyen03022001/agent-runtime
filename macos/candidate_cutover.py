@@ -1457,12 +1457,14 @@ def _write_payload_pointer_atomic(pointer: Path, closure: str, *, uid: int) -> N
         raise CutoverError("payload pointer publication did not converge")
 
 
-def _validate_zero_cost_payload_for_candidate(
+def _validate_zero_cost_payload_compatibility(
     payload_release: Path,
     candidate: dict[str, object],
+    *,
+    error_message: str,
 ) -> dict[str, object]:
     try:
-        payload = provenance.validate_payload_release(
+        return provenance.validate_payload_release(
             payload_release,
             expected_closure=str(candidate["initial_payload_closure"]),
             expected_requirements_lock_sha256=str(candidate["requirements_lock_sha256"]),
@@ -1471,7 +1473,18 @@ def _validate_zero_cost_payload_for_candidate(
             expected_public_surface_sha256=str(candidate["expected_public_surface_sha256"]),
         )
     except (KeyError, ValueError, TypeError, provenance.PackageProvenanceError) as exc:
-        raise CutoverError("zero-cost external payload validation failed") from exc
+        raise CutoverError(error_message) from exc
+
+
+def _validate_zero_cost_payload_for_candidate(
+    payload_release: Path,
+    candidate: dict[str, object],
+) -> dict[str, object]:
+    payload = _validate_zero_cost_payload_compatibility(
+        payload_release,
+        candidate,
+        error_message="zero-cost external payload validation failed",
+    )
     if payload.get("source_revision") != candidate.get("source_revision") or payload.get("source_tree") != candidate.get("source_tree"):
         raise CutoverError("initial payload source identity does not match candidate substrate")
     return payload
@@ -2320,14 +2333,26 @@ def _cutover_zero_cost_candidate(
         payloads_root.mkdir(parents=True, exist_ok=True)
         final_payload = payloads_root / closure
         if final_payload.exists() or final_payload.is_symlink():
-            _validate_zero_cost_payload_for_candidate(final_payload, expected)
+            _validate_zero_cost_payload_compatibility(
+                final_payload,
+                expected,
+                error_message="zero-cost canonical payload validation failed",
+            )
         else:
             staged_payload.chmod(0o755)
             os.replace(staged_payload, final_payload)
             final_payload.chmod(0o555)
             metadata["payload"] = {"closure": closure, "created": True}
             _atomic_json(transaction_dir / "metadata.json", metadata)
-        _validate_zero_cost_payload_for_candidate(final_payload, expected)
+        _validate_zero_cost_payload_compatibility(
+            final_payload,
+            expected,
+            error_message="zero-cost canonical payload validation failed",
+        )
+        candidate_payload_witness = (
+            final_payload if bool(metadata["payload"]["created"]) else staged_payload
+        )
+        _validate_zero_cost_payload_for_candidate(candidate_payload_witness, expected)
 
         _materialize_current_launchagent(home, uid=uid)
         if _service_loaded(launchctl, current_service):
@@ -2347,7 +2372,7 @@ def _cutover_zero_cost_candidate(
         _zero_cost_validate_input(
             target_app,
             transaction_dir / "candidate-handoff.json",
-            final_payload,
+            candidate_payload_witness,
             expected_candidate_sha256=expected_candidate_sha256,
             expected_handoff_sha256=expected_handoff_sha256,
         )
@@ -3154,13 +3179,26 @@ def commit_transaction(transaction_dir: Path, target_app: Path) -> dict[str, obj
         current_plist = Path(str(paths.get("current_plist", "")))
         desired_state = Path(str(paths.get("desired_state", "")))
         closure = payload.get("closure")
-        if not isinstance(closure, str) or re.fullmatch(r"[0-9a-f]{64}", closure) is None:
-            raise CutoverError("zero-cost commit payload closure is malformed")
+        created = payload.get("created")
+        if (
+            not isinstance(closure, str)
+            or re.fullmatch(r"[0-9a-f]{64}", closure) is None
+            or not isinstance(created, bool)
+        ):
+            raise CutoverError("zero-cost commit payload metadata is malformed")
         final_payload = _payloads_root(pointer.parent) / closure
+        _validate_zero_cost_payload_compatibility(
+            final_payload,
+            candidate,
+            error_message="zero-cost canonical payload validation failed",
+        )
+        candidate_payload_witness = (
+            final_payload if created else transaction_dir / "payloads" / closure
+        )
         validated = provenance.validate_zero_cost_candidate(
             target_app,
             transaction_dir / "candidate-handoff.json",
-            final_payload,
+            candidate_payload_witness,
         )
         if validated != candidate:
             raise CutoverError("installed zero-cost candidate no longer matches pending transaction")
@@ -3180,6 +3218,12 @@ def commit_transaction(transaction_dir: Path, target_app: Path) -> dict[str, obj
         if pointer.read_text(encoding="ascii") != closure + "\n":
             raise CutoverError("zero-cost commit payload pointer does not select the pending payload")
         _validate_runtime_config_identity(runtime_config, pointer.parent)
+        if not created:
+            _remove_transaction_payload(
+                candidate_payload_witness,
+                transaction_dir / "payloads",
+                closure,
+            )
         shutil.rmtree(transaction_dir)
         return {"status": "COMMITTED"}
 

@@ -432,6 +432,269 @@ def legacy_plist_bytes(
 
 
 class CandidateCutoverTests(unittest.TestCase):
+    def _zero_cost_collision_fixture(self, raw: str):
+        cutover = load_module(CUTOVER_PATH, "candidate_cutover_zero_cost_collision")
+        provenance = cutover.provenance
+        root = Path(raw)
+        home = root / "home"
+        target = home / "Applications" / "Agent Runtime.app"
+        state_dir = home / "Library" / "Application Support" / "Agent Runtime"
+        transaction = state_dir / "cutover-transaction"
+        state_dir.mkdir(parents=True)
+        runtime_env = state_dir / "runtime.env"
+        runtime_env.write_text("CONTROL_PLANE_API_KEY=fixture\n")
+        runtime_env.chmod(0o600)
+
+        candidate_revision = "d" * 40
+        candidate_tree = "e" * 40
+        requirements_lock = "c" * 64
+        surface_sha = "f" * 64
+
+        app = root / "candidate" / "Agent Runtime.app"
+        runtime = app / "Contents/Resources/runtime"
+        (runtime / ".venv/bin").mkdir(parents=True)
+        (runtime / "macos").mkdir(parents=True)
+        (app / "Contents/MacOS").mkdir(parents=True)
+        (app / "Contents/Info.plist").write_bytes(plistlib.dumps({
+            "CFBundleIdentifier": provenance.OWNER,
+            "CFBundleExecutable": "AgentRuntimeMenuBar",
+        }))
+        (runtime / "start.sh").write_text("#!/bin/sh\nexit 0\n")
+        (runtime / "start.sh").chmod(0o755)
+        (runtime / "macos/package_provenance.py").write_text("# bootstrap\n")
+        for relative in provenance.ZERO_COST_CODE_IDENTIFIERS:
+            target_code = app / relative
+            target_code.parent.mkdir(parents=True, exist_ok=True)
+            target_code.write_text("#!/bin/sh\nexit 0\n")
+            target_code.chmod(0o755)
+        provenance.write_substrate_manifest(
+            runtime,
+            app / "Contents/Resources/runtime-manifest.json",
+            candidate_revision,
+            candidate_tree,
+            requirements_lock,
+            python_major_minor="3.13",
+            public_tool_count=20,
+            public_surface_sha256=surface_sha,
+        )
+
+        payload_source = root / "payload-source"
+        payload_source.mkdir()
+        (payload_source / "__init__.py").write_text("__all__ = []\n")
+        (payload_source / "server.py").write_text("VALUE = 1\n")
+        older_payload = provenance.publish_payload_release(
+            payload_source,
+            root / "older-payloads",
+            revision="a" * 40,
+            tree="b" * 40,
+            requirements_lock_sha256=requirements_lock,
+            python_major_minor="3.13",
+            public_tool_count=20,
+            public_surface_sha256=surface_sha,
+        )
+        candidate_payload = provenance.publish_payload_release(
+            payload_source,
+            root / "candidate-payloads",
+            revision=candidate_revision,
+            tree=candidate_tree,
+            requirements_lock_sha256=requirements_lock,
+            python_major_minor="3.13",
+            public_tool_count=20,
+            public_surface_sha256=surface_sha,
+        )
+        self.assertEqual(older_payload["content_closure"], candidate_payload["content_closure"])
+        closure = str(candidate_payload["content_closure"])
+        payload_release = Path(candidate_payload["release_path"])
+
+        canonical_payload = state_dir / "payloads" / closure
+        canonical_payload.parent.mkdir(parents=True)
+        shutil.copytree(Path(older_payload["release_path"]), canonical_payload, copy_function=shutil.copy2)
+
+        def identity_reader(path: Path) -> dict[str, object]:
+            parts = path.parts
+            contents_index = parts.index("Contents")
+            relative = "/".join(parts[contents_index:])
+            identifier = provenance.ZERO_COST_CODE_IDENTIFIERS[relative]
+            return {
+                "identifier": identifier,
+                "team_identifier": None,
+                "designated_requirement": f'designated => identifier "{identifier}"',
+            }
+
+        handoff = root / "candidate.json"
+        provenance._verify_codesign = lambda _app: None
+        provenance._codesign_metadata = identity_reader
+        provenance.seal_zero_cost_candidate(
+            app, handoff, payload_release, identity_reader=identity_reader
+        )
+
+        launchctl, launch_state, launch_log = make_fake_launchctl(
+            root, ui_loaded=False, runtime_loaded=False
+        )
+        modern_state = {"main_app": "not-found", "runtime_agent": "not-found"}
+
+        def service_management(_app: Path, operation: str) -> dict[str, str]:
+            if operation == "status":
+                return dict(modern_state)
+            if operation == "register-main":
+                modern_state["main_app"] = "enabled"
+                return dict(modern_state)
+            if operation == "unregister-main":
+                modern_state["main_app"] = "not-found"
+                return dict(modern_state)
+            raise AssertionError(f"unexpected ServiceManagement operation: {operation}")
+
+        cutover._service_management = service_management
+        return cutover, {
+            "app": app,
+            "handoff": handoff,
+            "payload_release": payload_release,
+            "older_payload_release": Path(older_payload["release_path"]),
+            "candidate_revision": candidate_revision,
+            "candidate_tree": candidate_tree,
+            "closure": closure,
+            "canonical_payload": canonical_payload,
+            "home": home,
+            "target": target,
+            "state_dir": state_dir,
+            "transaction": transaction,
+            "launchctl": launchctl,
+            "launch_state": launch_state,
+            "launch_log": launch_log,
+        }
+
+    @staticmethod
+    def _payload_tree_bytes(root: Path) -> dict[str, bytes]:
+        return {
+            path.relative_to(root).as_posix(): path.read_bytes()
+            for path in root.rglob("*")
+            if path.is_file()
+        }
+
+    def test_zero_cost_reuses_existing_content_identical_payload_with_historical_source_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            cutover, fx = self._zero_cost_collision_fixture(raw)
+            canonical_before = self._payload_tree_bytes(fx["canonical_payload"])
+
+            result = cutover.cutover_candidate(
+                fx["app"],
+                fx["handoff"],
+                payload_release=fx["payload_release"],
+                target_app=fx["target"],
+                ui_plist=fx["home"] / "Library/LaunchAgents/com.picmao.agent-runtime-ui.plist",
+                runtime_plist=fx["home"] / "Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist",
+                state_dir=fx["state_dir"],
+                transaction_dir=fx["transaction"],
+                home=fx["home"],
+                launchctl=fx["launchctl"],
+                uid=os.getuid(),
+            )
+
+            self.assertEqual(result["status"], "PENDING")
+            metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
+            self.assertEqual(
+                metadata["payload"],
+                {"closure": fx["closure"], "created": False},
+            )
+            pointer = fx["state_dir"] / "current-payload"
+            self.assertEqual(pointer.read_text(), fx["closure"] + "\n")
+            self.assertEqual(
+                self._payload_tree_bytes(fx["canonical_payload"]),
+                canonical_before,
+            )
+
+            staged_payload = fx["transaction"] / "payloads" / fx["closure"]
+            staged_manifest = json.loads((staged_payload / "payload-manifest.json").read_text())
+            canonical_manifest = json.loads(
+                (fx["canonical_payload"] / "payload-manifest.json").read_text()
+            )
+            self.assertEqual(staged_manifest["source_revision"], fx["candidate_revision"])
+            self.assertEqual(staged_manifest["source_tree"], fx["candidate_tree"])
+            self.assertNotEqual(
+                canonical_manifest["source_revision"], staged_manifest["source_revision"]
+            )
+            self.assertNotEqual(canonical_manifest["source_tree"], staged_manifest["source_tree"])
+
+            committed = cutover.commit_transaction(fx["transaction"], fx["target"])
+            self.assertEqual(committed["status"], "COMMITTED")
+            self.assertFalse(fx["transaction"].exists())
+            self.assertEqual(pointer.read_text(), fx["closure"] + "\n")
+            self.assertEqual(
+                self._payload_tree_bytes(fx["canonical_payload"]),
+                canonical_before,
+            )
+
+    def test_zero_cost_rejects_existing_same_closure_payload_with_incompatible_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            cutover, fx = self._zero_cost_collision_fixture(raw)
+            manifest_path = fx["canonical_payload"] / "payload-manifest.json"
+            manifest_path.chmod(0o644)
+            manifest = json.loads(manifest_path.read_text())
+            manifest["requirements_lock_sha256"] = "9" * 64
+            manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+            manifest_path.chmod(0o444)
+            canonical_before = self._payload_tree_bytes(fx["canonical_payload"])
+
+            with self.assertRaisesRegex(
+                cutover.CutoverError,
+                "zero-cost canonical payload validation failed",
+            ):
+                cutover.cutover_candidate(
+                    fx["app"],
+                    fx["handoff"],
+                    payload_release=fx["payload_release"],
+                    target_app=fx["target"],
+                    ui_plist=fx["home"] / "Library/LaunchAgents/com.picmao.agent-runtime-ui.plist",
+                    runtime_plist=fx["home"] / "Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist",
+                    state_dir=fx["state_dir"],
+                    transaction_dir=fx["transaction"],
+                    home=fx["home"],
+                    launchctl=fx["launchctl"],
+                    uid=os.getuid(),
+                )
+
+            self.assertFalse(fx["transaction"].exists())
+            self.assertFalse(fx["target"].exists())
+            self.assertEqual(
+                self._payload_tree_bytes(fx["canonical_payload"]),
+                canonical_before,
+            )
+
+    def test_zero_cost_external_candidate_payload_still_requires_exact_source_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            cutover, fx = self._zero_cost_collision_fixture(raw)
+            canonical_before = self._payload_tree_bytes(fx["canonical_payload"])
+
+            with self.assertRaisesRegex(
+                cutover.CutoverError,
+                "zero-cost candidate validation failed",
+            ) as caught:
+                cutover.cutover_candidate(
+                    fx["app"],
+                    fx["handoff"],
+                    payload_release=fx["older_payload_release"],
+                    target_app=fx["target"],
+                    ui_plist=fx["home"] / "Library/LaunchAgents/com.picmao.agent-runtime-ui.plist",
+                    runtime_plist=fx["home"] / "Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist",
+                    state_dir=fx["state_dir"],
+                    transaction_dir=fx["transaction"],
+                    home=fx["home"],
+                    launchctl=fx["launchctl"],
+                    uid=os.getuid(),
+                )
+
+            self.assertIsInstance(
+                caught.exception.__cause__,
+                cutover.provenance.PackageProvenanceError,
+            )
+            self.assertIn("source identity", str(caught.exception.__cause__))
+            self.assertFalse(fx["transaction"].exists())
+            self.assertFalse(fx["target"].exists())
+            self.assertEqual(
+                self._payload_tree_bytes(fx["canonical_payload"]),
+                canonical_before,
+            )
+
     def test_zero_cost_cutover_atomically_installs_app_payload_pointer_and_current_launchagent(self) -> None:
         cutover = load_module(CUTOVER_PATH, "candidate_cutover_zero_cost_fresh")
         provenance = cutover.provenance
