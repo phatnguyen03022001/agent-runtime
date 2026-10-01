@@ -1,0 +1,48 @@
+protocol_version: 3
+
+task_id: TASK-0193
+task_revision: 1
+review_revision: 1
+state: REVISION_REQUIRED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0193/report.yaml
+  commit: "6bc1977a82cf883904978bb541017249f09aa21e"
+  report_revision: 1
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  skill_rules: PASS
+  scope: PASS
+  structure_policy: PASS
+  git_authority: PASS
+  acceptance_criteria: FAIL
+  verifier_evidence: PASS
+
+acceptance_basis:
+  - "Implementation candidate ea763dd043492d1312b0fc18c9049e9812725ac7 is the single direct child of exact TASK-0193 base fb0687e0f38b0c97e3e149552d5ad8efb25817e0 and changes only ten authorized status/Core/MenuBar/test/documentation files."
+  - "Report commit 6bc1977a82cf883904978bb541017249f09aa21e is the single direct child of the implementation candidate and adds only .agent/tasks/TASK-0193/report.yaml."
+  - "AC-1 through AC-6 are supported by focused proof: status/transport Python 27/27 PASS, focused Swift 30/30 PASS, and full Swift 86/86 PASS. Transport is independent from local availability/control authority and passive status no longer overclaims ChatGPT connectivity."
+  - "The sole revision-1 canonical ./verify invocation was reconciled to the same durable execution after owner mismatch and conclusively exited 1 without replay. The only blocker is tests.test_supervised_lifecycle timing out at 45.018 seconds against the verifier's fixed 45-second module budget."
+  - "The same module passes 27/27 standalone in 48.939 seconds with no assertion failure."
+  - "The task added eight transport-classification test methods to tests/test_supervised_lifecycle.py. Each independently starts a fixture Runtime and then tearDown stops it, although the transport cases exercise read-only status classification against the same deterministic running fixture. The fake control-plane endpoint returns immediately for ordinary cases and the timeout case exits immediately by fixture design; therefore the observed >45 second module duration is dominated by repeated lifecycle fixture setup/start/stop overhead, not evidence that the production transport probe exceeds its one-second bound."
+  - "The narrow corrective path is test-only: preserve every required transport matrix case while consolidating them over fixture-owned running state so repeated Start/Stop cycles are not paid once per classification case. Raising the canonical module timeout would mask the regression and is not justified."
+
+findings:
+  - id: "F-0193-001"
+    severity: "BLOCKING"
+    description: "tests.test_supervised_lifecycle exceeds the canonical verifier's 45-second per-module budget after eight transport cases were implemented as separate full lifecycle tests with redundant fixture Runtime Start/Stop cycles."
+    disposition: "Preserve all revision-1 production implementation bytes and semantics. Revise TASK-0193 narrowly to optimize only tests/test_supervised_lifecycle.py by sharing one fixture-owned running Runtime across the transport classification matrix, retaining all required cases and assertions. Require a timed standalone module result with material margin below 45 seconds before authorizing one fresh canonical ./verify invocation. Do not raise verifier timeout or remove coverage."
+
+notes:
+  - "Revision-1 canonical verifier budget is consumed; do not replay it."
+  - "Do not change start.sh, Swift production/tests, transport semantics, verifier timeout, verify harness, or live Runtime/tunnel state in revision 2."
+  - "TASK-0190 revision 8 remains superseded and its effect authority remains untouched."
