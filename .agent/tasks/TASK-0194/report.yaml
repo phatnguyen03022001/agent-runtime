@@ -1,10 +1,10 @@
 protocol_version: 3
 
 task_id: TASK-0194
-task_revision: 6
-report_revision: 6
+task_revision: 7
+report_revision: 7
 state: REPORTED
-result: PASS
+result: BLOCKED
 
 task_source:
   path: .agent/tasks/TASK-0194/task.yaml
@@ -15,194 +15,381 @@ execution:
     name: main
     role: canonical
   execution_surface: CHATGPT_LOCAL
-  exact_task_base: "57df4edd38dd2e090f6156b9dcb61cee35cae832"
-  implementation_candidate: "3a7c349e601e23779a5f6f607e312186386beec6"
-  implementation_parent: "57df4edd38dd2e090f6156b9dcb61cee35cae832"
-  implementation_tree: "fdce3b9289d10d402ae04ff625128f527c3d8b0b"
+  exact_task_base: "e779ee86436e6f9ae96970fc77b30eba2af9c32b"
+  source_mutation: false
 
 revision_basis:
-  revision_5_base: "ff893b884794af32002842dfadd791610df2adce"
-  revision_5_report_commit: "88ff8becd85ad171925786439452b1759b03198a"
-  revision_5_review_commit: "37ea794ccc69352ec4c9bced2fa944c88ad325f3"
-  blocking_finding_closed: "F-0194-004"
-
-scope_control:
-  authorized_files_changed:
-    - macos/candidate_cutover.py
-    - tests/test_candidate_cutover.py
-  forbidden_files_changed: []
-  package_provenance_changed: false
-  package_app_changed: false
-  install_interface_changed: false
-  payload_schema_changed: false
-  candidate_schema_changed: false
-  transaction_schema_changed: false
-  pointer_format_changed: false
-  content_closure_semantics_changed: false
-  runtime_version_changed: false
-  public_mcp_contract_changed: false
-  dependency_changed: false
-  live_activation_effects: 0
+  accepted_source_candidate: "3a7c349e601e23779a5f6f607e312186386beec6"
+  accepted_source_report: "676a3f9bfc5a7f43a36bc9ed7d01974b6856a995"
+  accepted_source_review: "fdc12ac970ecfa0bcf012c6aa06324d96e45f082"
+  canonical_verify_reused: true
+  canonical_verify_result: "62/62 modules, 865 tests PASS"
+  revision_7_verify_invocations: 0
+  live_predecessor_revision: "5286bbb6d1942ff7eed13190bd38ee5efcc0e621"
 
 source_gate:
   result: PASS
-  revision_5_to_revision_6_base_delta:
+  accepted_source_delta:
+    base: "3a7c349e601e23779a5f6f607e312186386beec6"
+    head: "e779ee86436e6f9ae96970fc77b30eba2af9c32b"
     changed_paths:
+      - ".agent/tasks/TASK-0194/report.yaml"
       - ".agent/tasks/TASK-0194/review.yaml"
       - ".agent/tasks/TASK-0194/task.yaml"
     product_source_changes: false
-  evidence: "The exact revision-6 base was a clean planning-only continuation of the revision-5 report state."
+  exact_base_tree: "6814d9ddd3c52b1e85de18577b5ba5c2a0b98a87"
 
-live_preflight_observation:
-  observation_only: true
-  installed_runtime_revision: "5286bbb6d1942ff7eed13190bd38ee5efcc0e621"
-  installed_git_tree: "4093367bfaaf499b880e98076d5904decae51375"
-  cutover_transaction: absent
-  runtime_status: "RUNNING (persistent terminal sessions: 6)"
-  healthz: live
-  readyz: ready
+packaging_interpreter_validation:
+  authorized: 1
+  consumed: 1
   result: PASS
+  path: "/Users/tienphat/.local/share/uv/python/cpython-3.13.5-macos-aarch64-none/bin/python3.13"
+  implementation: cpython
+  version: "3.13.5"
+  cache_tag: cpython-313
+  soabi: cpython-313-darwin
+  platform: darwin
+  machine: arm64
+  base_prefix: "/Users/tienphat/.local/share/uv/python/cpython-3.13.5-macos-aarch64-none"
 
-root_cause:
-  result: CONFIRMED
-  finding: "F-0194-004"
-  description: "Zero-cost preflight intentionally admitted the exact persistent predecessor current Runtime LaunchAgent via allow_persistent_predecessor=True, but _materialize_current_launchagent later performed strict-manual-only validation and rejected that same admitted predecessor instead of atomically transitioning it to the accepted manual KeepAlive=false contract."
-  exact_predecessor_delta_from_manual: "KeepAlive={SuccessfulExit:false} instead of KeepAlive=false; every other key/value remains identical."
-
-implementation:
-  manual_contract:
-    preserved: true
-    RunAtLoad: false
-    KeepAlive: false
-    ProcessType: Interactive
-    ThrottleInterval: 2
-  materialization:
-    default_transition_authority: false
-    behavior: "Existing exact manual plist is validated and returned without rewrite. Only when allow_persistent_predecessor_transition=True, the existing plist is validated using the already-existing exact persistent-predecessor allowance. Exact predecessor then proceeds through the existing temporary-file plus os.replace atomic publication path and is strictly revalidated as current manual state."
-    production_authority_site: "_cutover_zero_cost_candidate only"
-  strict_foreign_rejection:
-    preserved: true
-    evidence: "Wrong label, helper ProgramArguments, KeepAlive shape/value, RunAtLoad, extra key, symlink/unsafe state remain rejected and are not overwritten."
-  rollback:
-    preserved: true
-    evidence: "previous-current.plist remains snapshotted before mutation. Injected failure after manual LaunchAgent bootstrap triggers existing rollback, which restores predecessor plist bytes exactly, restores protected-runtime-running, restores current-label loaded state, and kickstarts prior lifecycle when desired-state was previously present."
-  payload_collision_fix:
-    f0194_003_preserved: true
-    evidence: "Existing same-closure regression remains PASS; no package_provenance.py or payload/candidate/transaction schema change."
-
-tdd_evidence:
-  red:
-    command: ".venv/bin/python -m unittest tests.test_candidate_cutover.CandidateClosureTests.test_current_launchagent_materialization_transitions_exact_persistent_predecessor_only"
-    exit_code: 1
-    tests: 1
-    decisive_failure: "_materialize_current_launchagent() got an unexpected keyword argument 'allow_persistent_predecessor_transition'"
-  green:
-    command: ".venv/bin/python -m unittest tests.test_candidate_cutover.CandidateClosureTests.test_current_launchagent_materialization_transitions_exact_persistent_predecessor_only"
-    exit_code: 0
-    tests: 1
-    result: PASS
-
-targeted_regressions:
-  command: ".venv/bin/python -m unittest tests.test_candidate_cutover.CandidateClosureTests.test_current_launchagent_materialization_transitions_exact_persistent_predecessor_only tests.test_candidate_cutover.CandidateCutoverTests.test_zero_cost_transitions_persistent_current_predecessor_to_manual_and_reaches_pending tests.test_candidate_cutover.CandidateCutoverTests.test_zero_cost_failure_after_predecessor_transition_restores_exact_persistent_lifecycle tests.test_candidate_cutover.CandidateCutoverTests.test_zero_cost_reuses_existing_content_identical_payload_with_historical_source_identity"
+pre_build_candidate_snapshot:
   result: PASS
-  tests: 4
-  evidence:
-    - "Exact persistent predecessor materializes to exact manual plist, mode 0600 and uid preserved; exact manual state is idempotent."
-    - "Foreign LaunchAgent variants remain fail-closed even when explicit predecessor-transition authority is present."
-    - "Live-shape zero-cost regression with current-label service loaded, exact persistent predecessor plist, desired marker, current payload pointer, existing same-closure canonical payload reaches PENDING."
-    - "PENDING regression removes desired marker, bootstraps exact manual current LaunchAgent, records payload.created=false, and retains staged exact candidate source revision/tree witness."
-    - "Injected after_launchagent_bootstrap failure rolls back: transaction removed, predecessor plist byte-for-byte restored, desired marker restored, current-label service restored and kickstarted."
-    - "Accepted F-0194-003 same-closure reuse regression remains PASS."
+  existing_candidate_count: 18
+  unique_new_candidate_after_build: "804497c5b0db9090b9d4585ce8624dc345d8c6ab3d60505a351381a016514889"
 
-focused_verification:
-  candidate_cutover:
-    command: ".venv/bin/python -m unittest tests.test_candidate_cutover"
-    result: PASS
-    tests: 119
-    duration_s: 85.987
-  package_provenance:
-    command: ".venv/bin/python -m unittest tests.test_package_provenance"
-    result: PASS
-    tests: 20
-    duration_s: 0.449
-
-canonical_verify:
+distribution_build:
   authorized: 1
   invocation_count: 1
   retry_count: 0
-  command: "./verify"
+  command: "AGENT_RUNTIME_PACKAGING_PYTHON=/Users/tienphat/.local/share/uv/python/cpython-3.13.5-macos-aarch64-none/bin/python3.13 ./macos/package_app.sh --zero-cost"
   carrier:
     mode: pipe
     durability: runtime_restart
-    start_identity: "f0940000000000000000000000000001"
-    session_id: "718f975cc302df72"
+    start_identity: "a7194000000000000000000000000001"
+    session_id: "f2f6477ce5d6daeb"
   initial_carrier_result: AMBIGUOUS_OWNER_IDENTITY
-  reconciliation: "No replay. Independent SentinelX observation confirmed the exact bash ./verify process remained active. After that same process exited, terminal_poll on the same start_identity reconciled the persisted terminal result."
+  reconciliation: "No replay. SentinelX observed the exact package_app process. terminal_poll on the same start_identity later returned the persisted terminal result."
   lifecycle: COMPLETED
   termination_reason: natural_exit
-  exit_code: 0
+  exit_code: 2
+  recoverable_post_publication_cleanup_case: true
+  sole_failure: "PACKAGE ERROR: could not unregister retained candidate from LaunchServices"
+  rebuild_invocations: 0
+  launchservices_cleanup_invocations: 0
+
+candidate_audit:
   result: PASS
-  modules_completed: 62
-  modules_selected: 62
-  tests_completed: 865
-  duration_s: 97.203
-  profile: qualification
-  candidate_cutover_tests_in_verify: 119
-  package_provenance_tests_in_verify: 20
+  candidate_app: "/Users/tienphat/Developer/agent-runtime/build/candidates/804497c5b0db9090b9d4585ce8624dc345d8c6ab3d60505a351381a016514889/Agent Runtime.app"
+  candidate_handoff: "/Users/tienphat/Developer/agent-runtime/build/candidates/804497c5b0db9090b9d4585ce8624dc345d8c6ab3d60505a351381a016514889/Agent Runtime.candidate.json"
+  candidate_sha256: "804497c5b0db9090b9d4585ce8624dc345d8c6ab3d60505a351381a016514889"
+  handoff_sha256: "5f410faa02bbee37b467ba97283fe810fcdcba017d1a290e3ecd91bbc0b131ba"
+  source_revision: "e779ee86436e6f9ae96970fc77b30eba2af9c32b"
+  source_tree: "6814d9ddd3c52b1e85de18577b5ba5c2a0b98a87"
+  initial_payload_closure: "85b82b2c88e9bc0bfdf0c240a7b47b17abfd260609d88a7e5dafecab042e2483"
+  requirements_lock_sha256: "0e18226dbb6538c29bd96739f447b639ec63cb0291eef8ce4c70b45a2bb377d2"
+  expected_public_surface_sha256: "8726540a1ff4576c030dd6f9ad2dbe4b69b3c2f4ee261f7be2d083e3e6e611e4"
+  runtime_version: "0.5.1"
+  advertised_tool_count: 20
+  record_count: 1686
+  zero_cost_provenance: PASS
+  strict_codesign: PASS
+  pyc_count: 0
+  pycache_count: 0
+  candidate_process_count: 0
+  f0194_003_bundled: true
+  f0194_004_bundled: true
+
+pre_install_live_state:
+  result: PASS
+  installed_runtime_revision: "5286bbb6d1942ff7eed13190bd38ee5efcc0e621"
+  installed_git_tree: "4093367bfaaf499b880e98076d5904decae51375"
+  transaction: absent
+  runtime_env_sha256: "b3d0d67471f6d620f53ad1ed9ee6db21a1e906fff643dd94050b7cd8def97029"
+  desired_state: present
+  runtime_status: "RUNNING (persistent terminal sessions: 6)"
+  healthz: live
+  readyz: ready
+  doctor: "healthy 10/10"
+  service_management:
+    main_app: enabled
+    runtime_agent: not-found
+  launchagent:
+    Label: "com.picmao.agent-runtime-runtime-service"
+    ProgramArguments:
+      - "/Users/tienphat/Applications/Agent Runtime.app/Contents/MacOS/AgentRuntimeRuntimeService"
+    RunAtLoad: false
+    KeepAlive:
+      SuccessfulExit: false
+    ProcessType: Interactive
+    ThrottleInterval: 2
+    mode: "0600"
+    uid: 501
+  canonical_payload:
+    closure: "85b82b2c88e9bc0bfdf0c240a7b47b17abfd260609d88a7e5dafecab042e2483"
+    snapshot_sha256: "d2f1d697eee0cac4526a2d63803f2f1a6ff107e5b75f851943b16751382e57c9"
+    file_count: 33
+    manifest_sha256: "5ad8dfdc469031cb1cbe3662b472d4015f337aa1aae2951f17f8244e721f5637"
+
+sentinelx_pre_install_lifeline:
+  result: PASS
+  host: mac-tphat-mb
+  operational: true
+  ping: PASS
+  read_only_repo_exec: PASS
+  observed_repo_head: "e779ee86436e6f9ae96970fc77b30eba2af9c32b"
+  session_id: "sess_7a475067841a"
+
+install_prebuilt:
+  authorized: 1
+  invocation_count: 1
+  retry_count: 0
+  carrier: "SentinelX mac-tphat-mb"
+  candidate_sha256: "804497c5b0db9090b9d4585ce8624dc345d8c6ab3d60505a351381a016514889"
+  handoff_sha256: "5f410faa02bbee37b467ba97283fe810fcdcba017d1a290e3ecd91bbc0b131ba"
+  exit_code: 0
+  result: PENDING
+  output_status: PENDING
+
+pending_acceptance:
+  result: PASS
+  transaction:
+    schema: 6
+    kind: zero-cost
+    status: PENDING
+    phase: APP_SWAPPED
+  installed_runtime_revision: "e779ee86436e6f9ae96970fc77b30eba2af9c32b"
+  installed_git_tree: "6814d9ddd3c52b1e85de18577b5ba5c2a0b98a87"
+  installed_strict_codesign: PASS
+  staged_zero_cost_provenance: PASS
+  payload:
+    closure: "85b82b2c88e9bc0bfdf0c240a7b47b17abfd260609d88a7e5dafecab042e2483"
+    created: false
+    canonical_snapshot_sha256: "d2f1d697eee0cac4526a2d63803f2f1a6ff107e5b75f851943b16751382e57c9"
+    canonical_unchanged: true
+    canonical_source_revision: "5286bbb6d1942ff7eed13190bd38ee5efcc0e621"
+    canonical_source_tree: "4093367bfaaf499b880e98076d5904decae51375"
+    staged_source_revision: "e779ee86436e6f9ae96970fc77b30eba2af9c32b"
+    staged_source_tree: "6814d9ddd3c52b1e85de18577b5ba5c2a0b98a87"
+    current_pointer: "85b82b2c88e9bc0bfdf0c240a7b47b17abfd260609d88a7e5dafecab042e2483"
+  launchagent:
+    RunAtLoad: false
+    KeepAlive: false
+    mode: "0600"
+    uid: 501
+    transition_result: PASS
+  desired_state: absent
+  runtime_env_sha256: "b3d0d67471f6d620f53ad1ed9ee6db21a1e906fff643dd94050b7cd8def97029"
+  service_management:
+    main_app: enabled
+    runtime_agent: not-found
+  current_launchagent_state: "bootstrapped, not running"
+  rollback_required: false
+
+commit_cutover:
+  authorized: 1
+  invocation_count: 1
+  retry_count: 0
+  carrier: "SentinelX mac-tphat-mb"
+  exit_code: 0
+  result: COMMITTED
+
+post_commit:
+  result: PASS
+  installed_runtime_revision: "e779ee86436e6f9ae96970fc77b30eba2af9c32b"
+  installed_git_tree: "6814d9ddd3c52b1e85de18577b5ba5c2a0b98a87"
+  transaction: absent
+  installed_strict_codesign: PASS
+  doctor: "healthy 10/10"
+  runtime_env_sha256: "b3d0d67471f6d620f53ad1ed9ee6db21a1e906fff643dd94050b7cd8def97029"
+  desired_state: absent
+  launchagent:
+    RunAtLoad: false
+    KeepAlive: false
+    mode: "0600"
+    uid: 501
+  service_management:
+    main_app: enabled
+    runtime_agent: not-found
+  canonical_payload:
+    closure: "85b82b2c88e9bc0bfdf0c240a7b47b17abfd260609d88a7e5dafecab042e2483"
+    snapshot_sha256: "d2f1d697eee0cac4526a2d63803f2f1a6ff107e5b75f851943b16751382e57c9"
+    unchanged: true
+    payload_revision: "5286bbb6d1942ff7eed13190bd38ee5efcc0e621"
+  staged_transaction_witness: absent
+
+menu_bar_relaunch:
+  authorized: 1
+  consumed: 1
+  retry_count: 0
+  predecessor_pid: 25846
+  predecessor_command: "/Users/tienphat/Applications/Agent Runtime.app/Contents/MacOS/AgentRuntimeMenuBar"
+  predecessor_exit: confirmed
+  open_invoked: true
+  initial_carrier_result: "exit 141 after open due pipefail in PID reconciliation pipeline"
+  reconciliation: "No relaunch replay. Read-only process reconciliation proved exactly one newly launched canonical menu process."
+  new_pid: 8417
+  new_command: "/Users/tienphat/Applications/Agent Runtime.app/Contents/MacOS/AgentRuntimeMenuBar"
+
+runtime_start:
+  authorized: 1
+  consumed: 1
+  reason: "After commit and menu-bar relaunch, package-owned schema-3 status was stopped/control=none with no listener."
+  result: PASS
+  final_status:
+    schema: 3
+    state: running
+    control: managed
+    pids:
+      - 8897
+    health: live
+    ready: ready
+    tunnel_transport: unconfirmed
+    detail: "Canonical Runtime is serving and ready."
+  desired_state: absent
+  canonical_listener:
+    address: "127.0.0.1:8080"
+    count: 1
+    pid: 8897
+    process: tunnel-client
+
+ui_truth_qualification:
+  machine_status_result: PASS
+  deterministic_presentation_mapping: PASS
+  evidence:
+    - "NativeRuntimeBackend maps schema-3 running/live/ready with one PID and control=managed to RuntimeStatus.owned when the PID is inspectable, otherwise external."
+    - "ControlPanelController maps both owned and external live/ready states to Endpoint 127.0.0.1:8080, Health live, Ready ready; Unavailable is reserved for stopped or ambiguous states."
+    - "The newly relaunched canonical menu-bar process is running as PID 8417."
+  screen_or_accessibility_capture: unavailable
+  screen_capture_reason: VISUAL_PERCEPTION_BLOCKED
+  operator_visual_confirmation_requested: false
+  operator_confirmation_reason: "Revision-7 instructions allow the single operator visual gate only after all machine-verifiable gates pass. The later ChatGPT runtime identity gate failed, so the operator gate was not reached."
+
+chatgpt_mcp_proof:
+  runtime_capabilities:
+    result: FAIL_IDENTITY
+    schema_version: 2
+    runtime_version: "0.5.1"
+    runtime_revision_observed: "5286bbb6d1942ff7eed13190bd38ee5efcc0e621"
+    runtime_revision_required: "e779ee86436e6f9ae96970fc77b30eba2af9c32b"
+    advertised_tool_count: 20
+    capability_count: 21
+    available_count: 20
+    unavailable_count: 1
+    execution:
+      heavy_ceiling: 6
+      active_session_ceiling: 6
+      terminal_poll_max_wait_ms: 30000
+      running_hard_wall_ms: 3600000
+  additional_read_only_mcp:
+    operation: repo_observer
+    result: PASS
+    observed_repo_head: "e779ee86436e6f9ae96970fc77b30eba2af9c32b"
+    branch: main
+    clean: true
+  connector_execution_result: "Operational, but runtime_revision identity does not satisfy AC-6."
+
+blocking_finding:
+  id: "F-0194-005"
+  severity: BLOCKING
+  description: "The committed rev7 substrate is active and healthy, but runtime_capabilities reports the reused canonical payload source revision rather than the installed substrate revision. Because F-0194-003 intentionally reuses the same-closure canonical payload byte-for-byte, its manifest retains predecessor source_revision 5286bbb..., so the live process receives AGENT_RUNTIME_REVISION=5286bbb... and runtime_capabilities cannot report rev7 e779ee8... under the current identity contract."
+  evidence:
+    - "Installed runtime-manifest.json: runtime_revision=e779ee86436e6f9ae96970fc77b30eba2af9c32b."
+    - "Doctor installed_package_identity: substrate_revision=e779ee86436e6f9ae96970fc77b30eba2af9c32b, payload_revision=5286bbb6d1942ff7eed13190bd38ee5efcc0e621."
+    - "Canonical reused payload manifest source_revision=5286bbb6d1942ff7eed13190bd38ee5efcc0e621 and remained byte-for-byte unchanged as required."
+    - "start.sh::validate_installed_selection returns payload['source_revision']; the serve path exports that value as AGENT_RUNTIME_REVISION."
+    - "agent_runtime.capability_registry reads AGENT_RUNTIME_REVISION as runtime_capabilities.runtime_revision."
+    - "ChatGPT-originated runtime_capabilities therefore returned 5286bbb... while normal read-only MCP execution succeeded."
+  disposition: "Stop revision 7 with the rev7 installation active. Do not roll back after commit and do not mutate source or identity contracts under this revision. A new Architect decision is required to reconcile the meaning of runtime_revision with content-addressed canonical payload reuse, for example by deciding whether runtime_revision is payload authority, substrate authority, or whether the public identity must represent both. Revision 7 does not choose among those contract changes."
+
+final_live_state:
+  installed_substrate_revision: "e779ee86436e6f9ae96970fc77b30eba2af9c32b"
+  installed_substrate_tree: "6814d9ddd3c52b1e85de18577b5ba5c2a0b98a87"
+  selected_payload_revision: "5286bbb6d1942ff7eed13190bd38ee5efcc0e621"
+  payload_closure: "85b82b2c88e9bc0bfdf0c240a7b47b17abfd260609d88a7e5dafecab042e2483"
+  canonical_payload_snapshot_sha256: "d2f1d697eee0cac4526a2d63803f2f1a6ff107e5b75f851943b16751382e57c9"
+  transaction: absent
+  runtime_status:
+    schema: 3
+    state: running
+    control: managed
+    pid: 8897
+    health: live
+    ready: ready
+    tunnel_transport: unconfirmed
+  listener: "127.0.0.1:8080"
+  menu_bar_pid: 8417
+  desired_state: absent
+  doctor: "healthy 10/10"
+  service_management:
+    main_app: enabled
+    runtime_agent: not-found
+  launchagent:
+    RunAtLoad: false
+    KeepAlive: false
+    mode: "0600"
+    uid: 501
 
 acceptance_evidence:
   - criterion_id: AC-1
     status: PASS
-    evidence: "Targeted helper regression proves exact persistent predecessor -> exact manual atomic materialization, valid uid/mode 0600, and strict post-write validation."
+    evidence: "Exactly one build published exactly one new immutable candidate for rev7; independent audit passed source/tree, v0.5.1, twenty tools, strict codesign/provenance, zero bytecode, and both accepted F-0194-003/F-0194-004 source checks. The only package exit-2 condition was the authorized post-publication LaunchServices cleanup failure."
   - criterion_id: AC-2
     status: PASS
-    evidence: "Exact manual state is idempotent. Wrong label/helper/KeepAlive/RunAtLoad/extra-key and unsafe states remain rejected without overwrite."
+    evidence: "Install reached PENDING with payload.created=false; canonical same-closure payload snapshot remained d2f1d697... byte-for-byte unchanged, pointer selected the shared closure, and staged exact rev7 source witness remained present."
   - criterion_id: AC-3
     status: PASS
-    evidence: "Zero-cost live-shape regression reaches PENDING with manual current plist, desired marker absent, current service bootstrapped, payload.created=false, and staged exact-source payload witness retained."
+    evidence: "PENDING showed exact manual RunAtLoad=false/KeepAlive=false plist mode 0600 uid 501, predecessor desired marker absent, and no foreign-contract failure."
   - criterion_id: AC-4
     status: PASS
-    evidence: "Injected post-transition failure restores predecessor plist byte-for-byte, desired marker presence, current-label loaded state and lifecycle kickstart through existing rollback semantics."
+    evidence: "Exactly one commit returned COMMITTED; transaction and staged witness are absent, canonical payload remains unchanged, installed substrate/codesign/doctor/manual lifecycle gates pass."
   - criterion_id: AC-5
-    status: PASS
-    evidence: "F-0194-003 same-closure regression remains PASS; tests.test_package_provenance 20/20 PASS; package_provenance.py is unchanged."
+    status: PASS_PROGRAMMATIC
+    evidence: "After exact menu relaunch and one explicit Start, live schema-3 status is running/live/ready/control=managed with one 127.0.0.1:8080 PID. The menu presentation code deterministically maps managed/external live-ready observations to Endpoint 127.0.0.1:8080 rather than Unavailable. No new screen/accessibility permission was used."
   - criterion_id: AC-6
-    status: PASS
-    evidence: "Targeted 4/4 PASS; tests.test_candidate_cutover 119/119 PASS; tests.test_package_provenance 20/20 PASS; exactly one durable/reconcilable ./verify PASSed 62/62 modules and 865 tests."
+    status: FAIL
+    evidence: "ChatGPT-originated runtime_capabilities returned runtime_version 0.5.1 and twenty advertised tools but runtime_revision 5286bbb... instead of required rev7 e779ee8.... One additional ChatGPT-originated read-only repo_observer succeeded, proving the connector itself is operational."
   - criterion_id: AC-7
     status: PASS
-    evidence: "Revision 6 performed no candidate build, package_app.sh, install-prebuilt, live cutover/rollback/commit, Runtime Start/Stop, menu-bar relaunch, LaunchServices mutation, reboot, release, tag, permission or live configuration mutation."
+    evidence: "Zero new TCC/security permissions were granted or requested. Existing screen capture remains VISUAL_PERCEPTION_BLOCKED. Operator visual confirmation was not requested because the preceding machine-verifiable AC-6 gate failed."
   - criterion_id: AC-8
     status: PASS
-    evidence: "Implementation candidate 3a7c349e601e23779a5f6f607e312186386beec6 is a direct child of exact revision-6 base and changes only macos/candidate_cutover.py plus tests/test_candidate_cutover.py."
+    evidence: "Live transaction is absent and rev7 substrate remains active; revision 7 made no product/source/test/Swift/docs/dependency/version/tag/release mutation. The report is the only repository mutation authorized after the exact base."
 
 effect_accounting:
   canonical_verify:
+    authorized: 0
+    consumed: 0
+  packaging_interpreter_validation:
     authorized: 1
     consumed: 1
     remaining: 0
   distribution_build:
+    authorized: 1
+    consumed: 1
+    remaining: 0
+  launchservices_cleanup:
     authorized: 0
     consumed: 0
   install_prebuilt:
-    authorized: 0
-    consumed: 0
+    authorized: 1
+    consumed: 1
+    remaining: 0
   commit_cutover:
-    authorized: 0
-    consumed: 0
+    authorized: 1
+    consumed: 1
+    remaining: 0
   rollback_cutover:
-    authorized: 0
+    authorized: 1
     consumed: 0
   menu_bar_relaunch:
-    authorized: 0
-    consumed: 0
+    authorized: 1
+    consumed: 1
+    remaining: 0
   runtime_explicit_start:
-    authorized: 0
-    consumed: 0
+    authorized: 1
+    consumed: 1
+    remaining: 0
   runtime_explicit_stop:
-    authorized: 0
-    consumed: 0
-  launchservices_cleanup:
     authorized: 0
     consumed: 0
   physical_reboot:
@@ -216,7 +403,9 @@ effect_accounting:
     consumed: 0
 
 notes:
-  - "No candidate was built and package_app.sh was not invoked."
-  - "No live installation, Runtime, MenuBar, LaunchServices or lifecycle state was mutated."
-  - "No ./verify replay occurred after the ambiguous initial carrier response."
-  - "The revision-5 candidate 879de69f... predates this F-0194-004 fix and remains unsuitable for later activation."
+  - "No ./verify invocation occurred; revision-6 canonical PASS was reused."
+  - "No product/source/test/Swift/docs/verifier/dependency/version/public-MCP mutation occurred."
+  - "No standalone LaunchServices cleanup/reset occurred."
+  - "No build, install-prebuilt, commit-cutover, menu-bar relaunch, or Runtime Start replay occurred."
+  - "No rollback occurred because all pre-commit gates passed; no post-commit rollback authority was invented after AC-6 failed."
+  - "The rev7 substrate remains installed and serving despite the task result BLOCKED."
