@@ -1,0 +1,157 @@
+protocol_version: 3
+
+task_id: TASK-0199
+task_revision: 1
+state: APPROVED
+title: "Truthful Terminal Authority Contract"
+
+origin:
+  type: architect_continuation
+  predecessor_task: TASK-0198
+  goal: "Remove the misleading implication that terminal process effects are workspace-confined while preserving the existing cwd validation and execution behavior."
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+
+execution_skills:
+  required: [executor, verification, security-review, simplicity]
+  recommended: []
+
+revision_basis:
+  accepted_task_0198_review: "78964a6784fae81ad6446cb672e213de484300dc"
+  paused_release_task: TASK-0196
+
+problem_statement:
+  - "terminal_exec and terminal_start currently publish Authority.workspace_bound=True."
+  - "Implementation only requires cwd to resolve inside AGENT_RUNTIME_WORKSPACE_ROOT; the spawned process still runs with the operator UID and can address host paths/effects available to that account."
+  - "README/THREAT_MODEL already disclaim sandboxing, but the capability authority bit can mislead clients into treating terminal execution as workspace effect confinement."
+
+objective: "Make the existing authority metadata truthful without adding a sandbox or changing terminal execution behavior: terminal process-launch authority must no longer claim workspace-bounded effects, while cwd remains strictly workspace-descendant and documentation/tests state that distinction explicitly."
+
+scope:
+  required_changes:
+    - "Fresh-bind exact revision-1 base with clean synchronized MAIN ONLY."
+    - "Change only terminal_exec and terminal_start ToolContract authority from workspace_bound=True to workspace_bound=False."
+    - "Do not change cwd validation: terminal_exec and terminal_start must continue rejecting cwd outside AGENT_RUNTIME_WORKSPACE_ROOT."
+    - "Do not change terminal argv, environment, protected-runtime filtering, network authority, mutation authority, process/session lifecycle, PTY/pipe behavior, limits or schemas."
+    - "Do not redefine structured fs/repo workspace authority. Existing tools whose path/effect semantics are actually workspace-scoped retain their current workspace_bound values."
+    - "Add explicit contract wording to terminal_exec and terminal_start preconditions/postconditions or bounds only where semantically appropriate so source truth states: cwd is workspace-bound; filesystem/host effects are not mechanically confined; process executes with operator-account authority. Do not add a new contract framework or descriptor schema."
+    - "Update focused ToolContract/capability-registry tests to assert terminal_exec and terminal_start publish workspace_bound=false while their cwd precondition remains validated-workspace-descendant."
+    - "Add a focused behavior regression proving terminal cwd outside workspace is still rejected after the metadata correction. Reuse an existing terminal owner test when possible."
+    - "Update README.md and THREAT_MODEL.md with one concise canonical statement: for terminal tools, workspace_root constrains cwd only; it does not confine absolute-path filesystem/process/network effects available to the operator UID."
+    - "Do not describe this as a security hardening or sandbox. This is a truthful-contract correction."
+    - "Preserve runtime_capabilities request/result schema 2/3, descriptor schema 2, ToolContract kernel version 2, all public tool request/result schemas and the twenty-tool surface."
+    - "Run focused tool-contract, capability-registry and terminal cwd-bound tests first."
+    - "Then run exactly one canonical ./verify through a durable/reconcilable carrier. Never blind-replay ambiguity."
+    - "Publish one implementation candidate and truthful TASK-0199 report. Final repository clean/synchronized MAIN ONLY."
+    - "Do not bump version, build/package/archive, tag/release, install/cut over, relaunch menu, Start/Stop/Restart live Runtime, reload plugin, rotate credentials, mutate LaunchServices, request permissions or reboot."
+
+  allowed_existing_files_or_components:
+    - "agent_runtime/executor.py"
+    - "agent_runtime/session.py"
+    - "tests/test_tool_contract.py"
+    - "tests/test_capability_registry.py"
+    - "tests/test_task0057_admission.py or tests/test_terminal_session.py only if needed for the existing cwd rejection regression"
+    - "README.md"
+    - "THREAT_MODEL.md"
+    - ".agent/tasks/TASK-0199/report.yaml"
+
+invariants:
+  - "terminal_exec and terminal_start continue to require cwd inside AGENT_RUNTIME_WORKSPACE_ROOT."
+  - "terminal_exec and terminal_start advertise workspace_bound=false because process effects are not mechanically confined to the workspace."
+  - "Network and mutation authority values remain unchanged."
+  - "No execution/sandbox behavior change."
+  - "No descriptor/result/tool schema version bump."
+  - "TASK-0197 and TASK-0198 accepted behavior remains unchanged."
+  - "TASK-0196 remains paused."
+  - "MAIN ONLY."
+
+forbidden_changes:
+  - "Implementing App Sandbox, sandbox-exec/SBPL, chroot, containerization, syscall filtering, path rewriting or filesystem confinement."
+  - "Changing terminal process environment, executable resolution, argv validation, protected-runtime semantics, network behavior, session lifecycle or resource limits."
+  - "Changing CapabilityAuthority fields or descriptor schema."
+  - "Changing workspace_bound semantics for non-terminal tools."
+  - "Any version/package/release/live/plugin/credential/permission/reboot effect."
+  - "Any second canonical ./verify after a conclusive result or blind replay after ambiguity."
+  - "Any branch or PR."
+
+effect_authority:
+  canonical_verify_max: 1
+  distribution_build_max: 0
+  archive_build_max: 0
+  install_prebuilt_max: 0
+  commit_cutover_max: 0
+  rollback_cutover_max: 0
+  menu_bar_relaunch_max: 0
+  runtime_restart_max: 0
+  runtime_explicit_start_max: 0
+  runtime_explicit_stop_max: 0
+  plugin_reload_or_reconnect_max: 0
+  credential_rotation_max: 0
+  physical_reboot_max: 0
+  new_security_permission_max: 0
+  version_tag_create_max: 0
+  github_release_publish_max: 0
+  branch_or_pr_creation_max: 0
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Terminal process-launch authority is no longer misleading."
+    evidence_required: "terminal_exec and terminal_start Authority.workspace_bound are false; network/mutation authority unchanged."
+  - id: AC-2
+    requirement: "cwd remains workspace-bound."
+    evidence_required: "Contract precondition remains explicit and focused behavior test proves outside-workspace cwd is rejected."
+  - id: AC-3
+    requirement: "No sandbox claim or execution behavior change is introduced."
+    evidence_required: "Diff is metadata/docs/tests only apart from the two contract literals; no execution path changes."
+  - id: AC-4
+    requirement: "Public capability schemas remain stable."
+    evidence_required: "runtime_capabilities 2/3, descriptor schema 2, kernel 2 and existing public tool schemas unchanged; focused registry tests PASS."
+  - id: AC-5
+    requirement: "Documentation states the authority boundary precisely."
+    evidence_required: "README and THREAT_MODEL explicitly distinguish cwd binding from operator-UID host effect authority."
+  - id: AC-6
+    requirement: "Canonical verification passes with zero live/release effects."
+    evidence_required: "Focused tests PASS then exactly one ./verify PASS; effect accounting zero outside verifier."
+  - id: AC-7
+    requirement: "Canonical closure."
+    evidence_required: "Truthful report; final main clean/synchronized MAIN ONLY."
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "Focused ToolContract/capability/terminal cwd proof then exactly one canonical ./verify."
+    expected_signal: "Authority metadata is truthful and behavior is unchanged."
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions: [BLOCKED, STALE_STATE, AUTHORITY_REQUIRED, CURRENT_PHASE_CAPABILITY_UNAVAILABLE, REVIEW_REQUIRED, REVERIFY_REQUIRED, USER_STOP]
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
