@@ -138,7 +138,6 @@ if [[ "${1-}" == "--recover-runtime-service" ]]; then
   exec python3 "$ROOT/macos/recover_runtime_service.py" \
     --repository-root "$ROOT" \
     --canonical-root "$ROOT" \
-    --expected-tunnel-fingerprint "6aa2b81d6dd8" \
     --launchctl "$(command -v launchctl)" \
     "$@"
 fi

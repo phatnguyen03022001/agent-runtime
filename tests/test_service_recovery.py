@@ -13,7 +13,6 @@ from macos.recover_runtime_service import (
     RecoveryError,
     RuntimeObservation,
     RuntimeServiceRecovery,
-    tunnel_fingerprint,
 )
 
 
@@ -29,21 +28,27 @@ class ServiceRecoveryTests(unittest.TestCase):
         for root in (self.repo, self.canonical):
             (root / "start.sh").write_text("#!/bin/sh\nexit 0\n")
             (root / "start.sh").chmod(0o700)
-        (self.canonical / ".env").write_text(
-            f"CONTROL_PLANE_API_KEY=dummy\nCONTROL_PLANE_TUNNEL_ID=stable-fixture-id\nAGENT_RUNTIME_WORKSPACE_ROOT={self.canonical.parent}\n"
+        self.tunnel_ids = (
+            "tunnel_0123456789abcdef0123456789abcdef",
+            "tunnel_fedcba9876543210fedcba9876543210",
         )
+        self._write_env(self.tunnel_ids[0])
         venv_target = self.temp / "shared-venv"
         venv_target.mkdir()
         (self.canonical / ".venv").symlink_to(venv_target, target_is_directory=True)
-        self.expected = tunnel_fingerprint("stable-fixture-id")
 
     def tearDown(self) -> None:
         self.temp_ctx.cleanup()
 
-    def recovery(self) -> RuntimeServiceRecovery:
-        return RuntimeServiceRecovery(
-            self.repo, self.canonical, self.home, self.expected
+    def _write_env(self, tunnel_id: str) -> None:
+        (self.canonical / ".env").write_text(
+            "CONTROL_PLANE_API_KEY=dummy\n"
+            f"CONTROL_PLANE_TUNNEL_ID={tunnel_id}\n"
+            f"AGENT_RUNTIME_WORKSPACE_ROOT={self.canonical.parent}\n"
         )
+
+    def recovery(self) -> RuntimeServiceRecovery:
+        return RuntimeServiceRecovery(self.repo, self.canonical, self.home)
 
     def stale_job(self, *, state: str = "not running") -> LaunchdSnapshot:
         root = "/private/tmp/tmpfixture123"
@@ -78,7 +83,6 @@ class ServiceRecoveryTests(unittest.TestCase):
         tunnel, child = self.canonical_processes()
         values = dict(
             desired_running=False,
-            tunnel_fingerprint=self.expected,
             launchd=self.stale_job(),
             listeners=(100,),
             processes=(tunnel, child),
@@ -163,11 +167,7 @@ class ServiceRecoveryTests(unittest.TestCase):
                 self.stale_observation(processes=(tunnel, child, unrelated))
             )
 
-    def test_wrong_tunnel_fingerprint_or_multiple_listeners_fail_closed(self) -> None:
-        with self.assertRaises(RecoveryError):
-            self.recovery().plan(
-                self.stale_observation(tunnel_fingerprint="000000000000")
-            )
+    def test_multiple_listeners_fail_closed(self) -> None:
         with self.assertRaises(RecoveryError):
             self.recovery().plan(self.stale_observation(listeners=(100, 777)))
 
@@ -195,7 +195,6 @@ class ServiceRecoveryTests(unittest.TestCase):
         )
         observation = RuntimeObservation(
             desired_running=False,
-            tunnel_fingerprint=self.expected,
             launchd=canonical_job,
             listeners=(),
             processes=(),
@@ -216,7 +215,7 @@ class ServiceRecoveryTests(unittest.TestCase):
 
     def test_outdated_canonical_stopped_service_plans_bounded_refresh(self) -> None:
         observation = RuntimeObservation(
-            False, self.expected, self.canonical_job(), (), (), False
+            False, self.canonical_job(), (), (), False
         )
         plan = self.recovery().plan(observation)
         self.assertEqual(plan.kind, "refresh_canonical_service")
@@ -249,7 +248,7 @@ class ServiceRecoveryTests(unittest.TestCase):
 
         class GuardedRecovery(RuntimeServiceRecovery):
             def __init__(inner, outer):
-                super().__init__(outer.repo, outer.canonical, outer.home, outer.expected)
+                super().__init__(outer.repo, outer.canonical, outer.home)
                 inner.mutations = []
 
             def observe(inner):
@@ -272,7 +271,7 @@ class ServiceRecoveryTests(unittest.TestCase):
 
         class GuardedRecovery(RuntimeServiceRecovery):
             def __init__(inner, outer):
-                super().__init__(outer.repo, outer.canonical, outer.home, outer.expected)
+                super().__init__(outer.repo, outer.canonical, outer.home)
                 inner.mutations = []
 
             def observe(inner):
@@ -289,15 +288,15 @@ class ServiceRecoveryTests(unittest.TestCase):
     def test_recover_executes_only_bounded_migration_sequence(self) -> None:
         tunnel, child = self.canonical_processes()
         cutover = RuntimeObservation(
-            False, self.expected, self.canonical_job(), (100,), (tunnel, child)
+            False, self.canonical_job(), (100,), (tunnel, child)
         )
         final = RuntimeObservation(
-            False, self.expected, self.canonical_job(), (), ()
+            False, self.canonical_job(), (), ()
         )
 
         class ScriptedRecovery(RuntimeServiceRecovery):
             def __init__(inner, outer):
-                super().__init__(outer.repo, outer.canonical, outer.home, outer.expected)
+                super().__init__(outer.repo, outer.canonical, outer.home)
                 inner.observations = [outer.stale_observation(), outer.stale_observation(), cutover, final]
                 inner.mutations = []
 
@@ -329,7 +328,6 @@ class ServiceRecoveryTests(unittest.TestCase):
     def test_recover_revalidates_stale_fixture_before_bootout(self) -> None:
         changed = RuntimeObservation(
             False,
-            self.expected,
             self.canonical_job(),
             (),
             (),
@@ -337,7 +335,7 @@ class ServiceRecoveryTests(unittest.TestCase):
 
         class RacingRecovery(RuntimeServiceRecovery):
             def __init__(inner, outer):
-                super().__init__(outer.repo, outer.canonical, outer.home, outer.expected)
+                super().__init__(outer.repo, outer.canonical, outer.home)
                 inner.observations = [outer.stale_observation(), changed]
                 inner.mutations = []
             def observe(inner):
@@ -352,10 +350,71 @@ class ServiceRecoveryTests(unittest.TestCase):
             recovery.recover()
         self.assertEqual(recovery.mutations, ["write"])
 
+    def test_recover_rejects_config_drift_before_destructive_transition(self) -> None:
+        class DriftingRecovery(RuntimeServiceRecovery):
+            def __init__(inner, outer):
+                super().__init__(outer.repo, outer.canonical, outer.home)
+                inner.outer = outer
+                inner.observations = [outer.stale_observation(), outer.stale_observation()]
+                inner.mutations = []
+
+            def observe(inner):
+                return inner.observations.pop(0)
+
+            def _write_canonical_plist(inner):
+                inner.mutations.append("write")
+                inner.outer._write_env(inner.outer.tunnel_ids[1])
+
+            def _remove_stale_registration(inner):
+                inner.mutations.append("bootout")
+
+        recovery = DriftingRecovery(self)
+        with self.assertRaisesRegex(RecoveryError, "canonical \\.env changed"):
+            recovery.recover()
+        self.assertEqual(recovery.mutations, ["write"])
+
+    def test_recover_rejects_config_drift_at_final_convergence(self) -> None:
+        tunnel, child = self.canonical_processes()
+        cutover = RuntimeObservation(
+            False, self.canonical_job(), (100,), (tunnel, child)
+        )
+        final = RuntimeObservation(False, self.canonical_job(), (), ())
+
+        class DriftingRecovery(RuntimeServiceRecovery):
+            def __init__(inner, outer):
+                super().__init__(outer.repo, outer.canonical, outer.home)
+                inner.outer = outer
+                inner.observations = [outer.stale_observation(), outer.stale_observation(), cutover, final]
+                inner.mutations = []
+
+            def observe(inner):
+                return inner.observations.pop(0)
+
+            def _write_canonical_plist(inner):
+                inner.mutations.append("write")
+
+            def _remove_stale_registration(inner):
+                inner.mutations.append("bootout")
+
+            def _register_canonical_service(inner):
+                inner.mutations.append("bootstrap")
+
+            def _terminate_process_group(inner, pgid):
+                inner.mutations.append(("terminate", pgid))
+                inner.outer._write_env(inner.outer.tunnel_ids[1])
+
+        recovery = DriftingRecovery(self)
+        with self.assertRaisesRegex(RecoveryError, "canonical \\.env changed"):
+            recovery.recover()
+        self.assertEqual(
+            recovery.mutations,
+            ["write", "bootout", "bootstrap", ("terminate", 100)],
+        )
+
     def test_recover_is_noop_after_convergence(self) -> None:
         recovery = self.recovery()
         recovery.observe = lambda: RuntimeObservation(
-            False, self.expected, self.canonical_job(), (), ()
+            False, self.canonical_job(), (), ()
         )
         result = recovery.recover()
         self.assertEqual(result.kind, "noop")
@@ -379,9 +438,38 @@ class ServiceRecoveryTests(unittest.TestCase):
             return subprocess.CompletedProcess(argv, 0, text, "")
 
         observation = RuntimeServiceRecovery(
-            self.repo, self.canonical, self.home, self.expected, runner=runner
+            self.repo, self.canonical, self.home, runner=runner
         ).observe()
         self.assertEqual(observation, self.stale_observation())
+
+    def test_check_only_planning_accepts_distinct_valid_user_tunnel_ids(self) -> None:
+        stale = self.stale_job()
+        tunnel, child = self.canonical_processes()
+
+        def runner(argv):
+            if argv[0] == "launchctl":
+                text = f"path = {stale.path}\nstate = {stale.state}\nprogram = {stale.program}\n"
+            elif argv[0] == "lsof":
+                text = "100\n"
+            elif argv[0] == "ps":
+                text = (
+                    f"{tunnel.pid} {tunnel.ppid} {tunnel.pgid} {tunnel.executable} {tunnel.argv}\n"
+                    f"{child.pid} {child.ppid} {child.pgid} {child.executable} {child.argv}\n"
+                )
+            else:
+                raise AssertionError(argv)
+            return subprocess.CompletedProcess(argv, 0, text, "")
+
+        recovery = RuntimeServiceRecovery(
+            self.repo, self.canonical, self.home, runner=runner
+        )
+        for tunnel_id in self.tunnel_ids:
+            with self.subTest(tunnel_id=tunnel_id):
+                self._write_env(tunnel_id)
+                self.assertEqual(
+                    recovery.plan(recovery.observe()).kind,
+                    "migrate_stale_fixture",
+                )
 
     def test_observe_recovers_full_executable_when_macos_comm_is_truncated(self) -> None:
         stale = self.stale_job()
@@ -402,7 +490,7 @@ class ServiceRecoveryTests(unittest.TestCase):
             return subprocess.CompletedProcess(argv, 0, text, "")
 
         recovery = RuntimeServiceRecovery(
-            self.repo, self.canonical, self.home, self.expected, runner=runner
+            self.repo, self.canonical, self.home, runner=runner
         )
         observation = recovery.observe()
         self.assertEqual(recovery.plan(observation).kind, "migrate_stale_fixture")
@@ -414,7 +502,7 @@ class ServiceRecoveryTests(unittest.TestCase):
             raise AssertionError(argv)
 
         recovery = RuntimeServiceRecovery(
-            self.repo, self.canonical, self.home, self.expected, runner=runner
+            self.repo, self.canonical, self.home, runner=runner
         )
         with self.assertRaises(RecoveryError):
             recovery.observe()
@@ -458,8 +546,7 @@ class ServiceRecoveryTests(unittest.TestCase):
         created = []
         def factory(*_args, **_kwargs):
             item = FakeRecovery(); created.append(item); return item
-        common = ["--repository-root", str(self.repo), "--canonical-root", str(self.canonical),
-                  "--expected-tunnel-fingerprint", self.expected]
+        common = ["--repository-root", str(self.repo), "--canonical-root", str(self.canonical)]
         self.assertEqual(module.main(common, recovery_factory=factory), 0)
         self.assertEqual(created[-1].recover_calls, 0)
         self.assertEqual(module.main(common + ["--apply"], recovery_factory=factory), 0)
@@ -472,7 +559,7 @@ class ServiceRecoveryTests(unittest.TestCase):
         self.assertLess(text.index(marker), text.index('if [[ ! -e "$ROOT/.venv" ]]'))
         self.assertIn('macos/recover_runtime_service.py', text)
         self.assertIn('--canonical-root "$ROOT"', text)
-        self.assertIn('--expected-tunnel-fingerprint "6aa2b81d6dd8"', text)
+        self.assertNotIn("--expected-tunnel-fingerprint", text)
 
 
 if __name__ == "__main__":

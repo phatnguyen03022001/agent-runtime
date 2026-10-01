@@ -44,7 +44,6 @@ class ProcessSnapshot:
 @dataclass(frozen=True)
 class RuntimeObservation:
     desired_running: bool
-    tunnel_fingerprint: str
     launchd: LaunchdSnapshot | None
     listeners: tuple[int, ...]
     processes: tuple[ProcessSnapshot, ...]
@@ -66,17 +65,12 @@ def _default_runner(argv: Sequence[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(list(argv), capture_output=True, text=True, check=False)
 
 
-def tunnel_fingerprint(tunnel_id: str) -> str:
-    return hashlib.sha256(tunnel_id.encode()).hexdigest()[:12]
-
-
 class RuntimeServiceRecovery:
     def __init__(
         self,
         repository_root: Path,
         canonical_root: Path,
         home: Path,
-        expected_tunnel_fingerprint: str,
         runner: Runner = _default_runner,
         launchctl: str = "launchctl",
         signaler: Callable[[int, int], None] = os.killpg,
@@ -85,7 +79,6 @@ class RuntimeServiceRecovery:
         self.repository_root = repository_root.resolve()
         self.canonical_root = canonical_root.resolve()
         self.home = home.resolve()
-        self.expected_tunnel_fingerprint = expected_tunnel_fingerprint
         self.runner = runner
         self.launchctl = launchctl
         self.signaler = signaler
@@ -154,8 +147,6 @@ class RuntimeServiceRecovery:
     def plan(self, observation: RuntimeObservation) -> MigrationPlan:
         if observation.desired_running:
             raise RecoveryError("migration requires desired state STOPPED")
-        if observation.tunnel_fingerprint != self.expected_tunnel_fingerprint:
-            raise RecoveryError("canonical tunnel fingerprint does not match accepted identity")
         if observation.launchd is None:
             raise RecoveryError("canonical Runtime launchd label is not loaded")
         canonical_tunnels = [p for p in observation.processes if self._canonical_tunnel(p)]
@@ -226,7 +217,7 @@ class RuntimeServiceRecovery:
 
     def _assert_static_prerequisites(self) -> bytes:
         self._assert_desired_stopped()
-        env_bytes = self._assert_env_identity_ownership()
+        env_bytes = self._assert_canonical_env()
         candidate_start = self.repository_root / "start.sh"
         canonical_start = self.canonical_root / "start.sh"
         if not candidate_start.is_file() or not canonical_start.is_file():
@@ -235,7 +226,7 @@ class RuntimeServiceRecovery:
             raise RecoveryError("canonical start.sh does not match the verified candidate")
         return env_bytes
 
-    def _assert_env_identity_ownership(self) -> bytes:
+    def _assert_canonical_env(self) -> bytes:
         if self.legacy_config_path.exists() or self.legacy_config_path.is_symlink():
             raise RecoveryError("legacy tunnel configuration is present")
         env_file = self.env_path
@@ -267,12 +258,14 @@ class RuntimeServiceRecovery:
         missing = [key for key in required if not values.get(key, "")]
         if missing:
             raise RecoveryError("canonical .env is missing required Runtime configuration")
-        if tunnel_fingerprint(values["CONTROL_PLANE_TUNNEL_ID"]) != self.expected_tunnel_fingerprint:
-            raise RecoveryError("canonical tunnel fingerprint does not match accepted identity")
         workspace = Path(values["AGENT_RUNTIME_WORKSPACE_ROOT"])
         if not workspace.is_absolute() or not workspace.is_dir():
             raise RecoveryError("canonical .env workspace root is invalid")
         return raw
+
+    def _assert_env_unchanged(self, expected: bytes) -> None:
+        if self._assert_canonical_env() != expected:
+            raise RecoveryError("canonical .env changed during service recovery")
 
     def _canonical_plist_payload(self) -> bytes:
         payload = {
@@ -337,8 +330,6 @@ class RuntimeServiceRecovery:
     def _validate_cutover_state(self, observation: RuntimeObservation, plan: MigrationPlan) -> None:
         if observation.desired_running:
             raise RecoveryError("desired state changed during migration")
-        if observation.tunnel_fingerprint != self.expected_tunnel_fingerprint:
-            raise RecoveryError("tunnel fingerprint changed during migration")
         if observation.launchd is None or not self._canonical_job(observation.launchd):
             raise RecoveryError("canonical supervisor is not registered in STOPPED state")
         canonical_tunnels = [p for p in observation.processes if self._canonical_tunnel(p)]
@@ -382,13 +373,14 @@ class RuntimeServiceRecovery:
         self._write_canonical_plist()
 
         if plan.kind == "refresh_canonical_service":
+            self._assert_env_unchanged(env_bytes)
             self._remove_canonical_registration()
+            self._assert_env_unchanged(env_bytes)
             self._register_canonical_service()
             final = self.plan(self.observe())
             if final.kind != "noop":
                 raise RecoveryError("canonical Runtime service did not refresh into STOPPED convergence")
-            if self._assert_env_identity_ownership() != env_bytes:
-                raise RecoveryError("canonical .env changed during service recovery")
+            self._assert_env_unchanged(env_bytes)
             return plan
 
         revalidated = self.plan(self.observe())
@@ -399,13 +391,16 @@ class RuntimeServiceRecovery:
         ):
             raise RecoveryError("stale-live ownership changed before launchd removal")
 
+        self._assert_env_unchanged(env_bytes)
         self._remove_stale_registration()
+        self._assert_env_unchanged(env_bytes)
         self._register_canonical_service()
 
         cutover = self.observe()
         self._validate_cutover_state(cutover, plan)
         if plan.tunnel_pgid is None:
             raise RecoveryError("migration plan has no proven Runtime process group")
+        self._assert_env_unchanged(env_bytes)
         self._terminate_process_group(plan.tunnel_pgid)
 
         deadline = time.monotonic() + 5.0
@@ -422,8 +417,7 @@ class RuntimeServiceRecovery:
                 raise RecoveryError("post-migration state is not converged")
             break
 
-        if self._assert_env_identity_ownership() != env_bytes:
-            raise RecoveryError("canonical .env changed during service recovery")
+        self._assert_env_unchanged(env_bytes)
         self._assert_desired_stopped()
         return plan
 
@@ -493,13 +487,7 @@ class RuntimeServiceRecovery:
         )
 
     def observe(self) -> RuntimeObservation:
-        env_bytes = self._assert_env_identity_ownership()
-        tunnel_id = next(
-            line.split("=", 1)[1]
-            for line in env_bytes.decode("utf-8").splitlines()
-            if line.startswith("CONTROL_PLANE_TUNNEL_ID=")
-        )
-        fingerprint = tunnel_fingerprint(tunnel_id)
+        self._assert_canonical_env()
 
         launchd_result = self.runner([self.launchctl, "print", self.service])
         launchd = None
@@ -523,7 +511,6 @@ class RuntimeServiceRecovery:
             raise RecoveryError("could not inspect Runtime process tree")
         return RuntimeObservation(
             desired_running=self.desired_path.exists(),
-            tunnel_fingerprint=fingerprint,
             launchd=launchd,
             listeners=listeners,
             processes=self._parse_processes(ps_result.stdout),
@@ -539,7 +526,6 @@ def main(
     parser = argparse.ArgumentParser(description="Bounded Agent Runtime stale-service recovery")
     parser.add_argument("--repository-root", required=True)
     parser.add_argument("--canonical-root", required=True)
-    parser.add_argument("--expected-tunnel-fingerprint", required=True)
     parser.add_argument("--home", default=str(Path.home()))
     parser.add_argument("--launchctl", default="launchctl")
     parser.add_argument("--apply", action="store_true")
@@ -549,7 +535,6 @@ def main(
             Path(args.repository_root),
             Path(args.canonical_root),
             Path(args.home),
-            args.expected_tunnel_fingerprint,
             launchctl=args.launchctl,
         )
         plan = recovery.recover() if args.apply else recovery.plan(recovery.observe())
