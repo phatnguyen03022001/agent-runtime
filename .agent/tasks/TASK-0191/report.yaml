@@ -1,8 +1,8 @@
 protocol_version: 3
 
 task_id: TASK-0191
-task_revision: 2
-report_revision: 2
+task_revision: 3
+report_revision: 3
 state: REPORTED
 
 task_source:
@@ -13,8 +13,8 @@ execution:
   branch:
     name: main
     role: canonical
-  authorized_base_head: "145243c8a3e8c823dadd36e3ea4d2d2be3d40f7f"
-  final_execution_head: "4ec736792c8322b37a5387157a0fd636f13d437c"
+  authorized_base_head: "df4800efdad3275effa283b4466b74c72fd69bb7"
+  final_execution_head: "bf7ce294573cd615f059ade8ee2caa28a2792f1c"
 
 skill_library:
   repository: phatnguyen03022001/agent-foundation
@@ -43,37 +43,41 @@ authoritative_verification:
   result: FAIL
   command: "./verify"
   invocation_count: 1
-  start_identity: "19120000000000000000000000000004"
-  session_id: "f1d2a55de4ea6d6f"
+  start_identity: "19130000000000000000000000000005"
+  session_id: "8b3bd85c0e813451"
   exit_code: 1
   modules_selected: 62
-  modules_completed: 28
-  tests_completed: 427
+  modules_completed: 41
+  tests_completed: 572
   retry_count: 0
-  evidence: "The sole revision-2 canonical verifier invocation ran through a runtime_restart durable pipe and completed naturally with exit 1. The previously failing tests.test_protected_runtime module passed 20/20 inside that durable verifier. A different module, tests.test_pressure_concurrency, failed because one of six concurrent terminal_exec operations raised RuntimeCapacityError: configured maximum 6 active terminal sessions reached. No second ./verify invocation was dispatched."
+  evidence: "The sole revision-3 canonical verifier invocation ran through a runtime_restart durable pipe and completed naturally with exit 1. The targeted tests.test_pressure_concurrency module passed 1/1 inside that durable verifier. Different out-of-scope modules then failed: tests.test_failure_effect_contract reported one failure and two errors involving ambient durable-recovery/capacity state, and tests.test_task0057_admission reported one failure and four errors involving exhausted/shared session-capacity state and cleanup. No second ./verify invocation was dispatched."
 
-pushed: true
+pushed: false
 
 acceptance_evidence:
   - criterion_id: AC-1
     status: PASS
-    evidence: "Revision-2 implementation candidate 4ec736792c8322b37a5387157a0fd636f13d437c is the direct child of exact base 145243c8a3e8c823dadd36e3ea4d2d2be3d40f7f and changes only tests/test_protected_runtime.py. The affected test now constructs TerminalSessionManager with fixture-owned durable_state_root=Path(raw)/durable-state. No production source changed."
+    evidence: "Implementation candidate bf7ce294573cd615f059ade8ee2caa28a2792f1c is the direct child of exact revision-3 base df4800efdad3275effa283b4466b74c72fd69bb7 and changes only tests/test_pressure_concurrency.py. The test now patches session._MANAGER to a fixture-owned TerminalSessionManager with fixture-owned durable state and admission."
   - criterion_id: AC-2
     status: PASS
-    evidence: "The exact previously failing test passed 1/1 after isolation, the full tests.test_protected_runtime module passed 20/20 before canonical verification, and the same module passed 20/20 again inside the durable canonical verifier."
+    evidence: "The test still uses ThreadPoolExecutor(max_workers=6), executor.map(run, range(6)), TerminalSessionManager(max_active_sessions=6), and HeavyExecutionAdmission(6). Each operation still executes a real sys.executable subprocess through agent_runtime.executor.execute_terminal. The exact test passed 1/1 and the full tests.test_pressure_concurrency module passed 1/1 before canonical verification."
   - criterion_id: AC-3
     status: PASS
-    evidence: "A direct diff from revision-1 implementation candidate f17813b9a2573cc8307195235dcd1406eccc3939 across start.sh, agent_runtime/session.py, macos/Sources/AgentRuntimeCore, and macos/Sources/AgentRuntimeMenuBar was empty. Revision-1 Runtime truth production implementation remains unchanged."
+    evidence: "One focused runtime_restart proof completed naturally with exit 0 before canonical verification: start_identity 19130000000000000000000000000003, session_id 36b95db89a89918d. The exact six-within-six pressure test passed 1/1 while launched under the relevant ambient durable-session condition. No focused durable replay occurred."
   - criterion_id: AC-4
-    status: BLOCKED
-    evidence: "Exactly one revision-2 ./verify invocation completed with a conclusive exit 1. The failure is outside the authorized fixture-isolation change: tests.test_pressure_concurrency.PressureConcurrencyTests.test_six_independent_terminal_exec_operations_complete_within_the_hard_limit raised RuntimeCapacityError while executing six concurrent terminal_exec operations. Revision 2 forbids a second canonical verifier invocation."
+    status: PASS
+    evidence: "Direct comparison preserved revision-1 production bytes across start.sh, agent_runtime/session.py, agent_runtime/capacity.py, agent_runtime/executor.py, and macOS Core/MenuBar sources. tests/test_protected_runtime.py remained byte-identical to revision-2 candidate 4ec736792c8322b37a5387157a0fd636f13d437c."
   - criterion_id: AC-5
     status: BLOCKED
-    evidence: "The fixture candidate was published non-force to main before report authorship and TASK-0190 revision-8 effects remained untouched. This report truthfully records the canonical verifier failure; its own later publication/final synchronized-main consequence is not self-attested inside the report."
+    evidence: "Exactly one revision-3 ./verify invocation completed conclusively with exit 1. The targeted pressure-concurrency module passed in that invocation, but tests.test_failure_effect_contract and tests.test_task0057_admission failed for separate out-of-scope shared-state/capacity reasons. Revision 3 forbids a second verifier invocation or out-of-scope repair."
+  - criterion_id: AC-6
+    status: BLOCKED
+    evidence: "The implementation/report chain is prepared for one non-force main publication and TASK-0190 revision-8 effects remain untouched. This report does not self-attest its own future remote publication or final synchronized-main consequence."
 
 blockers:
-  - "The sole authorized revision-2 canonical ./verify invocation conclusively failed in tests.test_pressure_concurrency, not in the protected-runtime fixture closed by this revision."
-  - "The failing concurrency test reported RuntimeCapacityError: configured maximum 6 active terminal sessions reached while scheduling six independent terminal_exec operations."
-  - "The new failure is outside revision-2 authorized implementation scope, local_auto_fix is false, and the canonical verifier budget is consumed. No second ./verify invocation or out-of-scope correction is authorized."
+  - "The sole authorized revision-3 canonical ./verify invocation conclusively failed after F-0191-002 itself was closed and tests.test_pressure_concurrency passed inside the durable verifier."
+  - "tests.test_failure_effect_contract failed outside revision-3 scope with ambient durable-recovery/capacity interference: one failure and two errors."
+  - "tests.test_task0057_admission failed outside revision-3 scope with shared session/admission capacity and cleanup interference: one failure and four errors."
+  - "Revision-3 local_auto_fix is false, scope expansion is forbidden, and the canonical verifier budget is consumed. No second ./verify invocation or out-of-scope correction is authorized."
 
 result: BLOCKED
