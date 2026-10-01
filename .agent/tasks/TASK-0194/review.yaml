@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0194
-task_revision: 7
-review_revision: 7
+task_revision: 8
+review_revision: 8
 state: REVISION_REQUIRED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0194/report.yaml
-  commit: "d515bd6aef4caf34453524fa9bef4c8947f49353"
-  report_revision: 7
+  commit: "8dbcdd84bc35ead4709dce7e3bfa4769fa1bd0d7"
+  report_revision: 8
 
 independence:
   reviewer_role: ARCHITECT
@@ -28,25 +28,23 @@ contract_compliance:
   verifier_evidence: PASS
 
 acceptance_basis:
-  - "Revision 7 successfully completed the real live cutover: one new candidate was built/audited, install-prebuilt reached PENDING, F-0194-003 same-closure reuse passed with payload.created=false and immutable canonical payload bytes, F-0194-004 predecessor LaunchAgent migration passed, one commit reached COMMITTED, transaction is absent, menu bar was relaunched, Runtime Start succeeded, and the active Runtime is running/live/ready/control=managed on one canonical 127.0.0.1:8080 listener."
-  - "The installed substrate is revision e779ee86436e6f9ae96970fc77b30eba2af9c32b while the intentionally reused canonical payload manifest retains historical source revision 5286bbb6d1942ff7eed13190bd38ee5efcc0e621."
-  - "Doctor already models this split correctly as substrate_revision=e779ee8... and payload_revision=5286bbb...."
-  - "Current start.sh intentionally returns payload['source_revision'] from validate_installed_selection and exports it as AGENT_RUNTIME_REVISION. Current tests/test_revision4_runtime_config.py explicitly asserts that installed serve binds AGENT_RUNTIME_REVISION to payload source authority rather than substrate or ambient configuration."
-  - "Therefore revision-7 AC-6 incorrectly required runtime_capabilities.runtime_revision to equal the installed substrate revision. The live response 5286bbb... is consistent with the existing legacy identity contract, not evidence that the old substrate is still active."
-  - "However runtime_capabilities schema v2 exposes only runtime_revision, so after content-addressed payload reuse a remote MCP client cannot independently distinguish the active substrate revision from the selected payload revision. This is a real observability/identity-contract gap."
-  - "Changing runtime_revision to substrate authority would silently break the existing zero-cost payload identity contract and telemetry semantics. The backward-compatible resolution is to retain runtime_revision as payload authority and make both dimensions explicit."
-  - "Architect decision: runtime_revision remains the legacy payload-source revision; runtime_capabilities result schema v3 adds payload_revision as the explicit payload identity and substrate_revision as the installed immutable substrate identity. For installed execution runtime_revision and payload_revision must agree. Source/development execution may report null identities rather than synthesizing Git state."
-  - "The request contract need not change: runtime_capabilities request schema remains v2 while result schema changes from v2 to v3."
-  - "The active rev7 installation is healthy and must remain serving during the identity-contract source fix; no rollback is required or authorized merely because the public identity response is incomplete."
+  - "Implementation candidate 5fb6339cb6e7603cbef1cd2353efb8456ee7dbf2 is the single direct child of exact revision-8 base 4eb00e891f21fb977e6d5f68b65808b386daa57f and changes only the seven files explicitly authorized by revision 8."
+  - "Report commit 8dbcdd84bc35ead4709dce7e3bfa4769fa1bd0d7 is the single direct child of the implementation candidate and changes only .agent/tasks/TASK-0194/report.yaml."
+  - "The dual-identity implementation satisfies the intended contract in focused tests: runtime_revision remains payload authority, payload_revision is explicit payload identity, substrate_revision is independent installed substrate identity, request schema remains v2, result/response schema is v3, source/development identity remains null, and legacy/payload mismatch fails closed."
+  - "Focused runtime-config plus capability-registry tests passed 21/21 and MCP client conformance passed 6/6."
+  - "The required doctor gate failed 4 tests before canonical verification because agent_runtime/doctor.py still hard-codes runtime_capabilities schema authority as request/result (2,2)."
+  - "Fresh Architect inspection confirms the mismatch is a single existing doctor schema-authority predicate: schema_versions.get('runtime_capabilities') == (2, 2), while accepted revision-8 capability registry and closed RuntimeCapabilitiesResult now advertise request=2/result=3."
+  - "Revision 8 explicitly forbade modifying agent_runtime/doctor.py and tests/test_doctor.py, so the Executor correctly stopped instead of weakening schema export or mutating out-of-scope doctor authority."
+  - "Canonical ./verify revision-8 budget remains unconsumed at 0/1."
+  - "The healthy active rev7 installation remains untouched at substrate revision e779ee86436e6f9ae96970fc77b30eba2af9c32b, transaction absent, running/live/ready/managed."
 
 findings:
-  - id: "F-0194-005"
+  - id: "F-0194-006"
     severity: BLOCKING
-    description: "runtime_capabilities schema v2 exposes only the legacy payload-source runtime_revision and therefore cannot attest the installed substrate revision when a byte-identical historical canonical payload is reused."
-    disposition: "Revision 8 must preserve runtime_revision payload semantics, add explicit payload_revision and substrate_revision to runtime_capabilities result schema v3, propagate exact installed substrate/payload identities from start.sh with separate validated process environment variables, update closed contracts/tests/docs, and obtain one canonical ./verify PASS. Do not mutate the healthy live rev7 installation in revision 8."
+    description: "Doctor's tool-contract schema authority still requires runtime_capabilities result schema v2 after revision 8 legitimately advanced that result contract to v3."
+    disposition: "Revision 9 may change only agent_runtime/doctor.py and tests/test_doctor.py, preserving the published revision-8 dual-identity implementation byte-for-byte. Update doctor authority to require runtime_capabilities request/result (2,3), add regression proving (2,3) passes and stale (2,2) fails, run the complete doctor module, then spend one canonical ./verify invocation."
 
 notes:
-  - "Do not reinterpret AGENT_RUNTIME_REVISION as substrate authority."
-  - "Do not mutate canonical payload metadata to manufacture identity equality."
-  - "Do not add repository/network probes to runtime_capabilities; identities must remain process-bound and deterministic."
-  - "Revision 7 remains installed and serving. The later activation/qualification step should verify runtime_revision=payload_revision=selected payload source and substrate_revision=the newly installed candidate source."
+  - "Do not revisit or reinterpret the dual-identity contract in revision 9."
+  - "Do not modify start.sh, capability_registry.py, contracts.py, README, revision-8 identity tests, telemetry, packaging, lifecycle, or live Runtime."
+  - "Revision 9 is a verifier/doctor authority convergence fix, not another runtime identity redesign."
