@@ -1,22 +1,22 @@
 protocol_version: 3
 
 task_id: TASK-0193
-task_revision: 2
+task_revision: 3
 state: APPROVED
-title: "Tunnel Transport Truth — Verifier Module-Budget Closure"
+title: "Tunnel Transport Truth — Stale-Marker Fixture Cleanup Closure"
 
 origin:
   type: user_request
   task_id: TASK-0193
-  gap_id: "F-0193-001"
+  gap_id: "F-0193-002"
 
 revision_basis:
-  revision_1_base: "fb0687e0f38b0c97e3e149552d5ad8efb25817e0"
   revision_1_candidate: "ea763dd043492d1312b0fc18c9049e9812725ac7"
-  revision_1_report_commit: "6bc1977a82cf883904978bb541017249f09aa21e"
-  revision_1_review_commit: "29a5dd4aa214ac4f7aaf291f666fe605b4721007"
-  blocking_finding: "F-0193-001"
-  disposition: "Preserve all revision-1 production and Swift test bytes. Optimize only tests/test_supervised_lifecycle.py so the required transport matrix fits comfortably within the existing canonical 45-second module budget, then spend one new canonical verifier invocation."
+  revision_2_candidate: "d9c0ab817f2cc50677a59cbd6906f5150526afb6"
+  revision_2_report_commit: "c68862f680ef3406a7a6b2e33ccc8cceae2dfd57"
+  revision_2_review_commit: "b37c984be95cfa771223a90937b8f66644436907"
+  blocking_finding: "F-0193-002"
+  disposition: "Preserve production and the revision-2 transport matrix. Correct only the stale-predecessor-marker test's local cleanup so its deliberately injected marker cannot contaminate generic tearDown, then prove the whole module fits the existing verifier budget before one fresh canonical verification."
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -45,59 +45,56 @@ execution_skills:
   recommended: []
 
 authority_sources:
-  - source: ".agent/tasks/TASK-0193/review.yaml at 29a5dd4aa214ac4f7aaf291f666fe605b4721007"
-    role: "Architect REVISION_REQUIRED judgment isolating F-0193-001 to redundant lifecycle-fixture overhead in tests.test_supervised_lifecycle."
+  - source: ".agent/tasks/TASK-0193/review.yaml at b37c984be95cfa771223a90937b8f66644436907"
+    role: "Architect finding F-0193-002: stale-marker test cleanup contaminates generic tearDown and accounts for approximately ten seconds of module runtime."
     precedence: 1
-  - source: ".agent/tasks/TASK-0193/report.yaml at 6bc1977a82cf883904978bb541017249f09aa21e"
-    role: "Exact revision-1 focused PASS evidence and consumed canonical verifier timeout result."
+  - source: ".agent/tasks/TASK-0193/report.yaml at c68862f680ef3406a7a6b2e33ccc8cceae2dfd57"
+    role: "Revision-2 functional PASS with standalone module timing gate failure and no canonical verifier invocation."
     precedence: 2
 
 structure_authority:
   status: NOT_APPLICABLE
-  source: "Revision-1 accepted production structure; revision 2 authorizes one test-file optimization only."
-  rationale: "No production, verifier-harness, lifecycle, transport, public-contract, dependency, or architecture change is authorized."
+  source: "Existing test fixture only."
+  rationale: "No production, Swift, verifier-harness, lifecycle, transport, or architecture change is authorized."
 
-objective: "Close F-0193-001 by preserving the full deterministic transport-classification coverage while removing redundant fixture Runtime Start/Stop cycles so tests.test_supervised_lifecycle completes with material margin below the canonical verifier's fixed 45-second per-module budget, then obtain one fresh canonical ./verify PASS."
+objective: "Close F-0193-002 by ensuring the stale-predecessor-marker status test removes only the marker it deliberately creates before generic tearDown runs, preserving all test semantics, then obtain a <=40.0-second complete module PASS and one canonical ./verify PASS."
 
 scope:
   required_changes:
-    - "Fresh-bind the exact revision-2 base and preserve revision-1 implementation candidate ea763dd043492d1312b0fc18c9049e9812725ac7 byte-for-byte outside tests/test_supervised_lifecycle.py."
-    - "Confirm before mutation that the eight TASK-0193 transport-classification test methods each pay separate fixture Runtime Start plus tearDown Stop despite exercising read-only status classification against the same deterministic running fixture."
+    - "Fresh-bind the exact revision-3 base and preserve all revision-1 production/Swift bytes plus the revision-2 transport matrix."
     - "Change only tests/test_supervised_lifecycle.py."
-    - "Consolidate transport classification cases over fixture-owned running state, preferably as one table/subtest matrix or an equivalently simple local helper structure. Avoid repeated lifecycle Start/Stop for cases that do not require lifecycle transitions."
-    - "Retain explicit coverage for at least: degraded, unknown, unsupported/404, timeout, malformed payload, unsupported schema, additive unknown fields, and read-only/external local Runtime with independent transport state."
-    - "Retain the existing healthy managed, healthy read-only, stopped, not-ready, foreign-owner, argv-drift, lifecycle ownership, crash/no-auto-restart, Start/Stop/Restart and supervisor semantics."
-    - "Do not weaken assertions merely to reduce runtime. Do not remove required transport cases, convert real fixture lifecycle tests that test lifecycle behavior into mocks, or skip cases."
-    - "Do not modify the 45-second verifier module timeout, verify, verify_tests.py, verification_policy.py, or any verifier harness."
-    - "Do not change start.sh, any Swift source/test file, Runtime lifecycle code, transport classification code, documentation, public MCP surface, capacity, dependency, credential/configuration, version, release, or live state."
-    - "Run the complete tests.test_supervised_lifecycle module once after the test-only optimization and record test count plus wall time."
-    - "The timed standalone module must PASS and complete in no more than 40.0 seconds. If it exceeds 40.0 seconds, stop BLOCKED before canonical ./verify; do not spend the verifier budget or widen scope."
-    - "After the timed module gate passes, run exactly one new canonical ./verify invocation through a durable/reconcilable execution path. If dispatch/result becomes ambiguous, reconcile that same execution before any retry; blind replay is forbidden."
-    - "If canonical ./verify PASSes, publish report revision 2. If it conclusively FAILs, publish the truthful blocker with no second invocation or out-of-scope repair."
+    - "In test_status_remains_stopped_even_if_a_predecessor_marker_is_left_behind, preserve creation of protected-runtime-running and all assertions proving status remains stopped and desired intent is absent from status truth."
+    - "After those assertions, remove the deliberately injected marker before the test returns so generic tearDown cannot exercise predecessor respawn behavior."
+    - "Keep cleanup local to this test. Do not change generic tearDown because generic cleanup must continue exposing unexpected marker leaks from other tests."
+    - "Do not change fake launchctl predecessor semantics; those semantics are intentional compatibility coverage."
+    - "Do not add sleeps, raise subprocess/test/verifier timeouts, skip tests, remove transport cases, weaken assertions, or change lifecycle behavior."
+    - "Run the exact stale-marker test after the correction and record its wall time."
+    - "Run the complete tests.test_supervised_lifecycle module exactly once for the revision-3 timing gate. It must PASS in <=40.0 seconds wall time before canonical verification."
+    - "If the module exceeds 40.0 seconds, stop BLOCKED before ./verify; do not widen scope in this binding."
+    - "If the timing gate passes, run exactly one new canonical ./verify invocation through a durable/reconcilable path. Reconcile the same execution after any ambiguous carrier response; blind replay is forbidden."
+    - "If ./verify PASSes, publish report revision 3. If it conclusively FAILs, publish the truthful blocker and stop."
 
   allowed_existing_files_or_components:
     - "tests/test_supervised_lifecycle.py"
     - ".agent/tasks/TASK-0193/report.yaml"
 
 invariants:
-  - "All revision-1 production bytes remain unchanged."
-  - "All revision-1 Swift source and Swift test bytes remain unchanged."
-  - "TASK-0193 transport semantics remain unchanged."
-  - "All required transport classification cases remain deterministically covered."
+  - "All revision-1 production and Swift bytes remain unchanged."
+  - "Revision-2 transport matrix and complete transport coverage remain intact."
+  - "Generic tearDown behavior remains unchanged."
+  - "Fake predecessor desired-marker respawn behavior remains unchanged."
   - "Canonical verifier per-module timeout remains 45 seconds."
   - "MAIN ONLY; no branch or PR creation."
   - "No live Runtime/tunnel install, cutover, Start, Stop, Restart, update, repair, or reboot."
   - "TASK-0190 revision-8 effect authority remains untouched."
-  - "Revision-2 canonical ./verify budget is exactly one new invocation."
+  - "Revision-3 canonical ./verify budget is exactly one invocation."
 
 forbidden_changes:
-  - "Any file change outside tests/test_supervised_lifecycle.py and the eventual TASK-0193 report."
-  - "Any production or Swift source/test change."
-  - "Any verifier timeout/harness change."
-  - "Deleting required transport cases, reducing semantic assertions, increasing timeouts, adding sleeps, or serializing/constraining behavior merely to hide timing."
-  - "Any dependency, MCP public-surface, capacity, credential/configuration, lifecycle, version, tag, release, or live-state change."
-  - "Any second revision-2 ./verify invocation after a conclusive result."
-  - "Any blind replay after ambiguous verifier dispatch/result."
+  - "Any file mutation outside tests/test_supervised_lifecycle.py and the eventual report."
+  - "Any production, Swift, verifier-harness, timeout, dependency, capacity, public MCP surface, credential/configuration, version, release, or live-state change."
+  - "Any generic teardown suppression or fixture behavior change that could hide lifecycle leaks."
+  - "Any second revision-3 ./verify invocation after a conclusive result."
+  - "Any blind replay after ambiguous execution state."
 
 gap_policy:
   local_auto_fix: false
@@ -129,38 +126,35 @@ effect_authority:
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "F-0193-001 is closed by test-only fixture/runtime optimization."
-    evidence_required: "Implementation diff changes only tests/test_supervised_lifecycle.py and removes redundant lifecycle Start/Stop cycles from transport-classification cases without changing production semantics."
+    requirement: "F-0193-002 is closed by local test-owned cleanup only."
+    evidence_required: "Diff changes only tests/test_supervised_lifecycle.py and the stale-marker test removes its deliberately created marker before generic tearDown while retaining the original assertions."
   - id: AC-2
-    requirement: "Transport coverage remains complete."
-    evidence_required: "Source and test output retain all required healthy/degraded/unconfirmed/unsupported/timeout/malformed/schema/additive/read-only transport cases and all pre-existing lifecycle behavior tests."
+    requirement: "The pathological cleanup delay is removed without weakening lifecycle coverage."
+    evidence_required: "Exact stale-marker test PASS with recorded timing materially below its previously observed ~10.2 seconds; generic tearDown and fake predecessor respawn semantics remain unchanged."
   - id: AC-3
-    requirement: "The module fits the existing verifier budget with margin."
-    evidence_required: "One complete standalone tests.test_supervised_lifecycle run PASSes in <= 40.0 seconds with recorded test count and wall time."
+    requirement: "The complete supervised lifecycle module fits the pre-verifier budget with margin."
+    evidence_required: "One complete standalone module invocation PASSes in <=40.0 seconds wall time with all 20 top-level tests and transport subtests intact."
   - id: AC-4
-    requirement: "Revision-1 implementation remains unchanged."
-    evidence_required: "Diff from ea763dd043492d1312b0fc18c9049e9812725ac7 to revision-2 candidate contains no changes outside tests/test_supervised_lifecycle.py."
-  - id: AC-5
     requirement: "Canonical verification closes without replay ambiguity."
-    evidence_required: "Exactly one revision-2 durable/reconcilable ./verify invocation completes PASS with no blind retry."
-  - id: AC-6
+    evidence_required: "Exactly one revision-3 durable/reconcilable ./verify invocation completes PASS with no blind retry."
+  - id: AC-5
     requirement: "Repository closure remains minimal and canonical."
-    evidence_required: "Truthful report revision 2, non-force publication on main, final clean synchronized MAIN ONLY topology, and zero live Runtime/tunnel effects."
+    evidence_required: "Truthful report revision 3, non-force publication on main, final clean synchronized MAIN ONLY topology, and zero live Runtime/tunnel effects."
 
 verification:
   authoritative_verification:
     required: true
     mechanism: "./verify"
-    expected_signal: "PASS from exactly one new revision-2 invocation after the <=40-second standalone module gate passes."
+    expected_signal: "PASS from exactly one revision-3 invocation after the <=40.0-second standalone module gate."
   executor_checks:
     - id: CHECK-1
-      command_or_check: "Run the complete tests.test_supervised_lifecycle module once and record PASS count plus wall time; require <=40.0 seconds."
+      command_or_check: "Run only test_status_remains_stopped_even_if_a_predecessor_marker_is_left_behind and record PASS plus wall time."
       required: true
     - id: CHECK-2
-      command_or_check: "Confirm candidate diff from revision-1 candidate touches only tests/test_supervised_lifecycle.py and preserves all required transport cases."
+      command_or_check: "Run the complete tests.test_supervised_lifecycle module exactly once; require PASS and <=40.0 seconds wall time."
       required: true
     - id: CHECK-3
-      command_or_check: "Run the single authorized durable/reconcilable ./verify invocation and reconcile its exact outcome without blind replay."
+      command_or_check: "If CHECK-2 passes, run the single authorized durable/reconcilable ./verify invocation and reconcile its exact outcome without blind replay."
       required: true
 
 git_authority:
