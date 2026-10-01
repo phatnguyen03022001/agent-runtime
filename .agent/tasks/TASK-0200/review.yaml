@@ -1,0 +1,48 @@
+protocol_version: 3
+
+task_id: TASK-0200
+task_revision: 1
+review_revision: 1
+state: REVISION_REQUIRED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0200/report.yaml
+  commit: "8f5e8cce410bf51fa0f9f3b0f0232e5b5f49422e"
+  report_revision: 1
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  scope: PASS
+  git_authority: PASS
+  acceptance_criteria: BLOCKED
+  verifier_evidence: NOT_RUN_BY_GATE
+
+acceptance_basis:
+  - "Qualification candidate f711ee6fd5b65e072cd6c93f01245afd1ff0a39f is the single direct child of exact TASK-0200 revision-1 base 91572b19572cd797a5c235a4f1a502f688e25db9 and changes only tests/test_product_qualification.py."
+  - "Report commit 8f5e8cce410bf51fa0f9f3b0f0232e5b5f49422e follows the qualification candidate and truthfully stops at the first proven product gap."
+  - "Q01 through Q03 pass with synthetic isolated state and no real control-plane or credential use."
+  - "Q04 reproduces a real production contract defect: non-UTF8 tunnel-client output causes UnicodeDecodeError before the existing structured CONTROL_PLANE_UNAVAILABLE mapping."
+  - "Canonical configuration remains absent or byte-identical and submitted secret content is not exposed, so the failure is typed-error robustness rather than persistence corruption."
+  - "Source inspection confirms macos/runtime_config.py invokes tunnel-client with subprocess.run(text=True); decoding occurs before the existing response bound/JSON mapping, while the catch handles OSError/subprocess.SubprocessError but not UnicodeDecodeError."
+  - "The Executor correctly stopped before Q05-Q14 and did not invoke canonical ./verify, as required by the revision-1 stop rule."
+  - "No production/live/release effect occurred."
+
+findings:
+  - id: F-0200-001
+    severity: BLOCKING
+    classification: typed_admission_error_contract_gap
+    description: "Undecodable tunnel-client stdout/stderr can bypass the stable configuration-admission error envelope and produce traceback/exit 1 instead of bounded CONTROL_PLANE_UNAVAILABLE/exit 2."
+    required_closure: "Normalize response decode failure inside the existing runtime_config tunnel-validation seam. Do not expose raw malformed output or secrets. Preserve canonical configuration non-publication/preservation semantics, all existing 401/403/404 mappings, timeout/missing-client behavior and user/org tunnel semantics. Then continue the full Q01-Q14 qualification."
+
+notes:
+  - "TASK-0200 revision 1 is not accepted."
+  - "This finding was intentionally discovered by qualification; production repair requires revision-2 authority."
+  - "TASK-0196 remains paused."
