@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0193
-task_revision: 1
-review_revision: 1
+task_revision: 2
+review_revision: 2
 state: REVISION_REQUIRED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0193/report.yaml
-  commit: "6bc1977a82cf883904978bb541017249f09aa21e"
-  report_revision: 1
+  commit: "c68862f680ef3406a7a6b2e33ccc8cceae2dfd57"
+  report_revision: 2
 
 independence:
   reviewer_role: ARCHITECT
@@ -28,21 +28,21 @@ contract_compliance:
   verifier_evidence: PASS
 
 acceptance_basis:
-  - "Implementation candidate ea763dd043492d1312b0fc18c9049e9812725ac7 is the single direct child of exact TASK-0193 base fb0687e0f38b0c97e3e149552d5ad8efb25817e0 and changes only ten authorized status/Core/MenuBar/test/documentation files."
-  - "Report commit 6bc1977a82cf883904978bb541017249f09aa21e is the single direct child of the implementation candidate and adds only .agent/tasks/TASK-0193/report.yaml."
-  - "AC-1 through AC-6 are supported by focused proof: status/transport Python 27/27 PASS, focused Swift 30/30 PASS, and full Swift 86/86 PASS. Transport is independent from local availability/control authority and passive status no longer overclaims ChatGPT connectivity."
-  - "The sole revision-1 canonical ./verify invocation was reconciled to the same durable execution after owner mismatch and conclusively exited 1 without replay. The only blocker is tests.test_supervised_lifecycle timing out at 45.018 seconds against the verifier's fixed 45-second module budget."
-  - "The same module passes 27/27 standalone in 48.939 seconds with no assertion failure."
-  - "The task added eight transport-classification test methods to tests/test_supervised_lifecycle.py. Each independently starts a fixture Runtime and then tearDown stops it, although the transport cases exercise read-only status classification against the same deterministic running fixture. The fake control-plane endpoint returns immediately for ordinary cases and the timeout case exits immediately by fixture design; therefore the observed >45 second module duration is dominated by repeated lifecycle fixture setup/start/stop overhead, not evidence that the production transport probe exceeds its one-second bound."
-  - "The narrow corrective path is test-only: preserve every required transport matrix case while consolidating them over fixture-owned running state so repeated Start/Stop cycles are not paid once per classification case. Raising the canonical module timeout would mask the regression and is not justified."
+  - "Revision-2 candidate d9c0ab817f2cc50677a59cbd6906f5150526afb6 is the single direct child of exact revision-2 base 7b774280eb2f9d0b6aa43364a8dace715680d733 and changes only tests/test_supervised_lifecycle.py."
+  - "Report commit c68862f680ef3406a7a6b2e33ccc8cceae2dfd57 is the single direct child of the candidate and changes only .agent/tasks/TASK-0193/report.yaml."
+  - "The transport classification consolidation is semantically correct: all eight required transport cases remain covered as subtests over one running fixture, and the complete module passes functionally."
+  - "The revision-2 standalone gate correctly stopped before canonical verification because the measured wall time was 45.87 seconds, above the authorized 40.0-second gate. The revision-2 canonical verifier budget remains unconsumed."
+  - "Independent read-only per-test timing on the exact published revision-2 state completed 20/20 PASS in 42.490 seconds. One test, test_status_remains_stopped_even_if_a_predecessor_marker_is_left_behind, consumed 10.233 seconds; the next slowest lifecycle test consumed 6.390 seconds and the transport matrix consumed only 3.400 seconds."
+  - "The 10.233-second test intentionally creates the predecessor protected-runtime-running marker to prove status ignores stale intent, then leaves that marker present until tearDown(). tearDown() unconditionally invokes fixture stop. The fake launchctl kill path contains predecessor compatibility behavior that respawns when the marker exists, so teardown waits against a fixture Runtime it accidentally recreated. This is cleanup contamination, not transport implementation latency and not a reason to weaken the 45-second verifier budget."
+  - "The narrow correction is to remove the intentionally created marker inside that test after the status assertions and before tearDown lifecycle cleanup. Broad teardown changes would risk masking other marker-leak defects and are not justified."
 
 findings:
-  - id: "F-0193-001"
+  - id: "F-0193-002"
     severity: "BLOCKING"
-    description: "tests.test_supervised_lifecycle exceeds the canonical verifier's 45-second per-module budget after eight transport cases were implemented as separate full lifecycle tests with redundant fixture Runtime Start/Stop cycles."
-    disposition: "Preserve all revision-1 production implementation bytes and semantics. Revise TASK-0193 narrowly to optimize only tests/test_supervised_lifecycle.py by sharing one fixture-owned running Runtime across the transport classification matrix, retaining all required cases and assertions. Require a timed standalone module result with material margin below 45 seconds before authorizing one fresh canonical ./verify invocation. Do not raise verifier timeout or remove coverage."
+    description: "The stale-predecessor-marker status test leaks its intentionally created marker into generic tearDown, causing the fake predecessor launchctl behavior to respawn a fixture Runtime during cleanup and spend approximately ten seconds in bounded stop cleanup."
+    disposition: "Preserve all revision-1 production bytes and the revision-2 transport-matrix consolidation. Revise TASK-0193 only in tests/test_supervised_lifecycle.py so the stale-marker test removes its own deliberately injected marker after assertions and before tearDown. Then require a fresh complete module timing <=40.0 seconds before spending the still-new revision-3 canonical verifier budget."
 
 notes:
-  - "Revision-1 canonical verifier budget is consumed; do not replay it."
-  - "Do not change start.sh, Swift production/tests, transport semantics, verifier timeout, verify harness, or live Runtime/tunnel state in revision 2."
-  - "TASK-0190 revision 8 remains superseded and its effect authority remains untouched."
+  - "Do not solve this by changing generic tearDown, fake launchctl predecessor semantics, production lifecycle code, transport code, or verifier timeout."
+  - "Revision-2 canonical ./verify was never invoked and must not be retroactively attributed to revision 3; revision 3 receives its own explicit one-invocation authority."
+  - "No live Runtime/tunnel mutation was used for this review; the diagnostic execution exercised only the repository's isolated fake lifecycle tests."
