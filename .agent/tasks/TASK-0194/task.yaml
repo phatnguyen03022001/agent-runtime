@@ -1,21 +1,21 @@
 protocol_version: 3
 
 task_id: TASK-0194
-task_revision: 3
+task_revision: 4
 state: APPROVED
-title: "Accepted Runtime Live Activation — Reuse Published Candidate"
+title: "Accepted Runtime Live Activation — Payload Store Collision Closure"
 
 origin:
   type: user_request
   task_id: TASK-0194
-  gap_id: "F-0194-002"
+  gap_id: "F-0194-003"
 
 revision_basis:
-  revision_2_base: "fcc19607d50b70270446c605335ec7d468b3cecc"
-  revision_2_report_commit: "093bfba2f0f42647ebfb0a1b8a65de9dfaabe89b"
-  revision_2_review_commit: "cbc3bc8e143529b565b369c174aad052b4850271"
-  blocking_finding: "F-0194-002"
-  disposition: "Do not rebuild and do not retry LaunchServices cleanup. Reuse the fully sealed content-addressed candidate already published by revision 2, revalidate it read-only, then continue the original SentinelX-protected transactional activation."
+  revision_3_base: "a004fa1834de14a6ff51841d06e1487c278ed29a"
+  revision_3_report_commit: "34d19ac14355f99efeaa76a3e5726371ad94234a"
+  revision_3_review_commit: "2edb7b81765b2347507a6d069b5455585623efd1"
+  blocking_finding: "F-0194-003"
+  disposition: "Source-fix and verification only. Correct zero-cost cutover semantics for an already-existing canonical payload with the same content closure but different historical source_revision/source_tree. Do not perform live activation in revision 4."
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -43,104 +43,81 @@ execution_skills:
     - simplicity
   recommended: []
 
-accepted_candidate:
-  candidate_sha256: "025f728aede45733ed8b83aa6c2717a5e28543b3cdb98dba31bf012ebc30338b"
-  source_revision: "fcc19607d50b70270446c605335ec7d468b3cecc"
-  source_tree: "0720c1b65321d5ef5d590d94cc3a76930e405d03"
-  candidate_app: "/Users/tienphat/Developer/agent-runtime/build/candidates/025f728aede45733ed8b83aa6c2717a5e28543b3cdb98dba31bf012ebc30338b/Agent Runtime.app"
-  candidate_handoff: "/Users/tienphat/Developer/agent-runtime/build/candidates/025f728aede45733ed8b83aa6c2717a5e28543b3cdb98dba31bf012ebc30338b/Agent Runtime.candidate.json"
-  candidate_handoff_sha256: "1e518cfb23ff7b01e42daac0accf4f0fd93d89d485fec4d60f0b5791d02d92e3"
-  initial_payload_closure: "85b82b2c88e9bc0bfdf0c240a7b47b17abfd260609d88a7e5dafecab042e2483"
-  initial_payload_release: "/Users/tienphat/Developer/agent-runtime/build/candidates/025f728aede45733ed8b83aa6c2717a5e28543b3cdb98dba31bf012ebc30338b/payloads/85b82b2c88e9bc0bfdf0c240a7b47b17abfd260609d88a7e5dafecab042e2483"
-  runtime_version: "0.5.1"
-  advertised_tool_count: 20
-  record_count: 1686
-
 authority_sources:
-  - source: ".agent/tasks/TASK-0194/review.yaml at cbc3bc8e143529b565b369c174aad052b4850271"
-    role: "Architect finding that revision-2 candidate publication completed before non-authoritative LaunchServices cleanup failed."
+  - source: ".agent/tasks/TASK-0194/review.yaml at 2edb7b81765b2347507a6d069b5455585623efd1"
+    role: "Architect root-cause finding F-0194-003 and source-fix boundary."
     precedence: 1
-  - source: ".agent/tasks/TASK-0194/report.yaml at 093bfba2f0f42647ebfb0a1b8a65de9dfaabe89b"
-    role: "Exact candidate identity, candidate audit, predecessor live state, and unconsumed live activation effects."
+  - source: ".agent/tasks/TASK-0194/report.yaml at 34d19ac14355f99efeaa76a3e5726371ad94234a"
+    role: "Exact failed live cutover evidence plus successful automatic rollback to the healthy predecessor."
     precedence: 2
-  - source: ".agent/tasks/TASK-0190/review.yaml"
-    role: "Accepted precedent that retained candidate LaunchServices records are discovery state, not durable lifecycle ownership, and may reappear after unregister."
+  - source: "macos/package_provenance.py and macos/candidate_cutover.py at revision-4 base"
+    role: "Current payload closure, external candidate provenance, canonical payload compatibility, transaction staging, rollback, and commit semantics."
     precedence: 3
-  - source: ".agent/tasks/TASK-0193/review.yaml at 102e4ecd6b711fdcd823aa736eefafb4dbd60846"
-    role: "Accepted source verification: 62/62 modules and 859 tests PASS."
-    precedence: 4
 
 structure_authority:
   status: RESOLVED
-  source: "Existing sealed candidate, transactional install-prebuilt/commit/rollback, package-owned status/doctor, installed menu-bar app, canonical user LaunchAgent, and SentinelX independent carrier."
-  rationale: "Continue from the immutable published candidate. LaunchServices discovery hygiene is not an activation owner and must not create a new build or cleanup loop."
+  source: "Existing content-addressed payload store, exact transaction-staged candidate payload, zero-cost candidate handoff, and current candidate_cutover transaction schema."
+  rationale: "Fix the incorrect validation coupling in place. Do not change payload schema, content-closure definition, storage key shape, pointer format, transaction schema, or introduce a second payload store."
 
-objective: "Activate exact preserved candidate 025f728a... transactionally on the live Mac, relaunch the newly installed menu-bar binary, prove canonical Runtime running/live/ready is presented as 127.0.0.1:8080 rather than Unavailable, and finish with actual ChatGPT-originated MCP proof against Runtime revision fcc19607d50b70270446c605335ec7d468b3cecc."
+objective: "Close F-0194-003 by allowing zero-cost cutover to reuse an immutable canonical payload entry when it has the exact candidate content closure and compatibility contract but a different historical source_revision/source_tree, while preserving exact source provenance through the transaction-staged candidate payload. Obtain focused regression proof and one canonical ./verify PASS. Do not touch the live installation in this revision."
 
 scope:
   required_changes:
-    - "Fresh-bind exact revision-3 base. Require clean synchronized MAIN ONLY topology and prove no product/source path changed since accepted candidate source revision fcc19607d50b70270446c605335ec7d468b3cecc; later commits may only be canonical .agent task/report/review artifacts."
-    - "Reuse TASK-0193 canonical verification PASS 62/62 modules and 859 tests. Do not run ./verify."
-    - "Do not run package_app.sh and do not create a new candidate."
-    - "Before live mutation, revalidate the exact preserved candidate read-only: candidate SHA/path, handoff SHA, initial payload closure/path, zero-cost provenance, strict codesign, source_revision fcc19607d50b70270446c605335ec7d468b3cecc, version 0.5.1, twenty advertised tools, 1686 records, and zero .pyc/__pycache__."
-    - "Treat any LaunchServices record for the exact preserved candidate only as non-authoritative discovery state. Do not invoke lsregister -u, global reset, candidate deletion/move/rename, or any cache repair to influence LaunchServices."
-    - "Reject any foreign/unattributed LaunchServices record only if it creates an actual ownership/path ambiguity relevant to lifecycle. Candidate discovery alone is not a blocker."
-    - "Re-check live predecessor immediately before mutation: installed revision 5286bbb6d1942ff7eed13190bd38ee5efcc0e621, cutover transaction absent, canonical 127.0.0.1:8080 ownership, Runtime RUNNING/live/ready, and no unexpected live change."
-    - "Immediately before install-prebuilt, require SentinelX host mac-tphat-mb operational=true, ping PASS, and harmless read-only repo exec PASS. If unavailable, stop BLOCKED before mutation."
-    - "Invoke exactly one ./install.sh --install-prebuilt using the exact preserved candidate app, handoff, --expected-candidate-sha256 025f728aede45733ed8b83aa6c2717a5e28543b3cdb98dba31bf012ebc30338b and --expected-handoff-sha256 1e518cfb23ff7b01e42daac0accf4f0fd93d89d485fec4d60f0b5791d02d92e3. Carry the mutation through SentinelX or another independent carrier that remains available if Agent Runtime disconnects."
-    - "Never blind-replay an ambiguous install result. Reconcile transaction phase, installed candidate identity, payload pointer, launchd ownership, and live processes before deciding whether any further effect remains."
-    - "At PENDING/APP_SWAPPED, prove installed app exactly matches preserved candidate; runtime.env identity is unchanged; current Runtime LaunchAgent path is ~/Library/LaunchAgents/com.picmao.agent-runtime-runtime-service.plist and has RunAtLoad=false / KeepAlive=false; protected-runtime-running is absent; main-app login registration is present/acceptable; Runtime SMAppService.agent ownership is absent; payload pointer selects exact initial payload; transaction is coherent."
-    - "If any pending-boundary gate fails before commit, consume at most one rollback-cutover through the independent carrier and prove predecessor revision 5286bbb6d1942ff7eed13190bd38ee5efcc0e621 and prior canonical lifecycle identity are restored. Do not commit a failed candidate."
-    - "If pending acceptance passes, invoke exactly one commit-cutover for that exact transaction. Never delete or synthesize transaction metadata."
-    - "After commit, require transaction absent, installed provenance/codesign/doctor/status coherent, current LaunchAgent manual contract intact, no persistent desired-state, and no competing Runtime SMAppService.agent."
-    - "Relaunch the menu-bar app exactly once from /Users/tienphat/Applications/Agent Runtime.app so the process loads the new native binary. Terminate only a positively identified predecessor menu-bar process running from that exact canonical installed path."
-    - "After relaunch, if the newly installed Runtime is not serving, explicitly Start it at most once using the new installed package-owned lifecycle helper."
-    - "Require package-owned status schema 3 with local state=running, health=live, ready=ready, control=managed, one canonical listener/PID, and Endpoint semantics 127.0.0.1:8080. Tunnel may be healthy, degraded, or unconfirmed without changing local availability/control."
-    - "Prove the reported bug is closed: while local status is running/live/ready, live presentation must not show Endpoint Unavailable. Expected Endpoint=127.0.0.1:8080, Health=live, Ready=ready; Tunnel attention is allowed."
-    - "Attempt live UI readback only with already-authorized capabilities. Do not request new Accessibility, Screen Recording, Full Disk Access, sudo, Gatekeeper bypass, or other security permissions. If no programmatic UI/screen channel is already available, request exactly one operator visual confirmation/screenshot after all machine-verifiable gates pass."
-    - "After the new Runtime is serving, perform one actual ChatGPT-originated runtime_capabilities call. It must report runtime_revision=fcc19607d50b70270446c605335ec7d468b3cecc and twenty advertised tools."
-    - "Perform one additional harmless read-only Agent Runtime MCP call after runtime_capabilities."
-    - "Persist TASK-0194 report revision 3 only after final live truth is known. If post-commit UI or connector proof fails, report the actual active installed state and stop; do not invent rollback authority after commit."
-    - "Final repository state must be clean/synchronized MAIN ONLY with no release/tag/source mutation."
+    - "Fresh-bind the exact revision-4 base and confirm the live predecessor remains healthy after revision-3 automatic rollback. Observation is read-only only; no live lifecycle/cutover mutation is authorized."
+    - "Change only macos/candidate_cutover.py and tests/test_candidate_cutover.py, plus the eventual TASK-0194 report artifact."
+    - "Preserve package_provenance._payload_closure exactly: canonical payload identity remains content-addressed by file path/mode/size/content hashes and intentionally does not include source_revision/source_tree."
+    - "Preserve provenance.validate_zero_cost_candidate and _zero_cost_validate_input exact external-candidate semantics. The candidate app + handoff + supplied external payload must still require matching source_revision/source_tree before any cutover mutation."
+    - "Preserve payload manifest schema, zero-cost candidate schema, transaction schema, current-payload pointer format, payload directory naming, lifecycle contract, public surface, and rollback model."
+    - "When zero-cost cutover reaches an already-existing canonical final payload path for the candidate closure, validate that canonical release by exact closure and the candidate substrate compatibility contract: requirements_lock_sha256, required Python major/minor, lifecycle/payload contract, expected public tool count, expected public surface, complete immutable files inventory and content closure. Historical source_revision/source_tree on that canonical content object must not be required to equal the candidate revision/tree."
+    - "Do not overwrite, replace, rename, chmod-mutate, or republish the pre-existing canonical payload merely to make its source metadata match the candidate. The existing content-addressed object must remain byte-for-byte unchanged when reused."
+    - "Retain the transaction-staged candidate payload when the canonical closure already exists. That staged payload remains the exact source_revision/source_tree provenance witness for the candidate through the PENDING boundary and commit."
+    - "At commit, validate the installed app/handoff against exact candidate provenance using the transaction-owned staged candidate payload when the canonical payload was reused. Separately validate that the canonical payload selected by current-payload is content/compatibility-valid for the installed substrate."
+    - "If the transaction created the canonical payload because the closure did not previously exist, existing exact candidate behavior may remain unchanged; do not weaken the normal new-payload path."
+    - "If an existing canonical payload has the same content closure but incompatible requirements lock, Python contract, lifecycle/payload contract, public tool count, public surface, malformed manifest, mutated files, wrong modes, or other compatibility defect, cutover/commit must still fail closed."
+    - "Rollback semantics must remain correct. A reused pre-existing canonical payload must never be deleted on rollback; a transaction-created payload retains existing bounded deletion behavior."
+    - "Do not alter LaunchServices behavior in revision 4. F-0194-002 has a separate accepted architectural disposition; no package_app.sh or lsregister source change is authorized here."
+    - "Add a deterministic regression reproducing the live collision: publish two payload manifests from identical Python file bytes and identical compatibility fields but different source_revision/source_tree, confirm they share one content_closure, seed the canonical store with the older identity, then install a candidate whose exact staged payload carries the newer identity."
+    - "The regression must prove cutover reaches PENDING and commit reaches COMMITTED while metadata records payload.created=false, current-payload selects the shared closure, the pre-existing canonical payload bytes/manifest remain byte-for-byte unchanged, and exact candidate provenance is still proven by the staged transaction payload."
+    - "Add or preserve a negative regression proving a same-closure canonical payload with incompatible non-source compatibility metadata is rejected rather than silently reused."
+    - "Add or preserve a negative regression proving the external candidate payload itself cannot carry mismatched source_revision/source_tree even though canonical-store reuse may carry historical source metadata."
+    - "Run focused exact regression tests first, then the complete tests.test_candidate_cutover module."
+    - "Run tests.test_package_provenance to prove the external zero-cost provenance and content-addressed payload contracts remain intact."
+    - "Only after focused suites pass, run exactly one new canonical ./verify invocation through a durable/reconcilable path. Reconcile an ambiguous carrier response against the same execution and never blind-replay."
+    - "If canonical ./verify fails conclusively, stop with truthful evidence. Do not perform live activation, candidate build, install-prebuilt, rollback, commit, menu-bar relaunch, or Runtime Start in revision 4."
+    - "Publish one reviewable implementation candidate and report. MAIN ONLY; no branch/PR."
 
   allowed_existing_files_or_components:
-    - "existing preserved build/candidates/025f728a... candidate tree"
+    - "macos/candidate_cutover.py"
+    - "tests/test_candidate_cutover.py"
     - ".agent/tasks/TASK-0194/report.yaml"
-    - "existing install.sh / candidate_cutover.py / package_provenance.py"
-    - "canonical installed Agent Runtime.app and package-owned state"
-    - "canonical Runtime LaunchAgent and SMAppService.mainApp"
-    - "SentinelX mac-tphat-mb independent carrier"
 
 invariants:
-  - "Activated product identity is the preserved candidate source revision fcc19607d50b70270446c605335ec7d468b3cecc, not the later revision-3 metadata commit."
-  - "No new build and no package_app.sh invocation."
-  - "No LaunchServices cleanup mutation."
-  - "No ./verify invocation."
-  - "No product/source/test/Swift/docs/dependency/version/public-MCP mutation."
-  - "Runtime version remains 0.5.1; twenty advertised tools and capacity semantics unchanged."
-  - "TASK-0191 availability/control separation, TASK-0192 manual lifecycle, and TASK-0193 Tunnel independence remain intact."
-  - "runtime.env is preserved and secrets are never printed."
-  - "No new permission, daemon, lifecycle owner, dependency, or global PATH change."
-  - "No physical reboot."
-  - "TASK-0190 revision-8 remains superseded."
+  - "Content closure remains content-only and 64-hex."
+  - "External zero-cost candidate validation remains exact-source fail-closed."
+  - "Canonical payload-store reuse never mutates a pre-existing immutable payload release."
+  - "Source_revision/source_tree relaxation applies only to reuse of an already-existing canonical payload whose exact content closure and all compatibility fields validate."
+  - "No public MCP tool/schema, Runtime lifecycle, menu-bar, tunnel, capacity, version, dependency, payload schema, candidate schema, transaction schema, pointer format, or release contract changes."
+  - "Live installed predecessor remains untouched."
+  - "No build, package publication, install, cutover, rollback, commit, Runtime Start/Stop, menu-bar relaunch, LaunchServices mutation, or reboot."
+  - "MAIN ONLY."
 
 forbidden_changes:
-  - "Running package_app.sh or building another candidate."
-  - "Running lsregister -u, resetting LaunchServices, deleting/moving/renaming the candidate, or otherwise mutating discovery state."
-  - "Running ./verify."
-  - "Any product source/test/Swift/docs/verifier/dependency/version/public-contract/tag/release mutation."
-  - "Any second install-prebuilt after a conclusive result."
-  - "Blind replay of install/commit/rollback after ambiguous response."
-  - "Deleting/editing transaction metadata to force progress."
-  - "Killing foreign/ambiguous port owners or unrelated processes."
-  - "Granting new TCC/privacy permissions, sudo, Gatekeeper disable/bypass, or quarantine stripping."
-  - "Any physical reboot."
+  - "Any file change outside macos/candidate_cutover.py, tests/test_candidate_cutover.py, and the eventual report."
+  - "Changing macos/package_provenance.py, package_app.sh, payload schema, _payload_closure, candidate handoff schema, transaction schema, or pointer/storage-key format."
+  - "Weakening provenance.validate_zero_cost_candidate or _zero_cost_validate_input exact source identity checks for the supplied candidate payload."
+  - "Overwriting or deleting an existing canonical payload to resolve metadata identity."
+  - "Treating source_revision/source_tree mismatch as acceptable when content closure or any compatibility field differs."
+  - "Any live installation/lifecycle mutation."
+  - "Any candidate build or package_app.sh invocation."
+  - "Any LaunchServices cleanup/reset."
+  - "Any second canonical ./verify after a conclusive result or blind replay after ambiguity."
+  - "Any branch/PR, tag, release, dependency, permission, or reboot effect."
 
 gap_policy:
-  local_auto_fix: false
+  local_auto_fix: true
   scope_expansion: forbidden
-  architecture_change: forbidden
-  spec_change: forbidden
+  architecture_change: revised_contract_required
+  spec_change: revised_contract_required
   dependency_change: forbidden
   public_contract_change: forbidden
   blocking_gap_behavior: BLOCKED
@@ -157,63 +134,62 @@ continuation_policy:
     - USER_STOP
 
 effect_authority:
-  canonical_verify_max: 0
+  canonical_verify_max: 1
   distribution_build_max: 0
-  launchservices_cleanup_max: 0
-  candidate_revalidation_max: 1
-  install_prebuilt_max: 1
-  commit_cutover_max: 1
-  rollback_cutover_max: 1
-  menu_bar_relaunch_max: 1
-  runtime_explicit_start_max: 1
+  install_prebuilt_max: 0
+  commit_cutover_max: 0
+  rollback_cutover_max: 0
+  menu_bar_relaunch_max: 0
+  runtime_explicit_start_max: 0
   runtime_explicit_stop_max: 0
+  launchservices_cleanup_max: 0
   physical_reboot_max: 0
   release_or_tag_max: 0
   branch_or_pr_creation_max: 0
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "The exact revision-2 candidate remains valid and immutable."
-    evidence_required: "One read-only revalidation proves exact candidate/handoff/payload hashes and paths, source revision fcc19607..., version 0.5.1, twenty tools, 1686 records, strict codesign/provenance PASS, zero generated bytecode, and zero process/lifecycle ownership from candidate path before install."
+    requirement: "The live collision is reproduced deterministically and closed without changing payload identity architecture."
+    evidence_required: "Regression creates identical payload content/closure with different source revision/tree, seeds older canonical payload, supplies newer exact candidate payload, and zero-cost cutover reaches PENDING then COMMITTED."
   - id: AC-2
-    requirement: "LaunchServices discovery is correctly excluded from lifecycle authority."
-    evidence_required: "No LaunchServices cleanup effect occurs; candidate record presence/absence is informational only; lifecycle ownership is proven from exact ServiceManagement/LaunchAgent/process paths with no foreign ambiguity."
+    requirement: "Canonical reuse is content/compatibility based and immutable."
+    evidence_required: "Reused canonical payload passes all compatibility/content validation, payload.created=false, pointer selects the shared closure, and the canonical payload tree including manifest remains byte-for-byte unchanged across cutover/commit."
   - id: AC-3
-    requirement: "Live cutover is transactional and independently recoverable."
-    evidence_required: "Fresh SentinelX lifeline PASS; exactly one install-prebuilt; coherent pending transaction; rollback at most once only before commit if needed; exactly one commit for accepted pending candidate."
+    requirement: "Exact candidate provenance remains fail-closed."
+    evidence_required: "Transaction-staged candidate payload retains exact source revision/tree and is used to prove candidate identity through commit; an externally supplied mismatched-source candidate payload still fails before mutation."
   - id: AC-4
-    requirement: "Accepted manual lifecycle is active after cutover."
-    evidence_required: "Installed current LaunchAgent RunAtLoad=false/KeepAlive=false; no protected-runtime-running marker; main-app login ownership acceptable; Runtime SM agent absent; transaction absent after commit."
+    requirement: "Incompatible canonical collisions remain blocked."
+    evidence_required: "Negative regression proves same content closure cannot bypass incompatible requirements/Python/public-surface/contract metadata or payload integrity checks."
   - id: AC-5
-    requirement: "The live Unavailable bug is closed."
-    evidence_required: "After exact installed menu-bar relaunch and Start if needed, status schema 3 is running/live/ready/control=managed on canonical 127.0.0.1:8080 and live presentation does not show Endpoint Unavailable."
+    requirement: "Rollback ownership remains correct."
+    evidence_required: "Regression/source inspection proves reused payload is never transaction-deleted, while existing created-payload rollback behavior remains unchanged."
   - id: AC-6
-    requirement: "Activated Runtime is proven end-to-end from ChatGPT."
-    evidence_required: "Post-activation ChatGPT runtime_capabilities returns runtime_revision fcc19607... and twenty advertised tools; one additional harmless read-only MCP call succeeds."
+    requirement: "Focused and canonical verification pass."
+    evidence_required: "Targeted collision tests PASS, complete tests.test_candidate_cutover PASS, tests.test_package_provenance PASS, then exactly one durable/reconcilable ./verify invocation PASSes with no blind retry."
   - id: AC-7
-    requirement: "UI proof requires no new security permission."
-    evidence_required: "Existing programmatic UI/screen proof, or exactly one operator visual confirmation/screenshot if unavailable; zero new TCC/privacy permission changes."
+    requirement: "Revision 4 has zero live/product activation effects."
+    evidence_required: "No package build, install-prebuilt, cutover, rollback, commit, Runtime lifecycle action, menu-bar relaunch, LaunchServices mutation, reboot, release, or permission effect."
   - id: AC-8
-    requirement: "Repository/live closure is canonical."
-    evidence_required: "Truthful report revision 3, final main clean/synchronized and MAIN ONLY, transaction absent, exact installed candidate active, no build/LaunchServices cleanup/reboot/release/source-verification effects."
+    requirement: "Repository closure is minimal and canonical."
+    evidence_required: "One implementation candidate changing only authorized source/test files, truthful report, clean synchronized MAIN ONLY topology."
 
 verification:
   authoritative_verification:
-    required: false
-    mechanism: "Reuse TASK-0193 revision-4 canonical PASS"
-    expected_signal: "62/62 modules, 859 tests PASS; TASK-0194 revision 3 must not invoke ./verify."
+    required: true
+    mechanism: "./verify"
+    expected_signal: "PASS from exactly one new revision-4 durable/reconcilable invocation after focused cutover/provenance suites pass."
   executor_checks:
     - id: CHECK-1
-      command_or_check: "Read-only revalidate the exact preserved candidate and fresh predecessor/Git state; no build and no LaunchServices cleanup."
+      command_or_check: "Run targeted red/green regression for identical-content different-source canonical payload reuse, exact staged provenance, and incompatible collision rejection."
       required: true
     - id: CHECK-2
-      command_or_check: "Refresh SentinelX lifeline, then perform exactly one independent-carrier install-prebuilt and pending acceptance; rollback only on pending failure, otherwise one commit."
+      command_or_check: "Run complete tests.test_candidate_cutover."
       required: true
     - id: CHECK-3
-      command_or_check: "Relaunch exact installed menu-bar app; Start new Runtime only if needed; prove schema-3 running/live/ready/managed and UI Endpoint 127.0.0.1:8080."
+      command_or_check: "Run complete tests.test_package_provenance."
       required: true
     - id: CHECK-4
-      command_or_check: "Perform post-activation ChatGPT runtime_capabilities expecting fcc19607... plus one additional harmless read-only MCP call."
+      command_or_check: "Run the single authorized durable/reconcilable ./verify invocation and reconcile its exact outcome without blind replay."
       required: true
 
 git_authority:
