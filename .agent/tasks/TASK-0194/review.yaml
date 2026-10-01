@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0194
-task_revision: 8
-review_revision: 8
-state: REVISION_REQUIRED
+task_revision: 9
+review_revision: 9
+state: ACCEPTED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0194/report.yaml
-  commit: "8dbcdd84bc35ead4709dce7e3bfa4769fa1bd0d7"
-  report_revision: 8
+  commit: "827930c668cdd676451e4dfde2cc8e2caf4a8e09"
+  report_revision: 9
 
 independence:
   reviewer_role: ARCHITECT
@@ -24,27 +24,22 @@ contract_compliance:
   scope: PASS
   structure_policy: PASS
   git_authority: PASS
-  acceptance_criteria: FAIL
+  acceptance_criteria: PASS
   verifier_evidence: PASS
 
 acceptance_basis:
-  - "Implementation candidate 5fb6339cb6e7603cbef1cd2353efb8456ee7dbf2 is the single direct child of exact revision-8 base 4eb00e891f21fb977e6d5f68b65808b386daa57f and changes only the seven files explicitly authorized by revision 8."
-  - "Report commit 8dbcdd84bc35ead4709dce7e3bfa4769fa1bd0d7 is the single direct child of the implementation candidate and changes only .agent/tasks/TASK-0194/report.yaml."
-  - "The dual-identity implementation satisfies the intended contract in focused tests: runtime_revision remains payload authority, payload_revision is explicit payload identity, substrate_revision is independent installed substrate identity, request schema remains v2, result/response schema is v3, source/development identity remains null, and legacy/payload mismatch fails closed."
-  - "Focused runtime-config plus capability-registry tests passed 21/21 and MCP client conformance passed 6/6."
-  - "The required doctor gate failed 4 tests before canonical verification because agent_runtime/doctor.py still hard-codes runtime_capabilities schema authority as request/result (2,2)."
-  - "Fresh Architect inspection confirms the mismatch is a single existing doctor schema-authority predicate: schema_versions.get('runtime_capabilities') == (2, 2), while accepted revision-8 capability registry and closed RuntimeCapabilitiesResult now advertise request=2/result=3."
-  - "Revision 8 explicitly forbade modifying agent_runtime/doctor.py and tests/test_doctor.py, so the Executor correctly stopped instead of weakening schema export or mutating out-of-scope doctor authority."
-  - "Canonical ./verify revision-8 budget remains unconsumed at 0/1."
-  - "The healthy active rev7 installation remains untouched at substrate revision e779ee86436e6f9ae96970fc77b30eba2af9c32b, transaction absent, running/live/ready/managed."
+  - "Implementation candidate 733056d287163190d82b019b163039d7f78965d3 is the single direct child of exact revision-9 base 90551667dca7cc385e0128e543809ae5d38ab71c and changes only agent_runtime/doctor.py plus tests/test_doctor.py."
+  - "The production change is exactly the authorized doctor schema-authority convergence: runtime_capabilities request/result expectation changed from (2,2) to (2,3); no other tool schema authority changed."
+  - "The regression adds explicit proof that the canonical runtime_capabilities descriptor is request=2/result=3 and that stale result schema 2 is rejected with TOOL_CONTRACT_SCHEMA_MISMATCH."
+  - "Revision-8 dual identity implementation remains byte-for-byte unchanged outside the two authorized doctor files."
+  - "Targeted RED 2/2 produced the expected failures; targeted GREEN 2/2 PASS; complete tests.test_doctor 21/21 PASS."
+  - "Exactly one revision-9 canonical ./verify invocation completed natural_exit/exit 0 with 62/62 modules and 865 tests PASS in 94.681 seconds. Ambiguous carrier ownership was reconciled to the same durable execution and was not replayed."
+  - "Revision 9 performed zero build/install/cutover/rollback/menu-bar/Runtime/LaunchServices/reboot/release effects."
+  - "The active revision-7 installation remained serving throughout revision 9 at substrate revision e779ee86436e6f9ae96970fc77b30eba2af9c32b with transaction absent and running/managed/live/ready state."
 
-findings:
-  - id: "F-0194-006"
-    severity: BLOCKING
-    description: "Doctor's tool-contract schema authority still requires runtime_capabilities result schema v2 after revision 8 legitimately advanced that result contract to v3."
-    disposition: "Revision 9 may change only agent_runtime/doctor.py and tests/test_doctor.py, preserving the published revision-8 dual-identity implementation byte-for-byte. Update doctor authority to require runtime_capabilities request/result (2,3), add regression proving (2,3) passes and stale (2,2) fails, run the complete doctor module, then spend one canonical ./verify invocation."
+findings: []
 
 notes:
-  - "Do not revisit or reinterpret the dual-identity contract in revision 9."
-  - "Do not modify start.sh, capability_registry.py, contracts.py, README, revision-8 identity tests, telemetry, packaging, lifecycle, or live Runtime."
-  - "Revision 9 is a verifier/doctor authority convergence fix, not another runtime identity redesign."
+  - "Revision 9 closes F-0194-006 and the source contract for dual Runtime identity is accepted."
+  - "The live installation still runs revision-7 bytes and therefore requires a separately authorized activation to expose runtime_capabilities result schema v3 and explicit payload_revision/substrate_revision."
+  - "A later activation must preserve the accepted identity semantics: runtime_revision remains the legacy payload-source identity; payload_revision is the explicit payload identity; substrate_revision is the installed immutable substrate identity."
