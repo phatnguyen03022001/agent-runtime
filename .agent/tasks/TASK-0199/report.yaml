@@ -1,0 +1,205 @@
+protocol_version: 3
+
+task_id: TASK-0199
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: NEEDS_REVIEW
+
+task_source:
+  path: .agent/tasks/TASK-0199/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  execution_surface: CHATGPT_LOCAL
+  exact_task_base: "93d7805c210cac7d808f814c9b9fe6452ea2dc2b"
+  implementation_candidate: "aac9016a2f2c7b22f669b5332915e1d59bcaf891"
+  implementation_tree: "3996fe822e7e8daf0ddb5c9134e70c93ab1f982d"
+  implementation_published: true
+
+fresh_binding:
+  result: PASS
+  local_base_before_execution: "21ea0dc455d61da5e7b86a602cbfeb1c9987edda"
+  remote_exact_base: "93d7805c210cac7d808f814c9b9fe6452ea2dc2b"
+  fast_forwarded_to_exact_base: true
+  branch: main
+  worktree_clean_at_exact_base: true
+  main_only: true
+  branch_or_pr_created: false
+
+implementation:
+  result: PASS
+  classification: truthful_authority_contract_correction
+  security_hardening_claimed: false
+  sandbox_or_confinement_added: false
+  changed_files:
+    - agent_runtime/executor.py
+    - agent_runtime/session.py
+    - tests/test_tool_contract.py
+    - tests/test_capability_registry.py
+    - README.md
+    - THREAT_MODEL.md
+  terminal_exec:
+    workspace_bound: false
+    network: bounded
+    mutation: destructive
+    cwd_precondition: validated-workspace-descendant
+    process_identity: operator-account
+    host_effect_confinement: none-cwd-only
+  terminal_start:
+    workspace_bound: false
+    network: bounded
+    mutation: destructive
+    cwd_precondition: validated-workspace-descendant
+    process_identity: operator-account
+    host_effect_confinement: none-cwd-only
+  preserved:
+    - executable and argv behavior
+    - child environment behavior
+    - protected Runtime filtering
+    - network authority
+    - mutation authority
+    - process and session lifecycle
+    - PTY and pipe behavior
+    - resource limits
+    - terminal cwd validation
+    - structured fs/repo workspace_bound semantics
+    - ToolContract kernel version 2
+    - CapabilityDescriptor schema version 2
+    - runtime_capabilities request/result schemas 2/3
+    - all public tool request/result schemas
+    - twenty-tool advertised surface
+  live_activation_performed: false
+
+focused_verification:
+  command: ".venv/bin/python -m unittest -v tests.test_tool_contract.TerminalAuthorityContractTests.test_terminal_launch_contracts_publish_truthful_authority tests.test_capability_registry.CapabilityRegistryTests.test_descriptor_schema_and_advertisement_are_exact tests.test_capability_registry.CapabilityRegistryTests.test_runtime_capabilities_full_filter_preserves_registry_order_and_global_counts tests.test_terminal_exec.TerminalExecTests.test_requires_absolute_cwd_inside_workspace_after_realpath tests.test_terminal_session.TerminalSessionTests.test_persistent_child_uses_literal_argv_workspace_guard_and_minimal_environment"
+  result: PASS
+  tests: 5
+  failures: 0
+  errors: 0
+  predicates:
+    - terminal_exec workspace_bound=false with network=bounded and mutation=destructive
+    - terminal_start workspace_bound=false with network=bounded and mutation=destructive
+    - cwd precondition remains validated-workspace-descendant
+    - terminal_exec rejects outside-workspace cwd
+    - terminal_start rejects outside-workspace cwd
+    - runtime_capabilities full source descriptors expose corrected authority values
+    - descriptor schema and public schema versions remain unchanged
+  diff_check:
+    command: "git diff --check"
+    result: PASS
+
+authoritative_verification:
+  required: true
+  command: "./verify"
+  invocation_count: 1
+  result: PASS
+  carrier:
+    mode: pipe
+    durability: runtime_restart
+    start_identity: "0199000000000000000000000000000f"
+    session_id: "a704c17844e9827a"
+  initial_start_response: "INVALID_ARGUMENT: durable job owner identity no longer matches the persisted process instance"
+  active_reconciliation_response: "INVALID_ARGUMENT: durable job owner identity cannot be established while execution remains active"
+  reconciliation: "No replay. Read-only process observation proved the exact verify_tests.py process tree remained active; terminal_poll with the same start_identity recovered the persisted terminal result after natural exit."
+  lifecycle: COMPLETED
+  termination_reason: natural_exit
+  exit_code: 0
+  profile: qualification
+  modules_selected: 62
+  modules_completed: 62
+  tests_completed: 880
+  duration_seconds: 97.444
+  dropped_output_bytes: 0
+
+documentation:
+  result: PASS
+  canonical_statement: "For terminal tools, AGENT_RUNTIME_WORKSPACE_ROOT constrains cwd only; it does not confine absolute-path filesystem/process/network effects available to the operator UID."
+  files:
+    - README.md
+    - THREAT_MODEL.md
+
+effect_accounting:
+  canonical_verify:
+    authorized: 1
+    consumed: 1
+    remaining: 0
+  distribution_build:
+    authorized: 0
+    consumed: 0
+  archive_build:
+    authorized: 0
+    consumed: 0
+  install_prebuilt:
+    authorized: 0
+    consumed: 0
+  commit_cutover:
+    authorized: 0
+    consumed: 0
+  rollback_cutover:
+    authorized: 0
+    consumed: 0
+  menu_bar_relaunch:
+    authorized: 0
+    consumed: 0
+  runtime_restart:
+    authorized: 0
+    consumed: 0
+  runtime_explicit_start:
+    authorized: 0
+    consumed: 0
+  runtime_explicit_stop:
+    authorized: 0
+    consumed: 0
+  plugin_reload_or_reconnect:
+    authorized: 0
+    consumed: 0
+  credential_rotation:
+    authorized: 0
+    consumed: 0
+  physical_reboot:
+    authorized: 0
+    consumed: 0
+  new_security_permission:
+    authorized: 0
+    consumed: 0
+  version_tag_create:
+    authorized: 0
+    consumed: 0
+  github_release_publish:
+    authorized: 0
+    consumed: 0
+  branch_or_pr_creation:
+    authorized: 0
+    consumed: 0
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "terminal_exec and terminal_start ToolContract authority now publish workspace_bound=false while network remains bounded and mutation remains destructive."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "Both contracts retain cwd=validated-workspace-descendant; existing terminal owner regressions still reject cwd outside AGENT_RUNTIME_WORKSPACE_ROOT."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "Implementation changes only the two authority literals plus contract metadata wording, focused tests, and documentation. No terminal execution path or sandbox behavior changed."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "Focused registry/schema tests pass: ToolContract kernel 2, CapabilityDescriptor schema 2, runtime_capabilities 2/3, terminal request/result schemas, and the twenty-tool surface remain unchanged."
+  - criterion_id: AC-5
+    status: PASS
+    evidence: "README.md and THREAT_MODEL.md state that workspace_root constrains terminal cwd only and does not confine operator-UID filesystem/process/network effects."
+  - criterion_id: AC-6
+    status: PASS
+    evidence: "Focused proof passes 5/5 and exactly one canonical ./verify completes 62/62 modules and 880 tests with exit 0; no live/release effect was consumed."
+  - criterion_id: AC-7
+    status: PASS
+    evidence: "Implementation candidate aac9016a2f2c7b22f669b5332915e1d59bcaf891 is published on main. Final clean synchronized MAIN ONLY closure is established by post-report publication observation rather than self-attested inside this report."
+
+deviations:
+  - "The sole canonical verifier carrier returned post-dispatch durable owner-identity ambiguity. The active verifier process tree was reconciled read-only and the persisted result was recovered with the same start_identity after natural exit; no second verifier invocation occurred."
+
+blocking_findings: []
