@@ -1,8 +1,8 @@
 protocol_version: 3
 
 task_id: TASK-0191
-task_revision: 3
-report_revision: 3
+task_revision: 4
+report_revision: 4
 state: REPORTED
 
 task_source:
@@ -13,8 +13,8 @@ execution:
   branch:
     name: main
     role: canonical
-  authorized_base_head: "df4800efdad3275effa283b4466b74c72fd69bb7"
-  final_execution_head: "bf7ce294573cd615f059ade8ee2caa28a2792f1c"
+  authorized_base_head: "b7233a5553e657765de1e08945deeb674c835d5b"
+  final_execution_head: "7dfcd49fa0caa614e9a3ec6171194cb48f74affe"
 
 skill_library:
   repository: phatnguyen03022001/agent-foundation
@@ -40,44 +40,41 @@ capability_preflight:
 authoritative_verification:
   required: true
   performed: true
-  result: FAIL
+  result: PASS
   command: "./verify"
   invocation_count: 1
-  start_identity: "19130000000000000000000000000005"
-  session_id: "8b3bd85c0e813451"
-  exit_code: 1
+  start_identity: "19140000000000000000000000000006"
+  session_id: "c9984f95f1800143"
+  exit_code: 0
   modules_selected: 62
-  modules_completed: 41
-  tests_completed: 572
+  modules_completed: 62
+  tests_completed: 857
   retry_count: 0
-  evidence: "The sole revision-3 canonical verifier invocation ran through a runtime_restart durable pipe and completed naturally with exit 1. The targeted tests.test_pressure_concurrency module passed 1/1 inside that durable verifier. Different out-of-scope modules then failed: tests.test_failure_effect_contract reported one failure and two errors involving ambient durable-recovery/capacity state, and tests.test_task0057_admission reported one failure and four errors involving exhausted/shared session-capacity state and cleanup. No second ./verify invocation was dispatched."
+  evidence: "The sole revision-4 canonical verifier invocation ran through a runtime_restart durable pipe and completed naturally with exit 0. All 62 selected modules completed and all 857 tests passed. No second ./verify invocation was dispatched."
 
-pushed: false
+pushed: true
 
 acceptance_evidence:
   - criterion_id: AC-1
     status: PASS
-    evidence: "Implementation candidate bf7ce294573cd615f059ade8ee2caa28a2792f1c is the direct child of exact revision-3 base df4800efdad3275effa283b4466b74c72fd69bb7 and changes only tests/test_pressure_concurrency.py. The test now patches session._MANAGER to a fixture-owned TerminalSessionManager with fixture-owned durable state and admission."
+    evidence: "Implementation candidate 7dfcd49fa0caa614e9a3ec6171194cb48f74affe is the direct child of exact revision-4 base b7233a5553e657765de1e08945deeb674c835d5b and changes only tests/test_failure_effect_contract.py and tests/test_task0057_admission.py. Failure-effect managers now use fixture-owned durable state. Admission tests bind executor.execute_terminal to a fixture-owned session._MANAGER with six-slot admission and fixture-owned durable state, while each local manager also has a fixture-owned durable root."
   - criterion_id: AC-2
     status: PASS
-    evidence: "The test still uses ThreadPoolExecutor(max_workers=6), executor.map(run, range(6)), TerminalSessionManager(max_active_sessions=6), and HeavyExecutionAdmission(6). Each operation still executes a real sys.executable subprocess through agent_runtime.executor.execute_terminal. The exact test passed 1/1 and the full tests.test_pressure_concurrency module passed 1/1 before canonical verification."
+    evidence: "Standalone tests.test_failure_effect_contract passed 18/18 and tests.test_task0057_admission passed 6/6. Existing failure/effect expectations, six-slot admission, seventh-request fail-fast behavior, cleanup assertions, concurrency, and real subprocess execution were preserved."
   - criterion_id: AC-3
     status: PASS
-    evidence: "One focused runtime_restart proof completed naturally with exit 0 before canonical verification: start_identity 19130000000000000000000000000003, session_id 36b95db89a89918d. The exact six-within-six pressure test passed 1/1 while launched under the relevant ambient durable-session condition. No focused durable replay occurred."
+    evidence: "One combined focused runtime_restart proof ran both affected modules under the relevant ambient durable-session condition and completed naturally with exit 0: start_identity 19140000000000000000000000000003, session_id 750f156dcd1b08d8, 24/24 tests PASS. No focused durable replay occurred."
   - criterion_id: AC-4
     status: PASS
-    evidence: "Direct comparison preserved revision-1 production bytes across start.sh, agent_runtime/session.py, agent_runtime/capacity.py, agent_runtime/executor.py, and macOS Core/MenuBar sources. tests/test_protected_runtime.py remained byte-identical to revision-2 candidate 4ec736792c8322b37a5387157a0fd636f13d437c."
+    evidence: "Before canonical verification, a bounded read-only AST/source audit covered all 62 qualification-selected modules for TerminalSessionManager/default durable state, executor.execute_terminal/process-global session._MANAGER, and shared global admission mutation. Nine modules contained relevant patterns. Five were already fixture-owned after accepted/current fixes; tests.test_protected_runtime, tests.test_task0145_unified_lifecycle, and tests.test_terminal_exec had already passed under the revision-3 durable verifier; tests.test_terminal_session patches default_durable_root to fixture storage for its local manager tests and exposed no credible same-class x6/shared-admission blocker. No additional proven blocker was found, so the verifier budget was not knowingly spent against a known same-class defect."
   - criterion_id: AC-5
-    status: BLOCKED
-    evidence: "Exactly one revision-3 ./verify invocation completed conclusively with exit 1. The targeted pressure-concurrency module passed in that invocation, but tests.test_failure_effect_contract and tests.test_task0057_admission failed for separate out-of-scope shared-state/capacity reasons. Revision 3 forbids a second verifier invocation or out-of-scope repair."
+    status: PASS
+    evidence: "Direct comparison preserved revision-1 production bytes, revision-2 tests/test_protected_runtime.py bytes, and revision-3 tests/test_pressure_concurrency.py bytes. The revision-4 implementation worktree contained only the two authorized test-module changes before commit."
   - criterion_id: AC-6
-    status: BLOCKED
-    evidence: "The implementation/report chain is prepared for one non-force main publication and TASK-0190 revision-8 effects remain untouched. This report does not self-attest its own future remote publication or final synchronized-main consequence."
+    status: PASS
+    evidence: "Exactly one revision-4 ./verify invocation completed PASS with attributable durable identity, 62/62 modules and 857 tests, exit 0, and no retry or ambiguous outcome."
+  - criterion_id: AC-7
+    status: PASS
+    evidence: "Implementation candidate 7dfcd49fa0caa614e9a3ec6171194cb48f74affe was published non-force to main before report authorship. TASK-0190 revision-8 effects were not consumed. This report does not self-attest its own later publication/final synchronized-main consequence, which is established by post-report remote observation."
 
-blockers:
-  - "The sole authorized revision-3 canonical ./verify invocation conclusively failed after F-0191-002 itself was closed and tests.test_pressure_concurrency passed inside the durable verifier."
-  - "tests.test_failure_effect_contract failed outside revision-3 scope with ambient durable-recovery/capacity interference: one failure and two errors."
-  - "tests.test_task0057_admission failed outside revision-3 scope with shared session/admission capacity and cleanup interference: one failure and four errors."
-  - "Revision-3 local_auto_fix is false, scope expansion is forbidden, and the canonical verifier budget is consumed. No second ./verify invocation or out-of-scope correction is authorized."
-
-result: BLOCKED
+result: PASS
