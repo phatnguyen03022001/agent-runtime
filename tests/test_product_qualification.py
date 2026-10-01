@@ -13,9 +13,12 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from tests import test_runtime_config as config_owner
+from tests import test_candidate_cutover as cutover_owner
+from tests import test_supervised_lifecycle as lifecycle_owner
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -167,3 +170,158 @@ class ProductQualificationTests(unittest.TestCase):
             expected_reason="CONTROL_PLANE_UNAVAILABLE",
             malformed_utf8=True,
         )
+
+    def test_q05_removed_configured_workspace_fails_without_consumer_state_mutation(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="task0200-workspace-") as raw:
+            root = Path(raw).resolve()
+            home = root / "home"
+            workspace = root / "workspace"
+            workspace.mkdir()
+            state = home / "Library/Application Support/Agent Runtime"
+            state.mkdir(parents=True)
+            canonical = state / "runtime.env"
+            values = {
+                "CONTROL_PLANE_API_KEY": "Q05_SYNTHETIC_SECRET",
+                "CONTROL_PLANE_TUNNEL_ID": config_owner.RuntimeConfigTests.TUNNEL_ID,
+                "AGENT_RUNTIME_WORKSPACE_ROOT": str(workspace),
+                "AGENT_RUNTIME_GIT_NAME": "Q05 Synthetic Operator",
+                "AGENT_RUNTIME_GIT_EMAIL": "q05@example.invalid",
+            }
+            canonical.write_bytes(config_owner.runtime_config._prebuilt_payload(values))
+            canonical.chmod(0o600)
+            (state / "protected-runtime-running").touch()
+            (state / "current-payload").write_text("a" * 64 + "\n")
+            before = {path.relative_to(home): path.read_bytes() for path in home.rglob("*") if path.is_file()}
+            info = canonical.stat()
+            identity = (info.st_dev, info.st_ino, stat.S_IMODE(info.st_mode))
+            workspace.rmdir()
+            client = config_owner.RuntimeConfigTests()._write_tunnel_client(root, output="{}", exit_code=0)
+            client.write_text("#!/bin/sh\n: > " + shlex.quote(str(root / "client-called")) + "\nexit 99\n")
+            env = {"HOME": str(home), "PATH": str(client.parent), "TMPDIR": str(root),
+                   "LANG": "C", "PYTHONDONTWRITEBYTECODE": "1"}
+            results = []
+            for _ in range(2):
+                result = subprocess.run(
+                    [sys.executable, str(ROOT / "macos/runtime_config.py"), "--reconfigure-stdin", str(canonical)],
+                    input=json.dumps(values), env=env, cwd=root, capture_output=True,
+                    text=True, check=False, timeout=20,
+                )
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(json.loads(result.stdout)["reason_code"], "WORKSPACE_UNAVAILABLE")
+                self.assertEqual(result.stderr, "")
+                self.assertNotIn(values["CONTROL_PLANE_API_KEY"], result.stdout)
+                results.append(result.stdout)
+            self.assertEqual(results[0], results[1])
+            self.assertFalse((root / "client-called").exists())
+            self.assertEqual({path.relative_to(home): path.read_bytes() for path in home.rglob("*") if path.is_file()}, before)
+            info = canonical.stat()
+            self.assertEqual((info.st_dev, info.st_ino, stat.S_IMODE(info.st_mode)), identity)
+
+    def test_q06_foreign_and_ambiguous_port_ownership_grants_no_signal_or_rebind_authority(self) -> None:
+        for pids in ("777", "777\n778"):
+            with self.subTest(pids=pids):
+                owner = lifecycle_owner.SupervisedLifecycleTests()
+                owner.setUp()
+                try:
+                    # All process observations are synthetic, including the second PID.
+                    ps = owner.bin / "ps"
+                    ps.write_text("#!/bin/sh\nprintf '%s\\n' '/usr/bin/python3 -m http.server 8080'\n")
+                    launchctl = owner.bin / "launchctl"
+                    original = launchctl.read_text()
+                    launchctl.write_text(original.replace(
+                        "case \"$1\" in\n",
+                        "printf '%s\\n' \"$1\" >> \"$HOME/fake-launchd/actions.log\"\ncase \"$1\" in\n", 1,
+                    ))
+                    env = {"FAKE_FOREIGN_PORT_PID": pids}
+                    status = owner.run_status_json(extra_env=env)
+                    self.assertEqual(status["state"], "attention")
+                    self.assertEqual(status["control"], "none")
+                    for action in ("start", "stop", "restart"):
+                        result = owner.run_start(action, extra_env=env)
+                        self.assertNotEqual(result.returncode, 0)
+                    log = owner.state / "actions.log"
+                    if log.exists():
+                        self.assertTrue(set(log.read_text().splitlines()) <= {"print"})
+                    self.assertFalse((owner.state / "starts.log").exists())
+                    self.assertFalse((owner.state / "runtime.pid").exists())
+                    self.assertFalse((owner.home / "Library/Application Support/Agent Runtime/protected-runtime-running").exists())
+                finally:
+                    owner.tearDown()
+
+    def _zero_cost_fixture(self, raw: str):
+        owner = cutover_owner.CandidateCutoverTests()
+        cutover, fx = owner._zero_cost_collision_fixture(raw)
+        predecessor = owner._prepare_zero_cost_persistent_current_predecessor(cutover, fx)
+        # Make predecessor/candidate distinguishable without altering the sealed candidate.
+        (fx["target"] / "predecessor-generation").write_text("synthetic predecessor\n")
+        return cutover, fx, predecessor
+
+    def _cutover(self, cutover, fx, **kwargs):
+        return cutover.cutover_candidate(
+            fx["app"], fx["handoff"], payload_release=fx["payload_release"],
+            target_app=fx["target"],
+            ui_plist=fx["home"] / "Library/LaunchAgents/com.picmao.agent-runtime-ui.plist",
+            runtime_plist=fx["home"] / "Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist",
+            state_dir=fx["state_dir"], transaction_dir=fx["transaction"],
+            home=fx["home"], launchctl=fx["launchctl"], uid=os.getuid(), **kwargs,
+        )
+
+    def test_q07_interrupted_zero_cost_before_and_after_swap_restores_exact_predecessor(self) -> None:
+        for stage, phase in (("after_predecessor_shutdown", "PRE_SWAP"), ("after_app_swap", "APP_SWAPPED")):
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory(prefix="task0200-cutover-") as raw:
+                cutover, fx, predecessor = self._zero_cost_fixture(raw)
+                before = cutover._rollback_app_closure(fx["target"])
+                config = (fx["state_dir"] / "runtime.env").read_bytes()
+                real_inject = cutover._inject
+
+                def interrupt(failures, current):
+                    if current == stage:
+                        raise KeyboardInterrupt("synthetic interruption")
+                    return real_inject(failures, current)
+
+                with mock.patch.object(cutover, "_inject", side_effect=interrupt):
+                    with self.assertRaises(KeyboardInterrupt):
+                        self._cutover(cutover, fx)
+                metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
+                self.assertEqual(metadata["kind"], "zero-cost")
+                self.assertEqual(metadata["phase"], phase)
+                result = cutover.rollback_transaction(fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=os.getuid())
+                self.assertEqual(result["status"], "ROLLED_BACK")
+                self.assertEqual(cutover._rollback_app_closure(fx["target"]), before)
+                self.assertEqual(predecessor["current_plist"].read_bytes(), predecessor["predecessor_bytes"])
+                self.assertTrue(predecessor["desired"].exists())
+                self.assertEqual((fx["state_dir"] / "runtime.env").read_bytes(), config)
+                self.assertFalse(fx["transaction"].exists())
+
+    def test_q07_interrupted_zero_cost_with_unverified_target_retains_evidence_and_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="task0200-ambiguous-cutover-") as raw:
+            cutover, fx, _ = self._zero_cost_fixture(raw)
+            real_inject = cutover._inject
+
+            def interrupt(failures, stage):
+                if stage == "after_app_swap":
+                    raise KeyboardInterrupt("synthetic interruption")
+                return real_inject(failures, stage)
+
+            with mock.patch.object(cutover, "_inject", side_effect=interrupt):
+                with self.assertRaises(KeyboardInterrupt):
+                    self._cutover(cutover, fx)
+            # The installed generation no longer matches the transaction's sealed identity.
+            helper = fx["target"] / "Contents/MacOS/AgentRuntimeRuntimeService"
+            helper.write_text("#!/bin/sh\n# foreign synthetic generation\nexit 0\n")
+            with self.assertRaises(cutover.provenance.PackageProvenanceError):
+                cutover.provenance.validate_zero_cost_candidate(
+                    fx["target"], fx["handoff"], fx["payload_release"],
+                )
+            before = cutover._rollback_app_closure(fx["target"])
+            try:
+                result = cutover.rollback_transaction(fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=os.getuid())
+            except cutover.CutoverError:
+                self.assertTrue((fx["transaction"] / "metadata.json").is_file())
+                self.assertEqual(cutover._rollback_app_closure(fx["target"]), before)
+            else:
+                self.fail(
+                    "Unsafe interrupted zero-cost recovery accepted an unverified installed generation: "
+                    f"status={result['status']}, transaction_retained={fx['transaction'].exists()}, "
+                    f"target_preserved={cutover._rollback_app_closure(fx['target']) == before}"
+                )

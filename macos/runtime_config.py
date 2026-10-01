@@ -422,7 +422,7 @@ def validate_tunnel_access(
             timeout=TUNNEL_LOOKUP_TIMEOUT_SECONDS,
             env=_safe_tunnel_environment(source, api_key),
         )
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError, UnicodeDecodeError):
         raise ConfigurationAdmissionError(
             "CONTROL_PLANE_UNAVAILABLE",
             "Tunnel validation is temporarily unavailable. Try again later.",

@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shlex
 import subprocess
 import sys
 import stat
@@ -42,6 +43,81 @@ class RuntimeConfigTests(unittest.TestCase):
         env["PATH"] = str(client.parent)
         env.pop("OPENAI_ADMIN_KEY", None)
         return env
+
+    def _assert_undecodable_response_is_private_admission_error(self, stream: str) -> None:
+        for existing in (False, True):
+            with self.subTest(stream=stream, existing=existing), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw).resolve()
+                home = root / "home"
+                workspace = root / "workspace"
+                home.mkdir()
+                workspace.mkdir()
+                canonical = home / "Library/Application Support/Agent Runtime/runtime.env"
+                secret = "UNDECODABLE_SUBMITTED_SYNTHETIC_KEY"
+                marker = "UNDECODABLE_SYNTHETIC_RESPONSE_MARKER"
+                values = {
+                    "CONTROL_PLANE_API_KEY": secret,
+                    "CONTROL_PLANE_TUNNEL_ID": self.TUNNEL_ID,
+                    "AGENT_RUNTIME_WORKSPACE_ROOT": str(workspace),
+                    "AGENT_RUNTIME_GIT_NAME": "Synthetic Decoder Operator",
+                    "AGENT_RUNTIME_GIT_EMAIL": "decoder@example.invalid",
+                }
+                before = None
+                identity = None
+                if existing:
+                    canonical.parent.mkdir(parents=True)
+                    canonical.write_bytes(runtime_config._prebuilt_payload({
+                        **values, "CONTROL_PLANE_API_KEY": "PREDECESSOR_SYNTHETIC_KEY",
+                    }))
+                    canonical.chmod(0o600)
+                    before = canonical.read_bytes()
+                    info = canonical.stat()
+                    identity = (info.st_dev, info.st_ino, stat.S_IMODE(info.st_mode))
+                client = self._write_tunnel_client(root, output="", exit_code=0)
+                argv_capture = root / "argv.txt"
+                redirect = " >&2" if stream == "stderr" else ""
+                client.write_text(
+                    "#!/bin/sh\n"
+                    + "printf '%s\\n' \"$@\" > " + shlex.quote(str(argv_capture)) + "\n"
+                    + ("printf '%s\\n' '{}'\n" if stream == "stderr" else "")
+                    + f"printf '\\377{marker}%s' \"$CONTROL_PLANE_API_KEY\"{redirect}\n"
+                    + "exit 0\n"
+                )
+                result = subprocess.run(
+                    [sys.executable, str(ROOT / "macos/runtime_config.py"),
+                     "--reconfigure-stdin" if existing else "--prebuilt-stdin", str(canonical)],
+                    input=json.dumps(values).encode(), capture_output=True, check=False,
+                    timeout=20, cwd=root,
+                    env={"HOME": str(home), "PATH": str(client.parent), "TMPDIR": str(root),
+                         "LANG": "C", "LC_ALL": "C", "PYTHONUTF8": "1",
+                         "PYTHONDONTWRITEBYTECODE": "1"},
+                )
+                if existing:
+                    self.assertEqual(canonical.read_bytes(), before)
+                    info = canonical.stat()
+                    self.assertEqual((info.st_dev, info.st_ino, stat.S_IMODE(info.st_mode)), identity)
+                else:
+                    self.assertFalse(canonical.exists())
+                output = result.stdout + result.stderr
+                self.assertNotIn(b"\xff", output)
+                self.assertNotIn(marker.encode(), output)
+                self.assertNotIn(secret.encode(), output)
+                self.assertNotIn(secret, argv_capture.read_text())
+                self.assertLess(len(output), 1024)
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(result.stderr, b"")
+                self.assertEqual(json.loads(result.stdout.decode("utf-8")), {
+                    "schema_version": 1,
+                    "status": "error",
+                    "reason_code": "CONTROL_PLANE_UNAVAILABLE",
+                    "message": "Tunnel validation is temporarily unavailable. Try again later.",
+                })
+
+    def test_undecodable_stdout_maps_private_structured_error_and_preserves_config(self) -> None:
+        self._assert_undecodable_response_is_private_admission_error("stdout")
+
+    def test_undecodable_stderr_maps_private_structured_error_and_preserves_config(self) -> None:
+        self._assert_undecodable_response_is_private_admission_error("stderr")
 
     def test_tunnel_child_environment_keeps_only_bounded_process_context_and_submitted_key(self) -> None:
         source = {
