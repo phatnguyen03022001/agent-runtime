@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest import mock
 
-from agent_runtime import capacity
+from agent_runtime import capacity, session
 from agent_runtime.executor import execute_terminal
 
 
@@ -43,8 +43,17 @@ class PressureConcurrencyTests(unittest.TestCase):
             return result["exit_code"], result["stdout"]
 
         admission = capacity.HeavyExecutionAdmission(6)
-        with mock.patch.object(capacity, "_HEAVY_EXECUTION_ADMISSION", admission), ThreadPoolExecutor(max_workers=6) as executor:
-            results = list(executor.map(run, range(6)))
+        manager = session.TerminalSessionManager(
+            max_active_sessions=6,
+            admission=admission,
+            durable_state_root=Path(self.temp.name) / "durable-state",
+            start_reaper=False,
+        )
+        try:
+            with mock.patch.object(session, "_MANAGER", manager), ThreadPoolExecutor(max_workers=6) as executor:
+                results = list(executor.map(run, range(6)))
+        finally:
+            manager.shutdown()
 
         self.assertEqual([code for code, _output in results], [0] * 6)
         self.assertEqual(
