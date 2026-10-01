@@ -1,0 +1,83 @@
+protocol_version: 3
+
+task_id: TASK-0192
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0192/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  authorized_base_head: "9e5ecb8c9181edaa993432bfab32db52a80772c7"
+  final_execution_head: "c5068b94400ba1e9fc8a73f06453ca18410a39fe"
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  authorized_revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - repository_observation
+    - scoped_repository_write
+    - deterministic_test_execution
+    - durable_reconcilable_verification
+    - non_force_main_publication
+  available:
+    - repository_observation
+    - scoped_repository_write
+    - deterministic_test_execution
+    - durable_reconcilable_verification
+    - non_force_main_publication
+  missing: []
+  passed: true
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: PASS
+  command: "./verify"
+  invocation_count: 1
+  start_identity: "19210000000000000000000000000001"
+  session_id: "33a6fbbb378c1415"
+  exit_code: 0
+  modules_selected: 62
+  modules_completed: 62
+  tests_completed: 858
+  retry_count: 0
+  evidence: "The sole TASK-0192 canonical verifier invocation ran as a runtime_restart durable pipe. The initial start response surfaced DURABLE_OWNER_LOST while the same persisted execution remained active; no second verifier was dispatched. The exact durable job was reconciled to COMPLETED/natural_exit/exit 0, then the same session was polled successfully. Final output recorded 62/62 modules and 858 tests PASS."
+
+pushed: true
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "Implementation candidate c5068b94400ba1e9fc8a73f06453ca18410a39fe changes the current Runtime LaunchAgent contract to RunAtLoad=false and KeepAlive=false, removes protected-runtime-running from current start/stop/restart/status and RuntimeService execution, and makes RuntimeService own exactly one explicitly launched child/process group before exiting without requesting recovery. Menu-bar SMAppService.mainApp login behavior remains unchanged. Focused lifecycle proof plus canonical tests.test_supervised_lifecycle 19/19 prove crash stays stopped until explicit Start and stale predecessor markers do not drive current availability."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "start.sh keeps positive current LaunchAgent identity and protected-port ownership checks. Start explicitly kickstarts one generation and waits for readiness; Stop signals only managed canonical ownership and safely no-ops when stopped; Restart is explicit bounded Stop+Start; read-only/external Runtime remains non-controllable. Focused lifecycle groups passed, and canonical tests.test_supervised_lifecycle completed 19/19 PASS."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "Canonical internal status JSON is explicitly revised from schema 1 to schema 2 and removes the desired field. NativeRuntimeBackend requires schema 2 and preserves TASK-0191 availability/control separation: healthy managed serving remains owned/running, healthy read-only serving remains external/running, stopped remains stopped, and attention remains ambiguous. ProtectedRuntimeTests passed 5/5 focused and 5/5 in the full Swift run."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "AppDelegate now uses StatusRefreshCoalescer: at most one observation is active and repeated timer/popover requests collapse to one pending follow-up. The follow-up is enqueued only after the active observation completes on the existing serial runtimeQueue, so lifecycle work queued during that observation cannot sit behind an unbounded refresh backlog. Deterministic testStatusRefreshCoalescerBoundsManyRequestsToOneActiveAndOneFollowUp passed, the existing 2-second cadence is unchanged, and full Swift MenuBar tests passed 50/50."
+  - criterion_id: AC-5
+    status: PASS
+    evidence: "Current candidate cutover materializes KeepAlive=false, leaves the new LaunchAgent loaded but idle, creates no current desired marker, and does not kickstart Runtime after fresh cutover. Payload activation preserves actual positively managed running/stopped truth instead of marker intent; stopped stays stopped. Uninstall observes canonical status and only stops/restarts a positively managed generation. Exact older desired-state restoration is retained only for bounded predecessor transaction rollback compatibility. Focused current cutover tests passed, tests.test_uninstall passed 14/14, legacy cutover/recovery regression passed 29/29, and canonical tests.test_candidate_cutover passed 113/113."
+  - criterion_id: AC-6
+    status: PASS
+    evidence: "No live install, cutover, rollback, recovery, Runtime Start/Stop/Restart, LaunchServices cleanup, or physical reboot was performed. TASK-0190 revision-8 effect authority was not consumed. No MCP registry, public tool schema, capacity setting, dependency, service topology, or version/release metadata changed; canonical surface/regression verification passed."
+  - criterion_id: AC-7
+    status: PASS
+    evidence: "Focused Python lifecycle/cutover/uninstall/regression tests were green before canonical verification. The exact full Swift command xcrun swift test --package-path macos passed 85/85 tests: MenuBar 50/50 and Core 35/35. Exactly one durable/reconcilable ./verify invocation then completed 62/62 modules and 858 tests with exit 0 and retry_count 0; its transient owner-loss response was reconciled to the same execution rather than replayed."
+  - criterion_id: AC-8
+    status: PASS
+    evidence: "Implementation candidate c5068b94400ba1e9fc8a73f06453ca18410a39fe is the direct child of exact base 9e5ecb8c9181edaa993432bfab32db52a80772c7 and was published non-force to main before report authorship. The candidate simplifies existing owners in place and introduces no new service or dependency. One local companion output line in install.sh was updated because it was part of the already-authorized current-install semantic surface and otherwise falsely claimed persisted desired state; installer behavior was not changed. This report does not self-attest its own later publication/final synchronized-main consequence, which is established by post-report remote observation."
+
+result: NEEDS_REVIEW
