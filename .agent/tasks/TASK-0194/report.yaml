@@ -1,10 +1,10 @@
 protocol_version: 3
 
 task_id: TASK-0194
-task_revision: 8
-report_revision: 8
+task_revision: 9
+report_revision: 9
 state: REPORTED
-result: BLOCKED
+result: PASS
 
 task_source:
   path: .agent/tasks/TASK-0194/task.yaml
@@ -15,172 +15,128 @@ execution:
     name: main
     role: canonical
   execution_surface: CHATGPT_LOCAL
-  exact_task_base: "4eb00e891f21fb977e6d5f68b65808b386daa57f"
-  implementation_candidate: "5fb6339cb6e7603cbef1cd2353efb8456ee7dbf2"
-  implementation_parent: "4eb00e891f21fb977e6d5f68b65808b386daa57f"
-  implementation_tree: "a33f27a33205c3602f6cda187c23ea8bd4c91e1"
+  exact_task_base: "90551667dca7cc385e0128e543809ae5d38ab71c"
+  implementation_candidate: "733056d287163190d82b019b163039d7f78965d3"
+  implementation_parent: "90551667dca7cc385e0128e543809ae5d38ab71c"
+  implementation_tree: "7561d8021adec1d09eb9e442cc3fa35569af9528"
 
 revision_basis:
-  revision_7_report_commit: "d515bd6aef4caf34453524fa9bef4c8947f49353"
-  revision_7_review_commit: "ea632f3f2e31d2bd8db5db3f9fc8044c201a2914"
-  blocking_finding_target: "F-0194-005"
+  revision_8_base: "4eb00e891f21fb977e6d5f68b65808b386daa57f"
+  revision_8_candidate: "5fb6339cb6e7603cbef1cd2353efb8456ee7dbf2"
+  revision_8_report_commit: "8dbcdd84bc35ead4709dce7e3bfa4769fa1bd0d7"
+  revision_8_review_commit: "ffd91e928145fbf6a3c875b32f90d0557c15e124"
+  blocking_finding_closed: "F-0194-006"
 
 source_gate:
   result: PASS
-  revision_7_report_to_revision_8_base_delta:
+  revision_8_candidate_to_revision_9_base:
     changed_paths:
+      - ".agent/tasks/TASK-0194/report.yaml"
       - ".agent/tasks/TASK-0194/review.yaml"
       - ".agent/tasks/TASK-0194/task.yaml"
     product_source_changes: false
+  evidence: "The published revision-8 dual-identity implementation remained byte-for-byte unchanged at revision-9 base before the authorized doctor-only correction."
 
 scope_control:
   authorized_files_changed:
-    - README.md
-    - agent_runtime/capability_registry.py
-    - agent_runtime/contracts.py
-    - start.sh
-    - tests/test_capability_registry.py
-    - tests/test_mcp_client_conformance.py
-    - tests/test_revision4_runtime_config.py
+    - agent_runtime/doctor.py
+    - tests/test_doctor.py
   unauthorized_files_changed: []
-  doctor_py_changed: false
-  doctor_tests_changed: false
-  telemetry_changed: false
-  package_provenance_changed: false
-  candidate_cutover_changed: false
-  package_app_changed: false
-  install_changed: false
+  revision_8_dual_identity_files_changed: false
+  other_tool_schema_authorities_changed: false
+  runtime_identity_semantics_changed: false
   runtime_version_changed: false
-  tool_surface_changed: false
+  public_tool_surface_changed: false
 
 implementation:
-  legacy_identity:
-    AGENT_RUNTIME_REVISION_semantics: "selected payload source revision"
-    runtime_capabilities_runtime_revision_semantics: "selected payload source revision"
-    preserved: true
-  explicit_identity:
-    AGENT_RUNTIME_PAYLOAD_REVISION: "selected validated payload source revision"
-    AGENT_RUNTIME_SUBSTRATE_REVISION: "validated installed substrate manifest runtime_revision"
-    installed_runtime_revision_equals_payload_revision: true
-    substrate_revision_independent: true
-  source_execution:
-    reserved_identity_synthesis: false
-    ambient_reserved_identity_forwarding: false
-    runtime_revision: null
-    payload_revision: null
-    substrate_revision: null
-  validation:
-    legacy_only_runtime_revision: accepted_as_payload_authority
-    explicit_payload_with_legacy: "must match or import fails closed"
-    substrate_revision: "independently exact lowercase 40-hex when present"
-  runtime_capabilities:
-    request_schema_version: 2
-    result_schema_version: 3
-    response_schema_version: 3
-    new_fields:
-      - payload_revision
-      - substrate_revision
-    advertised_tool_count: 20
-    known_capability_count: 21
-    ordering_and_filter_semantics_changed: false
-    probe_behavior_changed: false
-  installed_start:
-    selected_payload_identity_source: "validated selected payload manifest source_revision"
-    substrate_identity_source: "validated installed runtime-manifest.json runtime_revision"
-    doctor_environment_propagates_all_three_identities: true
-    serve_environment_propagates_all_three_identities: true
-  documentation:
-    README_updated: true
-    request_result_contract: "request v2 / result v3"
-    legacy_alias_defined: true
-    dual_identity_defined: true
+  doctor_schema_authority:
+    runtime_capabilities:
+      request_schema_version: 2
+      result_schema_version: 3
+    previous_stale_result_schema_version: 2
+    correction: "Only _tool_contract_schema_check runtime_capabilities result authority changed from 2 to 3."
+  preserved_authorities:
+    terminal_start: [4, 4]
+    terminal_poll: [4, 4]
+    capacity_observer: [1, 2]
+    fs_read_batch: [1, 2]
+    fs_manage: [1, 1]
+    repo_remote_observer: [1, 1]
+  doctor_dual_package_identity_semantics:
+    substrate_revision: preserved
+    payload_revision: preserved
 
 tdd_evidence:
   red:
-    command: ".venv/bin/python -m unittest tests.test_capability_registry.CapabilityRegistryTests.test_runtime_revision_uses_validated_reserved_process_identity tests.test_capability_registry.CapabilityRegistryTests.test_runtime_capabilities_summary_is_compact_deterministic_and_probe_free tests.test_revision4_runtime_config.Revision4RuntimeConfigTests.test_installed_serve_binds_revision_from_validated_package_manifest"
+    command: ".venv/bin/python -m unittest tests.test_doctor.DoctorContractTests.test_registry_schema_and_governance_checks_reuse_current_authorities tests.test_doctor.DoctorContractTests.test_schema_check_rejects_task0148_schema_version_regression"
     exit_code: 1
-    tests: 3
-    failures: 3
+    tests: 2
+    failures: 2
     decisive_failures:
-      - "PAYLOAD_REVISION/SUBSTRATE_REVISION imports did not exist."
-      - "runtime_capabilities summary omitted payload_revision/substrate_revision."
-      - "installed serve left AGENT_RUNTIME_PAYLOAD_REVISION and AGENT_RUNTIME_SUBSTRATE_REVISION empty."
+      - "Canonical runtime_capabilities request/result (2,3) bundle was rejected because doctor still required (2,2)."
+      - "Stale runtime_capabilities result_schema_version=2 was incorrectly accepted."
   green:
-    command: ".venv/bin/python -m unittest tests.test_capability_registry.CapabilityRegistryTests.test_runtime_revision_uses_validated_reserved_process_identity tests.test_capability_registry.CapabilityRegistryTests.test_runtime_capabilities_summary_is_compact_deterministic_and_probe_free tests.test_revision4_runtime_config.Revision4RuntimeConfigTests.test_installed_serve_binds_revision_from_validated_package_manifest"
+    command: ".venv/bin/python -m unittest tests.test_doctor.DoctorContractTests.test_registry_schema_and_governance_checks_reuse_current_authorities tests.test_doctor.DoctorContractTests.test_schema_check_rejects_task0148_schema_version_regression"
     exit_code: 0
-    tests: 3
+    tests: 2
     result: PASS
+    evidence:
+      - "Canonical runtime_capabilities (2,3) passes."
+      - "Stale runtime_capabilities result schema 2 fails with TOOL_CONTRACT_SCHEMA_MISMATCH."
 
 focused_verification:
-  identity_and_registry:
-    command: ".venv/bin/python -m unittest tests.test_revision4_runtime_config tests.test_capability_registry"
-    result: PASS
-    tests: 21
-  mcp_client_conformance:
-    command: ".venv/bin/python -m unittest tests.test_mcp_client_conformance"
-    result: PASS
-    tests: 6
   doctor:
     command: ".venv/bin/python -m unittest tests.test_doctor"
-    result: FAIL
+    result: PASS
     tests: 21
-    failures: 4
-    root_failure:
-      test: "tests.test_doctor.DoctorContractTests.test_registry_schema_and_governance_checks_reuse_current_authorities"
-      symptom: "tool_contract_schema status is fail instead of pass"
-      downstream_failures:
-        - "test_collect_report_has_exact_inventory_and_composition"
-        - "test_cli_json_is_one_object_deterministic_bounded_and_secret_safe"
-        - "test_no_network_private_data_or_mutation_surface_is_used"
-
-blocking_finding:
-  id: "F-0194-006"
-  severity: BLOCKING
-  description: "Revision 8 explicitly requires runtime_capabilities binding/result schema (request=2,result=3), but agent_runtime/doctor.py::_tool_contract_schema_check still hard-codes runtime_capabilities schema authority as (2,2). The doctor therefore reports TOOL_CONTRACT_SCHEMA_MISMATCH after the required v3 contract change."
-  code_evidence:
-    required_binding: "agent_runtime/capability_registry.py now publishes runtime_capabilities request_schema_version=2 and result_schema_version=3 as required by revision 8."
-    doctor_gate: "agent_runtime/doctor.py line 232 requires schema_versions.get('runtime_capabilities') == (2, 2)."
-    focused_result: "tests.test_doctor runs 21 tests and fails 4; the direct registry/schema doctor test fails because schema.status is fail."
-  authority_conflict:
-    allowed_change_list_excludes:
-      - "agent_runtime/doctor.py"
-      - "tests/test_doctor.py"
-    scope_expansion: forbidden
-    canonical_verify_precondition: "focused identity/registry/conformance/doctor tests must pass before canonical ./verify"
-  disposition: "Stop revision 8 BLOCKED. Do not alter doctor.py or doctor tests outside the explicit change list, do not falsify capability descriptors/schema export to preserve the obsolete (2,2) doctor expectation, and do not spend the canonical ./verify invocation. A revised task must authorize updating the doctor schema-authority expectation from runtime_capabilities (2,2) to (2,3) while preserving doctor dual package identity semantics."
+    failures: 0
+    duration_s: 2.703
 
 canonical_verify:
   authorized: 1
-  consumed: 0
-  remaining: 1
-  result: NOT_RUN
-  reason: "Focused doctor gate failed before canonical verification authority could be spent."
+  invocation_count: 1
+  retry_count: 0
+  command: "./verify"
+  carrier:
+    mode: pipe
+    durability: runtime_restart
+    start_identity: "df194000000000000000000000000001"
+    session_id: "1aa15ef796cfda3a"
+  initial_carrier_result: AMBIGUOUS_OWNER_IDENTITY
+  reconciliation: "No replay. SentinelX observed the exact bash ./verify process. After that process exited, terminal_poll on the same start_identity returned the persisted terminal result."
+  lifecycle: COMPLETED
+  termination_reason: natural_exit
+  exit_code: 0
+  result: PASS
+  modules_completed: 62
+  modules_selected: 62
+  tests_completed: 865
+  duration_s: 94.681
+  profile: qualification
+  doctor_tests_in_verify: 21
 
 acceptance_evidence:
   - criterion_id: AC-1
     status: PASS
-    evidence: "Legacy AGENT_RUNTIME_REVISION remains payload authority. Legacy-only identity is accepted, explicit payload identity agrees with legacy identity, mismatch fails closed, and invalid reserved identities fail closed."
+    evidence: "Canonical schema bundle with runtime_capabilities request=2/result=3 passes _tool_contract_schema_check."
   - criterion_id: AC-2
     status: PASS
-    evidence: "Installed start derives substrate revision from validated installed runtime-manifest.json and propagates it as AGENT_RUNTIME_SUBSTRATE_REVISION without Git/network probing."
+    evidence: "Regression mutating only runtime_capabilities result_schema_version to 2 returns fail with TOOL_CONTRACT_SCHEMA_MISMATCH."
   - criterion_id: AC-3
     status: PASS
-    evidence: "runtime_capabilities request schema remains 2, binding/result/response schema is 3, exact summary includes runtime_revision/payload_revision/substrate_revision, source summary reports all three null, and registry/client conformance tests pass."
+    evidence: "Implementation diff is limited to agent_runtime/doctor.py and tests/test_doctor.py. Revision-8 dual-identity implementation remains unchanged and no unrelated schema authority changed."
   - criterion_id: AC-4
     status: PASS
-    evidence: "Installed serve fixture uses different substrate and payload revisions; both doctor/run tunnel invocations receive runtime_revision=payload_revision and independent substrate_revision. Payload tamper remains fail-closed before execution."
+    evidence: "Complete tests.test_doctor passes 21/21."
   - criterion_id: AC-5
-    status: BLOCKED
-    evidence: "Doctor package dual identity implementation was not changed, but the doctor suite cannot remain healthy because its separate schema-authority gate still hard-codes runtime_capabilities result schema v2."
+    status: PASS
+    evidence: "Exactly one durable/reconcilable revision-9 ./verify invocation completed natural exit 0 with 62/62 modules and 865 tests; no replay occurred."
   - criterion_id: AC-6
     status: PASS
-    evidence: "README documents request v2/result v3 and defines runtime_revision as legacy payload alias plus explicit payload_revision/substrate_revision."
+    evidence: "No build/install/cutover/rollback/Runtime lifecycle/menu-bar/LaunchServices/reboot/release effects occurred; read-only observation confirmed the active rev7 installation remained serving."
   - criterion_id: AC-7
-    status: FAIL
-    evidence: "Identity/registry 21/21 PASS and MCP client conformance 6/6 PASS; doctor 17/21 PASS with 4 failures caused by F-0194-006. Canonical ./verify was correctly not invoked."
-  - criterion_id: AC-8
     status: PASS
-    evidence: "Implementation candidate changes only the seven explicitly authorized source/test/doc files. No live activation effect occurred."
+    evidence: "Implementation candidate is a direct child of exact revision-9 base and changes only the two authorized files; report is persisted separately."
 
 live_preservation:
   observation_only: true
@@ -198,7 +154,8 @@ live_preservation:
 effect_accounting:
   canonical_verify:
     authorized: 1
-    consumed: 0
+    consumed: 1
+    remaining: 0
   distribution_build:
     authorized: 0
     consumed: 0
@@ -237,7 +194,7 @@ effect_accounting:
     consumed: 0
 
 notes:
-  - "No ./verify invocation occurred."
-  - "No build, package, install, cutover, commit-cutover, rollback, Runtime lifecycle, menu-bar, LaunchServices, reboot, permission, tag or release effect occurred."
-  - "The active revision-7 installation remains untouched and serving schema v2 runtime_capabilities until a separately authorized later activation."
-  - "Implementation candidate 5fb6339cb6e7603cbef1cd2353efb8456ee7dbf2 preserves the dual-identity source work for the next authorized continuation."
+  - "No second canonical ./verify invocation occurred."
+  - "No revision-8 source implementation file was changed in revision 9."
+  - "No build, package, install, cutover, rollback, Runtime lifecycle, menu-bar, LaunchServices, reboot, permission, tag, or release effect occurred."
+  - "The active revision-7 installation remains untouched and serving; revision-9 source changes require a separately authorized later activation."
