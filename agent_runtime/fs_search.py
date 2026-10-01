@@ -9,7 +9,14 @@ import time
 
 from .contracts import CapabilityFailure, ContinuationReceiptResult, FsSearchResult, FsSearchResultItem
 from .errors import RuntimeValidationError
-from .fs_safety import FsSafetyError, open_directory_at, open_regular_at, open_validated_cwd, split_descendant
+from .fs_safety import (
+    FsSafetyError,
+    is_sensitive_dotenv_basename,
+    open_directory_at,
+    open_regular_at,
+    open_validated_cwd,
+    split_descendant,
+)
 from .tool_contract import (
     Authority,
     CONTINUATION_CURSOR_MAX_CHARS,
@@ -57,6 +64,8 @@ FS_SEARCH_CONTRACT = ToolContract(
         "root_path": "cwd-relative-directory-or-dot",
         "symlink_traversal": False,
         "git_directory_traversal": False,
+        "sensitive_dotenv_content": "denied-in-content-mode",
+        "path_mode_dotenv_discovery": True,
     },
     bounds={
         "max_files_scanned": MAX_FILES_SCANNED,
@@ -503,6 +512,9 @@ def search_files(
                     last_result_digest = state_hasher.digest()
                     if len(results) >= max_results:
                         boundary_digest = last_result_digest
+                    continue
+
+                if is_sensitive_dotenv_basename(components[-1]):
                     continue
 
                 remaining = MAX_CONTENT_BYTES_SCANNED - bytes_scanned

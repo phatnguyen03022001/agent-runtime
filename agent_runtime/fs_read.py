@@ -8,6 +8,7 @@ import stat
 from .contracts import FsReadErrorCode, FsReadItem
 from .errors import RuntimeValidationError
 from .executor import _validated_cwd_with_identity, _workspace_root
+from .fs_safety import is_sensitive_dotenv_basename
 from .tool_contract import (
     Authority,
     MutationAuthority,
@@ -44,6 +45,7 @@ FS_READ_BATCH_CONTRACT = ToolContract(
             "disallowed_components": ["", ".", ".."],
             "symlink_traversal": False,
             "regular_files_only": True,
+            "sensitive_dotenv_content": "denied",
         },
     },
     bounds={
@@ -345,6 +347,12 @@ def read_files_batch(cwd: str, items: list[FsReadItem]) -> dict[str, object]:
     results: list[dict[str, object]] = []
     try:
         for path, components, start_line, end_line in requests:
+            if is_sensitive_dotenv_basename(components[-1]):
+                results.append(
+                    _error_result(path, start_line, end_line, _ItemFailure("ACCESS_DENIED"))
+                )
+                continue
+
             if batch_scan_bytes >= BATCH_SCAN_LIMIT_BYTES:
                 results.append(
                     _error_result(

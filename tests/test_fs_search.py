@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from agent_runtime import fs_search as fs_search_module
 from agent_runtime.contracts import CapabilityFailure
 from agent_runtime.fs_search import (
     CALL_DEADLINE_SECONDS,
@@ -54,6 +55,11 @@ class FsSearchTests(unittest.TestCase):
         self.assertEqual(MAX_SERIALIZED_RESULT_BYTES, 256 * 1024)
         self.assertEqual(CALL_DEADLINE_SECONDS, 5.0)
         self.assertEqual(LINE_TEXT_MAX_BYTES, 4096)
+        self.assertEqual(
+            FS_SEARCH_CONTRACT.preconditions["sensitive_dotenv_content"],
+            "denied-in-content-mode",
+        )
+        self.assertIs(FS_SEARCH_CONTRACT.preconditions["path_mode_dotenv_discovery"], True)
 
     def test_path_mode_is_literal_recursive_and_deterministic(self) -> None:
         (self.root / "a.txt").write_text("x")
@@ -70,6 +76,50 @@ class FsSearchTests(unittest.TestCase):
         (self.root / "Straße.TXT").write_text("x")
         result = search_files(str(self.root), "STRASSE.txt", "path", case_sensitive=False)
         self.assertEqual([item.path for item in result.results], ["Straße.TXT"])
+
+    def test_sensitive_dotenv_content_is_skipped_before_opening_and_not_counted(self) -> None:
+        (self.root / "nested").mkdir()
+        sensitive_paths = (".env", ".env.local", "nested/.ENV", "nested/.env.LOCAL")
+        public_paths = (".ENV.EXAMPLE", ".env.sample", ".env.template", ".envrc", "notes.txt")
+        payload = "synthetic-dotenv-marker\n"
+        for path in sensitive_paths + public_paths:
+            (self.root / path).write_text(payload, encoding="utf-8")
+
+        original_open = fs_search_module.open_regular_at
+        with patch("agent_runtime.fs_search.open_regular_at", wraps=original_open) as opened:
+            result = search_files(str(self.root), "synthetic-dotenv-marker", "content")
+
+        returned_paths = [item.path for item in result.results]
+        self.assertEqual(set(returned_paths), set(public_paths))
+        self.assertTrue(all(item.line_text == "synthetic-dotenv-marker" for item in result.results))
+        self.assertTrue(all(item.file_sha256 is not None for item in result.results))
+        self.assertEqual(result.bytes_scanned, len(payload.encode("utf-8")) * len(public_paths))
+        opened_paths = ["/".join(call.args[1]) for call in opened.call_args_list]
+        self.assertEqual(set(opened_paths), set(public_paths))
+        self.assertTrue(set(sensitive_paths).isdisjoint(opened_paths))
+
+    def test_path_mode_can_discover_sensitive_dotenv_paths(self) -> None:
+        (self.root / "nested").mkdir()
+        paths = (
+            ".env",
+            ".env.local",
+            ".ENV.EXAMPLE",
+            ".env.sample",
+            ".env.template",
+            ".envrc",
+            "nested/.ENV",
+            "nested/.env.LOCAL",
+        )
+        for path in paths:
+            (self.root / path).write_text("synthetic\n", encoding="utf-8")
+
+        result = search_files(str(self.root), ".env", "path", case_sensitive=False)
+
+        self.assertEqual(set(item.path for item in result.results), set(paths))
+        self.assertTrue(all(item.line_number is None for item in result.results))
+        self.assertTrue(all(item.line_text is None for item in result.results))
+        self.assertTrue(all(item.file_sha256 is None for item in result.results))
+        self.assertEqual(result.bytes_scanned, 0)
 
     def test_content_mode_returns_matching_lines_and_complete_raw_sha256(self) -> None:
         raw = "alpha\nneedle here\nneedle again\n".encode()

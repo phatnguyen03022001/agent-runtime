@@ -34,6 +34,8 @@ Terminal tools execute with the operator account's normal authority. A program r
 
 Therefore the filter is not complete same UID isolation. No allow result grants lifecycle authority.
 
+Structured `fs_read_batch` and `fs_search` content mode also block sensitive dotenv basenames as defense-in-depth against accidental disclosure. This is not a sandbox or same-UID confidentiality boundary: terminal tools and arbitrary same-UID processes can still read user-readable workspace files. Secrets that must remain confidential from the agent should not be stored in its workspace.
+
 ## Explicit non-goals
 
 The Runtime does not claim to prevent:

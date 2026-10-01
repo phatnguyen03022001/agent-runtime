@@ -8,6 +8,16 @@ from pathlib import Path
 from .executor import _validated_cwd_with_identity, _workspace_root
 
 
+_PUBLIC_DOTENV_BASENAMES = frozenset({".env.example", ".env.sample", ".env.template"})
+
+
+def is_sensitive_dotenv_basename(basename: str) -> bool:
+    normalized = basename.casefold()
+    if normalized in _PUBLIC_DOTENV_BASENAMES:
+        return False
+    return normalized == ".env" or normalized.startswith(".env.")
+
+
 class FsSafetyError(Exception):
     """Low-level descriptor-relative filesystem safety failure."""
 

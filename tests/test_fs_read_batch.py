@@ -8,11 +8,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from agent_runtime import fs_read as fs_read_module
 from agent_runtime import server
 from agent_runtime.contracts import FsPatchEdit, FsReadItem
 from agent_runtime.errors import RuntimeValidationError
 from agent_runtime.fs_patch import patch_file
-from agent_runtime.fs_read import read_files_batch
+from agent_runtime.fs_read import FS_READ_BATCH_CONTRACT, read_files_batch
 
 ITEM_LIMIT = 128 * 1024
 BATCH_LIMIT = 256 * 1024
@@ -56,6 +57,12 @@ class FsReadBatchContractTests(unittest.IsolatedAsyncioTestCase):
                 annotations["openWorldHint"],
             ),
             (True, False, True, False),
+        )
+
+    async def test_contract_declares_sensitive_dotenv_content_denial(self) -> None:
+        self.assertEqual(
+            FS_READ_BATCH_CONTRACT.preconditions["path"]["sensitive_dotenv_content"],  # type: ignore[index]
+            "denied",
         )
 
 
@@ -118,6 +125,31 @@ class FsReadBatchBehaviorTests(unittest.TestCase):
                     self._call(FsReadItem(path=path))
         with self.assertRaises(RuntimeValidationError):
             self._call(FsReadItem(path="a.txt", start_line=3, end_line=2))
+
+    def test_sensitive_dotenv_files_are_denied_before_open_and_public_files_remain_readable(self) -> None:
+        (self.cwd / "nested").mkdir()
+        sensitive_paths = (".env", ".env.local", "nested/.ENV", "nested/.env.LOCAL")
+        public_paths = (".ENV.EXAMPLE", ".env.sample", ".env.template", ".envrc", "notes.txt")
+        for path in sensitive_paths + public_paths:
+            target = self.cwd / path
+            target.write_text("synthetic-dotenv-marker\n", encoding="utf-8")
+
+        original_open = fs_read_module._open_regular_at
+        with patch("agent_runtime.fs_read._open_regular_at", wraps=original_open) as opened:
+            results = self._call(*(FsReadItem(path=path) for path in sensitive_paths + public_paths))
+
+        denied = results[: len(sensitive_paths)]
+        readable = results[len(sensitive_paths) :]
+        self.assertEqual([item["error_code"] for item in denied], ["ACCESS_DENIED"] * len(denied))
+        for item in denied:
+            self.assertEqual(
+                set(item),
+                {"status", "path", "start_line", "end_line", "error_code", "message"},
+            )
+        self.assertEqual([item["status"] for item in readable], ["ok"] * len(readable))
+        self.assertEqual([item["text"] for item in readable], ["synthetic-dotenv-marker\n"] * len(readable))
+        opened_paths = ["/".join(call.args[1]) for call in opened.call_args_list]
+        self.assertEqual(opened_paths, list(public_paths))
 
     def test_expected_item_failures_are_partial_bounded_and_sanitized(self) -> None:
         (self.cwd / "good.txt").write_text("good\n", encoding="utf-8")
