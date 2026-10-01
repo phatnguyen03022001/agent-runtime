@@ -7,7 +7,6 @@ import sys
 sys.dont_write_bytecode = True
 
 import argparse
-import hashlib
 import json
 import os
 import platform
@@ -27,7 +26,6 @@ EXPECTED_ORIGINS = {
     "https://github.com/phatnguyen03022001/agent-runtime.git",
     "git@github.com:phatnguyen03022001/agent-runtime.git",
 }
-EXPECTED_TUNNEL_FINGERPRINT = "6aa2b81d6dd8"
 RUNTIME_ENV_RELATIVE = Path("Library/Application Support/Agent Runtime/runtime.env")
 CUTOVER_RELATIVE = Path("Library/Application Support/Agent Runtime/cutover-transaction")
 APP_RELATIVE = Path("Applications/Agent Runtime.app")
@@ -106,6 +104,36 @@ def _valid_limits(values: Mapping[str, str]) -> bool:
     except SystemExit:
         return False
     return True
+
+
+def _tunnel_check(
+    values: Mapping[str, str],
+    environ: Mapping[str, str],
+) -> dict[str, object]:
+    if not values.get("CONTROL_PLANE_API_KEY") or not values.get("CONTROL_PLANE_TUNNEL_ID"):
+        return _check(
+            "openai_tunnel",
+            "fail",
+            "RUNTIME_CONFIGURATION_INCOMPLETE",
+            "Provide a Runtime API key and Tunnel ID before tunnel validation.",
+            action_class=ACTION_HUMAN,
+        )
+    try:
+        runtime_config.validate_tunnel_access(dict(values), environ=dict(environ))
+    except runtime_config.ConfigurationAdmissionError as exc:
+        return _check(
+            "openai_tunnel",
+            "fail",
+            exc.reason_code,
+            exc.message,
+            action_class=ACTION_HUMAN,
+        )
+    return _check(
+        "openai_tunnel",
+        "pass",
+        "OK",
+        "Official tunnel-client validated the configured tunnel with the submitted Runtime key.",
+    )
 
 
 def _packaging_python_check(root: Path, environ: Mapping[str, str]) -> tuple[bool, str]:
@@ -302,7 +330,7 @@ def collect_report(
         _check(
             "workspace",
             "pass" if workspace_ok else "fail",
-            "OK" if workspace_ok else "WORKSPACE_INVALID",
+            "OK" if workspace_ok else "WORKSPACE_UNAVAILABLE",
             "Derived workspace is an existing absolute directory." if workspace_ok else "Derived workspace is unavailable or invalid.",
             action_class=ACTION_HUMAN,
         )
@@ -395,32 +423,7 @@ def collect_report(
         )
     )
 
-    tunnel_client = shutil.which("tunnel-client", path=env.get("PATH"))
-    tunnel_executable_ok = False
-    if tunnel_client:
-        tunnel_path = Path(tunnel_client)
-        tunnel_executable_ok = tunnel_path.is_absolute() and tunnel_path.is_file() and os.access(tunnel_path, os.X_OK)
-    tunnel_id = effective.get("CONTROL_PLANE_TUNNEL_ID", "")
-    fingerprint_ok = bool(tunnel_id) and hashlib.sha256(tunnel_id.encode("utf-8")).hexdigest()[:12] == EXPECTED_TUNNEL_FINGERPRINT
-    tunnel_ok = tunnel_executable_ok and fingerprint_ok
-    tunnel_reason = "OK"
-    tunnel_message = "Official tunnel-client path and accepted tunnel identity are ready."
-    if not tunnel_executable_ok:
-        tunnel_reason = "TUNNEL_CLIENT_UNAVAILABLE"
-        tunnel_message = "Install the official OpenAI tunnel-client before installation."
-    elif not fingerprint_ok:
-        tunnel_reason = "TUNNEL_IDENTITY_MISMATCH"
-        tunnel_message = "Configured tunnel identity does not match the accepted Runtime tunnel fingerprint."
-    checks.append(
-        _check(
-            "openai_tunnel",
-            "pass" if tunnel_ok else "fail",
-            tunnel_reason,
-            tunnel_message,
-            action_class=ACTION_HUMAN,
-            evidence={"executable_ready": tunnel_executable_ok, "fingerprint_match": fingerprint_ok},
-        )
-    )
+    checks.append(_tunnel_check(effective, env))
 
     legacy = home / LEGACY_TUNNEL_RELATIVE
     legacy_absent = not legacy.exists() and not legacy.is_symlink()
@@ -548,8 +551,8 @@ def collect_prebuilt_report(
         _check(
             "workspace",
             "pass" if workspace_ok else "fail",
-            "OK" if workspace_ok else "WORKSPACE_INVALID",
-            "Explicit prebuilt workspace is an existing absolute directory." if workspace_ok else "Provide an explicit absolute existing workspace root.",
+            "OK" if workspace_ok else "WORKSPACE_UNAVAILABLE",
+            "Explicit prebuilt workspace is an existing absolute directory." if workspace_ok else "Choose an existing workspace folder.",
             action_class=ACTION_HUMAN,
         )
     )
@@ -650,32 +653,7 @@ def collect_prebuilt_report(
         )
     )
 
-    tunnel_client = shutil.which("tunnel-client", path=env.get("PATH"))
-    tunnel_executable_ok = False
-    if tunnel_client:
-        tunnel_path = Path(tunnel_client)
-        tunnel_executable_ok = (
-            tunnel_path.is_absolute()
-            and tunnel_path.is_file()
-            and os.access(tunnel_path, os.X_OK)
-        )
-    tunnel_id = effective.get("CONTROL_PLANE_TUNNEL_ID", "")
-    fingerprint_ok = bool(tunnel_id) and hashlib.sha256(tunnel_id.encode("utf-8")).hexdigest()[:12] == EXPECTED_TUNNEL_FINGERPRINT
-    tunnel_ok = tunnel_executable_ok and fingerprint_ok
-    checks.append(
-        _check(
-            "openai_tunnel",
-            "pass" if tunnel_ok else "fail",
-            "OK" if tunnel_ok else ("TUNNEL_CLIENT_UNAVAILABLE" if not tunnel_executable_ok else "TUNNEL_IDENTITY_MISMATCH"),
-            "Official tunnel-client path and accepted tunnel identity are ready." if tunnel_ok else (
-                "Install the official OpenAI tunnel-client before installation."
-                if not tunnel_executable_ok
-                else "Configured tunnel identity does not match the accepted Runtime tunnel fingerprint."
-            ),
-            action_class=ACTION_HUMAN,
-            evidence={"executable_ready": tunnel_executable_ok, "fingerprint_match": fingerprint_ok},
-        )
-    )
+    checks.append(_tunnel_check(effective, env))
 
     legacy = home / LEGACY_TUNNEL_RELATIVE
     legacy_absent = not legacy.exists() and not legacy.is_symlink()

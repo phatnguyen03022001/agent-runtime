@@ -1,6 +1,57 @@
 import AppKit
 import Foundation
 
+struct FirstRunHelpLinks {
+    static let apiKeys = URL(string: "https://platform.openai.com/settings/organization/api-keys")!
+    static let tunnels = URL(string: "https://platform.openai.com/settings/organization/tunnels")!
+    static let secureTunnel = URL(string: "https://developers.openai.com/api/docs/guides/secure-mcp-tunnels")!
+}
+
+enum FirstRunFailurePresentation {
+    static func message(from data: Data, fallback: String) -> String {
+        guard let reason = reasonCode(from: data) else { return fallback }
+        switch reason {
+        case "TUNNEL_CLIENT_UNAVAILABLE":
+            return "The official tunnel-client is unavailable. Install it using the Secure MCP Tunnel setup guide and try again."
+        case "INVALID_TUNNEL_ID":
+            return "Enter a valid Tunnel ID from your OpenAI organization."
+        case "INVALID_CREDENTIAL":
+            return "The Runtime API key was rejected. Create or check the API key and try again."
+        case "TUNNEL_ACCESS_DENIED":
+            return "The Runtime API key does not have access to that tunnel."
+        case "TUNNEL_NOT_FOUND":
+            return "The configured tunnel was not found. Check the Tunnel ID and try again."
+        case "CONTROL_PLANE_UNAVAILABLE":
+            return "The OpenAI control plane is temporarily unavailable. Try again later."
+        case "WORKSPACE_UNAVAILABLE", "WORKSPACE_INVALID":
+            return "Choose an existing workspace folder and try again."
+        case "RUNTIME_CONFIGURATION_INCOMPLETE":
+            return "Provide all required Runtime configuration fields and try again."
+        case "CUTOVER_TRANSACTION_PRESENT":
+            return "An existing cutover transaction must be resolved before setup can continue."
+        default:
+            return fallback
+        }
+    }
+
+    static func reasonCode(from data: Data) -> String? {
+        guard let value = try? JSONSerialization.jsonObject(with: data),
+              let object = value as? [String: Any] else {
+            return nil
+        }
+        if let reason = object["reason_code"] as? String, !reason.isEmpty {
+            return reason
+        }
+        guard let checks = object["checks"] as? [[String: Any]] else { return nil }
+        for check in checks where (check["status"] as? String) != "pass" {
+            if let reason = check["reason_code"] as? String, !reason.isEmpty {
+                return reason
+            }
+        }
+        return nil
+    }
+}
+
 struct FirstRunProcessResult: Equatable {
     let exitCode: Int32
     let standardOutput: Data
@@ -302,20 +353,11 @@ final class FirstRunSetupOrchestrator {
                 "The complete release bundle is required. Reopen Agent Runtime.app beside Agent Runtime.candidate.json."
             )
         }
-        guard input.workspace.path.hasPrefix("/"),
-              isExistingDirectory(input.workspace) else {
+        guard input.workspace.path.hasPrefix("/"), isExistingDirectory(input.workspace) else {
             return .failure("Choose an existing workspace folder.")
         }
-
-        let payload: [String: String] = [
-            "CONTROL_PLANE_API_KEY": input.apiKey,
-            "CONTROL_PLANE_TUNNEL_ID": input.tunnelID,
-            "AGENT_RUNTIME_WORKSPACE_ROOT": input.workspace.standardizedFileURL.path,
-            "AGENT_RUNTIME_GIT_NAME": input.gitName,
-            "AGENT_RUNTIME_GIT_EMAIL": input.gitEmail,
-        ]
-        guard let encoded = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]) else {
-            return .failure("Could not encode Runtime configuration.")
+        guard let encoded = validatedInput(input) else {
+            return .failure("Provide all required Runtime configuration fields.")
         }
 
         let configured = runner.run(
@@ -328,14 +370,51 @@ final class FirstRunSetupOrchestrator {
             standardInput: encoded
         )
         guard configured.exitCode == 0 else {
-            return .failure(
-                "Runtime configuration was rejected. " + boundedDetail(configured.standardError, secrets: [
-                    input.apiKey,
-                    input.tunnelID,
-                ])
-            )
+            return .failure(FirstRunFailurePresentation.message(
+                from: configured.standardOutput,
+                fallback: "Runtime configuration was rejected. Check the required values and try again."
+            ))
         }
         return activateConfigured(workspace: input.workspace)
+    }
+
+    func reconfigure(_ input: FirstRunSetupInput) -> FirstRunSetupOutcome {
+        guard let encoded = validatedInput(input) else {
+            return .failure("Provide all required Runtime configuration fields and choose an existing workspace.")
+        }
+        let configured = runner.run(
+            executable: paths.runtimePython,
+            arguments: [
+                paths.runtimeConfig.path,
+                "--reconfigure-stdin",
+                paths.canonicalEnv.path,
+            ],
+            standardInput: encoded
+        )
+        guard configured.exitCode == 0 else {
+            return .failure(FirstRunFailurePresentation.message(
+                from: configured.standardOutput,
+                fallback: "Runtime reconfiguration was rejected. Check the required values and try again."
+            ))
+        }
+        return .success
+    }
+
+    private func validatedInput(_ input: FirstRunSetupInput) -> Data? {
+        let required = [input.apiKey, input.tunnelID, input.gitName, input.gitEmail]
+        guard required.allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }),
+              input.workspace.path.hasPrefix("/"),
+              isExistingDirectory(input.workspace) else {
+            return nil
+        }
+        let payload: [String: String] = [
+            "CONTROL_PLANE_API_KEY": input.apiKey,
+            "CONTROL_PLANE_TUNNEL_ID": input.tunnelID,
+            "AGENT_RUNTIME_WORKSPACE_ROOT": input.workspace.standardizedFileURL.path,
+            "AGENT_RUNTIME_GIT_NAME": input.gitName,
+            "AGENT_RUNTIME_GIT_EMAIL": input.gitEmail,
+        ]
+        return try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
     }
 
     func continueConfigured(workspace: URL) -> FirstRunSetupOutcome {
@@ -356,7 +435,10 @@ final class FirstRunSetupOrchestrator {
         }
         let result = runInstaller(["--workspace-root", workspace.standardizedFileURL.path])
         if result.exitCode != 0 && !pathExistsOrIsSymlink(paths.transactionDirectory) {
-            return .failure("Prebuilt activation failed. " + boundedDetail(result.standardError))
+            return .failure(FirstRunFailurePresentation.message(
+                from: result.standardOutput,
+                fallback: "Prebuilt activation failed. See installation guidance for the bounded next action."
+            ))
         }
         return evaluateAndFinalize()
     }
@@ -487,42 +569,51 @@ final class FirstRunSetupOrchestrator {
 enum FirstRunSetupMode {
     case fresh
     case configured(URL)
+    case reconfigure(URL?)
     case blocked(String)
 }
 
 @MainActor
-final class FirstRunSetupController: NSViewController {
+final class FirstRunSetupController: NSViewController, NSTextFieldDelegate {
     let apiKeyField = NSSecureTextField()
     let tunnelIDField = NSSecureTextField()
     let workspaceField = NSTextField(labelWithString: "No workspace selected")
+    let gitNameField = NSTextField()
+    let gitEmailField = NSTextField()
     var selectedWorkspace: URL?
 
-    private let gitNameField = NSTextField()
-    private let gitEmailField = NSTextField()
     private let statusField = NSTextField(wrappingLabelWithString: "")
     private let primaryButton = NSButton()
     private let secondaryButton = NSButton()
     private let mode: FirstRunSetupMode
     private let begin: (FirstRunSetupInput) -> FirstRunSetupOutcome
+    private let reconfigure: (FirstRunSetupInput) -> FirstRunSetupOutcome
     private let activateConfigured: (URL) -> FirstRunSetupOutcome
     private let performAction: (FirstRunRecoveryAction) -> FirstRunSetupOutcome
+    private let requestReconfigure: (URL) -> Void
     private let completed: () -> Void
     private var recoveryAction: FirstRunRecoveryAction?
 
     init(
         mode: FirstRunSetupMode,
         begin: @escaping (FirstRunSetupInput) -> FirstRunSetupOutcome,
+        reconfigure: @escaping (FirstRunSetupInput) -> FirstRunSetupOutcome = { _ in
+            .failure("Reconfiguration is unavailable.")
+        },
         activateConfigured: @escaping (URL) -> FirstRunSetupOutcome,
         performAction: @escaping (FirstRunRecoveryAction) -> FirstRunSetupOutcome,
+        requestReconfigure: @escaping (URL) -> Void = { _ in },
         completed: @escaping () -> Void
     ) {
         self.mode = mode
         self.begin = begin
+        self.reconfigure = reconfigure
         self.activateConfigured = activateConfigured
         self.performAction = performAction
+        self.requestReconfigure = requestReconfigure
         self.completed = completed
         super.init(nibName: nil, bundle: nil)
-        preferredContentSize = NSSize(width: 470, height: 360)
+        preferredContentSize = NSSize(width: 500, height: 420)
     }
 
     @available(*, unavailable)
@@ -532,7 +623,13 @@ final class FirstRunSetupController: NSViewController {
 
     override func loadView() {
         let root = NSView()
-        let title = NSTextField(labelWithString: "Set Up Agent Runtime")
+        let titleText: String
+        if case .reconfigure = mode {
+            titleText = "Reconfigure Agent Runtime"
+        } else {
+            titleText = "Set Up Agent Runtime"
+        }
+        let title = NSTextField(labelWithString: titleText)
         title.font = .systemFont(ofSize: 20, weight: .semibold)
 
         let stack = NSStackView()
@@ -544,27 +641,32 @@ final class FirstRunSetupController: NSViewController {
 
         switch mode {
         case .fresh:
-            stack.addArrangedSubview(fieldRow("Control Plane API key", apiKeyField))
-            stack.addArrangedSubview(fieldRow("Tunnel ID", tunnelIDField))
-            stack.addArrangedSubview(fieldRow("Git name", gitNameField))
-            stack.addArrangedSubview(fieldRow("Git email", gitEmailField))
-
-            let choose = NSButton(title: "Choose Workspace…", target: self, action: #selector(chooseWorkspace))
-            let workspaceRow = NSStackView(views: [workspaceField, choose])
-            workspaceRow.orientation = .horizontal
-            workspaceRow.spacing = 8
-            workspaceRow.distribution = .fill
-            stack.addArrangedSubview(workspaceRow)
-            workspaceRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+            addConfigurationForm(to: stack, workspace: nil)
             primaryButton.title = "Set Up"
         case .configured(let workspace):
             selectedWorkspace = workspace
             workspaceField.stringValue = workspace.path
             stack.addArrangedSubview(NSTextField(wrappingLabelWithString:
-                "A valid canonical Runtime configuration already exists. Continue activation without rewriting it."
+                "A valid canonical Runtime configuration already exists. Continue activation without rewriting it, or explicitly reconfigure it."
             ))
             stack.addArrangedSubview(workspaceField)
+            let reconfigureButton = NSButton(
+                title: "Reconfigure…",
+                target: self,
+                action: #selector(requestReconfigurePressed)
+            )
+            stack.addArrangedSubview(reconfigureButton)
             primaryButton.title = "Continue Setup"
+        case .reconfigure(let workspace):
+            if let workspace {
+                selectedWorkspace = workspace.standardizedFileURL
+                workspaceField.stringValue = workspace.standardizedFileURL.path
+            }
+            stack.addArrangedSubview(NSTextField(wrappingLabelWithString:
+                "Enter new values. Existing API keys and Tunnel IDs are never displayed or prefilled."
+            ))
+            addConfigurationForm(to: stack, workspace: workspace)
+            primaryButton.title = "Reconfigure"
         case .blocked(let message):
             statusField.stringValue = message
             primaryButton.isHidden = true
@@ -572,7 +674,7 @@ final class FirstRunSetupController: NSViewController {
         }
 
         statusField.textColor = .secondaryLabelColor
-        statusField.maximumNumberOfLines = 4
+        statusField.maximumNumberOfLines = 5
         stack.addArrangedSubview(statusField)
 
         primaryButton.target = self
@@ -596,13 +698,59 @@ final class FirstRunSetupController: NSViewController {
             secondaryButton.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ])
         view = root
+
+        switch mode {
+        case .fresh, .reconfigure:
+            refreshRequiredFieldState()
+        case .configured, .blocked:
+            break
+        }
+    }
+
+    private func addConfigurationForm(to stack: NSStackView, workspace: URL?) {
+        apiKeyField.stringValue = ""
+        tunnelIDField.stringValue = ""
+        apiKeyField.delegate = self
+        tunnelIDField.delegate = self
+        gitNameField.delegate = self
+        gitEmailField.delegate = self
+
+        stack.addArrangedSubview(fieldRow("Runtime API key", apiKeyField))
+        stack.addArrangedSubview(fieldRow("Tunnel ID", tunnelIDField))
+        stack.addArrangedSubview(fieldRow("Git name", gitNameField))
+        stack.addArrangedSubview(fieldRow("Git email", gitEmailField))
+
+        let choose = NSButton(title: "Choose Workspace…", target: self, action: #selector(chooseWorkspace))
+        let workspaceRow = NSStackView(views: [workspaceField, choose])
+        workspaceRow.orientation = .horizontal
+        workspaceRow.spacing = 8
+        workspaceRow.distribution = .fill
+        stack.addArrangedSubview(workspaceRow)
+        workspaceRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
+        let links = NSStackView(views: [
+            helpButton("Runtime API keys…", action: #selector(openAPIKeysHelp)),
+            helpButton("Tunnels…", action: #selector(openTunnelsHelp)),
+            helpButton("Secure MCP Tunnel help…", action: #selector(openSecureTunnelHelp)),
+        ])
+        links.orientation = .horizontal
+        links.spacing = 10
+        stack.addArrangedSubview(links)
+    }
+
+    private func helpButton(_ title: String, action: Selector) -> NSButton {
+        let button = NSButton(title: title, target: self, action: action)
+        button.isBordered = false
+        button.bezelStyle = .inline
+        button.controlSize = .small
+        return button
     }
 
     static func configureWorkspacePanel(_ panel: NSOpenPanel) {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.canCreateDirectories = true
+        panel.canCreateDirectories = false
         panel.resolvesAliases = true
         panel.prompt = "Choose Workspace"
     }
@@ -611,6 +759,43 @@ final class FirstRunSetupController: NSViewController {
         guard response == .OK, urls.count == 1 else { return }
         selectedWorkspace = urls[0].standardizedFileURL
         workspaceField.stringValue = urls[0].standardizedFileURL.path
+        refreshRequiredFieldState()
+    }
+
+    func controlTextDidChange(_ obj: Notification) {
+        refreshRequiredFieldState()
+    }
+
+    func refreshRequiredFieldState(updateFeedback: Bool = true) {
+        guard case .fresh = mode else {
+            if case .reconfigure = mode {
+                updateRequiredFieldState(updateFeedback: updateFeedback)
+            }
+            return
+        }
+        updateRequiredFieldState(updateFeedback: updateFeedback)
+    }
+
+    private func updateRequiredFieldState(updateFeedback: Bool) {
+        let fields = [
+            apiKeyField.stringValue,
+            tunnelIDField.stringValue,
+            gitNameField.stringValue,
+            gitEmailField.stringValue,
+        ]
+        var isDirectory: ObjCBool = false
+        let workspaceReady = selectedWorkspace.map {
+            FileManager.default.fileExists(atPath: $0.path, isDirectory: &isDirectory) && isDirectory.boolValue
+        } ?? false
+        let ready = fields.allSatisfy {
+            !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        } && workspaceReady
+        primaryButton.isEnabled = ready
+        if updateFeedback {
+            statusField.stringValue = ready
+                ? "Ready to validate configuration."
+                : "Required: Runtime API key, Tunnel ID, Git name, Git email, and an existing workspace."
+        }
     }
 
     private func fieldRow(_ label: String, _ field: NSTextField) -> NSView {
@@ -632,36 +817,77 @@ final class FirstRunSetupController: NSViewController {
         applyWorkspaceSelection(response: response, urls: panel.urls)
     }
 
+    @objc private func requestReconfigurePressed() {
+        guard case .configured(let workspace) = mode else { return }
+        requestReconfigure(workspace)
+    }
+
+    @objc private func openAPIKeysHelp() {
+        NSWorkspace.shared.open(FirstRunHelpLinks.apiKeys)
+    }
+
+    @objc private func openTunnelsHelp() {
+        NSWorkspace.shared.open(FirstRunHelpLinks.tunnels)
+    }
+
+    @objc private func openSecureTunnelHelp() {
+        NSWorkspace.shared.open(FirstRunHelpLinks.secureTunnel)
+    }
+
     @objc private func primaryPressed() {
         primaryButton.isEnabled = false
         secondaryButton.isHidden = true
         recoveryAction = nil
-        statusField.stringValue = "Checking configuration and activation…"
 
         let outcome: FirstRunSetupOutcome
         switch mode {
-        case .fresh:
-            guard let workspace = selectedWorkspace else {
-                statusField.stringValue = "Choose a workspace folder first."
-                primaryButton.isEnabled = true
+        case .fresh, .reconfigure:
+            guard let input = currentInput() else {
+                statusField.stringValue = "Provide all required fields and choose an existing workspace."
+                refreshRequiredFieldState(updateFeedback: false)
                 return
             }
-            let input = FirstRunSetupInput(
-                apiKey: apiKeyField.stringValue,
-                tunnelID: tunnelIDField.stringValue,
-                workspace: workspace,
-                gitName: gitNameField.stringValue,
-                gitEmail: gitEmailField.stringValue
-            )
-            outcome = begin(input)
+            if case .fresh = mode {
+                statusField.stringValue = "Validating configuration before setup…"
+                outcome = begin(input)
+            } else {
+                statusField.stringValue = "Validating new configuration…"
+                outcome = reconfigure(input)
+            }
             apiKeyField.stringValue = ""
             tunnelIDField.stringValue = ""
         case .configured(let workspace):
+            statusField.stringValue = "Checking activation…"
             outcome = activateConfigured(workspace)
         case .blocked:
             return
         }
         apply(outcome)
+    }
+
+    private func currentInput() -> FirstRunSetupInput? {
+        guard let workspace = selectedWorkspace else { return nil }
+        let values = [
+            apiKeyField.stringValue,
+            tunnelIDField.stringValue,
+            gitNameField.stringValue,
+            gitEmailField.stringValue,
+        ]
+        guard values.allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
+            return nil
+        }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: workspace.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            return nil
+        }
+        return FirstRunSetupInput(
+            apiKey: apiKeyField.stringValue,
+            tunnelID: tunnelIDField.stringValue,
+            workspace: workspace,
+            gitName: gitNameField.stringValue,
+            gitEmail: gitEmailField.stringValue
+        )
     }
 
     @objc private func secondaryPressed() {
@@ -673,7 +899,12 @@ final class FirstRunSetupController: NSViewController {
     private func apply(_ outcome: FirstRunSetupOutcome) {
         switch outcome {
         case .success:
-            statusField.stringValue = "Setup complete. Runtime is installed and remains stopped until Start."
+            if case .reconfigure = mode {
+                statusField.stringValue =
+                    "Configuration updated. Runtime was not stopped or restarted; use an explicit lifecycle action when needed."
+            } else {
+                statusField.stringValue = "Setup complete. Runtime is installed and remains stopped until Start."
+            }
             primaryButton.isHidden = true
             secondaryButton.isHidden = true
             completed()
@@ -690,7 +921,14 @@ final class FirstRunSetupController: NSViewController {
         case .failure(let message):
             statusField.stringValue = message
             secondaryButton.isHidden = true
-            primaryButton.isEnabled = true
+            switch mode {
+            case .fresh, .reconfigure:
+                refreshRequiredFieldState(updateFeedback: false)
+            case .configured:
+                primaryButton.isEnabled = true
+            case .blocked:
+                primaryButton.isEnabled = false
+            }
         }
     }
 

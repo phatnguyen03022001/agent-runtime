@@ -230,9 +230,11 @@ struct RuntimePopoverPresentation {
 @MainActor
 final class ControlPanelController: NSViewController {
     private let performAction: (RuntimeAction) -> Void
+    private let reconfigure: () -> Void
     private let quit: () -> Void
     private let statusIndicatorView = NSImageView()
     private let lifecycleButton = NSButton()
+    private let reconfigureButton = NSButton()
     private let divider = NSBox()
     private var factsGrid: NSGridView!
     private var factValueLabels: [NSTextField] = []
@@ -240,8 +242,13 @@ final class ControlPanelController: NSViewController {
     private(set) var header: NSStackView!
     private var rootStack: NSStackView!
 
-    init(performAction: @escaping (RuntimeAction) -> Void, quit: @escaping () -> Void) {
+    init(
+        performAction: @escaping (RuntimeAction) -> Void,
+        reconfigure: @escaping () -> Void = {},
+        quit: @escaping () -> Void
+    ) {
         self.performAction = performAction
+        self.reconfigure = reconfigure
         self.quit = quit
         super.init(nibName: nil, bundle: nil)
         preferredContentSize = NSSize(width: 304, height: 1)
@@ -282,6 +289,9 @@ final class ControlPanelController: NSViewController {
         lifecycleButton.isHidden = true
         lifecycleButton.isEnabled = false
 
+        configure(reconfigureButton, title: "Reconfigure…", action: #selector(reconfigurePressed))
+        reconfigureButton.setAccessibilityLabel("Reconfigure Agent Runtime")
+
         let quitButton = NSButton(title: "Quit Agent Runtime", target: self, action: #selector(quitPressed))
         quitButton.isBordered = false
         quitButton.bezelStyle = .inline
@@ -293,7 +303,7 @@ final class ControlPanelController: NSViewController {
         divider.boxType = .separator
         divider.translatesAutoresizingMaskIntoConstraints = false
 
-        rootStack = NSStackView(views: [header, factsGrid, lifecycleButton, divider, quitButton])
+        rootStack = NSStackView(views: [header, factsGrid, lifecycleButton, reconfigureButton, divider, quitButton])
         rootStack.orientation = .vertical
         rootStack.alignment = .leading
         rootStack.spacing = 8
@@ -307,6 +317,7 @@ final class ControlPanelController: NSViewController {
             factsGrid.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
             header.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
             lifecycleButton.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
+            reconfigureButton.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
             divider.widthAnchor.constraint(equalTo: rootStack.widthAnchor),
         ])
 
@@ -427,6 +438,8 @@ final class ControlPanelController: NSViewController {
         guard let lifecycleAction else { return }
         performAction(lifecycleAction)
     }
+
+    @objc private func reconfigurePressed() { reconfigure() }
 
     @objc private func quitPressed() { quit() }
 }

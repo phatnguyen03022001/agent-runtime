@@ -94,9 +94,13 @@ class Task0141ProductizationTests(unittest.TestCase):
         (root / "macos").mkdir()
         (root / "macos" / "packaging_python.sh").write_text("# fixture\n")
         tunnel = tools / "tunnel-client"
-        tunnel.write_text("#!/bin/sh\nexit 0\n")
+        tunnel_id = "tunnel_0123456789abcdef0123456789abcdef"
+        tunnel.write_text(
+            "#!/bin/sh\n"
+            f"printf '%s\\n' '{{\"id\":\"{tunnel_id}\"}}'\n"
+            "exit 0\n"
+        )
         tunnel.chmod(0o700)
-        tunnel_id = "task0141-fixture-tunnel"
         api_key = "TASK0141_SECRET_API_KEY"
         git_name = "TASK0141_SECRET_GIT_NAME"
         git_email = "task0141-secret@example.invalid"
@@ -134,11 +138,6 @@ class Task0141ProductizationTests(unittest.TestCase):
             mock.patch.object(preflight, "_packaging_python_check", return_value=(True, "ready")),
             mock.patch.object(preflight, "_run", side_effect=fake_run),
             mock.patch.object(preflight.shutil, "which", side_effect=fake_which),
-            mock.patch.object(
-                preflight,
-                "EXPECTED_TUNNEL_FINGERPRINT",
-                hashlib.sha256(tunnel_id.encode()).hexdigest()[:12],
-            ),
         )
         secrets = (api_key, tunnel_id, git_name, git_email)
         return root, home, environ, patches, secrets
@@ -165,6 +164,70 @@ class Task0141ProductizationTests(unittest.TestCase):
                 self.assertNotIn(secret, encoded)
                 self.assertNotIn(secret, human)
             self.assertTrue(all(check["status"] == "pass" for check in first["checks"]))
+
+    def test_preflight_tunnel_client_structured_reason_matrix(self) -> None:
+        cases = (
+            ("401", '{"error":{"status":401}}', 1, "INVALID_CREDENTIAL"),
+            ("403", '{"error":{"status":403}}', 1, "TUNNEL_ACCESS_DENIED"),
+            ("404", '{"error":{"status":404}}', 1, "TUNNEL_NOT_FOUND"),
+            ("transient", '{"error":{"status":503}}', 1, "CONTROL_PLANE_UNAVAILABLE"),
+            ("malformed", 'not-json', 0, "CONTROL_PLANE_UNAVAILABLE"),
+            ("missing", None, None, "TUNNEL_CLIENT_UNAVAILABLE"),
+        )
+        for label, output, exit_code, expected_reason in cases:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as td:
+                root, home, environ, patches, secrets = self._ready_preflight_fixture(Path(td))
+                tunnel = Path(environ["PATH"]) / "tunnel-client"
+                if output is None:
+                    tunnel.unlink()
+                else:
+                    tunnel.write_text(
+                        "#!/bin/sh\n"
+                        + "printf '%s\\n' " + repr(output) + "\n"
+                        + f"exit {exit_code}\n"
+                    )
+                    tunnel.chmod(0o700)
+                entered = [patcher.start() for patcher in patches]
+                try:
+                    report = preflight.collect_report(root, home, environ=environ)
+                finally:
+                    for patcher in reversed(patches):
+                        patcher.stop()
+                    del entered
+                tunnel_check = next(item for item in report["checks"] if item["id"] == "openai_tunnel")
+                self.assertEqual(report["status"], "blocked")
+                self.assertEqual(tunnel_check["reason_code"], expected_reason)
+                encoded = json.dumps(report, sort_keys=True)
+                for secret in secrets:
+                    self.assertNotIn(secret, encoded)
+
+    def test_preflight_accepts_user_owned_valid_tunnel_ids_without_fingerprint(self) -> None:
+        preflight_source = (ROOT / "macos" / "install_preflight.py").read_text()
+        self.assertNotIn("fingerprint_match", preflight_source)
+        self.assertNotIn("sha256(tunnel_id", preflight_source)
+        for tunnel_id in (
+            "tunnel_0123456789abcdef0123456789abcdef",
+            "tunnel_fedcba9876543210fedcba9876543210",
+        ):
+            with self.subTest(tunnel_id=tunnel_id), tempfile.TemporaryDirectory() as td:
+                root, home, environ, patches, _ = self._ready_preflight_fixture(Path(td))
+                config = root / ".env"
+                config.write_text(
+                    config.read_text().replace(
+                        "tunnel_0123456789abcdef0123456789abcdef",
+                        tunnel_id,
+                    )
+                )
+                entered = [patcher.start() for patcher in patches]
+                try:
+                    report = preflight.collect_report(root, home, environ=environ)
+                finally:
+                    for patcher in reversed(patches):
+                        patcher.stop()
+                    del entered
+                self.assertEqual(report["status"], "ready")
+                tunnel_check = next(item for item in report["checks"] if item["id"] == "openai_tunnel")
+                self.assertEqual(tunnel_check["reason_code"], "OK")
 
     def test_preflight_nonpass_has_reason_and_action_class(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -414,12 +477,16 @@ class Task0141ProductizationTests(unittest.TestCase):
             handoff.write_text(json.dumps({"initial_payload_closure": closure}) + "\n")
             (bundle / "payloads" / closure).mkdir(parents=True)
             tunnel_target = tools / "tunnel-client-real"
-            tunnel_target.write_text("#!/bin/sh\nexit 0\n")
+            tunnel_id = "tunnel_fedcba9876543210fedcba9876543210"
+            tunnel_target.write_text(
+                "#!/bin/sh\n"
+                f"printf '%s\\n' '{{\"id\":\"{tunnel_id}\"}}'\n"
+                "exit 0\n"
+            )
             tunnel_target.chmod(0o700)
             tunnel = tools / "tunnel-client"
             tunnel.symlink_to(tunnel_target)
 
-            tunnel_id = "task0171-prebuilt-tunnel"
             secrets = (
                 "TASK0171_PREBUILT_API_SECRET",
                 tunnel_id,
@@ -444,8 +511,6 @@ class Task0141ProductizationTests(unittest.TestCase):
             with mock.patch.object(preflight.platform, "system", return_value="Darwin"), mock.patch.object(
                 preflight.platform, "machine", return_value="arm64"
             ), mock.patch.object(preflight.shutil, "which", side_effect=fake_which), mock.patch.object(
-                preflight, "EXPECTED_TUNNEL_FINGERPRINT", hashlib.sha256(tunnel_id.encode()).hexdigest()[:12]
-            ), mock.patch.object(
                 preflight.package_provenance, "_load_zero_cost_candidate_handoff", return_value={"initial_payload_closure": closure}
             ), mock.patch.object(
                 preflight.package_provenance, "validate_zero_cost_candidate", return_value={"candidate_sha256": "a" * 64}
@@ -485,8 +550,6 @@ class Task0141ProductizationTests(unittest.TestCase):
             with mock.patch.object(preflight.platform, "system", return_value="Darwin"), mock.patch.object(
                 preflight.platform, "machine", return_value="arm64"
             ), mock.patch.object(preflight.shutil, "which", side_effect=fake_which), mock.patch.object(
-                preflight, "EXPECTED_TUNNEL_FINGERPRINT", hashlib.sha256(tunnel_id.encode()).hexdigest()[:12]
-            ), mock.patch.object(
                 preflight.package_provenance, "_load_zero_cost_candidate_handoff", return_value={"initial_payload_closure": closure}
             ), mock.patch.object(
                 preflight.package_provenance, "validate_zero_cost_candidate", return_value={"candidate_sha256": "a" * 64}
@@ -589,8 +652,11 @@ class Task0141ProductizationTests(unittest.TestCase):
                     self.assertEqual(trust["reason_code"], "RELEASE_TRUST_INVALID")
                     self.assertEqual(trust["status"], "fail")
                 else:
-                    self.assertIn("release_trust: fail (RELEASE_TRUST_INVALID)", result.stdout)
-                    self.assertIn("prebuilt installation preflight failed", result.stderr)
+                    report = json.loads(result.stdout)
+                    trust = next(item for item in report["checks"] if item["id"] == "release_trust")
+                    self.assertEqual(trust["reason_code"], "RELEASE_TRUST_INVALID")
+                    self.assertEqual(trust["status"], "fail")
+                    self.assertNotIn("prebuilt installation preflight failed", result.stderr)
                 self.assertEqual(self._snapshot(app), sealed_before)
 
 

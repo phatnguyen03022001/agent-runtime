@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import stat
 import subprocess
 import sys
@@ -22,6 +23,16 @@ OPTIONAL = {"AGENT_RUNTIME_MAX_ACTIVE_SESSIONS", "AGENT_RUNTIME_MAX_PARALLELISM"
 ENTRY = re.compile(r"([A-Z_][A-Z0-9_]*)=(.*)")
 MAX_ACTIVE_SESSIONS = 6
 MAX_IDENTITY_BYTES = 256
+TUNNEL_ID = re.compile(r"tunnel_[0-9a-f]{32}")
+MAX_TUNNEL_RESPONSE_BYTES = 16384
+TUNNEL_LOOKUP_TIMEOUT_SECONDS = 10
+
+
+class ConfigurationAdmissionError(Exception):
+    def __init__(self, reason_code: str, message: str):
+        super().__init__(message)
+        self.reason_code = reason_code
+        self.message = message
 
 
 def fail(message: str) -> "NoReturn":
@@ -316,7 +327,220 @@ def prebuilt_values_from_mapping(values: dict[str, object]) -> dict[str, str]:
     normalized["AGENT_RUNTIME_WORKSPACE_ROOT"] = str(workspace)
     _validate_values(normalized, workspace)
     _validated_identity(normalized, required=True)
+    api_key = normalized["CONTROL_PLANE_API_KEY"]
+    if any(character in api_key for character in ("\x00", "\r", "\n")):
+        fail("CONTROL_PLANE_API_KEY is malformed")
+    if TUNNEL_ID.fullmatch(normalized["CONTROL_PLANE_TUNNEL_ID"]) is None:
+        fail("CONTROL_PLANE_TUNNEL_ID must match tunnel_<32 lowercase hex characters>")
     return normalized
+
+
+def _admission_values(values: dict[str, object]) -> dict[str, str]:
+    try:
+        return prebuilt_values_from_mapping(values)
+    except SystemExit as exc:
+        message = str(exc)
+        if "AGENT_RUNTIME_WORKSPACE_ROOT" in message or "absolute existing directory" in message:
+            reason = "WORKSPACE_UNAVAILABLE"
+        elif "CONTROL_PLANE_TUNNEL_ID" in message:
+            reason = "INVALID_TUNNEL_ID"
+        else:
+            reason = "RUNTIME_CONFIGURATION_INCOMPLETE"
+        raise ConfigurationAdmissionError(reason, message.removeprefix("CONFIG ERROR: ")) from None
+
+
+def _safe_tunnel_environment(source: dict[str, str], api_key: str) -> dict[str, str]:
+    child: dict[str, str] = {}
+    for key in ("HOME", "USER", "TMPDIR", "LANG", "PATH"):
+        value = source.get(key)
+        if value:
+            child[key] = value
+    for key, value in source.items():
+        if key.startswith("LC_") and value:
+            child[key] = value
+    child["CONTROL_PLANE_API_KEY"] = api_key
+    return child
+
+
+def _http_status_from_json(value: object) -> int | None:
+    pending = [value]
+    visited = 0
+    while pending and visited < 64:
+        current = pending.pop()
+        visited += 1
+        if isinstance(current, dict):
+            for key, item in current.items():
+                if key in {"status", "status_code", "statusCode", "http_status", "httpStatus"}:
+                    if isinstance(item, int) and 100 <= item <= 599:
+                        return item
+                    if isinstance(item, str) and item.isdigit() and 100 <= int(item) <= 599:
+                        return int(item)
+                if isinstance(item, (dict, list)):
+                    pending.append(item)
+        elif isinstance(current, list):
+            pending.extend(item for item in current if isinstance(item, (dict, list)))
+    return None
+
+
+def validate_tunnel_access(
+    values: dict[str, str],
+    *,
+    environ: dict[str, str] | None = None,
+) -> None:
+    source = dict(os.environ if environ is None else environ)
+    client = shutil.which("tunnel-client", path=source.get("PATH"))
+    if client is None:
+        raise ConfigurationAdmissionError(
+            "TUNNEL_CLIENT_UNAVAILABLE",
+            "Install the official OpenAI tunnel-client and try again.",
+        )
+    client_path = Path(client)
+    if not client_path.is_absolute() or not client_path.is_file() or not os.access(client_path, os.X_OK):
+        raise ConfigurationAdmissionError(
+            "TUNNEL_CLIENT_UNAVAILABLE",
+            "Install the official OpenAI tunnel-client and try again.",
+        )
+
+    api_key = values.get("CONTROL_PLANE_API_KEY", "")
+    if not api_key or any(character in api_key for character in ("\x00", "\r", "\n")):
+        raise ConfigurationAdmissionError(
+            "RUNTIME_CONFIGURATION_INCOMPLETE",
+            "Enter a valid Runtime API key.",
+        )
+    tunnel_id = values["CONTROL_PLANE_TUNNEL_ID"]
+    if TUNNEL_ID.fullmatch(tunnel_id) is None:
+        raise ConfigurationAdmissionError("INVALID_TUNNEL_ID", "Enter a valid Runtime Tunnel ID.")
+
+    try:
+        result = subprocess.run(
+            [str(client_path), "admin", "--json", "tunnels", "get", tunnel_id],
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=TUNNEL_LOOKUP_TIMEOUT_SECONDS,
+            env=_safe_tunnel_environment(source, api_key),
+        )
+    except (OSError, subprocess.SubprocessError):
+        raise ConfigurationAdmissionError(
+            "CONTROL_PLANE_UNAVAILABLE",
+            "Tunnel validation is temporarily unavailable. Try again later.",
+        ) from None
+
+    if any(
+        len(stream.encode("utf-8", errors="ignore")) > MAX_TUNNEL_RESPONSE_BYTES
+        for stream in (result.stdout, result.stderr)
+    ):
+        raise ConfigurationAdmissionError(
+            "CONTROL_PLANE_UNAVAILABLE",
+            "Tunnel validation returned an invalid response. Try again later.",
+        )
+    response: object | None = None
+    for stream in (result.stdout, result.stderr):
+        try:
+            candidate = json.loads(stream)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(candidate, (dict, list)):
+            response = candidate
+            break
+
+    if result.returncode == 0:
+        if not isinstance(response, dict):
+            raise ConfigurationAdmissionError(
+                "CONTROL_PLANE_UNAVAILABLE",
+                "Tunnel validation returned an invalid response. Try again later.",
+            )
+        return
+
+    status = _http_status_from_json(response)
+    if status == 401:
+        reason = "INVALID_CREDENTIAL"
+        message = "The Runtime API key was rejected. Create or check the key and try again."
+    elif status == 403:
+        reason = "TUNNEL_ACCESS_DENIED"
+        message = "The Runtime API key does not have access to that tunnel."
+    elif status == 404:
+        reason = "TUNNEL_NOT_FOUND"
+        message = "The configured tunnel was not found."
+    else:
+        reason = "CONTROL_PLANE_UNAVAILABLE"
+        message = "Tunnel validation is temporarily unavailable. Try again later."
+    raise ConfigurationAdmissionError(reason, message)
+
+
+def _publish_admitted_prebuilt(
+    canonical: Path,
+    normalized: dict[str, str],
+    *,
+    replace_existing: bool,
+) -> None:
+    workspace = Path(normalized["AGENT_RUNTIME_WORKSPACE_ROOT"])
+    previous: bytes | None = None
+    if replace_existing:
+        if not canonical.exists() or canonical.is_symlink():
+            raise ConfigurationAdmissionError(
+                "RUNTIME_CONFIGURATION_INCOMPLETE",
+                "Existing canonical Runtime configuration is unavailable or unsafe.",
+            )
+        try:
+            previous = validate(canonical, require_mode=True, require_git_identity=True)
+        except SystemExit:
+            raise ConfigurationAdmissionError(
+                "RUNTIME_CONFIGURATION_INCOMPLETE",
+                "Existing canonical Runtime configuration is unavailable or unsafe.",
+            ) from None
+    elif canonical.exists() or canonical.is_symlink():
+        raise ConfigurationAdmissionError(
+            "RUNTIME_CONFIGURATION_INCOMPLETE",
+            "Canonical Runtime configuration already exists; use explicit Reconfigure.",
+        )
+
+    raw = _prebuilt_payload(normalized)
+    canonical.parent.mkdir(parents=True, exist_ok=True)
+    private = _write_private(canonical, raw)
+    try:
+        validate_prebuilt_configuration(private, workspace)
+        if replace_existing:
+            try:
+                current = validate(canonical, require_mode=True, require_git_identity=True)
+            except SystemExit:
+                raise ConfigurationAdmissionError(
+                    "RUNTIME_CONFIGURATION_INCOMPLETE",
+                    "Existing canonical Runtime configuration changed before publication.",
+                ) from None
+            if current != previous:
+                raise ConfigurationAdmissionError(
+                    "RUNTIME_CONFIGURATION_INCOMPLETE",
+                    "Existing canonical Runtime configuration changed before publication.",
+                )
+            os.replace(private, canonical)
+        else:
+            try:
+                os.link(private, canonical)
+            except FileExistsError:
+                raise ConfigurationAdmissionError(
+                    "RUNTIME_CONFIGURATION_INCOMPLETE",
+                    "Canonical Runtime configuration appeared before publication; use explicit Reconfigure.",
+                ) from None
+    finally:
+        try:
+            private.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def admit_prebuilt_values(
+    canonical: Path,
+    values: dict[str, object],
+    *,
+    replace_existing: bool,
+    environ: dict[str, str] | None = None,
+) -> None:
+    normalized = _admission_values(values)
+    validate_tunnel_access(normalized, environ=environ)
+    _publish_admitted_prebuilt(canonical, normalized, replace_existing=replace_existing)
 
 
 def inspect_prebuilt_existing(canonical: Path) -> dict[str, object]:
@@ -341,28 +565,18 @@ def validate_prebuilt_configuration(canonical: Path, workspace_root: Path) -> by
     return raw
 
 
-def ensure_prebuilt_values(canonical: Path, values: dict[str, object]) -> None:
-    normalized = prebuilt_values_from_mapping(values)
-    workspace = Path(normalized["AGENT_RUNTIME_WORKSPACE_ROOT"])
-    if canonical.exists() or canonical.is_symlink():
-        validate_prebuilt_configuration(canonical, workspace)
-        return
-
-    raw = _prebuilt_payload(normalized)
-    canonical.parent.mkdir(parents=True, exist_ok=True)
-    private = _write_private(canonical, raw)
-    try:
-        validate_prebuilt_configuration(private, workspace)
-        try:
-            os.link(private, canonical)
-        except FileExistsError:
-            validate_prebuilt_configuration(canonical, workspace)
-            return
-    finally:
-        try:
-            private.unlink()
-        except FileNotFoundError:
-            pass
+def ensure_prebuilt_values(
+    canonical: Path,
+    values: dict[str, object],
+    *,
+    environ: dict[str, str] | None = None,
+) -> None:
+    admit_prebuilt_values(
+        canonical,
+        values,
+        replace_existing=False,
+        environ=environ,
+    )
 
 
 def ensure_prebuilt(
@@ -377,21 +591,56 @@ def ensure_prebuilt(
         return
 
     values = prebuilt_values(workspace, environ=environ)
-    ensure_prebuilt_values(canonical, values)
+    admit_prebuilt_values(canonical, values, replace_existing=False, environ=environ)
 
 
-if __name__ == "__main__":
-    if len(sys.argv) == 3 and sys.argv[1] == "--prebuilt-stdin":
-        payload = sys.stdin.buffer.read(65537)
+def _native_admission(canonical: Path, *, replace_existing: bool) -> int:
+    payload = sys.stdin.buffer.read(65537)
+    try:
         if len(payload) > 65536:
-            fail("native configuration input is too large")
+            raise ConfigurationAdmissionError(
+                "RUNTIME_CONFIGURATION_INCOMPLETE",
+                "Native configuration input is too large.",
+            )
         try:
             decoded = json.loads(payload.decode("utf-8"))
         except (UnicodeError, json.JSONDecodeError):
-            fail("native configuration input is malformed")
+            raise ConfigurationAdmissionError(
+                "RUNTIME_CONFIGURATION_INCOMPLETE",
+                "Native configuration input is malformed.",
+            ) from None
         if not isinstance(decoded, dict) or not all(isinstance(key, str) for key in decoded):
-            fail("native configuration input must be an object")
-        ensure_prebuilt_values(Path(sys.argv[2]), decoded)
+            raise ConfigurationAdmissionError(
+                "RUNTIME_CONFIGURATION_INCOMPLETE",
+                "Native configuration input must be an object.",
+            )
+        admit_prebuilt_values(
+            canonical,
+            decoded,
+            replace_existing=replace_existing,
+        )
+    except ConfigurationAdmissionError as exc:
+        sys.stdout.write(json.dumps({
+            "schema_version": 1,
+            "status": "error",
+            "reason_code": exc.reason_code,
+            "message": exc.message,
+        }, separators=(",", ":"), sort_keys=True) + "\n")
+        return 2
+    sys.stdout.write(json.dumps({
+        "schema_version": 1,
+        "status": "ok",
+        "reason_code": "OK",
+    }, separators=(",", ":"), sort_keys=True) + "\n")
+    return 0
+
+
+if __name__ == "__main__":
+    if len(sys.argv) == 3 and sys.argv[1] in {"--prebuilt-stdin", "--reconfigure-stdin"}:
+        raise SystemExit(_native_admission(
+            Path(sys.argv[2]),
+            replace_existing=sys.argv[1] == "--reconfigure-stdin",
+        ))
     elif len(sys.argv) == 3 and sys.argv[1] == "--inspect-prebuilt-existing":
         inspected = inspect_prebuilt_existing(Path(sys.argv[2]))
         sys.stdout.write(json.dumps(inspected, separators=(",", ":"), sort_keys=True) + "\n")
@@ -408,6 +657,7 @@ if __name__ == "__main__":
         fail(
             "usage: runtime_config.py SOURCE_ENV CANONICAL_ENV WORKSPACE_ROOT, "
             "runtime_config.py --prebuilt CANONICAL_ENV WORKSPACE_ROOT, "
-            "runtime_config.py --prebuilt-stdin CANONICAL_ENV, or "
+            "runtime_config.py --prebuilt-stdin CANONICAL_ENV, "
+            "runtime_config.py --reconfigure-stdin CANONICAL_ENV, or "
             "runtime_config.py --inspect-prebuilt-existing CANONICAL_ENV"
         )

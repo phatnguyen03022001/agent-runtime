@@ -182,6 +182,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func makeControlPanel() -> ControlPanelController {
         ControlPanelController(
             performAction: { [weak self] action in self?.perform(action) },
+            reconfigure: { [weak self] in self?.showInstalledReconfigure() },
             quit: { NSApp.terminate(nil) }
         )
     }
@@ -241,12 +242,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showFirstRunSetup(mode: FirstRunSetupMode) {
         guard let orchestrator = firstRunOrchestrator else { return }
+        firstRunWindowController?.close()
+        firstRunWindowController = nil
         let controller = FirstRunSetupController(
             mode: mode,
             begin: { input in orchestrator.begin(input) },
+            reconfigure: { input in orchestrator.reconfigure(input) },
             activateConfigured: { workspace in orchestrator.continueConfigured(workspace: workspace) },
             performAction: { action in orchestrator.perform(action) },
-            completed: { [weak self] in self?.firstRunCompleted() }
+            requestReconfigure: { [weak self] workspace in
+                self?.showFirstRunSetup(mode: .reconfigure(workspace))
+            },
+            completed: { [weak self] in self?.setupCompleted(mode: mode) }
         )
         let window = NSWindow(contentViewController: controller)
         window.title = "Agent Runtime Setup"
@@ -257,6 +264,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         firstRunWindowController = windowController
         windowController.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func showInstalledReconfigure() {
+        guard let orchestrator = firstRunOrchestrator else { return }
+        let workspace: URL?
+        if case .valid(let configuredWorkspace) = orchestrator.inspectConfiguration() {
+            workspace = configuredWorkspace
+        } else {
+            workspace = nil
+        }
+        showFirstRunSetup(mode: .reconfigure(workspace))
+    }
+
+    private func setupCompleted(mode: FirstRunSetupMode) {
+        if case .reconfigure = mode {
+            guard let orchestrator = firstRunOrchestrator else { return }
+            if Bundle.main.bundleURL.standardizedFileURL.path
+                == orchestrator.paths.installedApp.standardizedFileURL.path {
+                configureRuntime()
+            }
+            refreshStatus()
+            return
+        }
+        firstRunCompleted()
     }
 
     private func firstRunCompleted() {

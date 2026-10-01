@@ -77,8 +77,10 @@ PY
     WORKSPACE_ROOT="$2"
     [[ "$WORKSPACE_ROOT" == /* && -d "$WORKSPACE_ROOT" ]] \
       || fail "workspace root must be an absolute existing directory."
-    "$PYTHON" "$PREFLIGHT" --prebuilt --bundle-root "$BUNDLE_ROOT" --workspace-root "$WORKSPACE_ROOT" \
-      || fail "prebuilt installation preflight failed."
+    if ! PREFLIGHT_JSON="$("$PYTHON" "$PREFLIGHT" --json --prebuilt --bundle-root "$BUNDLE_ROOT" --workspace-root "$WORKSPACE_ROOT")"; then
+      printf '%s\n' "$PREFLIGHT_JSON"
+      exit 2
+    fi
     "$PYTHON" "$CONFIG_HELPER" --prebuilt "$CANONICAL_ENV" "$WORKSPACE_ROOT" \
       || fail "canonical Runtime configuration initialization failed."
     unset CONTROL_PLANE_API_KEY CONTROL_PLANE_TUNNEL_ID AGENT_RUNTIME_GIT_NAME AGENT_RUNTIME_GIT_EMAIL

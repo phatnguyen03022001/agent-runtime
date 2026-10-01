@@ -3500,7 +3500,7 @@ class CandidateCutoverTests(unittest.TestCase):
         self.assertIn('CONFIG_HELPER="$SCRIPT_DIR/runtime_config.py"', text)
         self.assertIn('PROVENANCE="$SCRIPT_DIR/package_provenance.py"', text)
         self.assertIn('CUTOVER="$SCRIPT_DIR/candidate_cutover.py"', text)
-        self.assertIn('"$PYTHON" "$PREFLIGHT" --prebuilt', text)
+        self.assertIn('"$PYTHON" "$PREFLIGHT" --json --prebuilt', text)
         self.assertIn('"$PYTHON" "$CONFIG_HELPER" --prebuilt', text)
         self.assertIn('PAYLOAD_RELEASE=', text)
         self.assertIn('"$PYTHON" "$PROVENANCE" validate-zero-cost', text)

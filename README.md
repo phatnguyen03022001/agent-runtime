@@ -25,13 +25,24 @@ A qualified release bundle is checkout-independent. It contains ad-hoc sealed `A
 
 Download the [v0.5.1 zero-cost release](https://github.com/phatnguyen03022001/agent-runtime/releases/tag/v0.5.1) and `SHA256SUMS.txt`. Verify the archive with `shasum -a 256 -c SHA256SUMS.txt` before extraction. Its SHA-256 is `9518e1cf4f28033cbec97b8906e55e1a4da6ad3a9067485fb6ef7c4fcfac58e8`, and the release tag identifies packaged source revision `674095e739533e100c2cf75f434dd0bc825a3de3`.
 
-On a fresh machine the existing app opens native setup automatically. Enter the provisioned Control Plane API key and tunnel ID in secure fields, provide the Runtime Git name/email pair when requested, and choose the workspace with the macOS folder picker. The normal newcomer path does **not** require Terminal, shell exports, manual `runtime.env` editing, or typing a workspace path.
+The latest public release remains **v0.5.1**. Current source contains a corrected newcomer onboarding flow for a later release; the source behavior below must not be read as a new v0.5.1 artifact claim.
 
-The app delegates validation, canonical mode-`0600` configuration publication, release preflight/provenance, candidate cutover, resume/recovery, doctor, and commit to the existing package-owned helpers. It does not reimplement lifecycle semantics in Swift. A recognized pending cutover may be doctor `degraded` before commit only because of `CUTOVER_TRANSACTION_PRESENT`; any additional doctor warning or failure blocks commit. Setup reports success only after the existing commit resolves the transaction and package-owned doctor is `healthy`. Runtime remains stopped until the operator explicitly presses Start or runs `./start.sh start`.
+On a fresh machine the source app opens native setup automatically. Set Up stays disabled until a new Runtime API key, Tunnel ID, Runtime Git name/email pair, and an existing workspace are provided. API-key and Tunnel-ID fields are secure and are never populated from an existing canonical configuration. The normal newcomer path does **not** require Terminal, shell exports, manual `runtime.env` editing, or typing a workspace path.
+
+Before canonical publication, the packaged configuration authority validates local shape, requires the official OpenAI `tunnel-client`, and performs the read-only equivalent of `tunnel-client admin --json tunnels get <tunnel_id>` with the submitted Runtime API key supplied only through a sanitized child environment. `tunnel-client doctor` remains local configuration validation and is not treated as remote credential proof. Failed validation neither creates a new canonical `runtime.env` nor overwrites an existing one. Successful publication remains atomic and mode `0600`.
+
+Configured first-run state and the installed control panel both expose **Reconfigure**. Reconfiguration requires fresh explicit values, validates them before atomically replacing the canonical configuration, never displays or pre-fills the existing API key or Tunnel ID, and does not implicitly Start, Stop, or Restart Runtime. Setup does not create keys or tunnels and does not install or upgrade `tunnel-client`.
+
+Official OpenAI setup destinations:
+- [Runtime API keys](https://platform.openai.com/settings/organization/api-keys)
+- [Tunnels](https://platform.openai.com/settings/organization/tunnels)
+- [Secure MCP Tunnel setup and tunnel-client](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels)
+
+The app delegates canonical configuration publication, release preflight/provenance, candidate cutover, resume/recovery, doctor, and commit to the existing package-owned helpers. It does not reimplement lifecycle semantics in Swift. A recognized pending cutover may be doctor `degraded` before commit only because of `CUTOVER_TRANSACTION_PRESENT`; any additional doctor warning or failure blocks commit. Setup reports success only after the existing commit resolves the transaction and package-owned doctor is `healthy`. Runtime remains stopped until the operator explicitly presses Start or runs `./start.sh start`.
 
 If macOS blocks the first ad-hoc app launch, use the platform's Open/Open Anyway control for the exact app and reopen the complete bundle. Setup then validates the external handoff and payload before cutover. The official OpenAI `tunnel-client` remains an external prerequisite and is neither installed nor upgraded by setup.
 
-An already-valid installed canonical configuration remains authoritative and goes directly to the current control panel without being rewritten or re-prompted. No agent-runtime Git clone, CPython 3.13, Swift/Xcode, local signing identity, or notary credentials are required on the consumer Mac.
+An already-valid installed canonical configuration remains authoritative and goes directly to the current control panel without being silently rewritten. No agent-runtime Git clone, CPython 3.13, Swift/Xcode, local signing identity, or notary credentials are required on the consumer Mac.
 
 The public v0.5.1 artifact is ad-hoc signed without Apple Developer ID or notarization. macOS may require Open/Open Anyway for the exact downloaded app.
 

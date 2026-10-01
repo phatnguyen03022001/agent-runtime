@@ -35,18 +35,26 @@ The first ad-hoc app launch may require macOS Open/Open Anyway for that exact ap
 
 The target does **not** need an agent-runtime Git clone, Git repository identity for an agent-runtime checkout, CPython 3.13, Xcode/Swift, or a local code-signing identity. The release installer uses the Python interpreter and lifecycle helpers packaged inside `Agent Runtime.app`.
 
-OpenAI Secure MCP Tunnel guidance and `tunnel-client` acquisition are:
-https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
+Official OpenAI setup destinations:
+
+- Runtime API keys: https://platform.openai.com/settings/organization/api-keys
+- Tunnels: https://platform.openai.com/settings/organization/tunnels
+- Secure MCP Tunnel setup and `tunnel-client`: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
 
 ### First-run native setup
 
+The latest public release remains **v0.5.1**. The corrected onboarding behavior in this section describes current source and is intended for a later release; it does not revise the published v0.5.1 artifact.
+
 Keep `Agent Runtime.app`, `Agent Runtime.candidate.json`, and the `payloads` directory together and open the app. A fresh prebuilt launch with no usable canonical configuration presents setup automatically.
 
-1. Enter the provisioned `CONTROL_PLANE_API_KEY` in the secure API-key field.
-2. Enter the provisioned `CONTROL_PLANE_TUNNEL_ID` in the secure tunnel field.
-3. Provide the Runtime Git name/email pair when setup requires it.
+1. Enter a new `CONTROL_PLANE_API_KEY` in the secure Runtime API-key field.
+2. Enter a new `CONTROL_PLANE_TUNNEL_ID` in the secure tunnel field.
+3. Provide the Runtime Git name/email pair.
 4. Choose an existing workspace with the macOS directory picker. The normal path does not accept a typed workspace path.
-5. Continue setup. If macOS blocks the initial ad-hoc app launch, use its Open/Open Anyway control for this exact app, then reopen the complete bundle.
+5. Set Up remains disabled until all five inputs are present and the workspace exists.
+6. Continue setup. If macOS blocks the initial ad-hoc app launch, use its Open/Open Anyway control for this exact app, then reopen the complete bundle.
+
+The UI provides user-initiated links to the official API-key, tunnel, and Secure MCP Tunnel pages above. Setup never creates keys or tunnels, uses admin keys, or installs or upgrades `tunnel-client`.
 
 Secrets cross from the native UI to the packaged configuration helper only through bounded stdin. They are not placed in argv, shell exports, UserDefaults, logs, diagnostics, or repository evidence. The canonical destination remains:
 
@@ -54,9 +62,13 @@ Secrets cross from the native UI to the packaged configuration helper only throu
 ~/Library/Application Support/Agent Runtime/runtime.env
 ```
 
-The existing `runtime_config.py` authority validates all values before publication and creates the canonical file privately and atomically at mode `0600`. Invalid input creates no partial canonical file and starts no cutover. An existing canonical file is inspected and preserved; setup never silently repairs or overwrites an invalid/unsafe existing file.
+The existing `runtime_config.py` authority validates local configuration shape before publication, requires an executable official `tunnel-client`, then performs the read-only equivalent of `tunnel-client admin --json tunnels get <tunnel_id>`. The submitted `CONTROL_PLANE_API_KEY` is passed only in a sanitized child environment and is never placed in argv. `tunnel-client doctor` validates local configuration shape only and is not remote credential proof.
 
-The native flow then delegates to the packaged `install_release.sh`, provenance, and `candidate_cutover.py` implementation. The external candidate handoff and matching initial content-addressed payload are mandatory and must remain beside the app. Missing, unsafe, or mismatched state fails closed with guidance to reopen the complete release bundle.
+Only after that admission succeeds does `runtime_config.py` create the canonical file privately and atomically at mode `0600`. Validation failure creates no canonical file and never overwrites an existing canonical configuration. Typed admission reasons are preserved through the packaged installer and native UI rather than reconstructed from arbitrary human stderr.
+
+Configured first-run state and the installed control panel expose **Reconfigure**. Reconfigure never displays or pre-fills an existing API key or Tunnel ID; all required values must be entered explicitly again. It validates first, then atomically replaces a safe existing mode-`0600` canonical configuration through the same `runtime_config.py` authority. Reconfiguration does not implicitly Start, Stop, or Restart Runtime.
+
+The native flow then delegates activation to the packaged `install_release.sh`, provenance, and `candidate_cutover.py` implementation. The external candidate handoff and matching initial content-addressed payload are mandatory and must remain beside the app. Missing, unsafe, or mismatched state fails closed with guidance to reopen the complete release bundle.
 
 Before commit, setup requires:
 
@@ -67,7 +79,7 @@ The package-owned doctor therefore remains `degraded` at that boundary solely be
 
 The app and initial payload are validated before cutover. Setup does not bypass Gatekeeper or install or update the external `tunnel-client`. Native/substrate cutover requires coherent lifecycle ownership: `SMAppService.mainApp` for menu-bar login startup, the canonical per-user LaunchAgent for explicit Runtime invocation, and no current Runtime `SMAppService.agent` registration. Fresh cutover leaves that LaunchAgent loaded but idle. Ordinary validated pure-Python payload activation preserves whether a positively managed Runtime was running: a running generation is stopped, reaped, switched, and explicitly restarted; an already-stopped Runtime remains stopped. It leaves the approved app, LaunchAgent plist, runtime.env, and tunnel-client unchanged.
 
-An already-valid installed configuration with no pending cutover bypasses onboarding and opens the current control panel directly.
+An already-valid installed configuration with no pending cutover bypasses first-run onboarding and opens the current control panel directly; Reconfigure remains available there as an explicit user action.
 
 ### Packaged lifecycle CLI — maintainers and recovery
 

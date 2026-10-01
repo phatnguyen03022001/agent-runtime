@@ -959,6 +959,11 @@ final class PresentationTests: XCTestCase {
         )
         controller.selectedWorkspace = URL(fileURLWithPath: "/")
         controller.loadView()
+        controller.apiKeyField.stringValue = "synthetic-key"
+        controller.tunnelIDField.stringValue = "tunnel_0123456789abcdef0123456789abcdef"
+        controller.gitNameField.stringValue = "Native Operator"
+        controller.gitEmailField.stringValue = "native@example.invalid"
+        controller.refreshRequiredFieldState()
 
         try XCTUnwrap(button(titled: "Set Up", in: controller.view)).performClick(nil)
 
@@ -1005,6 +1010,143 @@ final class PresentationTests: XCTestCase {
         controller.applyWorkspaceSelection(response: .cancel, urls: [URL(fileURLWithPath: "/ignored")])
         let selectedWorkspace = controller.selectedWorkspace
         XCTAssertEqual(selectedWorkspace, original)
+    }
+
+    func testFirstRunTypedFailurePresentationMapsClosedReasonsAndSafeFallback() throws {
+        let expected: [String: String] = [
+            "TUNNEL_CLIENT_UNAVAILABLE": "tunnel-client",
+            "INVALID_TUNNEL_ID": "Tunnel ID",
+            "INVALID_CREDENTIAL": "API key",
+            "TUNNEL_ACCESS_DENIED": "access",
+            "TUNNEL_NOT_FOUND": "not found",
+            "CONTROL_PLANE_UNAVAILABLE": "temporarily unavailable",
+            "WORKSPACE_UNAVAILABLE": "workspace",
+            "RUNTIME_CONFIGURATION_INCOMPLETE": "required",
+            "CUTOVER_TRANSACTION_PRESENT": "cutover",
+        ]
+        for (reason, fragment) in expected {
+            let data = try JSONSerialization.data(withJSONObject: [
+                "schema_version": 1,
+                "status": "error",
+                "reason_code": reason,
+            ])
+            XCTAssertTrue(
+                FirstRunFailurePresentation.message(from: data, fallback: "fallback")
+                    .localizedCaseInsensitiveContains(fragment),
+                reason
+            )
+        }
+        let installer = try JSONSerialization.data(withJSONObject: [
+            "checks": [["status": "fail", "reason_code": "TUNNEL_NOT_FOUND"]],
+        ])
+        XCTAssertTrue(
+            FirstRunFailurePresentation.message(from: installer, fallback: "fallback")
+                .contains("not found")
+        )
+        XCTAssertEqual(
+            FirstRunFailurePresentation.message(from: Data("not-json".utf8), fallback: "safe fallback"),
+            "safe fallback"
+        )
+    }
+
+    func testExplicitReconfigureUsesOnlyRuntimeConfigAdmissionAndKeepsSecretsOffArgv() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let home = root.appendingPathComponent("home", isDirectory: true)
+        let candidate = home.appendingPathComponent("Applications/Agent Runtime.app", isDirectory: true)
+        let workspace = root.appendingPathComponent("workspace", isDirectory: true)
+        try FileManager.default.createDirectory(at: workspace, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+        let runner = RecordingFirstRunRunner(results: [.init(exitCode: 0)])
+        let paths = FirstRunSetupPaths(candidateApp: candidate, home: home)
+        let orchestrator = FirstRunSetupOrchestrator(paths: paths, runner: runner)
+        let api = "SWIFT_RECONFIGURE_API_SENTINEL"
+        let tunnel = "tunnel_0123456789abcdef0123456789abcdef"
+
+        XCTAssertEqual(orchestrator.reconfigure(FirstRunSetupInput(
+            apiKey: api,
+            tunnelID: tunnel,
+            workspace: workspace,
+            gitName: "New Operator",
+            gitEmail: "new@example.invalid"
+        )), .success)
+        XCTAssertEqual(runner.invocations.count, 1)
+        XCTAssertEqual(
+            runner.invocations[0].arguments,
+            [paths.runtimeConfig.path, "--reconfigure-stdin", paths.canonicalEnv.path]
+        )
+        XCTAssertFalse(runner.invocations[0].arguments.joined(separator: " ").contains(api))
+        XCTAssertFalse(runner.invocations[0].arguments.joined(separator: " ").contains(tunnel))
+        let input = try XCTUnwrap(runner.invocations[0].standardInput)
+        XCTAssertTrue(String(decoding: input, as: UTF8.self).contains(api))
+        XCTAssertTrue(String(decoding: input, as: UTF8.self).contains(tunnel))
+    }
+
+    @MainActor
+    func testSetupFormGatesRequiredFieldsAndPublishesOfficialHelpDestinations() throws {
+        let controller = FirstRunSetupController(
+            mode: .fresh,
+            begin: { _ in .failure("not called") },
+            activateConfigured: { _ in .failure("not called") },
+            performAction: { _ in .failure("not called") },
+            completed: {}
+        )
+        controller.loadView()
+        let setup = try XCTUnwrap(button(titled: "Set Up", in: controller.view))
+        XCTAssertFalse(setup.isEnabled)
+        XCTAssertEqual(FirstRunHelpLinks.apiKeys.absoluteString, "https://platform.openai.com/settings/organization/api-keys")
+        XCTAssertEqual(FirstRunHelpLinks.tunnels.absoluteString, "https://platform.openai.com/settings/organization/tunnels")
+        XCTAssertEqual(FirstRunHelpLinks.secureTunnel.absoluteString, "https://developers.openai.com/api/docs/guides/secure-mcp-tunnels")
+        XCTAssertNotNil(button(titled: "Runtime API keys…", in: controller.view))
+        XCTAssertNotNil(button(titled: "Tunnels…", in: controller.view))
+        XCTAssertNotNil(button(titled: "Secure MCP Tunnel help…", in: controller.view))
+
+        controller.apiKeyField.stringValue = "synthetic-key"
+        controller.tunnelIDField.stringValue = "tunnel_0123456789abcdef0123456789abcdef"
+        controller.gitNameField.stringValue = "Native Operator"
+        controller.gitEmailField.stringValue = "native@example.invalid"
+        controller.selectedWorkspace = URL(fileURLWithPath: "/", isDirectory: true)
+        controller.refreshRequiredFieldState()
+        XCTAssertTrue(setup.isEnabled)
+    }
+
+    @MainActor
+    func testConfiguredAndInstalledControlPanelExposeExplicitReconfigureWithoutSecretPrefill() throws {
+        let workspace = URL(fileURLWithPath: "/", isDirectory: true)
+        var configuredRequest: URL?
+        let configured = FirstRunSetupController(
+            mode: .configured(workspace),
+            begin: { _ in .failure("not called") },
+            activateConfigured: { _ in .failure("not called") },
+            performAction: { _ in .failure("not called") },
+            requestReconfigure: { configuredRequest = $0 },
+            completed: {}
+        )
+        configured.loadView()
+        try XCTUnwrap(button(titled: "Reconfigure…", in: configured.view)).performClick(nil)
+        XCTAssertEqual(configuredRequest, workspace)
+
+        var controlPanelRequested = false
+        let panel = ControlPanelController(
+            performAction: { _ in XCTFail("reconfigure must not dispatch lifecycle") },
+            reconfigure: { controlPanelRequested = true },
+            quit: {}
+        )
+        panel.loadView()
+        try XCTUnwrap(button(titled: "Reconfigure…", in: panel.view)).performClick(nil)
+        XCTAssertTrue(controlPanelRequested)
+
+        let form = FirstRunSetupController(
+            mode: .reconfigure(workspace),
+            begin: { _ in .failure("not called") },
+            reconfigure: { _ in .success },
+            activateConfigured: { _ in .failure("not called") },
+            performAction: { _ in .failure("not called") },
+            completed: {}
+        )
+        form.loadView()
+        XCTAssertEqual(form.apiKeyField.stringValue, "")
+        XCTAssertEqual(form.tunnelIDField.stringValue, "")
+        XCTAssertFalse(try XCTUnwrap(button(titled: "Reconfigure", in: form.view)).isEnabled)
     }
 
     @MainActor

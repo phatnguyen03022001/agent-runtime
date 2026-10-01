@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import stat
@@ -19,6 +20,50 @@ SPEC.loader.exec_module(runtime_config)
 
 
 class RuntimeConfigTests(unittest.TestCase):
+    TUNNEL_ID = "tunnel_0123456789abcdef0123456789abcdef"
+
+    def _write_tunnel_client(self, temp: Path, *, output: str, exit_code: int) -> Path:
+        tools = temp / "tools"
+        tools.mkdir(exist_ok=True)
+        client = tools / "tunnel-client"
+        client.write_text(
+            "#!/bin/sh\n"
+            "for arg in \"$@\"; do\n"
+            "  [ \"$arg\" != \"$CONTROL_PLANE_API_KEY\" ] || exit 97\n"
+            "done\n"
+            + "printf '%s\\n' " + repr(output) + "\n"
+            + f"exit {exit_code}\n"
+        )
+        client.chmod(0o700)
+        return client
+
+    def _native_environment(self, client: Path) -> dict[str, str]:
+        env = os.environ.copy()
+        env["PATH"] = str(client.parent)
+        env.pop("OPENAI_ADMIN_KEY", None)
+        return env
+
+    def test_tunnel_child_environment_keeps_only_bounded_process_context_and_submitted_key(self) -> None:
+        source = {
+            "HOME": "/synthetic/home",
+            "USER": "synthetic-user",
+            "TMPDIR": "/synthetic/tmp",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/synthetic/bin",
+            "CONTROL_PLANE_API_KEY": "OLD_KEY",
+            "OPENAI_ADMIN_KEY": "ADMIN_SENTINEL",
+            "OPENAI_API_KEY": "OTHER_SENTINEL",
+            "UNRELATED_SECRET": "UNRELATED_SENTINEL",
+        }
+        child = runtime_config._safe_tunnel_environment(source, "SUBMITTED_RUNTIME_KEY")
+        self.assertEqual(child["CONTROL_PLANE_API_KEY"], "SUBMITTED_RUNTIME_KEY")
+        self.assertEqual(child["PATH"], "/synthetic/bin")
+        self.assertEqual(child["LC_ALL"], "C")
+        self.assertNotIn("OPENAI_ADMIN_KEY", child)
+        self.assertNotIn("OPENAI_API_KEY", child)
+        self.assertNotIn("UNRELATED_SECRET", child)
+
     def _write_source(self, path: Path, workspace_value: str) -> None:
         path.write_text(
             "CONTROL_PLANE_API_KEY=test-key\n"
@@ -337,19 +382,25 @@ class RuntimeConfigTests(unittest.TestCase):
             canonical = temp / "config" / "runtime.env"
             environ = {
                 "CONTROL_PLANE_API_KEY": "PREBUILT_SECRET_API",
-                "CONTROL_PLANE_TUNNEL_ID": "PREBUILT_SECRET_TUNNEL",
+                "CONTROL_PLANE_TUNNEL_ID": self.TUNNEL_ID,
                 "AGENT_RUNTIME_GIT_NAME": "Prebuilt Operator",
                 "AGENT_RUNTIME_GIT_EMAIL": "prebuilt@example.invalid",
                 "AGENT_RUNTIME_MAX_ACTIVE_SESSIONS": "6",
                 "AGENT_RUNTIME_MAX_PARALLELISM": "2",
             }
+            client = self._write_tunnel_client(
+                temp,
+                output=json.dumps({"id": self.TUNNEL_ID}),
+                exit_code=0,
+            )
+            environ["PATH"] = str(client.parent)
 
             runtime_config.ensure_prebuilt(canonical, workspace, environ=environ)
 
             text = canonical.read_text()
             self.assertEqual(stat.S_IMODE(canonical.stat().st_mode), 0o600)
             self.assertIn("CONTROL_PLANE_API_KEY=PREBUILT_SECRET_API\n", text)
-            self.assertIn("CONTROL_PLANE_TUNNEL_ID=PREBUILT_SECRET_TUNNEL\n", text)
+            self.assertIn(f"CONTROL_PLANE_TUNNEL_ID={self.TUNNEL_ID}\n", text)
             self.assertIn(f"AGENT_RUNTIME_WORKSPACE_ROOT={workspace.resolve()}\n", text)
             self.assertIn("AGENT_RUNTIME_GIT_NAME=Prebuilt Operator\n", text)
             self.assertIn("AGENT_RUNTIME_GIT_EMAIL=prebuilt@example.invalid\n", text)
@@ -368,7 +419,7 @@ class RuntimeConfigTests(unittest.TestCase):
             secret = "DO_NOT_DISCLOSE_PREBUILT_SECRET"
             environ = {
                 "CONTROL_PLANE_API_KEY": secret,
-                "CONTROL_PLANE_TUNNEL_ID": "fixture-tunnel",
+                "CONTROL_PLANE_TUNNEL_ID": self.TUNNEL_ID,
                 "AGENT_RUNTIME_GIT_NAME": "Prebuilt Operator",
             }
             with self.assertRaises(SystemExit) as raised:
@@ -385,6 +436,37 @@ class RuntimeConfigTests(unittest.TestCase):
                 runtime_config.ensure_prebuilt(canonical, missing_workspace, environ=complete)
 
 
+    def test_native_stdin_requires_tunnel_client_before_canonical_publication(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            workspace = temp / "workspace"
+            workspace.mkdir()
+            canonical = temp / "config" / "runtime.env"
+            secret = "NATIVE_SENTINEL_" + uuid.uuid4().hex
+            payload = {
+                "CONTROL_PLANE_API_KEY": secret,
+                "CONTROL_PLANE_TUNNEL_ID": "tunnel_0123456789abcdef0123456789abcdef",
+                "AGENT_RUNTIME_WORKSPACE_ROOT": str(workspace),
+                "AGENT_RUNTIME_GIT_NAME": "Native Operator",
+                "AGENT_RUNTIME_GIT_EMAIL": "native@example.invalid",
+            }
+            env = os.environ.copy()
+            env["PATH"] = str(temp / "missing-tools")
+
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "macos" / "runtime_config.py"), "--prebuilt-stdin", str(canonical)],
+                input=json.dumps(payload),
+                capture_output=True,
+                text=True,
+                check=False,
+                env=env,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(json.loads(result.stdout)["reason_code"], "TUNNEL_CLIENT_UNAVAILABLE")
+            self.assertNotIn(secret, result.stdout + result.stderr)
+            self.assertFalse(canonical.exists())
+
     def test_native_stdin_bootstrap_is_private_atomic_and_non_echoing(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             temp = Path(raw)
@@ -392,7 +474,12 @@ class RuntimeConfigTests(unittest.TestCase):
             workspace.mkdir()
             canonical = temp / "config" / "runtime.env"
             api_secret = "NATIVE_SENTINEL_" + uuid.uuid4().hex
-            tunnel_secret = "NATIVE_SENTINEL_" + uuid.uuid4().hex
+            tunnel_secret = self.TUNNEL_ID
+            client = self._write_tunnel_client(
+                temp,
+                output=json.dumps({"id": tunnel_secret}),
+                exit_code=0,
+            )
             payload = {
                 "CONTROL_PLANE_API_KEY": api_secret,
                 "CONTROL_PLANE_TUNNEL_ID": tunnel_secret,
@@ -407,6 +494,7 @@ class RuntimeConfigTests(unittest.TestCase):
                 capture_output=True,
                 text=True,
                 check=False,
+                env=self._native_environment(client),
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -430,6 +518,131 @@ class RuntimeConfigTests(unittest.TestCase):
                 json.loads(inspected.stdout),
                 {"git_identity_ready": True, "workspace_root": str(workspace.resolve())},
             )
+
+    def test_native_stdin_maps_structured_tunnel_failures_without_publishing(self) -> None:
+        cases = (
+            (401, "INVALID_CREDENTIAL"),
+            (403, "TUNNEL_ACCESS_DENIED"),
+            (404, "TUNNEL_NOT_FOUND"),
+            (503, "CONTROL_PLANE_UNAVAILABLE"),
+        )
+        for status, reason in cases:
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as raw:
+                temp = Path(raw)
+                workspace = temp / "workspace"
+                workspace.mkdir()
+                canonical = temp / "config" / "runtime.env"
+                secret = "FAILURE_SENTINEL_" + uuid.uuid4().hex
+                client = self._write_tunnel_client(
+                    temp,
+                    output=json.dumps({"error": {"status": status}}),
+                    exit_code=1,
+                )
+                payload = {
+                    "CONTROL_PLANE_API_KEY": secret,
+                    "CONTROL_PLANE_TUNNEL_ID": self.TUNNEL_ID,
+                    "AGENT_RUNTIME_WORKSPACE_ROOT": str(workspace),
+                    "AGENT_RUNTIME_GIT_NAME": "Native Operator",
+                    "AGENT_RUNTIME_GIT_EMAIL": "native@example.invalid",
+                }
+                result = subprocess.run(
+                    [sys.executable, str(ROOT / "macos" / "runtime_config.py"), "--prebuilt-stdin", str(canonical)],
+                    input=json.dumps(payload),
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    env=self._native_environment(client),
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(json.loads(result.stdout)["reason_code"], reason)
+                self.assertNotIn(secret, result.stdout + result.stderr)
+                self.assertFalse(canonical.exists())
+
+    def test_native_stdin_rejects_malformed_tunnel_response_without_publishing(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            workspace = temp / "workspace"
+            workspace.mkdir()
+            canonical = temp / "runtime.env"
+            client = self._write_tunnel_client(temp, output="not-json", exit_code=0)
+            payload = {
+                "CONTROL_PLANE_API_KEY": "MALFORMED_SENTINEL",
+                "CONTROL_PLANE_TUNNEL_ID": self.TUNNEL_ID,
+                "AGENT_RUNTIME_WORKSPACE_ROOT": str(workspace),
+                "AGENT_RUNTIME_GIT_NAME": "Native Operator",
+                "AGENT_RUNTIME_GIT_EMAIL": "native@example.invalid",
+            }
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "macos" / "runtime_config.py"), "--prebuilt-stdin", str(canonical)],
+                input=json.dumps(payload),
+                capture_output=True,
+                text=True,
+                check=False,
+                env=self._native_environment(client),
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(json.loads(result.stdout)["reason_code"], "CONTROL_PLANE_UNAVAILABLE")
+            self.assertFalse(canonical.exists())
+
+    def test_reconfigure_validates_before_atomic_replacement_and_preserves_previous_on_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            workspace = temp / "workspace"
+            workspace.mkdir()
+            canonical = temp / "config" / "runtime.env"
+            canonical.parent.mkdir()
+            old_values = {
+                "CONTROL_PLANE_API_KEY": "OLD_SYNTHETIC_KEY",
+                "CONTROL_PLANE_TUNNEL_ID": self.TUNNEL_ID,
+                "AGENT_RUNTIME_WORKSPACE_ROOT": str(workspace),
+                "AGENT_RUNTIME_GIT_NAME": "Old Operator",
+                "AGENT_RUNTIME_GIT_EMAIL": "old@example.invalid",
+            }
+            canonical.write_bytes(runtime_config._prebuilt_payload(old_values))
+            canonical.chmod(0o600)
+            before = canonical.read_bytes()
+            failing = self._write_tunnel_client(
+                temp,
+                output=json.dumps({"error": {"status": 403}}),
+                exit_code=1,
+            )
+            new_values = {
+                **old_values,
+                "CONTROL_PLANE_API_KEY": "NEW_SYNTHETIC_KEY",
+                "AGENT_RUNTIME_GIT_NAME": "New Operator",
+                "AGENT_RUNTIME_GIT_EMAIL": "new@example.invalid",
+            }
+            failed = subprocess.run(
+                [sys.executable, str(ROOT / "macos" / "runtime_config.py"), "--reconfigure-stdin", str(canonical)],
+                input=json.dumps(new_values),
+                capture_output=True,
+                text=True,
+                check=False,
+                env=self._native_environment(failing),
+            )
+            self.assertNotEqual(failed.returncode, 0)
+            self.assertEqual(json.loads(failed.stdout)["reason_code"], "TUNNEL_ACCESS_DENIED")
+            self.assertEqual(canonical.read_bytes(), before)
+            self.assertEqual(stat.S_IMODE(canonical.stat().st_mode), 0o600)
+
+            success = self._write_tunnel_client(
+                temp,
+                output=json.dumps({"id": self.TUNNEL_ID}),
+                exit_code=0,
+            )
+            passed = subprocess.run(
+                [sys.executable, str(ROOT / "macos" / "runtime_config.py"), "--reconfigure-stdin", str(canonical)],
+                input=json.dumps(new_values),
+                capture_output=True,
+                text=True,
+                check=False,
+                env=self._native_environment(success),
+            )
+            self.assertEqual(passed.returncode, 0, passed.stderr)
+            self.assertEqual(json.loads(passed.stdout)["reason_code"], "OK")
+            self.assertNotEqual(canonical.read_bytes(), before)
+            self.assertEqual(stat.S_IMODE(canonical.stat().st_mode), 0o600)
+            self.assertIn(b"AGENT_RUNTIME_GIT_NAME=New Operator\n", canonical.read_bytes())
 
     def test_native_stdin_invalid_input_leaves_no_canonical_or_secret_output(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -481,7 +694,9 @@ class RuntimeConfigTests(unittest.TestCase):
             )
             self.assertNotEqual(result.returncode, 0)
             self.assertFalse(canonical.exists())
-            self.assertIn("unsupported configuration field", result.stderr)
+            failure = json.loads(result.stdout)
+            self.assertEqual(failure["reason_code"], "RUNTIME_CONFIGURATION_INCOMPLETE")
+            self.assertIn("unsupported configuration field", failure["message"])
 
 
 if __name__ == "__main__":
