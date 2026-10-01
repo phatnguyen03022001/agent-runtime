@@ -1,0 +1,161 @@
+protocol_version: 3
+
+task_id: TASK-0191
+task_revision: 1
+state: APPROVED
+title: "Canonical Runtime Truth and Menu-Bar Status Correctness"
+
+origin:
+  type: user_request
+  task_id: ""
+  gap_id: "RUNTIME-STATUS-FALSE-UNAVAILABLE"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+
+architect_analysis_skills:
+  - architect
+  - verification
+  - reliability
+  - simplicity
+
+execution_skills:
+  required:
+    - executor
+    - verification
+    - reliability
+    - simplicity
+  recommended: []
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+authority_sources:
+  - source: "Current operator instruction in the active Architect session."
+    role: "Runtime does not need reboot survival; while running it must expose truthful state. Start the first stability task now."
+    precedence: 1
+  - source: "agent-runtime main at 3980d1766b154fa2bd81a28ba639908ca9da9b81: start.sh and macos/Sources/AgentRuntimeCore/NativeRuntimeBackend.swift"
+    role: "Current target truth: lifecycle helper already owns readiness checks while Swift separately reconstructs status from desired-state, process discovery and readiness, allowing false Unavailable."
+    precedence: 2
+  - source: ".agent/tasks/TASK-0190/task.yaml revision 8"
+    role: "Historical unfinished reboot-survival authority superseded by the current operator objective; its remaining physical-reboot authority must not be consumed."
+    precedence: 3
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing package-owned lifecycle/status helper plus existing AgentRuntimeCore and menu-bar presentation components."
+  rationale: "Truth ownership stays inside existing lifecycle/status responsibilities; no new top-level subsystem or service is required."
+
+objective: "Establish one authoritative read-only Runtime observation contract and make the menu-bar presentation consume that truth so a genuinely serving canonical Runtime is never reported Unavailable merely because desired-state, process-discovery formatting, or ownership metadata disagrees. Availability and lifecycle-control authority must be separate."
+
+scope:
+  required_changes:
+    - "Make one package-owned Runtime observation path the canonical source for operator-visible status. Remove duplicated status truth from the Swift menu-bar backend; Swift may adapt/present the canonical result but must not independently redefine Runtime availability."
+    - "Model service availability separately from lifecycle-control authority. A canonical Runtime proven healthy/ready must present as running. If it is serving but positive lifecycle ownership cannot be proven, present it as running read-only/external rather than Unavailable and keep destructive controls disabled."
+    - "Treat desired-state persistence as lifecycle intent only, never proof that Runtime is currently running or stopped."
+    - "Do not trust arbitrary occupancy or arbitrary HTTP 200 on port 8080. The canonical observation must preserve positive Runtime identity/ownership safety before classifying a listener as the canonical Runtime."
+    - "Preserve fail-closed lifecycle mutation: Stop/Restart require positive canonical control ownership; foreign, conflicting, or genuinely unknowable state must never be signaled or killed."
+    - "Make CLI/operator status and menu-bar status derive from the same status semantics. A stale exact-argv/process-format observation must not override stronger canonical serving evidence."
+    - "Keep status refresh bounded, read-only and side-effect free. Do not auto-start, repair, reinstall, restart, cut over, reboot, mutate LaunchServices, widen permissions, or change persistence while observing state."
+    - "Add deterministic tests for at least: healthy managed Runtime; healthy Runtime with control ownership unproven; desired RUNNING but readiness failed; no Runtime; foreign/ambiguous port owner; stale desired-state; process/argv presentation drift. Prove the first two cannot render Unavailable solely from ownership/process-discovery uncertainty."
+    - "Use focused deterministic tests before broad verification. Run the canonical ./verify at most once after focused checks pass. The canonical verification execution must have an attributable durable/reconcilable outcome across chat/transport interruption; if its result becomes unknown, reconcile existing process/log/receipt/state before any rerun and never blind-retry."
+    - "Publish a truthful report only after implementation and required proof. TASK-0190 revision 8 must not be executed, rebooted, repaired, or otherwise consumed during TASK-0191."
+  allowed_existing_files_or_components:
+    - "start.sh lifecycle/status observation"
+    - "macos/Sources/AgentRuntimeCore/"
+    - "macos/Sources/AgentRuntimeMenuBar/"
+    - "macos/Tests/AgentRuntimeCoreTests/"
+    - "tests/"
+    - "README.md status/lifecycle documentation"
+
+invariants:
+  - "MAIN ONLY; no branch or PR creation."
+  - "GitHub remote remains canonical repository truth."
+  - "Availability and lifecycle-control authority are distinct facts."
+  - "A healthy canonical Runtime is never downgraded to Unavailable solely because desired-state, ownership metadata, or ps/argv presentation is stale or unprovable."
+  - "Foreign or ambiguous Runtime identity never grants Stop/Restart authority."
+  - "No requirement is added for Runtime survival across reboot/login."
+  - "TASK-0190 revision 8 physical reboot budget remains unconsumed."
+  - "No dependency or service-topology expansion is required for status truth."
+
+forbidden_changes:
+  - "Do not execute or continue TASK-0190 revision 8."
+  - "Do not reboot the Mac or add reboot/login qualification."
+  - "Do not install, cut over, rollback, recover, manually restart, or mutate the live installed Runtime as part of implementation verification."
+  - "Do not add supervisor daemons, schedulers, registries, databases, caches, new services, or speculative orchestration."
+  - "Do not weaken protected-port/foreign-process safety in order to make status appear green."
+  - "Do not change MCP public tool semantics, tunnel identity/configuration, credentials, release assets, tags, or version."
+  - "Do not add dependencies unless a revised Architect task explicitly authorizes them."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: forbidden
+  spec_change: revised_contract_required
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Runtime status has one authoritative observation owner shared by CLI/operator status and menu-bar presentation."
+    evidence_required: "Diff and focused tests prove the menu-bar no longer independently reconstructs competing availability truth and both surfaces map from the same canonical status semantics."
+  - id: AC-2
+    requirement: "Availability is independent from lifecycle-control ownership."
+    evidence_required: "Deterministic tests prove healthy managed Runtime -> Running/controllable; healthy canonical Runtime with ownership unproven -> Running read-only/external; neither case becomes Unavailable solely because desired-state or process/ownership metadata disagrees."
+  - id: AC-3
+    requirement: "Unsafe or genuinely unhealthy states remain fail-closed."
+    evidence_required: "Tests prove desired RUNNING with failed readiness is degraded/attention rather than falsely Running; absent Runtime is Stopped; foreign/conflicting identity is non-controllable and never killed or adopted."
+  - id: AC-4
+    requirement: "Status observation is bounded and non-mutating and introduces no reboot-survival machinery."
+    evidence_required: "Focused tests/source inspection prove refresh performs no start/stop/restart/install/reboot/repair/persistence mutation and TASK-0190 reboot authority is untouched."
+  - id: AC-5
+    requirement: "Implementation is deterministically verified without blind replay after chat/transport loss."
+    evidence_required: "Focused Swift/status tests PASS, canonical ./verify PASS from at most one new invocation, and verification evidence is attributable/reconcilable if the controlling chat or transport disconnects."
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "./verify"
+    expected_signal: "PASS from one post-focused-check invocation maximum; no blind rerun after ambiguous interruption."
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Run focused AgentRuntimeCore/menu-bar status tests and any focused shell/Python contract tests without touching the live installed Runtime."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Run xcrun swift test --package-path macos after focused status behavior is green."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Run the single canonical ./verify through a durable/reconcilable execution path only after focused checks pass."
+      required: true
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
