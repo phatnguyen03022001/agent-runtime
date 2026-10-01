@@ -1,0 +1,213 @@
+protocol_version: 3
+
+task_id: TASK-0195
+task_revision: 1
+state: APPROVED
+title: "Menu-Bar External Payload Configuration Truth Closure"
+
+origin:
+  type: user_reported_defect
+  predecessor_task: TASK-0194
+  gap_id: "F-0195-001"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+
+execution_skills:
+  required:
+    - executor
+    - verification
+    - reliability
+    - simplicity
+  recommended: []
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0194/review.yaml at de0c67dd581c7377386f7bb71bf96df16a34b65f"
+    role: "Accepted live Runtime/cutover/dual-identity state and closed TASK-0194."
+    precedence: 1
+  - source: "Fresh Architect live diagnosis after TASK-0194 closure"
+    role: "Proven menu bootstrap mismatch: AppDelegate requires an obsolete embedded server.py that zero-cost external-payload installations intentionally do not contain."
+    precedence: 2
+  - source: "macos/Sources/AgentRuntimeMenuBar/AppDelegate.swift at the TASK-0195 base"
+    role: "Current menu configuration gate and fallback-to-ambiguous behavior."
+    precedence: 3
+  - source: "macos/Sources/AgentRuntimeCore/NativeRuntimeBackend.swift at the TASK-0195 base"
+    role: "Canonical status observation path through installed start.sh status --json."
+    precedence: 4
+
+problem_statement:
+  observed_live_truth:
+    installed_substrate_revision: "e88effb4bb828c602667943dbe0f1fb2c88d012c"
+    runtime_status: "schema=3 state=running control=managed health=live ready=ready"
+    listener: "127.0.0.1:8080"
+    direct_listener_owner: "tunnel-client child of canonical AgentRuntimeRuntimeService"
+    doctor: "healthy 10/10"
+    transaction: absent
+    desired_state: absent
+    menu_process: "canonical installed AgentRuntimeMenuBar process present"
+  proven_defect:
+    embedded_server_path: "Contents/Resources/runtime/agent_runtime/server.py"
+    embedded_server_state: absent
+    selected_external_payload_server_state: present
+    safe_environment_status_probe: PASS
+    consequence: "AppDelegate.installedRuntimeConfiguration throws before NativeRuntimeBackend can observe canonical status; controller remains nil; refreshStatus synthesizes RuntimeStatus.ambiguous; presentation maps ambiguous Endpoint to Unavailable."
+  non_root_causes:
+    - "Port 8080 is listening correctly."
+    - "start.sh status --json succeeds under the same reduced safe environment used by NativeRuntimeBackend."
+    - "RuntimePopoverPresentation mapping is correct for owned/external running observations."
+    - "The active Runtime lifecycle, tunnel-client child process, selected payload, doctor, and dual identity are healthy."
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing AppDelegate installed configuration bootstrap plus NativeRuntimeBackend canonical status observation."
+  rationale: "Remove the obsolete embedded first-party server-file assumption from menu bootstrap. Do not add a new payload resolver or duplicate start.sh external-payload validation in Swift."
+
+objective: "Make the menu-bar Runtime controller initialize correctly for the accepted zero-cost external-payload installation shape so canonical start.sh status truth reaches the existing presentation mapping. A healthy running/live/ready Runtime must not be downgraded to ambiguous/Unavailable merely because agent_runtime/server.py is absent from the immutable app substrate."
+
+scope:
+  required_changes:
+    - "Fresh-bind the exact TASK-0195 revision-1 base and require clean synchronized MAIN ONLY topology before implementation."
+    - "Change only macos/Sources/AgentRuntimeMenuBar/AppDelegate.swift and macos/Tests/AgentRuntimeMenuBarTests/PresentationTests.swift, plus the eventual TASK-0195 report."
+    - "Preserve Bundle.main-based production resolution and the existing RuntimeConfiguration runtimeRoot/envFile contract."
+    - "Remove the obsolete requirement that Contents/Resources/runtime/agent_runtime/server.py must exist inside the installed app substrate."
+    - "Continue validating the immutable substrate inputs that the menu itself owns: valid runtime-manifest identity/entrypoint/python metadata, non-symlink runtime root, executable runtime/start.sh, executable runtime/.venv/bin/python, and canonical runtime.env regular-file/mode requirements."
+    - "Do not make AppDelegate directly resolve, trust, or validate current-payload, payload-manifest.json, external agent_runtime/server.py, payload closure, or payload source revision. The installed start.sh/status path remains the SSOT for selected external payload validity and Runtime truth."
+    - "Do not weaken NativeRuntimeBackend canonical status validation: schema must remain 3 and running status must still require health=live, ready=ready, one PID, and supported control semantics."
+    - "Do not change RuntimePopoverPresentation facts/mapping. Existing owned/external running mapping to Endpoint 127.0.0.1:8080 is correct."
+    - "If a test seam is needed, keep it minimal and inside AppDelegate.swift; production behavior must still enter through Bundle.main.resourceURL and the canonical home runtime.env."
+    - "Add a deterministic regression with a synthetic installed substrate matching the accepted zero-cost shape: runtime-manifest valid, runtime/start.sh executable, runtime/.venv/bin/python executable, runtime.env valid mode, no embedded agent_runtime/server.py. The configuration resolver must succeed rather than report 'installed Runtime payload is incomplete'."
+    - "Add or preserve negative tests proving missing/non-executable lifecycle helper, missing/non-executable runtime Python, unsafe/symlink substrate root where applicable, invalid manifest, and unsafe runtime.env still fail closed. Do not broaden acceptance beyond the proven obsolete server-file condition."
+    - "Add a presentation-level regression or compose existing presentation proof showing a canonical running/live/ready managed observation renders Endpoint 127.0.0.1:8080 rather than Unavailable. Do not invent a second mapping implementation."
+    - "Run focused AgentRuntimeMenuBarTests covering the configuration regression first."
+    - "Run the complete macOS Swift test suite using the repository's canonical Swift package command."
+    - "Only after Swift gates pass, run exactly one canonical ./verify invocation through a durable/reconcilable carrier. Reconcile ambiguous carrier results against the same execution and never blind-replay."
+    - "Publish one reviewable implementation candidate and truthful TASK-0195 report. MAIN ONLY."
+    - "Do not activate, reinstall, relaunch, stop, start, or restart the live Runtime/menu-bar in revision 1. The currently healthy live Runtime must remain untouched."
+
+  allowed_existing_files_or_components:
+    - "macos/Sources/AgentRuntimeMenuBar/AppDelegate.swift"
+    - "macos/Tests/AgentRuntimeMenuBarTests/PresentationTests.swift"
+    - ".agent/tasks/TASK-0195/report.yaml"
+
+invariants:
+  - "start.sh status --json remains the canonical Runtime availability truth source used by NativeRuntimeBackend."
+  - "Zero-cost external payload ownership/validation remains outside AppDelegate."
+  - "RuntimePopoverPresentation running/ambiguous mapping remains unchanged."
+  - "Runtime version remains 0.5.1."
+  - "runtime_capabilities request/result remains 2/3 and dual identity semantics remain unchanged."
+  - "Twenty advertised tools, twenty-one known capabilities, manual LaunchAgent lifecycle, tunnel semantics, payload/candidate/transaction schemas, and cutover behavior remain unchanged."
+  - "No new daemon, watcher, payload resolver, dependency, security permission, or lifecycle owner."
+  - "Live installed Runtime remains untouched in revision 1."
+  - "MAIN ONLY."
+
+forbidden_changes:
+  - "Any file mutation outside AppDelegate.swift, PresentationTests.swift, and eventual TASK-0195 report."
+  - "Changing NativeRuntimeBackend.swift, RuntimeLifecycle.swift, ControlPanelController.swift, start.sh, payload/cutover/package code, Python Runtime code, doctor, capability contracts, Swift lifecycle semantics, dependencies, version, docs, or public MCP contract."
+  - "Adding direct Swift validation of current-payload or external payload contents as a replacement for start.sh/status SSOT."
+  - "Weakening runtime.env permission checks, manifest identity checks, runtime-root symlink checks, executable lifecycle/Python checks, or canonical status schema checks."
+  - "Any live build/install/cutover/rollback/commit/menu-bar relaunch/Runtime Start/Stop/Restart/LaunchServices/reboot/permission/tag/release effect."
+  - "Any second canonical ./verify after a conclusive result or blind replay after ambiguity."
+  - "Any branch or PR creation."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: revised_contract_required
+  spec_change: revised_contract_required
+  dependency_change: forbidden
+  public_contract_change: forbidden
+  blocking_gap_behavior: BLOCKED
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions:
+    - BLOCKED
+    - STALE_STATE
+    - AUTHORITY_REQUIRED
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    - REVIEW_REQUIRED
+    - REVERIFY_REQUIRED
+    - USER_STOP
+
+effect_authority:
+  canonical_verify_max: 1
+  distribution_build_max: 0
+  install_prebuilt_max: 0
+  commit_cutover_max: 0
+  rollback_cutover_max: 0
+  menu_bar_relaunch_max: 0
+  runtime_explicit_start_max: 0
+  runtime_explicit_stop_max: 0
+  runtime_restart_max: 0
+  launchservices_cleanup_max: 0
+  physical_reboot_max: 0
+  release_or_tag_max: 0
+  branch_or_pr_creation_max: 0
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Accepted zero-cost installed substrate shape no longer fails menu bootstrap because embedded server.py is absent."
+    evidence_required: "Synthetic fixture with valid manifest/start.sh/runtime Python/runtime.env and no embedded agent_runtime/server.py resolves a RuntimeConfiguration successfully."
+  - id: AC-2
+    requirement: "Security and ownership gates remain fail-closed."
+    evidence_required: "Focused regressions prove invalid manifest, missing/non-executable start.sh or runtime Python, unsafe substrate shape where currently enforced, and unsafe runtime.env still fail."
+  - id: AC-3
+    requirement: "External payload truth is not duplicated in the menu layer."
+    evidence_required: "AppDelegate contains no new direct current-payload/payload-manifest/external server validation; NativeRuntimeBackend continues to obtain truth through start.sh status --json."
+  - id: AC-4
+    requirement: "Running Runtime maps to the correct endpoint."
+    evidence_required: "Existing/new deterministic presentation test proves running/live/ready managed observation produces Endpoint 127.0.0.1:8080 and not Unavailable."
+  - id: AC-5
+    requirement: "Swift and canonical verification pass."
+    evidence_required: "Focused AgentRuntimeMenuBarTests PASS, complete macOS Swift tests PASS, then exactly one durable/reconcilable ./verify PASS with no blind replay."
+  - id: AC-6
+    requirement: "Revision 1 performs zero live effects."
+    evidence_required: "No package build/install/cutover/menu relaunch/Runtime lifecycle/LaunchServices/reboot/release/permission mutation."
+  - id: AC-7
+    requirement: "Repository closure is minimal and canonical."
+    evidence_required: "One implementation candidate changes only authorized Swift source/test files, truthful report, clean synchronized MAIN ONLY topology."
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "./verify"
+    expected_signal: "PASS from exactly one TASK-0195 revision-1 durable/reconcilable invocation after focused and full Swift tests pass."
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Run focused menu-bar configuration regression for external-payload installed shape without embedded server.py."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Run complete AgentRuntimeMenuBarTests and the full canonical macOS Swift test suite."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Run exactly one canonical ./verify through a durable/reconcilable carrier and reconcile exact outcome without blind replay."
+      required: true
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
