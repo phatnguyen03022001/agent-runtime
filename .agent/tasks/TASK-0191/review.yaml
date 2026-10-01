@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0191
-task_revision: 2
-review_revision: 2
+task_revision: 3
+review_revision: 3
 state: REVISION_REQUIRED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0191/report.yaml
-  commit: "323f6b0d4eb50fbef4b4f858d50b0408ab7e6409"
-  report_revision: 2
+  commit: "c9eed07820150a4fc656b25521c9af0ad4fed928"
+  report_revision: 3
 
 independence:
   reviewer_role: ARCHITECT
@@ -28,21 +28,24 @@ contract_compliance:
   verifier_evidence: PASS
 
 acceptance_basis:
-  - "Revision-2 fixture candidate 4ec736792c8322b37a5387157a0fd636f13d437c is the single direct child of exact revision-2 base 145243c8a3e8c823dadd36e3ea4d2d2be3d40f7f and changes only tests/test_protected_runtime.py."
-  - "Report commit 323f6b0d4eb50fbef4b4f858d50b0408ab7e6409 is the single direct child of the fixture candidate and changes only .agent/tasks/TASK-0191/report.yaml."
-  - "F-0191-001 is closed: the exact formerly failing test passes 1/1, the full protected-runtime module passes 20/20, and that module also passes 20/20 inside the durable canonical verifier."
-  - "Revision-1 production status implementation remains unchanged; no production source mutation occurred in revision 2."
-  - "The sole authorized revision-2 ./verify invocation conclusively failed in tests.test_pressure_concurrency with RuntimeCapacityError after 28/62 modules and 427 tests; it was not replayed."
-  - "The new failure is fixture coupling, not evidence that the six-slot product contract is wrong. tests.test_pressure_concurrency calls the terminal_exec facade through the process-global session._MANAGER. During the durable canonical verifier, that manager already contains the verifier's own active Runtime session. The test then starts six additional operations, so the seventh retained active session trips TerminalSessionManager.max_active_sessions=6 before the test can prove its intended six-operation concurrency predicate."
-  - "Changing the product limit to seven, reducing the test to five operations, or weakening capacity enforcement would hide the fixture defect and is not justified."
+  - "Revision-3 implementation candidate bf7ce294573cd615f059ade8ee2caa28a2792f1c is the single direct child of exact revision-3 base df4800efdad3275effa283b4466b74c72fd69bb7 and changes only tests/test_pressure_concurrency.py."
+  - "Report commit c9eed07820150a4fc656b25521c9af0ad4fed928 is the single direct child of the implementation candidate and changes only .agent/tasks/TASK-0191/report.yaml."
+  - "F-0191-002 is closed without weakening semantics: the test still executes six real concurrent terminal_exec operations under a six-slot fixture ceiling, focused standalone proof passes, focused runtime_restart proof passes, and tests.test_pressure_concurrency passes inside the canonical durable verifier."
+  - "Revision-1 production Runtime-status bytes and revision-2 protected-runtime fixture bytes remain unchanged."
+  - "The sole revision-3 ./verify invocation conclusively failed after 41/62 modules and 572 tests in two different out-of-scope modules and was not replayed."
+  - "tests.test_failure_effect_contract creates several TerminalSessionManager fixtures without a fixture-owned durable_state_root. Those managers therefore scan the production-default durable store and can recover the outer canonical verifier session before the intended failure/effect assertions execute."
+  - "tests.test_task0057_admission patches the process-global heavy admission object but continues to route executor.execute_terminal through process-global session._MANAGER while also constructing separate managers without fixture-owned durable roots. Under the durable verifier this mixes outer-session state, fixture admission leases, local-manager state, and cleanup ownership."
+  - "Both failures are the same material defect class: verification tests that intend test-owned session/capacity semantics are not hermetic from the live process-global/default durable Runtime state. No evidence supports changing the product six-slot ceiling, durable recovery semantics, or production session implementation."
 
 findings:
-  - id: "F-0191-002"
+  - id: "F-0191-003"
     severity: "BLOCKING"
-    description: "tests.test_pressure_concurrency is not hermetic from the process-global Runtime session manager. The durable verifier itself consumes one active slot, contaminating a test whose intended subject is six independent terminal_exec operations within the supported six-slot ceiling."
-    disposition: "Preserve the product limit and revision-1 production implementation. Revise TASK-0191 narrowly so the pressure-concurrency test exercises six terminal_exec operations against fixture-owned session/capacity/durable state, then authorize one fresh canonical ./verify invocation. Do not reduce concurrency, raise the product ceiling, or change production session/capacity semantics."
+    description: "tests.test_failure_effect_contract and tests.test_task0057_admission are non-hermetic from ambient default durable/session/capacity state when canonical verification itself runs through Agent Runtime."
+    disposition: "Preserve all production semantics and prior accepted fixture fixes. Revise TASK-0191 to isolate only these two proven modules with fixture-owned durable/session/admission state. Before spending a new canonical verifier invocation, perform a bounded read-only audit for the same contamination class across the selected verification surface; if another concrete module is proven vulnerable, stop before ./verify and return it for revised authority rather than consuming the verifier budget."
 
 notes:
-  - "Revision-2 canonical verifier budget is consumed; do not replay it."
+  - "Do not fix this by changing verify_tests.py HOME semantics globally in revision 4; that would alter the environment contract for unrelated host/lifecycle tests without proof."
+  - "Do not increase product/test capacity ceilings, reduce concurrency assertions, or weaken recovery/capacity enforcement."
+  - "Revision-3 canonical verifier budget is consumed; do not replay it."
   - "Do not install, cut over, restart, reboot, or otherwise mutate the live Runtime."
   - "TASK-0190 revision 8 remains superseded for the current objective and its physical reboot budget remains untouched."
