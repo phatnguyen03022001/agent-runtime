@@ -1,13 +1,13 @@
 protocol_version: 3
 task_id: TASK-0200
-task_revision: 2
+task_revision: 3
 state: APPROVED
-title: "Product Failure Qualification — Typed Tunnel Response Closure"
+title: "Product Failure Qualification — Zero-Cost Rollback Identity Closure"
 
 origin:
   type: architect_continuation
   predecessor_task: TASK-0200
-  gap_id: F-0200-001
+  gap_id: F-0200-002
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -29,65 +29,64 @@ execution_skills:
   required: [executor, verification, reliability, security-review, simplicity]
 
 revision_basis:
-  revision_1_base: "91572b19572cd797a5c235a4f1a502f688e25db9"
-  revision_1_candidate: "f711ee6fd5b65e072cd6c93f01245afd1ff0a39f"
-  revision_1_report: "8f5e8cce410bf51fa0f9f3b0f0232e5b5f49422e"
-  revision_1_review: "066c989af907446c5bc9cffc53176055e69bc968"
+  revision_2_candidate: "86d0f0f6bb9da0b4a4f5dbecaa5d5d1b10045de7"
+  revision_2_report: "e7d925e8594751e79925d14965d66e423bc428f0"
+  revision_2_review: "d3c81b679f81ee6835594cffa19b787511c3eac1"
+  closed_finding: F-0200-001
+  open_finding: F-0200-002
   paused_release_task: TASK-0196
 
-objective: "Close only F-0200-001 by normalizing undecodable official tunnel-client output into the existing bounded CONTROL_PLANE_UNAVAILABLE admission envelope, then resume and complete Q01-Q14 qualification. If any other current product gap appears, stop BLOCKED without fixing it."
+objective: "Close only F-0200-002 by making APP_SWAPPED zero-cost rollback validate the installed generation against the sealed transaction identity before any destructive rollback effect, then resume Q07 and complete Q08-Q14. If another product gap appears, stop BLOCKED without fixing it."
 
 scope:
   required_changes:
-    - "Fresh-bind exact revision-2 base with clean synchronized MAIN ONLY."
-    - "Preserve revision-1 qualification tests and evidence; do not weaken or delete the non-UTF8 reproducer."
-    - "Modify only macos/runtime_config.py to close F-0200-001."
-    - "Tunnel-client stdout or stderr that cannot be decoded as valid UTF-8 must map to ConfigurationAdmissionError reason_code CONTROL_PLANE_UNAVAILABLE with the existing safe bounded user message and normal structured exit 2 path."
-    - "Do not emit, log, persist, echo or include the raw malformed tunnel-client bytes in the structured error, stderr, report or diagnostics."
-    - "Preserve the current maximum tunnel response bound, timeout, executable checks, sanitized child environment and runtime-key-only authority."
-    - "Preserve all existing successful lookup behavior and current mappings for 401 INVALID_CREDENTIAL, 403 TUNNEL_ACCESS_DENIED, 404 TUNNEL_NOT_FOUND, transient status, malformed JSON, missing tunnel-client and invalid Tunnel ID."
-    - "Preserve configuration safety: failed fresh admission creates no canonical runtime.env; failed reconfigure leaves the existing canonical file byte-for-byte and mode/identity unchanged."
-    - "Add focused owner regression coverage in tests/test_runtime_config.py for undecodable stdout and undecodable stderr using synthetic bytes only."
-    - "Keep tests/test_product_qualification.py as the Q01-Q14 qualification owner and extend it only as needed to complete Q05-Q14. No production implementation may be duplicated inside tests."
-    - "Run focused runtime_config owner tests and Q01-Q04 first."
-    - "Only if F-0200-001 closes, continue Q05-Q14 using existing real helpers and existing owner suites where appropriate."
-    - "Q05: removed configured workspace -> stable workspace failure and no destructive lifecycle/cutover effect."
-    - "Q06: foreign/ambiguous port 8080 ownership -> fail closed; no kill/rebind authority from occupancy alone."
-    - "Q07: interrupted zero-cost cutover before/after app swap -> deterministic resumable/rollbackable/partial or fail-closed evidence."
+    - "Fresh-bind exact revision-3 base with clean synchronized MAIN ONLY."
+    - "Preserve the accepted revision-2 runtime_config UnicodeDecodeError closure unchanged."
+    - "Modify only macos/candidate_cutover.py for production behavior."
+    - "For a zero-cost transaction whose installed generation is in APP_SWAPPED state, validate target_app before any bootout, pointer restore, ServiceManagement mutation, rmtree, predecessor restore or payload cleanup."
+    - "Use the existing sealed transaction witnesses: transaction candidate-handoff plus the exact payload witness selected by the same rule as zero-cost commit: canonical final payload if metadata.payload.created=true, otherwise transaction_dir/payloads/<closure>."
+    - "Run the existing provenance.validate_zero_cost_candidate path and require its returned identity to equal metadata.candidate."
+    - "If the installed target cannot be validated or its identity differs from metadata.candidate, fail closed before destructive rollback action. The outer rollback_transaction path must retain transaction evidence, set status PARTIAL, record a bounded rollback error and leave the installed target plus pointer/config/lifecycle state unchanged."
+    - "Do not weaken PRE_SWAP rollback, valid APP_SWAPPED rollback, predecessor snapshot closure checks, payload compatibility checks, ServiceManagement ownership checks or any existing rollback safety gate."
+    - "Do not validate the opaque predecessor as if it were a current candidate; predecessor rollback material remains closure-checked opaque snapshot material as already designed."
+    - "Add focused regressions in tests/test_candidate_cutover.py for zero-cost APP_SWAPPED target identity drift: candidate bytes/provenance altered -> rollback fails before any destructive effect, transaction retained PARTIAL, target closure unchanged, pointer/config/service state unchanged."
+    - "Preserve and rerun the existing Q07 qualification reproducer in tests/test_product_qualification.py. Do not weaken it."
+    - "Run focused candidate-cutover owner tests covering normal zero-cost rollback, invalid target identity and rollback evidence retention."
+    - "Then run Q01-Q07. F-0200-001 must remain PASS."
+    - "Only if Q01-Q07 all PASS, continue Q08-Q14 exactly as previously authorized."
     - "Q08: material cutover failure -> exact rollback on success; PARTIAL evidence on rollback failure."
-    - "Q09: interrupted payload/update generation switch -> current-payload never silently selects an unverified generation."
+    - "Q09: interrupted payload/update switch -> current-payload never silently selects an unverified generation."
     - "Q10: uninstall/reinstall -> canonical runtime.env retained byte-for-byte and remains authoritative or explicitly reconfigurable."
     - "Q11: upgrade vN->vN+1 -> canonical runtime.env bytes/mode/identity preserved unless explicit reconfigure."
     - "Q12: doctor/preflight diagnostics are secret-safe and bounded."
     - "Q13: doctor emits deterministic non-OK reasons for workspace, package/payload, lifecycle and cutover failures."
     - "Q14: coherent synthetic installed state yields the exact healthy doctor inventory with no spurious warning."
-    - "Use only synthetic temporary HOME/workspace/config/tunnel-client state. Never read the operator runtime.env or real credential values. Never call the real OpenAI control plane."
-    - "If any Q05-Q14 predicate fails due to current production behavior, stop BLOCKED and report the new gap. Do not modify any additional production file."
+    - "Use only synthetic temporary HOME/workspace/config/tunnel-client state. Never read operator runtime.env or real credentials; never call the real control plane."
+    - "If Q08-Q14 exposes any new production gap, stop BLOCKED and report it. Do not modify additional production files."
     - "If Q01-Q14 all PASS, run git diff --check and exactly one canonical ./verify through a durable/reconcilable carrier. Never blind-replay ambiguity."
-    - "Publish one revision-2 implementation candidate and truthful report. Final main clean/synchronized MAIN ONLY."
+    - "Publish one revision-3 implementation candidate and truthful report. Final main clean/synchronized MAIN ONLY."
 
   allowed_existing_files_or_components:
-    - "macos/runtime_config.py"
-    - "tests/test_runtime_config.py"
+    - "macos/candidate_cutover.py"
+    - "tests/test_candidate_cutover.py"
     - "tests/test_product_qualification.py"
     - ".agent/tasks/TASK-0200/report.yaml"
 
 invariants:
-  - "Only runtime_config.py may change production behavior in revision 2."
-  - "The repair changes error normalization only; tunnel authority, config publication sequencing and onboarding semantics remain unchanged."
-  - "No real credential/config content enters tests or report."
-  - "No live installed Runtime mutation."
-  - "Existing doctor remains the only diagnosis surface under evaluation."
+  - "Only candidate_cutover.py may change production behavior in revision 3."
+  - "F-0200-001 remains closed."
+  - "Invalid/unverifiable APP_SWAPPED target identity cannot be overwritten by rollback."
+  - "Valid unchanged zero-cost rollback remains functional."
+  - "No real credentials or live installed Runtime mutation."
   - "TASK-0196 remains paused."
   - "MAIN ONLY."
 
 forbidden_changes:
-  - "Any production file other than macos/runtime_config.py."
-  - "Any Swift, shell product command, docs, dependency, version, lifecycle, cutover, doctor or schema change."
-  - "Any new diagnosis subsystem/command/service/daemon."
-  - "Any real control-plane credential/tunnel use."
+  - "Any production file other than macos/candidate_cutover.py."
+  - "Any runtime_config, Swift, shell product command, docs, doctor, dependency, version or schema change."
+  - "Any new rollback subsystem or alternate transaction format."
   - "Any live install/cutover/relaunch/Runtime lifecycle/plugin/reboot/permission/credential-rotation effect."
-  - "Any additional production fix if Q05-Q14 exposes another gap."
+  - "Any additional production fix if Q08-Q14 exposes another gap."
   - "Any second canonical ./verify after a conclusive result or blind replay."
   - "Any branch or PR."
 
@@ -110,18 +109,18 @@ effect_authority:
   branch_or_pr_creation_max: 0
 
 acceptance_criteria:
-  - {id: AC-1, requirement: "F-0200-001 is closed.", evidence_required: "Undecodable synthetic stdout/stderr map to structured CONTROL_PLANE_UNAVAILABLE/exit 2 with canonical config unchanged and no raw-byte/secret disclosure."}
-  - {id: AC-2, requirement: "Q01-Q14 all pass.", evidence_required: "Exact focused qualification matrix with owner-test evidence."}
-  - {id: AC-3, requirement: "Existing doctor is sufficient for Q12-Q14.", evidence_required: "Bounded deterministic current doctor output; no new diagnosis surface."}
-  - {id: AC-4, requirement: "Recovery/update/uninstall behavior is deterministic.", evidence_required: "Q07-Q11 PASS including PARTIAL evidence when recovery cannot complete."}
-  - {id: AC-5, requirement: "Revision-2 implementation remains narrow.", evidence_required: "Only runtime_config.py plus the two authorized test files before report."}
+  - {id: AC-1, requirement: "F-0200-002 is closed.", evidence_required: "Invalid APP_SWAPPED zero-cost target identity fails before destructive rollback, transaction becomes PARTIAL and target/consumer state remain unchanged."}
+  - {id: AC-2, requirement: "Valid zero-cost rollback still works.", evidence_required: "Existing normal rollback/interruption tests PASS with exact predecessor restoration."}
+  - {id: AC-3, requirement: "Q01-Q14 all pass.", evidence_required: "Exact focused qualification matrix with owner-test evidence."}
+  - {id: AC-4, requirement: "Recovery/update/uninstall behavior is deterministic.", evidence_required: "Q07-Q11 PASS including retained PARTIAL evidence on unsafe/unrecoverable state."}
+  - {id: AC-5, requirement: "Revision-3 implementation remains narrow.", evidence_required: "Only candidate_cutover.py plus the two authorized test files before report."}
   - {id: AC-6, requirement: "Canonical verification passes.", evidence_required: "Focused matrix PASS, diff-check PASS, exactly one ./verify PASS."}
   - {id: AC-7, requirement: "Canonical closure.", evidence_required: "Truthful report and clean synchronized MAIN ONLY."}
 
 verification:
   authoritative_verification:
     required: true
-    mechanism: "Focused runtime_config/Q01-Q14 qualification plus exactly one canonical ./verify after all qualification predicates pass."
+    mechanism: "Focused zero-cost rollback identity proof + Q01-Q14 qualification + exactly one canonical ./verify after all qualification predicates pass."
 
 continuation_policy:
   mode: MANUAL
