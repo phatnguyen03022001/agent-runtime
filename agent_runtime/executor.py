@@ -30,7 +30,7 @@ _PRESERVED_ENV_NAMES = ("PATH", "HOME", "USER", "TMPDIR", "LANG")
 TERMINAL_EXEC_CONTRACT = ToolContract(
     name="terminal_exec",
     tool_class=ToolClass.PROCESS,
-    authority=Authority(True, NetworkAuthority.BOUNDED, MutationAuthority.DESTRUCTIVE),
+    authority=Authority(False, NetworkAuthority.BOUNDED, MutationAuthority.DESTRUCTIVE),
     annotations=ToolAnnotations(False, True, True, True),
     preconditions={
         "cwd": "validated-workspace-descendant",
@@ -52,6 +52,8 @@ TERMINAL_EXEC_CONTRACT = ToolContract(
         "output": "bounded-separate-streams",
         "lifecycle": "shared-keyed-pipe-core",
         "duplicate": "join-original-deadline-and-retained-result",
+        "process_identity": "operator-account",
+        "host_effect_confinement": "none-cwd-only",
     },
 )
 

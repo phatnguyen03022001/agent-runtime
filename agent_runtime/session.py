@@ -98,7 +98,7 @@ def _complete_utf8_prefix_length(data: bytes, *, final: bool) -> int:
 TERMINAL_START_CONTRACT = ToolContract(
     name="terminal_start",
     tool_class=ToolClass.PROCESS,
-    authority=Authority(True, NetworkAuthority.BOUNDED, MutationAuthority.DESTRUCTIVE),
+    authority=Authority(False, NetworkAuthority.BOUNDED, MutationAuthority.DESTRUCTIVE),
     annotations=ToolAnnotations(False, True, False, True),
     preconditions={
         "cwd": "validated-workspace-descendant",
@@ -122,6 +122,8 @@ TERMINAL_START_CONTRACT = ToolContract(
         "keyed_start": "reserve-before-popen-idempotent-within-runtime-incarnation",
         "pipe_stdin": "closed",
         "pipe_output": "separate-streams",
+        "process_identity": "operator-account",
+        "host_effect_confinement": "none-cwd-only",
     },
 )
 TERMINAL_POLL_CONTRACT = ToolContract(

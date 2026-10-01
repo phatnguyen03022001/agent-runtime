@@ -6,6 +6,7 @@ from dataclasses import FrozenInstanceError
 from enum import Enum
 
 from agent_runtime import server
+from agent_runtime.executor import TERMINAL_EXEC_CONTRACT
 from agent_runtime.fs_list import DIRECTORY_SCAN_LIMIT, FS_LIST_CONTRACT, MAX_ENTRIES
 from agent_runtime.fs_patch import (
     FS_PATCH_CONTRACT,
@@ -35,6 +36,7 @@ from agent_runtime.fs_read import (
     ITEM_OUTPUT_LIMIT_BYTES,
     ITEM_SCAN_LIMIT_BYTES,
 )
+from agent_runtime.session import TERMINAL_START_CONTRACT
 from agent_runtime.tool_contract import (
     Authority,
     ContractError,
@@ -270,6 +272,23 @@ class ToolContractKernelTests(unittest.TestCase):
                 semantic_parameters={},
                 observed_state_bytes=bytearray(b"state"),  # type: ignore[arg-type]
             )
+
+
+class TerminalAuthorityContractTests(unittest.TestCase):
+    def test_terminal_launch_contracts_publish_truthful_authority(self) -> None:
+        for contract in (TERMINAL_EXEC_CONTRACT, TERMINAL_START_CONTRACT):
+            with self.subTest(tool=contract.name):
+                self.assertEqual(
+                    contract.authority,
+                    Authority(
+                        workspace_bound=False,
+                        network=NetworkAuthority.BOUNDED,
+                        mutation=MutationAuthority.DESTRUCTIVE,
+                    ),
+                )
+                self.assertEqual(contract.preconditions["cwd"], "validated-workspace-descendant")
+                self.assertEqual(contract.postconditions["process_identity"], "operator-account")
+                self.assertEqual(contract.postconditions["host_effect_confinement"], "none-cwd-only")
 
 
 class FsReadBatchContractAdoptionTests(unittest.IsolatedAsyncioTestCase):

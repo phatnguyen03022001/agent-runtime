@@ -47,7 +47,7 @@ The Runtime does not claim to prevent:
 - kernel compromise or equivalent higher-privilege control;
 - all host filesystem/process/network effects available to the operator account.
 
-`AGENT_RUNTIME_WORKSPACE_ROOT` is an execution boundary enforced by Runtime semantics; it is not mechanical whole-host isolation.
+For terminal tools, `AGENT_RUNTIME_WORKSPACE_ROOT` constrains `cwd` only; it does not confine absolute-path filesystem/process/network effects available to the operator UID.
 
 ## Permission boundary
 

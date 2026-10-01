@@ -150,6 +150,8 @@ Use `./install.sh --uninstall` for owner-safe removal. Canonical runtime.env is 
 
 The protected Runtime filter recognizes a bounded set of lifecycle/process intents. It is **not a sandbox** and is not complete same UID isolation. A process running as the operator's **same UID** may perform effects outside the classifier's recognized forms. No allow result grants lifecycle authority.
 
+For terminal tools, `AGENT_RUNTIME_WORKSPACE_ROOT` constrains `cwd` only; it does not confine absolute-path filesystem/process/network effects available to the operator UID.
+
 Structured `fs_read_batch` and `fs_search` content mode block sensitive dotenv basenames as defense-in-depth against accidental disclosure; `fs_search` path mode may still discover those filenames. This does not prevent terminal tools or arbitrary same-UID processes from reading user-readable workspace files. Secrets requiring confidentiality from the agent should not be stored in its workspace.
 
 The threat model explicitly excludes `root/sudo`, a **malicious local administrator**, kernel compromise, and equivalent higher-privilege control. See [THREAT_MODEL.md](THREAT_MODEL.md).

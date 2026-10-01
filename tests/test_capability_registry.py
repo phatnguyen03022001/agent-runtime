@@ -257,6 +257,12 @@ class CapabilityRegistryTests(unittest.IsolatedAsyncioTestCase):
             tuple(item["name"] for item in full.structured_content["capabilities"]),
             EXPECTED_NAMES,
         )
+        full_by_name = {item["name"]: item for item in full.structured_content["capabilities"]}
+        for name in ("terminal_exec", "terminal_start"):
+            with self.subTest(tool=name):
+                self.assertIs(full_by_name[name]["authority"]["workspace_bound"], False)
+                self.assertEqual(full_by_name[name]["authority"]["network"], "bounded")
+                self.assertEqual(full_by_name[name]["authority"]["mutation"], "destructive")
 
         filtered = await server.mcp.call_tool(
             "runtime_capabilities",
