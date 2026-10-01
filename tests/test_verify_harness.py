@@ -122,7 +122,7 @@ class VerifyHarnessTests(unittest.TestCase):
     def test_inventory_is_classified_exactly_once_with_expected_lane_counts(self) -> None:
         modules = verify_tests.discover_modules()
         verify_tests.validate_classification(modules)
-        self.assertEqual(len(modules), 62)
+        self.assertEqual(len(modules), 63)
         self.assertEqual(set(modules), set(verification_policy.MODULE_POLICIES))
         counts = Counter(
             policy.lane
@@ -135,7 +135,7 @@ class VerifyHarnessTests(unittest.TestCase):
                 verification_policy.L2_ISOLATED_INTEGRATION: 21,
                 verification_policy.L3_DETERMINISTIC_REGRESSION: 10,
                 verification_policy.L4_HOST_LIFECYCLE: 9,
-                verification_policy.L5_QUALIFICATION_CHAOS_CUTOVER: 5,
+                verification_policy.L5_QUALIFICATION_CHAOS_CUTOVER: 6,
             },
         )
         self.assertEqual(verification_policy.GLOBAL_WORKER_LIMIT, 4)
@@ -159,6 +159,19 @@ class VerifyHarnessTests(unittest.TestCase):
             verification_policy.L2_ISOLATED_INTEGRATION,
         )
         self.assertIsNone(repo_commit.isolation_key)
+
+    def test_product_qualification_has_serialized_l5_policy(self) -> None:
+        policy = verification_policy.MODULE_POLICIES[
+            "tests.test_product_qualification"
+        ]
+        self.assertEqual(policy.lane, verification_policy.L5_QUALIFICATION_CHAOS_CUTOVER)
+        self.assertEqual(policy.isolation_key, "qualification")
+        self.assertEqual(policy.timeout_seconds, 180.0)
+        self.assertEqual(
+            set(policy.subsystem_tags),
+            {"qualification", "cutover", "recovery", "productization"},
+        )
+        self.assertNotIn("tests.test_product_qualification", verification_policy.GLOBAL_QUICK_MODULES)
 
     def test_unknown_test_module_fails_closed(self) -> None:
         modules = verify_tests.discover_modules() + ["tests.test_new_unknown"]

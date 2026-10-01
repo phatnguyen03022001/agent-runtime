@@ -211,6 +211,13 @@ MODULE_POLICY_ENTRIES: tuple[tuple[str, ModulePolicy], ...] = (
         ("capacity", "concurrency"),
         "Deterministic cross-component pressure/concurrency regression.",
     )),
+    ("tests.test_product_qualification", module_policy(
+        L5_QUALIFICATION_CHAOS_CUTOVER,
+        ("qualification", "cutover", "recovery", "productization"),
+        "Synthetic consumer failure, cutover recovery and product qualification.",
+        timeout=180.0,
+        isolation_key="qualification",
+    )),
     ("tests.test_protected_runtime", module_policy(
         L4_HOST_LIFECYCLE,
         ("host_lifecycle", "protection"),
