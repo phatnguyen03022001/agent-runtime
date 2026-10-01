@@ -1,13 +1,13 @@
 protocol_version: 3
 task_id: TASK-0200
-task_revision: 5
+task_revision: 6
 state: APPROVED
-title: "Product Failure Qualification — Verifier Policy Integration Closure"
+title: "Product Failure Qualification — Canonical Short-Path Reverification"
 
 origin:
   type: architect_continuation
   predecessor_task: TASK-0200
-  gap_id: F-0200-004
+  gap_id: F-0200-005
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -29,55 +29,51 @@ execution_skills:
   required: [executor, verification, simplicity]
 
 revision_basis:
-  revision_4_candidate: "09c2e0cea6421405ab01a1343ccdcd17eddaaa55"
-  revision_4_report: "2b067228b6f62847f3bb8a3cebda7a0e655bd158"
-  revision_4_review: "37eb8bb07f0bb00ced0d330f2ee185297910fd02"
-  closed_findings: [F-0200-001, F-0200-002, F-0200-003]
-  open_finding: F-0200-004
+  revision_5_candidate: "2c64319d14a4d5b66e4dda5ef6a3a82eb66584bf"
+  revision_5_report: "4d8bf34206a0a85db7a7d7ee4889edc789de12f6"
+  revision_5_review: "57da5a8d060ba38e8ebaa8547865ea7d06398ea9"
+  closed_findings: [F-0200-001, F-0200-002, F-0200-003, F-0200-004]
+  open_finding: F-0200-005
   paused_release_task: TASK-0196
 
-objective: "Close only F-0200-004 by integrating the already-passing tests.test_product_qualification module into the existing strict verification policy, then spend one new canonical ./verify invocation under revision-5 authority. Do not alter product behavior or the qualification predicates."
+objective: "Close F-0200-005 by performing canonical verification in a bounded short-path synthetic environment. Revision 6 is verification/report only: no source, test, policy, product, documentation or configuration mutation is authorized."
 
 scope:
   required_changes:
-    - "Fresh-bind exact revision-5 base with clean synchronized MAIN ONLY."
-    - "Do not modify macos/candidate_cutover.py, macos/runtime_config.py, tests/test_product_qualification.py or any product/runtime behavior."
-    - "Add exactly one MODULE_POLICY_ENTRIES classification for tests.test_product_qualification in verification_policy.py."
-    - "Classify it as L5_QUALIFICATION_CHAOS_CUTOVER with isolation_key='qualification'."
-    - "Use subsystem tags that truthfully represent the module's existing scope: qualification, cutover, recovery and productization."
-    - "Use a bounded timeout of 180 seconds. Do not weaken the global worker limit, L5 worker limit, classification strictness or unknown-module fail-closed behavior."
-    - "Do not add the module to GLOBAL_QUICK_MODULES."
-    - "Do not create a module-specific exemption, skip, discovery bypass, wildcard policy or special-case verifier branch."
-    - "Update tests/test_verify_harness.py exact inventory expectations from 62 to 63 total modules and from 5 to 6 L5 modules."
-    - "Add an explicit verifier-harness assertion that tests.test_product_qualification is L5_QUALIFICATION_CHAOS_CUTOVER, isolation_key='qualification', and timeout_seconds=180.0."
-    - "Preserve all other lane counts, module policies, path rules, worker limits, heartbeat and selection semantics unchanged."
-    - "Run focused tests.test_verify_harness first."
-    - "Run git diff --check."
-    - "Only if focused verifier-harness proof passes, run exactly one canonical ./verify through a durable/reconcilable carrier."
-    - "The canonical verifier must discover 63 classified modules and execute tests.test_product_qualification as part of the qualification lane. Do not separately suppress or pre-exclude that module."
-    - "Never blind-replay an ambiguous verifier result; reconcile the same start identity."
-    - "Do not rerun or rewrite Q01-Q14 outside canonical verification unless needed only to diagnose a new verifier/test failure after the canonical invocation; any new product failure requires BLOCKED, not an opportunistic fix."
-    - "Publish one truthful revision-5 report and finish clean/synchronized MAIN ONLY."
+    - "Fresh-bind exact revision-6 base with clean synchronized MAIN ONLY."
+    - "Do not modify any tracked repository file before verification."
+    - "Confirm revision-5 implementation candidate 2c64319d14a4d5b66e4dda5ef6a3a82eb66584bf remains in direct accepted lineage and verification_policy.py plus tests/test_verify_harness.py are unchanged since that candidate."
+    - "Use run-owned repo-local short temporary roots exactly $PWD/.h for HOME and $PWD/.v for TMPDIR. They must be absent before the run or safely created empty with owner-only permissions, and must be removed before final git/report closure."
+    - "Do not use the revision-5 long TMPDIR or add another nested run-name component above $PWD/.v."
+    - "Before spending canonical verifier budget, calculate/record the expected AF_UNIX fixture socket path bound for the existing tests.test_fs_read_batch_adversarial TemporaryDirectory prefix under $PWD/.v. It must remain below 100 bytes on the bound checkout path."
+    - "Run the exact previously failing focused test once under HOME=$PWD/.h and TMPDIR=$PWD/.v: tests.test_fs_read_batch_adversarial.FsReadBatchAdversarialTests.test_fifo_socket_and_device_modes_are_rejected_before_content_read."
+    - "If that short-path focused test does not PASS, stop BLOCKED before canonical verification. Do not modify source/tests/policy to make it pass."
+    - "After focused short-path PASS, run exactly one canonical ./verify through a durable/reconcilable carrier with HOME=$PWD/.h and TMPDIR=$PWD/.v and otherwise the established canonical verification environment."
+    - "The verifier must discover/classify/select 63 modules, execute all 63, and execute tests.test_product_qualification in L5_QUALIFICATION_CHAOS_CUTOVER with isolation_key=qualification."
+    - "Do not pre-exclude, skip, filter or separately substitute any module."
+    - "Never blind-replay an ambiguous verifier result. Reconcile only the same start_identity/session."
+    - "A genuine verifier/test failure is a new BLOCKED result. Do not fix it in revision 6."
+    - "After the verifier reaches a conclusive result, remove $PWD/.h and $PWD/.v before final repo observation/report publication."
+    - "Run git status/repo observation and prove no untracked temporary material remains."
+    - "Publish only .agent/tasks/TASK-0200/report.yaml as the revision-6 repository mutation."
+    - "Final main clean/synchronized MAIN ONLY."
 
   allowed_existing_files_or_components:
-    - "verification_policy.py"
-    - "tests/test_verify_harness.py"
     - ".agent/tasks/TASK-0200/report.yaml"
 
 invariants:
-  - "Revision-4 product candidate and Q01-Q14 qualification implementation remain byte-for-byte unchanged."
-  - "F-0200-001, F-0200-002 and F-0200-003 remain closed."
-  - "Verification remains strict: every discovered test module must be classified exactly once."
-  - "tests.test_product_qualification is a serialized L5 qualification module, not a quick/candidate shortcut."
-  - "No product/runtime/live/release behavior changes."
+  - "All source, tests, verifier policy, product behavior, Q01-Q14 predicates and documentation remain byte-for-byte unchanged."
+  - "F-0200-001 through F-0200-004 remain closed."
+  - "No real operator credential/runtime.env content is read or copied."
+  - "No live installed Runtime mutation."
   - "TASK-0196 remains paused."
   - "MAIN ONLY."
 
 forbidden_changes:
-  - "Any file other than verification_policy.py, tests/test_verify_harness.py and eventual TASK-0200 report."
-  - "Any product code, qualification-test predicate, doctor, Swift, shell product command, dependency, version, schema or docs change."
-  - "Skipping/exempting tests.test_product_qualification or weakening validate_classification."
-  - "Changing GLOBAL_WORKER_LIMIT, L5 worker concurrency, heartbeat, other module policies or path selection to make verification pass."
+  - "Any tracked file other than eventual TASK-0200 report."
+  - "Any source/test/policy/fixture modification."
+  - "Any verifier skip/exemption/filter or classification change."
+  - "Any long external TMPDIR path for canonical verification."
   - "Any live install/cutover/relaunch/Runtime lifecycle/plugin/reboot/permission/credential/release effect."
   - "Any second canonical ./verify after a conclusive result or blind replay."
   - "Any branch or PR."
@@ -101,16 +97,16 @@ effect_authority:
   branch_or_pr_creation_max: 0
 
 acceptance_criteria:
-  - {id: AC-1, requirement: "F-0200-004 is closed without weakening verification.", evidence_required: "tests.test_product_qualification is classified exactly once as serialized L5 with 180s timeout; unknown modules still fail closed."}
-  - {id: AC-2, requirement: "Verifier inventory is internally consistent.", evidence_required: "Focused test_verify_harness PASS with 63 total modules and 6 L5 modules; all other lane counts unchanged."}
-  - {id: AC-3, requirement: "Revision-4 product qualification remains unchanged.", evidence_required: "Pre-report diff touches only verification_policy.py and tests/test_verify_harness.py."}
-  - {id: AC-4, requirement: "Canonical verification passes.", evidence_required: "Exactly one revision-5 ./verify invocation PASS, including tests.test_product_qualification in L5; no replay."}
+  - {id: AC-1, requirement: "Short-path verifier environment is proven before canonical dispatch.", evidence_required: "Bounded socket-path calculation below 100 bytes and exact previously failing focused test PASS under $PWD/.h + $PWD/.v."}
+  - {id: AC-2, requirement: "Canonical verification completes.", evidence_required: "Exactly one revision-6 ./verify PASS with 63/63 modules and no replay."}
+  - {id: AC-3, requirement: "Product qualification executes canonically.", evidence_required: "tests.test_product_qualification is selected and PASS in serialized L5 qualification lane."}
+  - {id: AC-4, requirement: "Revision 6 introduces no implementation change.", evidence_required: "Only report.yaml changes; temporary HOME/TMPDIR removed before final observation."}
   - {id: AC-5, requirement: "Canonical closure.", evidence_required: "Truthful report and clean synchronized MAIN ONLY."}
 
 verification:
   authoritative_verification:
     required: true
-    mechanism: "Focused verifier-policy/harness proof followed by exactly one canonical ./verify."
+    mechanism: "Short-path focused AF_UNIX fixture preflight followed by exactly one canonical ./verify."
 
 continuation_policy:
   mode: MANUAL
