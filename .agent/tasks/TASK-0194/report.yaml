@@ -1,10 +1,13 @@
 protocol_version: 3
 
 task_id: TASK-0194
-task_revision: 3
-report_revision: 3
+task_revision: 4
+report_revision: 4
 state: REPORTED
-result: BLOCKED
+result: PASS
+
+task_source:
+  path: .agent/tasks/TASK-0194/task.yaml
 
 execution:
   repository: phatnguyen03022001/agent-runtime
@@ -12,175 +15,179 @@ execution:
     name: main
     role: canonical
   execution_surface: CHATGPT_LOCAL
-  exact_task_base: "a004fa1834de14a6ff51841d06e1487c278ed29a"
-  implementation_mutation: false
+  exact_task_base: "a0c4b8373c9c86fc768400d06eb0fb51b13639ee"
+  implementation_candidate: "dfbd1c93913c0bdaa0c6ead1ffbdc251c088f5bc"
+  implementation_parent: "a0c4b8373c9c86fc768400d06eb0fb51b13639ee"
+  implementation_tree: "57e686df47571ed7789a218796ea32dfd55f4016"
 
 revision_basis:
-  revision_2_base: "fcc19607d50b70270446c605335ec7d468b3cecc"
-  revision_2_report_commit: "093bfba2f0f42647ebfb0a1b8a65de9dfaabe89b"
-  revision_2_review_commit: "cbc3bc8e143529b565b369c174aad052b4850271"
-  revision_2_blocking_finding: "F-0194-002"
-  revision_2_candidate_reused: true
+  revision_3_report_commit: "34d19ac14355f99efeaa76a3e5726371ad94234a"
+  revision_3_review_commit: "2edb7b81765b2347507a6d069b5455585623efd1"
+  blocking_finding_closed: "F-0194-003"
 
-accepted_source_reuse:
-  task_0193_review_commit: "102e4ecd6b711fdcd823aa736eefafb4dbd60846"
-  canonical_verify_reused: true
-  canonical_verify_result: PASS
-  modules_completed: 62
-  tests_completed: 859
-  task_0194_revision_3_verify_invocations: 0
-  package_app_invocations: 0
-  source_delta_to_revision_3_base:
+scope_control:
+  authorized_files_changed:
+    - macos/candidate_cutover.py
+    - tests/test_candidate_cutover.py
+  forbidden_files_changed: []
+  package_provenance_changed: false
+  package_app_changed: false
+  payload_schema_changed: false
+  candidate_schema_changed: false
+  transaction_schema_changed: false
+  pointer_format_changed: false
+  content_closure_semantics_changed: false
+  public_mcp_contract_changed: false
+  dependency_changed: false
+
+root_cause:
+  result: CONFIRMED
+  description: "The canonical zero-cost payload store is keyed by content_closure, while candidate source_revision/source_tree are provenance metadata outside the content closure. The cutover path incorrectly required an already-existing canonical payload at the same closure to carry the incoming candidate source identity, conflating content-addressed storage identity with exact external candidate provenance."
+  failing_path: "_cutover_zero_cost_candidate -> _validate_zero_cost_payload_for_candidate(final_payload, expected)"
+  commit_path_defect: "commit_transaction repeated the same coupling by validating the installed candidate against the canonical final payload instead of retaining the transaction-staged exact candidate payload as the source provenance witness."
+
+implementation:
+  canonical_payload_reuse:
+    behavior: "An already-existing canonical payload at the candidate closure is validated with provenance.validate_payload_release against exact closure, requirements lock, Python contract, lifecycle/payload contracts, public tool count, public surface, immutable inventory, modes, hashes, and content closure. Historical source_revision/source_tree are syntactically validated but are not required to equal the candidate source identity."
+    mutation_of_existing_payload: false
+  exact_candidate_provenance:
+    behavior: "External candidate app, handoff, and supplied/staged candidate payload retain exact source_revision/source_tree validation. _validate_zero_cost_payload_for_candidate still rejects source identity mismatch."
+    relaxed: false
+  transaction_staged_witness:
+    reused_canonical_payload: "The staged candidate payload remains inside the transaction through the PENDING boundary and is used by commit_transaction as the exact candidate source provenance witness when payload.created=false."
+    created_canonical_payload: "When payload.created=true, the canonical final payload remains the exact candidate provenance witness as before."
+  commit_cleanup:
+    behavior: "After all commit validations succeed, a reused staged immutable payload witness is removed with the existing bounded _remove_transaction_payload helper before transaction directory cleanup."
+  rollback:
+    behavior: "Existing payload.created semantics remain unchanged. Reused canonical payloads remain created=false and are never deleted by rollback; transaction-created payloads retain existing bounded deletion behavior."
+
+tdd_evidence:
+  red:
+    command: ".venv/bin/python -m unittest tests.test_candidate_cutover.CandidateCutoverTests.test_zero_cost_reuses_existing_content_identical_payload_with_historical_source_identity"
+    exit_code: 1
+    tests: 1
+    decisive_failure: "zero-cost cutover failed; rollback restored previous state: initial payload source identity does not match candidate substrate"
+    failing_line: "macos/candidate_cutover.py:2323"
+  intermediate_green_attempt:
+    command: ".venv/bin/python -m unittest tests.test_candidate_cutover.CandidateCutoverTests.test_zero_cost_reuses_existing_content_identical_payload_with_historical_source_identity"
+    exit_code: 1
+    decisive_failure: "PermissionError while commit_transaction removed the retained immutable staged payload witness with shutil.rmtree"
+    disposition: "Added bounded post-validation staged witness cleanup using _remove_transaction_payload for payload.created=false."
+  green:
+    command: ".venv/bin/python -m unittest tests.test_candidate_cutover.CandidateCutoverTests.test_zero_cost_reuses_existing_content_identical_payload_with_historical_source_identity"
+    exit_code: 0
+    tests: 1
     result: PASS
-    evidence: "GitHub compare from preserved candidate source fcc19607d50b70270446c605335ec7d468b3cecc to exact revision-3 base a004fa1834de14a6ff51841d06e1487c278ed29a changed only .agent/tasks/TASK-0194 task/report/review artifacts."
 
-repository_preflight:
-  local_head: "a004fa1834de14a6ff51841d06e1487c278ed29a"
-  remote_main: "a004fa1834de14a6ff51841d06e1487c278ed29a"
-  branch: main
-  remote_branch_count: 1
-  worktree_clean: true
-  synchronized: true
-
-candidate_revalidation:
-  invocation_count: 1
+targeted_regressions:
+  command: ".venv/bin/python -m unittest tests.test_candidate_cutover.CandidateCutoverTests.test_zero_cost_reuses_existing_content_identical_payload_with_historical_source_identity tests.test_candidate_cutover.CandidateCutoverTests.test_zero_cost_rejects_existing_same_closure_payload_with_incompatible_metadata tests.test_candidate_cutover.CandidateCutoverTests.test_zero_cost_external_candidate_payload_still_requires_exact_source_identity"
   result: PASS
-  candidate_app: "/Users/tienphat/Developer/agent-runtime/build/candidates/025f728aede45733ed8b83aa6c2717a5e28543b3cdb98dba31bf012ebc30338b/Agent Runtime.app"
-  candidate_handoff: "/Users/tienphat/Developer/agent-runtime/build/candidates/025f728aede45733ed8b83aa6c2717a5e28543b3cdb98dba31bf012ebc30338b/Agent Runtime.candidate.json"
-  candidate_sha256: "025f728aede45733ed8b83aa6c2717a5e28543b3cdb98dba31bf012ebc30338b"
-  handoff_sha256: "1e518cfb23ff7b01e42daac0accf4f0fd93d89d485fec4d60f0b5791d02d92e3"
-  initial_payload_release: "/Users/tienphat/Developer/agent-runtime/build/candidates/025f728aede45733ed8b83aa6c2717a5e28543b3cdb98dba31bf012ebc30338b/payloads/85b82b2c88e9bc0bfdf0c240a7b47b17abfd260609d88a7e5dafecab042e2483"
-  initial_payload_closure: "85b82b2c88e9bc0bfdf0c240a7b47b17abfd260609d88a7e5dafecab042e2483"
-  source_revision: "fcc19607d50b70270446c605335ec7d468b3cecc"
-  source_tree: "0720c1b65321d5ef5d590d94cc3a76930e405d03"
-  runtime_version: "0.5.1"
-  advertised_tool_count: 20
-  record_count: 1686
-  zero_cost_provenance: PASS
-  strict_codesign: PASS
-  pyc_count: 0
-  pycache_count: 0
-  candidate_process_count: 0
-  launchservices_cleanup_effects: 0
+  tests: 3
+  evidence:
+    - "Identical payload bytes and compatibility fields with different source revision/tree share one content closure, reuse the older canonical object, reach PENDING and COMMITTED, record payload.created=false, select the shared current-payload closure, retain exact staged candidate provenance through commit, and leave canonical payload bytes unchanged."
+    - "A same-closure canonical payload with incompatible requirements-lock metadata is rejected fail-closed and remains unchanged."
+    - "An externally supplied same-content payload with mismatched source identity is rejected before transaction mutation; the wrapped provenance cause records the source-identity mismatch."
 
-pre_install_live_state:
-  installed_runtime_revision: "5286bbb6d1942ff7eed13190bd38ee5efcc0e621"
-  cutover_transaction: absent
-  runtime_env_sha256: "b3d0d67471f6d620f53ad1ed9ee6db21a1e906fff643dd94050b7cd8def97029"
-  predecessor_status: "RUNNING (persistent terminal sessions: 6)"
-  runtime_supervisor_pid: 812
-  listener:
-    address: "127.0.0.1:8080"
-    process: tunnel-client
-    pid: 835
-    ownership: canonical
-  healthz: live
-  readyz: ready
+focused_verification:
+  candidate_cutover:
+    command: ".venv/bin/python -m unittest tests.test_candidate_cutover"
+    result: PASS
+    tests: 116
+    duration_s: 83.541
+  package_provenance:
+    command: ".venv/bin/python -m unittest tests.test_package_provenance"
+    result: PASS
+    tests: 20
+    duration_s: 0.405
 
-sentinelx_pre_install_lifeline:
-  host: mac-tphat-mb
-  operational: true
-  ping: PASS
-  read_only_repo_exec: PASS
-  observed_repo_head: "a004fa1834de14a6ff51841d06e1487c278ed29a"
-  session_id: "sess_9ff5fd80cb2f"
-
-install_prebuilt:
+canonical_verify:
   authorized: 1
   invocation_count: 1
   retry_count: 0
-  carrier: "SentinelX mac-tphat-mb"
-  command: "./install.sh --install-prebuilt <exact preserved candidate> <exact handoff> --expected-candidate-sha256 025f728aede45733ed8b83aa6c2717a5e28543b3cdb98dba31bf012ebc30338b --expected-handoff-sha256 1e518cfb23ff7b01e42daac0accf4f0fd93d89d485fec4d60f0b5791d02d92e3"
-  result: FAIL_WITH_AUTOMATIC_ROLLBACK
-  exit_code: 2
-  output: "CUTOVER ERROR: zero-cost cutover failed; rollback restored previous state: initial payload source identity does not match candidate substrate"
-  reached_pending: false
-  reached_commit: false
-  explicit_retry: false
-  automatic_rollback_inside_install: true
-  evidence: "The sole install-prebuilt invocation entered the transactional zero-cost cutover, performed mutation, then failed before PENDING because the canonical payload store already contained the same content closure with predecessor source identity. candidate_cutover.py automatically invoked rollback_transaction and reported that predecessor state was restored."
-
-payload_identity_conflict:
-  closure: "85b82b2c88e9bc0bfdf0c240a7b47b17abfd260609d88a7e5dafecab042e2483"
-  candidate_payload_manifest:
-    sha256: "02aba00e8c333797fdd1972b1a693aaa0af32254c3e344ebf30bab58fa95e636"
-    source_revision: "fcc19607d50b70270446c605335ec7d468b3cecc"
-    source_tree: "0720c1b65321d5ef5d590d94cc3a76930e405d03"
-    content_closure: "85b82b2c88e9bc0bfdf0c240a7b47b17abfd260609d88a7e5dafecab042e2483"
-  canonical_existing_payload_manifest:
-    sha256: "5ad8dfdc469031cb1cbe3662b472d4015f337aa1aae2951f17f8244e721f5637"
-    source_revision: "5286bbb6d1942ff7eed13190bd38ee5efcc0e621"
-    source_tree: "4093367bfaaf499b880e98076d5904decae51375"
-    content_closure: "85b82b2c88e9bc0bfdf0c240a7b47b17abfd260609d88a7e5dafecab042e2483"
-  invariant_fields_equal:
-    requirements_lock_sha256: "0e18226dbb6538c29bd96739f447b639ec63cb0291eef8ce4c70b45a2bb377d2"
-    required_python_major_minor: "3.13"
-    expected_public_tool_count: 20
-    expected_public_surface_sha256: "8726540a1ff4576c030dd6f9ad2dbe4b69b3c2f4ee261f7be2d083e3e6e611e4"
-  code_path_evidence: "candidate_cutover.py uses payloads_root / closure as final_payload. If that path already exists it validates the existing payload against the new candidate source identity instead of replacing it. The existing predecessor payload therefore fails _validate_zero_cost_payload_for_candidate before PENDING."
-  root_cause: "The canonical payload store is keyed by content_closure, but payload source_revision/source_tree remain identity-significant. Two source identities with byte-equivalent payload content share one closure path, so the revision-3 cutover cannot install the preserved candidate while the predecessor payload occupies that closure."
-
-automatic_rollback_restoration:
+  command: "./verify"
+  carrier:
+    mode: pipe
+    durability: runtime_restart
+    start_identity: "c0940000000000000000000000000001"
+    session_id: "573c6339d24a0f85"
+  dispatch_result: AMBIGUOUS_OWNER_IDENTITY
+  reconciliation: "terminal_start returned a durable owner-identity mismatch after dispatch. The exact bash ./verify process was observed active through the independent SentinelX carrier. No second verifier was dispatched. After that same process exited, terminal_poll using the same start_identity reconciled the persisted execution."
+  lifecycle: COMPLETED
+  termination_reason: natural_exit
+  exit_code: 0
   result: PASS
+  modules_completed: 62
+  modules_selected: 62
+  tests_completed: 862
+  duration_s: 101.651
+  profile: qualification
+  candidate_cutover_tests_in_verify: 116
+  package_provenance_tests_in_verify: 20
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "Deterministic regression creates byte-identical old/new payload releases with different source revision/tree and one shared content closure; older canonical payload is seeded, newer exact candidate payload is supplied, and cutover reaches PENDING then COMMITTED."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "Reused canonical payload is fully content/compatibility validated, metadata records payload.created=false, current-payload selects the shared closure, and complete canonical payload file bytes remain unchanged across cutover and commit."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "Transaction-staged candidate payload retains the newer exact source revision/tree and is used for validate_zero_cost_candidate during commit. External candidate payload source mismatch remains fail-closed before mutation."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "Negative regression mutates non-source compatibility metadata at the same closure and proves canonical reuse is rejected rather than silently accepted."
+  - criterion_id: AC-5
+    status: PASS
+    evidence: "Production rollback ownership remains keyed by payload.created. Reused payloads remain created=false and are not removed by rollback; existing created=true cleanup path is unchanged. Full candidate-cutover suite passes."
+  - criterion_id: AC-6
+    status: PASS
+    evidence: "Targeted 3/3 PASS; tests.test_candidate_cutover 116/116 PASS; tests.test_package_provenance 20/20 PASS; exactly one durable/reconcilable ./verify invocation PASSed 62/62 modules and 862 tests."
+  - criterion_id: AC-7
+    status: PASS
+    evidence: "Revision 4 performed no candidate build, package_app.sh, install-prebuilt, live cutover/rollback/commit, Runtime Start/Stop, menu-bar relaunch, LaunchServices mutation, reboot, release, permission, or live configuration mutation."
+  - criterion_id: AC-8
+    status: PASS
+    evidence: "Implementation candidate dfbd1c93913c0bdaa0c6ead1ffbdc251c088f5bc is a direct child of the exact revision-4 base and changes only macos/candidate_cutover.py and tests/test_candidate_cutover.py."
+
+live_preservation:
+  observation_only: true
   installed_runtime_revision: "5286bbb6d1942ff7eed13190bd38ee5efcc0e621"
   installed_git_tree: "4093367bfaaf499b880e98076d5904decae51375"
-  selected_payload_revision: "5286bbb6d1942ff7eed13190bd38ee5efcc0e621"
-  selected_payload_closure: "85b82b2c88e9bc0bfdf0c240a7b47b17abfd260609d88a7e5dafecab042e2483"
   cutover_transaction: absent
-  runtime_env_sha256: "b3d0d67471f6d620f53ad1ed9ee6db21a1e906fff643dd94050b7cd8def97029"
-  service_management:
-    main_app: enabled
-    runtime_agent: not-found
-  predecessor_launchagent:
-    RunAtLoad: false
-    KeepAlive:
-      SuccessfulExit: false
-  protected_runtime_running: present
-  runtime_supervisor_pid: 15393
-  tunnel_client_pid: 15399
-  listener: "127.0.0.1:8080"
+  runtime_status: "RUNNING (persistent terminal sessions: 6)"
   healthz: live
   readyz: ready
-  doctor:
-    status: healthy
-    checks_passed: 10
-    checks_total: 10
-  menu_bar_pid: 25846
-  evidence: "The installer-internal rollback restored the stale predecessor app, predecessor payload pointer, predecessor persistent lifecycle semantics, canonical runtime.env, ServiceManagement ownership, and a healthy running Runtime. This is restoration of revision-1/2 predecessor truth, not activation of TASK-0192 manual lifecycle."
+  result: PASS
+  evidence: "Fresh read-only observation after focused and canonical verification confirmed the predecessor remained unchanged and healthy."
 
 effect_accounting:
   canonical_verify:
-    authorized: 0
-    consumed: 0
+    authorized: 1
+    consumed: 1
+    remaining: 0
   distribution_build:
     authorized: 0
     consumed: 0
-  launchservices_cleanup:
+  install_prebuilt:
     authorized: 0
     consumed: 0
-  candidate_revalidation:
-    authorized: 1
-    consumed: 1
-    remaining: 0
-  install_prebuilt:
-    authorized: 1
-    consumed: 1
-    remaining: 0
-  rollback_cutover:
-    authorized: 1
-    consumed: 1
-    remaining: 0
-    mode: "automatic rollback_transaction inside the sole install-prebuilt invocation"
   commit_cutover:
-    authorized: 1
+    authorized: 0
+    consumed: 0
+  rollback_cutover:
+    authorized: 0
     consumed: 0
   menu_bar_relaunch:
-    authorized: 1
+    authorized: 0
     consumed: 0
   runtime_explicit_start:
-    authorized: 1
+    authorized: 0
     consumed: 0
   runtime_explicit_stop:
+    authorized: 0
+    consumed: 0
+  launchservices_cleanup:
     authorized: 0
     consumed: 0
   physical_reboot:
@@ -193,42 +200,8 @@ effect_accounting:
     authorized: 0
     consumed: 0
 
-acceptance_evidence:
-  - criterion_id: AC-1
-    status: PASS
-    evidence: "One read-only revalidation proved exact candidate/handoff/payload identity, source fcc19607..., v0.5.1, 20 tools, 1686 records, strict codesign/provenance PASS, zero generated bytecode, and zero process ownership from the candidate path."
-  - criterion_id: AC-2
-    status: PASS
-    evidence: "No LaunchServices mutation was performed. Candidate discovery state was not used as lifecycle authority."
-  - criterion_id: AC-3
-    status: FAIL
-    evidence: "The sole SentinelX-carried install-prebuilt failed before PENDING due to an existing canonical payload path with the same closure but predecessor source identity. The installer automatically rolled back successfully. No retry occurred and no commit was attempted."
-  - criterion_id: AC-4
-    status: NOT_REACHED
-    evidence: "Accepted manual lifecycle was never activated. Automatic rollback restored the predecessor lifecycle contract, including KeepAlive SuccessfulExit=false and protected-runtime-running."
-  - criterion_id: AC-5
-    status: NOT_REACHED
-    evidence: "The preserved candidate was not left installed, so no new menu-bar relaunch or schema-3 presentation proof occurred."
-  - criterion_id: AC-6
-    status: NOT_REACHED
-    evidence: "No post-activation ChatGPT runtime_capabilities or ordinary MCP proof was attempted because activation failed and rolled back."
-  - criterion_id: AC-7
-    status: PASS
-    evidence: "No new TCC/privacy permission, sudo, Gatekeeper bypass, or security weakening occurred."
-  - criterion_id: AC-8
-    status: BLOCKED
-    evidence: "Live predecessor is healthy and transaction-free after automatic rollback, but exact candidate fcc19607... is not active."
-
-blocking_findings:
-  - id: "F-0194-003"
-    severity: BLOCKING
-    description: "The zero-cost payload store keys releases by content_closure while the payload manifest also binds source_revision/source_tree. Candidate fcc19607... and predecessor 5286bbb... have byte-equivalent payload content and therefore the same closure 85b82..., but different source identities. The existing predecessor payload path causes candidate_cutover.py to reject the candidate before PENDING."
-    disposition: "Stop TASK-0194 revision 3. Do not retry install-prebuilt, do not invoke rollback again, and do not commit/relaunch/Start. A new authorized task or revision must explicitly resolve the payload-store identity collision; revision 3 forbids local source/spec changes and its install/rollback effects are consumed."
-
 notes:
-  - "No package_app.sh or new build was executed."
-  - "No ./verify was executed."
-  - "No LaunchServices discovery mutation occurred."
-  - "No product/source/test/Swift/docs/dependency/version/public-contract mutation occurred."
-  - "No explicit rollback-cutover command was invoked; rollback occurred once inside the transactional install-prebuilt failure path."
-  - "No commit-cutover, menu-bar relaunch, explicit Runtime Start/Stop, reboot, release, or tag effect occurred."
+  - "No package_app.sh invocation occurred."
+  - "No ./verify replay occurred after the ambiguous initial carrier response."
+  - "No macos/package_provenance.py mutation occurred; content-only closure and external zero-cost provenance contracts remain unchanged."
+  - "No live activation is claimed or performed by revision 4."
