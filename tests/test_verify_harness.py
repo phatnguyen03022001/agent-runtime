@@ -145,7 +145,7 @@ class VerifyHarnessTests(unittest.TestCase):
         candidate_cutover = verification_policy.MODULE_POLICIES[
             "tests.test_candidate_cutover"
         ]
-        self.assertEqual(candidate_cutover.timeout_seconds, 180.0)
+        self.assertEqual(candidate_cutover.timeout_seconds, 300.0)
         self.assertEqual(
             candidate_cutover.lane,
             verification_policy.L5_QUALIFICATION_CHAOS_CUTOVER,

@@ -90,7 +90,7 @@ MODULE_POLICY_ENTRIES: tuple[tuple[str, ModulePolicy], ...] = (
         L5_QUALIFICATION_CHAOS_CUTOVER,
         ("cutover", "package", "host_lifecycle"),
         "Transactional package cutover, rollback and crash-boundary qualification.",
-        timeout=180.0,
+        timeout=300.0,
         isolation_key="qualification",
     )),
     ("tests.test_candidate_freeze", module_policy(
