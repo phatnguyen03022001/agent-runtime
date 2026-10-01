@@ -65,6 +65,82 @@ class CandidateClosureTests(unittest.TestCase):
             with self.assertRaisesRegex(cutover.CutoverError, "symlink|unsafe"):
                 cutover._materialize_current_launchagent(home, uid=os.getuid())
 
+    def test_current_launchagent_materialization_transitions_exact_persistent_predecessor_only(self) -> None:
+        cutover = load_module(CUTOVER_PATH, "candidate_cutover_launchagent_transition")
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw) / "home"
+            helper = home / "Applications/Agent Runtime.app/Contents/MacOS/AgentRuntimeRuntimeService"
+            helper.parent.mkdir(parents=True)
+            helper.write_text("#!/bin/sh\nexit 0\n")
+            helper.chmod(0o755)
+            plist_path = home / "Library/LaunchAgents" / f"{MODERN_RUNTIME_LABEL}.plist"
+            plist_path.parent.mkdir(parents=True)
+
+            manual = cutover._current_launchagent_payload(home)
+            predecessor = dict(manual)
+            predecessor["KeepAlive"] = {"SuccessfulExit": False}
+            predecessor_bytes = plistlib.dumps(predecessor)
+            plist_path.write_bytes(predecessor_bytes)
+            plist_path.chmod(0o600)
+
+            cutover._validate_current_launchagent(
+                plist_path,
+                home,
+                uid=os.getuid(),
+                allow_persistent_predecessor=True,
+            )
+            with self.assertRaisesRegex(cutover.CutoverError, "foreign|identity|contract"):
+                cutover._validate_current_launchagent(plist_path, home, uid=os.getuid())
+
+            materialized = cutover._materialize_current_launchagent(
+                home,
+                uid=os.getuid(),
+                allow_persistent_predecessor_transition=True,
+            )
+            self.assertEqual(materialized, plist_path)
+            self.assertEqual(plistlib.loads(plist_path.read_bytes()), manual)
+            self.assertEqual(stat.S_IMODE(plist_path.stat().st_mode), 0o600)
+            self.assertEqual(plist_path.stat().st_uid, os.getuid())
+            cutover._validate_current_launchagent(plist_path, home, uid=os.getuid())
+
+            manual_bytes = plist_path.read_bytes()
+            cutover._materialize_current_launchagent(
+                home,
+                uid=os.getuid(),
+                allow_persistent_predecessor_transition=True,
+            )
+            self.assertEqual(plist_path.read_bytes(), manual_bytes)
+
+            foreign_variants = []
+            wrong_label = dict(manual)
+            wrong_label["Label"] = "com.example.foreign"
+            foreign_variants.append(wrong_label)
+            wrong_helper = dict(manual)
+            wrong_helper["ProgramArguments"] = ["/usr/bin/false"]
+            foreign_variants.append(wrong_helper)
+            wrong_keepalive = dict(manual)
+            wrong_keepalive["KeepAlive"] = {"SuccessfulExit": True}
+            foreign_variants.append(wrong_keepalive)
+            wrong_run_at_load = dict(manual)
+            wrong_run_at_load["RunAtLoad"] = True
+            foreign_variants.append(wrong_run_at_load)
+            extra_key = dict(manual)
+            extra_key["Unexpected"] = True
+            foreign_variants.append(extra_key)
+
+            for foreign in foreign_variants:
+                with self.subTest(foreign=foreign):
+                    foreign_bytes = plistlib.dumps(foreign)
+                    plist_path.write_bytes(foreign_bytes)
+                    plist_path.chmod(0o600)
+                    with self.assertRaisesRegex(cutover.CutoverError, "foreign|identity|contract"):
+                        cutover._materialize_current_launchagent(
+                            home,
+                            uid=os.getuid(),
+                            allow_persistent_predecessor_transition=True,
+                        )
+                    self.assertEqual(plist_path.read_bytes(), foreign_bytes)
+
     def _signed_app(
         self, provenance, root: Path, *, marker: str = "candidate", revision: str = "a" * 40,
         runtime_label: str = MODERN_RUNTIME_LABEL, manifest_schema: int = 2,
@@ -570,6 +646,157 @@ class CandidateCutoverTests(unittest.TestCase):
             for path in root.rglob("*")
             if path.is_file()
         }
+
+    def _prepare_zero_cost_persistent_current_predecessor(self, cutover, fx):
+        shutil.copytree(fx["app"], fx["target"], copy_function=shutil.copy2)
+        current_plist = (
+            fx["home"]
+            / "Library/LaunchAgents"
+            / f"{MODERN_RUNTIME_LABEL}.plist"
+        )
+        current_plist.parent.mkdir(parents=True, exist_ok=True)
+        manual = cutover._current_launchagent_payload(fx["home"])
+        predecessor = dict(manual)
+        predecessor["KeepAlive"] = {"SuccessfulExit": False}
+        predecessor_bytes = plistlib.dumps(
+            predecessor,
+            fmt=plistlib.FMT_XML,
+            sort_keys=False,
+        )
+        current_plist.write_bytes(predecessor_bytes)
+        current_plist.chmod(0o600)
+
+        desired = fx["state_dir"] / "protected-runtime-running"
+        desired.touch()
+        pointer = fx["state_dir"] / "current-payload"
+        pointer.write_text(fx["closure"] + "\n")
+        pointer.chmod(0o600)
+
+        service = f"gui/{os.getuid()}/{MODERN_RUNTIME_LABEL}"
+        loaded = set(json.loads(fx["launch_state"].read_text()))
+        loaded.add(service)
+        fx["launch_state"].write_text(json.dumps(sorted(loaded)) + "\n")
+        programs_path = fx["home"].parent / "launchctl-programs.json"
+        programs = json.loads(programs_path.read_text())
+        programs[service] = str(
+            fx["target"] / "Contents/MacOS/AgentRuntimeRuntimeService"
+        )
+        programs_path.write_text(json.dumps(programs, sort_keys=True) + "\n")
+        return {
+            "current_plist": current_plist,
+            "predecessor_bytes": predecessor_bytes,
+            "manual": manual,
+            "desired": desired,
+            "pointer": pointer,
+            "service": service,
+            "programs_path": programs_path,
+        }
+
+    def test_zero_cost_transitions_persistent_current_predecessor_to_manual_and_reaches_pending(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            cutover, fx = self._zero_cost_collision_fixture(raw)
+            predecessor = self._prepare_zero_cost_persistent_current_predecessor(
+                cutover,
+                fx,
+            )
+
+            result = cutover.cutover_candidate(
+                fx["app"],
+                fx["handoff"],
+                payload_release=fx["payload_release"],
+                target_app=fx["target"],
+                ui_plist=fx["home"] / "Library/LaunchAgents/com.picmao.agent-runtime-ui.plist",
+                runtime_plist=fx["home"] / "Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist",
+                state_dir=fx["state_dir"],
+                transaction_dir=fx["transaction"],
+                home=fx["home"],
+                launchctl=fx["launchctl"],
+                uid=os.getuid(),
+            )
+
+            self.assertEqual(result["status"], "PENDING")
+            self.assertEqual(
+                plistlib.loads(predecessor["current_plist"].read_bytes()),
+                predecessor["manual"],
+            )
+            self.assertEqual(
+                stat.S_IMODE(predecessor["current_plist"].stat().st_mode),
+                0o600,
+            )
+            self.assertFalse(predecessor["desired"].exists())
+            self.assertIn(
+                predecessor["service"],
+                json.loads(fx["launch_state"].read_text()),
+            )
+            metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
+            self.assertEqual(
+                metadata["payload"],
+                {"closure": fx["closure"], "created": False},
+            )
+            staged_payload = fx["transaction"] / "payloads" / fx["closure"]
+            staged_manifest = json.loads(
+                (staged_payload / "payload-manifest.json").read_text()
+            )
+            self.assertEqual(
+                staged_manifest["source_revision"],
+                fx["candidate_revision"],
+            )
+            self.assertEqual(staged_manifest["source_tree"], fx["candidate_tree"])
+
+    def test_zero_cost_failure_after_predecessor_transition_restores_exact_persistent_lifecycle(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            cutover, fx = self._zero_cost_collision_fixture(raw)
+            predecessor = self._prepare_zero_cost_persistent_current_predecessor(
+                cutover,
+                fx,
+            )
+
+            with self.assertRaisesRegex(
+                cutover.CutoverError,
+                "rollback restored previous state: injected after_launchagent_bootstrap failure",
+            ):
+                cutover.cutover_candidate(
+                    fx["app"],
+                    fx["handoff"],
+                    payload_release=fx["payload_release"],
+                    target_app=fx["target"],
+                    ui_plist=fx["home"] / "Library/LaunchAgents/com.picmao.agent-runtime-ui.plist",
+                    runtime_plist=fx["home"] / "Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist",
+                    state_dir=fx["state_dir"],
+                    transaction_dir=fx["transaction"],
+                    home=fx["home"],
+                    launchctl=fx["launchctl"],
+                    uid=os.getuid(),
+                    fail_stages={"after_launchagent_bootstrap"},
+                )
+
+            self.assertFalse(fx["transaction"].exists())
+            self.assertEqual(
+                predecessor["current_plist"].read_bytes(),
+                predecessor["predecessor_bytes"],
+            )
+            self.assertTrue(predecessor["desired"].is_file())
+            self.assertIn(
+                predecessor["service"],
+                json.loads(fx["launch_state"].read_text()),
+            )
+            programs = json.loads(predecessor["programs_path"].read_text())
+            self.assertEqual(
+                programs[predecessor["service"]],
+                str(
+                    fx["target"]
+                    / "Contents/MacOS/AgentRuntimeRuntimeService"
+                ),
+            )
+            launch_log = fx["launch_log"].read_text()
+            self.assertIn(
+                f"bootstrap gui/{os.getuid()} {predecessor['current_plist']}",
+                launch_log,
+            )
+            self.assertIn(
+                f"kickstart gui/{os.getuid()}/{MODERN_RUNTIME_LABEL}",
+                launch_log,
+            )
 
     def test_zero_cost_reuses_existing_content_identical_payload_with_historical_source_identity(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

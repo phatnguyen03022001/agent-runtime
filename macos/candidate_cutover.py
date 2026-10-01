@@ -120,16 +120,28 @@ def _validate_current_launchagent(
     return value
 
 
-def _materialize_current_launchagent(home: Path, *, uid: int) -> Path:
+def _materialize_current_launchagent(
+    home: Path,
+    *,
+    uid: int,
+    allow_persistent_predecessor_transition: bool = False,
+) -> Path:
     path = _current_launchagent_path(home)
     launch_dir = path.parent
     if launch_dir.is_symlink() or (launch_dir.exists() and not launch_dir.is_dir()):
         raise CutoverError("LaunchAgents directory is unsafe")
     launch_dir.mkdir(parents=True, exist_ok=True)
+    expected = _current_launchagent_payload(home)
     if path.exists() or path.is_symlink():
-        _validate_current_launchagent(path, home, uid=uid)
-        return path
-    payload = plistlib.dumps(_current_launchagent_payload(home), fmt=plistlib.FMT_XML, sort_keys=False)
+        existing = _validate_current_launchagent(
+            path,
+            home,
+            uid=uid,
+            allow_persistent_predecessor=allow_persistent_predecessor_transition,
+        )
+        if existing == expected:
+            return path
+    payload = plistlib.dumps(expected, fmt=plistlib.FMT_XML, sort_keys=False)
     temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     if temporary.exists() or temporary.is_symlink():
         raise CutoverError("current Runtime LaunchAgent staging path already exists")
@@ -2354,7 +2366,11 @@ def _cutover_zero_cost_candidate(
         )
         _validate_zero_cost_payload_for_candidate(candidate_payload_witness, expected)
 
-        _materialize_current_launchagent(home, uid=uid)
+        _materialize_current_launchagent(
+            home,
+            uid=uid,
+            allow_persistent_predecessor_transition=True,
+        )
         if _service_loaded(launchctl, current_service):
             raise CutoverError("current Runtime LaunchAgent became loaded before transaction bootstrap")
         _require_launchctl_ok(
