@@ -1,13 +1,13 @@
 protocol_version: 3
 task_id: TASK-0200
-task_revision: 4
+task_revision: 5
 state: APPROVED
-title: "Product Failure Qualification — Immutable Payload Activation Durability"
+title: "Product Failure Qualification — Verifier Policy Integration Closure"
 
 origin:
   type: architect_continuation
   predecessor_task: TASK-0200
-  gap_id: F-0200-003
+  gap_id: F-0200-004
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -26,72 +26,59 @@ skill_library:
   revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
 
 execution_skills:
-  required: [executor, verification, reliability, security-review, simplicity]
+  required: [executor, verification, simplicity]
 
 revision_basis:
-  revision_3_candidate: "696f298b1fbbb7b80beb8896320a9e3b636b5505"
-  revision_3_report: "c20cf9d44731244bf41d6027fb0e3bc5ea012bd4"
-  revision_3_review: "52d400c609b5ef6fb4b138095513450a483dae47"
-  closed_findings: [F-0200-001, F-0200-002]
-  open_finding: F-0200-003
+  revision_4_candidate: "09c2e0cea6421405ab01a1343ccdcd17eddaaa55"
+  revision_4_report: "2b067228b6f62847f3bb8a3cebda7a0e655bd158"
+  revision_4_review: "37eb8bb07f0bb00ced0d330f2ee185297910fd02"
+  closed_findings: [F-0200-001, F-0200-002, F-0200-003]
+  open_finding: F-0200-004
   paused_release_task: TASK-0196
 
-objective: "Close only F-0200-003 by making payload-update activation publish a valid immutable payload on Darwin and by preserving typed transaction evidence through payload-update cleanup failures. Then resume Q09 and complete Q10-Q14. If another product gap appears, stop BLOCKED without fixing it."
+objective: "Close only F-0200-004 by integrating the already-passing tests.test_product_qualification module into the existing strict verification policy, then spend one new canonical ./verify invocation under revision-5 authority. Do not alter product behavior or the qualification predicates."
 
 scope:
   required_changes:
-    - "Fresh-bind exact revision-4 base with clean synchronized MAIN ONLY."
-    - "Preserve F-0200-001 runtime_config behavior and F-0200-002 zero-cost rollback identity behavior unchanged."
-    - "Modify only macos/candidate_cutover.py for production behavior."
-    - "Payload-update staging must continue validating the sealed copied payload before publication."
-    - "When publishing a new payload from transaction staging into the canonical payload store on Darwin, reuse the existing accepted zero-cost publication mode transition: make only the staged payload root rename-capable, perform the atomic os.replace into the exact closure path, restore the canonical payload root to mode 0555, then validate the canonical release before pointer authority can advance."
-    - "Do not recursively make immutable payload contents writable for publication. Do not weaken payload content/provenance validation."
-    - "Preserve the exact closure path and canonical payload-store collision checks. Existing canonical payloads must still be validated rather than overwritten."
-    - "Payload-update rollback and activation cleanup must not call raw shutil.rmtree(transaction_dir) while a sealed staged payload can remain."
-    - "Introduce only the smallest shared payload-update transaction cleanup helper if needed. It must remove a known staged payload using the existing _remove_transaction_payload safety helper before removing its container."
-    - "Transaction metadata must remain present until all other transaction-owned cleanup material has been safely removed. Before unlinking metadata, require the transaction directory to contain only the expected metadata artifact (and already-empty/removed expected payload container). Unknown/unsafe artifacts must fail closed while metadata remains."
-    - "If payload-update cleanup or rollback cleanup fails, the existing outer error path must be able to retain/rewrite metadata as status PARTIAL with bounded last_error. A supported failure must never leave a retained transaction directory without metadata.json."
-    - "Preserve current payload pointer until the published payload is validated. Preserve existing phases PREPARED, OLD_GENERATION_STOPPED, PAYLOAD_PUBLISHED, POINTER_SWITCHED and VALIDATED; do not add a transaction schema or phase."
-    - "Preserve runtime running/stopped restoration behavior and existing payload-update witness validation."
-    - "Add focused tests in tests/test_candidate_cutover.py using a real sealed mode-0555 staged payload on Darwin-compatible semantics to prove valid activation reaches PAYLOAD_PUBLISHED and POINTER_SWITCHED checkpoints."
-    - "Add focused cleanup regressions proving a sealed staged payload is removed before metadata, and an injected cleanup failure retains metadata with status PARTIAL rather than an untyped transaction directory."
-    - "Preserve and rerun the existing Q09 qualification reproducer in tests/test_product_qualification.py. Do not weaken it."
-    - "Run focused candidate-cutover payload-update owner tests first."
-    - "Then run Q01-Q09, proving F-0200-001 and F-0200-002 remain closed."
-    - "Only if Q01-Q09 all PASS, continue Q10-Q14 exactly as previously authorized."
-    - "Q10: uninstall/reinstall -> canonical runtime.env retained byte-for-byte and remains authoritative or explicitly reconfigurable."
-    - "Q11: upgrade vN->vN+1 -> canonical runtime.env bytes/mode/identity preserved unless explicit reconfigure."
-    - "Q12: doctor/preflight diagnostics are secret-safe and bounded."
-    - "Q13: doctor emits deterministic non-OK reasons for workspace, package/payload, lifecycle and cutover failures."
-    - "Q14: coherent synthetic installed state yields the exact healthy doctor inventory with no spurious warning."
-    - "Use only synthetic temporary HOME/workspace/config/tunnel-client state. Never read operator runtime.env or real credentials; never call the real control plane."
-    - "If Q10-Q14 exposes any new production gap, stop BLOCKED and report it. Do not modify any additional production file."
-    - "If Q01-Q14 all PASS, run git diff --check and exactly one canonical ./verify through a durable/reconcilable carrier. Never blind-replay ambiguity."
-    - "Publish one revision-4 implementation candidate and truthful report. Final main clean/synchronized MAIN ONLY."
+    - "Fresh-bind exact revision-5 base with clean synchronized MAIN ONLY."
+    - "Do not modify macos/candidate_cutover.py, macos/runtime_config.py, tests/test_product_qualification.py or any product/runtime behavior."
+    - "Add exactly one MODULE_POLICY_ENTRIES classification for tests.test_product_qualification in verification_policy.py."
+    - "Classify it as L5_QUALIFICATION_CHAOS_CUTOVER with isolation_key='qualification'."
+    - "Use subsystem tags that truthfully represent the module's existing scope: qualification, cutover, recovery and productization."
+    - "Use a bounded timeout of 180 seconds. Do not weaken the global worker limit, L5 worker limit, classification strictness or unknown-module fail-closed behavior."
+    - "Do not add the module to GLOBAL_QUICK_MODULES."
+    - "Do not create a module-specific exemption, skip, discovery bypass, wildcard policy or special-case verifier branch."
+    - "Update tests/test_verify_harness.py exact inventory expectations from 62 to 63 total modules and from 5 to 6 L5 modules."
+    - "Add an explicit verifier-harness assertion that tests.test_product_qualification is L5_QUALIFICATION_CHAOS_CUTOVER, isolation_key='qualification', and timeout_seconds=180.0."
+    - "Preserve all other lane counts, module policies, path rules, worker limits, heartbeat and selection semantics unchanged."
+    - "Run focused tests.test_verify_harness first."
+    - "Run git diff --check."
+    - "Only if focused verifier-harness proof passes, run exactly one canonical ./verify through a durable/reconcilable carrier."
+    - "The canonical verifier must discover 63 classified modules and execute tests.test_product_qualification as part of the qualification lane. Do not separately suppress or pre-exclude that module."
+    - "Never blind-replay an ambiguous verifier result; reconcile the same start identity."
+    - "Do not rerun or rewrite Q01-Q14 outside canonical verification unless needed only to diagnose a new verifier/test failure after the canonical invocation; any new product failure requires BLOCKED, not an opportunistic fix."
+    - "Publish one truthful revision-5 report and finish clean/synchronized MAIN ONLY."
 
   allowed_existing_files_or_components:
-    - "macos/candidate_cutover.py"
-    - "tests/test_candidate_cutover.py"
-    - "tests/test_product_qualification.py"
+    - "verification_policy.py"
+    - "tests/test_verify_harness.py"
     - ".agent/tasks/TASK-0200/report.yaml"
 
 invariants:
-  - "Only candidate_cutover.py may change production behavior in revision 4."
-  - "F-0200-001 and F-0200-002 remain closed."
-  - "Valid immutable payload updates can be published without weakening mode/provenance checks."
-  - "No retained payload-update transaction may lose metadata before all other cleanup is proven complete."
-  - "Pointer never selects an unvalidated payload generation."
-  - "No real credentials or live installed Runtime mutation."
+  - "Revision-4 product candidate and Q01-Q14 qualification implementation remain byte-for-byte unchanged."
+  - "F-0200-001, F-0200-002 and F-0200-003 remain closed."
+  - "Verification remains strict: every discovered test module must be classified exactly once."
+  - "tests.test_product_qualification is a serialized L5 qualification module, not a quick/candidate shortcut."
+  - "No product/runtime/live/release behavior changes."
   - "TASK-0196 remains paused."
   - "MAIN ONLY."
 
 forbidden_changes:
-  - "Any production file other than macos/candidate_cutover.py."
-  - "Any runtime_config, Swift, shell product command, docs, doctor, dependency, version, payload schema or transaction schema/phase change."
-  - "Recursive broad chmod of canonical payload contents or weakening canonical payload immutability."
-  - "Any new journal/database/recovery subsystem."
-  - "Any live install/cutover/relaunch/Runtime lifecycle/plugin/reboot/permission/credential-rotation effect."
-  - "Any additional production fix if Q10-Q14 exposes another gap."
+  - "Any file other than verification_policy.py, tests/test_verify_harness.py and eventual TASK-0200 report."
+  - "Any product code, qualification-test predicate, doctor, Swift, shell product command, dependency, version, schema or docs change."
+  - "Skipping/exempting tests.test_product_qualification or weakening validate_classification."
+  - "Changing GLOBAL_WORKER_LIMIT, L5 worker concurrency, heartbeat, other module policies or path selection to make verification pass."
+  - "Any live install/cutover/relaunch/Runtime lifecycle/plugin/reboot/permission/credential/release effect."
   - "Any second canonical ./verify after a conclusive result or blind replay."
   - "Any branch or PR."
 
@@ -114,18 +101,16 @@ effect_authority:
   branch_or_pr_creation_max: 0
 
 acceptance_criteria:
-  - {id: AC-1, requirement: "F-0200-003 is closed.", evidence_required: "A valid sealed payload reaches publication/switch checkpoints on Darwin; cleanup cannot strand a transaction without metadata."}
-  - {id: AC-2, requirement: "Payload immutability and pointer authority remain fail-closed.", evidence_required: "Canonical payload returns to 0555 and validates before pointer switch; invalid payload never becomes selected."}
-  - {id: AC-3, requirement: "Payload-update cleanup is evidence-preserving.", evidence_required: "Sealed staged payload is removed safely before metadata; injected cleanup failure retains PARTIAL metadata with bounded error."}
-  - {id: AC-4, requirement: "Q01-Q14 all pass.", evidence_required: "Exact focused qualification matrix with owner-test evidence."}
-  - {id: AC-5, requirement: "Revision-4 implementation remains narrow.", evidence_required: "Only candidate_cutover.py plus the two authorized test files before report."}
-  - {id: AC-6, requirement: "Canonical verification passes.", evidence_required: "Focused matrix PASS, diff-check PASS, exactly one ./verify PASS."}
-  - {id: AC-7, requirement: "Canonical closure.", evidence_required: "Truthful report and clean synchronized MAIN ONLY."}
+  - {id: AC-1, requirement: "F-0200-004 is closed without weakening verification.", evidence_required: "tests.test_product_qualification is classified exactly once as serialized L5 with 180s timeout; unknown modules still fail closed."}
+  - {id: AC-2, requirement: "Verifier inventory is internally consistent.", evidence_required: "Focused test_verify_harness PASS with 63 total modules and 6 L5 modules; all other lane counts unchanged."}
+  - {id: AC-3, requirement: "Revision-4 product qualification remains unchanged.", evidence_required: "Pre-report diff touches only verification_policy.py and tests/test_verify_harness.py."}
+  - {id: AC-4, requirement: "Canonical verification passes.", evidence_required: "Exactly one revision-5 ./verify invocation PASS, including tests.test_product_qualification in L5; no replay."}
+  - {id: AC-5, requirement: "Canonical closure.", evidence_required: "Truthful report and clean synchronized MAIN ONLY."}
 
 verification:
   authoritative_verification:
     required: true
-    mechanism: "Focused immutable payload publish/cleanup proof + Q01-Q14 qualification + exactly one canonical ./verify after all qualification predicates pass."
+    mechanism: "Focused verifier-policy/harness proof followed by exactly one canonical ./verify."
 
 continuation_policy:
   mode: MANUAL
