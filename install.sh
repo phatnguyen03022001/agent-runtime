@@ -368,7 +368,7 @@ echo "Workspace root: $WORKSPACE_ROOT"
 echo "Tunnel authority: per-user Application Support runtime.env"
 echo "Native app: $TARGET_APP"
 echo "Installed Runtime payload: $RUNTIME_ROOT"
-echo "Login behavior: menu-bar UI is registered now; Runtime follows explicit persisted desired state."
+echo "Login behavior: menu-bar UI is registered now; Runtime remains stopped until explicit Start."
 SESSION_LIMIT_VALUE="$(awk -F= '$1 == "AGENT_RUNTIME_MAX_ACTIVE_SESSIONS" { print substr($0, index($0, "=") + 1); exit }' "$ENV_FILE")"
 if [[ "$SESSION_LIMIT_VALUE" =~ ^[1-9][0-9]*$ ]]; then
   SESSION_LIMIT_EFFECTIVE="$SESSION_LIMIT_VALUE"

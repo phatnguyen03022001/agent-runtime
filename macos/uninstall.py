@@ -73,12 +73,18 @@ def _current_launchagent(path: Path, app: Path, *, uid: int) -> Path:
         "Label": MODERN_RUNTIME_LABEL,
         "ProgramArguments": [str(helper)],
         "RunAtLoad": False,
-        "KeepAlive": {"SuccessfulExit": False},
+        "KeepAlive": False,
         "ProcessType": "Interactive",
         "ThrottleInterval": 2,
     }
     info = path.stat()
-    if info.st_uid != uid or (info.st_mode & 0o777) != 0o600 or value != expected:
+    predecessor = dict(expected)
+    predecessor["KeepAlive"] = {"SuccessfulExit": False}
+    if (
+        info.st_uid != uid
+        or (info.st_mode & 0o777) != 0o600
+        or value not in (expected, predecessor)
+    ):
         raise UninstallError("current LaunchAgent ownership is ambiguous")
     return helper
 
@@ -123,6 +129,27 @@ def _validate_payload_state(state_dir: Path, *, uid: int) -> tuple[Path, Path]:
     if not (payloads / selected).is_dir():
         raise UninstallError("selected payload release is missing")
     return pointer, payloads
+
+
+def _runtime_managed_running(app: Path) -> bool:
+    script = app / "Contents" / "Resources" / "runtime" / "start.sh"
+    result = _run(["/bin/bash", str(script), "status", "--json"])
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or f"exit {result.returncode}"
+        raise UninstallError(f"Runtime status observation failed: {detail[:300]}")
+    try:
+        status = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise UninstallError("Runtime status observation is malformed") from exc
+    if not isinstance(status, dict) or status.get("schema") not in {1, 2}:
+        raise UninstallError("Runtime status observation schema is unsupported")
+    state = status.get("state")
+    control = status.get("control")
+    if state == "stopped" and control == "none":
+        return False
+    if state == "running" and control == "managed":
+        return True
+    raise UninstallError("Runtime uninstall requires stopped or positively managed Runtime state")
 
 
 def _runtime_lifecycle(app: Path, action: str) -> None:
@@ -286,7 +313,7 @@ def uninstall_product(*, home: Path, launchctl: Path, uid: int | None = None) ->
     payloads: Path | None = None
     current_service_before: dict[str, str] | None = None
     desired_state = state_dir / "protected-runtime-running"
-    desired_before = desired_state.exists() and not desired_state.is_symlink()
+    runtime_was_running = False
 
     if lifecycle_contract == "launchagent-v1":
         if not current_plist.exists() and not current_plist.is_symlink():
@@ -305,6 +332,7 @@ def uninstall_product(*, home: Path, launchctl: Path, uid: int | None = None) ->
             )
             pointer, payloads = _validate_payload_state(state_dir, uid=uid)
             current_service_before = _service_snapshot(app, "status")
+            runtime_was_running = _runtime_managed_running(app)
             if current_service_before["runtime_agent"] not in ABSENT_SERVICE_STATES:
                 raise UninstallError(
                     "current Runtime ServiceManagement ownership contradicts launchagent-v1"
@@ -351,10 +379,9 @@ def uninstall_product(*, home: Path, launchctl: Path, uid: int | None = None) ->
     current_main_unregistered = False
     try:
         if lifecycle_contract == "launchagent-v1":
-            _runtime_lifecycle(app, "stop")
-            current_stopped = True
-            if desired_state.exists() or desired_state.is_symlink():
-                raise UninstallError("Runtime desired-state marker survived owned stop")
+            if runtime_was_running:
+                _runtime_lifecycle(app, "stop")
+                current_stopped = True
             if current_loaded:
                 assert current_helper is not None
                 _bootout(launchctl, uid, MODERN_RUNTIME_LABEL)
@@ -384,7 +411,7 @@ def uninstall_product(*, home: Path, launchctl: Path, uid: int | None = None) ->
                 )
             except UninstallError as compensation_error:
                 compensation_errors.append(str(compensation_error))
-        if current_stopped and lifecycle_contract == "launchagent-v1" and desired_before:
+        if current_stopped and lifecycle_contract == "launchagent-v1" and runtime_was_running:
             try:
                 _runtime_lifecycle(app, "start")
             except UninstallError as compensation_error:

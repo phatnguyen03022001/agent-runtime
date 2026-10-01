@@ -31,7 +31,7 @@ The target operator needs only:
 - provisioned `CONTROL_PLANE_API_KEY` and `CONTROL_PLANE_TUNNEL_ID`;
 - an explicit Runtime Git name/email pair.
 
-The first ad-hoc app launch may require macOS Open/Open Anyway for that exact app. The Runtime supervisor uses the traditional per-user LaunchAgent and does not require current ServiceManagement Background Activity registration. Separately, installation establishes `SMAppService.mainApp` for menu-bar login startup; a macOS `requires-approval` state is surfaced as explicit human action required rather than accepted as healthy.
+The first ad-hoc app launch may require macOS Open/Open Anyway for that exact app. Runtime uses a traditional per-user LaunchAgent with `RunAtLoad=false` and `KeepAlive=false`; it does not require current ServiceManagement Background Activity registration and remains stopped until explicit Start. Separately, installation establishes `SMAppService.mainApp` for menu-bar login startup; a macOS `requires-approval` state is surfaced as explicit human action required rather than accepted as healthy.
 
 The target does **not** need an agent-runtime Git clone, Git repository identity for an agent-runtime checkout, CPython 3.13, Xcode/Swift, or a local code-signing identity. The release installer uses the Python interpreter and lifecycle helpers packaged inside `Agent Runtime.app`.
 
@@ -60,13 +60,12 @@ The native flow then delegates to the packaged `install_release.sh`, provenance,
 
 Before commit, setup requires:
 
-- Runtime readiness `ready`;
 - zero doctor failures; and
 - exactly one doctor warning: `cutover_identity/CUTOVER_TRANSACTION_PRESENT` for the recognized `PENDING` / `APP_SWAPPED` transaction.
 
-The package-owned doctor therefore remains `degraded` at that boundary solely because the transaction still exists. Any additional warning or failure blocks commit. Only then may setup invoke the existing cutover commit. Terminal success additionally requires the transaction to be absent, readiness to remain `ready`, and package-owned doctor overall status to be `healthy`.
+The package-owned doctor therefore remains `degraded` at that boundary solely because the transaction still exists. Any additional warning or failure blocks commit. Only then may setup invoke the existing cutover commit. Terminal success requires the transaction to be absent and package-owned doctor overall status to be `healthy`; it does not require Runtime readiness because a fresh committed installation intentionally remains stopped until explicit Start.
 
-The app and initial payload are validated before cutover. Setup does not bypass Gatekeeper or install or update the external `tunnel-client`. Native/substrate cutover requires coherent lifecycle ownership: `SMAppService.mainApp` for menu-bar login startup, the canonical per-user LaunchAgent for the Runtime supervisor, and no current Runtime `SMAppService.agent` registration. Ordinary validated pure-Python payload activation changes the external release pointer only after the previous Runtime generation is fully stopped and reaped; it leaves the approved app, LaunchAgent plist, runtime.env, and tunnel-client unchanged.
+The app and initial payload are validated before cutover. Setup does not bypass Gatekeeper or install or update the external `tunnel-client`. Native/substrate cutover requires coherent lifecycle ownership: `SMAppService.mainApp` for menu-bar login startup, the canonical per-user LaunchAgent for explicit Runtime invocation, and no current Runtime `SMAppService.agent` registration. Fresh cutover leaves that LaunchAgent loaded but idle. Ordinary validated pure-Python payload activation preserves whether a positively managed Runtime was running: a running generation is stopped, reaped, switched, and explicitly restarted; an already-stopped Runtime remains stopped. It leaves the approved app, LaunchAgent plist, runtime.env, and tunnel-client unchanged.
 
 An already-valid installed configuration with no pending cutover bypasses onboarding and opens the current control panel directly.
 

@@ -2,7 +2,7 @@
 
 Agent Runtime is a **bounded local execution provider** for ChatGPT and other MCP clients on macOS. **MCP is the protocol**; the admitted product transport is OpenAI Secure MCP Tunnel, which keeps the Runtime private and uses outbound HTTPS rather than a public inbound listener.
 
-The installed Runtime is version **0.5.1** with **exactly twenty public tools** and **twenty-one known capabilities**. The current zero-cost source lane packages an immutable ad-hoc app substrate and a separate content-addressed first-party Python payload. `SMAppService.mainApp` owns menu-bar login startup, while one traditional per-user LaunchAgent owns the Runtime supervisor. `SMAppService.agent` remains predecessor-migration compatibility only.
+The installed Runtime is version **0.5.1** with **exactly twenty public tools** and **twenty-one known capabilities**. The current zero-cost source lane packages an immutable ad-hoc app substrate and a separate content-addressed first-party Python payload. `SMAppService.mainApp` owns menu-bar login startup, while one traditional per-user LaunchAgent is the explicit Runtime invocation/ownership mechanism. The LaunchAgent is loaded idle with `RunAtLoad=false` and `KeepAlive=false`; Runtime execution itself is manual and session-scoped. `SMAppService.agent` remains predecessor-migration compatibility only.
 
 ## Supported product shape
 
@@ -12,7 +12,7 @@ The installed Runtime is version **0.5.1** with **exactly twenty public tools** 
 - Canonical operator configuration at `~/Library/Application Support/Agent Runtime/runtime.env`, mode `0600`.
 - One protected singleton tunnel/listener on `127.0.0.1:8080`.
 - Runtime source and installed Runtime version 0.5.1, ToolContract Kernel v2, twenty advertised MCP tools from twenty-one known capabilities; installation remains an explicit pinned transactional cutover rather than a side effect of source publication.
-- Runtime requires no blanket TCC permissions. The current Runtime supervisor uses the traditional per-user LaunchAgent rather than ServiceManagement Background Activity registration; menu-bar login persistence is independently owned by `SMAppService.mainApp`.
+- Runtime requires no blanket TCC permissions. The current Runtime uses the traditional per-user LaunchAgent rather than ServiceManagement Background Activity registration; menu-bar login persistence is independently owned by `SMAppService.mainApp`. Login/reboot does not start Runtime, and an unexpected Runtime generation exit is not automatically restarted.
 - Homebrew is optional; it is not an architecture prerequisite.
 
 The first ad-hoc substrate launch may require the operator to use macOS Open/Open Anyway for that exact app. Ad-hoc signing seals code integrity but does not authenticate a publisher. Ordinary validated pure-Python payload activation does not replace the app; a later native/substrate release may require approval again.
@@ -27,7 +27,7 @@ Download the [v0.5.1 zero-cost release](https://github.com/phatnguyen03022001/ag
 
 On a fresh machine the existing app opens native setup automatically. Enter the provisioned Control Plane API key and tunnel ID in secure fields, provide the Runtime Git name/email pair when requested, and choose the workspace with the macOS folder picker. The normal newcomer path does **not** require Terminal, shell exports, manual `runtime.env` editing, or typing a workspace path.
 
-The app delegates validation, canonical mode-`0600` configuration publication, release preflight/provenance, candidate cutover, resume/recovery, doctor, readiness, and commit to the existing package-owned helpers. It does not reimplement lifecycle semantics in Swift. A recognized pending cutover may be doctor `degraded` before commit only because of `CUTOVER_TRANSACTION_PRESENT`; any additional doctor warning or failure blocks commit. Setup reports success only after the existing commit resolves the transaction, readiness is `ready`, and package-owned doctor is `healthy`.
+The app delegates validation, canonical mode-`0600` configuration publication, release preflight/provenance, candidate cutover, resume/recovery, doctor, and commit to the existing package-owned helpers. It does not reimplement lifecycle semantics in Swift. A recognized pending cutover may be doctor `degraded` before commit only because of `CUTOVER_TRANSACTION_PRESENT`; any additional doctor warning or failure blocks commit. Setup reports success only after the existing commit resolves the transaction and package-owned doctor is `healthy`. Runtime remains stopped until the operator explicitly presses Start or runs `./start.sh start`.
 
 If macOS blocks the first ad-hoc app launch, use the platform's Open/Open Anyway control for the exact app and reopen the complete bundle. Setup then validates the external handoff and payload before cutover. The official OpenAI `tunnel-client` remains an external prerequisite and is neither installed nor upgraded by setup.
 

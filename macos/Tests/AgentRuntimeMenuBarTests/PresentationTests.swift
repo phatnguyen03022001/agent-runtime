@@ -38,6 +38,26 @@ final class PresentationTests: XCTestCase {
         XCTAssertTrue(policy.shouldPlay(for: .stopped))
     }
 
+    func testStatusRefreshCoalescerBoundsManyRequestsToOneActiveAndOneFollowUp() {
+        var coalescer = StatusRefreshCoalescer()
+
+        XCTAssertTrue(coalescer.request())
+        for _ in 0..<100 {
+            XCTAssertFalse(coalescer.request())
+        }
+        XCTAssertTrue(coalescer.isInFlight)
+        XCTAssertTrue(coalescer.hasPendingFollowUp)
+
+        XCTAssertTrue(coalescer.complete())
+        XCTAssertFalse(coalescer.isInFlight)
+        XCTAssertFalse(coalescer.hasPendingFollowUp)
+
+        XCTAssertTrue(coalescer.request())
+        XCTAssertFalse(coalescer.complete())
+        XCTAssertFalse(coalescer.isInFlight)
+        XCTAssertFalse(coalescer.hasPendingFollowUp)
+    }
+
     func testFactsUseStableTwoColumnAlignmentContract() {
         XCTAssertEqual(RuntimeFactLayout.labelColumn, 0)
         XCTAssertEqual(RuntimeFactLayout.valueColumn, 1)
@@ -461,16 +481,15 @@ final class PresentationTests: XCTestCase {
             .init(exitCode: 0),
             .init(exitCode: 1, standardOutput: preCommit),
             .init(exitCode: 0),
-            .init(exitCode: 0),
             .init(exitCode: 0, standardOutput: postCommit),
-            .init(exitCode: 0),
         ])
         let approved = FirstRunSetupOrchestrator(paths: paths, runner: approvedRunner)
 
         XCTAssertEqual(approved.perform(.resume), .success)
-        XCTAssertEqual(approvedRunner.invocations.count, 6)
+        XCTAssertEqual(approvedRunner.invocations.count, 4)
         XCTAssertEqual(approvedRunner.invocations[0].arguments, [paths.installer.path, "--resume-cutover"])
-        XCTAssertEqual(approvedRunner.invocations[3].arguments, [paths.installer.path, "--commit-cutover"])
+        XCTAssertEqual(approvedRunner.invocations[2].arguments, [paths.installer.path, "--commit-cutover"])
+        XCTAssertFalse(approvedRunner.invocations.contains(where: { $0.executable.path == "/usr/bin/curl" }))
     }
 
     func testFirstRunExistingCanonicalInspectionPreservesBytesAndBypassesInstalledSetup() throws {
@@ -635,9 +654,7 @@ final class PresentationTests: XCTestCase {
             .init(exitCode: 0),
             .init(exitCode: 1, standardOutput: preCommit),
             .init(exitCode: 0),
-            .init(exitCode: 0),
             .init(exitCode: 0, standardOutput: postCommit),
-            .init(exitCode: 0),
         ])
         let paths = FirstRunSetupPaths(candidateApp: candidate, home: home)
         let orchestrator = FirstRunSetupOrchestrator(paths: paths, runner: runner)
@@ -655,10 +672,11 @@ final class PresentationTests: XCTestCase {
         )
 
         XCTAssertEqual(outcome, .success)
-        XCTAssertEqual(runner.invocations.count, 7)
+        XCTAssertEqual(runner.invocations.count, 5)
         XCTAssertEqual(runner.invocations[0].arguments.prefix(2), [paths.runtimeConfig.path, "--prebuilt-stdin"])
         XCTAssertEqual(runner.invocations[1].arguments, [paths.installer.path, "--workspace-root", workspace.path])
-        XCTAssertEqual(runner.invocations[4].arguments, [paths.installer.path, "--commit-cutover"])
+        XCTAssertEqual(runner.invocations[3].arguments, [paths.installer.path, "--commit-cutover"])
+        XCTAssertFalse(runner.invocations.contains(where: { $0.executable.path == "/usr/bin/curl" }))
         for invocation in runner.invocations {
             XCTAssertFalse(invocation.arguments.joined(separator: " ").contains(api))
             XCTAssertFalse(invocation.arguments.joined(separator: " ").contains(tunnel))

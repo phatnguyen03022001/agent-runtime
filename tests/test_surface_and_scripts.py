@@ -309,7 +309,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
     def test_start_uses_launchd_singleton_and_canonical_env_backed_serve_mode(self) -> None:
         text = (ROOT / "start.sh").read_text()
         self.assertIn("com.picmao.agent-runtime-runtime-service", text)
-        self.assertIn("protected-runtime-running", text)
+        self.assertNotIn("protected-runtime-running", text)
         self.assertIn("lifecycle.lock", text)
         self.assertIn("--serve", text)
         self.assertIn("CONTROL_PLANE_TUNNEL_ID", text)
@@ -331,7 +331,7 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertNotIn("TUNNEL_CLIENT_PROFILE_FILE", text)
         self.assertNotIn("AGENT_RUNTIME_TUNNEL_PROFILE", text)
 
-    def test_installer_registers_app_owned_runtime_service_without_changing_desired_state(self) -> None:
+    def test_installer_registers_idle_nonpersistent_runtime_service(self) -> None:
         import plistlib
 
         installer = (ROOT / "install.sh").read_text()
@@ -344,9 +344,10 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertIn("--install-prebuilt", installer)
         self.assertEqual(service["Label"], "com.picmao.agent-runtime-runtime-service")
         self.assertEqual(service["BundleProgram"], "Contents/MacOS/AgentRuntimeRuntimeService")
-        self.assertEqual(service["KeepAlive"], {"SuccessfulExit": False})
+        self.assertIs(service["KeepAlive"], False)
         self.assertIs(service["RunAtLoad"], False)
-        self.assertIn("protected-runtime-running", cutover)
+        current = cutover[cutover.index("def _cutover_zero_cost_candidate("):cutover.index("def cutover_candidate(")]
+        self.assertNotIn('"kickstart", current_service', current)
         self.assertIn('_service_management(target_app, "register-runtime")', cutover)
         self.assertIn('_service_management(target_app, "unregister-runtime")', cutover)
         self.assertIn('"desired_state_present": desired_state.exists()', cutover)

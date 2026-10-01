@@ -86,13 +86,19 @@ def _current_launchagent_payload(home: Path) -> dict[str, object]:
         "Label": MODERN_RUNTIME_LABEL,
         "ProgramArguments": [str(_current_runtime_helper(home))],
         "RunAtLoad": False,
-        "KeepAlive": {"SuccessfulExit": False},
+        "KeepAlive": False,
         "ProcessType": "Interactive",
         "ThrottleInterval": 2,
     }
 
 
-def _validate_current_launchagent(path: Path, home: Path, *, uid: int) -> dict[str, object]:
+def _validate_current_launchagent(
+    path: Path,
+    home: Path,
+    *,
+    uid: int,
+    allow_persistent_predecessor: bool = False,
+) -> dict[str, object]:
     if path.is_symlink() or not path.is_file():
         raise CutoverError("current Runtime LaunchAgent plist is missing, unsafe, or a symlink")
     info = path.stat()
@@ -104,7 +110,10 @@ def _validate_current_launchagent(path: Path, home: Path, *, uid: int) -> dict[s
         raise CutoverError("current Runtime LaunchAgent plist is malformed") from exc
     expected = _current_launchagent_payload(home)
     if value != expected:
-        raise CutoverError("current Runtime LaunchAgent has a foreign identity or contract")
+        predecessor = dict(expected)
+        predecessor["KeepAlive"] = {"SuccessfulExit": False}
+        if not allow_persistent_predecessor or value != predecessor:
+            raise CutoverError("current Runtime LaunchAgent has a foreign identity or contract")
     helper = _current_runtime_helper(home)
     if helper.is_symlink() or not helper.is_file() or not os.access(helper, os.X_OK):
         raise CutoverError("current Runtime supervisor executable is missing or unsafe")
@@ -1623,7 +1632,12 @@ def _rollback_zero_cost_transaction(
     if not isinstance(current_was_loaded, bool):
         raise CutoverError("zero-cost rollback current LaunchAgent metadata is malformed")
     if current_was_loaded:
-        _validate_current_launchagent(current_plist, home, uid=uid)
+        _validate_current_launchagent(
+            current_plist,
+            home,
+            uid=uid,
+            allow_persistent_predecessor=True,
+        )
         _require_launchctl_ok(
             _run([str(launchctl), "bootstrap", f"gui/{uid}", str(current_plist)]),
             "could not restore previous current Runtime LaunchAgent",
@@ -1774,6 +1788,40 @@ def _validate_payload_for_substrate(
         raise CutoverError("payload is incompatible with the installed immutable substrate") from exc
 
 
+def _runtime_managed_running(target_app: Path) -> bool:
+    lifecycle = target_app / "Contents" / "Resources" / "runtime" / "start.sh"
+    if lifecycle.is_symlink() or not lifecycle.is_file():
+        raise CutoverError("installed Runtime lifecycle helper is missing or unsafe")
+    try:
+        result = subprocess.run(
+            ["/bin/bash", str(lifecycle), "status", "--json"],
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise CutoverError("Runtime status observation failed") from exc
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip().replace("\n", " ")
+        raise CutoverError(f"Runtime status observation failed: {detail[:300]}")
+    try:
+        status = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise CutoverError("Runtime status observation is malformed") from exc
+    if not isinstance(status, dict) or status.get("schema") not in {1, 2}:
+        raise CutoverError("Runtime status observation schema is unsupported")
+    state = status.get("state")
+    control = status.get("control")
+    if state == "stopped" and control == "none":
+        return False
+    if state == "running" and control == "managed":
+        return True
+    raise CutoverError("Runtime payload update requires stopped or positively managed Runtime state")
+
+
 def _run_runtime_lifecycle(target_app: Path, action: str) -> None:
     if action not in {"start", "stop"}:
         raise CutoverError("payload update lifecycle action is invalid")
@@ -1853,7 +1901,9 @@ def _rollback_payload_update(
     current_plist = Path(str(paths["current_plist"]))
     home = Path(str(paths["home"]))
     old_closure = previous.get("closure")
-    desired_before = previous.get("desired_state_present")
+    runtime_was_running = previous.get("runtime_was_running")
+    if runtime_was_running is None and isinstance(previous.get("desired_state_present"), bool):
+        runtime_was_running = previous["desired_state_present"]
     new_closure = payload.get("closure")
     created = payload.get("created")
     if (
@@ -1861,18 +1911,19 @@ def _rollback_payload_update(
         or re.fullmatch(r"[0-9a-f]{64}", old_closure) is None
         or not isinstance(new_closure, str)
         or re.fullmatch(r"[0-9a-f]{64}", new_closure) is None
-        or not isinstance(desired_before, bool)
+        or not isinstance(runtime_was_running, bool)
         or not isinstance(created, bool)
     ):
         raise CutoverError("payload update rollback identity metadata is malformed")
 
     _validate_current_launchagent(current_plist, home, uid=uid)
-    _run_runtime_lifecycle(target_app, "stop")
+    if runtime_was_running:
+        _run_runtime_lifecycle(target_app, "stop")
     _write_payload_pointer_atomic(pointer, old_closure, uid=uid)
     substrate = _current_substrate_manifest(target_app)
     old_release = _payloads_root(state_dir) / old_closure
     _validate_payload_for_substrate(old_release, substrate)
-    if desired_before:
+    if runtime_was_running:
         _run_runtime_lifecycle(target_app, "start")
     _validate_payload_update_witnesses(witnesses, target_app, state_dir, current_plist)
 
@@ -1908,10 +1959,7 @@ def activate_payload_release(
     _require_service_identity(launchctl, service, _current_runtime_helper(home))
     old_release = _payloads_root(state_dir) / old_closure
     _validate_payload_for_substrate(old_release, substrate)
-    desired_state = state_dir / "protected-runtime-running"
-    if desired_state.is_symlink() or (desired_state.exists() and not desired_state.is_file()):
-        raise CutoverError("desired Runtime state marker is unsafe")
-    desired_before = desired_state.exists()
+    runtime_was_running = _runtime_managed_running(target_app)
     witnesses = _payload_update_witnesses(target_app, state_dir, current_plist)
 
     if new_closure == old_closure:
@@ -1933,7 +1981,7 @@ def activate_payload_release(
             "phase": "PREPARED",
             "previous": {
                 "closure": old_closure,
-                "desired_state_present": desired_before,
+                "runtime_was_running": runtime_was_running,
             },
             "payload": {"closure": new_closure, "created": False},
             "witnesses": witnesses,
@@ -1948,9 +1996,8 @@ def activate_payload_release(
         }
         _atomic_json(transaction_dir / "metadata.json", metadata)
 
-        _run_runtime_lifecycle(target_app, "stop")
-        if desired_state.exists() or desired_state.is_symlink():
-            raise CutoverError("Runtime desired state remained present after bounded stop")
+        if runtime_was_running:
+            _run_runtime_lifecycle(target_app, "stop")
         if _current_payload_closure(pointer, uid=uid) != old_closure:
             raise CutoverError("payload pointer changed before activation authority")
         metadata["phase"] = "OLD_GENERATION_STOPPED"
@@ -1978,7 +2025,7 @@ def activate_payload_release(
         _atomic_json(transaction_dir / "metadata.json", metadata)
         _inject(failures, "after_pointer_switch")
 
-        if desired_before:
+        if runtime_was_running:
             _run_runtime_lifecycle(target_app, "start")
         if _current_payload_closure(pointer, uid=uid) != new_closure:
             raise CutoverError("payload pointer did not remain on the validated new release")
@@ -2077,7 +2124,12 @@ def _cutover_zero_cost_candidate(
 
     current_present = current_plist.exists() or current_plist.is_symlink()
     if current_present:
-        _validate_current_launchagent(current_plist, home, uid=uid)
+        _validate_current_launchagent(
+            current_plist,
+            home,
+            uid=uid,
+            allow_persistent_predecessor=True,
+        )
     current_loaded = _service_loaded(launchctl, current_service) if current_present else False
 
     ui_present = _validate_previous_launchagent(ui_plist, UI_LABEL, target_app)
@@ -2229,6 +2281,10 @@ def _cutover_zero_cost_candidate(
             ui_was_loaded=ui_loaded,
             runtime_was_loaded=legacy_runtime_loaded,
         )
+        if desired_state.exists() or desired_state.is_symlink():
+            if desired_state.is_symlink() or not desired_state.is_file():
+                raise CutoverError("predecessor desired-state marker became unsafe")
+            desired_state.unlink()
         _inject(fail_stages, "after_predecessor_shutdown")
 
         target_app.parent.mkdir(parents=True, exist_ok=True)
@@ -2285,14 +2341,8 @@ def _cutover_zero_cost_candidate(
 
         _write_payload_pointer_atomic(pointer, closure, uid=uid)
         _inject(fail_stages, "after_pointer_swap")
-        if not target_present:
-            descriptor = os.open(desired_state, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-            os.close(descriptor)
-        if not target_present or bool(previous["desired_state_present"]):
-            _require_launchctl_ok(
-                _run([str(launchctl), "kickstart", current_service]),
-                "could not start selected current Runtime generation",
-            )
+        if desired_state.exists() or desired_state.is_symlink():
+            raise CutoverError("current Runtime steady state retained predecessor desired-state")
 
         _zero_cost_validate_input(
             target_app,
@@ -2302,6 +2352,8 @@ def _cutover_zero_cost_candidate(
             expected_handoff_sha256=expected_handoff_sha256,
         )
         _validate_current_launchagent(current_plist, home, uid=uid)
+        if desired_state.exists() or desired_state.is_symlink():
+            raise CutoverError("current Runtime steady state contains persistent desired-state")
         _validate_runtime_config_identity(runtime_config, state_dir)
         metadata["status"] = "PENDING"
         _atomic_json(transaction_dir / "metadata.json", metadata)
@@ -3100,6 +3152,7 @@ def commit_transaction(transaction_dir: Path, target_app: Path) -> dict[str, obj
         home = Path(str(paths.get("home", "")))
         pointer = Path(str(paths.get("pointer", "")))
         current_plist = Path(str(paths.get("current_plist", "")))
+        desired_state = Path(str(paths.get("desired_state", "")))
         closure = payload.get("closure")
         if not isinstance(closure, str) or re.fullmatch(r"[0-9a-f]{64}", closure) is None:
             raise CutoverError("zero-cost commit payload closure is malformed")
@@ -3112,6 +3165,8 @@ def commit_transaction(transaction_dir: Path, target_app: Path) -> dict[str, obj
         if validated != candidate:
             raise CutoverError("installed zero-cost candidate no longer matches pending transaction")
         _validate_current_launchagent(current_plist, home, uid=os.getuid())
+        if desired_state.exists() or desired_state.is_symlink():
+            raise CutoverError("zero-cost commit found persistent Runtime desired-state")
         service_state = _service_management(target_app, "status")
         if service_state["main_app"] not in REGISTERED_SERVICE_STATES:
             raise CutoverError("zero-cost commit main-app registration is absent")

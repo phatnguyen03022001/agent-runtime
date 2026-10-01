@@ -59,7 +59,7 @@ printf '{"main_app":"%s","runtime_agent":"%s"}\n' "$main_state" "$runtime_state"
             "Label": "com.picmao.agent-runtime-runtime-service",
             "ProgramArguments": [str(helper)],
             "RunAtLoad": False,
-            "KeepAlive": {"SuccessfulExit": False},
+            "KeepAlive": False,
             "ProcessType": "Interactive",
             "ThrottleInterval": 2,
         }))
@@ -271,7 +271,8 @@ esac
 
         status = self.run_status_json()
 
-        self.assertEqual(status["schema"], 1)
+        self.assertEqual(status["schema"], 2)
+        self.assertNotIn("desired", status)
         self.assertEqual(status["state"], "running")
         self.assertEqual(status["control"], "managed")
         self.assertEqual(status["pids"], [pid])
@@ -292,15 +293,14 @@ esac
         self.assertEqual(status["health"], "live")
         self.assertEqual(status["ready"], "ready")
 
-    def test_status_does_not_treat_stale_desired_state_as_runtime_truth(self) -> None:
+    def test_status_serving_truth_has_no_persistent_intent_field(self) -> None:
         started = self.run_start("start")
         self.assertEqual(started.returncode, 0, started.stderr)
-        desired = self.home / "Library/Application Support/Agent Runtime/protected-runtime-running"
-        desired.unlink()
 
         status = self.run_status_json()
 
-        self.assertEqual(status["desired"], "stopped")
+        self.assertEqual(status["schema"], 2)
+        self.assertNotIn("desired", status)
         self.assertEqual(status["state"], "running")
         self.assertEqual(status["control"], "managed")
 
@@ -322,14 +322,15 @@ esac
         self.assertEqual(status["control"], "none")
         self.assertEqual(status["pids"], [])
 
-    def test_status_treats_stale_running_intent_without_runtime_as_stopped(self) -> None:
+    def test_status_remains_stopped_even_if_a_predecessor_marker_is_left_behind(self) -> None:
         desired = self.home / "Library/Application Support/Agent Runtime/protected-runtime-running"
         desired.parent.mkdir(parents=True, exist_ok=True)
         desired.touch()
 
         status = self.run_status_json()
 
-        self.assertEqual(status["desired"], "running")
+        self.assertEqual(status["schema"], 2)
+        self.assertNotIn("desired", status)
         self.assertEqual(status["state"], "stopped")
         self.assertEqual(status["control"], "none")
         self.assertEqual(status["pids"], [])
@@ -358,19 +359,19 @@ esac
         original = self.current_pid()
         self.assertIsNotNone(original)
         desired = self.home / "Library/Application Support/Agent Runtime/protected-runtime-running"
-        self.assertTrue(desired.exists())
+        self.assertFalse(desired.exists())
 
         stopped = self.run_start("stop", extra_env={"FAKE_PARENT_PID": "9999"})
         self.assertNotEqual(stopped.returncode, 0)
         self.assertEqual(self.current_pid(), original)
-        self.assertTrue(desired.exists())
+        self.assertFalse(desired.exists())
 
         restarted = self.run_start("restart", extra_env={"FAKE_PARENT_PID": "9999"})
         self.assertNotEqual(restarted.returncode, 0)
         self.assertEqual(self.current_pid(), original)
-        self.assertTrue(desired.exists())
+        self.assertFalse(desired.exists())
 
-    def test_ten_concurrent_starts_collapse_and_recovery_stop_start_restart_are_singleton(self) -> None:
+    def test_ten_concurrent_starts_collapse_and_crash_stays_stopped_until_explicit_start(self) -> None:
         processes = [
             subprocess.Popen(
                 [str(self.repo / "start.sh"), "start"],
@@ -390,24 +391,25 @@ esac
 
         service = "gui/501/com.picmao.agent-runtime-runtime-service"
         subprocess.run([str(self.bin / "launchctl"), "kill", "SIGTERM", service], env=self.env, check=True)
-        recovered = self.wait_for_pid_change(first)
-        self.assertEqual(len((self.state / "starts.log").read_text().splitlines()), 2)
+        time.sleep(0.15)
+        self.assertIsNone(self.current_pid())
+        self.assertEqual((self.state / "starts.log").read_text().splitlines(), ["start"])
+        self.assertFalse((self.home / "Library/Application Support/Agent Runtime/protected-runtime-running").exists())
 
         stopped = self.run_start("stop")
         self.assertEqual(stopped.returncode, 0, stopped.stderr)
-        time.sleep(0.15)
         self.assertIsNone(self.current_pid())
-        self.assertFalse((self.home / "Library/Application Support/Agent Runtime/protected-runtime-running").exists())
 
         started = self.run_start("start")
         self.assertEqual(started.returncode, 0, started.stderr)
-        after_start = self.wait_for_pid_change(recovered)
+        after_start = self.current_pid()
+        self.assertIsNotNone(after_start)
         restarted = self.run_start("restart")
         self.assertEqual(restarted.returncode, 0, restarted.stderr)
         after_restart = self.wait_for_pid_change(after_start)
         self.assertNotEqual(after_start, after_restart)
         self.assertFalse((self.state / "duplicates.log").exists())
-        self.assertEqual(len((self.state / "starts.log").read_text().splitlines()), 4)
+        self.assertEqual(len((self.state / "starts.log").read_text().splitlines()), 3)
 
 
     def test_start_uses_traditional_launchagent_without_service_management_state(self) -> None:
@@ -504,6 +506,8 @@ esac
         self.assertNotIn("killall", source)
         self.assertNotIn("pkill", source)
         self.assertNotIn("pgrep", source)
+        self.assertNotIn("protected-runtime-running", source)
+        self.assertNotIn("SuccessfulExit", source)
 
 
 if __name__ == "__main__":

@@ -88,14 +88,18 @@ def make_current_product(home: Path, service_state: Path) -> tuple[Path, Path, P
     state.mkdir(parents=True, exist_ok=True)
     env = state / "runtime.env"
     env.write_text("CONTROL_PLANE_API_KEY=retained\n")
-    desired = state / "protected-runtime-running"
-    desired.touch()
+    running = state / "runtime-running"
+    running.touch()
     lifecycle_log = state / "lifecycle.log"
     start = app / "Contents" / "Resources" / "runtime" / "start.sh"
     start.write_text(
         "#!/bin/sh\n"
-        f"echo \"$1\" >> {str(lifecycle_log)!r}\n"
-        f"case \"$1\" in stop) rm -f {str(desired)!r} ;; start) : > {str(desired)!r} ;; *) exit 2 ;; esac\n"
+        f"case \"$1\" in\n"
+        f"  status) if [ -f {str(running)!r} ]; then printf '%s\\n' '{{\"schema\":2,\"state\":\"running\",\"control\":\"managed\",\"pids\":[123],\"health\":\"live\",\"ready\":\"ready\",\"detail\":\"fixture\"}}'; else printf '%s\\n' '{{\"schema\":2,\"state\":\"stopped\",\"control\":\"none\",\"pids\":[],\"health\":\"unverified\",\"ready\":\"unverified\",\"detail\":\"fixture\"}}'; fi ;;\n"
+        f"  stop) echo stop >> {str(lifecycle_log)!r}; rm -f {str(running)!r} ;;\n"
+        f"  start) echo start >> {str(lifecycle_log)!r}; : > {str(running)!r} ;;\n"
+        "  *) exit 2 ;;\n"
+        "esac\n"
     )
     start.chmod(0o755)
 
@@ -125,7 +129,7 @@ def make_current_product(home: Path, service_state: Path) -> tuple[Path, Path, P
         "Label": MODERN_RUNTIME_LABEL,
         "ProgramArguments": [str(helper)],
         "RunAtLoad": False,
-        "KeepAlive": {"SuccessfulExit": False},
+        "KeepAlive": False,
         "ProcessType": "Interactive",
         "ThrottleInterval": 2,
     }))
@@ -540,7 +544,7 @@ class UninstallTests(unittest.TestCase):
             self.assertTrue(current_plist.is_file())
             self.assertTrue((state / "current-payload").is_file())
             self.assertTrue((state / "payloads").is_dir())
-            self.assertTrue((state / "protected-runtime-running").is_file())
+            self.assertFalse((state / "protected-runtime-running").exists())
             self.assertTrue(env.is_file())
             self.assertEqual(lifecycle_log.read_text().splitlines(), ["stop", "start"])
 

@@ -41,7 +41,7 @@ class CandidateClosureTests(unittest.TestCase):
             payload = cutover._current_launchagent_payload(home)
             self.assertEqual(payload["Label"], MODERN_RUNTIME_LABEL)
             self.assertEqual(payload["ProgramArguments"], [str(helper)])
-            self.assertEqual(payload["KeepAlive"], {"SuccessfulExit": False})
+            self.assertIs(payload["KeepAlive"], False)
             self.assertIs(payload["RunAtLoad"], False)
             self.assertNotIn("BundleProgram", payload)
             self.assertNotIn("AssociatedBundleIdentifiers", payload)
@@ -556,9 +556,8 @@ class CandidateCutoverTests(unittest.TestCase):
             self.assertNotIn("BundleProgram", current)
             self.assertIn("gui/501/com.picmao.agent-runtime-runtime-service", json.loads(launch_state.read_text()))
             desired_state = state_dir / "protected-runtime-running"
-            self.assertTrue(desired_state.is_file())
-            self.assertEqual(stat.S_IMODE(desired_state.stat().st_mode), 0o600)
-            self.assertIn("kickstart gui/501/com.picmao.agent-runtime-runtime-service", launch_log.read_text())
+            self.assertFalse(desired_state.exists())
+            self.assertNotIn("kickstart gui/501/com.picmao.agent-runtime-runtime-service", launch_log.read_text())
             metadata = json.loads((transaction / "metadata.json").read_text())
             self.assertEqual(metadata["schema"], cutover.ZERO_COST_TRANSACTION_SCHEMA)
             self.assertEqual(metadata["payload"]["closure"], closure)
@@ -670,8 +669,6 @@ class CandidateCutoverTests(unittest.TestCase):
         runtime_env = state_dir / "runtime.env"
         runtime_env.write_text("CONTROL_PLANE_API_KEY=fixture\n")
         runtime_env.chmod(0o600)
-        desired = state_dir / "protected-runtime-running"
-        desired.touch()
 
         old_closure = "a" * 64
         new_closure = "b" * 64
@@ -694,7 +691,6 @@ class CandidateCutoverTests(unittest.TestCase):
             "target": target,
             "state": state_dir,
             "transaction": state_dir / "cutover-transaction",
-            "desired": desired,
             "pointer": pointer,
             "old_closure": old_closure,
             "new_closure": new_closure,
@@ -717,10 +713,8 @@ class CandidateCutoverTests(unittest.TestCase):
             def lifecycle(_target: Path, action: str) -> None:
                 if action == "stop":
                     self.assertEqual(fx["pointer"].read_text(), fx["old_closure"] + "\n")
-                    fx["desired"].unlink(missing_ok=True)
                 elif action == "start":
                     self.assertEqual(fx["pointer"].read_text(), fx["new_closure"] + "\n")
-                    fx["desired"].touch()
                 events.append(action)
 
             def write_pointer(path: Path, closure: str, *, uid: int) -> None:
@@ -732,6 +726,7 @@ class CandidateCutoverTests(unittest.TestCase):
                 mock.patch.object(cutover, "_validate_payload_for_substrate", side_effect=validate_payload),
                 mock.patch.object(cutover, "_validate_current_launchagent"),
                 mock.patch.object(cutover, "_require_service_identity"),
+                mock.patch.object(cutover, "_runtime_managed_running", return_value=True),
                 mock.patch.object(cutover, "_run_runtime_lifecycle", side_effect=lifecycle),
                 mock.patch.object(cutover, "_write_payload_pointer_atomic", side_effect=write_pointer),
             ):
@@ -750,7 +745,7 @@ class CandidateCutoverTests(unittest.TestCase):
             self.assertEqual(fx["pointer"].read_text(), fx["new_closure"] + "\n")
             self.assertTrue((fx["state"] / "payloads" / fx["new_closure"]).is_dir())
             self.assertFalse(fx["transaction"].exists())
-            self.assertTrue(fx["desired"].is_file())
+            self.assertFalse((fx["state"] / "protected-runtime-running").exists())
             self.assertEqual(
                 cutover._payload_update_witnesses(fx["target"], fx["state"], fx["plist"]),
                 before,
@@ -767,11 +762,8 @@ class CandidateCutoverTests(unittest.TestCase):
                 return {"content_closure": path.name}
 
             def lifecycle(_target: Path, action: str) -> None:
-                if action == "stop":
-                    fx["desired"].unlink(missing_ok=True)
-                elif action == "start":
+                if action == "start":
                     self.assertEqual(fx["pointer"].read_text(), fx["old_closure"] + "\n")
-                    fx["desired"].touch()
                 events.append(action)
 
             def write_pointer(path: Path, closure: str, *, uid: int) -> None:
@@ -783,6 +775,7 @@ class CandidateCutoverTests(unittest.TestCase):
                 mock.patch.object(cutover, "_validate_payload_for_substrate", side_effect=validate_payload),
                 mock.patch.object(cutover, "_validate_current_launchagent"),
                 mock.patch.object(cutover, "_require_service_identity"),
+                mock.patch.object(cutover, "_runtime_managed_running", return_value=True),
                 mock.patch.object(cutover, "_run_runtime_lifecycle", side_effect=lifecycle),
                 mock.patch.object(cutover, "_write_payload_pointer_atomic", side_effect=write_pointer),
             ):
@@ -811,7 +804,38 @@ class CandidateCutoverTests(unittest.TestCase):
             self.assertEqual(fx["pointer"].read_text(), fx["old_closure"] + "\n")
             self.assertFalse((fx["state"] / "payloads" / fx["new_closure"]).exists())
             self.assertFalse(fx["transaction"].exists())
-            self.assertTrue(fx["desired"].is_file())
+            self.assertFalse((fx["state"] / "protected-runtime-running").exists())
+
+    def test_payload_activation_preserves_stopped_state_without_lifecycle_restart(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            cutover, fx = self._payload_update_fixture(raw)
+            uid = os.getuid()
+            events: list[str] = []
+
+            def validate_payload(path: Path, _substrate):
+                return {"content_closure": path.name}
+
+            with (
+                mock.patch.object(cutover, "_current_substrate_manifest", return_value={"contract": "fixture"}),
+                mock.patch.object(cutover, "_validate_payload_for_substrate", side_effect=validate_payload),
+                mock.patch.object(cutover, "_validate_current_launchagent"),
+                mock.patch.object(cutover, "_require_service_identity"),
+                mock.patch.object(cutover, "_runtime_managed_running", return_value=False),
+                mock.patch.object(cutover, "_run_runtime_lifecycle", side_effect=lambda _target, action: events.append(action)),
+            ):
+                result = cutover.activate_payload_release(
+                    fx["incoming"],
+                    target_app=fx["target"],
+                    state_dir=fx["state"],
+                    transaction_dir=fx["transaction"],
+                    home=fx["home"],
+                    launchctl=Path("/bin/true"),
+                    uid=uid,
+                )
+
+            self.assertEqual(result, {"status": "ACTIVATED", "payload_closure": fx["new_closure"]})
+            self.assertEqual(events, [])
+            self.assertFalse((fx["state"] / "protected-runtime-running").exists())
 
     def test_current_cutover_uses_traditional_launchagent_and_service_management_only_for_predecessors(self) -> None:
         source = CUTOVER_PATH.read_text()

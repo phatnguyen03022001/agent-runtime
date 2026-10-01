@@ -18,6 +18,28 @@ enum RuntimePresentationCondition: Equatable {
     }
 }
 
+struct StatusRefreshCoalescer {
+    private(set) var isInFlight = false
+    private(set) var hasPendingFollowUp = false
+
+    mutating func request() -> Bool {
+        if isInFlight {
+            hasPendingFollowUp = true
+            return false
+        }
+        isInFlight = true
+        return true
+    }
+
+    mutating func complete() -> Bool {
+        precondition(isInFlight)
+        isInFlight = false
+        let followUp = hasPendingFollowUp
+        hasPendingFollowUp = false
+        return followUp
+    }
+}
+
 struct OfflineAudioPolicy {
     private var lastCondition: RuntimePresentationCondition?
     private var hasObservedConnected = false
@@ -51,6 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var firstRunOrchestrator: FirstRunSetupOrchestrator?
     private var firstRunWindowController: NSWindowController?
     private var offlineAudioPolicy = OfflineAudioPolicy()
+    private var statusRefreshCoalescer = StatusRefreshCoalescer()
     private var notificationSound: NSSound?
     private let auditReader = ProtectionAuditReader()
     private lazy var controlPanel = makeControlPanel()
@@ -262,11 +285,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             present(status, sessionLimit: sessionLimit, parallelLimit: parallelLimit)
             return
         }
+        guard statusRefreshCoalescer.request() else { return }
+        enqueueStatusRefresh(controller)
+    }
+
+    private func enqueueStatusRefresh(_ controller: RuntimeController) {
         runtimeQueue.async { [weak self, controller] in
             let status = controller.refresh()
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 self.present(status)
+                if self.statusRefreshCoalescer.complete() {
+                    self.refreshStatus()
+                }
             }
         }
     }
@@ -287,8 +318,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 case .success(let status):
                     self.present(status)
                 case .failure(let error):
-                    let status = controller.refresh()
-                    self.present(status)
+                    self.refreshStatus()
                     self.showError(error.localizedDescription)
                 }
             }

@@ -45,7 +45,7 @@ Each material non-OK doctor reason code has exactly one action class.
 ## Cutover states
 
 A current zero-cost cutover may be `PREPARED`, `PENDING`, or `PARTIAL`; `AWAITING_APPROVAL` is historical ServiceManagement predecessor state only. If macOS blocks the first ad-hoc app launch, use Open/Open Anyway for the exact app and reopen the complete release bundle. Do not treat this as a current ServiceManagement registration state.
-- **PENDING**: native first-run setup commits only when readiness is `ready` and package-owned doctor has no failure and no warning except the recognized `CUTOVER_TRANSACTION_PRESENT` warning for `PENDING/APP_SWAPPED`. CLI recovery/maintainer use still requires an explicit commit-or-rollback decision.
+- **PENDING**: native first-run setup commits only when package-owned doctor has no failure and no warning except the recognized `CUTOVER_TRANSACTION_PRESENT` warning for `PENDING/APP_SWAPPED`. Runtime readiness is not a commit prerequisite because a fresh committed installation intentionally remains stopped until explicit Start. CLI recovery/maintainer use still requires an explicit commit-or-rollback decision.
 - **PARTIAL**: native setup surfaces the existing bounded recovery action. The equivalent CLI command is:
 
   ```bash

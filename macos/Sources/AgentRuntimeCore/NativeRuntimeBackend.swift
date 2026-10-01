@@ -183,7 +183,6 @@ public enum RuntimeConfiguredParallelism {
 public struct RuntimeConfiguration: Sendable {
     public let runtimeRoot: String
     public let envFileURL: URL?
-    public let desiredStateURL: URL
     public let transitionTimeout: TimeInterval
     public let requiresReadiness: Bool
     public let sessionLimit: Int
@@ -193,7 +192,6 @@ public struct RuntimeConfiguration: Sendable {
     // product this value is the package-owned Resources/runtime directory.
     public init(
         checkoutRoot: String,
-        desiredStateURL: URL? = nil,
         transitionTimeout: TimeInterval = 10,
         envFileURL: URL? = nil,
         requiresReadiness: Bool = false,
@@ -202,9 +200,6 @@ public struct RuntimeConfiguration: Sendable {
     ) {
         self.runtimeRoot = URL(fileURLWithPath: checkoutRoot).standardizedFileURL.path
         self.envFileURL = envFileURL
-        self.desiredStateURL = desiredStateURL ?? FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/Agent Runtime", isDirectory: true)
-            .appendingPathComponent("protected-runtime-running", isDirectory: false)
         self.transitionTimeout = transitionTimeout
         self.requiresReadiness = requiresReadiness
         self.sessionLimit = sessionLimit ?? RuntimeSessionCapacity.effective(from: envFileURL)
@@ -214,7 +209,6 @@ public struct RuntimeConfiguration: Sendable {
     public init(
         runtimeRoot: String,
         envFileURL: URL,
-        desiredStateURL: URL? = nil,
         transitionTimeout: TimeInterval = 10,
         requiresReadiness: Bool = true,
         sessionLimit: Int? = nil,
@@ -222,7 +216,6 @@ public struct RuntimeConfiguration: Sendable {
     ) {
         self.init(
             checkoutRoot: runtimeRoot,
-            desiredStateURL: desiredStateURL,
             transitionTimeout: transitionTimeout,
             envFileURL: envFileURL,
             requiresReadiness: requiresReadiness,
@@ -241,7 +234,6 @@ private struct CanonicalRuntimeObservation: Decodable {
     let pids: [Int32]
     let health: String
     let ready: String
-    let desired: String
     let detail: String
 }
 
@@ -305,7 +297,7 @@ public final class NativeRuntimeBackend: RuntimeBackend, @unchecked Sendable {
         }
 
         let observation = try canonicalObservation()
-        guard observation.schema == 1 else {
+        guard observation.schema == 2 else {
             throw RuntimeLifecycleError.operationFailed("Canonical Runtime status schema is unsupported.")
         }
         switch observation.state {

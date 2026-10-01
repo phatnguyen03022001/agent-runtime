@@ -343,7 +343,7 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
             "Label": "com.picmao.agent-runtime-runtime-service",
             "ProgramArguments": [str(helper)],
             "RunAtLoad": False,
-            "KeepAlive": {"SuccessfulExit": False},
+            "KeepAlive": False,
             "ProcessType": "Interactive",
             "ThrottleInterval": 2,
         }))
@@ -410,7 +410,7 @@ printf '%s\n' "$*" >> {str(state / "curl.log")!r}
                 capture_output=True, text=True, check=False,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("Agent Runtime desired state: RUNNING", result.stdout)
+            self.assertIn("Agent Runtime: RUNNING", result.stdout)
             probes = (state / "curl.log").read_text()
             self.assertIn("http://127.0.0.1:8080/healthz", probes)
             self.assertIn("http://127.0.0.1:8080/readyz", probes)
@@ -423,7 +423,7 @@ printf '%s\n' "$*" >> {str(state / "curl.log")!r}
                 capture_output=True, text=True, check=False,
             )
             self.assertNotEqual(result.returncode, 0)
-            self.assertNotIn("Agent Runtime desired state: RUNNING", result.stdout)
+            self.assertNotIn("Agent Runtime: RUNNING", result.stdout)
             self.assertIn("ready", result.stderr.lower())
             self.assertTrue((state / "curl.log").exists())
 

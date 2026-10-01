@@ -24,7 +24,7 @@ class Task0055MacOSContractTests(unittest.TestCase):
         self.assertIn('return home / "Library" / "LaunchAgents" / f"{MODERN_RUNTIME_LABEL}.plist"', source)
         self.assertIn('"ProgramArguments": [str(_current_runtime_helper(home))]', source)
         self.assertIn('"RunAtLoad": False', source)
-        self.assertIn('"KeepAlive": {"SuccessfulExit": False}', source)
+        self.assertIn('"KeepAlive": False', source)
         self.assertIn('"ProcessType": "Interactive"', source)
         self.assertIn('"ThrottleInterval": 2', source)
         self.assertIn("CURRENT_LAUNCHAGENT_MODE = 0o600", source)
@@ -113,7 +113,7 @@ class Task0055MacOSContractTests(unittest.TestCase):
             "bounded local execution provider",
             "MCP is the protocol",
             "transport",
-            "one traditional per-user LaunchAgent owns the Runtime supervisor",
+            "one traditional per-user LaunchAgent is the explicit Runtime invocation/ownership mechanism",
             "`SMAppService.agent` remains predecessor-migration compatibility only.",
             "Open/Open Anyway",
             "Ad-hoc signing seals code integrity but does not authenticate a publisher",

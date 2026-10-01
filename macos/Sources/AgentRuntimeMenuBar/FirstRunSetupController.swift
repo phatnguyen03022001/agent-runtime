@@ -408,13 +408,6 @@ final class FirstRunSetupOrchestrator {
             break
         }
 
-        guard readinessIsReady() else {
-            return .actionRequired(
-                "Runtime readiness is not ready yet. The pending cutover was not committed.",
-                .recheck
-            )
-        }
-
         let committed = runInstaller(["--commit-cutover"])
         guard committed.exitCode == 0 else {
             return .actionRequired(
@@ -425,10 +418,9 @@ final class FirstRunSetupOrchestrator {
 
         let postDoctor = runDoctor()
         guard !pathExistsOrIsSymlink(paths.transactionDirectory),
-              readinessIsReady(),
               FirstRunDoctorGate.postCommitIsHealthy(from: postDoctor.standardOutput) else {
             return .failure(
-                "Cutover committed, but Runtime is not healthy. Use the installed Agent Runtime recovery guidance."
+                "Cutover committed, but installed Runtime state is not healthy. Use the installed Agent Runtime recovery guidance."
             )
         }
         return .success
@@ -448,19 +440,6 @@ final class FirstRunSetupOrchestrator {
             arguments: [paths.installedStart.path, "doctor", "--json"],
             standardInput: nil
         )
-    }
-
-    private func readinessIsReady() -> Bool {
-        runner.run(
-            executable: URL(fileURLWithPath: "/usr/bin/curl"),
-            arguments: [
-                "-fsS",
-                "--max-time",
-                "1",
-                "http://127.0.0.1:8080/readyz",
-            ],
-            standardInput: nil
-        ).exitCode == 0
     }
 
     private func safeReleaseBundleIsPresent() -> Bool {
@@ -694,7 +673,7 @@ final class FirstRunSetupController: NSViewController {
     private func apply(_ outcome: FirstRunSetupOutcome) {
         switch outcome {
         case .success:
-            statusField.stringValue = "Setup complete. Runtime readiness is ready and package-owned doctor is healthy."
+            statusField.stringValue = "Setup complete. Runtime is installed and remains stopped until Start."
             primaryButton.isHidden = true
             secondaryButton.isHidden = true
             completed()

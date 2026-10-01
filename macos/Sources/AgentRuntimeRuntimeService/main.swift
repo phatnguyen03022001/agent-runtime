@@ -8,10 +8,6 @@ private let stateDirectory = home.appendingPathComponent(
     "Library/Application Support/Agent Runtime",
     isDirectory: true
 )
-private let desiredState = stateDirectory.appendingPathComponent(
-    "protected-runtime-running",
-    isDirectory: false
-)
 private let runtimeEnv = stateDirectory.appendingPathComponent("runtime.env", isDirectory: false)
 private let gracefulShutdownSeconds: TimeInterval = 3
 private let forcedShutdownSeconds: TimeInterval = 2
@@ -128,9 +124,6 @@ private func ensureOwnedGroupStopped(_ childPGID: pid_t, termAlreadySent: Bool) 
     }
 }
 
-guard fileManager.fileExists(atPath: desiredState.path) else {
-    exit(0)
-}
 guard let resources = Bundle.main.resourceURL else {
     fail("app bundle resources are unavailable")
 }
@@ -204,7 +197,7 @@ ensureOwnedGroupStopped(childPGID, termAlreadySent: termSent)
 termSource.cancel()
 intSource.cancel()
 
-// KeepAlive uses SuccessfulExit=false. Explicit Stop removes the desired
-// marker before signaling this helper; any unexpected child exit while desired
-// remains RUNNING is non-zero so launchd may recover the one owned generation.
-exit(fileManager.fileExists(atPath: desiredState.path) ? 1 : 0)
+// This helper owns exactly one explicitly launched Runtime generation.
+// launchd KeepAlive is disabled, so cleanup completes this invocation without
+// requesting automatic recovery after child failure or operator Stop.
+exit(0)

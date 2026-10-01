@@ -499,7 +499,7 @@ esac
                     "Label": "com.picmao.agent-runtime-runtime-service",
                     "ProgramArguments": [str(helper)],
                     "RunAtLoad": False,
-                    "KeepAlive": {"SuccessfulExit": False},
+                    "KeepAlive": False,
                     "ProcessType": "Interactive",
                     "ThrottleInterval": 2,
                 },

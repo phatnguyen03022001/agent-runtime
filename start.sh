@@ -37,7 +37,6 @@ LEGACY_CONFIG="$HOME/.config/tunnel-client/agent-runtime.yaml"
 CURRENT_RUNTIME_LAUNCHD_LABEL="com.picmao.agent-runtime-runtime-service"
 DOMAIN="gui/$(id -u)"
 SERVICE="$DOMAIN/$CURRENT_RUNTIME_LAUNCHD_LABEL"
-DESIRED_STATE="$STATE_DIR/protected-runtime-running"
 LOCK_DIR="$STATE_DIR/lifecycle.lock"
 INSTALLED_APP="$HOME/Applications/Agent Runtime.app"
 RUNTIME_SERVICE_PLIST="$HOME/Library/LaunchAgents/$CURRENT_RUNTIME_LAUNCHD_LABEL.plist"
@@ -191,7 +190,7 @@ expected = {
     "Label": label,
     "ProgramArguments": [helper],
     "RunAtLoad": False,
-    "KeepAlive": {"SuccessfulExit": False},
+    "KeepAlive": False,
     "ProcessType": "Interactive",
     "ThrottleInterval": 2,
 }
@@ -342,14 +341,6 @@ service_quiescent() {
   [[ ! "$state" =~ (^|$'\n')[[:space:]]*pid[[:space:]]*=[[:space:]]*[0-9]+($|$'\n') ]]
 }
 
-set_running() {
-  mkdir -p "$STATE_DIR"
-  local tmp="$STATE_DIR/.protected-runtime-running.$$"
-  : > "$tmp"
-  chmod 600 "$tmp"
-  mv -f "$tmp" "$DESIRED_STATE"
-}
-
 effective_session_limit() {
   local value=""
   if [[ -f "$ENV_FILE" && ! -L "$ENV_FILE" ]]; then
@@ -461,25 +452,20 @@ status_pid_json() {
 }
 
 observe_runtime_status() {
-  local owners count pid desired_running=0
+  local owners count pid
   STATUS_STATE="attention"
   STATUS_CONTROL="none"
   STATUS_PIDS=""
   STATUS_HEALTH="unverified"
   STATUS_READY="unverified"
   STATUS_DETAIL="Runtime status is unavailable."
-  [[ -f "$DESIRED_STATE" ]] && desired_running=1
 
   owners="$(port_owner_pids)"
   STATUS_PIDS="$owners"
   count="$(printf '%s\n' "$owners" | awk 'NF { count++ } END { print count+0 }')"
   if [[ "$count" == "0" ]]; then
     STATUS_STATE="stopped"
-    if [[ "$desired_running" == "1" ]]; then
-      STATUS_DETAIL="No Runtime listener is serving; desired state still requests RUNNING."
-    else
-      STATUS_DETAIL="No Runtime listener is serving."
-    fi
+    STATUS_DETAIL="No Runtime listener is serving."
     return 0
   fi
   if [[ "$count" != "1" ]]; then
@@ -539,9 +525,8 @@ emit_runtime_status() {
   observe_runtime_status
   pids_json="$(status_pid_json)"
   if [[ "$json_mode" == "1" ]]; then
-    printf '{"schema":1,"state":"%s","control":"%s","pids":%s,"health":"%s","ready":"%s","desired":"%s","detail":"%s"}\n' \
-      "$STATUS_STATE" "$STATUS_CONTROL" "$pids_json" "$STATUS_HEALTH" "$STATUS_READY" \
-      "$([[ -f "$DESIRED_STATE" ]] && printf running || printf stopped)" "$STATUS_DETAIL"
+    printf '{"schema":2,"state":"%s","control":"%s","pids":%s,"health":"%s","ready":"%s","detail":"%s"}\n' \
+      "$STATUS_STATE" "$STATUS_CONTROL" "$pids_json" "$STATUS_HEALTH" "$STATUS_READY" "$STATUS_DETAIL"
     return 0
   fi
   case "$STATUS_STATE/$STATUS_CONTROL" in
@@ -771,38 +756,34 @@ EOF
     validate_current_runtime_before_start
     preflight_protected_port
     if runtime_ready_once; then
-      echo "Agent Runtime desired state: RUNNING"
+      echo "Agent Runtime: RUNNING"
       exit 0
     fi
-    set_running
     launchctl kickstart "$SERVICE" >/dev/null 2>&1 || fail "Could not start canonical Runtime service."
     wait_until_ready
-    echo "Agent Runtime desired state: RUNNING"
+    echo "Agent Runtime: RUNNING"
     ;;
   stop)
     acquire_lock
     require_lifecycle_control_authority
-    rm -f "$DESIRED_STATE"
     if service_loaded; then
       launchctl kill SIGTERM "$SERVICE" >/dev/null 2>&1 || true
     fi
     wait_until_stopped
-    echo "Agent Runtime desired state: STOPPED"
+    echo "Agent Runtime: STOPPED"
     ;;
   restart)
     acquire_lock
     validate_current_runtime_before_start
     preflight_protected_port
     require_lifecycle_control_authority
-    rm -f "$DESIRED_STATE"
     if service_loaded; then
       launchctl kill SIGTERM "$SERVICE" >/dev/null 2>&1 || true
       wait_until_stopped
     fi
-    set_running
     launchctl kickstart "$SERVICE" >/dev/null 2>&1 || fail "Could not restart canonical Runtime service."
     wait_until_ready
-    echo "Agent Runtime desired state: RUNNING"
+    echo "Agent Runtime: RUNNING"
     ;;
   status)
     if [[ "$SOURCE_ROOT" == "$INSTALLED_RUNTIME_ROOT" ]]; then
