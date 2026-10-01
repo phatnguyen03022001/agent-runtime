@@ -130,6 +130,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let resources = Bundle.main.resourceURL else {
             throw RuntimeLifecycleError.metadata("app bundle resources are unavailable")
         }
+        return try installedRuntimeConfiguration(
+            resources: resources,
+            home: FileManager.default.homeDirectoryForCurrentUser
+        )
+    }
+
+    static func installedRuntimeConfiguration(resources: URL, home: URL) throws -> RuntimeConfiguration {
         let manifestURL = resources.appendingPathComponent("runtime-manifest.json", isDirectory: false)
         let manifestData = try Data(contentsOf: manifestURL)
         guard let manifest = try JSONSerialization.jsonObject(with: manifestData) as? [String: Any],
@@ -145,16 +152,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let runtimeRoot = resources.appendingPathComponent("runtime", isDirectory: true)
         let lifecycle = runtimeRoot.appendingPathComponent("start.sh", isDirectory: false)
         let runtimePython = runtimeRoot.appendingPathComponent(".venv/bin/python", isDirectory: false)
-        let server = runtimeRoot.appendingPathComponent("agent_runtime/server.py", isDirectory: false)
+        // Selected external payload validation belongs to start.sh/status.
         let runtimeValues = try runtimeRoot.resourceValues(forKeys: [.isSymbolicLinkKey])
         guard runtimeValues.isSymbolicLink != true,
               FileManager.default.isExecutableFile(atPath: lifecycle.path),
-              FileManager.default.isExecutableFile(atPath: runtimePython.path),
-              FileManager.default.fileExists(atPath: server.path) else {
+              FileManager.default.isExecutableFile(atPath: runtimePython.path) else {
             throw RuntimeLifecycleError.metadata("installed Runtime payload is incomplete")
         }
 
-        let envURL = FileManager.default.homeDirectoryForCurrentUser
+        let envURL = home
             .appendingPathComponent("Library/Application Support/Agent Runtime/runtime.env", isDirectory: false)
         let values = try envURL.resourceValues(forKeys: [.isSymbolicLinkKey, .isRegularFileKey])
         guard values.isSymbolicLink != true, values.isRegularFile == true else {

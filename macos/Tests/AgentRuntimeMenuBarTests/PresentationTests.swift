@@ -12,6 +12,165 @@ final class PresentationTests: XCTestCase {
         executablePath: "/usr/bin/tunnel-client"
     )
 
+    @MainActor
+    func testInstalledConfigurationAcceptsZeroCostSubstrateWithoutEmbeddedServer() throws {
+        let fixture = try installedConfigurationFixture()
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: fixture.resources.appendingPathComponent("runtime/agent_runtime/server.py").path
+        ))
+
+        let configuration = try AppDelegate.installedRuntimeConfiguration(
+            resources: fixture.resources,
+            home: fixture.home
+        )
+        XCTAssertEqual(configuration.runtimeRoot, fixture.resources.appendingPathComponent("runtime").path)
+        XCTAssertEqual(configuration.envFileURL, fixture.env)
+        XCTAssertTrue(configuration.requiresReadiness)
+        XCTAssertEqual(configuration.sessionLimit, 6)
+        XCTAssertEqual(configuration.parallelLimit, 2)
+    }
+
+    @MainActor
+    func testInstalledConfigurationRejectsMissingOrNonExecutableSubstrateEntrypoints() throws {
+        for relativePath in ["runtime/start.sh", "runtime/.venv/bin/python"] {
+            for missing in [true, false] {
+                let fixture = try installedConfigurationFixture()
+                let entrypoint = fixture.resources.appendingPathComponent(relativePath)
+                if missing {
+                    try FileManager.default.removeItem(at: entrypoint)
+                } else {
+                    try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: entrypoint.path)
+                }
+                XCTAssertThrowsError(try AppDelegate.installedRuntimeConfiguration(
+                    resources: fixture.resources,
+                    home: fixture.home
+                ), "\(relativePath), missing=\(missing)")
+            }
+        }
+    }
+
+    @MainActor
+    func testInstalledConfigurationRejectsMissingRegularFileOrSymlinkRuntimeRoot() throws {
+        for shape in ["missing", "regular-file", "symlink"] {
+            let fixture = try installedConfigurationFixture()
+            let runtime = fixture.resources.appendingPathComponent("runtime")
+            let movedRuntime = fixture.resources.appendingPathComponent("moved-runtime")
+            try FileManager.default.moveItem(at: runtime, to: movedRuntime)
+            if shape == "regular-file" {
+                try Data("not a directory".utf8).write(to: runtime)
+            } else if shape == "symlink" {
+                try FileManager.default.createSymbolicLink(at: runtime, withDestinationURL: movedRuntime)
+            }
+            XCTAssertThrowsError(try AppDelegate.installedRuntimeConfiguration(
+                resources: fixture.resources,
+                home: fixture.home
+            ), shape)
+        }
+    }
+
+    @MainActor
+    func testInstalledConfigurationRejectsMissingMalformedOrInvalidManifest() throws {
+        let invalidFields: [(String, Any)] = [
+            ("schema", 2),
+            ("owner", "untrusted.owner"),
+            ("entrypoint", "other/start.sh"),
+            ("python", "other/python"),
+            ("runtime_revision", "short"),
+        ]
+        for (field, value) in invalidFields {
+            let fixture = try installedConfigurationFixture()
+            let manifestURL = fixture.resources.appendingPathComponent("runtime-manifest.json")
+            var manifest = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: Data(contentsOf: manifestURL)) as? [String: Any]
+            )
+            manifest[field] = value
+            try JSONSerialization.data(withJSONObject: manifest).write(to: manifestURL)
+            XCTAssertThrowsError(try AppDelegate.installedRuntimeConfiguration(
+                resources: fixture.resources,
+                home: fixture.home
+            ), field)
+        }
+        for malformed in [false, true] {
+            let fixture = try installedConfigurationFixture()
+            let manifestURL = fixture.resources.appendingPathComponent("runtime-manifest.json")
+            if malformed {
+                try Data("not JSON".utf8).write(to: manifestURL)
+            } else {
+                try FileManager.default.removeItem(at: manifestURL)
+            }
+            XCTAssertThrowsError(try AppDelegate.installedRuntimeConfiguration(
+                resources: fixture.resources,
+                home: fixture.home
+            ))
+        }
+    }
+
+    @MainActor
+    func testInstalledConfigurationRejectsMissingDirectorySymlinkOrUnsafeModeEnvironment() throws {
+        for shape in ["missing", "directory", "symlink", "mode-0644", "mode-0400"] {
+            let fixture = try installedConfigurationFixture()
+            if shape.hasPrefix("mode-") {
+                let mode = shape == "mode-0644" ? 0o644 : 0o400
+                try FileManager.default.setAttributes([.posixPermissions: mode], ofItemAtPath: fixture.env.path)
+            } else {
+                let movedEnv = fixture.env.deletingLastPathComponent().appendingPathComponent("moved.env")
+                try FileManager.default.moveItem(at: fixture.env, to: movedEnv)
+                if shape == "directory" {
+                    try FileManager.default.createDirectory(at: fixture.env, withIntermediateDirectories: false)
+                } else if shape == "symlink" {
+                    try FileManager.default.createSymbolicLink(at: fixture.env, withDestinationURL: movedEnv)
+                }
+            }
+            XCTAssertThrowsError(try AppDelegate.installedRuntimeConfiguration(
+                resources: fixture.resources,
+                home: fixture.home
+            ), shape)
+        }
+    }
+
+    func testCanonicalManagedRunningObservationPresentsLiveReadyEndpoint() {
+        // NativeRuntimeBackend maps validated schema-3 running/managed/live/ready
+        // observations with one serving PID to owned status.
+        let presentation = RuntimePopoverPresentation.make(
+            observation: RuntimeObservation(status: .owned(servingIdentity), tunnelTransport: .healthy),
+            audit: ProtectionAuditSnapshot(),
+            sessionLimit: 6
+        )
+        XCTAssertEqual(presentation.facts[0], RuntimeFact(label: "Endpoint", value: "127.0.0.1:8080"))
+        XCTAssertNotEqual(presentation.facts[0].value, "Unavailable")
+        XCTAssertEqual(presentation.facts[2], RuntimeFact(label: "Health", value: "live"))
+        XCTAssertEqual(presentation.facts[3], RuntimeFact(label: "Ready", value: "ready"))
+        XCTAssertTrue(presentation.lifecycleSlot.isEnabled)
+    }
+
+    private func installedConfigurationFixture() throws -> (resources: URL, home: URL, env: URL) {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
+        addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+        let resources = root.appendingPathComponent("Agent Runtime.app/Contents/Resources", isDirectory: true)
+        let home = root.appendingPathComponent("home", isDirectory: true)
+        let env = home.appendingPathComponent("Library/Application Support/Agent Runtime/runtime.env")
+        for relativePath in ["runtime/start.sh", "runtime/.venv/bin/python"] {
+            let entrypoint = resources.appendingPathComponent(relativePath)
+            try FileManager.default.createDirectory(at: entrypoint.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data("#!/bin/sh\nexit 0\n".utf8).write(to: entrypoint)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: entrypoint.path)
+        }
+        let manifest: [String: Any] = [
+            "schema": 1,
+            "owner": "com.picmao.agent-runtime",
+            "entrypoint": "runtime/start.sh",
+            "python": "runtime/.venv/bin/python",
+            "runtime_revision": String(repeating: "a", count: 40),
+        ]
+        try JSONSerialization.data(withJSONObject: manifest)
+            .write(to: resources.appendingPathComponent("runtime-manifest.json"))
+        try FileManager.default.createDirectory(at: env.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS=6\nAGENT_RUNTIME_MAX_PARALLELISM=2\n".utf8).write(to: env)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: env.path)
+        return (resources, home, env)
+    }
+
     func testOfflineAudioPlaysOncePerConnectedToOfflineEdge() {
         var policy = OfflineAudioPolicy()
 
