@@ -1,0 +1,137 @@
+protocol_version: 3
+
+task_id: TASK-0193
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0193/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  authorized_base_head: "fb0687e0f38b0c97e3e149552d5ad8efb25817e0"
+  final_execution_head: "ea763dd043492d1312b0fc18c9049e9812725ac7"
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  authorized_revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - repository_observation
+    - scoped_repository_write
+    - deterministic_test_execution
+    - durable_reconcilable_verification
+    - non_force_main_publication
+  available:
+    - repository_observation
+    - scoped_repository_write
+    - deterministic_test_execution
+    - durable_reconcilable_verification
+    - non_force_main_publication
+  missing: []
+  passed: true
+
+focused_verification:
+  shell_syntax:
+    command: "/bin/bash -n start.sh"
+    result: PASS
+  canonical_status_transport:
+    command: "/usr/bin/python3 -m unittest tests.test_supervised_lifecycle"
+    result: PASS
+    tests: 27
+    duration_seconds: 48.939
+  swift_core_menu:
+    command: "/usr/bin/xcrun swift test --package-path macos --filter 'ProtectedRuntimeTests|PresentationTests'"
+    result: PASS
+    tests: 30
+  full_swift:
+    command: "/usr/bin/xcrun swift test --package-path macos"
+    result: PASS
+    tests: 86
+    menu_bar_tests: 51
+    core_tests: 35
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: FAIL
+  command: "./verify"
+  invocation_count: 1
+  start_identity: "01930000000000000000000000000019"
+  session_id: "10d4793484aad18e"
+  exit_code: 1
+  termination_reason: natural_exit
+  modules_selected: 62
+  modules_completed: 52
+  tests_completed: 709
+  retry_count: 0
+  failed_or_timed_out_module: "tests.test_supervised_lifecycle"
+  failure_kind: TIMEOUT
+  module_timeout_seconds: 45
+  observed_timeout_seconds: 45.018
+  evidence: "The sole TASK-0193 canonical verifier was dispatched through a runtime_restart durable pipe. The start response surfaced DURABLE_OWNER_LOST after dispatch; no second verifier was started. The exact persisted job for start identity 01930000000000000000000000000019 was reconciled read-only to RUNNING and then COMPLETED/natural_exit/exit 1. Its journal records no assertion failure for the task-focused suite; tests.test_supervised_lifecycle reached the verifier's 45-second module timeout. The same suite had already passed 27/27 focused in 48.939 seconds, so revision 1 cannot obtain authoritative PASS without a new verification budget."
+
+effect_accounting:
+  canonical_verify:
+    authorized: 1
+    consumed: 1
+    remaining: 0
+  live_install_or_cutover:
+    authorized: 0
+    consumed: 0
+  live_service_restart:
+    authorized: 0
+    consumed: 0
+  tunnel_process_restart_or_update:
+    authorized: 0
+    consumed: 0
+  physical_reboot:
+    authorized: 0
+    consumed: 0
+  branch_or_pr_creation:
+    authorized: 0
+    consumed: 0
+
+pushed: false
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "Candidate ea763dd043492d1312b0fc18c9049e9812725ac7 revises the internal status JSON to schema 3 and adds tunnel_transport as a separate read-only axis. Focused status tests pass 27/27 and prove local managed/read-only/stopped semantics remain unchanged while tunnel status varies independently."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "start.sh reads only the existing loopback /health/control-plane component after local healthz and readyz are green. Schema 1 component ok maps to healthy, degraded maps to degraded, and unknown/disabled/unobserved plus 404, timeout, malformed payload, unsupported schema, or read failure map to unconfirmed. Tests cover all required cases, including additive unknown fields and rejecting unsupported evidence as healthy."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "Swift presentation tests pass 30/30 focused. The popover exposes an explicit Tunnel fact; degraded/unconfirmed tunnel state produces attention presentation while RuntimePolicy continues to derive lifecycle authority only from local RuntimeStatus. Local-readiness-only wording no longer claims Connected, and accessibility text explicitly states that ChatGPT connection is not proven."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "Transport observation remains inside the existing status refresh. StatusRefreshCoalescer remains the one-active-plus-one-follow-up gate and its deterministic test passes. Source/diff inspection shows no added timer, daemon, direct HTTPS request, tool/discovery call, doctor call, repair path, or tunnel restart path; the transport read is a bounded max-time-1 loopback GET."
+  - criterion_id: AC-5
+    status: PASS
+    evidence: "README.md and docs/OPERATIONS.md now separate local Runtime availability, lifecycle-control ownership, and tunnel control-plane transport. They state that passive health does not prove a ChatGPT app/workspace/conversation link or future tool-call success and that end-to-end proof requires an actual product-originated MCP request."
+  - criterion_id: AC-6
+    status: PASS
+    evidence: "The candidate changes only the authorized status/Core/MenuBar/tests/docs surfaces. No dependency, version, release, credential/configuration, service topology, capacity, MCP registry, or public tool schema changed. Preflight still observed 20 advertised MCP tools and session ceiling 6; canonical tests.test_surface_and_scripts passed before the verifier later timed out in another module. No live Runtime/tunnel lifecycle effect was performed."
+  - criterion_id: AC-7
+    status: FAIL
+    evidence: "Focused Python and Swift proof plus full Swift all passed, but the single authorized canonical ./verify invocation exited 1 because tests.test_supervised_lifecycle exceeded its 45-second per-module harness limit at 45.018 seconds. The invocation was reconciled without replay and canonical_verify_max is exhausted."
+  - criterion_id: AC-8
+    status: PASS
+    evidence: "Candidate ea763dd043492d1312b0fc18c9049e9812725ac7 is one reviewable direct child of exact base fb0687e0f38b0c97e3e149552d5ad8efb25817e0, touches only ten authorized existing files, introduces no branch or PR, and was clean before report authorship. This report records pre-publication truth only; its publication/final synchronized-main consequence must be established after the report commit."
+
+blocking_findings:
+  - id: F-0193-001
+    severity: BLOCKING
+    category: authoritative_verification
+    summary: "The required canonical verifier timed out tests.test_supervised_lifecycle after the task-expanded deterministic suite exceeded the existing 45-second module budget."
+    evidence: "Focused 27/27 PASS took 48.939 seconds; canonical ./verify recorded VERIFY TIMEOUT for tests.test_supervised_lifecycle at 45.018/45 seconds and exited 1."
+    required_next_step: "Authorize a new task revision with a fresh canonical verification budget after reducing the focused lifecycle suite runtime or otherwise resolving the verifier module-budget mismatch. Do not replay revision-1 ./verify."
+
+result: REVERIFY_REQUIRED
