@@ -1,0 +1,131 @@
+protocol_version: 3
+task_id: TASK-0200
+task_revision: 1
+state: APPROVED
+title: "Product Failure Qualification"
+
+origin:
+  type: architect_continuation
+  predecessor_task: TASK-0199
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+
+execution_skills:
+  required: [executor, verification, reliability, security-review, simplicity]
+
+revision_basis:
+  accepted_task_0199_review: "ec1a4cc6e0fee4ae5d56607234166b3ff93ac5d9"
+  paused_release_task: TASK-0196
+
+objective: "Qualify high-value newcomer, diagnostic, cutover, rollback, update and uninstall failure paths using isolated synthetic consumer state before reopening v0.5.2. Revision 1 is test/evidence-only. If current production behavior fails any required predicate, stop BLOCKED and report it; do not fix production code."
+
+scope:
+  required_changes:
+    - "Fresh-bind exact base, clean synchronized MAIN ONLY."
+    - "Production files, Swift, shell product commands, docs, dependencies and version are read-only."
+    - "Prefer one new tests/test_product_qualification.py. Existing tests may be minimally reused/extended only when needed for fixture exposure."
+    - "Use only synthetic temporary HOME/workspace/config/tunnel-client state. Never read operator runtime.env or real credential values."
+    - "Do not call a real control plane. Synthetic tunnel-client responses only."
+    - "Evaluate existing ./start.sh doctor --json as the diagnosis bundle. Do not add a new diagnosis command."
+    - "Do not claim physical fresh-Mac/user qualification; this task is synthetic consumer-state qualification."
+
+  qualification_matrix:
+    Q01: "Missing tunnel-client -> TUNNEL_CLIENT_UNAVAILABLE before canonical config publication."
+    Q02: "Synthetic 401 -> INVALID_CREDENTIAL; canonical config unchanged; submitted secret absent from argv/output."
+    Q03: "Synthetic 403/404 -> TUNNEL_ACCESS_DENIED/TUNNEL_NOT_FOUND; canonical config unchanged."
+    Q04: "Transient/malformed tunnel response -> CONTROL_PLANE_UNAVAILABLE; canonical config unchanged."
+    Q05: "Configured workspace removed -> stable workspace failure; no destructive lifecycle/cutover effect."
+    Q06: "Foreign/ambiguous port 8080 ownership -> fail closed; no kill/rebind authority from occupancy alone."
+    Q07: "Interrupted zero-cost cutover before/after app swap -> transaction remains deterministically resumable/rollbackable/partial or fails closed with evidence."
+    Q08: "Material cutover failure -> successful rollback restores predecessor; failed rollback retains PARTIAL evidence."
+    Q09: "Interrupted payload/update switch -> current-payload never silently claims an unverified generation; deterministic recovery or fail-closed evidence."
+    Q10: "Uninstall/reinstall -> canonical runtime.env retained byte-for-byte and remains authoritative or explicitly reconfigurable."
+    Q11: "Upgrade vN->vN+1 -> canonical runtime.env bytes/mode/identity preserved unless explicit reconfigure."
+    Q12: "Doctor/preflight diagnostics never emit credential/Tunnel/Git identity values; output/evidence bounded."
+    Q13: "Doctor emits deterministic non-OK reasons for workspace invalid, package/payload invalid, lifecycle invalid/approval-required, cutover present/invalid."
+    Q14: "Coherent synthetic installed state -> exact healthy doctor inventory without extra warnings."
+
+  execution_rules:
+    - "Use real existing helpers directly where practical; do not duplicate product implementations inside tests."
+    - "Existing strong owner tests may be cited and run as part of the focused matrix."
+    - "If Q01-Q14 all PASS, run git diff --check then exactly one canonical ./verify."
+    - "Never replay an ambiguous verifier; reconcile the same start identity."
+    - "Publish a report with Q01-Q14 PASS/BLOCKED and exact evidence."
+    - "Final main clean/synchronized MAIN ONLY."
+
+  allowed_existing_files_or_components:
+    - "tests/test_product_qualification.py"
+    - "existing test files only for minimal test-fixture reuse"
+    - ".agent/tasks/TASK-0200/report.yaml"
+
+invariants:
+  - "Production bytes unchanged."
+  - "No real credential/config content enters tests or report."
+  - "No live installed Runtime mutation."
+  - "Existing doctor is the only diagnosis surface under evaluation."
+  - "TASK-0196 remains paused."
+  - "MAIN ONLY."
+
+forbidden_changes:
+  - "Any production, Swift, shell product command, docs, dependency or version change."
+  - "Any new diagnosis subsystem/command/service/daemon."
+  - "Any real control-plane credential/tunnel use."
+  - "Any live install/cutover/relaunch/Runtime lifecycle/plugin/reboot/permission/credential-rotation effect."
+  - "sudo or physical new-user creation."
+  - "Any second canonical ./verify after a conclusive result or blind replay."
+  - "Any branch or PR."
+
+effect_authority:
+  canonical_verify_max: 1
+  distribution_build_max: 0
+  install_prebuilt_max: 0
+  commit_cutover_max: 0
+  rollback_cutover_max: 0
+  menu_bar_relaunch_max: 0
+  runtime_restart_max: 0
+  runtime_explicit_start_max: 0
+  runtime_explicit_stop_max: 0
+  plugin_reload_or_reconnect_max: 0
+  credential_rotation_max: 0
+  physical_reboot_max: 0
+  new_security_permission_max: 0
+  version_tag_create_max: 0
+  github_release_publish_max: 0
+  branch_or_pr_creation_max: 0
+
+acceptance_criteria:
+  - {id: AC-1, requirement: "Q01-Q14 all pass.", evidence_required: "Exact focused qualification evidence."}
+  - {id: AC-2, requirement: "Qualification is isolated and secret-safe.", evidence_required: "Synthetic state only; no operator config/credential bytes."}
+  - {id: AC-3, requirement: "Existing doctor is sufficient for Q12-Q14.", evidence_required: "Bounded deterministic current doctor output; no new diagnosis surface."}
+  - {id: AC-4, requirement: "Recovery/update/uninstall behavior is deterministic.", evidence_required: "Q07-Q11 PASS including PARTIAL evidence when recovery cannot complete."}
+  - {id: AC-5, requirement: "Production implementation unchanged.", evidence_required: "Pre-report diff is test-only."}
+  - {id: AC-6, requirement: "Canonical verification passes.", evidence_required: "Focused matrix PASS, diff-check PASS, exactly one ./verify PASS."}
+  - {id: AC-7, requirement: "Canonical closure.", evidence_required: "Truthful report and clean synchronized MAIN ONLY."}
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "Focused synthetic product qualification plus exactly one canonical ./verify."
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions: [BLOCKED, STALE_STATE, AUTHORITY_REQUIRED, CURRENT_PHASE_CAPABILITY_UNAVAILABLE, REVIEW_REQUIRED, REVERIFY_REQUIRED, USER_STOP]
+
+git_authority: {create_branch: false, commit: true, push: true, promote_to_main: false}
+release_authority: {create_version_tag: false, mutate_repository_metadata: false, publish_release: false}
+blocking_decisions: []
+execution_ready: true
