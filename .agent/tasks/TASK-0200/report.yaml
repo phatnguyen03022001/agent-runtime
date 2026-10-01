@@ -1,7 +1,7 @@
 protocol_version: 3
 task_id: TASK-0200
-task_revision: 5
-report_revision: 5
+task_revision: 6
+report_revision: 6
 state: REPORTED
 result: BLOCKED
 
@@ -12,9 +12,10 @@ execution:
   repository: phatnguyen03022001/agent-runtime
   branch: {name: main, role: canonical}
   execution_surface: CHATGPT_LOCAL
-  authorized_base_head: "43d25a5dcf33cd3533f1d055f1bdefef212cc0d5"
-  final_execution_head: "2c64319d14a4d5b66e4dda5ef6a3a82eb66584bf"
-  implementation_tree: "b95cb3d66ed01dec9d5cd5efcfc156559b3b9f51"
+  authorized_base_head: "ec033ec011363e6aa2e8719bec9b5f454b210b7f"
+  final_execution_head: "ec033ec011363e6aa2e8719bec9b5f454b210b7f"
+  implementation_tree: "981c07940c911f420dbc0f16195149166d343137"
+  implementation_change: "None; verification-only execution at exact base. The report is the sole authorized tracked mutation."
 
 skill_library:
   repository: phatnguyen03022001/agent-foundation
@@ -22,105 +23,118 @@ skill_library:
 
 capability_preflight:
   phase: EXECUTION
-  required: [repository_read, scoped_content_write, isolated_python_execution, durable_terminal_execution, git_main_commit_push]
-  available: [repository_read, scoped_content_write, isolated_python_execution, durable_terminal_execution, git_main_commit_push]
+  required: [repository_read, isolated_python_execution, unix_socket_fixture_execution, durable_terminal_execution, report_write, git_main_commit_push]
+  available: [repository_read, isolated_python_execution, unix_socket_fixture_execution, durable_terminal_execution, report_write, git_main_commit_push]
   missing: []
   passed: true
 
 pushed: false
 
-repair:
-  finding: F-0200-004
-  policy_proof: PASS
-  change: "Exactly one explicit MODULE_POLICY_ENTRIES entry for tests.test_product_qualification. Lane L5_QUALIFICATION_CHAOS_CUTOVER, isolation_key qualification, timeout 180.0, tags qualification/cutover/recovery/productization."
-  harness: "Inventory updated to 63 total and 6 L5. New assertion covers lane, isolation, timeout, exact tags and exclusion from GLOBAL_QUICK_MODULES. All other lane counts remain 17/21/10/9."
-  strictness: "Existing unknown-module and duplicate-classification tests pass. Removing the added entry from the candidate policy AST makes it identical to the base policy AST: no other policies, path rules, worker limits, L5 concurrency, heartbeat or selection rules changed. verify_tests.py and the existing unknown-module test are unchanged."
-  product_preservation: "Pre-report candidate changes only verification_policy.py and tests/test_verify_harness.py. Product code, Q01-Q14 predicates and TASK-0196 are byte-identical to exact base. Revision-4 product evidence is preserved, not requalified or rewritten outside canonical verification."
-  integration_limit: "Canonical inventory accepts all 63 classifications, but an unrelated fixture setup error stops worker launch before tests.test_product_qualification executes. Its required canonical execution is NOT_PROVEN, so the task remains BLOCKED."
+preserved_evidence:
+  policy_candidate: "2c64319d14a4d5b66e4dda5ef6a3a82eb66584bf"
+  lineage: "Policy candidate is an ancestor of the exact execution base. verification_policy.py and tests/test_verify_harness.py are byte-identical to that candidate."
+  closed_findings: [F-0200-001, F-0200-002, F-0200-003, F-0200-004]
+  product_qualification: "Accepted revision-4 Q01-Q14 and 16/16 qualification evidence are preserved. No source, test, predicate or policy was modified or separately requalified. This evidence does not substitute for the incomplete revision-6 canonical run."
+  qualification_policy: {lane: L5_QUALIFICATION_CHAOS_CUTOVER, isolation_key: qualification, timeout_seconds: 180.0}
+  task_0196: "Paused; artifacts unchanged."
 
-focused_verification:
-  harness:
-    command: ".venv/bin/python -m unittest -v tests.test_verify_harness"
-    isolation: "Run-owned temporary HOME/TMPDIR and sterile environment. Harness subprocess verify calls use synthetic repositories, not the canonical repository verifier."
-    result: PASS
-    tests: 22
-    exit_code: 0
-    evidence: "Exact inventory/lane counts, explicit qualification policy and unchanged fail-closed unknown-module behavior pass."
-  diff_check:
-    commands: ["git diff --check", "git diff --cached --check"]
-    result: PASS
-    pre_report_scope: [verification_policy.py, tests/test_verify_harness.py]
-  failure_diagnosis:
+short_path_preflight:
+  home: "/Users/tienphat/Developer/agent-runtime/.h"
+  tmpdir: "/Users/tienphat/Developer/agent-runtime/.v"
+  ownership: "Both paths were absent before creation, then created empty with mode 0700 and current UID. Device/inode/UID identities were recorded and checked before cleanup. No nested run-name directory above .v."
+  fixture_prefix: "agent-runtime-task0040-adversarial-"
+  random_suffix_bytes: 8
+  suffix: "/cwd/socket"
+  expected_socket_path: "/Users/tienphat/Developer/agent-runtime/.v/agent-runtime-task0040-adversarial-xxxxxxxx/cwd/socket"
+  expected_socket_path_bytes: 97
+  required_bound_bytes_exclusive: 100
+  bound_result: PASS
+  calculation: "Absolute checkout .v path + slash + exact existing TemporaryDirectory prefix + Python 3.13 eight-character ASCII random suffix + /cwd/socket; UTF-8 encoded length is 97 bytes."
+  focused_test:
     command: ".venv/bin/python -m unittest -v tests.test_fs_read_batch_adversarial.FsReadBatchAdversarialTests.test_fifo_socket_and_device_modes_are_rejected_before_content_read"
-    result: PASS
+    home: "$PWD/.h"
+    tmpdir: "$PWD/.v"
+    surface: "Authorized execution supporting local Unix sockets; no filesystem-sandbox socket.bind denial."
+    invocation_count: 1
     tests: 1
     exit_code: 0
-    environment: "Synthetic HOME; TMPDIR=/private/tmp; run outside the filesystem sandbox that independently denies socket.bind. No source changes or canonical verifier replay."
-    evidence: "The same failing test passes with a short temporary path. An initial sandboxed diagnostic gets PermissionError at socket.bind instead of the canonical AF_UNIX path-too-long error; the sufficient authorized surface then establishes the short-path diagnosis."
-
-acceptance_evidence:
-  - {criterion_id: AC-1, status: PASS, evidence: "Explicit single serialized L5 classification with required timeout/tags; strictness and unknown-module rejection unchanged and proven by focused harness."}
-  - {criterion_id: AC-2, status: PASS, evidence: "Focused harness 22/22 PASS; 63 total, 6 L5, all other counts unchanged. Canonical summary confirms classified_modules=63."}
-  - {criterion_id: AC-3, status: PASS, evidence: "Only the two authorized verifier files differ before report; all accepted product/qualification implementation remains unchanged."}
-  - {criterion_id: AC-4, status: BLOCKED, evidence: "One canonical ./verify returns exit 1 after 49/63 modules. Fixture Unix-socket path too long stops scheduling before tests.test_product_qualification. No exemption, pre-exclusion or replay."}
-  - {criterion_id: AC-5, status: NOT_PROVEN, evidence: "Truthful BLOCKED report prepared as sole report-only child of the candidate on main. Fresh post-publication synchronization proof is established externally after publication."}
+    result: PASS
+  pre_dispatch_tracked_state: "git diff and git diff --cached both empty; exact-base HEAD retained. No tracked repository mutation before verification."
 
 authoritative_verification:
   required: true
   performed: true
   invocation_count: 1
   command: "./verify"
-  candidate: "2c64319d14a4d5b66e4dda5ef6a3a82eb66584bf"
+  candidate: "ec033ec011363e6aa2e8719bec9b5f454b210b7f"
+  home: "/Users/tienphat/Developer/agent-runtime/.h"
+  tmpdir: "/Users/tienphat/Developer/agent-runtime/.v"
+  environment: "Established sterile canonical environment, repo .venv Python, fixed system PATH, C locale, PYTHONUTF8=1, PYTHONDONTWRITEBYTECODE=1. HOME and TMPDIR use the exact required short repo-local roots. No real operator config/credentials."
   carrier: "Agent Runtime terminal_start, durable pipe"
   durability: runtime_restart
-  start_identity: "f7333709910e4654a1b057ad8506cea0"
-  session_id: "89a5d4bfde668186"
+  start_identity: "b9256f34a8a1404bafb0d0ecf1192e8a"
+  session_id: "e2e649193b7c3b42"
   lifecycle: COMPLETED
   termination_reason: natural_exit
   exit_code: 1
   result: FAIL
-  reconciliation: "Initial start and polls returned DURABLE_OWNER_LOST with effect unknown. No start replay occurred. Polling the same start_identity subsequently returned the conclusive COMPLETED/natural_exit/exit-1 result; incremental output was reconciled through cursor 18223 with no dropped bytes."
-  environment: "Sterile env with temporary synthetic HOME; executor-selected TMPDIR=/private/tmp/task0200-r5-canonical-verify-h8jb3amr. This path was too long for the existing Unix-socket fixture."
+  reconciliation: "Initial start/polls returned DURABLE_OWNER_LOST with effect unknown while execution remained active. Only the same start identity was polled. The terminal result was subsequently reconciled through cursor 16410 with no dropped output; no start replay."
+  profile: qualification
   classified_modules: 63
   selected_modules: 63
-  completed_modules: 49
-  tests: 741
+  completed_modules: 57
+  tests: 739
   lane_counts:
-    L1_DETERMINISTIC_UNIT: {selected: 17, completed: 10, tests: 137}
+    L1_DETERMINISTIC_UNIT: {selected: 17, completed: 17, tests: 231}
     L2_ISOLATED_INTEGRATION: {selected: 21, completed: 21, tests: 233}
     L3_DETERMINISTIC_REGRESSION: {selected: 10, completed: 10, tests: 91}
-    L4_HOST_LIFECYCLE: {selected: 9, completed: 7, tests: 155}
-    L5_QUALIFICATION_CHAOS_CUTOVER: {selected: 6, completed: 1, tests: 125}
+    L4_HOST_LIFECYCLE: {selected: 9, completed: 9, tests: 184}
+    L5_QUALIFICATION_CHAOS_CUTOVER: {selected: 6, completed: 0, tests: 0}
+  socket_fixture_module: {module: tests.test_fs_read_batch_adversarial, result: PASS, tests: 7}
+  timed_out_module:
+    module: tests.test_candidate_cutover
+    lane: L5_QUALIFICATION_CHAOS_CUTOVER
+    isolation_key: qualification
+    timeout_seconds: 180.0
+    observed_elapsed_seconds: 180.043
+    result: TIMEOUT
+    evidence: "VERIFY TIMEOUT lane=L5_QUALIFICATION_CHAOS_CUTOVER module=tests.test_candidate_cutover elapsed_s=180.043 timeout_s=180"
   product_qualification:
+    module: tests.test_product_qualification
     selected: true
     lane: L5_QUALIFICATION_CHAOS_CUTOVER
     executed: false
     result: NOT_RUN
-    evidence: "Existing fail-closed scheduling stops launching pending workers after the fixture failure. Product qualification was classified and selected, not exempted or pre-excluded. Revision-4 16/16 evidence remains accepted but cannot substitute for required revision-5 canonical execution."
-  candidate_cutover: {result: PASS, tests: 125}
-  verifier_harness: {result: PASS, tests: 22}
-  failed_module: tests.test_fs_read_batch_adversarial
-  failed_test: test_fifo_socket_and_device_modes_are_rejected_before_content_read
-  evidence: "OSError: AF_UNIX path too long at tests/test_fs_read_batch_adversarial.py:172, sock.bind(str(sock_path)). Canonical total: modules=49/63 classified_modules=63 tests=741 profile=qualification requested_profile=qualification."
+    evidence: "Existing fail-closed scheduler stopped launching pending modules after the first L5 worker timed out. The module was classified/selected, not filtered, exempted or pre-excluded; required canonical execution is unproven."
+  evidence: "VERIFY total modules=57/63 classified_modules=63 tests=739 duration_s=180.051 profile=qualification requested_profile=qualification. All 57 completed modules PASS. No completed product assertion failure observed; the deadline failure remains conclusive canonical FAIL."
 
 blocking_findings:
-  - id: CANONICAL-VERIFY-TMPDIR-SOCKET-PATH
-    classification: executor_environment_fixture_setup_failure
-    source: "tests/test_fs_read_batch_adversarial.py:26,172; executor-selected canonical TMPDIR"
-    trigger: "Existing fixture appends agent-runtime-task0040-adversarial-<random>/cwd/socket under the long run-owned TMPDIR."
-    observed: "Unix-socket bind raises AF_UNIX path too long before product filesystem-read behavior is evaluated."
-    attribution: "Executor environment choice caused this setup failure. The exact test passes with short TMPDIR on an authorized surface supporting Unix sockets. No new product defect is established."
-    consequence: "Canonical verification fails and the required qualification-module execution is not reached. Policy integration is proven locally, but full task acceptance remains blocked."
-    scope_decision: "No fixture/product/policy weakening or additional fix. No second canonical invocation. A future canonical run with short TMPDIR requires separately authorized continuation."
+  - id: CANONICAL-CANDIDATE-CUTOVER-DEADLINE
+    classification: canonical_module_timeout
+    source: "Existing tests.test_candidate_cutover 180-second policy; canonical verifier timeout event"
+    observed: "The first serialized L5 worker does not complete within its existing 180-second deadline. The verifier terminates the owned worker group and fails closed before the other five L5 modules execute."
+    consequence: "AC-2 and AC-3 are BLOCKED: canonical verification completes only 57/63 modules and does not execute product qualification."
+    certainty: "Timeout and incomplete inventory are directly observed. The worker produced no completed result; no specific failing cutover test or new product defect is established."
+    scope_decision: "No source/test/policy/deadline change, additional fix or second canonical invocation. Revision 6 stops BLOCKED. Any diagnosis or remedy requires separately authorized continuation."
+
+acceptance_evidence:
+  - {criterion_id: AC-1, status: PASS, evidence: "Exact socket-path bound 97 < 100 bytes and exact focused test PASS once under $PWD/.h and $PWD/.v. Canonical socket fixture module also PASS 7 tests."}
+  - {criterion_id: AC-2, status: BLOCKED, evidence: "Exactly one canonical invocation reconciled to exit 1; first L5 module TIMEOUT; 57/63 completed. No replay."}
+  - {criterion_id: AC-3, status: BLOCKED, evidence: "Qualification module is selected as existing serialized L5 but never started after the timeout; no substitute or suppressed predicate."}
+  - {criterion_id: AC-4, status: PASS, evidence: "All tracked files remained unchanged through verification. Recorded owned .h/.v roots removed after conclusive result, before final observation/report. Worktree/index/untracked observation empty before the report-only mutation."}
+  - {criterion_id: AC-5, status: NOT_PROVEN, evidence: "Truthful BLOCKED report prepared as sole report-only child of exact verified base. Fresh post-publication proof is established externally after publication."}
+
+cleanup:
+  result: PASS
+  short_home_removed: true
+  short_tmpdir_removed: true
+  evidence: "Validated exact repo-child paths, non-symlink roots and recorded device/inode/UID ownership; removed only run-owned material after terminal reconciliation. git status --porcelain --untracked-files=all empty; worktree and index diffs empty; git diff --check PASS before report authorship."
 
 effect_accounting:
   canonical_verify: {authorized_max: 1, consumed: 1}
+  focused_short_path_test: {required: 1, consumed: 1}
   live_product_effects: 0
   distribution_builds: 0
   package_release_or_version_effects: 0
   branch_or_pr_creation: 0
-  task_0196_continuation: "None; pause honored and artifacts unchanged."
-
-local_hygiene:
-  result: PASS
-  evidence: "Focused fixtures clean run-owned temporary material. Canonical verifier terminated naturally; the durable identity/result is preserved in this report before run-owned intent/HOME cleanup. No live installed Runtime or real credential state inspected or mutated."
+  task_0196_continuation: "None; pause honored."
