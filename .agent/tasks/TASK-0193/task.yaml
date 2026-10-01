@@ -1,0 +1,219 @@
+protocol_version: 3
+
+task_id: TASK-0193
+task_revision: 1
+state: APPROVED
+title: "Tunnel Transport Truth and End-to-End Diagnostic Boundary"
+
+origin:
+  type: user_request
+  task_id: ""
+  gap_id: "LOCAL-RUNTIME-HEALTH-IS-NOT-TUNNEL-REACHABILITY"
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+
+architect_analysis_skills:
+  - architect
+  - reliability
+  - verification
+  - simplicity
+
+execution_skills:
+  required:
+    - executor
+    - reliability
+    - verification
+    - simplicity
+  recommended: []
+
+external_skills:
+  architect_analysis: []
+  execution_required: []
+  execution_recommended: []
+
+external_reference:
+  repository: openai/tunnel-client
+  revision: "c8aeedec334db55bbd69bb16db6b71276993d708"
+  authority: "Read-only transport behavior reference only; never product/task authority."
+  relevant_contracts:
+    - "docs/health.md: /healthz is liveness, /readyz is startup readiness, /health/control-plane exposes bounded observed control-plane polling state."
+    - "pkg/controlplane/health.go: control-plane component reports ok/degraded/unknown separately from local readiness."
+    - "Health observations are historical evidence at their timestamps and do not prove a specific ChatGPT app/workspace is linked or that a future tool call will succeed."
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0192/review.yaml at f5de366bfa07df8879c507777f16ca8dc6fe76e8"
+    role: "Accepted manual lifecycle, TASK-0191 status truth preservation, and bounded/coalesced menu-bar refresh."
+    precedence: 1
+  - source: "openai/tunnel-client at c8aeedec334db55bbd69bb16db6b71276993d708"
+    role: "Current upstream component-health semantics for local liveness/readiness versus control-plane polling health."
+    precedence: 2
+  - source: "Current operator objective in the active Architect session."
+    role: "Menu-bar state must not claim the Runtime/tunnel is available when only local 8080 health is known."
+    precedence: 3
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing package-owned start.sh status observation, NativeRuntimeBackend adaptation, menu-bar presentation, and current upstream tunnel-client loopback health surface."
+  rationale: "Extend the existing canonical read-only status path with one orthogonal transport observation. Do not add a daemon, remote monitor, active heartbeat service, or second status owner."
+
+objective: "Expose truthful tunnel transport state independently from local Runtime availability and lifecycle ownership. A locally healthy Runtime may remain Running while the OpenAI control-plane transport is degraded or unconfirmed; the UI must show that distinction without disabling safe lifecycle ownership or falsely claiming ChatGPT end-to-end connectivity."
+
+scope:
+  required_changes:
+    - "Preserve TASK-0191/TASK-0192 local Runtime state and control semantics exactly. Local availability and positive lifecycle ownership remain the only inputs to Start/Stop/Restart policy."
+    - "Extend the single package-owned canonical status observation with an orthogonal read-only tunnel transport field. Use an explicit internal schema revision if the JSON shape changes; update all internal consumers/tests atomically."
+    - "When the canonical Runtime is not serving, report transport as not-running and do not probe tunnel component health."
+    - "When the canonical Runtime is serving, obtain transport evidence only from the existing loopback tunnel-client operator surface. Prefer the upstream /health/control-plane component contract at schema_version 1. Do not contact OpenAI directly from Agent Runtime status code."
+    - "Map upstream control-plane component status conservatively: ok -> healthy; degraded -> degraded; unknown/disabled/unobserved -> unconfirmed. Treat 404/unsupported component-health surfaces as unsupported/unconfirmed, not as Runtime failure. Treat timeout, malformed JSON, unsupported schema, or local read failure as unconfirmed."
+    - "Accept additive unknown upstream JSON fields within the supported schema, but validate the fields that drive the transport classification. Do not infer success from arbitrary HTTP 200 alone."
+    - "Keep the transport probe bounded and read-only. It must not start MCP discovery, trigger tool calls, run tunnel-client doctor, mutate configuration, create remote traffic beyond the already-running tunnel-client's own behavior, or repair/restart the tunnel."
+    - "Do not equate tunnel transport health with a specific ChatGPT app/workspace connection. Human/UI wording must distinguish 'Tunnel transport healthy/polling' from 'ChatGPT connected'. Actual product reachability requires an actual product-originated MCP request and is outside passive status proof."
+    - "Update menu-bar presentation with an explicit Tunnel fact independent from Endpoint/Health/Ready. A locally Running Runtime with healthy transport may present fully healthy; a locally Running Runtime with degraded or unconfirmed transport must present attention/degraded visually while retaining the same lifecycle action permissions derived from local ownership."
+    - "Remove or correct any wording that currently says 'Connected' solely because local healthz/readyz are green. Accessibility text must carry the same truthful distinction."
+    - "Keep read-only/external Runtime semantics: local Runtime may be serving read-only and transport health may still be observed, but destructive controls remain disabled because ownership is separate."
+    - "Keep doctor as an installed-package/configuration diagnostic; do not make doctor fail merely because the manually started Runtime is stopped or tunnel transport is currently unobserved."
+    - "Update operator docs to explain three distinct facts: local Runtime availability, lifecycle-control ownership, and tunnel control-plane transport health. State explicitly that passive local health cannot prove ChatGPT/plugin linkage or future tool-call success."
+    - "Add deterministic status/parser tests for: local stopped; local running + control-plane ok; local running + control-plane degraded; local running + control-plane unknown; component route unsupported/404; timeout; malformed payload; unsupported schema; additive unknown fields; read-only/external local Runtime with healthy/degraded transport."
+    - "Add deterministic Swift presentation tests proving degraded/unconfirmed tunnel state changes operator-visible presentation but never grants or removes lifecycle authority beyond the existing RuntimePolicy result."
+    - "Preserve TASK-0192 StatusRefreshCoalescer bounds; tunnel observation must remain inside the same one-active-plus-one-follow-up refresh budget and must not create a second polling loop."
+    - "Run focused shell/Python status tests and focused Swift Core/MenuBar tests before full Swift verification."
+    - "Run xcrun swift test --package-path macos after focused tests pass."
+    - "Run exactly one new canonical ./verify invocation through a durable/reconcilable execution path after focused proof is green. If the controlling response is ambiguous, reconcile the same execution before any retry; blind replay is forbidden."
+    - "Do not mutate the live installed Runtime, tunnel-client process, configuration, app registration, lifecycle service, or network settings during implementation or verification."
+
+  allowed_existing_files_or_components:
+    - "start.sh"
+    - "macos/Sources/AgentRuntimeCore/"
+    - "macos/Sources/AgentRuntimeMenuBar/"
+    - "macos/Tests/AgentRuntimeCoreTests/"
+    - "macos/Tests/AgentRuntimeMenuBarTests/"
+    - "existing status/lifecycle tests"
+    - "README.md"
+    - "docs/OPERATIONS.md"
+
+invariants:
+  - "Local Runtime availability, lifecycle-control ownership, and tunnel transport health remain separate facts."
+  - "Tunnel transport state never grants destructive lifecycle authority."
+  - "A degraded/unconfirmed tunnel does not falsely turn a healthy local Runtime into Stopped."
+  - "A healthy local Runtime alone never produces a claim that ChatGPT is connected."
+  - "No active end-to-end synthetic request is emitted by passive status refresh."
+  - "No new daemon, service, watcher, scheduler, remote monitor, dependency, or persistence mechanism is introduced."
+  - "TASK-0192 manual lifecycle semantics and bounded refresh coalescing remain unchanged."
+  - "The six-session/product capacity semantics and twenty advertised MCP tools remain unchanged."
+  - "MAIN ONLY; no branch or PR creation."
+  - "TASK-0190 revision-8 effect authority remains untouched."
+
+forbidden_changes:
+  - "Any direct OpenAI API/control-plane request from Agent Runtime status/menu-bar code."
+  - "Any synthetic MCP call, connector discovery, or ChatGPT call generated by passive status refresh."
+  - "Calling tunnel-client doctor on every refresh."
+  - "Any new background polling loop separate from TASK-0192 menu-bar refresh."
+  - "Treating /healthz or /readyz alone as proof of healthy control-plane transport."
+  - "Treating transport health as proof that a specific ChatGPT workspace/app is linked."
+  - "Any weakening of Runtime ownership checks or lifecycle fail-closed behavior."
+  - "Any public MCP tool/schema change, capacity change, tunnel credential/configuration mutation, dependency change, version/tag/release change."
+  - "Any live Runtime Start/Stop/Restart/install/cutover/reboot or tunnel-client restart/update during this task."
+  - "Any continuation of TASK-0190 revision 8."
+
+gap_policy:
+  local_auto_fix: true
+  scope_expansion: forbidden
+  architecture_change: revised_contract_required
+  spec_change: revised_contract_required
+  dependency_change: revised_contract_required
+  public_contract_change: revised_contract_required
+  blocking_gap_behavior: BLOCKED
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions:
+    - BLOCKED
+    - STALE_STATE
+    - AUTHORITY_REQUIRED
+    - CURRENT_PHASE_CAPABILITY_UNAVAILABLE
+    - REVIEW_REQUIRED
+    - REVERIFY_REQUIRED
+    - USER_STOP
+
+effect_authority:
+  canonical_verify_max: 1
+  live_install_or_cutover_max: 0
+  live_service_restart_max: 0
+  tunnel_process_restart_or_update_max: 0
+  physical_reboot_max: 0
+  branch_or_pr_creation_max: 0
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Canonical status exposes tunnel transport truth as an independent read-only axis."
+    evidence_required: "Focused status tests prove local Running/Stopped/control ownership semantics remain unchanged while control-plane ok/degraded/unconfirmed/unsupported are represented independently."
+  - id: AC-2
+    requirement: "Transport classification uses authoritative local tunnel-client component evidence conservatively."
+    evidence_required: "Tests cover schema_version 1 /health/control-plane ok, degraded, unknown, additive fields, 404, timeout, malformed data, and unsupported schema; arbitrary HTTP success cannot manufacture transport healthy."
+  - id: AC-3
+    requirement: "Menu-bar presentation no longer overclaims local readiness as ChatGPT connectivity."
+    evidence_required: "Swift tests prove an explicit Tunnel fact and truthful accessibility/summary wording; local Running plus tunnel degraded/unconfirmed is visually attention/degraded while lifecycle controls remain determined only by existing ownership policy."
+  - id: AC-4
+    requirement: "Passive status remains bounded, coalesced, and side-effect free."
+    evidence_required: "Tests/source inspection prove no new polling loop, no direct OpenAI request, no doctor/tool/discovery call, no repair/restart, and TASK-0192 one-active-plus-one-follow-up refresh bound remains intact."
+  - id: AC-5
+    requirement: "Diagnostic boundary is explicit."
+    evidence_required: "Docs state that control-plane polling health proves observed tunnel transport health, not a specific ChatGPT app/workspace link or guaranteed future tool call; actual end-to-end product proof requires a real product-originated MCP request."
+  - id: AC-6
+    requirement: "Unrelated product contracts remain unchanged."
+    evidence_required: "No MCP public-surface, capacity, lifecycle, dependency, credential/configuration, version, release, or live-state change."
+  - id: AC-7
+    requirement: "Canonical verification closes without replay ambiguity."
+    evidence_required: "Focused suites PASS, full Swift PASS, then exactly one durable/reconcilable ./verify invocation completes PASS with no blind retry."
+  - id: AC-8
+    requirement: "Repository closure is minimal and canonical."
+    evidence_required: "One reviewable implementation candidate, truthful report, non-force publication on main, final clean synchronized MAIN ONLY topology."
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "./verify"
+    expected_signal: "PASS from exactly one new invocation after focused status/transport and Swift presentation proof pass."
+  executor_checks:
+    - id: CHECK-1
+      command_or_check: "Run focused canonical-status transport parsing/classification tests covering healthy, degraded, unknown, unsupported, timeout, malformed, and additive-field cases."
+      required: true
+    - id: CHECK-2
+      command_or_check: "Run focused Swift Core/MenuBar tests proving independent transport presentation and unchanged lifecycle action authority."
+      required: true
+    - id: CHECK-3
+      command_or_check: "Run xcrun swift test --package-path macos."
+      required: true
+    - id: CHECK-4
+      command_or_check: "Run the single authorized durable/reconcilable ./verify invocation and reconcile its exact outcome without blind replay."
+      required: true
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
