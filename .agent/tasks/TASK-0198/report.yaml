@@ -1,8 +1,8 @@
 protocol_version: 3
 
 task_id: TASK-0198
-task_revision: 1
-report_revision: 1
+task_revision: 2
+report_revision: 2
 state: REPORTED
 result: NEEDS_REVIEW
 
@@ -15,108 +15,80 @@ execution:
     name: main
     role: canonical
   execution_surface: CHATGPT_LOCAL
-  exact_task_base: "fe5c17f6171ae69d245047d10a5fe478bffd02c6"
-  implementation_candidate: "3d94e53e28521a6f54c7c64c7b3f3374bb9fc0d5"
-  implementation_tree: "7758198d616b1a031bba51cbb1830cf067293964"
+  exact_task_base: "25bb72b4bddf9f1089fddcfb0f66ab02fb9f7d1c"
+  implementation_candidate: "93cb00c92f6a9d0b948707f2e3c192b0fe82fa9b"
+  implementation_tree: "d8b2c58edd38d7345b3d5b09dd701eef50b71932"
   implementation_published: true
-
-skill_library:
-  repository: phatnguyen03022001/agent-foundation
-  authorized_revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
-  required_skills:
-    - executor
-    - security-review
-    - verification
-    - reliability
-    - simplicity
 
 fresh_binding:
   result: PASS
-  local_branch: main
-  remote_branch: main
-  base_head: "fe5c17f6171ae69d245047d10a5fe478bffd02c6"
-  local_worktree_clean_before_execution: true
-  remote_head_matched_exact_base_before_execution: true
+  local_base_before_execution: "fc486ff9fa135d03000acfebf9547256f33a6294"
+  remote_exact_base: "25bb72b4bddf9f1089fddcfb0f66ab02fb9f7d1c"
+  fast_forwarded_to_exact_base: true
+  branch: main
+  worktree_clean_at_exact_base: true
+  main_only: true
   branch_or_pr_created: false
-  task_0196_release_train_executed: false
 
 implementation:
   result: PASS
-  configuration_admission:
-    authority: macos/runtime_config.py
-    publication: "Submitted configuration is locally validated, remotely validated through the official tunnel-client, then published atomically as the canonical mode-0600 runtime.env."
-    remote_validation_command_shape: "tunnel-client admin --json tunnels get <tunnel_id>"
-    credential_transport: "CONTROL_PLANE_API_KEY is supplied only through a sanitized child environment and never argv."
-    raw_openai_http_added: false
-    admin_key_used: false
-    tunnel_or_key_provisioning_added: false
-    tunnel_client_install_or_upgrade_added: false
-  typed_reasons:
-    - TUNNEL_CLIENT_UNAVAILABLE
-    - INVALID_TUNNEL_ID
-    - INVALID_CREDENTIAL
-    - TUNNEL_ACCESS_DENIED
-    - TUNNEL_NOT_FOUND
-    - CONTROL_PLANE_UNAVAILABLE
-    - WORKSPACE_UNAVAILABLE
-    - RUNTIME_CONFIGURATION_INCOMPLETE
-    - CUTOVER_TRANSACTION_PRESENT
-  fresh_configuration:
-    failed_validation_creates_canonical: false
-    success_publication: "Private validated candidate plus no-replace publication."
-  reconfiguration:
-    explicit_only: true
-    failed_validation_overwrites_existing: false
-    success_publication: "Validate first, verify the existing canonical bytes are unchanged, then os.replace the private mode-0600 candidate."
-    secret_prefill: false
-    implicit_runtime_lifecycle_action: false
-  native_ui:
-    configured_first_run_reconfigure: true
-    installed_control_panel_reconfigure: true
-    required_field_gate: "Runtime API key, Tunnel ID, Git name, Git email, and an existing workspace are all required before Set Up/Reconfigure is enabled."
-    structured_failure_channel: "Swift consumes bounded JSON reason codes from runtime_config/install_preflight/install_release and uses a closed actionable mapping plus a safe fallback."
-    arbitrary_stderr_semantic_parsing: false
-    official_help_links:
-      runtime_api_keys: "https://platform.openai.com/settings/organization/api-keys"
-      tunnels: "https://platform.openai.com/settings/organization/tunnels"
-      secure_mcp_tunnel: "https://developers.openai.com/api/docs/guides/secure-mcp-tunnels"
-  documentation:
-    latest_public_release: v0.5.1
-    updated:
-      - README.md
-      - docs/INSTALL.md
-  real_secret_material_used: false
-
-tdd_evidence:
-  python_red:
-    command: "python3 -m unittest tests.test_runtime_config.RuntimeConfigTests.test_native_stdin_requires_tunnel_client_before_canonical_publication"
-    result: EXPECTED_FAILURE
-    evidence: "After correcting a missing test import, the regression failed because the old native stdin path published canonical runtime.env before proving tunnel-client availability."
-  swift_red:
-    command: "swift test --filter PresentationTests.testFirstRunTypedFailurePresentationMapsClosedReasonsAndSafeFallback"
-    result: EXPECTED_COMPILE_FAILURE
-    evidence: "The new typed-failure/reconfiguration/UI contracts were absent before implementation."
-  green:
-    evidence: "Focused Python, focused AgentRuntimeMenuBarTests, the full canonical Swift suite, and the sole canonical verifier all pass on the implementation tree."
+  changed_files:
+    - macos/recover_runtime_service.py
+    - install.sh
+    - tests/test_service_recovery.py
+  revision_1_onboarding_reopened: false
+  recovery_identity:
+    hard_coded_expected_tunnel_fingerprint_removed: true
+    expected_tunnel_fingerprint_cli_removed: true
+    expected_tunnel_fingerprint_constructor_state_removed: true
+    repository_or_machine_tunnel_identity_replacement_added: false
+  preserved_fail_closed_guards:
+    - exact stale fixture provenance
+    - canonical start.sh identity
+    - desired state STOPPED
+    - exact 127.0.0.1:8080 listener ownership
+    - exact canonical tunnel-client and MCP child process tree
+    - exact process-group membership
+    - current-generation recovery rejection
+    - legacy configuration rejection
+    - canonical configuration structural/path safety
+  configuration_drift:
+    witness: "Exact canonical .env bytes captured before recovery mutation."
+    revalidated_before:
+      - stale launchd bootout
+      - canonical launchd bootout during refresh
+      - canonical launchd bootstrap
+      - proven Runtime process-group termination
+    revalidated_at_final_convergence: true
+    repository_global_identity_used: false
+  check_only:
+    mutating: false
+    distinct_valid_user_tunnel_ids_proven: 2
 
 focused_verification:
-  python_onboarding_config_preflight_productization:
-    command: "python3 -m py_compile macos/runtime_config.py macos/install_preflight.py && bash -n macos/install_release.sh && python3 -m unittest tests.test_runtime_config tests.test_task0141_productization tests.test_candidate_cutover.CandidateCutoverTests.test_release_bundle_installer_uses_embedded_runtime_and_preserves_pending_cutover"
+  production_syntax_static:
+    commands:
+      - "python3 -m py_compile macos/recover_runtime_service.py"
+      - "bash -n install.sh"
     result: PASS
-    tests: 38
-  menu_bar:
-    command: "xcrun swift test --package-path macos --filter AgentRuntimeMenuBarTests"
+  service_recovery:
+    command: "python3 -m unittest tests.test_service_recovery"
     result: PASS
-    tests: 62
-  full_macos_swift:
-    command: "xcrun swift test --package-path macos"
+    tests: 27
+    failures: 0
+    errors: 0
+  diff_check:
+    command: "git diff --check"
     result: PASS
-    tests: 97
-    menu_bar_tests: 62
-    core_tests: 35
-  diff_and_scope:
+  pre_verify_scope:
     result: PASS
-    evidence: "git diff --check passed; the implementation candidate changes exactly the twelve task-authorized source/test/documentation files, including only the permitted static install_release assertion in tests/test_candidate_cutover.py."
+    changed_files_exact:
+      - macos/recover_runtime_service.py
+      - install.sh
+      - tests/test_service_recovery.py
+  product_path_fingerprint_search:
+    result: PASS
+    evidence: "No production-path expected tunnel fingerprint, developer fingerprint value, or tunnel_fingerprint helper remains. The only matched string before commit was the negative assertion in tests/test_service_recovery.py."
 
 authoritative_verification:
   required: true
@@ -126,20 +98,50 @@ authoritative_verification:
   carrier:
     mode: pipe
     durability: runtime_restart
-    start_identity: "0198a11ce00000000000000000000030"
-    session_id: "b9848607c3851418"
+    start_identity: "0198b20000000000000000000000000f"
+    session_id: "313ffc5b35061d44"
   initial_start_response: "INVALID_ARGUMENT: durable job owner identity no longer matches the persisted process instance"
   active_reconciliation_response: "INVALID_ARGUMENT: durable job owner identity cannot be established while execution remains active"
-  reconciliation: "No replay. Read-only process observation proved the exact ./verify process tree remained active. After that process exited, terminal_poll using the same start_identity returned the persisted terminal result."
+  reconciliation: "No replay. Read-only process observation proved the exact bash ./verify and verify_tests.py process tree remained active. After it exited, terminal_poll with the same start_identity returned the persisted terminal result."
   lifecycle: COMPLETED
   termination_reason: natural_exit
   exit_code: 0
   profile: qualification
   modules_selected: 62
   modules_completed: 62
-  tests_completed: 876
-  duration_seconds: 98.020
+  tests_completed: 879
+  duration_seconds: 97.570
   dropped_output_bytes: 0
+
+regression_evidence:
+  distinct_tunnel_ids:
+    test: test_check_only_planning_accepts_distinct_valid_user_tunnel_ids
+    result: PASS
+    tunnel_ids:
+      - tunnel_0123456789abcdef0123456789abcdef
+      - tunnel_fedcba9876543210fedcba9876543210
+  config_drift_before_destructive_transition:
+    test: test_recover_rejects_config_drift_before_destructive_transition
+    result: PASS
+    effect: "Recovery stops after plist write and before stale launchd bootout."
+  config_drift_at_final_convergence:
+    test: test_recover_rejects_config_drift_at_final_convergence
+    result: PASS
+    effect: "Recovery rejects convergence after the operation-scoped canonical configuration witness changes."
+  foreign_or_ambiguous_recovery_state:
+    result: PASS
+    preserved_coverage:
+      - foreign process identity
+      - wrong MCP child identity
+      - multiple canonical tunnel processes
+      - multiple listeners
+      - unrelated process-group member
+      - non-temp or ambiguous launchd provenance
+      - desired-running state
+      - current-generation service metadata/helper
+  installer_ordering:
+    result: PASS
+    evidence: "--recover-runtime-service remains before generic venv/install work and no expected fingerprint argument is passed."
 
 effect_accounting:
   canonical_verify:
@@ -150,12 +152,6 @@ effect_accounting:
     authorized: 0
     consumed: 0
   archive_build:
-    authorized: 0
-    consumed: 0
-  version_tag_create:
-    authorized: 0
-    consumed: 0
-  github_release_create_or_publish:
     authorized: 0
     consumed: 0
   install_prebuilt:
@@ -170,13 +166,13 @@ effect_accounting:
   menu_bar_relaunch:
     authorized: 0
     consumed: 0
+  runtime_restart:
+    authorized: 0
+    consumed: 0
   runtime_explicit_start:
     authorized: 0
     consumed: 0
   runtime_explicit_stop:
-    authorized: 0
-    consumed: 0
-  runtime_restart:
     authorized: 0
     consumed: 0
   launchservices_cleanup:
@@ -185,13 +181,19 @@ effect_accounting:
   plugin_reload_or_reconnect:
     authorized: 0
     consumed: 0
+  credential_rotation:
+    authorized: 0
+    consumed: 0
   physical_reboot:
     authorized: 0
     consumed: 0
   new_security_permission:
     authorized: 0
     consumed: 0
-  credential_rotation:
+  version_tag_create:
+    authorized: 0
+    consumed: 0
+  github_release_publish:
     authorized: 0
     consumed: 0
   branch_or_pr_creation:
@@ -201,34 +203,27 @@ effect_accounting:
 acceptance_evidence:
   - criterion_id: AC-1
     status: PASS
-    evidence: "The newcomer/prebuilt product path no longer contains EXPECTED_TUNNEL_FINGERPRINT or a developer-machine tunnel fingerprint gate. Syntactically valid user/org tunnel IDs are admitted through the official tunnel-client read-only metadata lookup, and focused productization tests exercise multiple valid IDs without fingerprint monkeypatching."
+    evidence: "install.sh and macos/recover_runtime_service.py no longer contain or accept an expected tunnel fingerprint. No replacement fixed tunnel id, allowlist or machine-specific identity was added."
   - criterion_id: AC-2
     status: PASS
-    evidence: "Synthetic missing-client, 401, 403, 404, transient and malformed-response tests prove failed submitted configuration does not create canonical runtime.env. Failed explicit reconfiguration preserves the previous canonical bytes and mode; successful validated reconfiguration atomically replaces it at mode 0600. API-key bytes are absent from argv and structured output."
+    evidence: "Two distinct syntactically valid user/org Tunnel IDs pass check-only planning when provenance, listener, process tree, desired state and canonical configuration are otherwise valid. Existing foreign and ambiguous-state tests remain PASS."
   - criterion_id: AC-3
     status: PASS
-    evidence: "Configured first-run UI and the installed control panel both expose explicit Reconfigure. Reconfigure requires fresh secret values, never reads them into UI fields, and calls only runtime_config --reconfigure-stdin; it does not invoke Runtime Start/Stop/Restart or require Terminal, deletion, uninstall, or reinstall."
+    evidence: "Recovery captures exact canonical configuration bytes before mutation and checks that witness before destructive lifecycle transitions and again at final convergence. Synthetic drift before bootout and at final convergence both fail closed."
   - criterion_id: AC-4
     status: PASS
-    evidence: "runtime_config emits closed JSON reason codes, install_preflight preserves those codes, install_release forwards the structured preflight JSON on failure, and Swift maps the closed reason set to bounded actionable text with a safe unknown fallback. No arbitrary human stderr parsing is used to reconstruct onboarding semantics."
+    evidence: "The revision-2 implementation diff from exact base changes only recover_runtime_service.py, install.sh and test_service_recovery.py. Accepted revision-1 onboarding/config/preflight/Swift/docs behavior was not modified."
   - criterion_id: AC-5
     status: PASS
-    evidence: "Set Up/Reconfigure remain disabled until API key, Tunnel ID, Git name, Git email and an existing workspace are present. Inline required-field feedback and the three exact official OpenAI help destinations are present; no account/tunnel provisioning or tunnel-client installation/update was added."
+    evidence: "Production syntax/static checks PASS; focused service recovery tests PASS 27/27; exactly one canonical ./verify completes 62/62 modules and 879 tests with exit 0."
   - criterion_id: AC-6
     status: PASS
-    evidence: "Focused Python proof passed 38/38, focused AgentRuntimeMenuBarTests passed 62/62, full canonical Swift passed 97/97, and canonical verification passed. Cutover, doctor, rollback, provenance, manual lifecycle, twenty-tool surface, screen_capture policy and TASK-0197 dotenv protection were not intentionally changed."
+    evidence: "No build/package/archive/install/cutover/menu lifecycle/plugin/credential/permission/reboot/tag/release effect was consumed."
   - criterion_id: AC-7
     status: PASS
-    evidence: "Exactly one canonical ./verify execution was dispatched. Its owner-identity ambiguity was reconciled without replay to COMPLETED/natural_exit/exit 0 with 62/62 modules and 876 tests. No live activation, release, lifecycle, plugin, permission, credential or reboot effect was consumed."
-  - criterion_id: AC-8
-    status: PASS
-    evidence: "Implementation candidate 3d94e53e28521a6f54c7c64c7b3f3374bb9fc0d5 is the direct child of exact task base fe5c17f6171ae69d245047d10a5fe478bffd02c6, changes only authorized implementation/test/docs files, and was published non-force to main. README.md and docs/INSTALL.md retain v0.5.1 as the latest public release. Final clean synchronized MAIN ONLY closure is established by post-report publication observation rather than self-attested inside this report."
-
-scope_notes:
-  - "A pre-existing SHA-12 tunnel fingerprint guard remains in macos/recover_runtime_service.py and the checkout-only install.sh --recover-runtime-service command. TASK-0198 does not authorize those files and explicitly requires preserving existing recovery behavior. The corrected newcomer/prebuilt path (runtime_config.py, install_preflight.py, install_release.sh and native onboarding/control-panel UI) neither contains nor calls that legacy recovery fingerprint gate."
+    evidence: "Implementation candidate 93cb00c92f6a9d0b948707f2e3c192b0fe82fa9b is published on main. Final clean synchronized MAIN ONLY closure is established by post-report publication observation rather than self-attested inside this report."
 
 deviations:
-  - "The first Python red attempt had a test-fixture NameError because os was not imported; it was corrected before counting the behavioral red."
-  - "The sole canonical verifier carrier returned an owner-identity ambiguity after dispatch and could not be polled by start_identity while active. The exact process tree was observed read-only and the same start_identity was polled after exit; no second verifier was started."
+  - "The sole canonical verifier carrier returned the same post-dispatch durable owner-identity ambiguity seen in revision 1. The exact verifier process tree was reconciled read-only and the persisted result was recovered through the same start_identity after natural exit; no second verifier was started."
 
 blocking_findings: []
