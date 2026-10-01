@@ -1,0 +1,211 @@
+protocol_version: 3
+
+task_id: TASK-0196
+task_revision: 1
+state: APPROVED
+title: "Qualify, Publish and Activate Agent Runtime v0.5.2"
+
+origin:
+  type: operator_request
+  predecessor_task: TASK-0195
+  request: "Publish the current accepted product as v0.5.2, activate it on this Mac, restart Agent Runtime once, then stop so the operator can reload the ChatGPT plugin."
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+
+execution_skills:
+  required: [executor, verification, reliability, security-review, simplicity]
+  recommended: []
+
+execution_surface:
+  id: CHATGPT_LOCAL
+  controller: CHATGPT
+  preferred_mutation_carrier: SENTINELX
+  reason: "Release publication and exact live activation can interrupt the Runtime/plugin path. Establish and use an independent durable SentinelX carrier before package installation, menu relaunch, or Runtime restart."
+
+revision_basis:
+  accepted_product_head: "804131d49fdf6689d672dbc2387500ab4ecdbb81"
+  accepted_task_0195_review: "804131d49fdf6689d672dbc2387500ab4ecdbb81"
+  current_runtime_version: "0.5.1"
+  target_runtime_version: "0.5.2"
+  current_public_release: "v0.5.1"
+  current_public_release_tag_target: "674095e739533e100c2cf75f434dd0bc825a3de3"
+  current_live_substrate_revision: "fd3b578eda909166a56b77c1bd930e23ebebeb4b"
+  current_live_payload_revision: "e88effb4bb828c602667943dbe0f1fb2c88d012c"
+
+authority_sources:
+  - source: ".agent/tasks/TASK-0195/review.yaml at 804131d49fdf6689d672dbc2387500ab4ecdbb81"
+    role: "Accepted current product state: menu truth fixed, manual/session-scoped lifecycle, Runtime healthy, twenty advertised tools, screen_capture dormant."
+    precedence: 1
+  - source: ".agent/tasks/TASK-0185/task.yaml and review"
+    role: "Established bounded version bump, canonical verification, zero-cost package qualification and archive procedure."
+    precedence: 2
+  - source: ".agent/tasks/TASK-0186/task.yaml and review"
+    role: "Established draft -> remote asset verification -> publication -> documentation update release procedure."
+    precedence: 3
+  - source: ".agent/tasks/TASK-0187/task.yaml and review"
+    role: "Established real-target transactional installation qualification of an exact public release."
+    precedence: 4
+  - source: ".agent/tasks/TASK-0189/review.yaml"
+    role: "Current release governance: release-tag-integrity protects refs/tags/v* from update/delete while allowing creation; immutable releases are enabled for future publications."
+    precedence: 5
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing version SSOT, Info.plist projection, zero-cost packaging/provenance, GitHub immutable release channel, transactional install/cutover and package-owned lifecycle."
+  rationale: "Do not introduce release machinery. Reuse accepted version, package, release, install and lifecycle paths."
+
+objective: "Create and qualify exactly one v0.5.2 source/package from the currently accepted product, publish it as a new immutable GitHub release without mutating v0.5.0/v0.5.1, update the public release documentation, transactionally install the exact remotely verified public v0.5.2 artifact on this Mac, relaunch the menu app, restart Agent Runtime exactly once using package-owned lifecycle authority, prove local health, then stop. The operator will reload the ChatGPT plugin manually afterward."
+
+scope:
+  required_changes:
+    - "Fresh-bind clean synchronized MAIN ONLY at the exact revision-1 task base. Confirm the only pre-task remote branch is main; v0.5.2 tag/release must not already exist."
+    - "Preserve all accepted TASK-0191 through TASK-0195 product behavior. Do not change lifecycle, tunnel truth, cutover semantics, menu truth, capability semantics, dependencies, public tool surface, screen_capture policy, or architecture."
+    - "Bump only the Runtime version projection from 0.5.1 to 0.5.2 in agent_runtime/version.py and macos/AppBundle/Info.plist, and update the exact focused version assertions in tests/test_capability_registry.py. CFBundleVersion remains unchanged unless an existing accepted invariant proves otherwise; do not invent a build-number scheme."
+    - "Run focused version/capability/doctor/package-provenance tests sufficient to prove the bump, then run exactly one canonical ./verify. Stop BLOCKED on a conclusive failure. Reconcile an ambiguous carrier result to the same execution; never blind-replay."
+    - "Commit and publish one source/package candidate on main. This exact commit becomes the packaged-source identity and the only permitted v0.5.2 tag target."
+    - "Validate the canonical CPython 3.13.5 arm64 packaging interpreter. Run package_app.sh --zero-cost exactly once from the exact clean source candidate. If it exits 2 only at the already-known post-publication retained-candidate LaunchServices unregister cleanup, do not rebuild and do not mutate LaunchServices; reconcile the unique published candidate and continue only after independent candidate audit passes."
+    - "Independently audit the candidate: Runtime 0.5.2, exact source revision/tree, schema-3 substrate manifest, exactly twenty advertised MCP tools and twenty-one known capabilities with screen_capture supported but unavailable/hidden as VISUAL_PERCEPTION_BLOCKED, strict deep ad-hoc codesign PASS, zero-cost provenance/handoff/payload validation PASS, zero pyc/__pycache__, and accepted TASK-0195 schema-3 menu bootstrap bytes present."
+    - "Create exactly one complete v0.5.2 release archive containing Agent Runtime.app, Agent Runtime.candidate.json and the sole matching initial payload under ignored build/TASK-0196-release. Record size and SHA-256 and prepare SHA256SUMS.txt plus final release notes before any public publication."
+    - "Release notes must state Apple silicon, ad-hoc signing without Developer ID/notarization, possible Open/Open Anyway, official tunnel-client prerequisite, exact twenty-tool surface, current manual/session-scoped Runtime lifecycle, independent tunnel status semantics, and that screen_capture remains dormant VISUAL_PERCEPTION_BLOCKED. Do not claim visual capability or automatic Runtime startup."
+    - "Create v0.5.2 tag exactly at the packaged source candidate. The repository release-tag-integrity rule protects it from later update/delete; never attempt to move or replace it."
+    - "Create exactly one draft GitHub Release v0.5.2 with the exact archive and checksum. Before publication, read back tag/release metadata and both assets, download both remote assets into ignored build/TASK-0196-release/remote, verify archive byte/hash equality and checksum correctness. If any draft verification fails, leave the release draft and stop BLOCKED."
+    - "Only after all remote draft checks PASS, publish the release exactly once. Because repository immutable releases are enabled, treat the published release body and assets as final; do not edit, replace or re-upload them afterward."
+    - "After public release exists, update only README.md, docs/INSTALL.md and the exact matching release sentence/assertion in tests/test_task0055_macos_contract.py so the latest public release link/hash/source identity and ad-hoc limitations refer to v0.5.2. Preserve truthful twenty-tool/manual-lifecycle/screen_capture-dormant documentation. Run the focused documentation contract test and static diff checks; do not rerun canonical ./verify for docs-only publication."
+    - "Preserve existing v0.5.0 and v0.5.1 tags, releases, assets and checksums byte-for-byte and metadata-wise."
+    - "Before any live installation, establish fresh SentinelX mac-tphat-mb health with ping and harmless repository read. Snapshot live Runtime status, doctor, transaction, runtime.env SHA/owner/mode, current payload pointer/manifest, manual LaunchAgent contract, one canonical menu process and 127.0.0.1:8080 ownership."
+    - "Download the now-public immutable v0.5.2 archive and checksum fresh from GitHub into ignored build/TASK-0196-install, verify exact remote SHA/size/checksum against the already qualified archive, extract the complete bundle, and validate app/handoff/payload with the package-owned zero-cost provenance path before mutation. The live install must use this exact remote-verified public artifact, not an unverified local reconstruction."
+    - "Invoke exactly one install-prebuilt transaction through SentinelX. At PENDING require exact v0.5.2 source/tree, coherent transaction, preserved runtime.env bytes/owner/mode 0600, manual LaunchAgent RunAtLoad=false/KeepAlive=false, desired-state absent, main-app registration coherent, Runtime SMAppService.agent absent, and payload provenance exact. Because agent_runtime/version.py changes first-party payload bytes, expect a new v0.5.2 payload closure; do not force same-closure reuse."
+    - "If a pre-commit gate fails, rollback at most once unless automatic rollback is already proven. Never issue a second rollback after confirmed automatic rollback."
+    - "If PENDING gates pass, commit cutover exactly once. Require transaction absent, exact installed v0.5.2 substrate identity, strict codesign/provenance PASS, package-owned doctor healthy 10/10, manual lifecycle intact and desired-state absent."
+    - "Relaunch the canonical installed AgentRuntimeMenuBar exactly once after commit so the running menu process uses v0.5.2 app bytes. Terminate only a positively identified canonical old menu process at the exact installed executable path, then launch the installed app exactly once and require one canonical menu process."
+    - "After menu relaunch, invoke exactly one package-owned './start.sh restart' through SentinelX. Do not separately call Start or Stop. The restart is the sole authorized Runtime lifecycle mutation in this phase and must resolve to one healthy serving generation."
+    - "After the restart, use SentinelX/read-only local surfaces to prove status schema 3 state=running control=managed health=live ready=ready, exactly one canonical 127.0.0.1:8080 listener, package-owned doctor healthy 10/10, transaction absent, desired-state absent, Runtime version 0.5.2, exact installed substrate/payload release identity and unchanged runtime.env."
+    - "Do not require a post-restart ChatGPT-originated MCP call in this task because the operator explicitly owns the next plugin reload/reconnection boundary. Do not reload, reconnect, install, remove, or otherwise mutate the ChatGPT plugin. Stop after local Runtime health is proven and tell the operator it is ready for manual plugin reload."
+    - "Record exact source candidate, canonical verification identity, package/archive identity, release/tag/assets, remote byte verification, docs commit, live cutover/restart evidence and effect accounting in .agent/tasks/TASK-0196/report.yaml. Publish the report as the sole report child after all execution work, non-force, then reconcile clean synchronized MAIN ONLY."
+
+  allowed_existing_files_or_components:
+    - "agent_runtime/version.py"
+    - "macos/AppBundle/Info.plist"
+    - "tests/test_capability_registry.py"
+    - "README.md"
+    - "docs/INSTALL.md"
+    - "tests/test_task0055_macos_contract.py"
+    - ".agent/tasks/TASK-0196/report.yaml"
+    - "build/candidates/ ignored immutable candidate output"
+    - "build/TASK-0196-release/ ignored archive/release evidence"
+    - "build/TASK-0196-install/ ignored remote-install evidence"
+    - "existing zero-cost packaging/provenance/install/cutover/lifecycle machinery"
+    - "canonical installed Agent Runtime.app, Runtime LaunchAgent and menu process"
+    - "SentinelX mac-tphat-mb"
+
+invariants:
+  - "Public MCP surface remains exactly twenty advertised tools; known capabilities remain twenty-one; screen_capture remains unavailable and unadvertised with VISUAL_PERCEPTION_BLOCKED."
+  - "Runtime lifecycle remains explicit manual/session-scoped with LaunchAgent RunAtLoad=false and KeepAlive=false."
+  - "Tunnel transport remains an independent status axis; tunnel_transport=unconfirmed is non-blocking for local Runtime health."
+  - "runtime_capabilities request/result schemas remain 2/3 and dual substrate/payload identity semantics remain unchanged."
+  - "Canonical runtime.env is preserved byte-for-byte through live activation."
+  - "v0.5.0 and v0.5.1 publication identities remain immutable inputs and are never changed."
+  - "v0.5.2 tag is created once at exact packaged source and never moved."
+  - "Published v0.5.2 release/assets are verified before publication and never edited after immutable publication."
+  - "No new TCC permission, Screen Recording permission, sudo, Gatekeeper bypass, dependency, daemon, branch, PR or reboot."
+  - "The operator, not the Executor, owns ChatGPT plugin reload after task completion."
+  - "MAIN ONLY."
+
+forbidden_changes:
+  - "Any architecture, lifecycle, tunnel, cutover, capability, screen_capture, dependency-lock, telemetry, tool-schema or public-tool-surface change beyond the explicit version/docs/test projection."
+  - "Any source file mutation outside agent_runtime/version.py, macos/AppBundle/Info.plist and tests/test_capability_registry.py before packaging."
+  - "Any documentation/test mutation outside README.md, docs/INSTALL.md and tests/test_task0055_macos_contract.py after release publication."
+  - "Any second canonical ./verify, second package build, second archive build, second tag creation, second release publication, second install-prebuilt, second commit-cutover, second menu relaunch, or second Runtime restart after a conclusive result."
+  - "Blind replay of any ambiguous build/release/install/commit/relaunch/restart result."
+  - "Standalone LaunchServices cleanup/reset."
+  - "Moving/deleting/replacing any v* tag, or mutating any previously published v0.5.0/v0.5.1 release or asset."
+  - "Editing/replacing v0.5.2 after immutable publication."
+  - "Any plugin reload/reconnection mutation."
+  - "Any new TCC/security permission, sudo, Gatekeeper disable/bypass, quarantine stripping, reboot, branch or PR."
+
+effect_authority:
+  canonical_verify_max: 1
+  distribution_build_max: 1
+  archive_build_max: 1
+  version_tag_create_max: 1
+  github_release_draft_create_max: 1
+  github_release_publish_max: 1
+  github_release_post_publish_mutation_max: 0
+  install_prebuilt_max: 1
+  commit_cutover_max: 1
+  rollback_cutover_max: 1
+  menu_bar_relaunch_max: 1
+  runtime_restart_max: 1
+  runtime_explicit_start_max: 0
+  runtime_explicit_stop_max: 0
+  launchservices_cleanup_max: 0
+  physical_reboot_max: 0
+  new_security_permission_max: 0
+  branch_or_pr_creation_max: 0
+  plugin_reload_or_reconnect_max: 0
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "v0.5.2 version projection is minimal and canonically verified."
+    evidence_required: "Only version.py, Info.plist and focused version test change in the source candidate; version projections equal 0.5.2; focused tests PASS; exactly one canonical ./verify PASS."
+  - id: AC-2
+    requirement: "One immutable v0.5.2 distribution and archive are qualified."
+    evidence_required: "One package build, exact source/tree, v0.5.2, twenty tools/twenty-one known capabilities with screen_capture dormant, strict codesign/provenance PASS, zero bytecode, one complete archive with exact SHA-256/size."
+  - id: AC-3
+    requirement: "Public v0.5.2 release is durably and immutably published."
+    evidence_required: "Tag targets exact packaged source; draft assets remotely download and byte/hash-verify before publication; published release is non-draft/non-prerelease and immutable; no post-publication mutation."
+  - id: AC-4
+    requirement: "Public docs identify v0.5.2 truthfully."
+    evidence_required: "README/INSTALL and exact contract assertion reference v0.5.2 URL/hash/source/signing limits; focused doc contract test/static checks PASS."
+  - id: AC-5
+    requirement: "The exact public v0.5.2 artifact is activated transactionally on the operator Mac."
+    evidence_required: "Fresh remote archive is byte/hash verified, one install reaches coherent PENDING, one commit reaches transaction absent, v0.5.2 substrate/payload provenance and runtime.env preservation PASS."
+  - id: AC-6
+    requirement: "The Mac is running the new release after exactly one explicit Runtime restart."
+    evidence_required: "One canonical menu process runs new app bytes; exactly one './start.sh restart'; final running/managed/live/ready, one 127.0.0.1:8080 listener, doctor healthy 10/10, transaction/desired-state absent, Runtime version 0.5.2."
+  - id: AC-7
+    requirement: "Release history and security boundaries remain intact."
+    evidence_required: "v0.5.0/v0.5.1 unchanged; release-tag-integrity and immutable-release policy preserved; no new permission/reboot/plugin/source-scope violation."
+  - id: AC-8
+    requirement: "Canonical repository closure is clean."
+    evidence_required: "Truthful TASK-0196 report; final main == origin/main, ahead/behind 0/0, clean, one worktree, only main; no branch/PR."
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "One canonical ./verify on the exact v0.5.2 source candidate, plus zero-cost package/provenance/signing/archive verification, remote draft asset byte verification, and live package-owned doctor/status after cutover/restart."
+    expected_signal: "One exact public immutable v0.5.2 artifact is published and running healthy on the operator Mac; plugin reload remains a separate operator action."
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions: [BLOCKED, STALE_STATE, AUTHORITY_REQUIRED, CURRENT_PHASE_CAPABILITY_UNAVAILABLE, REVIEW_REQUIRED, REVERIFY_REQUIRED, USER_STOP]
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: true
+  mutate_repository_metadata: false
+  publish_release: true
+
+blocking_decisions: []
+execution_ready: true
