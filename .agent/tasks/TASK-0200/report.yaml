@@ -1,7 +1,7 @@
 protocol_version: 3
 task_id: TASK-0200
-task_revision: 2
-report_revision: 2
+task_revision: 3
+report_revision: 3
 state: REPORTED
 result: BLOCKED
 
@@ -12,9 +12,9 @@ execution:
   repository: phatnguyen03022001/agent-runtime
   branch: {name: main, role: canonical}
   execution_surface: CHATGPT_LOCAL
-  authorized_base_head: "f0fdacc7a79b10accf4928914cf7c163da9c20df"
-  final_execution_head: "86d0f0f6bb9da0b4a4f5dbecaa5d5d1b10045de7"
-  implementation_tree: "ea4531edb6f17a12c1e7ca9aa3e8488f38532cc9"
+  authorized_base_head: "fe446a73340eebf3a60fbcfa75719ad03cf4754c"
+  final_execution_head: "696f298b1fbbb7b80beb8896320a9e3b636b5505"
+  implementation_tree: "00be386f879c3141f87736a1440632ca4074ff95"
 
 skill_library:
   repository: phatnguyen03022001/agent-foundation
@@ -30,113 +30,107 @@ capability_preflight:
 pushed: false
 
 repair:
-  finding: F-0200-001
+  finding: F-0200-002
   result: PASS
-  source: "macos/runtime_config.py:425"
-  change: "Catch UnicodeDecodeError alongside the existing process errors; reuse the existing safe CONTROL_PLANE_UNAVAILABLE message and structured exit-2 admission path. No response content is included."
-  regressions:
-    - "tests.test_runtime_config.RuntimeConfigTests.test_undecodable_stdout_maps_private_structured_error_and_preserves_config"
-    - "tests.test_runtime_config.RuntimeConfigTests.test_undecodable_stderr_maps_private_structured_error_and_preserves_config"
-  preservation: "Both regressions exercise fresh admission and reconfigure. Fresh canonical remains absent; existing canonical bytes/device/inode/mode remain unchanged. Returned JSON is exact, stderr empty, and response markers, malformed content and submitted secret are absent from output; child argv excludes the submitted secret."
-  compatibility: "The one-line production diff changes only exception normalization. Client discovery, timeout, response bound, child environment, argv, successful lookup, Tunnel ID validation, status mapping and publication sequencing are unchanged."
-  revision_1_reproducer: "Preserved and PASS. AST comparison proves every pre-existing qualification method and helper unchanged. Historical revision-1 report remains resolvable at 8f5e8cce410bf51fa0f9f3b0f0232e5b5f49422e."
+  source: "macos/candidate_cutover.py:1566-1590"
+  change: "APP_SWAPPED zero-cost rollback validates the installed app with provenance.validate_zero_cost_candidate before any lifecycle lookup/mutation, pointer restore, app removal/restoration or payload cleanup. It uses candidate-handoff.json and the commit-equivalent payload witness, requiring exact equality with metadata.candidate."
+  witness_selection: "Canonical final payload when payload.created=true; transaction_dir/payloads/<closure> when false. Malformed witness metadata or validation failure produces a fixed bounded CutoverError."
+  preservation: "The existing rollback_transaction envelope retains the transaction, writes status PARTIAL and bounded error evidence. Owner regressions assert target closure, pointer/config bytes/inode/mode, plist, synthetic launch state/log, ServiceManagement state and desired-state presence unchanged, with all destructive seams forbidden."
+  opaque_predecessor: "PRE_SWAP path and predecessor closure checks unchanged; predecessor snapshot never validated as a modern candidate."
+  f0200_001: "PASS: runtime_config.py is byte-identical to exact base; all 26 owner tests including undecodable stdout/stderr remain PASS."
+  original_qualification: "All original qualification methods/helpers, including the Q07 reproducer, are AST-identical to exact base and rerun PASS."
 
 focused_verification:
-  isolation: "Sterile parent environment with run-owned temporary HOME/TMPDIR and synthetic workspace/config/tunnel-client. Continuation reuses existing temporary consumer fixtures, fake launchctl/process observations and fake ServiceManagement/code-signing identity; no live product state or real control plane."
-  python: ".venv/bin/python (CPython 3.13.5)"
+  isolation: "Run-owned temporary HOME/TMPDIR/workspace/config and sterile parent environment. Reused consumer fixtures use fake launchctl/process/ServiceManagement/code-signing state. Payload publication/validation uses existing real helpers against temporary files. No real credentials, control plane or live installed state."
+  python: ".venv/bin/python (CPython 3.13.5 on Darwin)"
   before_repair:
-    command: ".venv/bin/python -m unittest -v --failfast tests.test_runtime_config.RuntimeConfigTests.test_undecodable_stdout_maps_private_structured_error_and_preserves_config"
+    command: ".venv/bin/python -m unittest -v --failfast tests.test_candidate_cutover.CandidateCutoverTests.test_zero_cost_app_swapped_rollback_rejects_target_drift_before_any_effect"
     result: FAIL
-    evidence: "At exact base, undecodable stdout produces the existing traceback rather than the bounded typed error; the output-bound regression fails. No malformed response content printed by this check."
-  admission_owner:
-    command: ".venv/bin/python -m unittest -v --failfast tests.test_runtime_config"
+    evidence: "Exact-base rollback reaches the forbidden launchctl seam before identity validation; the expected identity rejection is absent."
+  candidate_owner:
+    command: ".venv/bin/python -m unittest -v --failfast tests.test_candidate_cutover.CandidateCutoverTests.test_zero_cost_app_swapped_rollback_rejects_target_drift_before_any_effect tests.test_candidate_cutover.CandidateCutoverTests.test_zero_cost_app_swapped_rollback_requires_exact_payload_witness tests.test_candidate_cutover.CandidateCutoverTests.test_zero_cost_app_swapped_rollback_requires_metadata_identity_equality tests.test_candidate_cutover.CandidateCutoverTests.test_zero_cost_failure_after_predecessor_transition_restores_exact_persistent_lifecycle tests.test_candidate_cutover.CandidateCutoverTests.test_zero_cost_rollback_removes_transaction_created_main_registration tests.test_candidate_cutover.CandidateCutoverTests.test_zero_cost_transitions_persistent_current_predecessor_to_manual_and_reaches_pending"
     result: PASS
-    tests: 26
+    tests: 6
     exit_code: 0
-    duration_seconds: 4.326
-  q01_q04:
-    command: ".venv/bin/python -m unittest -v --failfast tests.test_product_qualification"
-    selection: "Before adding Q05-Q07; exactly the five preserved revision-1 qualification tests."
+    duration_seconds: 11.928
+    evidence: "Three new fault regressions each cover created=false/true payload witness selection; three existing owner tests preserve valid rollback/lifecycle behavior."
+  q01_q07_and_f001:
+    command: ".venv/bin/python -m unittest -v --failfast tests.test_runtime_config tests.test_product_qualification"
+    selection: "Before adding Q08/Q09: all 26 runtime_config owner tests and all nine preserved Q01-Q07 qualification tests."
     result: PASS
-    tests: 5
+    tests: 35
     exit_code: 0
-    duration_seconds: 4.494
-  q05_q07:
-    command: ".venv/bin/python -m unittest -v --failfast tests.test_product_qualification.ProductQualificationTests.test_q05_removed_configured_workspace_fails_without_consumer_state_mutation tests.test_product_qualification.ProductQualificationTests.test_q06_foreign_and_ambiguous_port_ownership_grants_no_signal_or_rebind_authority tests.test_product_qualification.ProductQualificationTests.test_q07_interrupted_zero_cost_before_and_after_swap_restores_exact_predecessor tests.test_product_qualification.ProductQualificationTests.test_q07_interrupted_zero_cost_with_unverified_target_retains_evidence_and_fails_closed"
+    duration_seconds: 16.225
+  continuation:
+    invocation: ".venv/bin/python -m unittest -v --failfast tests.test_product_qualification.ProductQualificationTests.test_q08_material_failures_restore_exact_predecessor_or_retain_partial_evidence tests.test_product_qualification.ProductQualificationTests.test_q09_interrupted_payload_switch_selects_only_verified_release_and_recovers tests.test_product_qualification.ProductQualificationTests.test_q10_uninstall_retains_exact_config_and_reinstall_admission_keeps_it_authoritative tests.test_product_qualification.ProductQualificationTests.test_q11_upgrade_preserves_config_bytes_mode_and_identity"
     result: FAIL
-    tests: 4
-    passed: 3
-    failures: 1
+    tests_executed: 2
+    passed: 1
+    errors: 1
     exit_code: 1
-    duration_seconds: 10.621
-  owner_q06:
-    command: ".venv/bin/python -m unittest -v --failfast tests.test_supervised_lifecycle.SupervisedLifecycleTests.test_status_rejects_foreign_port_owner_even_if_port_is_occupied tests.test_supervised_lifecycle.SupervisedLifecycleTests.test_foreign_8080_listener_fails_closed_without_desired_state_or_signal"
-    result: PASS
-    tests: 2
-    exit_code: 0
-    duration_seconds: 2.051
-  confirmed_q07_gap:
-    command: ".venv/bin/python -m unittest -v --failfast tests.test_product_qualification.ProductQualificationTests.test_q07_interrupted_zero_cost_with_unverified_target_retains_evidence_and_fails_closed"
+    duration_seconds: 11.125
+    evidence: "Q08 passes; Q09 errors before the requested interruption. Failfast prevents Q10/Q11 execution. Those unexecuted draft suffix tests were removed from the candidate; no existing test was removed or weakened."
+  q09_confirmation:
+    command: ".venv/bin/python -m unittest -v --failfast tests.test_product_qualification.ProductQualificationTests.test_q09_interrupted_payload_switch_selects_only_verified_release_and_recovers"
     result: FAIL
     tests: 1
     failures: 1
     exit_code: 1
-    duration_seconds: 2.815
-    evidence: "After strengthening the fixture with the real provenance validator, validator rejection passes and the rollback fail-closed predicate still fails. This is gap confirmation, not continuation to Q08-Q14."
-  reused_fixtures:
-    - "tests.test_runtime_config.RuntimeConfigTests._write_tunnel_client"
-    - "tests.test_supervised_lifecycle.SupervisedLifecycleTests.setUp/tearDown"
-    - "tests.test_candidate_cutover.CandidateCutoverTests._zero_cost_collision_fixture"
-    - "tests.test_candidate_cutover.CandidateCutoverTests._prepare_zero_cost_persistent_current_predecessor"
+    duration_seconds: 3.259
+    evidence: "Final diagnostic assertion observes transaction_retained=True, metadata_retained=False, staged_mode=0555, cause=PermissionError, pointer_and_consumer_witnesses_preserved=True. Requested after_payload_publish checkpoint is not reached."
+    diagnostic_refinement: "An intermediate confirmation attempted to read retained metadata and instead observed FileNotFoundError. Final test reports missing metadata explicitly while still failing the qualification predicate; no production behavior changed during diagnosis."
+  independent_mode_reproduction:
+    result: CONFIRMED
+    evidence: "On Darwin, os.replace of a run-owned 0555 directory between two 0755 parent directories raises PermissionError errno 13 and retains the source. This reproduces the activation failure independently of the consumer fixture."
   diff_check:
     commands: ["git diff --check", "git diff --cached --check"]
     result: PASS
-    pre_report_scope: [macos/runtime_config.py, tests/test_runtime_config.py, tests/test_product_qualification.py]
+    pre_report_scope: [macos/candidate_cutover.py, tests/test_candidate_cutover.py, tests/test_product_qualification.py]
 
 qualification_matrix:
-  Q01: {result: PASS, evidence: "Preserved missing-client test: typed error, no fresh publication, existing bytes/device/inode/mode unchanged."}
-  Q02: {result: PASS, evidence: "Preserved synthetic 401 test: INVALID_CREDENTIAL; absent/existing config unchanged; submitted secret absent from parent/child argv and output."}
-  Q03: {result: PASS, evidence: "Preserved synthetic 403/404 test: TUNNEL_ACCESS_DENIED/TUNNEL_NOT_FOUND; canonical unchanged."}
-  Q04: {result: PASS, evidence: "Preserved transient/malformed-JSON/revision-1 reproducer tests and new stdout/stderr owner regressions all pass; structured CONTROL_PLANE_UNAVAILABLE/exit 2 with preservation and no response/secret leakage."}
-  Q05: {result: PASS, evidence: "Removed previously configured workspace returns deterministic WORKSPACE_UNAVAILABLE/exit 2 on repeated admission; temporary consumer-state files and canonical identity unchanged; fake tunnel-client never invoked."}
-  Q06: {result: PASS, evidence: "Single foreign and multiple ambiguous synthetic 8080 owners yield attention/control=none. Synthetic start/stop/restart all refuse; launchctl only observes print, with no signal/bootstrap/kickstart, listener creation or desired-state authority. Two exact existing owner tests also pass."}
-  Q07: {result: BLOCKED, evidence: "Interruptions before/after app swap restore exact predecessor app closure, plist, desired state and config. Unsafe generation drift is rejected by provenance, but zero-cost rollback nevertheless returns ROLLED_BACK, replaces the unverified target and deletes transaction evidence."}
-  Q08: {result: BLOCKED, evidence: "Not executed: mandatory stop at the new Q07 product gap."}
-  Q09: {result: BLOCKED, evidence: "Not executed: mandatory stop at the new Q07 product gap."}
-  Q10: {result: BLOCKED, evidence: "Not executed: mandatory stop at the new Q07 product gap."}
-  Q11: {result: BLOCKED, evidence: "Not executed: mandatory stop at the new Q07 product gap."}
-  Q12: {result: BLOCKED, evidence: "Not executed: doctor/preflight qualification stopped at Q07; admission secret safety does not establish diagnosis secret safety."}
-  Q13: {result: BLOCKED, evidence: "Not executed: ./start.sh doctor --json not invoked after the mandatory Q07 stop."}
-  Q14: {result: BLOCKED, evidence: "Not executed: healthy synthetic installed diagnosis inventory not qualified after the mandatory Q07 stop."}
+  Q01: {result: PASS, evidence: "Preserved missing-client qualification test rerun; typed error and canonical absence/identity preservation."}
+  Q02: {result: PASS, evidence: "Preserved synthetic 401 qualification test rerun; INVALID_CREDENTIAL, canonical unchanged, submitted secret absent from argv/output."}
+  Q03: {result: PASS, evidence: "Preserved synthetic 403/404 qualification test rerun; correct typed reasons and config preservation."}
+  Q04: {result: PASS, evidence: "Preserved transient/malformed/revision-1 reproducer and stdout/stderr owner regressions rerun; F-0200-001 remains closed."}
+  Q05: {result: PASS, evidence: "Preserved removed-workspace test rerun; stable WORKSPACE_UNAVAILABLE without consumer-state mutation."}
+  Q06: {result: PASS, evidence: "Preserved foreign/ambiguous 8080 ownership test rerun; no signaling/rebind authority."}
+  Q07: {result: PASS, evidence: "Preserved before/after-swap interruption tests and unverified-target reproducer rerun; exact predecessor restoration for valid candidate, fail-closed PARTIAL retention and unchanged target for identity drift. Strong owner regressions cover both payload witness lanes."}
+  Q08: {result: PASS, evidence: "Four material zero-cost failure stages restore exact predecessor closure/plist/pointer/desired state and canonical identity. Injected predecessor restoration failure retains PARTIAL metadata, sealed handoff and rollback snapshot with bounded last_error."}
+  Q09: {result: BLOCKED, evidence: "A real published immutable payload cannot be moved from copied 0555 staging on Darwin. Cleanup fails after removing metadata.json, leaving an untyped retained transaction. Pointer/consumer witnesses remain unchanged, but intended interrupted switch/recovery predicates cannot be reached/proven."}
+  Q10: {result: BLOCKED, evidence: "Not executed: mandatory stop at new Q09 production gap."}
+  Q11: {result: BLOCKED, evidence: "Not executed: mandatory stop at new Q09 production gap."}
+  Q12: {result: BLOCKED, evidence: "Not executed: mandatory stop at Q09; admission secret-safety does not establish diagnosis secret-safety."}
+  Q13: {result: BLOCKED, evidence: "Not executed: existing ./start.sh doctor --json remains the diagnosis surface; no alternate subsystem added."}
+  Q14: {result: BLOCKED, evidence: "Not executed: healthy synthetic installed diagnosis inventory remains unqualified after the Q09 stop."}
 
 blocking_findings:
-  - id: Q07-UNVERIFIED-TARGET
-    classification: zero_cost_recovery_ownership_gap
+  - id: Q09-SEALED-PAYLOAD-MODE
+    classification: immutable_payload_activation_and_cleanup_gap
     severity: high
     confidence: high
-    source: "macos/candidate_cutover.py:1588-1606; schema dispatch/cleanup at 1716-1740"
-    trigger: "Interrupt a synthetic zero-cost cutover at after_app_swap. Change the installed Runtime helper so the current app no longer matches the sealed candidate. Existing validate_zero_cost_candidate rejects this generation. Invoke rollback_transaction against the retained transaction."
-    expected: "Fail closed on unverified current generation without replacing it; retain transaction evidence, including PARTIAL if appropriate."
-    observed: "status=ROLLED_BACK; transaction_retained=False; target_preserved=False. The predecessor replaces the generation whose ownership was not proven and transaction evidence is deleted."
-    cause: "The zero-cost rollback path checks target file type but does not validate current generation against the transaction's candidate identity before deleting it. Successful schema dispatch then removes the transaction."
-    consequence: "Interrupted recovery can destructively replace an unverified generation and discard the evidence needed to resolve ownership ambiguity."
-    remediation: "A separately authorized production revision must establish safe current-generation authority before zero-cost rollback mutation and preserve evidence on ambiguity. candidate_cutover.py remains unchanged here."
+    source: "macos/candidate_cutover.py:2024-2026,2066,2098-2109; published immutable directory mode from macos/package_provenance.py:503-504"
+    trigger: "Publish a valid different payload with the existing publisher, then activate it against coherent synthetic zero-cost installed state on Darwin. The publisher seals directories to 0555; copytree preserves those modes."
+    expected: "A valid immutable incoming generation can reach the switch interruption checkpoints, with deterministic recovery or typed fail-closed evidence on failure."
+    observed: "os.replace(staged_payload, final_payload) raises PermissionError errno 13 before after_payload_publish. Rollback cleanup also fails; transaction directory remains but metadata.json is gone. Current-payload and app/config/plist witnesses remain unchanged."
+    cause: "Payload activation moves the copied read-only release directory without preparing it for Darwin rename. Its broad transaction rmtree can remove metadata before failing on read-only payload material; the subsequent attempt to load metadata for PARTIAL recording fails and is suppressed."
+    consequence: "Valid immutable payload updates fail before switching generation and can strand a transaction without typed recovery metadata. No unverified generation selection or config corruption was observed in this reproduction."
+    remediation: "A separately authorized revision must support moving sealed payload material and preserve transaction metadata when cleanup fails. No payload activation/cleanup fix performed here, although the file is also the authorized F-0200-002 repair owner."
 
 acceptance_evidence:
-  - {criterion_id: AC-1, status: PASS, evidence: "F-0200-001 closed by one-line exception normalization; stdout/stderr regressions cover fresh/reconfigure, typed exit 2, secret/response non-disclosure and canonical identity preservation."}
-  - {criterion_id: AC-2, status: BLOCKED, evidence: "Q01-Q06 PASS; Q07 new production failure; Q08-Q14 unexecuted under the stop rule."}
-  - {criterion_id: AC-3, status: NOT_PROVEN, evidence: "Q12-Q14 not executed; no alternate diagnosis command/subsystem added."}
-  - {criterion_id: AC-4, status: BLOCKED, evidence: "Ordinary interrupted zero-cost rollback restores exact predecessor; unsafe ambiguity fails Q07. Q08-Q11 not executed."}
-  - {criterion_id: AC-5, status: PASS, evidence: "Candidate changes only runtime_config.py and the two authorized test files; all original qualification methods unchanged; all other production bytes unchanged."}
-  - {criterion_id: AC-6, status: BLOCKED, evidence: "Canonical verifier gate remains false at Q07; ./verify invocation count is zero."}
-  - {criterion_id: AC-7, status: NOT_PROVEN, evidence: "Truthful revision-2 BLOCKED report prepared on main. Fresh post-report publication and clean synchronization are proven externally after publication, not self-attested here."}
+  - {criterion_id: AC-1, status: PASS, evidence: "F-0200-002 identity guard runs before rollback effects; invalid app/witness/metadata identity leaves target and consumer state unchanged, retaining PARTIAL evidence."}
+  - {criterion_id: AC-2, status: PASS, evidence: "Existing valid zero-cost owner rollback and preserved before/after-swap qualification restore the exact opaque predecessor."}
+  - {criterion_id: AC-3, status: BLOCKED, evidence: "Q01-Q08 PASS; Q09 new production gap; Q10-Q14 not executed under mandatory stop."}
+  - {criterion_id: AC-4, status: BLOCKED, evidence: "Q07/Q08 PASS; Q09 cannot reach switch/recovery checkpoints with the real sealed payload, and failure cleanup loses typed metadata. Q10/Q11 not executed."}
+  - {criterion_id: AC-5, status: PASS, evidence: "Only candidate_cutover.py and the two authorized tests change before report. Production diff is confined to the APP_SWAPPED rollback guard; runtime_config closure unchanged."}
+  - {criterion_id: AC-6, status: BLOCKED, evidence: "Diff-check PASS; all-PASS gate false at Q09, so canonical ./verify is not dispatched."}
+  - {criterion_id: AC-7, status: NOT_PROVEN, evidence: "Truthful revision-3 BLOCKED report prepared on main; post-report publication and clean synchronization are established by fresh external observation after publication."}
 
 authoritative_verification:
   required: true
   performed: false
   invocation_count: 0
   result: NOT_RUN
-  evidence: "Exactly one canonical ./verify is authorized only after Q01-Q14 all PASS. New Q07 gap prevents dispatch; no verifier replay occurred."
+  evidence: "Q01-Q14 all-PASS prerequisite is false. No canonical verifier dispatch or replay."
 
 effect_accounting:
   canonical_verify: {authorized_max: 1, consumed: 0}
@@ -144,8 +138,8 @@ effect_accounting:
   distribution_builds: 0
   package_release_or_version_effects: 0
   branch_or_pr_creation: 0
-  task_0196_continuation: "None; operator pause honored; task artifact unchanged."
+  task_0196_continuation: "None; operator pause honored; task artifacts unchanged."
 
 local_hygiene:
   result: PASS
-  evidence: "Run-owned TemporaryDirectory contexts and reused owner teardown complete cleanup of synthetic consumer state. No live Runtime or LaunchServices mutation; no physical fresh-Mac/user qualification claimed."
+  evidence: "Synthetic transaction evidence is inspected before run-owned TemporaryDirectory cleanup. Owner tearDown and temporary contexts complete cleanup; no live Runtime/LaunchServices changes or physical fresh-Mac/user qualification."
