@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0194
-task_revision: 2
-review_revision: 2
+task_revision: 3
+review_revision: 3
 state: REVISION_REQUIRED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0194/report.yaml
-  commit: "093bfba2f0f42647ebfb0a1b8a65de9dfaabe89b"
-  report_revision: 2
+  commit: "34d19ac14355f99efeaa76a3e5726371ad94234a"
+  report_revision: 3
 
 independence:
   reviewer_role: ARCHITECT
@@ -28,24 +28,25 @@ contract_compliance:
   verifier_evidence: PASS
 
 acceptance_basis:
-  - "Revision-2 report commit 093bfba2f0f42647ebfb0a1b8a65de9dfaabe89b is the single direct child of exact revision-2 base fcc19607d50b70270446c605335ec7d468b3cecc and changes only .agent/tasks/TASK-0194/report.yaml."
-  - "The pinned packaging interpreter gate passed exactly and the sole revision-2 package_app --zero-cost invocation built, sealed, and content-addressably published candidate 025f728aede45733ed8b83aa6c2717a5e28543b3cdb98dba31bf012ebc30338b before returning exit 2."
-  - "Independent candidate audit after the failed command confirms the published artifact is complete and stable: zero-cost provenance PASS, strict codesign PASS, source_revision fcc19607d50b70270446c605335ec7d468b3cecc, source_tree 0720c1b65321d5ef5d590d94cc3a76930e405d03, version 0.5.1, twenty advertised tools, 1686 records, and zero .pyc/__pycache__."
-  - "The exact candidate handoff SHA-256 is 1e518cfb23ff7b01e42daac0accf4f0fd93d89d485fec4d60f0b5791d02d92e3 and initial payload closure is 85b82b2c88e9bc0bfdf0c240a7b47b17abfd260609d88a7e5dafecab042e2483."
-  - "package_app.sh performs seal-zero-cost and publish-zero-cost before its retained-candidate LaunchServices unregister. Therefore the exit-2 point is post-publication discovery cleanup, not an incomplete candidate build or failed content seal."
-  - "Fresh read-only observation finds one LaunchServices discovery record for the retained candidate path and no running process from that candidate."
-  - "TASK-0190 Architect review already established that retained valid candidate LaunchServices records can reappear after successful unregister and are not a durable lifecycle invariant. Exact lifecycle ownership must instead be proven from ServiceManagement/LaunchAgent/process paths. Repeating lsregister -u would be a symptom patch rather than material acceptance evidence."
-  - "The live predecessor remains untouched at revision 5286bbb6d1942ff7eed13190bd38ee5efcc0e621 with transaction absent and Runtime RUNNING/live/ready; no revision-2 install, commit, rollback, menu-bar relaunch, Runtime lifecycle, reboot, or release effect occurred."
-  - "A rebuild is neither necessary nor authorized for the narrow continuation. The existing published candidate should be revalidated and consumed exactly once by the transactional installer."
+  - "Revision-3 report commit 34d19ac14355f99efeaa76a3e5726371ad94234a is the single direct child of exact revision-3 base a004fa1834de14a6ff51841d06e1487c278ed29a and changes only .agent/tasks/TASK-0194/report.yaml."
+  - "The preserved revision-2 candidate revalidated successfully and no build, verifier, LaunchServices cleanup, commit, menu-bar relaunch, Runtime Start, reboot, or source mutation occurred in revision 3."
+  - "The sole authorized install-prebuilt invocation ran through the independent SentinelX carrier, failed conclusively, and automatically rolled the predecessor state back. No install replay or extra rollback occurred."
+  - "Post-rollback live state is healthy and canonical at predecessor revision 5286bbb6d1942ff7eed13190bd38ee5efcc0e621 with transaction absent, Runtime RUNNING/live/ready, doctor 10/10 healthy, runtime.env preserved, main_app enabled, and runtime_agent not-found."
+  - "The zero-cost candidate external payload is exact for candidate source revision fcc19607d50b70270446c605335ec7d468b3cecc / tree 0720c1b65321d5ef5d590d94cc3a76930e405d03."
+  - "The existing canonical payload store entry at the same content closure 85b82b2c88e9bc0bfdf0c240a7b47b17abfd260609d88a7e5dafecab042e2483 has predecessor source revision 5286bbb6d1942ff7eed13190bd38ee5efcc0e621 / tree 4093367bfaaf499b880e98076d5904decae51375."
+  - "Fresh Architect comparison proves the candidate and canonical manifests have identical schema, owner, content_closure, requirements_lock_sha256, required_python_major_minor, lifecycle_contract, payload_contract, expected_public_tool_count, expected_public_surface_sha256, and identical files inventory. Only source_revision/source_tree differ."
+  - "package_provenance._payload_closure intentionally hashes only payload file path/mode/size/content hashes; therefore identical payload bytes across different source revisions intentionally resolve to the same canonical content closure."
+  - "candidate_cutover currently validates the external candidate payload correctly against exact source identity before mutation, but when the canonical payload path already exists it incorrectly calls _validate_zero_cost_payload_for_candidate(final_payload, expected), requiring the canonical deduplicated store entry to carry the candidate source revision/tree."
+  - "The commit path repeats the same incorrect coupling by validating the installed candidate against final_payload rather than retaining exact candidate provenance from the transaction-staged payload while validating the selected canonical payload by content/compatibility contract."
+  - "The correct fix is not to change content_closure, overwrite the canonical payload, or weaken external candidate provenance. The exact staged candidate payload must remain the source-identity proof; an already-existing canonical payload with the same closure must be validated by content/compatibility only."
 
 findings:
-  - id: "F-0194-002"
+  - id: "F-0194-003"
     severity: BLOCKING
-    description: "package_app.sh treats retained-candidate LaunchServices unregister as fatal after a fully sealed candidate has already been content-addressably published."
-    disposition: "Authorize revision 3 to reuse exact candidate 025f728aede45733ed8b83aa6c2717a5e28543b3cdb98dba31bf012ebc30338b with zero new build and zero LaunchServices cleanup authority. Revalidate its exact bytes/handoff/payload before install, treat candidate LaunchServices presence only as non-authoritative discovery state, and continue transactional live activation using lifecycle ownership gates."
+    description: "Zero-cost cutover conflates exact external candidate source provenance with canonical content-addressed payload-store identity. A valid existing canonical payload with identical content closure but older source_revision/source_tree is rejected."
+    disposition: "Revision 4 must be source-fix and verification only. Preserve content-addressed store semantics and exact external candidate validation. Update zero-cost cutover/commit so an existing canonical payload at the candidate closure is reused only after full content/compatibility validation, while the transaction-staged candidate payload continues to provide exact source_revision/source_tree provenance for the app candidate. Add deterministic regression coverage reproducing the live collision and proving commit succeeds without mutating the pre-existing canonical payload. Do not perform live activation in revision 4."
 
 notes:
-  - "Revision-2 build budget is consumed and must not be replayed."
-  - "Do not rerun package_app.sh, do not retry lsregister -u, and do not mutate or delete the retained candidate to influence LaunchServices."
-  - "Because the preserved candidate was built at source revision fcc19607d50b70270446c605335ec7d468b3cecc, post-activation Runtime identity must equal fcc19607d50b70270446c605335ec7d468b3cecc even though revision-3 task/report/review metadata is committed later."
-  - "The candidate LaunchServices record must never be treated as Runtime ownership or as permission to signal any process."
+  - "Do not rename/rekey payload closures, mutate or replace the existing canonical payload release, relax external candidate source-identity validation, or alter payload schema."
+  - "Revision 4 requires fresh canonical source verification because production cutover code will change."
+  - "The predecessor live installation is healthy after automatic rollback and must remain untouched during revision-4 implementation/verification."
