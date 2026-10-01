@@ -1563,6 +1563,32 @@ def _rollback_zero_cost_transaction(
     if not isinstance(main_owned, bool):
         raise CutoverError("zero-cost rollback main-app registration ownership metadata is malformed")
 
+    if metadata.get("phase") == "APP_SWAPPED":
+        candidate = metadata.get("candidate")
+        closure = payload.get("closure")
+        created = payload.get("created")
+        if (
+            not isinstance(candidate, dict)
+            or not isinstance(closure, str)
+            or re.fullmatch(r"[0-9a-f]{64}", closure) is None
+            or not isinstance(created, bool)
+        ):
+            raise CutoverError("installed zero-cost candidate rollback witnesses are malformed")
+        candidate_payload_witness = (
+            _payloads_root(pointer.parent) / closure
+            if created else transaction_dir / "payloads" / closure
+        )
+        try:
+            validated = provenance.validate_zero_cost_candidate(
+                target_app,
+                transaction_dir / "candidate-handoff.json",
+                candidate_payload_witness,
+            )
+        except Exception:
+            raise CutoverError("installed zero-cost candidate rollback identity cannot be validated") from None
+        if validated != candidate:
+            raise CutoverError("installed zero-cost candidate no longer matches rollback transaction")
+
     if _service_loaded(launchctl, service):
         if current_plist.exists() and not current_plist.is_symlink() and target_app.exists():
             _validate_current_launchagent(current_plist, home, uid=uid)

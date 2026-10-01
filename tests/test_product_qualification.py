@@ -325,3 +325,118 @@ class ProductQualificationTests(unittest.TestCase):
                     f"status={result['status']}, transaction_retained={fx['transaction'].exists()}, "
                     f"target_preserved={cutover._rollback_app_closure(fx['target']) == before}"
                 )
+
+    @staticmethod
+    def _config_identity(path: Path):
+        info = path.stat()
+        return (path.read_bytes(), info.st_dev, info.st_ino, stat.S_IMODE(info.st_mode))
+
+    def test_q08_material_failures_restore_exact_predecessor_or_retain_partial_evidence(self) -> None:
+        for stage in ("after_predecessor_shutdown", "after_app_swap", "after_launchagent_bootstrap", "after_pointer_swap"):
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory(prefix="task0200-rollback-") as raw:
+                cutover, fx, predecessor = self._zero_cost_fixture(raw)
+                before = cutover._rollback_app_closure(fx["target"])
+                config = fx["state_dir"] / "runtime.env"
+                config_before = self._config_identity(config)
+                with self.assertRaisesRegex(cutover.CutoverError, "rollback restored previous state"):
+                    self._cutover(cutover, fx, fail_stages={stage})
+                self.assertEqual(cutover._rollback_app_closure(fx["target"]), before)
+                self.assertEqual(predecessor["current_plist"].read_bytes(), predecessor["predecessor_bytes"])
+                self.assertEqual(predecessor["pointer"].read_text(), fx["closure"] + "\n")
+                self.assertTrue(predecessor["desired"].exists())
+                self.assertEqual(self._config_identity(config), config_before)
+                self.assertFalse(fx["transaction"].exists())
+        with tempfile.TemporaryDirectory(prefix="task0200-partial-") as raw:
+            cutover, fx, _ = self._zero_cost_fixture(raw)
+            real_copy = cutover._copy_rollback_app
+
+            def fail_restore(source, destination):
+                if source == fx["transaction"] / "previous-app":
+                    raise OSError("synthetic predecessor restoration failure")
+                return real_copy(source, destination)
+
+            with mock.patch.object(cutover, "_copy_rollback_app", side_effect=fail_restore):
+                with self.assertRaisesRegex(cutover.CutoverError, "rollback incomplete"):
+                    self._cutover(cutover, fx, fail_stages={"after_app_swap"})
+            metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
+            self.assertEqual(metadata["status"], "PARTIAL")
+            self.assertTrue((fx["transaction"] / "previous-app").is_dir())
+            self.assertTrue((fx["transaction"] / "candidate-handoff.json").is_file())
+            self.assertLess(len(metadata["last_error"].encode()), 1024)
+
+    def test_q09_interrupted_payload_switch_selects_only_verified_release_and_recovers(self) -> None:
+        for stage in ("after_payload_publish", "after_pointer_switch"):
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory(prefix="task0200-update-") as raw:
+                cutover, fx, predecessor = self._zero_cost_fixture(raw)
+                self._cutover(cutover, fx)
+                cutover.commit_transaction(fx["transaction"], fx["target"])
+                old_pointer = predecessor["pointer"].read_bytes()
+                witnesses = cutover._payload_update_witnesses(fx["target"], fx["state_dir"], predecessor["current_plist"])
+                source = Path(raw) / "update-source"
+                source.mkdir()
+                (source / "__init__.py").write_text("__all__ = []\n")
+                (source / "server.py").write_text("VALUE = 2\n")
+                substrate = cutover._current_substrate_manifest(fx["target"])
+                published = cutover.provenance.publish_payload_release(
+                    source, Path(raw) / "incoming-payloads", revision="1" * 40, tree="2" * 40,
+                    requirements_lock_sha256=substrate["requirements_lock_sha256"],
+                    python_major_minor=substrate["required_python_major_minor"],
+                    public_tool_count=substrate["expected_public_tool_count"],
+                    public_surface_sha256=substrate["expected_public_surface_sha256"],
+                )
+                incoming = Path(published["release_path"])
+                real_inject = cutover._inject
+
+                def interrupt(failures, current):
+                    if current == stage:
+                        raise KeyboardInterrupt("synthetic payload interruption")
+                    return real_inject(failures, current)
+
+                with (
+                    mock.patch.object(cutover, "_runtime_managed_running", return_value=False),
+                    mock.patch.object(cutover, "_run_runtime_lifecycle", side_effect=AssertionError("stopped fixture must not start")),
+                    mock.patch.object(cutover, "_inject", side_effect=interrupt),
+                ):
+                    try:
+                        with self.assertRaises(KeyboardInterrupt):
+                            cutover.activate_payload_release(
+                                incoming, target_app=fx["target"], state_dir=fx["state_dir"],
+                                transaction_dir=fx["transaction"], home=fx["home"],
+                                launchctl=fx["launchctl"], uid=os.getuid(),
+                            )
+                    except cutover.CutoverError as exc:
+                        metadata_path = fx["transaction"] / "metadata.json"
+                        retained = json.loads(metadata_path.read_text()) if metadata_path.exists() else {}
+                        self.assertEqual(predecessor["pointer"].read_bytes(), old_pointer)
+                        self.assertEqual(cutover._payload_update_witnesses(fx["target"], fx["state_dir"], predecessor["current_plist"]), witnesses)
+                        staged = fx["transaction"] / "payloads" / published["content_closure"]
+                        self.fail(
+                            "Valid sealed payload could not reach the requested interruption: "
+                            f"stage={stage}, status={retained.get('status')}, phase={retained.get('phase')}, "
+                            f"transaction_retained={fx['transaction'].exists()}, metadata_retained={metadata_path.exists()}, "
+                            f"staged_mode={stat.S_IMODE(staged.stat().st_mode):04o}, "
+                            f"cause={type(exc.__cause__).__name__}, pointer_and_consumer_witnesses_preserved=True"
+                        )
+                metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
+                self.assertEqual(metadata["kind"], "payload-update")
+                self.assertEqual(metadata["status"], "RUNNING")
+                selected = cutover._current_payload_closure(predecessor["pointer"], uid=os.getuid())
+                self.assertEqual(selected, published["content_closure"] if stage == "after_pointer_switch" else fx["closure"])
+                cutover._validate_payload_for_substrate(fx["state_dir"] / "payloads" / selected, substrate)
+                result = cutover.rollback_transaction(fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=os.getuid())
+                self.assertEqual(result["status"], "ROLLED_BACK")
+                self.assertEqual(predecessor["pointer"].read_bytes(), old_pointer)
+                self.assertEqual(cutover._payload_update_witnesses(fx["target"], fx["state_dir"], predecessor["current_plist"]), witnesses)
+                self.assertFalse(fx["transaction"].exists())
+                self.assertFalse((fx["state_dir"] / "payloads" / published["content_closure"]).exists())
+                # An unverified incoming release must fail before another pointer switch.
+                invalid = incoming / "agent_runtime/server.py"
+                invalid.chmod(0o644)
+                invalid.write_text("UNVERIFIED = True\n")
+                with self.assertRaises(cutover.CutoverError):
+                    cutover.activate_payload_release(
+                        incoming, target_app=fx["target"], state_dir=fx["state_dir"],
+                        transaction_dir=fx["transaction"], home=fx["home"], launchctl=fx["launchctl"], uid=os.getuid(),
+                    )
+                self.assertEqual(predecessor["pointer"].read_bytes(), old_pointer)
+                self.assertFalse(fx["transaction"].exists())

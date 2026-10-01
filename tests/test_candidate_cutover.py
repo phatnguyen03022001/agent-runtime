@@ -692,6 +692,75 @@ class CandidateCutoverTests(unittest.TestCase):
             "programs_path": programs_path,
         }
 
+    def _assert_zero_cost_rollback_identity_failure_has_no_consumer_effect(self, fault: str) -> None:
+        for created in (False, True):
+            with self.subTest(fault=fault, created=created), tempfile.TemporaryDirectory() as raw:
+                cutover, fx = self._zero_cost_collision_fixture(raw)
+                if created:
+                    cutover._remove_transaction_payload(fx["canonical_payload"], fx["canonical_payload"].parent, fx["closure"])
+                result = cutover.cutover_candidate(
+                    fx["app"], fx["handoff"], payload_release=fx["payload_release"],
+                    target_app=fx["target"],
+                    ui_plist=fx["home"] / "Library/LaunchAgents/com.picmao.agent-runtime-ui.plist",
+                    runtime_plist=fx["home"] / "Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist",
+                    state_dir=fx["state_dir"], transaction_dir=fx["transaction"],
+                    home=fx["home"], launchctl=fx["launchctl"], uid=os.getuid(),
+                )
+                self.assertEqual(result["status"], "PENDING")
+                metadata_path = fx["transaction"] / "metadata.json"
+                metadata = json.loads(metadata_path.read_text())
+                self.assertEqual(metadata["phase"], "APP_SWAPPED")
+                self.assertEqual(metadata["payload"]["created"], created)
+                witness = fx["canonical_payload"] if created else fx["transaction"] / "payloads" / fx["closure"]
+                if fault == "target":
+                    helper = fx["target"] / "Contents/MacOS/AgentRuntimeRuntimeService"
+                    helper.write_text("#!/bin/sh\n# synthetic identity drift\nexit 0\n")
+                    with self.assertRaises(cutover.provenance.PackageProvenanceError):
+                        cutover.provenance.validate_zero_cost_candidate(fx["target"], fx["handoff"], witness)
+                elif fault == "witness":
+                    cutover._remove_transaction_payload(witness, witness.parent, fx["closure"])
+                elif fault == "metadata":
+                    metadata["candidate"]["candidate_sha256"] = "0" * 64
+                    metadata_path.write_text(json.dumps(metadata))
+                else:
+                    raise AssertionError(fault)
+                target_closure = cutover._rollback_app_closure(fx["target"])
+                pointer = fx["state_dir"] / "current-payload"
+                config = fx["state_dir"] / "runtime.env"
+                before_files = {
+                    path: (path.read_bytes(), path.stat().st_ino, stat.S_IMODE(path.stat().st_mode))
+                    for path in (pointer, config, cutover._current_launchagent_path(fx["home"]), fx["launch_state"], fx["launch_log"])
+                }
+                before_service = cutover._service_management(fx["target"], "status")
+                before_desired = (fx["state_dir"] / "protected-runtime-running").exists()
+                with (
+                    mock.patch.object(cutover, "_run", side_effect=AssertionError("launchctl attempted")),
+                    mock.patch.object(cutover, "_service_management", side_effect=AssertionError("ServiceManagement attempted")),
+                    mock.patch.object(cutover, "_restore_file", side_effect=AssertionError("file restore attempted")),
+                    mock.patch.object(cutover, "_copy_rollback_app", side_effect=AssertionError("predecessor restore attempted")),
+                    mock.patch.object(cutover, "_remove_transaction_payload", side_effect=AssertionError("payload cleanup attempted")),
+                    mock.patch.object(cutover.shutil, "rmtree", side_effect=AssertionError("rmtree attempted")),
+                ):
+                    with self.assertRaisesRegex(cutover.CutoverError, "installed zero-cost candidate"):
+                        cutover.rollback_transaction(fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=os.getuid())
+                retained = json.loads(metadata_path.read_text())
+                self.assertEqual(retained["status"], "PARTIAL")
+                self.assertLess(len(retained["last_error"].encode()), 1024)
+                self.assertEqual(cutover._rollback_app_closure(fx["target"]), target_closure)
+                for path, before in before_files.items():
+                    self.assertEqual((path.read_bytes(), path.stat().st_ino, stat.S_IMODE(path.stat().st_mode)), before)
+                self.assertEqual(cutover._service_management(fx["target"], "status"), before_service)
+                self.assertEqual((fx["state_dir"] / "protected-runtime-running").exists(), before_desired)
+
+    def test_zero_cost_app_swapped_rollback_rejects_target_drift_before_any_effect(self) -> None:
+        self._assert_zero_cost_rollback_identity_failure_has_no_consumer_effect("target")
+
+    def test_zero_cost_app_swapped_rollback_requires_exact_payload_witness(self) -> None:
+        self._assert_zero_cost_rollback_identity_failure_has_no_consumer_effect("witness")
+
+    def test_zero_cost_app_swapped_rollback_requires_metadata_identity_equality(self) -> None:
+        self._assert_zero_cost_rollback_identity_failure_has_no_consumer_effect("metadata")
+
     def test_zero_cost_transitions_persistent_current_predecessor_to_manual_and_reaches_pending(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             cutover, fx = self._zero_cost_collision_fixture(raw)
