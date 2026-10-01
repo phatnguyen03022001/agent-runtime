@@ -307,104 +307,68 @@ esac
         self.assertEqual(status["ready"], "ready")
         self.assertEqual(status["tunnel_transport"], "healthy")
 
-    def test_status_transport_degraded_does_not_change_managed_runtime_truth(self) -> None:
+    def test_status_transport_classification_matrix_reuses_one_running_fixture(self) -> None:
         started = self.run_start("start")
         self.assertEqual(started.returncode, 0, started.stderr)
         pid = self.current_pid()
         self.assertIsNotNone(pid)
 
-        status = self.run_status_json(
-            extra_env={
-                "FAKE_CONTROL_PLANE_BODY": '{"schema_version":1,"component":"control-plane","status":"degraded","state":"backoff"}'
-            }
-        )
+        cases = [
+            (
+                "degraded",
+                {
+                    "FAKE_CONTROL_PLANE_BODY": '{"schema_version":1,"component":"control-plane","status":"degraded","state":"backoff"}'
+                },
+                "managed",
+                "degraded",
+            ),
+            (
+                "unknown",
+                {
+                    "FAKE_CONTROL_PLANE_BODY": '{"schema_version":1,"component":"control-plane","status":"unknown","state":"polling"}'
+                },
+                "managed",
+                "unconfirmed",
+            ),
+            ("unsupported-route", {"FAKE_CONTROL_PLANE_HTTP_STATUS": "404"}, "managed", "unconfirmed"),
+            ("timeout", {"FAKE_CONTROL_PLANE_TIMEOUT": "1"}, "managed", "unconfirmed"),
+            ("malformed", {"FAKE_CONTROL_PLANE_BODY": "not-json"}, "managed", "unconfirmed"),
+            (
+                "unsupported-schema",
+                {
+                    "FAKE_CONTROL_PLANE_BODY": '{"schema_version":2,"component":"control-plane","status":"ok"}'
+                },
+                "managed",
+                "unconfirmed",
+            ),
+            (
+                "additive-unknown-fields",
+                {
+                    "FAKE_CONTROL_PLANE_BODY": '{"schema_version":1,"component":"control-plane","status":"ok","state":"idle","future":{"nested":true}}'
+                },
+                "managed",
+                "healthy",
+            ),
+            (
+                "read-only-degraded",
+                {
+                    "FAKE_PARENT_PID": "9999",
+                    "FAKE_CONTROL_PLANE_BODY": '{"schema_version":1,"component":"control-plane","status":"degraded"}',
+                },
+                "read-only",
+                "degraded",
+            ),
+        ]
 
-        self.assertEqual(status["state"], "running")
-        self.assertEqual(status["control"], "managed")
-        self.assertEqual(status["pids"], [pid])
-        self.assertEqual(status["tunnel_transport"], "degraded")
-
-    def test_status_transport_unknown_is_unconfirmed(self) -> None:
-        started = self.run_start("start")
-        self.assertEqual(started.returncode, 0, started.stderr)
-
-        status = self.run_status_json(
-            extra_env={
-                "FAKE_CONTROL_PLANE_BODY": '{"schema_version":1,"component":"control-plane","status":"unknown","state":"polling"}'
-            }
-        )
-
-        self.assertEqual(status["state"], "running")
-        self.assertEqual(status["control"], "managed")
-        self.assertEqual(status["tunnel_transport"], "unconfirmed")
-
-    def test_status_transport_unsupported_route_is_unconfirmed(self) -> None:
-        started = self.run_start("start")
-        self.assertEqual(started.returncode, 0, started.stderr)
-
-        status = self.run_status_json(extra_env={"FAKE_CONTROL_PLANE_HTTP_STATUS": "404"})
-
-        self.assertEqual(status["state"], "running")
-        self.assertEqual(status["tunnel_transport"], "unconfirmed")
-
-    def test_status_transport_timeout_is_unconfirmed(self) -> None:
-        started = self.run_start("start")
-        self.assertEqual(started.returncode, 0, started.stderr)
-
-        status = self.run_status_json(extra_env={"FAKE_CONTROL_PLANE_TIMEOUT": "1"})
-
-        self.assertEqual(status["state"], "running")
-        self.assertEqual(status["tunnel_transport"], "unconfirmed")
-
-    def test_status_transport_malformed_payload_is_unconfirmed(self) -> None:
-        started = self.run_start("start")
-        self.assertEqual(started.returncode, 0, started.stderr)
-
-        status = self.run_status_json(extra_env={"FAKE_CONTROL_PLANE_BODY": "not-json"})
-
-        self.assertEqual(status["state"], "running")
-        self.assertEqual(status["tunnel_transport"], "unconfirmed")
-
-    def test_status_transport_unsupported_schema_is_unconfirmed(self) -> None:
-        started = self.run_start("start")
-        self.assertEqual(started.returncode, 0, started.stderr)
-
-        status = self.run_status_json(
-            extra_env={
-                "FAKE_CONTROL_PLANE_BODY": '{"schema_version":2,"component":"control-plane","status":"ok"}'
-            }
-        )
-
-        self.assertEqual(status["state"], "running")
-        self.assertEqual(status["tunnel_transport"], "unconfirmed")
-
-    def test_status_transport_accepts_additive_unknown_fields(self) -> None:
-        started = self.run_start("start")
-        self.assertEqual(started.returncode, 0, started.stderr)
-
-        status = self.run_status_json(
-            extra_env={
-                "FAKE_CONTROL_PLANE_BODY": '{"schema_version":1,"component":"control-plane","status":"ok","state":"idle","future":{"nested":true}}'
-            }
-        )
-
-        self.assertEqual(status["state"], "running")
-        self.assertEqual(status["tunnel_transport"], "healthy")
-
-    def test_status_read_only_runtime_keeps_transport_independent(self) -> None:
-        started = self.run_start("start")
-        self.assertEqual(started.returncode, 0, started.stderr)
-
-        status = self.run_status_json(
-            extra_env={
-                "FAKE_PARENT_PID": "9999",
-                "FAKE_CONTROL_PLANE_BODY": '{"schema_version":1,"component":"control-plane","status":"degraded"}',
-            }
-        )
-
-        self.assertEqual(status["state"], "running")
-        self.assertEqual(status["control"], "read-only")
-        self.assertEqual(status["tunnel_transport"], "degraded")
+        for name, extra_env, expected_control, expected_transport in cases:
+            with self.subTest(name=name):
+                status = self.run_status_json(extra_env=extra_env)
+                self.assertEqual(status["state"], "running")
+                self.assertEqual(status["control"], expected_control)
+                self.assertEqual(status["pids"], [pid])
+                self.assertEqual(status["health"], "live")
+                self.assertEqual(status["ready"], "ready")
+                self.assertEqual(status["tunnel_transport"], expected_transport)
 
     def test_status_serving_truth_has_no_persistent_intent_field(self) -> None:
         started = self.run_start("start")
