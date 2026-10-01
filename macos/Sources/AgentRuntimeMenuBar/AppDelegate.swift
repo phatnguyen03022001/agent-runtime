@@ -94,8 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let system = DarwinProcessSystem()
             let backend = NativeRuntimeBackend(
                 configuration: configuration,
-                inspector: system,
-                discovery: PSRuntimeDiscovery(inspector: system)
+                inspector: system
             )
             runtimeConfiguration = configuration
             controller = RuntimeController(backend: backend)

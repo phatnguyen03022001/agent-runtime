@@ -234,12 +234,34 @@ public struct RuntimeConfiguration: Sendable {
     public var checkoutRoot: String { runtimeRoot }
 }
 
+private struct CanonicalRuntimeObservation: Decodable {
+    let schema: Int
+    let state: String
+    let control: String
+    let pids: [Int32]
+    let health: String
+    let ready: String
+    let desired: String
+    let detail: String
+}
+
 public final class NativeRuntimeBackend: RuntimeBackend, @unchecked Sendable {
     private let configuration: RuntimeConfiguration
     private let inspector: ProcessInspecting
-    private let discovery: RuntimeDiscovering
+    private let discovery: RuntimeDiscovering?
     private let legacyStore: OwnershipStoring?
     private let legacySupervisor: OwnedProcessSupervisor?
+
+    public init(
+        configuration: RuntimeConfiguration,
+        inspector: ProcessInspecting
+    ) {
+        self.configuration = configuration
+        self.inspector = inspector
+        self.discovery = nil
+        self.legacyStore = nil
+        self.legacySupervisor = nil
+    }
 
     public init(
         configuration: RuntimeConfiguration,
@@ -275,28 +297,46 @@ public final class NativeRuntimeBackend: RuntimeBackend, @unchecked Sendable {
                record.matches(current) {
                 return .owned(current)
             }
+            guard let discovery else {
+                throw RuntimeLifecycleError.operationFailed("Legacy Runtime discovery is unavailable.")
+            }
             let external = try discovery.matchingRuntimePIDs(checkoutRoot: configuration.runtimeRoot)
             return external.isEmpty ? .stopped : .external(external)
         }
 
-        let pids = try discovery.matchingRuntimePIDs(checkoutRoot: configuration.runtimeRoot)
-        let desiredRunning = FileManager.default.fileExists(atPath: configuration.desiredStateURL.path)
-        if !desiredRunning {
-            return pids.isEmpty ? .stopped : .external(pids)
+        let observation = try canonicalObservation()
+        guard observation.schema == 1 else {
+            throw RuntimeLifecycleError.operationFailed("Canonical Runtime status schema is unsupported.")
         }
-        guard pids.count == 1 else {
-            if pids.isEmpty {
-                return .ambiguous("Desired state is RUNNING, but no canonical Runtime instance is serving.")
+        switch observation.state {
+        case "stopped":
+            guard observation.control == "none", observation.pids.isEmpty else {
+                throw RuntimeLifecycleError.operationFailed("Canonical Runtime stopped status is inconsistent.")
             }
-            return .ambiguous("Multiple canonical Runtime instances were discovered; refusing lifecycle mutation.")
+            return .stopped
+        case "running":
+            guard observation.health == "live",
+                  observation.ready == "ready",
+                  observation.pids.count == 1 else {
+                throw RuntimeLifecycleError.operationFailed("Canonical Runtime running status is inconsistent.")
+            }
+            let pid = observation.pids[0]
+            switch observation.control {
+            case "managed":
+                guard let identity = inspector.snapshot(pid: pid) else {
+                    return .external([pid])
+                }
+                return .owned(identity)
+            case "read-only":
+                return .external([pid])
+            default:
+                throw RuntimeLifecycleError.operationFailed("Canonical Runtime control status is unsupported.")
+            }
+        case "attention":
+            return .ambiguous(observation.detail)
+        default:
+            throw RuntimeLifecycleError.operationFailed("Canonical Runtime state is unsupported.")
         }
-        guard let identity = inspector.snapshot(pid: pids[0]) else {
-            return .ambiguous("Canonical Runtime identity changed during inspection.")
-        }
-        if configuration.requiresReadiness && !readinessIsGreen() {
-            return .ambiguous("Canonical Runtime is running but health/readiness is not green yet.")
-        }
-        return .owned(identity)
     }
 
     public func startOwned() throws {
@@ -321,7 +361,6 @@ public final class NativeRuntimeBackend: RuntimeBackend, @unchecked Sendable {
             return
         }
         try runLifecycle("start")
-        try waitFor(expectedRunning: true)
     }
 
     public func stopOwned() throws {
@@ -330,7 +369,6 @@ public final class NativeRuntimeBackend: RuntimeBackend, @unchecked Sendable {
             return
         }
         try runLifecycle("stop")
-        try waitFor(expectedRunning: false)
     }
 
     public func restartOwned() throws {
@@ -340,7 +378,6 @@ public final class NativeRuntimeBackend: RuntimeBackend, @unchecked Sendable {
             return
         }
         try runLifecycle("restart")
-        try waitFor(expectedRunning: true)
     }
 
     private func lifecycleScript() -> URL {
@@ -378,42 +415,60 @@ public final class NativeRuntimeBackend: RuntimeBackend, @unchecked Sendable {
         }
     }
 
-    private func waitFor(expectedRunning: Bool) throws {
-        let timeout = max(0, configuration.transitionTimeout)
-        let deadline = Date().addingTimeInterval(timeout)
-        repeat {
-            let pids = try discovery.matchingRuntimePIDs(checkoutRoot: configuration.runtimeRoot)
-            if expectedRunning {
-                if pids.count == 1 && (!configuration.requiresReadiness || readinessIsGreen()) { return }
-            } else if pids.isEmpty {
-                return
-            }
-            if timeout == 0 { break }
-            Thread.sleep(forTimeInterval: 0.05)
-        } while Date() < deadline
-        throw RuntimeLifecycleError.operationFailed(
-            expectedRunning
-                ? "Runtime did not converge to exactly one healthy canonical instance."
-                : "Runtime did not stop within the bounded transition window."
-        )
-    }
-
-    private func readinessIsGreen() -> Bool {
-        for endpoint in ["healthz", "readyz"] {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
-            process.arguments = ["-fsS", "--max-time", "1", "http://127.0.0.1:8080/\(endpoint)"]
-            process.standardOutput = FileHandle.nullDevice
-            process.standardError = FileHandle.nullDevice
-            do {
-                try process.run()
-                process.waitUntilExit()
-            } catch {
-                return false
-            }
-            guard process.terminationStatus == 0 else { return false }
+    private func canonicalObservation() throws -> CanonicalRuntimeObservation {
+        let script = lifecycleScript()
+        guard FileManager.default.isExecutableFile(atPath: script.path) else {
+            throw RuntimeLifecycleError.operationFailed("Installed Runtime lifecycle helper is unavailable.")
         }
-        return true
+        let process = Process()
+        let stdout = Pipe()
+        let stderr = Pipe()
+        let stdoutCapture = ProcessOutputCapture(pipe: stdout)
+        let stderrCapture = ProcessOutputCapture(pipe: stderr)
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = [script.path, "status", "--json"]
+        process.environment = Self.safeChildEnvironment()
+        process.standardOutput = stdout
+        process.standardError = stderr
+        do {
+            try process.run()
+        } catch {
+            throw RuntimeLifecycleError.operationFailed("Could not observe Runtime status: \(error.localizedDescription)")
+        }
+        stdoutCapture.startDraining()
+        stderrCapture.startDraining()
+        let deadline = Date().addingTimeInterval(4)
+        while process.isRunning && Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.01)
+        }
+        let timedOut = process.isRunning
+        if timedOut {
+            process.terminate()
+            if process.isRunning {
+                _ = kill(process.processIdentifier, SIGKILL)
+            }
+        }
+        process.waitUntilExit()
+        guard stdoutCapture.waitForDrain(timeout: 1), stderrCapture.waitForDrain(timeout: 1) else {
+            stdoutCapture.closeReader()
+            stderrCapture.closeReader()
+            throw RuntimeLifecycleError.operationFailed("Could not read canonical Runtime status within the bounded deadline.")
+        }
+        stdoutCapture.closeReader()
+        stderrCapture.closeReader()
+        guard !timedOut else {
+            throw RuntimeLifecycleError.operationFailed("Canonical Runtime status observation timed out.")
+        }
+        guard process.terminationStatus == 0 else {
+            let detail = String(decoding: stderrCapture.snapshot(), as: UTF8.self)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            throw RuntimeLifecycleError.operationFailed(detail.isEmpty ? "Canonical Runtime status observation failed." : detail)
+        }
+        do {
+            return try JSONDecoder().decode(CanonicalRuntimeObservation.self, from: stdoutCapture.snapshot())
+        } catch {
+            throw RuntimeLifecycleError.operationFailed("Canonical Runtime status observation was malformed.")
+        }
     }
 
     private static func safeChildEnvironment() -> [String: String] {

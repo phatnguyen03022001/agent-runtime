@@ -11,9 +11,10 @@ enum RuntimeStatusIndicator: Equatable {
     case offlineOrUnconfirmed
 
     init(status: RuntimeStatus) {
-        if case .owned = status {
+        switch status {
+        case .owned, .external:
             self = .online
-        } else {
+        case .stopped, .ambiguous:
             self = .offlineOrUnconfirmed
         }
     }
@@ -51,9 +52,10 @@ enum RuntimePopoverStatusIndicator: Equatable {
     case offlineOrUnconfirmed
 
     init(status: RuntimeStatus) {
-        if case .owned = status {
+        switch status {
+        case .owned, .external:
             self = .online
-        } else {
+        case .stopped, .ambiguous:
             self = .offlineOrUnconfirmed
         }
     }
@@ -69,7 +71,7 @@ enum RuntimePopoverStatusIndicator: Equatable {
 
     var accessibilityLabel: String {
         switch self {
-        case .online: return "Online; owned Runtime is live and ready"
+        case .online: return "Online; Runtime is live and ready"
         case .offlineOrUnconfirmed: return "Offline or unconfirmed; Runtime ownership is not confirmed online"
         }
     }
@@ -138,8 +140,8 @@ struct RuntimePopoverPresentation {
             facts = [
                 RuntimeFact(label: "Endpoint", value: "127.0.0.1:8080"),
                 RuntimeFact(label: "PID", value: "External \(identities)"),
-                RuntimeFact(label: "Health", value: "Unverified"),
-                RuntimeFact(label: "Ready", value: "Unverified"),
+                RuntimeFact(label: "Health", value: "live"),
+                RuntimeFact(label: "Ready", value: "ready"),
                 RuntimeFact(label: "Sessions", value: "\(sessionLimit) max"),
                 RuntimeFact(label: "Parallel", value: "\(parallelLimit) max"),
                 RuntimeFact(label: "Protection", value: protection),
@@ -167,12 +169,12 @@ struct RuntimePopoverPresentation {
     static func accessibilitySummary(for status: RuntimeStatus) -> String {
         switch status {
         case .stopped:
-            return "Offline; desired state STOPPED; not serving."
+            return "Offline; Runtime is not serving."
         case .owned(let identity):
             return "Connected; endpoint 127.0.0.1:8080; PID \(identity.pid); live and ready."
         case .external(let pids):
             let identities = pids.map(String.init).joined(separator: ", ")
-            return "External; endpoint 127.0.0.1:8080; PID(s) \(identities); read-only; health and readiness unverified."
+            return "Connected; endpoint 127.0.0.1:8080; PID(s) \(identities); live and ready; read-only/external."
         case .ambiguous(let message):
             return "Attention; unavailable; \(message)"
         }

@@ -86,13 +86,32 @@ final class PresentationTests: XCTestCase {
         }
     }
 
+    func testHealthyReadOnlyRuntimeIsPresentedAsServingWithoutLifecycleControl() {
+        let status = RuntimeStatus.external([99])
+        let menuIndicator = RuntimeStatusIndicator(status: status)
+        let popover = RuntimePopoverPresentation.make(
+            status: status,
+            audit: ProtectionAuditSnapshot(),
+            sessionLimit: 6
+        )
+
+        XCTAssertEqual(menuIndicator, .online)
+        XCTAssertFalse(menuIndicator.appearsDisabled)
+        XCTAssertEqual(popover.indicator, .online)
+        XCTAssertEqual(popover.facts[0], RuntimeFact(label: "Endpoint", value: "127.0.0.1:8080"))
+        XCTAssertEqual(popover.facts[2], RuntimeFact(label: "Health", value: "live"))
+        XCTAssertEqual(popover.facts[3], RuntimeFact(label: "Ready", value: "ready"))
+        XCTAssertFalse(popover.lifecycleSlot.isEnabled)
+        XCTAssertTrue(popover.accessibilitySummary.contains("read-only"))
+    }
+
     func testPopoverHeaderUsesCircleStatusDotWithTruthfulSemantics() {
         let online = RuntimePopoverStatusIndicator(status: .owned(servingIdentity))
         XCTAssertEqual(online.symbolName, "circle.fill")
         XCTAssertEqual(online.color, .systemGreen)
         XCTAssertTrue(online.accessibilityLabel.contains("Online"))
 
-        for status in [RuntimeStatus.stopped, .external([99]), .ambiguous("health unavailable")] {
+        for status in [RuntimeStatus.stopped, .ambiguous("health unavailable")] {
             let unavailable = RuntimePopoverStatusIndicator(status: status)
             XCTAssertEqual(unavailable.symbolName, "circle.fill")
             XCTAssertEqual(unavailable.color, .systemRed)
@@ -107,7 +126,7 @@ final class PresentationTests: XCTestCase {
         XCTAssertFalse(online.appearsDisabled)
         XCTAssertTrue(online.accessibilityLabel.contains("Serving"))
 
-        for status in [RuntimeStatus.stopped, .external([99]), .ambiguous("health unavailable")] {
+        for status in [RuntimeStatus.stopped, .ambiguous("health unavailable")] {
             let offline = RuntimeStatusIndicator(status: status)
             XCTAssertEqual(offline, .offlineOrUnconfirmed)
             XCTAssertEqual(offline.symbolName, "bolt.horizontal.circle")
@@ -219,7 +238,7 @@ final class PresentationTests: XCTestCase {
 
         let stopped = RuntimePopoverPresentation.accessibilitySummary(for: .stopped)
         XCTAssertTrue(stopped.contains("Offline"))
-        XCTAssertTrue(stopped.contains("STOPPED"))
+        XCTAssertTrue(stopped.contains("not serving"))
 
         let attention = RuntimePopoverPresentation.accessibilitySummary(for: .ambiguous("health unavailable"))
         XCTAssertTrue(attention.contains("Attention"))

@@ -380,6 +380,32 @@ is_canonical_port_owner() {
   [[ "$command" != *"--profile"* ]]
 }
 
+service_pid() {
+  launchctl print "$SERVICE" 2>/dev/null \
+    | awk '/^[[:space:]]*pid[[:space:]]*=[[:space:]]*[0-9]+[[:space:]]*$/ { print $3; exit }'
+}
+
+is_tunnel_client_process() {
+  local pid="$1" executable
+  executable="$(ps -p "$pid" -o comm= 2>/dev/null | awk 'NF { print; exit }')"
+  [[ "${executable##*/}" == "tunnel-client" ]]
+}
+
+canonical_control_owner() {
+  local pid="$1" supervisor parent
+  (require_current_launchagent) >/dev/null 2>&1 || return 1
+  supervisor="$(service_pid)"
+  [[ "$supervisor" =~ ^[0-9]+$ ]] || return 1
+  parent="$(ps -p "$pid" -o ppid= 2>/dev/null | awk 'NF { print $1; exit }')"
+  [[ "$parent" == "$supervisor" ]] || return 1
+  is_tunnel_client_process "$pid"
+}
+
+is_canonical_runtime_identity() {
+  local pid="$1"
+  canonical_control_owner "$pid" || is_canonical_port_owner "$pid"
+}
+
 preflight_protected_port() {
   local owners pid
   owners="$(port_owner_pids)"
@@ -387,7 +413,7 @@ preflight_protected_port() {
   service_loaded || fail "Protected port 8080 is occupied by an unsupervised or foreign process; refusing to kill or rebind it."
   while IFS= read -r pid; do
     [[ -n "$pid" ]] || continue
-    is_canonical_port_owner "$pid" || fail "Protected port 8080 is occupied by a foreign or ambiguous process; refusing to kill or rebind it."
+    is_canonical_runtime_identity "$pid" || fail "Protected port 8080 is occupied by a foreign or ambiguous process; refusing to kill or rebind it."
   done <<< "$owners"
 }
 
@@ -402,7 +428,7 @@ runtime_ready_once() {
     return 1
   fi
   pid="$(printf '%s\n' "$owners" | awk 'NF { print; exit }')"
-  if ! is_canonical_port_owner "$pid"; then
+  if ! is_canonical_runtime_identity "$pid"; then
     READY_DIAGNOSTIC="port 8080 listener is not the canonical installed no-profile Runtime"
     return 1
   fi
@@ -417,6 +443,121 @@ runtime_ready_once() {
   fi
   READY_DIAGNOSTIC="ready"
   return 0
+}
+
+STATUS_STATE="attention"
+STATUS_CONTROL="none"
+STATUS_PIDS=""
+STATUS_HEALTH="unverified"
+STATUS_READY="unverified"
+STATUS_DETAIL="Runtime status has not been observed."
+
+status_pid_json() {
+  printf '%s\n' "$STATUS_PIDS" | awk '
+    BEGIN { first=1; printf "[" }
+    /^[0-9]+$/ { if (!first) printf ","; printf "%s", $1; first=0 }
+    END { print "]" }
+  '
+}
+
+observe_runtime_status() {
+  local owners count pid desired_running=0
+  STATUS_STATE="attention"
+  STATUS_CONTROL="none"
+  STATUS_PIDS=""
+  STATUS_HEALTH="unverified"
+  STATUS_READY="unverified"
+  STATUS_DETAIL="Runtime status is unavailable."
+  [[ -f "$DESIRED_STATE" ]] && desired_running=1
+
+  owners="$(port_owner_pids)"
+  STATUS_PIDS="$owners"
+  count="$(printf '%s\n' "$owners" | awk 'NF { count++ } END { print count+0 }')"
+  if [[ "$count" == "0" ]]; then
+    STATUS_STATE="stopped"
+    if [[ "$desired_running" == "1" ]]; then
+      STATUS_DETAIL="No Runtime listener is serving; desired state still requests RUNNING."
+    else
+      STATUS_DETAIL="No Runtime listener is serving."
+    fi
+    return 0
+  fi
+  if [[ "$count" != "1" ]]; then
+    STATUS_DETAIL="Multiple listeners occupy the protected Runtime port; ownership is ambiguous."
+    return 0
+  fi
+
+  pid="$(printf '%s\n' "$owners" | awk 'NF { print; exit }')"
+  if ! is_canonical_runtime_identity "$pid"; then
+    STATUS_DETAIL="Port 8080 is occupied by a foreign or ambiguous process."
+    return 0
+  fi
+  command -v curl >/dev/null 2>&1 || fail "curl is required for Runtime readiness checks."
+  if curl -fsS --max-time 1 "$HEALTH_URL/healthz" >/dev/null 2>&1; then
+    STATUS_HEALTH="live"
+  else
+    STATUS_HEALTH="failed"
+    STATUS_DETAIL="Canonical Runtime identity is present, but healthz is not green."
+    return 0
+  fi
+  if curl -fsS --max-time 1 "$HEALTH_URL/readyz" >/dev/null 2>&1; then
+    STATUS_READY="ready"
+  else
+    STATUS_READY="failed"
+    STATUS_DETAIL="Canonical Runtime identity is present, but readyz is not green."
+    return 0
+  fi
+
+  STATUS_STATE="running"
+  STATUS_DETAIL="Canonical Runtime is serving and ready."
+  if canonical_control_owner "$pid"; then
+    STATUS_CONTROL="managed"
+  else
+    STATUS_CONTROL="read-only"
+  fi
+}
+
+require_lifecycle_control_authority() {
+  local owners count pid
+  owners="$(port_owner_pids)"
+  count="$(printf '%s\n' "$owners" | awk 'NF { count++ } END { print count+0 }')"
+  if [[ "$count" == "0" ]]; then
+    if service_loaded; then
+      require_current_launchagent
+    fi
+    return 0
+  fi
+  [[ "$count" == "1" ]] \
+    || fail "Runtime lifecycle control is unavailable because protected-port ownership is ambiguous."
+  pid="$(printf '%s\n' "$owners" | awk 'NF { print; exit }')"
+  canonical_control_owner "$pid" \
+    || fail "Runtime is serving without positive canonical lifecycle-control ownership; refusing to signal it."
+}
+
+emit_runtime_status() {
+  local json_mode="${1:-0}" pids_json
+  observe_runtime_status
+  pids_json="$(status_pid_json)"
+  if [[ "$json_mode" == "1" ]]; then
+    printf '{"schema":1,"state":"%s","control":"%s","pids":%s,"health":"%s","ready":"%s","desired":"%s","detail":"%s"}\n' \
+      "$STATUS_STATE" "$STATUS_CONTROL" "$pids_json" "$STATUS_HEALTH" "$STATUS_READY" \
+      "$([[ -f "$DESIRED_STATE" ]] && printf running || printf stopped)" "$STATUS_DETAIL"
+    return 0
+  fi
+  case "$STATUS_STATE/$STATUS_CONTROL" in
+    running/managed)
+      echo "RUNNING (managed; persistent terminal sessions: $(effective_session_limit))"
+      ;;
+    running/read-only)
+      echo "RUNNING (read-only/external; persistent terminal sessions: $(effective_session_limit))"
+      ;;
+    stopped/*)
+      echo "STOPPED (persistent terminal sessions: $(effective_session_limit))"
+      ;;
+    *)
+      echo "ATTENTION: $STATUS_DETAIL (persistent terminal sessions: $(effective_session_limit))"
+      ;;
+  esac
 }
 
 wait_until_ready() {
@@ -439,7 +580,7 @@ wait_until_stopped() {
     fi
     while IFS= read -r pid; do
       [[ -n "$pid" ]] || continue
-      is_canonical_port_owner "$pid" \
+      is_canonical_runtime_identity "$pid" \
         || fail "Port 8080 changed to a foreign or ambiguous owner while stopping; refusing to claim Runtime is stopped."
     done <<< "$owners"
     sleep 0.1
@@ -613,7 +754,7 @@ validate_current_runtime_before_start() {
 case "$ACTION" in
   --help|-h)
     cat <<'EOF'
-Usage: ./start.sh [start|stop|restart|status|session-limit|doctor [--json]]
+Usage: ./start.sh [start|stop|restart|status [--json]|session-limit|doctor [--json]]
 The installed Runtime uses one exact per-user LaunchAgent and one validated external payload selection.
 --serve is an internal supervisor entrypoint and is not an operator command.
 EOF
@@ -640,6 +781,7 @@ EOF
     ;;
   stop)
     acquire_lock
+    require_lifecycle_control_authority
     rm -f "$DESIRED_STATE"
     if service_loaded; then
       launchctl kill SIGTERM "$SERVICE" >/dev/null 2>&1 || true
@@ -651,6 +793,7 @@ EOF
     acquire_lock
     validate_current_runtime_before_start
     preflight_protected_port
+    require_lifecycle_control_authority
     rm -f "$DESIRED_STATE"
     if service_loaded; then
       launchctl kill SIGTERM "$SERVICE" >/dev/null 2>&1 || true
@@ -665,16 +808,19 @@ EOF
     if [[ "$SOURCE_ROOT" == "$INSTALLED_RUNTIME_ROOT" ]]; then
       validate_installed_selection "$ROOT" "$RUNTIME_PYTHON" >/dev/null
     fi
-    if [[ -f "$DESIRED_STATE" ]]; then
-      echo "RUNNING (persistent terminal sessions: $(effective_session_limit))"
+    if [[ "${2:-}" == "--json" ]]; then
+      [[ "$#" == "2" ]] || fail "Usage: ./start.sh status [--json]"
+      emit_runtime_status 1
+    elif [[ "$#" == "1" ]]; then
+      emit_runtime_status 0
     else
-      echo "STOPPED (persistent terminal sessions: $(effective_session_limit))"
+      fail "Usage: ./start.sh status [--json]"
     fi
     ;;
   session-limit)
     echo "AGENT_RUNTIME_MAX_ACTIVE_SESSIONS effective: $(effective_session_limit)"
     ;;
   *)
-    fail "Usage: ./start.sh [start|stop|restart|status|session-limit|doctor [--json]]"
+    fail "Usage: ./start.sh [start|stop|restart|status [--json]|session-limit|doctor [--json]]"
     ;;
 esac

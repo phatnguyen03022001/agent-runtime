@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import plistlib
 import signal
@@ -143,6 +144,10 @@ runtime_pid="$(cat "$HOME/fake-launchd/runtime.pid" 2>/dev/null || true)"
 if [[ -n "$runtime_pid" && "$requested_pid" == "$runtime_pid" ]]; then
   if [[ "$output_format" == "comm=" ]]; then
     echo "$FAKE_TUNNEL_CLIENT"
+  elif [[ "$output_format" == "ppid=" ]]; then
+    echo "${FAKE_PARENT_PID:-${FAKE_SERVICE_PID:-4242}}"
+  elif [[ -n "${FAKE_ARGV_DRIFT:-}" ]]; then
+    echo "$FAKE_TUNNEL_CLIENT <process presentation changed>"
   else
     echo "$FAKE_TUNNEL_CLIENT run --control-plane.poll-channel main --mcp.command command=$FAKE_REPO/.venv/bin/python -m agent_runtime.server,channel=main --health.listen-addr 127.0.0.1:8080"
   fi
@@ -154,6 +159,8 @@ fi
         self._write(
             "curl",
             """#!/bin/bash
+if [[ "$*" == *"/healthz"* && -n "${FAKE_HEALTH_FAIL:-}" ]]; then exit 22; fi
+if [[ "$*" == *"/readyz"* && -n "${FAKE_READY_FAIL:-}" ]]; then exit 22; fi
 if [[ -f "$HOME/fake-launchd/runtime.pid" && ( "$*" == *"/healthz"* || "$*" == *"/readyz"* ) ]]; then
   exit 0
 fi
@@ -191,7 +198,7 @@ case "$1" in
     [[ "${2:-}" == "$service" && -f "$state/loaded" ]] || exit 1
     if [[ -f "$state/runtime.pid" ]]; then
       echo "state = running"
-      echo "pid = $(cat "$state/runtime.pid")"
+      echo "pid = ${FAKE_SERVICE_PID:-4242}"
     else
       echo "state = not running"
     fi
@@ -226,6 +233,21 @@ esac
             check=False,
         )
 
+    def run_status_json(self, *, extra_env: dict[str, str] | None = None) -> dict[str, object]:
+        env = dict(self.env)
+        if extra_env:
+            env.update(extra_env)
+        result = subprocess.run(
+            [str(self.repo / "start.sh"), "status", "--json"],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout)
+
     def current_pid(self) -> int | None:
         path = self.state / "runtime.pid"
         if not path.exists():
@@ -240,6 +262,113 @@ esac
                 return current
             time.sleep(0.02)
         self.fail("runtime pid did not change")
+
+    def test_status_reports_healthy_managed_runtime_from_serving_truth(self) -> None:
+        started = self.run_start("start")
+        self.assertEqual(started.returncode, 0, started.stderr)
+        pid = self.current_pid()
+        self.assertIsNotNone(pid)
+
+        status = self.run_status_json()
+
+        self.assertEqual(status["schema"], 1)
+        self.assertEqual(status["state"], "running")
+        self.assertEqual(status["control"], "managed")
+        self.assertEqual(status["pids"], [pid])
+        self.assertEqual(status["health"], "live")
+        self.assertEqual(status["ready"], "ready")
+
+    def test_status_reports_healthy_runtime_read_only_when_control_ownership_is_unproven(self) -> None:
+        started = self.run_start("start")
+        self.assertEqual(started.returncode, 0, started.stderr)
+        pid = self.current_pid()
+        self.assertIsNotNone(pid)
+
+        status = self.run_status_json(extra_env={"FAKE_PARENT_PID": "9999"})
+
+        self.assertEqual(status["state"], "running")
+        self.assertEqual(status["control"], "read-only")
+        self.assertEqual(status["pids"], [pid])
+        self.assertEqual(status["health"], "live")
+        self.assertEqual(status["ready"], "ready")
+
+    def test_status_does_not_treat_stale_desired_state_as_runtime_truth(self) -> None:
+        started = self.run_start("start")
+        self.assertEqual(started.returncode, 0, started.stderr)
+        desired = self.home / "Library/Application Support/Agent Runtime/protected-runtime-running"
+        desired.unlink()
+
+        status = self.run_status_json()
+
+        self.assertEqual(status["desired"], "stopped")
+        self.assertEqual(status["state"], "running")
+        self.assertEqual(status["control"], "managed")
+
+    def test_status_reports_attention_when_canonical_runtime_is_not_ready(self) -> None:
+        started = self.run_start("start")
+        self.assertEqual(started.returncode, 0, started.stderr)
+
+        status = self.run_status_json(extra_env={"FAKE_READY_FAIL": "1"})
+
+        self.assertEqual(status["state"], "attention")
+        self.assertEqual(status["control"], "none")
+        self.assertEqual(status["health"], "live")
+        self.assertEqual(status["ready"], "failed")
+
+    def test_status_reports_stopped_when_no_runtime_exists(self) -> None:
+        status = self.run_status_json()
+
+        self.assertEqual(status["state"], "stopped")
+        self.assertEqual(status["control"], "none")
+        self.assertEqual(status["pids"], [])
+
+    def test_status_treats_stale_running_intent_without_runtime_as_stopped(self) -> None:
+        desired = self.home / "Library/Application Support/Agent Runtime/protected-runtime-running"
+        desired.parent.mkdir(parents=True, exist_ok=True)
+        desired.touch()
+
+        status = self.run_status_json()
+
+        self.assertEqual(status["desired"], "running")
+        self.assertEqual(status["state"], "stopped")
+        self.assertEqual(status["control"], "none")
+        self.assertEqual(status["pids"], [])
+
+    def test_status_rejects_foreign_port_owner_even_if_port_is_occupied(self) -> None:
+        status = self.run_status_json(extra_env={"FAKE_FOREIGN_PORT_PID": "777"})
+
+        self.assertEqual(status["state"], "attention")
+        self.assertEqual(status["control"], "none")
+        self.assertEqual(status["pids"], [777])
+
+    def test_status_managed_ownership_survives_process_argv_presentation_drift(self) -> None:
+        started = self.run_start("start")
+        self.assertEqual(started.returncode, 0, started.stderr)
+
+        status = self.run_status_json(extra_env={"FAKE_ARGV_DRIFT": "1"})
+
+        self.assertEqual(status["state"], "running")
+        self.assertEqual(status["control"], "managed")
+        self.assertEqual(status["health"], "live")
+        self.assertEqual(status["ready"], "ready")
+
+    def test_stop_and_restart_refuse_read_only_runtime_without_signaling_it(self) -> None:
+        started = self.run_start("start")
+        self.assertEqual(started.returncode, 0, started.stderr)
+        original = self.current_pid()
+        self.assertIsNotNone(original)
+        desired = self.home / "Library/Application Support/Agent Runtime/protected-runtime-running"
+        self.assertTrue(desired.exists())
+
+        stopped = self.run_start("stop", extra_env={"FAKE_PARENT_PID": "9999"})
+        self.assertNotEqual(stopped.returncode, 0)
+        self.assertEqual(self.current_pid(), original)
+        self.assertTrue(desired.exists())
+
+        restarted = self.run_start("restart", extra_env={"FAKE_PARENT_PID": "9999"})
+        self.assertNotEqual(restarted.returncode, 0)
+        self.assertEqual(self.current_pid(), original)
+        self.assertTrue(desired.exists())
 
     def test_ten_concurrent_starts_collapse_and_recovery_stop_start_restart_are_singleton(self) -> None:
         processes = [
