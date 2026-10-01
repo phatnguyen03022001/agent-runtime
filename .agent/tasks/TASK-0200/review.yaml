@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0200
-task_revision: 2
-review_revision: 2
+task_revision: 3
+review_revision: 3
 state: REVISION_REQUIRED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0200/report.yaml
-  commit: "e7d925e8594751e79925d14965d66e423bc428f0"
-  report_revision: 2
+  commit: "c20cf9d44731244bf41d6027fb0e3bc5ea012bd4"
+  report_revision: 3
 
 independence:
   reviewer_role: ARCHITECT
@@ -26,24 +26,25 @@ contract_compliance:
   verifier_evidence: NOT_RUN_BY_GATE
 
 acceptance_basis:
-  - "Revision-2 candidate 86d0f0f6bb9da0b4a4f5dbecaa5d5d1b10045de7 is the single direct child of exact revision-2 base f0fdacc7a79b10accf4928914cf7c163da9c20df and changes only macos/runtime_config.py plus the two authorized test files."
-  - "Report commit e7d925e8594751e79925d14965d66e423bc428f0 follows the implementation candidate and truthfully stops at Q07."
-  - "F-0200-001 is CLOSED: undecodable tunnel-client stdout/stderr now map to structured CONTROL_PLANE_UNAVAILABLE/exit 2, with fresh canonical absent, existing canonical byte/device/inode/mode preserved, and no malformed response or submitted secret disclosure."
-  - "Focused runtime_config owner suite PASS 26/26 and the revision-1 non-UTF8 reproducer remains intact and PASS."
-  - "Q01 through Q06 pass under isolated synthetic consumer state."
-  - "Q07 exposes a distinct zero-cost rollback safety asymmetry. The general/current rollback path validates an APP_SWAPPED installed candidate before compensation/replacement; _rollback_zero_cost_transaction currently performs service/pointer/app rollback mutations without an equivalent installed-candidate provenance check."
-  - "The qualification mutates the synthetic installed candidate so provenance.validate_zero_cost_candidate rejects it. rollback_transaction nevertheless returns ROLLED_BACK, replaces the unverified target with the predecessor and removes transaction evidence."
-  - "The Executor correctly stopped before Q08-Q14 and did not invoke canonical ./verify."
+  - "Revision-3 candidate 696f298b1fbbb7b80beb8896320a9e3b636b5505 is the single direct child of exact revision-3 base fe446a73340eebf3a60fbcfa75719ad03cf4754c and changes only macos/candidate_cutover.py plus the two authorized qualification/owner test files."
+  - "Report commit c20cf9d44731244bf41d6027fb0e3bc5ea012bd4 follows the implementation candidate and truthfully stops at Q09."
+  - "F-0200-002 is CLOSED: APP_SWAPPED zero-cost rollback validates the sealed installed candidate identity before any destructive rollback effect; invalid app/witness/metadata identity retains PARTIAL evidence and leaves target/pointer/config/lifecycle state unchanged."
+  - "Focused owner regressions PASS 6/6; runtime_config plus Q01-Q07 PASS 35/35; Q08 PASS."
+  - "Q09 independently reproduces a Darwin immutable-directory activation gap: the package publisher seals payload directories to mode 0555, copytree preserves that mode in transaction staging, and payload activation attempts os.replace(staged_payload, final_payload) without preparing the staged root for Darwin rename."
+  - "The existing zero-cost candidate publish path already uses the accepted pattern staged_payload chmod 0755 -> os.replace -> final_payload chmod 0555 -> persist/validate; payload-update activation lacks that corresponding step."
+  - "On activation failure, payload-update rollback/cleanup can call raw shutil.rmtree(transaction_dir) while the transaction still contains sealed payload material. Cleanup may remove metadata.json before failing on that material, preventing the later PARTIAL metadata update."
+  - "Pointer and consumer witnesses remain unchanged in the reproduced failure, but transaction evidence becomes incomplete and a valid payload cannot reach the intended switch checkpoints."
+  - "The Executor correctly stopped before Q10-Q14 and did not invoke canonical ./verify."
   - "No live/release effect occurred."
 
 findings:
-  - id: F-0200-002
+  - id: F-0200-003
     severity: BLOCKING
-    classification: zero_cost_rollback_identity_gap
-    description: "An APP_SWAPPED zero-cost transaction can rollback over an installed generation that no longer matches the sealed transaction candidate identity, destroying the unverified generation and deleting transaction evidence."
-    required_closure: "Before any destructive zero-cost rollback action for an APP_SWAPPED generation, validate the installed target against the transaction's candidate-handoff and exact transaction payload witness using the existing zero-cost provenance validator, and require the validated identity to equal metadata.candidate. On mismatch or unverifiable identity, fail closed before service/pointer/app mutation; rollback_transaction must retain the transaction as PARTIAL with bounded error evidence. Preserve normal rollback for a valid unchanged transaction candidate."
+    classification: immutable_payload_publish_and_transaction_cleanup_gap
+    description: "Payload-update activation cannot reliably move a valid sealed 0555 staged payload into the canonical store on Darwin, and cleanup may delete transaction metadata before failing on immutable staged material."
+    required_closure: "Reuse the established zero-cost payload publication mode transition for payload-update activation and make payload-update transaction cleanup remove any sealed staged payload safely before deleting transaction metadata/directory. A cleanup failure must retain typed PARTIAL transaction evidence rather than leave a transaction without metadata."
 
 notes:
-  - "TASK-0200 revision 2 is not accepted."
-  - "F-0200-001 remains closed and must not be reopened."
+  - "TASK-0200 revision 3 is not accepted."
+  - "F-0200-001 and F-0200-002 remain closed and must not be reopened."
   - "TASK-0196 remains paused."
