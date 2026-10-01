@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0194
-task_revision: 5
-review_revision: 5
-state: REVISION_REQUIRED
+task_revision: 6
+review_revision: 6
+state: ACCEPTED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0194/report.yaml
-  commit: "88ff8becd85ad171925786439452b1759b03198a"
-  report_revision: 5
+  commit: "676a3f9bfc5a7f43a36bc9ed7d01974b6856a995"
+  report_revision: 6
 
 independence:
   reviewer_role: ARCHITECT
@@ -24,28 +24,24 @@ contract_compliance:
   scope: PASS
   structure_policy: PASS
   git_authority: PASS
-  acceptance_criteria: FAIL
+  acceptance_criteria: PASS
   verifier_evidence: PASS
 
 acceptance_basis:
-  - "Revision-5 report commit 88ff8becd85ad171925786439452b1759b03198a is the single direct child of exact revision-5 base ff893b884794af32002842dfadd791610df2adce and changes only .agent/tasks/TASK-0194/report.yaml."
-  - "The sole revision-5 package invocation produced and independently validated immutable candidate 879de69f3648be62cd328749cf408bab69f7130c0dfab88a366d8dfbe21e0af1 at source revision ff893b884794af32002842dfadd791610df2adce / tree 41ab4251f4f159f4d8861167e15fd93c218f1cfb. Its only package command failure was the already-authorized non-authoritative retained-candidate LaunchServices cleanup after publication; no rebuild or LaunchServices mutation occurred."
-  - "The sole install-prebuilt invocation ran through SentinelX, failed before PENDING with 'current Runtime LaunchAgent has a foreign identity or contract', and automatically restored the predecessor. No install replay, explicit second rollback, commit, menu-bar relaunch, Runtime Start, reboot, or source mutation occurred."
-  - "Post-rollback live state is healthy and canonical at predecessor revision 5286bbb6d1942ff7eed13190bd38ee5efcc0e621, transaction absent, Runtime RUNNING/live/ready, doctor 10/10 healthy, runtime.env unchanged, main_app enabled, runtime_agent not-found, and canonical payload byte-for-byte unchanged."
-  - "Fresh Architect read-only observation confirms the live current Runtime LaunchAgent exactly matches the intentionally supported persistent predecessor shape: Label com.picmao.agent-runtime-runtime-service, canonical helper ProgramArguments, RunAtLoad=false, KeepAlive={SuccessfulExit:false}, ProcessType=Interactive, ThrottleInterval=2; the predecessor protected-runtime-running marker is present."
-  - "candidate_cutover preflight intentionally calls _validate_current_launchagent(... allow_persistent_predecessor=True), so the live predecessor contract is explicitly admitted and is not foreign."
-  - "After predecessor shutdown/app swap/desired-state removal, _materialize_current_launchagent encounters the same current plist but calls _validate_current_launchagent with allow_persistent_predecessor default false. It therefore rejects an admitted predecessor contract instead of atomically transitioning it to the accepted manual KeepAlive=false plist."
-  - "The transaction snapshots previous-current.plist before live mutation, and rollback restores that snapshot before re-bootstrap. Therefore a bounded persistent-predecessor-to-manual plist transition can be implemented without weakening rollback fidelity."
-  - "_materialize_current_launchagent has a single production call site in zero-cost cutover. The narrow fix is to make materialization accept only either the exact current manual contract or the exact explicitly recognized persistent predecessor contract; manual is idempotent, exact predecessor is atomically replaced by the manual contract, all other identities/contracts remain fail-closed."
+  - "Implementation candidate 3a7c349e601e23779a5f6f607e312186386beec6 is the single direct child of exact revision-6 base 57df4edd38dd2e090f6156b9dcb61cee35cae832 and changes only macos/candidate_cutover.py and tests/test_candidate_cutover.py."
+  - "Report commit 676a3f9bfc5a7f43a36bc9ed7d01974b6856a995 is the single direct child of the implementation candidate and changes only .agent/tasks/TASK-0194/report.yaml."
+  - "F-0194-004 is closed narrowly: _materialize_current_launchagent defaults predecessor-transition authority to false; exact current manual state is idempotent; only the already-recognized persistent predecessor may be transitioned when the zero-cost cutover call site explicitly enables that authority."
+  - "The persistent predecessor differs from the manual contract only by KeepAlive={SuccessfulExit:false}; foreign label/helper/KeepAlive/RunAtLoad/extra-key/symlink/unsafe variants remain fail-closed."
+  - "Migration uses the existing temporary-file plus os.replace atomic publication path and strict post-write current-manual validation."
+  - "Transaction snapshot ordering and rollback remain intact. Regression proves an injected later failure restores previous-current.plist byte-for-byte, protected-runtime-running presence, prior loaded current-label service, and prior lifecycle kickstart."
+  - "F-0194-003 same-closure payload reuse/provenance semantics remain intact."
+  - "Targeted transition/rollback proof 4/4 PASS, tests.test_candidate_cutover 119/119 PASS, tests.test_package_provenance 20/20 PASS."
+  - "Exactly one revision-6 canonical ./verify invocation completed natural_exit/exit 0 with 62/62 modules and 865 tests PASS after reconciling the same durable execution; no replay occurred."
+  - "Revision 6 performed zero live activation effects. Installed predecessor remains 5286bbb6d1942ff7eed13190bd38ee5efcc0e621, transaction absent, RUNNING/live/ready."
 
-findings:
-  - id: "F-0194-004"
-    severity: BLOCKING
-    description: "Zero-cost cutover admits the exact persistent predecessor current Runtime LaunchAgent during preflight but _materialize_current_launchagent later rejects that same admitted contract instead of transitioning it to the accepted manual LaunchAgent."
-    disposition: "Revision 6 must be source-fix and verification only. Update the current LaunchAgent materialization path so the exact known persistent predecessor may be atomically migrated to the exact manual RunAtLoad=false/KeepAlive=false contract after preflight; exact manual state remains idempotent and any foreign identity/contract remains rejected. Add regression coverage for transition, foreign rejection, and rollback restoration. Do not perform live activation in revision 6."
+findings: []
 
 notes:
-  - "Do not broaden predecessor recognition beyond the exact already-supported KeepAlive={SuccessfulExit:false} contract."
-  - "Do not weaken _validate_current_launchagent's default strict manual validation for unrelated callers."
-  - "Do not alter ServiceManagement ownership, desired-state semantics, LaunchServices behavior, F-0194-003 payload semantics, or transaction schema."
-  - "Candidate 879de69f... predates the F-0194-004 fix and must not be activated after revision 6; a later activation revision must build a new candidate."
+  - "Revision-6 source fix is accepted."
+  - "Revision-5 candidate 879de69f3648be62cd328749cf408bab69f7130c0dfab88a366d8dfbe21e0af1 must not be activated because it predates F-0194-004."
+  - "A later activation revision must build one new candidate containing both accepted F-0194-003 and F-0194-004 fixes."
