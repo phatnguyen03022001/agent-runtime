@@ -1,8 +1,8 @@
 protocol_version: 3
 
 task_id: TASK-0193
-task_revision: 2
-report_revision: 2
+task_revision: 3
+report_revision: 3
 state: REPORTED
 
 task_source:
@@ -13,14 +13,15 @@ execution:
   branch:
     name: main
     role: canonical
-  authorized_base_head: "7b774280eb2f9d0b6aa43364a8dace715680d733"
-  final_execution_head: "d9c0ab817f2cc50677a59cbd6906f5150526afb6"
+  authorized_base_head: "ddfb5135239a67df9e668a0c10b1ff9e9ba9625f"
+  final_execution_head: "7541be4832510a9d446529b09e8c77735f1e1957"
 
 revision_basis:
   revision_1_candidate: "ea763dd043492d1312b0fc18c9049e9812725ac7"
-  revision_1_report_commit: "6bc1977a82cf883904978bb541017249f09aa21e"
-  revision_1_review_commit: "29a5dd4aa214ac4f7aaf291f666fe605b4721007"
-  blocking_finding: "F-0193-001"
+  revision_2_candidate: "d9c0ab817f2cc50677a59cbd6906f5150526afb6"
+  revision_2_report_commit: "c68862f680ef3406a7a6b2e33ccc8cceae2dfd57"
+  revision_2_review_commit: "b37c984be95cfa771223a90937b8f66644436907"
+  blocking_finding_closed: "F-0193-002"
 
 skill_library:
   repository: phatnguyen03022001/agent-foundation
@@ -47,34 +48,52 @@ implementation:
   changed_files:
     - tests/test_supervised_lifecycle.py
   production_or_swift_changes: false
-  summary: "Consolidated the eight transport-classification cases into one subtest matrix over a single fixture-owned running Runtime. The matrix retains degraded, unknown, unsupported/404, timeout, malformed payload, unsupported schema, additive unknown fields, and read-only/degraded cases and strengthens each case to assert running state, control ownership, PID, health, readiness, and tunnel transport."
+  summary: "The stale-predecessor-marker test now removes only the protected-runtime-running marker that it deliberately creates, after all status assertions and before generic tearDown. Generic tearDown, fake predecessor respawn semantics, the revision-2 transport matrix, production code, and Swift bytes are unchanged."
+
+focused_verification:
+  stale_marker_test:
+    command: "/usr/bin/time -p /usr/bin/python3 -m unittest tests.test_supervised_lifecycle.SupervisedLifecycleTests.test_status_remains_stopped_even_if_a_predecessor_marker_is_left_behind"
+    result: PASS
+    tests: 1
+    unittest_duration_seconds: 0.876
+    wall_time_seconds: 0.97
+    evidence: "The pathological approximately 10.2-second cleanup delay is removed while the original stale-intent status assertions remain intact."
 
 standalone_module_gate:
   required: true
   command: "/usr/bin/time -p /usr/bin/python3 -m unittest tests.test_supervised_lifecycle"
   invocation_count: 1
-  result: FAIL_GATE
-  test_result: PASS
+  result: PASS
   tests: 20
-  unittest_duration_seconds: 45.771
-  wall_time_seconds: 45.87
+  unittest_duration_seconds: 34.038
+  wall_time_seconds: 34.11
   required_max_wall_time_seconds: 40.0
-  evidence: "The complete module passed all 20 top-level unittest methods, including the eight transport classifications as deterministic subtests, but exceeded the revision-2 pre-verifier wall-time gate by 5.87 seconds."
+  evidence: "The complete module passed all 20 top-level tests, including the revision-2 transport subtest matrix, with 5.89 seconds of margin below the revision-3 pre-verifier gate."
 
 authoritative_verification:
   required: true
-  performed: false
-  result: NOT_RUN
+  performed: true
+  result: FAIL
   command: "./verify"
-  invocation_count: 0
+  invocation_count: 1
+  start_identity: "01930000000000000000000000000038"
+  session_id: "a60ccedc2869cbf1"
+  exit_code: 1
+  termination_reason: natural_exit
   retry_count: 0
-  evidence: "Revision 2 explicitly requires stopping BLOCKED before canonical verification when the standalone module exceeds 40.0 seconds. The observed wall time was 45.87 seconds, so the sole revision-2 canonical verifier budget was not spent."
+  dispatch_reconciliation: "terminal_start returned durable owner identity mismatch after dispatch; the same persisted durable execution was reconciled by start identity to COMPLETED/natural_exit/exit 1. No second verifier was started."
+  failed_module: "tests.test_durable_pipe"
+  failed_module_tests: 11
+  failed_module_errors: 5
+  failed_module_duration_seconds: 14.956
+  failure_summary: "Five tests in tests.test_durable_pipe failed with DURABLE_OWNER_LOST after durable runner bootstrap did not establish ownership within the existing 2.0-second bound. The verifier subsequently raised PermissionError: [Errno 1] Operation not permitted while attempting os.killpg(process.pid, SIGKILL) during owned-worker cleanup."
+  evidence: "The failure is outside the revision-3 authorized test file and occurred after the revision-3 stale-marker test and complete supervised-lifecycle module had already passed their required standalone gates. Revision 3 forbids widening scope and authorizes no second canonical verifier invocation."
 
 effect_accounting:
   canonical_verify:
     authorized: 1
-    consumed: 0
-    remaining_in_closed_binding: 1
+    consumed: 1
+    remaining: 0
   live_install_or_cutover:
     authorized: 0
     consumed: 0
@@ -96,29 +115,26 @@ pushed: false
 acceptance_evidence:
   - criterion_id: AC-1
     status: PASS
-    evidence: "The revision-2 implementation candidate d9c0ab817f2cc50677a59cbd6906f5150526afb6 is the direct child of exact base 7b774280eb2f9d0b6aa43364a8dace715680d733 and changes only tests/test_supervised_lifecycle.py. Eight separate transport methods that each started and later stopped a fixture Runtime were consolidated into one matrix using one running fixture."
+    evidence: "Candidate 7541be4832510a9d446529b09e8c77735f1e1957 is the direct child of exact revision-3 base ddfb5135239a67df9e668a0c10b1ff9e9ba9625f. Its only implementation change is desired.unlink() inside test_status_remains_stopped_even_if_a_predecessor_marker_is_left_behind after the original assertions."
   - criterion_id: AC-2
     status: PASS
-    evidence: "Source retains explicit cases for degraded, unknown, unsupported/404, timeout, malformed payload, unsupported schema, additive unknown fields, and read-only/degraded transport. Existing healthy managed/read-only, stopped, not-ready, foreign-owner, argv-drift, lifecycle ownership, crash/no-auto-restart, Start/Stop/Restart, and supervisor tests remain present. The complete module passed."
+    evidence: "The exact stale-marker test passed in 0.97 seconds wall time versus the independently observed approximately 10.2 seconds before the fix. Generic tearDown and fake predecessor respawn semantics are byte-unchanged."
   - criterion_id: AC-3
-    status: FAIL
-    evidence: "The single required standalone module run passed functionally but took 45.87 seconds wall time, exceeding the required <=40.0-second gate."
-  - criterion_id: AC-4
     status: PASS
-    evidence: "Before mutation, revision-1 production and Swift paths were byte-identical to ea763dd043492d1312b0fc18c9049e9812725ac7. The final implementation diff from the revision-2 exact base contains only tests/test_supervised_lifecycle.py; no production or Swift file was changed."
+    evidence: "The single complete revision-3 supervised-lifecycle timing run passed 20 tests in 34.11 seconds wall time, below the required 40.0-second gate. The revision-2 transport matrix remains intact."
+  - criterion_id: AC-4
+    status: FAIL
+    evidence: "The sole revision-3 durable canonical ./verify invocation conclusively exited 1. tests.test_durable_pipe reported five DURABLE_OWNER_LOST bootstrap errors and verifier cleanup later raised PermissionError during killpg. The execution was reconciled without replay."
   - criterion_id: AC-5
-    status: BLOCKED
-    evidence: "Canonical verification was intentionally not invoked because AC-3 failed and the task mandates stopping before ./verify when the standalone module exceeds 40.0 seconds."
-  - criterion_id: AC-6
     status: PARTIAL
-    evidence: "Implementation closure is minimal and no live Runtime/tunnel effects, branch, PR, release, capacity, dependency, configuration, or public-contract changes occurred. Final publication/synchronized-main truth is established only after this report commit is published."
+    evidence: "Implementation scope is minimal, no live Runtime/tunnel effects or branch/PR effects occurred, and the candidate is clean. Final publication and synchronized-main truth are established only after this report commit is published."
 
 blocking_findings:
-  - id: "F-0193-001"
-    severity: "BLOCKING"
-    category: verifier_module_budget
-    summary: "The authorized test-only consolidation removed seven redundant transport fixture lifecycle cycles but the complete tests.test_supervised_lifecycle module still exceeds the revision-2 <=40.0-second pre-verifier gate."
-    evidence: "One complete standalone run passed 20 tests in 45.771 seconds unittest time / 45.87 seconds wall time."
-    required_next_step: "Do not run revision-2 ./verify. A new task revision is required to authorize any further bounded optimization or another corrective strategy; the current binding is closed by the explicit >40-second stop condition."
+  - id: "F-0193-003"
+    severity: BLOCKING
+    category: authoritative_verification
+    summary: "Revision-3 focused and module timing gates pass, but the sole canonical verifier fails in tests.test_durable_pipe and then encounters a verifier worker-cleanup permission error."
+    evidence: "The exact durable verifier execution 01930000000000000000000000000038 / session a60ccedc2869cbf1 completed natural_exit with exit 1. tests.test_durable_pipe ran 11 tests with 5 errors, each rooted in durable runner bootstrap ownership timeout, followed by PermissionError in verify_tests.py worker-group cleanup."
+    required_next_step: "Do not replay revision-3 ./verify. A new task revision is required to investigate and authorize any correction for the durable-pipe/bootstrap or verifier-cleanup failure outside revision-3 scope."
 
-result: BLOCKED
+result: REVERIFY_REQUIRED
