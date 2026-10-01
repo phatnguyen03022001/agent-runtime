@@ -229,7 +229,7 @@ def _tool_contract_schema_check(bundle: dict[str, object] | None) -> DoctorCheck
         and schema_versions.get("terminal_start") == (4, 4)
         and schema_versions.get("terminal_poll") == (4, 4)
         and schema_versions.get("capacity_observer") == (1, 2)
-        and schema_versions.get("runtime_capabilities") == (2, 2)
+        and schema_versions.get("runtime_capabilities") == (2, 3)
         and schema_versions.get("fs_read_batch") == (1, 2)
         and schema_versions.get("fs_manage") == (1, 1)
         and schema_versions.get("repo_remote_observer") == (1, 1)

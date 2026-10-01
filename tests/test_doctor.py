@@ -198,6 +198,13 @@ class DoctorContractTests(unittest.TestCase):
             ),
             (1, 1),
         )
+        self.assertEqual(
+            (
+                descriptors["runtime_capabilities"]["request_schema_version"],
+                descriptors["runtime_capabilities"]["result_schema_version"],
+            ),
+            (2, 3),
+        )
         self.assertEqual(registry.evidence["screen_capture"], "VISUAL_PERCEPTION_BLOCKED")
         self.assertEqual(governance.evidence["screen_capture"], "VISUAL_PERCEPTION_BLOCKED")
 
@@ -207,6 +214,7 @@ class DoctorContractTests(unittest.TestCase):
         for name, field, stale_value in (
             ("fs_read_batch", "result_schema_version", 1),
             ("fs_manage", "request_schema_version", 2),
+            ("runtime_capabilities", "result_schema_version", 2),
         ):
             with self.subTest(name=name, field=field):
                 stale = json.loads(json.dumps(bundle))
