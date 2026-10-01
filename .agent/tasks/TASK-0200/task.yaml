@@ -1,13 +1,13 @@
 protocol_version: 3
 task_id: TASK-0200
-task_revision: 6
+task_revision: 7
 state: APPROVED
-title: "Product Failure Qualification — Canonical Short-Path Reverification"
+title: "Product Failure Qualification — Candidate Cutover Deadline Closure"
 
 origin:
   type: architect_continuation
   predecessor_task: TASK-0200
-  gap_id: F-0200-005
+  gap_id: F-0200-006
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -29,51 +29,53 @@ execution_skills:
   required: [executor, verification, simplicity]
 
 revision_basis:
-  revision_5_candidate: "2c64319d14a4d5b66e4dda5ef6a3a82eb66584bf"
-  revision_5_report: "4d8bf34206a0a85db7a7d7ee4889edc789de12f6"
-  revision_5_review: "57da5a8d060ba38e8ebaa8547865ea7d06398ea9"
-  closed_findings: [F-0200-001, F-0200-002, F-0200-003, F-0200-004]
-  open_finding: F-0200-005
+  revision_6_report: "f9fa4c401b2d60095d1d3557eadc90cdc927c7bf"
+  revision_6_review: "8bf85b0a3125ab43473d80aa229f52c483998377"
+  closed_findings: [F-0200-001, F-0200-002, F-0200-003, F-0200-004, F-0200-005]
+  open_finding: F-0200-006
   paused_release_task: TASK-0196
 
-objective: "Close F-0200-005 by performing canonical verification in a bounded short-path synthetic environment. Revision 6 is verification/report only: no source, test, policy, product, documentation or configuration mutation is authorized."
+objective: "Close only F-0200-006 by updating the stale bounded verifier deadline for tests.test_candidate_cutover, then complete one canonical short-path verification. Do not alter product behavior, test predicates, lanes, isolation or any other deadline."
 
 scope:
   required_changes:
-    - "Fresh-bind exact revision-6 base with clean synchronized MAIN ONLY."
-    - "Do not modify any tracked repository file before verification."
-    - "Confirm revision-5 implementation candidate 2c64319d14a4d5b66e4dda5ef6a3a82eb66584bf remains in direct accepted lineage and verification_policy.py plus tests/test_verify_harness.py are unchanged since that candidate."
-    - "Use run-owned repo-local short temporary roots exactly $PWD/.h for HOME and $PWD/.v for TMPDIR. They must be absent before the run or safely created empty with owner-only permissions, and must be removed before final git/report closure."
-    - "Do not use the revision-5 long TMPDIR or add another nested run-name component above $PWD/.v."
-    - "Before spending canonical verifier budget, calculate/record the expected AF_UNIX fixture socket path bound for the existing tests.test_fs_read_batch_adversarial TemporaryDirectory prefix under $PWD/.v. It must remain below 100 bytes on the bound checkout path."
-    - "Run the exact previously failing focused test once under HOME=$PWD/.h and TMPDIR=$PWD/.v: tests.test_fs_read_batch_adversarial.FsReadBatchAdversarialTests.test_fifo_socket_and_device_modes_are_rejected_before_content_read."
-    - "If that short-path focused test does not PASS, stop BLOCKED before canonical verification. Do not modify source/tests/policy to make it pass."
-    - "After focused short-path PASS, run exactly one canonical ./verify through a durable/reconcilable carrier with HOME=$PWD/.h and TMPDIR=$PWD/.v and otherwise the established canonical verification environment."
-    - "The verifier must discover/classify/select 63 modules, execute all 63, and execute tests.test_product_qualification in L5_QUALIFICATION_CHAOS_CUTOVER with isolation_key=qualification."
-    - "Do not pre-exclude, skip, filter or separately substitute any module."
-    - "Never blind-replay an ambiguous verifier result. Reconcile only the same start_identity/session."
-    - "A genuine verifier/test failure is a new BLOCKED result. Do not fix it in revision 6."
-    - "After the verifier reaches a conclusive result, remove $PWD/.h and $PWD/.v before final repo observation/report publication."
-    - "Run git status/repo observation and prove no untracked temporary material remains."
-    - "Publish only .agent/tasks/TASK-0200/report.yaml as the revision-6 repository mutation."
-    - "Final main clean/synchronized MAIN ONLY."
+    - "Fresh-bind exact revision-7 base with clean synchronized MAIN ONLY."
+    - "Modify only verification_policy.py and tests/test_verify_harness.py before the report."
+    - "Change tests.test_candidate_cutover timeout_seconds from 180.0 to exactly 300.0."
+    - "Preserve tests.test_candidate_cutover lane=L5_QUALIFICATION_CHAOS_CUTOVER, isolation_key='qualification', subsystem tags and proof rationale unchanged."
+    - "Preserve tests.test_product_qualification timeout_seconds=180.0 unchanged."
+    - "Preserve all other module deadlines, lane assignments, classification strictness, GLOBAL_WORKER_LIMIT, L5 worker limit, heartbeat, path rules and selection semantics unchanged."
+    - "Update only the exact verifier-harness assertion for candidate-cutover timeout from 180.0 to 300.0. Inventory remains 63 modules and 6 L5 modules."
+    - "Run focused tests.test_verify_harness first."
+    - "Use run-owned repo-local short roots HOME=$PWD/.h and TMPDIR=$PWD/.v, with both absent/empty before use, mode 0700, and removed before closure."
+    - "Before canonical verification, run the complete tests.test_candidate_cutover module once under the short-path environment. It must PASS naturally within 300 seconds."
+    - "Do not change tests.test_candidate_cutover or tests.test_product_qualification to satisfy the deadline."
+    - "Run git diff --check."
+    - "Only after focused harness and complete candidate-cutover module PASS, run exactly one canonical ./verify through a durable/reconcilable carrier with HOME=$PWD/.h and TMPDIR=$PWD/.v."
+    - "The canonical verifier must classify/select/complete 63/63 modules and execute tests.test_product_qualification in serialized L5."
+    - "Never blind-replay ambiguity; reconcile the same start_identity/session only."
+    - "Any genuine module/test failure under the new deadline is BLOCKED and must not be fixed in revision 7."
+    - "After the conclusive verifier result, remove .h/.v before final observation."
+    - "Publish a truthful revision-7 report; final main clean/synchronized MAIN ONLY."
 
   allowed_existing_files_or_components:
+    - "verification_policy.py"
+    - "tests/test_verify_harness.py"
     - ".agent/tasks/TASK-0200/report.yaml"
 
 invariants:
-  - "All source, tests, verifier policy, product behavior, Q01-Q14 predicates and documentation remain byte-for-byte unchanged."
-  - "F-0200-001 through F-0200-004 remain closed."
-  - "No real operator credential/runtime.env content is read or copied."
+  - "All product source, qualification tests, doctor behavior and Q01-Q14 predicates remain byte-for-byte unchanged."
+  - "Only candidate-cutover's verifier timeout changes."
+  - "F-0200-001 through F-0200-005 remain closed."
+  - "No real operator credentials/config are used."
   - "No live installed Runtime mutation."
   - "TASK-0196 remains paused."
   - "MAIN ONLY."
 
 forbidden_changes:
-  - "Any tracked file other than eventual TASK-0200 report."
-  - "Any source/test/policy/fixture modification."
-  - "Any verifier skip/exemption/filter or classification change."
-  - "Any long external TMPDIR path for canonical verification."
+  - "Any file other than verification_policy.py, tests/test_verify_harness.py and eventual report."
+  - "Any test skip/exemption/filter, lane/isolation change or deadline change for another module."
+  - "Any product/runtime/source/Swift/shell/docs/dependency/version/schema change."
   - "Any live install/cutover/relaunch/Runtime lifecycle/plugin/reboot/permission/credential/release effect."
   - "Any second canonical ./verify after a conclusive result or blind replay."
   - "Any branch or PR."
@@ -97,16 +99,16 @@ effect_authority:
   branch_or_pr_creation_max: 0
 
 acceptance_criteria:
-  - {id: AC-1, requirement: "Short-path verifier environment is proven before canonical dispatch.", evidence_required: "Bounded socket-path calculation below 100 bytes and exact previously failing focused test PASS under $PWD/.h + $PWD/.v."}
-  - {id: AC-2, requirement: "Canonical verification completes.", evidence_required: "Exactly one revision-6 ./verify PASS with 63/63 modules and no replay."}
-  - {id: AC-3, requirement: "Product qualification executes canonically.", evidence_required: "tests.test_product_qualification is selected and PASS in serialized L5 qualification lane."}
-  - {id: AC-4, requirement: "Revision 6 introduces no implementation change.", evidence_required: "Only report.yaml changes; temporary HOME/TMPDIR removed before final observation."}
-  - {id: AC-5, requirement: "Canonical closure.", evidence_required: "Truthful report and clean synchronized MAIN ONLY."}
+  - {id: AC-1, requirement: "F-0200-006 is closed narrowly.", evidence_required: "Candidate-cutover timeout is exactly 300s; all other verifier policies unchanged; focused harness PASS."}
+  - {id: AC-2, requirement: "Candidate-cutover completes naturally under the new bound.", evidence_required: "Complete tests.test_candidate_cutover PASS once under short-path environment within 300s."}
+  - {id: AC-3, requirement: "Canonical verification completes.", evidence_required: "Exactly one revision-7 ./verify PASS, 63/63 modules, no replay."}
+  - {id: AC-4, requirement: "Product qualification executes canonically.", evidence_required: "tests.test_product_qualification PASS in serialized L5."}
+  - {id: AC-5, requirement: "Canonical closure.", evidence_required: "Only authorized files changed; .h/.v removed; truthful report; clean synchronized MAIN ONLY."}
 
 verification:
   authoritative_verification:
     required: true
-    mechanism: "Short-path focused AF_UNIX fixture preflight followed by exactly one canonical ./verify."
+    mechanism: "Focused verifier harness + full candidate-cutover module + exactly one canonical short-path ./verify."
 
 continuation_policy:
   mode: MANUAL
