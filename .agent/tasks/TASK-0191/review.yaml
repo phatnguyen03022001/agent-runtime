@@ -1,0 +1,47 @@
+protocol_version: 3
+
+task_id: TASK-0191
+task_revision: 1
+review_revision: 1
+state: REVISION_REQUIRED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0191/report.yaml
+  commit: "bfab23127ea06dfb19fd0918b7d76c22e7f47cf9"
+  report_revision: 1
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  skill_rules: PASS
+  scope: PASS
+  structure_policy: PASS
+  git_authority: PASS
+  acceptance_criteria: FAIL
+  verifier_evidence: PASS
+
+acceptance_basis:
+  - "Implementation candidate f17813b9a2573cc8307195235dcd1406eccc3939 is the single direct child of exact task base 4ca431794cd034c4336e96f082ed46309a7e9963 and contains only the bounded status/lifecycle implementation and tests authorized by TASK-0191 revision 1."
+  - "Report commit bfab23127ea06dfb19fd0918b7d76c22e7f47cf9 is the single direct child of the implementation candidate and adds only .agent/tasks/TASK-0191/report.yaml."
+  - "AC-1 through AC-4 are supported by focused evidence: shell/status 19/19 PASS, Swift MenuBar 49/49 PASS, Swift Core 35/35 PASS, Python contract-focused 50/50 PASS, and full xcrun swift test PASS. Healthy managed and healthy read-only states no longer render Unavailable solely from ownership/process-discovery uncertainty; unsafe mutation remains fail-closed."
+  - "The sole authorized revision-1 ./verify invocation is conclusively FAIL with exit 1 and was not replayed. Therefore AC-5 cannot pass under revision 1."
+  - "The canonical failure is isolated to tests.test_protected_runtime.ProtectedRuntimeGuardTests.test_executor_and_session_boundaries_call_guard_before_spawn. The test constructs TerminalSessionManager without an isolated durable_state_root. TerminalSessionManager.__init__ recovers the ambient durable store, and start() checks recovery blocking before _PROTECTED_GUARD.check. When ./verify itself is running as the required durable session, the fixture can observe that ambient running durable job and fail on recovery capacity before reaching the assertion under test."
+  - "The exact failing test passes after the enclosing durable verifier terminates, consistent with ambient durable-state coupling rather than a Runtime-status implementation regression."
+
+findings:
+  - id: "F-0191-001"
+    severity: "BLOCKING"
+    description: "The protected-guard unit test is not hermetic with respect to durable Runtime recovery state. Its intended predicate is guard-before-spawn, but ambient durable verifier state can preempt that predicate."
+    disposition: "Preserve the revision-1 product implementation. Revise TASK-0191 narrowly to isolate the affected test fixture from ambient durable state and authorize exactly one fresh canonical ./verify invocation after focused RED/GREEN proof. Do not change product/runtime behavior unless focused causal evidence contradicts this diagnosis."
+
+notes:
+  - "Do not replay ./verify under revision 1; its verification budget is consumed."
+  - "Do not install, cut over, restart, reboot, or otherwise mutate the live Runtime."
+  - "TASK-0190 revision 8 remains superseded for the current objective; its physical reboot budget remains untouched."
