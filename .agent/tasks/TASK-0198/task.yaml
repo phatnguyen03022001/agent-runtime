@@ -1,15 +1,20 @@
 protocol_version: 3
 
 task_id: TASK-0198
-task_revision: 1
+task_revision: 2
 state: APPROVED
-title: "Newcomer Onboarding Correctness and Recovery"
+title: "Newcomer Onboarding Correctness and Recovery — Legacy Recovery Identity Closure"
 
 origin:
   type: architect_continuation
-  predecessor_task: TASK-0197
-  paused_release_task: TASK-0196
-  goal: "Remove operator-specific tunnel assumptions and make fresh-install configuration boring, truthful and recoverable before v0.5.2."
+  predecessor_task: TASK-0198
+  gap_id: F-0198-001
+
+revision_basis:
+  revision_1_candidate: "3d94e53e28521a6f54c7c64c7b3f3374bb9fc0d5"
+  revision_1_report: "fc486ff9fa135d03000acfebf9547256f33a6294"
+  revision_1_review: "2aa03d3fde0fac92503521ef636311c1425cad78"
+  revision_1_verification: "Focused Python 38/38 PASS; MenuBar Swift 62/62 PASS; full macOS Swift 97/97 PASS; canonical ./verify 62/62 modules, 876 tests PASS."
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -30,127 +35,58 @@ skill_library:
   revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
 
 execution_skills:
-  required: [executor, security-review, verification, reliability, simplicity]
+  required: [executor, verification, reliability, simplicity]
   recommended: []
 
-revision_basis:
-  accepted_task_0197_review: "869ed82c304dd232b3e51f82c40a6427540750d6"
-  live_runtime_activation_required: false
-  release_train_paused: TASK-0196
-
-authority_sources:
-  - source: "macos/install_preflight.py at revision-1 base"
-    role: "Current prebuilt prerequisite/preflight implementation; contains the machine-specific EXPECTED_TUNNEL_FINGERPRINT defect."
-    precedence: 1
-  - source: "macos/runtime_config.py at revision-1 base"
-    role: "Current atomic mode-0600 canonical runtime.env validation/publication implementation."
-    precedence: 2
-  - source: "macos/install_release.sh at revision-1 base"
-    role: "Current package-owned prebuilt activation orchestration and generic preflight failure propagation."
-    precedence: 3
-  - source: "macos/Sources/AgentRuntimeMenuBar/FirstRunSetupController.swift and AppDelegate.swift"
-    role: "Current native onboarding/configured/recovery UI flow."
-    precedence: 4
-  - source: "Installed official tunnel-client 0.0.14 help/doctor/admin contract"
-    role: "Existing supported validation surface. tunnel-client doctor validates local shape/config; read-only 'tunnel-client admin --json tunnels get <tunnel_id>' accepts the runtime CONTROL_PLANE_API_KEY and performs control-plane metadata lookup."
-    precedence: 5
-  - source: "Official setup destinations surfaced by tunnel-client"
-    role: "Tunnels management https://platform.openai.com/settings/organization/tunnels ; Runtime API keys https://platform.openai.com/settings/organization/api-keys ; Secure MCP Tunnel guide https://developers.openai.com/api/docs/guides/secure-mcp-tunnels"
-    precedence: 6
-
-structure_authority:
-  status: RESOLVED
-  source: "Existing runtime_config, install_preflight, install_release and native first-run/control-panel seams."
-  rationale: "Delete the operator-specific invariant, reuse official tunnel-client validation, and add the smallest explicit reconfiguration path. Do not add a wizard framework, settings subsystem, account provisioning service, updater, database, daemon or new dependency."
-
-problem_statement:
-  - "Prebuilt product preflight currently requires SHA256(tunnel_id)[:12] == one developer-machine fingerprint, incorrectly promoting an operator invariant to a product invariant."
-  - "Fresh setup publishes structurally-valid runtime.env before transport/tunnel authorization is proven. A non-empty but invalid credential/tunnel can therefore become canonical and subsequent launches offer Continue Setup without a credential re-entry path."
-  - "The installer collapses useful typed preflight reasons into a generic stderr message, while native Swift surfaces only that generic detail."
-  - "Fresh setup permits submit with empty required fields and does not directly guide a newcomer to official API-key/tunnel/tunnel-client setup."
-
-objective: "Make the self-installed Mac newcomer path user/org-specific, prevalidated before canonical configuration publication, recoverable entirely in the app, and typed from Python preflight through native UI. Preserve current transactional cutover/lifecycle/product architecture and obtain focused/full Swift plus exactly one canonical ./verify PASS. Perform zero live activation/release effects."
+objective: "Close the sole remaining TASK-0198 invariant gap by removing the developer-machine-specific tunnel fingerprint from the supported checkout stale-service recovery path while preserving its fail-closed provenance, process/listener ownership, STOPPED-state and configuration-drift guarantees. Preserve the accepted revision-1 newcomer onboarding implementation unchanged."
 
 scope:
   required_changes:
-    - "Fresh-bind exact revision-1 base with clean synchronized MAIN ONLY. TASK-0196 remains paused and must not execute."
-    - "Remove EXPECTED_TUNNEL_FINGERPRINT and all product/prebuilt fingerprint matching. Remove tests that patch the fingerprint constant. A syntactically valid tunnel ID belongs to the current user/org configuration, not this repository or developer machine."
-    - "Preserve deterministic tunnel-ID syntax validation. Use the official tunnel-client tunnel ID shape instead of a repository-specific fingerprint."
-    - "Use the existing official tunnel-client binary as the transport validation authority. Do not call raw OpenAI HTTP APIs directly from Agent Runtime and do not reimplement tunnel authorization logic."
-    - "For submitted newcomer/reconfigure values, perform read-only validation before canonical runtime.env publication: require tunnel-client executable; validate local config shape; then run the equivalent of 'tunnel-client admin --json tunnels get <tunnel_id>' with the submitted runtime CONTROL_PLANE_API_KEY supplied only through a sanitized child environment, never argv/log/UI text. The lookup must not use an admin key and must not mutate tunnels."
-    - "Interpret the control-plane lookup conservatively and deterministically. At minimum preserve distinct internal reasons for: TUNNEL_CLIENT_UNAVAILABLE, INVALID_TUNNEL_ID, INVALID_CREDENTIAL (401), TUNNEL_ACCESS_DENIED (403), TUNNEL_NOT_FOUND (404), CONTROL_PLANE_UNAVAILABLE/transient-or-malformed response, WORKSPACE_UNAVAILABLE, RUNTIME_CONFIGURATION_INCOMPLETE, and CUTOVER_TRANSACTION_PRESENT where relevant. Do not infer credential validity from tunnel-client doctor alone because doctor validates configuration shape, not remote authentication."
-    - "Never include API-key bytes in argv, stdout, stderr, structured reason metadata, logs, tests or report. Bound/sanitize all external tunnel-client output before mapping it to the closed reason set."
-    - "Change configuration sequencing so a submitted new configuration is fully syntactically validated plus tunnel/control-plane validated before it becomes canonical. A failed validation must leave an absent canonical runtime.env absent, or an existing canonical runtime.env byte-for-byte unchanged."
-    - "Reuse runtime_config.py's existing private mode-0600/atomic publication seam. Add only the minimal explicit staged/reconfigure operation needed to validate first and atomically publish afterward. Do not create a persistent configuration database or shadow authority."
-    - "For an explicit successful reconfiguration of an existing canonical config, atomically replace it only after validation. On any failure/interruption before publication, preserve the previous canonical bytes and mode."
-    - "Existing valid configuration remains authoritative unless the user explicitly chooses Reconfigure. Do not silently prompt, rewrite or rotate credentials during normal launch."
-    - "Add a visible Reconfigure path in the native app that is reachable both from the configured first-run state and from the installed control panel. It must not require Terminal, deleting runtime.env, uninstalling, or reinstalling."
-    - "Reconfigure must never display or prefill the existing API key or tunnel ID. Secret fields start empty and require explicit new values. Non-secret workspace/Git identity may be shown/prefilled only if already available through existing safe inspection."
-    - "If Runtime is already running, reconfiguration must not silently restart/stop it. Preserve manual lifecycle authority and clearly tell the user that an explicit lifecycle action is required to apply changed configuration if applicable."
-    - "Make native Set Up/Reconfigure submission locally impossible until API key, tunnel ID, Git name, Git email and a selected existing workspace are non-empty. Keep Python validation authoritative; native gating is UX, not the security boundary."
-    - "Show concise inline/native guidance for required fields rather than waiting for a generic helper rejection."
-    - "Add official newcomer help links without account automation: Runtime API key -> https://platform.openai.com/settings/organization/api-keys ; Tunnel ID -> https://platform.openai.com/settings/organization/tunnels ; tunnel-client/setup help -> https://developers.openai.com/api/docs/guides/secure-mcp-tunnels . Opening a link is user-initiated only. Do not create keys/tunnels, use admin credentials, or install/upgrade tunnel-client."
-    - "Preserve typed preflight semantics end-to-end. install_preflight/install_release must not discard the machine-readable failure reason before Swift can consume it. Swift must map the closed reasons to bounded actionable user text, for example install tunnel-client, create/check runtime API key, create/check tunnel access, choose an existing workspace, retry later for control-plane availability, or resolve an existing cutover."
-    - "Do not parse arbitrary human stderr text in Swift to recover semantics. Preserve one structured bounded reason channel from Python/installer to Swift, with a generic safe fallback for unknown failures."
-    - "Preserve existing cutover transaction/doctor/recovery behavior. This task changes configuration admission/recovery and error presentation only; it must not weaken provenance, doctor gates, rollback, manual lifecycle or Runtime ownership."
-    - "Update tests/test_task0141_productization.py so arbitrary valid user tunnel IDs are admitted without fingerprint monkeypatching and synthetic tunnel-client responses cover success, 401, 403, 404, transient/malformed output and missing executable."
-    - "Add/update runtime_config tests proving: failed submitted config never creates canonical; failed reconfigure preserves existing canonical bytes/mode; successful validated reconfigure atomically replaces canonical; secrets remain absent from argv/output."
-    - "Update macOS PresentationTests to prove: required-field gating; official help destinations; fresh setup prevalidates before canonical publication; typed reason -> actionable message mapping; configured mode exposes Reconfigure; control panel exposes Reconfigure; secrets are not prefilled; existing valid config is unchanged unless explicit reconfigure."
-    - "Run focused Python onboarding/config/preflight/productization tests first."
-    - "Run focused AgentRuntimeMenuBarTests, then the complete canonical macOS Swift suite."
-    - "Only after all focused/Swift gates PASS, run exactly one canonical ./verify through a durable/reconcilable carrier. Never blind-replay an ambiguous invocation."
-    - "Update README.md and docs/INSTALL.md to describe the corrected newcomer flow and official links, while keeping v0.5.1 as the latest public release until TASK-0196 publishes a successor."
-    - "Publish one implementation candidate and truthful TASK-0198 report. Final repository clean/synchronized MAIN ONLY."
-    - "Do not install/cut over/relaunch/restart the live Runtime, rotate credentials, reload plugin, build release archives, create tags/releases, mutate LaunchServices, request permissions or reboot."
+    - "Fresh-bind exact revision-2 base with clean synchronized MAIN ONLY."
+    - "Do not revise the accepted revision-1 onboarding/config/preflight/native UI implementation."
+    - "Remove the hard-coded '--expected-tunnel-fingerprint 6aa2b81d6dd8' argument from install.sh --recover-runtime-service."
+    - "Remove the externally supplied expected tunnel fingerprint authority from macos/recover_runtime_service.py, including its CLI parameter, constructor state and repository/developer-specific tunnel identity comparison."
+    - "Do not replace it with another constant, hash allowlist, repository tunnel id, developer tunnel id or machine-specific identity."
+    - "Preserve canonical configuration validation: required API key/tunnel/workspace fields, safe regular file requirements, valid workspace, absence of legacy tunnel profile and all existing ownership/path checks."
+    - "Preserve fail-closed stale-service recovery identity through the existing exact stale fixture provenance, canonical start.sh identity, desired STOPPED state, exact port-8080 listener ownership, exact canonical tunnel/MCP process tree and process-group membership."
+    - "Preserve configuration-drift protection during an applying recovery by retaining the canonical configuration bytes (or an equivalent exact operation-scoped digest) as a witness and checking that same witness before destructive lifecycle transitions and at final convergence. The witness must be derived from the current user's canonical configuration at operation start, not from repository/global identity."
+    - "Check-only recovery remains nonmutating and may operate for any structurally valid user/org tunnel configuration."
+    - "Update tests/test_service_recovery.py to remove expected-fingerprint fixtures/assertions and prove at least two distinct syntactically valid user tunnel IDs are not rejected merely for identity, while configuration drift during recovery still fails closed."
+    - "Preserve tests proving foreign process identity, multiple listeners/processes, non-temp/ambiguous launchd provenance, desired-running state, unrelated process-group members and current-generation installations fail closed."
+    - "Preserve install.sh recovery-mode ordering before generic venv/install work."
+    - "Run python syntax/static checks for the two production files and focused tests.test_service_recovery first."
+    - "Then run exactly one canonical ./verify through a durable/reconcilable carrier. Never blind-replay ambiguity."
+    - "Publish one revision-2 implementation candidate and truthful TASK-0198 report. Final repository clean/synchronized MAIN ONLY."
+    - "Do not build/package/archive, bump version, tag/release, install/cut over, relaunch menu, Start/Stop/Restart live Runtime, reload plugin, rotate credentials, mutate LaunchServices live state, request permissions or reboot."
 
   allowed_existing_files_or_components:
-    - "macos/install_preflight.py"
-    - "macos/runtime_config.py"
-    - "macos/install_release.sh"
-    - "macos/Sources/AgentRuntimeMenuBar/FirstRunSetupController.swift"
-    - "macos/Sources/AgentRuntimeMenuBar/ControlPanelController.swift"
-    - "macos/Sources/AgentRuntimeMenuBar/AppDelegate.swift"
-    - "macos/Tests/AgentRuntimeMenuBarTests/PresentationTests.swift"
-    - "tests/test_task0141_productization.py"
-    - "tests/test_runtime_config.py"
-    - "tests/test_candidate_cutover.py only if an existing static install_release contract assertion requires updating"
-    - "README.md"
-    - "docs/INSTALL.md"
+    - "macos/recover_runtime_service.py"
+    - "install.sh"
+    - "tests/test_service_recovery.py"
     - ".agent/tasks/TASK-0198/report.yaml"
 
 invariants:
-  - "No repository-wide tunnel fingerprint or developer-machine tunnel identity remains in the product path."
-  - "Tunnel/key provisioning remains user/org-owned; Agent Runtime never creates/deletes/updates tunnels or API keys."
-  - "Admin keys are never requested or used."
-  - "Submitted API key never appears in argv or persisted diagnostic output."
-  - "Canonical runtime.env remains mode 0600 and is the sole installed configuration authority after successful publication."
-  - "Validation failure cannot create or overwrite canonical runtime.env."
-  - "Existing canonical config remains unchanged without explicit user Reconfigure action."
-  - "Cutover/doctor/recovery/manual lifecycle semantics remain unchanged."
-  - "TASK-0197 dotenv source protection remains intact."
-  - "Runtime version remains 0.5.1; twenty advertised tools/twenty-one known capabilities and screen_capture policy remain unchanged."
-  - "TASK-0196 remains paused until TASK-0198 acceptance and later 9.5 qualification gates."
+  - "Revision-1 newcomer onboarding/config/reconfigure/typed-error/help-link behavior remains byte-for-byte unchanged."
+  - "No repository-wide, release-wide, developer-machine or globally expected tunnel fingerprint remains in any supported product/recovery path."
+  - "Recovery continues to fail closed on ambiguous provenance, process ownership, listener ownership, desired state or configuration drift."
+  - "Recovery does not validate user credentials by comparing them with a developer identity."
+  - "Runtime version remains 0.5.1; public tool/capability/lifecycle/tunnel/screen_capture semantics remain unchanged."
+  - "TASK-0196 remains paused."
   - "MAIN ONLY."
 
 forbidden_changes:
-  - "Raw OpenAI HTTP implementation inside Agent Runtime for tunnel validation."
-  - "Tunnel CRUD, admin-key use, automatic tunnel/API-key provisioning, automatic tunnel-client installation/update, or storing credentials outside canonical runtime.env."
-  - "A new settings database, onboarding framework, daemon, background validator, retry scheduler, account subsystem or third-party dependency."
-  - "Persisting an unvalidated submitted credential/tunnel as canonical config."
-  - "Displaying or pre-populating existing API-key/tunnel secret values in native UI."
-  - "Parsing arbitrary human stderr strings as the typed native error contract."
-  - "Changing Runtime lifecycle, cutover transaction schemas, provenance, public MCP tools, screen_capture, telemetry, payload model or dependency locks."
-  - "Version bump, distribution/archive build, tag/release mutation, live install/cutover/menu relaunch/Runtime lifecycle/plugin/credential rotation/reboot/security-permission effects."
+  - "Any mutation outside recover_runtime_service.py, install.sh, test_service_recovery.py and eventual TASK-0198 report."
+  - "Any change to newcomer onboarding Swift, runtime_config.py, install_preflight.py, install_release.sh, cutover/provenance, Runtime MCP code, docs, dependencies or public schemas."
+  - "Any replacement machine/global tunnel identity constant."
+  - "Weakening stale fixture provenance, process-tree, port ownership, STOPPED-state or configuration-drift checks."
   - "Any second canonical ./verify after a conclusive result or blind replay after ambiguity."
+  - "Any live/release/plugin/reboot/permission/credential effect."
   - "Any branch or PR."
 
 effect_authority:
   canonical_verify_max: 1
   distribution_build_max: 0
   archive_build_max: 0
-  version_tag_create_max: 0
-  github_release_draft_create_max: 0
-  github_release_publish_max: 0
   install_prebuilt_max: 0
   commit_cutover_max: 0
   rollback_cutover_max: 0
@@ -163,39 +99,38 @@ effect_authority:
   credential_rotation_max: 0
   physical_reboot_max: 0
   new_security_permission_max: 0
+  version_tag_create_max: 0
+  github_release_publish_max: 0
   branch_or_pr_creation_max: 0
 
 acceptance_criteria:
   - id: AC-1
-    requirement: "Prebuilt onboarding is user/org-specific rather than developer-machine-specific."
-    evidence_required: "EXPECTED_TUNNEL_FINGERPRINT and fingerprint tests are gone; arbitrary syntactically valid tunnel IDs are validated through official tunnel-client read-only metadata lookup."
+    requirement: "No developer/global tunnel fingerprint remains in supported product/recovery paths."
+    evidence_required: "install.sh and recover_runtime_service.py contain no hard-coded or externally expected tunnel fingerprint authority; repository search of production paths finds no such invariant."
   - id: AC-2
-    requirement: "Bad submitted transport configuration cannot poison canonical configuration."
-    evidence_required: "401/403/404/transient/missing-client/malformed validation failures leave absent canonical absent and existing canonical byte-identical; successful validation publishes atomically mode 0600."
+    requirement: "Recovery remains user/org-neutral and fail-closed."
+    evidence_required: "Distinct valid tunnel IDs can pass identity-neutral planning when other state is valid; foreign/ambiguous state continues to fail."
   - id: AC-3
-    requirement: "Onboarding is recoverable without Terminal."
-    evidence_required: "Fresh/configured/control-panel flows provide explicit Reconfigure/Retry; existing secrets are never shown; explicit successful reconfigure can replace config after validation."
+    requirement: "Configuration drift remains protected without global identity."
+    evidence_required: "Operation-scoped canonical config bytes/digest are revalidated before destructive transition and final convergence; synthetic drift regression fails closed."
   - id: AC-4
-    requirement: "Typed failure semantics survive Python -> installer -> Swift."
-    evidence_required: "Closed reason mapping with actionable UI messages and safe unknown fallback; no arbitrary stderr semantic parsing and no secret leakage."
+    requirement: "Revision-1 onboarding implementation remains unchanged."
+    evidence_required: "Diff from revision-2 base touches only the three authorized recovery files before report."
   - id: AC-5
-    requirement: "Newcomer form and guidance are self-explanatory."
-    evidence_required: "Set Up/Reconfigure gated on required values/workspace; inline required-state feedback; official API-key/tunnel/Secure MCP Tunnel help links present; no automated provisioning/install."
+    requirement: "Focused and canonical verification pass."
+    evidence_required: "Syntax/static checks and tests.test_service_recovery PASS followed by exactly one canonical ./verify PASS with no replay."
   - id: AC-6
-    requirement: "Existing transactional/runtime behavior remains stable."
-    evidence_required: "Focused productization/config/cutover tests PASS, menu focused/full Swift PASS, no lifecycle/provenance/cutover regression."
+    requirement: "Zero live/release effects."
+    evidence_required: "No build/install/cutover/lifecycle/plugin/credential/permission/reboot/tag/release effects."
   - id: AC-7
-    requirement: "Canonical verification passes with zero live/release effects."
-    evidence_required: "Exactly one ./verify PASS; no version/package/release/install/cutover/relaunch/restart/plugin/permission/reboot/credential effects."
-  - id: AC-8
-    requirement: "Repository closure is minimal and truthful."
-    evidence_required: "Only authorized files plus report change; README/INSTALL describe current source newcomer behavior while retaining v0.5.1 public-release truth; final main clean/synchronized MAIN ONLY."
+    requirement: "Canonical closure."
+    evidence_required: "Truthful revision-2 report; final main clean/synchronized MAIN ONLY."
 
 verification:
   authoritative_verification:
     required: true
-    mechanism: "Focused Python onboarding/config/preflight tests + focused/full macOS Swift + exactly one canonical ./verify."
-    expected_signal: "Onboarding correctness/recovery is accepted in source with no live or release effects."
+    mechanism: "Focused service-recovery proof then exactly one canonical ./verify."
+    expected_signal: "Historical machine-specific tunnel identity is removed without weakening recovery safety."
 
 continuation_policy:
   mode: MANUAL
