@@ -1,0 +1,159 @@
+protocol_version: 3
+task_id: TASK-0201
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: NEEDS_REVIEW
+
+task_source:
+  path: .agent/tasks/TASK-0201/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "5583991963bd48ecbef65897a3fb650b18c7ba66"
+  implementation_commit: "4b43ffd22c4225361cd502c8d310cffdf281f604"
+  implementation_tree: "23e497bf3ea061f3653a9afd0e458eb481380a88"
+  implementation_pushed: true
+  task_0196_paused: true
+
+implementation:
+  release_bundle:
+    path: macos/release_bundle.py
+    manifest_schema: 1
+    output_assets: ["deterministic .tar.gz", release-manifest.json, SHA256SUMS.txt]
+    contract: "The same already-frozen zero-cost candidate produces byte-identical archive, release-manifest.json, and SHA256SUMS.txt. No independent compiler-build reproducibility claim is made."
+    provenance_authority: macos/package_provenance.py
+    validation:
+      - "Exact zero-cost candidate root inventory."
+      - "Existing app/handoff/payload validation and candidate closure authority reused without algorithm changes."
+      - "Candidate root identity, initial payload closure, source revision/tree, requirements lock, public surface, and carried schemas are bound into schema-1 release-manifest.json."
+      - "Archive filename is deterministic from Runtime version plus the full collision-safe candidate SHA-256."
+      - "Tar/gzip metadata is normalized; only regular files/directories are accepted; traversal, duplicate members, links, special entries, unsafe modes, forbidden config/cache paths, and embedded operator HOME paths fail closed."
+      - "Verification uses explicit member validation and manual extraction, then re-runs zero-cost provenance validation on the extracted bundle."
+  workflow:
+    path: .github/workflows/release-gate.yml
+    trigger: workflow_dispatch
+    permissions: {contents: read}
+    build_lane: macos-26
+    compatibility_lanes: [macos-14, macos-15, macos-26]
+    architecture_assertion: arm64
+    behavior: "Canonical verify, exactly one zero-cost candidate build, two deterministic release-bundle builds with byte comparison, release-bundle verification, upload of only the three release assets, then artifact-only compatibility verification with strict codesign/provenance and bundled Python smoke."
+    forbidden_authority_preserved: "No push/PR/tag trigger, secret request, Developer ID, notarization, tag/release mutation, install/cutover, menu launch, Runtime lifecycle mutation, or real user configuration mutation."
+  compatibility:
+    path: docs/COMPATIBILITY.md
+    supported_contract: "Apple Silicon/arm64; minimum macOS 13; Intel unsupported."
+    continuously_qualified: "macOS 14/15/26 ARM64 release-gate lanes."
+    macos_13_truth: "Supported deployment contract, not continuously CI-qualified."
+    source_version: "0.5.1"
+    latest_public_release: "v0.5.1"
+    public_contract_truth:
+      substrate_manifest_schema: 2
+      candidate_handoff_schema: 2
+      payload_schema: 1
+      zero_cost_transaction_schema: 6
+    candidate_schema_truth: "Release manifests record the schema values actually carried by the exact frozen candidate after package-provenance validation; this does not rewrite or weaken the published v0.5.1 compatibility contract."
+
+verification_policy:
+  reason: "The new .github/workflows/release-gate.yml path was previously unclassified."
+  change: "Added one narrow .github/workflows/** PathRule tagged package/release/verification with force_qualification=true."
+  regression: "A dedicated verifier-harness test observed RED with zero matching rules, then GREEN after the narrow rule was added."
+
+focused_verification:
+  result: PASS
+  final_owner_suite:
+    command: ".venv/bin/python -m unittest tests.test_package_provenance tests.test_candidate_freeze tests.test_surface_and_scripts tests.test_task0055_macos_contract tests.test_verify_harness"
+    tests: 84
+    failures: 0
+    errors: 0
+    elapsed_seconds: 6.208
+  release_bundle_contract:
+    tests: 5
+    result: PASS
+    coverage:
+      - "double-build byte determinism and safe round-trip verify"
+      - "provenance/manifest/checksum binding"
+      - "unexpected root entry"
+      - "content and mode identity mismatch"
+      - "traversal and duplicate members"
+      - "symlink and FIFO/special entries"
+      - "embedded operator HOME path rejection"
+      - "absence of checkout/config/secret path material"
+  static_checks:
+    python_compile: PASS
+    workflow_yaml_parse: PASS
+    shell_syntax: PASS
+    git_diff_check: PASS
+  tdd_evidence:
+    - "Release-bundle public contract test first failed because macos/release_bundle.py did not exist, then passed after implementation."
+    - "GitHub workflow path-classification test first failed with zero matching PathRules, then passed after the narrow workflow rule."
+
+authoritative_verification:
+  required: true
+  performed: true
+  invocation_count: 1
+  command: 'HOME="$PWD/.h" TMPDIR="$PWD/.v" ./verify'
+  carrier: "Agent Runtime terminal_start"
+  mode: pipe
+  durability: process
+  start_identity: "9ac158366a7842a9b104c426b4372abf"
+  session_id: "d2d2b4af7ee62784"
+  lifecycle: COMPLETED
+  termination_reason: natural_exit
+  exit_code: 0
+  result: PASS
+  profile: qualification
+  requested_profile: qualification
+  classified_modules: 63
+  selected_modules: 63
+  completed_modules: 63
+  tests: 913
+  duration_seconds: 140.825
+  lane_counts:
+    L1_DETERMINISTIC_UNIT: {selected: 17, completed: 17, tests: 231}
+    L2_ISOLATED_INTEGRATION: {selected: 21, completed: 21, tests: 238}
+    L3_DETERMINISTIC_REGRESSION: {selected: 10, completed: 10, tests: 94}
+    L4_HOST_LIFECYCLE: {selected: 9, completed: 9, tests: 184}
+    L5_QUALIFICATION_CHAOS_CUTOVER: {selected: 6, completed: 6, tests: 166}
+  slowest:
+    candidate_cutover: {tests: 125, duration_seconds: 92.538, result: PASS}
+    product_qualification: {tests: 16, duration_seconds: 35.385, result: PASS}
+  reconciliation: "The verifier was started exactly once. One terminal_poll request was rejected before reading state because it supplied both session_id and start_identity; the already-running same session was then polled by session_id only. The verifier was never restarted or replayed."
+  evidence: "VERIFY total modules=63/63 classified_modules=63 tests=913 duration_s=140.825 profile=qualification requested_profile=qualification"
+
+cleanup:
+  short_home_removed: true
+  short_tmpdir_removed: true
+  local_distribution_artifacts_created: false
+  evidence: ".h and .v were empty at verifier completion and are absent after cleanup."
+
+effect_accounting:
+  canonical_verify: {authorized_max: 1, consumed: 1}
+  local_distribution_build: {authorized_max: 0, consumed: 0}
+  github_workflow_dispatch: {authorized_max: 0, consumed: 0}
+  install_prebuilt: {authorized_max: 0, consumed: 0}
+  commit_cutover: {authorized_max: 0, consumed: 0}
+  rollback_cutover: {authorized_max: 0, consumed: 0}
+  menu_bar_relaunch: {authorized_max: 0, consumed: 0}
+  runtime_restart: {authorized_max: 0, consumed: 0}
+  runtime_explicit_start: {authorized_max: 0, consumed: 0}
+  runtime_explicit_stop: {authorized_max: 0, consumed: 0}
+  plugin_reload_or_reconnect: {authorized_max: 0, consumed: 0}
+  credential_rotation: {authorized_max: 0, consumed: 0}
+  physical_reboot: {authorized_max: 0, consumed: 0}
+  new_security_permission: {authorized_max: 0, consumed: 0}
+  version_tag_create: {authorized_max: 0, consumed: 0}
+  github_release_publish: {authorized_max: 0, consumed: 0}
+  branch_or_pr_creation: {authorized_max: 0, consumed: 0}
+
+acceptance_evidence:
+  - {criterion_id: AC-1, status: PASS, evidence: "Synthetic frozen-candidate fixture builds twice byte-identically for archive/manifest/sums and round-trip verification re-establishes candidate/payload/source identity."}
+  - {criterion_id: AC-2, status: PASS, evidence: "Focused release-bundle tests reject checksum/manifest/provenance mismatch, traversal, duplicate/extra members, symlink/FIFO, unexpected root, and content/mode drift before unsafe extraction."}
+  - {criterion_id: AC-3, status: PASS, evidence: "workflow_dispatch-only contents:read gate encodes macOS 26 ARM64 build and macOS 14/15/26 ARM64 compatibility lanes without release authority; static contract test and YAML parse PASS."}
+  - {criterion_id: AC-4, status: PASS, evidence: "COMPATIBILITY.md distinguishes macOS 13 arm64 supported contract from 14/15/26 continuous qualification, rejects Intel support, and preserves v0.5.1/public schema truth without claiming v0.5.2 publication."}
+  - {criterion_id: AC-5, status: PASS, evidence: "No Runtime version/schema/lifecycle/candidate-provenance algorithm changed; effect accounting records zero package, workflow-dispatch, tag/release, install/cutover/lifecycle/plugin/credential/permission/reboot effects."}
+  - {criterion_id: AC-6, status: PASS, evidence: "Focused owner suite PASS 84 tests plus syntax/YAML/diff checks, followed by exactly one canonical short-path verify PASS 63/63 modules and 913 tests."}
+  - {criterion_id: AC-7, status: PENDING_REPORT_PUBLICATION, evidence: "Implementation commit 4b43ffd22c4225361cd502c8d310cffdf281f604 is already published cleanly on main. This report is the sole report-only child; final clean/synchronized main proof is necessarily observed after publishing this report commit to avoid self-referential report mutation."}
+
+blocking_findings: []
