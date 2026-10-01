@@ -1258,6 +1258,189 @@ class CandidateCutoverTests(unittest.TestCase):
             "plist": current_plist,
         }
 
+    def _sealed_payload_update_fixture(self, raw: str):
+        cutover, fx = self._zero_cost_collision_fixture(raw)
+        predecessor = self._prepare_zero_cost_persistent_current_predecessor(cutover, fx)
+        cutover.cutover_candidate(
+            fx["app"], fx["handoff"], payload_release=fx["payload_release"],
+            target_app=fx["target"], state_dir=fx["state_dir"], transaction_dir=fx["transaction"],
+            home=fx["home"], launchctl=fx["launchctl"], uid=os.getuid(),
+            ui_plist=fx["home"] / "Library/LaunchAgents/com.picmao.agent-runtime-ui.plist",
+            runtime_plist=fx["home"] / "Library/LaunchAgents/com.picmao.agent-runtime-runtime.plist",
+        )
+        cutover.commit_transaction(fx["transaction"], fx["target"])
+        source = Path(raw) / "update-source"
+        source.mkdir()
+        (source / "__init__.py").write_text("__all__ = []\n")
+        (source / "server.py").write_text("VALUE = 2\n")
+        substrate = cutover._current_substrate_manifest(fx["target"])
+        published = cutover.provenance.publish_payload_release(
+            source, Path(raw) / "incoming-payloads", revision="1" * 40, tree="2" * 40,
+            requirements_lock_sha256=substrate["requirements_lock_sha256"],
+            python_major_minor=substrate["required_python_major_minor"],
+            public_tool_count=substrate["expected_public_tool_count"],
+            public_surface_sha256=substrate["expected_public_surface_sha256"],
+        )
+        fx.update(incoming=Path(published["release_path"]), new_closure=published["content_closure"],
+                  pointer=predecessor["pointer"], plist=predecessor["current_plist"], substrate=substrate)
+        return cutover, fx
+
+    def _activate_sealed_payload(self, cutover, fx, **kwargs):
+        return cutover.activate_payload_release(
+            fx["incoming"], target_app=fx["target"], state_dir=fx["state_dir"],
+            transaction_dir=fx["transaction"], home=fx["home"], launchctl=fx["launchctl"],
+            uid=os.getuid(), **kwargs,
+        )
+
+    def test_sealed_payload_publication_validates_before_switch_and_reaches_checkpoints(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            cutover, fx = self._sealed_payload_update_fixture(raw)
+            old_pointer = fx["pointer"].read_bytes()
+            events = []
+            real_validate = cutover._validate_payload_for_substrate
+            real_replace = cutover.os.replace
+            final = fx["state_dir"] / "payloads" / fx["new_closure"]
+
+            def validate(path, substrate):
+                result = real_validate(path, substrate)
+                if path == fx["transaction"] / "payloads" / fx["new_closure"]:
+                    self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o555)
+                    events.append("sealed-staging-validated")
+                if path == final:
+                    self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o555)
+                    self.assertTrue(all(stat.S_IMODE(p.stat().st_mode) == (0o555 if p.is_dir() else 0o444) for p in path.rglob("*")))
+                    events.append("canonical-validated")
+                return result
+
+            def replace(source, destination):
+                if Path(destination) == final:
+                    self.assertIn("sealed-staging-validated", events)
+                    self.assertEqual(stat.S_IMODE(Path(source).stat().st_mode), 0o755)
+                    self.assertEqual(stat.S_IMODE((Path(source) / "agent_runtime").stat().st_mode), 0o555)
+                return real_replace(source, destination)
+
+            def checkpoint(_failures, stage):
+                if stage == "after_payload_publish":
+                    self.assertIn("canonical-validated", events)
+                    self.assertEqual(fx["pointer"].read_bytes(), old_pointer)
+                if stage == "after_pointer_switch":
+                    self.assertEqual(fx["pointer"].read_text(), fx["new_closure"] + "\n")
+                events.append(stage)
+
+            with (
+                mock.patch.object(cutover, "_runtime_managed_running", return_value=False),
+                mock.patch.object(cutover, "_run_runtime_lifecycle", side_effect=AssertionError("stopped fixture")),
+                mock.patch.object(cutover, "_validate_payload_for_substrate", side_effect=validate),
+                mock.patch.object(cutover.os, "replace", side_effect=replace),
+                mock.patch.object(cutover, "_inject", side_effect=checkpoint),
+            ):
+                self.assertEqual(self._activate_sealed_payload(cutover, fx)["status"], "ACTIVATED")
+            self.assertIn("after_payload_publish", events)
+            self.assertIn("after_pointer_switch", events)
+            real_validate(final, fx["substrate"])
+            self.assertEqual(stat.S_IMODE(final.stat().st_mode), 0o555)
+            self.assertFalse(fx["transaction"].exists())
+
+    def test_sealed_payload_cleanup_retains_typed_evidence_until_safe_removal(self) -> None:
+        for fault in ("none", "remove", "unknown", "unsafe-container", "final-rmdir"):
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as raw:
+                cutover, fx = self._sealed_payload_update_fixture(raw)
+                old_pointer = fx["pointer"].read_bytes()
+                before = cutover._payload_update_witnesses(fx["target"], fx["state_dir"], fx["plist"])
+                config = fx["state_dir"] / "runtime.env"
+                config_info = config.stat()
+                real_inject = cutover._inject
+
+                def interrupt(failures, stage):
+                    if stage == "after_old_generation_stop":
+                        raise KeyboardInterrupt("synthetic interruption")
+                    return real_inject(failures, stage)
+
+                with (mock.patch.object(cutover, "_runtime_managed_running", return_value=False),
+                      mock.patch.object(cutover, "_inject", side_effect=interrupt)):
+                    with self.assertRaises(KeyboardInterrupt):
+                        self._activate_sealed_payload(cutover, fx)
+                lifecycle_before = (fx["launch_state"].read_bytes(), fx["launch_log"].read_bytes())
+                metadata_path = fx["transaction"] / "metadata.json"
+                staged = fx["transaction"] / "payloads" / fx["new_closure"]
+                self.assertEqual(stat.S_IMODE(staged.stat().st_mode), 0o555)
+                if fault == "unknown":
+                    (fx["transaction"] / "foreign-artifact").write_text("retain\n")
+                if fault == "unsafe-container":
+                    container = staged.parent
+                    container.rename(fx["transaction"] / "retained-payloads")
+                    container.symlink_to(fx["transaction"] / "retained-payloads")
+                real_remove = cutover._remove_transaction_payload
+                real_rmdir = Path.rmdir
+
+                def remove(path, root, closure):
+                    self.assertTrue(metadata_path.is_file())
+                    if fault == "remove":
+                        raise OSError("synthetic cleanup failure " + "x" * 5000)
+                    real_remove(path, root, closure)
+                    self.assertTrue(metadata_path.is_file())
+                    self.assertFalse(path.exists())
+
+                def rmdir(path):
+                    if fault == "final-rmdir" and path == fx["transaction"]:
+                        raise OSError("synthetic final directory removal failure")
+                    return real_rmdir(path)
+
+                with (mock.patch.object(cutover, "_remove_transaction_payload", side_effect=remove),
+                      mock.patch.object(Path, "rmdir", rmdir),
+                      mock.patch.object(cutover, "_run_runtime_lifecycle", side_effect=AssertionError("stopped fixture"))):
+                    if fault == "none":
+                        self.assertEqual(cutover.rollback_transaction(fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=os.getuid())["status"], "ROLLED_BACK")
+                    else:
+                        with self.assertRaises(cutover.CutoverError):
+                            cutover.rollback_transaction(fx["transaction"], fx["target"], launchctl=fx["launchctl"], uid=os.getuid())
+                        metadata = json.loads(metadata_path.read_text())
+                        self.assertEqual(metadata["status"], "PARTIAL")
+                        self.assertLess(len(metadata["last_error"].encode()), 1024)
+                self.assertEqual(fx["pointer"].read_bytes(), old_pointer)
+                self.assertEqual(cutover._payload_update_witnesses(fx["target"], fx["state_dir"], fx["plist"]), before)
+                self.assertEqual((config.stat().st_dev, config.stat().st_ino, config.stat().st_mode), (config_info.st_dev, config_info.st_ino, config_info.st_mode))
+                self.assertEqual((fx["launch_state"].read_bytes(), fx["launch_log"].read_bytes()), lifecycle_before)
+                self.assertEqual(fx["transaction"].exists(), fault != "none")
+
+    def test_payload_update_collision_cleanup_and_activation_failure_keep_typed_metadata(self) -> None:
+        for fail in (False, True):
+            with self.subTest(fail=fail), tempfile.TemporaryDirectory() as raw:
+                cutover, fx = self._sealed_payload_update_fixture(raw)
+                final = fx["state_dir"] / "payloads" / fx["new_closure"]
+                shutil.copytree(fx["incoming"], final, copy_function=shutil.copy2)
+                canonical_before = (final.stat().st_ino, self._payload_tree_bytes(final))
+                old_pointer = fx["pointer"].read_bytes()
+                witnesses = cutover._payload_update_witnesses(fx["target"], fx["state_dir"], fx["plist"])
+                real_remove = cutover._remove_transaction_payload
+                removals = []
+
+                def remove(path, root, closure):
+                    self.assertTrue((fx["transaction"] / "metadata.json").is_file())
+                    self.assertEqual(path, fx["transaction"] / "payloads" / fx["new_closure"])
+                    removals.append(path)
+                    if fail:
+                        raise OSError("synthetic staged cleanup failure " + "x" * 5000)
+                    return real_remove(path, root, closure)
+
+                with (mock.patch.object(cutover, "_runtime_managed_running", return_value=False),
+                      mock.patch.object(cutover, "_remove_transaction_payload", side_effect=remove),
+                      mock.patch.object(cutover, "_run_runtime_lifecycle", side_effect=AssertionError("stopped fixture"))):
+                    if fail:
+                        with self.assertRaisesRegex(cutover.CutoverError, "rollback incomplete"):
+                            self._activate_sealed_payload(cutover, fx, fail_stages={"after_old_generation_stop"})
+                        metadata = json.loads((fx["transaction"] / "metadata.json").read_text())
+                        self.assertEqual(metadata["status"], "PARTIAL")
+                        self.assertLess(len(metadata["last_error"].encode()), 1024)
+                        self.assertEqual(fx["pointer"].read_bytes(), old_pointer)
+                    else:
+                        self.assertEqual(self._activate_sealed_payload(cutover, fx)["status"], "ACTIVATED")
+                        self.assertFalse(fx["transaction"].exists())
+                self.assertEqual(len(removals), 1)
+                self.assertEqual((final.stat().st_ino, self._payload_tree_bytes(final)), canonical_before)
+                self.assertEqual(stat.S_IMODE(final.stat().st_mode), 0o555)
+                self.assertEqual(cutover._payload_update_witnesses(fx["target"], fx["state_dir"], fx["plist"]), witnesses)
+
     def test_payload_activation_stops_before_pointer_switch_and_preserves_immutable_substrate(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             cutover, fx = self._payload_update_fixture(raw)

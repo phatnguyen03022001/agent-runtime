@@ -1729,14 +1729,14 @@ def rollback_transaction(
                 launchctl=launchctl,
                 uid=uid,
             )
+            _cleanup_payload_update_transaction(transaction_dir, raw_metadata)
         except Exception as exc:
             raw_metadata["status"] = "PARTIAL"
-            raw_metadata["last_error"] = "payload rollback incomplete: " + str(exc)
+            raw_metadata["last_error"] = "payload rollback incomplete: " + str(exc)[:200]
             _atomic_json(transaction_dir / "metadata.json", raw_metadata)
             if isinstance(exc, CutoverError):
                 raise
             raise CutoverError("payload rollback incomplete") from exc
-        shutil.rmtree(transaction_dir)
         return {"status": "ROLLED_BACK"}
 
     if raw_metadata.get("schema") == ZERO_COST_TRANSACTION_SCHEMA:
@@ -1984,6 +1984,34 @@ def _rollback_payload_update(
             _remove_transaction_payload(new_release, new_release.parent, new_closure)
 
 
+def _cleanup_payload_update_transaction(transaction_dir: Path, metadata: dict[str, object]) -> None:
+    payload = metadata.get("payload")
+    closure = payload.get("closure") if isinstance(payload, dict) else None
+    if not isinstance(closure, str) or re.fullmatch(r"[0-9a-f]{64}", closure) is None:
+        raise CutoverError("payload update cleanup identity is malformed")
+    if transaction_dir.is_symlink() or not transaction_dir.is_dir():
+        raise CutoverError("payload update cleanup transaction is unsafe")
+    metadata_path = transaction_dir / "metadata.json"
+    if metadata_path.is_symlink() or not metadata_path.is_file():
+        raise CutoverError("payload update cleanup metadata is unsafe")
+    payloads = transaction_dir / "payloads"
+    if set(transaction_dir.iterdir()) - {metadata_path, payloads}:
+        raise CutoverError("payload update cleanup contains unexpected artifacts")
+    if payloads.exists() or payloads.is_symlink():
+        if payloads.is_symlink() or not payloads.is_dir():
+            raise CutoverError("payload update cleanup container is unsafe")
+        staged = payloads / closure
+        if set(payloads.iterdir()) - {staged}:
+            raise CutoverError("payload update cleanup contains unexpected payload artifacts")
+        if staged.exists() or staged.is_symlink():
+            _remove_transaction_payload(staged, payloads, closure)
+        payloads.rmdir()
+    if set(transaction_dir.iterdir()) != {metadata_path}:
+        raise CutoverError("payload update cleanup is incomplete")
+    metadata_path.unlink()
+    transaction_dir.rmdir()
+
+
 def activate_payload_release(
     payload_release: Path,
     *,
@@ -2017,35 +2045,35 @@ def activate_payload_release(
         _validate_payload_update_witnesses(witnesses, target_app, state_dir, current_plist)
         return {"status": "UNCHANGED", "payload_closure": old_closure}
 
+    metadata: dict[str, object] = {
+        "schema": PAYLOAD_UPDATE_TRANSACTION_SCHEMA,
+        "kind": "payload-update",
+        "status": "RUNNING",
+        "phase": "PREPARED",
+        "previous": {
+            "closure": old_closure,
+            "runtime_was_running": runtime_was_running,
+        },
+        "payload": {"closure": new_closure, "created": False},
+        "witnesses": witnesses,
+        "paths": {
+            "target_app": str(target_app),
+            "state_dir": str(state_dir),
+            "pointer": str(pointer),
+            "current_plist": str(current_plist),
+            "home": str(home),
+        },
+        "last_error": "",
+    }
     created_transaction = False
     try:
         transaction_dir.mkdir(parents=True, mode=0o700)
         created_transaction = True
+        _atomic_json(transaction_dir / "metadata.json", metadata)
         staged_payload = transaction_dir / "payloads" / new_closure
         staged_payload.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(payload_release, staged_payload, copy_function=shutil.copy2)
         _validate_payload_for_substrate(staged_payload, substrate)
-        metadata: dict[str, object] = {
-            "schema": PAYLOAD_UPDATE_TRANSACTION_SCHEMA,
-            "kind": "payload-update",
-            "status": "RUNNING",
-            "phase": "PREPARED",
-            "previous": {
-                "closure": old_closure,
-                "runtime_was_running": runtime_was_running,
-            },
-            "payload": {"closure": new_closure, "created": False},
-            "witnesses": witnesses,
-            "paths": {
-                "target_app": str(target_app),
-                "state_dir": str(state_dir),
-                "pointer": str(pointer),
-                "current_plist": str(current_plist),
-                "home": str(home),
-            },
-            "last_error": "",
-        }
-        _atomic_json(transaction_dir / "metadata.json", metadata)
 
         if runtime_was_running:
             _run_runtime_lifecycle(target_app, "stop")
@@ -2063,7 +2091,9 @@ def activate_payload_release(
         if final_payload.exists() or final_payload.is_symlink():
             _validate_payload_for_substrate(final_payload, substrate)
         else:
+            staged_payload.chmod(0o755)
             os.replace(staged_payload, final_payload)
+            final_payload.chmod(0o555)
             metadata["payload"] = {"closure": new_closure, "created": True}
             _atomic_json(transaction_dir / "metadata.json", metadata)
         _validate_payload_for_substrate(final_payload, substrate)
@@ -2084,12 +2114,11 @@ def activate_payload_release(
         _validate_payload_update_witnesses(witnesses, target_app, state_dir, current_plist)
         metadata["phase"] = "VALIDATED"
         _atomic_json(transaction_dir / "metadata.json", metadata)
-        shutil.rmtree(transaction_dir)
+        _cleanup_payload_update_transaction(transaction_dir, metadata)
         return {"status": "ACTIVATED", "payload_closure": new_closure}
     except Exception as exc:
-        if created_transaction and (transaction_dir / "metadata.json").is_file():
+        if created_transaction:
             try:
-                metadata = _read_transaction_metadata_unversioned(transaction_dir)
                 _rollback_payload_update(
                     transaction_dir,
                     target_app,
@@ -2097,23 +2126,20 @@ def activate_payload_release(
                     launchctl=launchctl,
                     uid=uid,
                 )
-                shutil.rmtree(transaction_dir)
+                _cleanup_payload_update_transaction(transaction_dir, metadata)
             except Exception as rollback_exc:
                 try:
-                    partial = _read_transaction_metadata_unversioned(transaction_dir)
-                    partial["status"] = "PARTIAL"
-                    partial["last_error"] = "payload rollback incomplete: " + str(rollback_exc)
-                    _atomic_json(transaction_dir / "metadata.json", partial)
+                    metadata["status"] = "PARTIAL"
+                    metadata["last_error"] = "payload rollback incomplete: " + str(rollback_exc)[:200]
+                    _atomic_json(transaction_dir / "metadata.json", metadata)
                 except Exception:
                     pass
                 raise CutoverError(
-                    f"payload activation failed and rollback incomplete: {rollback_exc}"
+                    f"payload activation failed and rollback incomplete: {str(rollback_exc)[:200]}"
                 ) from exc
             raise CutoverError(
-                f"payload activation failed; previous payload restored: {exc}"
+                f"payload activation failed; previous payload restored: {str(exc)[:200]}"
             ) from exc
-        if created_transaction and transaction_dir.exists():
-            shutil.rmtree(transaction_dir)
         if isinstance(exc, (CutoverError, provenance.PackageProvenanceError)):
             raise CutoverError(str(exc)) from exc
         raise

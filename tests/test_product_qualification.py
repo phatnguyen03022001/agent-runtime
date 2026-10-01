@@ -440,3 +440,241 @@ class ProductQualificationTests(unittest.TestCase):
                     )
                 self.assertEqual(predecessor["pointer"].read_bytes(), old_pointer)
                 self.assertFalse(fx["transaction"].exists())
+
+    @staticmethod
+    def _valid_config(workspace: Path):
+        return {
+            "CONTROL_PLANE_API_KEY": "TASK0200_SYNTHETIC_CREDENTIAL",
+            "CONTROL_PLANE_TUNNEL_ID": "user-qualification-tunnel",
+            "AGENT_RUNTIME_WORKSPACE_ROOT": str(workspace.resolve()),
+            "AGENT_RUNTIME_GIT_NAME": "TASK0200 Synthetic Identity",
+            "AGENT_RUNTIME_GIT_EMAIL": "task0200-synthetic@example.invalid",
+            "AGENT_RUNTIME_MAX_ACTIVE_SESSIONS": "6",
+            "AGENT_RUNTIME_MAX_PARALLELISM": "2",
+            "AGENT_RUNTIME_TELEMETRY": "off",
+        }
+
+    def test_q10_uninstall_retains_exact_config_and_reinstall_admission_keeps_it_authoritative(self) -> None:
+        from tests import test_uninstall as uninstall_owner
+        with tempfile.TemporaryDirectory(prefix="task0200-uninstall-") as raw:
+            root = Path(raw)
+            home = root / "home"
+            home.mkdir()
+            workspace = root / "workspace"
+            workspace.mkdir()
+            service_state = root / "service-state.json"
+            service_state.write_text(json.dumps({"main_app": "enabled", "runtime_agent": "not-found"}) + "\n")
+            app, state, config, plist, _ = uninstall_owner.make_current_product(home, service_state)
+            config.write_bytes(config_owner.runtime_config._prebuilt_payload(self._valid_config(workspace)))
+            config.chmod(0o600)
+            before = self._config_identity(config)
+            launchctl = root / "launchctl"
+            helper = app / "Contents/MacOS/AgentRuntimeRuntimeService"
+            launchctl.write_text("#!/bin/sh\ncase \"$1\" in\n"
+                                 f" print) printf 'program = %s\\n' {shlex.quote(str(helper))}; exit 0 ;;\n"
+                                 " bootout) exit 0 ;;\nesac\nexit 2\n")
+            launchctl.chmod(0o755)
+            uninstall = uninstall_owner.load_module()
+            result = uninstall.uninstall_product(home=home, launchctl=launchctl, uid=os.getuid())
+            self.assertEqual(result["status"], "UNINSTALLED")
+            self.assertFalse(app.exists())
+            self.assertFalse(plist.exists())
+            self.assertFalse((state / "current-payload").exists())
+            self.assertEqual(self._config_identity(config), before)
+            # Reinstall's existing admission owner must retain valid canonical authority.
+            with mock.patch.object(config_owner.runtime_config, "validate_tunnel_access", side_effect=AssertionError("retained config must not contact control plane")):
+                config_owner.runtime_config.ensure_prebuilt(config, workspace, environ={"CONTROL_PLANE_API_KEY": "IGNORED_SYNTHETIC_KEY"})
+                inspected = config_owner.runtime_config.inspect_prebuilt_existing(config)
+            self.assertEqual(inspected, {"git_identity_ready": True, "workspace_root": str(workspace.resolve())})
+            self.assertEqual(self._config_identity(config), before)
+
+    def test_q11_upgrade_preserves_config_bytes_mode_and_identity(self) -> None:
+        import plistlib
+        with tempfile.TemporaryDirectory(prefix="task0200-upgrade-") as raw:
+            cutover, fx, _ = self._zero_cost_fixture(raw)
+            workspace = Path(raw) / "workspace"
+            workspace.mkdir()
+            config = fx["state_dir"] / "runtime.env"
+            config.write_bytes(config_owner.runtime_config._prebuilt_payload(self._valid_config(workspace)))
+            config.chmod(0o600)
+            before = self._config_identity(config)
+            for app, version in ((fx["target"], "0.5.0"), (fx["app"], "0.5.1")):
+                info = app / "Contents/Info.plist"
+                values = plistlib.loads(info.read_bytes())
+                values["CFBundleShortVersionString"] = version
+                info.write_bytes(plistlib.dumps(values))
+            cutover.provenance.seal_zero_cost_candidate(fx["app"], fx["handoff"], fx["payload_release"], identity_reader=cutover.provenance._codesign_metadata)
+            self.assertEqual(self._cutover(cutover, fx)["status"], "PENDING")
+            self.assertEqual(plistlib.loads((fx["target"] / "Contents/Info.plist").read_bytes())["CFBundleShortVersionString"], "0.5.1")
+            self.assertEqual(self._config_identity(config), before)
+            cutover.commit_transaction(fx["transaction"], fx["target"])
+            self.assertEqual(self._config_identity(config), before)
+
+    def _doctor_fixture(self, raw: str):
+        import shutil
+        from tests import test_doctor as doctor_owner
+        root = Path(raw).resolve()
+        home = root / "home"
+        home.mkdir()
+        workspace = root / "workspace"
+        workspace.mkdir()
+        app = doctor_owner.make_installed_fixture(home)
+        runtime = app / "Contents/Resources/runtime"
+        (runtime / "macos").mkdir()
+        for name in ("candidate_cutover.py", "package_provenance.py", "runtime_config.py"):
+            shutil.copy2(ROOT / "macos" / name, runtime / "macos" / name)
+        # A synthetic bundled Python transport reuses the current interpreter.
+        # Only Darwin signing probes are substituted; doctor/selection/config logic is real.
+        bootstrap = root / "fixture-python.py"
+        bootstrap.write_text(
+            "import runpy, socket, sys\n"
+            f"sys.path.insert(0, {str(runtime)!r})\n"
+            "sys.dont_write_bytecode = True\n"
+            "def no_network(*args, **kwargs): raise AssertionError('qualification network forbidden')\n"
+            "socket.socket.connect = no_network\n"
+            "args = sys.argv[1:]\n"
+            "if args[0] == '-':\n"
+            "    sys.argv = args\n"
+            "    exec(compile(sys.stdin.read(), '<installed-selection>', 'exec'), {'__name__': '__main__'})\n"
+            "elif args[:2] == ['-m', 'agent_runtime.doctor']:\n"
+            "    from macos import package_provenance\n"
+            "    package_provenance._verify_codesign = lambda app: None\n"
+            "    package_provenance.zero_cost_responsible_code_identity = lambda app: {}\n"
+            "    sys.argv = args[1:]\n"
+            "    runpy.run_module('agent_runtime.doctor', run_name='__main__')\n"
+            "else: raise AssertionError('unexpected synthetic interpreter command')\n"
+        )
+        python = runtime / ".venv/bin/python"
+        python.write_text(f"#!/bin/sh\nexec {shlex.quote(sys.executable)} {shlex.quote(str(bootstrap))} \"$@\"\n")
+        python.chmod(0o755)
+        provenance = doctor_owner.doctor.package_provenance
+        manifest_path = runtime.parent / "runtime-manifest.json"
+        old = provenance._load_substrate_manifest(manifest_path)
+        provenance.write_substrate_manifest(
+            runtime, manifest_path, old["runtime_revision"], old["git_tree"], old["requirements_lock_sha256"],
+            python_major_minor=old["required_python_major_minor"],
+            public_tool_count=old["expected_public_tool_count"], public_surface_sha256=old["expected_public_surface_sha256"],
+        )
+        state = home / "Library/Application Support/Agent Runtime"
+        config = state / "runtime.env"
+        values = self._valid_config(workspace)
+        config.write_bytes(config_owner.runtime_config._prebuilt_payload(values))
+        config.chmod(0o600)
+        return {"root": root, "home": home, "workspace": workspace, "app": app, "runtime": runtime,
+                "state": state, "config": config, "values": values, "manifest": manifest_path}
+
+    def _run_doctor(self, fx):
+        env = {"HOME": str(fx["home"]), "TMPDIR": str(fx["root"]), "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+               "PYTHONDONTWRITEBYTECODE": "1", "LANG": "C", "LC_ALL": "C", "PYTHONUTF8": "1"}
+        result = subprocess.run([str(ROOT / "start.sh"), "doctor", "--json"], cwd=ROOT, env=env,
+                                text=True, capture_output=True, timeout=30, check=False)
+        self.assertEqual(result.stderr, "")
+        self.assertLess(len(result.stdout.encode()), 64 * 1024)
+        self.assertEqual(len(result.stdout.splitlines()), 1)
+        payload = json.loads(result.stdout)
+        for key in ("CONTROL_PLANE_API_KEY", "CONTROL_PLANE_TUNNEL_ID", "AGENT_RUNTIME_GIT_NAME", "AGENT_RUNTIME_GIT_EMAIL"):
+            self.assertNotIn(fx["values"][key], result.stdout)
+        for check in payload.get("checks", []):
+            self.assertLessEqual(len(json.dumps(check["evidence"], sort_keys=True).encode()), 4096)
+        return result, payload
+
+    def test_q12_diagnosis_and_existing_preflight_are_secret_safe_bounded_and_deterministic(self) -> None:
+        from contextlib import ExitStack
+        from tests import test_task0141_productization as preflight_owner
+        with tempfile.TemporaryDirectory(prefix="task0200-doctor-safe-") as raw:
+            fx = self._doctor_fixture(raw)
+            config_before = self._config_identity(fx["config"])
+            first, _ = self._run_doctor(fx)
+            second, _ = self._run_doctor(fx)
+            self.assertEqual((first.returncode, first.stdout), (second.returncode, second.stdout))
+            self.assertEqual(self._config_identity(fx["config"]), config_before)
+            # Shell config preflight uses fixed safe diagnostics even for hostile values.
+            fx["config"].write_bytes(config_owner.runtime_config._prebuilt_payload({**fx["values"], "AGENT_RUNTIME_MAX_PARALLELISM": "invalid"}))
+            failure, payload = self._run_doctor(fx)
+            self.assertEqual(failure.returncode, 2)
+            self.assertEqual(payload["error"]["reason_code"], "CANONICAL_CONFIG_INVALID")
+        with tempfile.TemporaryDirectory(prefix="task0200-preflight-safe-") as raw:
+            owner = preflight_owner.Task0141ProductizationTests()
+            root, home, env, patches, secrets = owner._ready_preflight_fixture(Path(raw))
+            before = owner._snapshot(root, home)
+            with ExitStack() as stack:
+                for patch in patches:
+                    stack.enter_context(patch)
+                first = preflight_owner.preflight.collect_report(root, home, environ=env)
+                second = preflight_owner.preflight.collect_report(root, home, environ=env)
+            self.assertEqual(first, second)
+            self.assertEqual(owner._snapshot(root, home), before)
+            encoded = json.dumps(first, sort_keys=True)
+            human = preflight_owner.preflight.render_human(first)
+            self.assertLess(len(encoded.encode()), 64 * 1024)
+            self.assertLess(len(human.encode()), 64 * 1024)
+            for secret in secrets:
+                self.assertNotIn(secret, encoded)
+                self.assertNotIn(secret, human)
+
+    def test_q13_doctor_has_deterministic_non_ok_reasons_for_consumer_failures(self) -> None:
+        import plistlib
+        cases = (
+            ("workspace", "CANONICAL_CONFIG_INVALID"),
+            ("package", "INSTALLED_PACKAGE_INVALID"),
+            ("substrate", "INSTALLED_SUBSTRATE_INVALID"),
+            ("pointer", "PAYLOAD_POINTER_INVALID"),
+            ("payload", "PAYLOAD_RELEASE_INVALID"),
+            ("lifecycle", "LIFECYCLE_OWNERSHIP_INVALID"),
+            ("approval", "MAIN_APP_APPROVAL_REQUIRED"),
+            ("transaction", "CUTOVER_TRANSACTION_PRESENT"),
+            ("invalid-transaction", "CUTOVER_STATE_INVALID"),
+        )
+        for fault, reason in cases:
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory(prefix="task0200-doctor-failure-") as raw:
+                fx = self._doctor_fixture(raw)
+                if fault == "workspace":
+                    fx["workspace"].rmdir()
+                elif fault == "package":
+                    (fx["runtime"] / ".venv/bin/python").unlink()
+                elif fault == "substrate":
+                    (fx["runtime"] / "start.sh").write_text("foreign substrate\n")
+                elif fault == "pointer":
+                    (fx["state"] / "current-payload").write_text("invalid\n")
+                elif fault == "payload":
+                    closure = (fx["state"] / "current-payload").read_text().strip()
+                    path = fx["state"] / "payloads" / closure / "agent_runtime/doctor.py"
+                    path.chmod(0o644)
+                    path.write_text("UNVERIFIED = True\n")
+                elif fault == "lifecycle":
+                    plist = fx["home"] / "Library/LaunchAgents/com.picmao.agent-runtime-runtime-service.plist"
+                    value = plistlib.loads(plist.read_bytes())
+                    value["KeepAlive"] = True
+                    plist.write_bytes(plistlib.dumps(value))
+                elif fault == "approval":
+                    menu = fx["app"] / "Contents/MacOS/AgentRuntimeMenuBar"
+                    menu.write_text(menu.read_text().replace('"enabled"', '"requires-approval"'))
+                else:
+                    transaction = fx["state"] / "cutover-transaction"
+                    transaction.mkdir()
+                    metadata = {"schema": 6, "kind": "zero-cost", "status": "PENDING", "phase": "APP_SWAPPED", "paths": {"target_app": str(fx["app"])}}
+                    (transaction / "metadata.json").write_text("invalid" if fault == "invalid-transaction" else json.dumps(metadata))
+                config_before = self._config_identity(fx["config"])
+                first, payload = self._run_doctor(fx)
+                second, _ = self._run_doctor(fx)
+                self.assertNotEqual(first.returncode, 0)
+                self.assertEqual((first.returncode, first.stdout), (second.returncode, second.stdout))
+                reasons = {payload["error"]["reason_code"]} if "error" in payload else {check["reason_code"] for check in payload["checks"] if check["status"] != "pass"}
+                self.assertIn(reason, reasons)
+                self.assertEqual(self._config_identity(fx["config"]), config_before)
+
+    def test_q14_healthy_installed_doctor_has_exact_inventory_without_warnings(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="task0200-doctor-healthy-") as raw:
+            fx = self._doctor_fixture(raw)
+            first, payload = self._run_doctor(fx)
+            second, _ = self._run_doctor(fx)
+            self.assertEqual(first.returncode, 0, first.stdout)
+            self.assertEqual((first.returncode, first.stdout), (second.returncode, second.stdout))
+            self.assertEqual(set(payload), {"schema_version", "runtime_version", "status", "checks"})
+            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(payload["status"], "healthy")
+            self.assertEqual([check["id"] for check in payload["checks"]], [
+                "runtime_identity", "capability_registry", "tool_contract_schema", "workspace", "capacity_session_config",
+                "git_readiness", "installed_package_identity", "service_registration", "cutover_identity", "governance_protection",
+            ])
+            self.assertTrue(all(check["status"] == "pass" and check["reason_code"] == "OK" for check in payload["checks"]))
