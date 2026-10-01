@@ -1,0 +1,213 @@
+protocol_version: 3
+
+task_id: TASK-0197
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: NEEDS_REVIEW
+
+task_source:
+  path: .agent/tasks/TASK-0197/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  execution_surface: CHATGPT_LOCAL
+  exact_task_base: "68725d4c76c3b1299029c5d9d2a29db7402ca1e4"
+  implementation_candidate: "b745b949a03c75417d9ecc21dcc003ba9720f52b"
+  implementation_tree: "41c84285938607e3a5ae1c4a4597c390aa8a1044"
+  implementation_published: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  authorized_revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+  required_skills:
+    - executor
+    - security-review
+    - verification
+    - simplicity
+
+fresh_binding:
+  result: PASS
+  origin: "git@github.com:phatnguyen03022001/agent-runtime.git"
+  local_branch: main
+  remote_branch: main
+  base_head: "68725d4c76c3b1299029c5d9d2a29db7402ca1e4"
+  local_worktree_clean_before_execution: true
+  worktree_count: 1
+  branch_or_pr_created: false
+  task_0196_release_train_executed: false
+
+implementation:
+  result: PASS
+  classifier:
+    owner: agent_runtime/fs_safety.py
+    function: is_sensitive_dotenv_basename
+    rule: "Case-insensitive final-basename classification: deny .env and .env.* except exactly .env.example, .env.sample, and .env.template."
+    content_inspection: false
+  fs_read_batch:
+    sensitive_action: "Return existing per-item ACCESS_DENIED before opening or reading content."
+    request_schema_version: 1
+    result_schema_version: 2
+    error_enum_changed: false
+  fs_search:
+    content_mode: "Skip sensitive dotenv files before open/read/hash; sensitive bytes do not contribute to bytes_scanned."
+    path_mode: "Sensitive dotenv filenames remain discoverable."
+    request_schema_version: 2
+    result_schema_version: 2
+  documentation:
+    - README.md
+    - THREAT_MODEL.md
+  security_boundary: "Accidental-disclosure defense-in-depth only; not a sandbox or same-UID confidentiality boundary. Terminal tools and arbitrary same-UID processes remain outside this protection."
+  real_secret_material_used: false
+
+tdd_evidence:
+  initial_environment_attempt:
+    command: "python3 -m unittest tests.test_fs_read_batch tests.test_fs_search"
+    result: SETUP_ERROR
+    counted_as_red: false
+    evidence: "Homebrew Python 3.14 lacked pydantic, so the test modules did not import. No behavioral red claim was made from this attempt."
+  red:
+    command: ".venv/bin/python -m unittest tests.test_fs_read_batch tests.test_fs_search"
+    result: EXPECTED_FAILURE
+    tests_run: 30
+    failures: 1
+    errors: 3
+    evidence: "New regressions failed because dotenv content was still readable/searchable and ToolContract metadata did not yet declare the policy."
+  green:
+    command: ".venv/bin/python -m unittest tests.test_fs_read_batch tests.test_fs_search"
+    result: PASS
+    tests: 30
+    evidence: "All owner regressions passed after the minimal shared-classifier implementation."
+
+focused_verification:
+  filesystem_owners:
+    command: ".venv/bin/python -m unittest tests.test_fs_read_batch tests.test_fs_search"
+    result: PASS
+    tests: 30
+  adversarial_and_mcp_adjacent:
+    command: ".venv/bin/python -m unittest tests.test_fs_read_batch_adversarial tests.test_fs_read_batch_mcp tests.test_tool_contract tests.test_wave1_mcp tests.test_capability_registry tests.test_mcp_contracts"
+    result: PASS
+    tests: 67
+  synthetic_regression_matrix:
+    sensitive_dotenv:
+      - ".env"
+      - ".env.local"
+      - "nested/.ENV"
+      - "nested/.env.LOCAL"
+    public_templates:
+      - ".ENV.EXAMPLE"
+      - ".env.sample"
+      - ".env.template"
+    narrow_non_sensitive_example: ".envrc"
+    ordinary_non_sensitive_example: "notes.txt"
+    real_secret_fixture_used: false
+
+authoritative_verification:
+  required: true
+  command: "./verify"
+  invocation_count: 1
+  result: PASS
+  carrier:
+    mode: pipe
+    durability: runtime_restart
+    start_identity: "19700000000000000000000000000054"
+    session_id: "2b0172bdae5f6d26"
+  initial_carrier_result: DURABLE_OWNER_LOST
+  reconciliation: "No replay. The exact verifier process was observed still running, then terminal_poll on the same start_identity returned the persisted terminal result after exit."
+  lifecycle: COMPLETED
+  termination_reason: natural_exit
+  exit_code: 0
+  profile: qualification
+  modules_selected: 62
+  modules_completed: 62
+  tests_completed: 869
+  duration_seconds: 97.537
+
+effect_accounting:
+  canonical_verify:
+    authorized: 1
+    consumed: 1
+    remaining: 0
+  distribution_build:
+    authorized: 0
+    consumed: 0
+  archive_build:
+    authorized: 0
+    consumed: 0
+  version_tag_create:
+    authorized: 0
+    consumed: 0
+  github_release_create_or_publish:
+    authorized: 0
+    consumed: 0
+  install_prebuilt:
+    authorized: 0
+    consumed: 0
+  commit_cutover:
+    authorized: 0
+    consumed: 0
+  rollback_cutover:
+    authorized: 0
+    consumed: 0
+  menu_bar_relaunch:
+    authorized: 0
+    consumed: 0
+  runtime_explicit_start:
+    authorized: 0
+    consumed: 0
+  runtime_explicit_stop:
+    authorized: 0
+    consumed: 0
+  runtime_restart:
+    authorized: 0
+    consumed: 0
+  launchservices_cleanup:
+    authorized: 0
+    consumed: 0
+  plugin_reload_or_reconnect:
+    authorized: 0
+    consumed: 0
+  physical_reboot:
+    authorized: 0
+    consumed: 0
+  new_security_permission:
+    authorized: 0
+    consumed: 0
+  credential_rotation:
+    authorized: 0
+    consumed: 0
+  branch_or_pr_creation:
+    authorized: 0
+    consumed: 0
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "One shared filename-only classifier in fs_safety implements the exact case-insensitive .env/.env.* deny rule with only the three exact public-template exceptions. No scanner, regex, entropy heuristic, registry, framework, dependency, or adjacent secret family was added."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "Synthetic fs_read regressions prove .env, .env.local, nested and case variants return existing ACCESS_DENIED before _open_regular_at is called; denied items contain no text, size, hash, or content-derived metadata. Public templates, .envrc, and notes.txt remain readable."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "Synthetic fs_search regressions prove protected dotenv files are not opened in content mode, return no line/line_text/file_sha256, and contribute zero content bytes to bytes_scanned. Path mode still discovers protected dotenv paths."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "fs_read request/result remain 1/2, fs_search remain 2/2, FsReadErrorCode is unchanged, owner suites pass 30/30, MCP/schema/adversarial suites pass 67/67, and canonical verification passes."
+  - criterion_id: AC-5
+    status: PASS
+    evidence: "README.md and THREAT_MODEL.md explicitly state accidental-disclosure defense-in-depth only, preserve same-UID/terminal limitations, and advise not storing secrets in the agent workspace when confidentiality from the agent is required."
+  - criterion_id: AC-6
+    status: PASS
+    evidence: "Exactly one canonical ./verify was dispatched and reconciled without replay; final result is 62/62 modules and 869 tests PASS. No live, release, lifecycle, permission, credential, or reboot effects were consumed."
+  - criterion_id: AC-7
+    status: PASS
+    evidence: "Implementation candidate b745b949a03c75417d9ecc21dcc003ba9720f52b is a direct child of the exact task base and was published to main. Only authorized implementation/test/docs surfaces changed before this report; final clean synchronized MAIN ONLY closure is verified after report publication."
+
+deviations:
+  - "The first attempted focused command used the host python3 and failed before test import because pydantic was unavailable. It was not counted as TDD red; the repository .venv interpreter was then used for the valid red/green cycle."
+  - "The sole canonical verifier carrier initially reported DURABLE_OWNER_LOST after dispatch. The same invocation was reconciled by start_identity/session and completed PASS; no second canonical verifier was started."
+
+blocking_findings: []
