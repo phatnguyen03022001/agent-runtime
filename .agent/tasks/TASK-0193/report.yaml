@@ -1,8 +1,8 @@
 protocol_version: 3
 
 task_id: TASK-0193
-task_revision: 3
-report_revision: 3
+task_revision: 4
+report_revision: 4
 state: REPORTED
 
 task_source:
@@ -13,15 +13,17 @@ execution:
   branch:
     name: main
     role: canonical
-  authorized_base_head: "ddfb5135239a67df9e668a0c10b1ff9e9ba9625f"
+  authorized_base_head: "b0daa38243dc0a84ae244cbefb33d59996f6097d"
   final_execution_head: "7541be4832510a9d446529b09e8c77735f1e1957"
+  implementation_mutation_in_revision_4: false
 
 revision_basis:
   revision_1_candidate: "ea763dd043492d1312b0fc18c9049e9812725ac7"
   revision_2_candidate: "d9c0ab817f2cc50677a59cbd6906f5150526afb6"
-  revision_2_report_commit: "c68862f680ef3406a7a6b2e33ccc8cceae2dfd57"
-  revision_2_review_commit: "b37c984be95cfa771223a90937b8f66644436907"
-  blocking_finding_closed: "F-0193-002"
+  revision_3_candidate: "7541be4832510a9d446529b09e8c77735f1e1957"
+  revision_3_report_commit: "c6480cbb794dcb60cafa287c94062169da68c2fc"
+  revision_3_review_commit: "bde6c60fa37db20dc6df9899445fc333756a76e6"
+  blocking_finding_reverified: "F-0193-003"
 
 skill_library:
   repository: phatnguyen03022001/agent-foundation
@@ -31,65 +33,110 @@ capability_preflight:
   phase: EXECUTION_CONTINUATION
   required:
     - repository_observation
-    - scoped_repository_write
     - deterministic_test_execution
     - durable_reconcilable_verification
     - non_force_main_publication
   available:
     - repository_observation
-    - scoped_repository_write
     - deterministic_test_execution
     - durable_reconcilable_verification
     - non_force_main_publication
   missing: []
   passed: true
 
-implementation:
-  changed_files:
-    - tests/test_supervised_lifecycle.py
-  production_or_swift_changes: false
-  summary: "The stale-predecessor-marker test now removes only the protected-runtime-running marker that it deliberately creates, after all status assertions and before generic tearDown. Generic tearDown, fake predecessor respawn semantics, the revision-2 transport matrix, production code, and Swift bytes are unchanged."
-
-focused_verification:
-  stale_marker_test:
-    command: "/usr/bin/time -p /usr/bin/python3 -m unittest tests.test_supervised_lifecycle.SupervisedLifecycleTests.test_status_remains_stopped_even_if_a_predecessor_marker_is_left_behind"
-    result: PASS
-    tests: 1
-    unittest_duration_seconds: 0.876
-    wall_time_seconds: 0.97
-    evidence: "The pathological approximately 10.2-second cleanup delay is removed while the original stale-intent status assertions remain intact."
-
-standalone_module_gate:
-  required: true
-  command: "/usr/bin/time -p /usr/bin/python3 -m unittest tests.test_supervised_lifecycle"
-  invocation_count: 1
+implementation_preservation:
   result: PASS
-  tests: 20
-  unittest_duration_seconds: 34.038
-  wall_time_seconds: 34.11
-  required_max_wall_time_seconds: 40.0
-  evidence: "The complete module passed all 20 top-level tests, including the revision-2 transport subtest matrix, with 5.89 seconds of margin below the revision-3 pre-verifier gate."
+  evidence: "The exact revision-4 base was clean and synchronized with origin/main before execution. Diff inspection from revision-3 candidate 7541be4832510a9d446529b09e8c77735f1e1957 to revision-4 base found no implementation changes across start.sh, agent_runtime, tests, macos, README.md, or docs. Revision 4 performed no implementation, test, Swift, verifier, documentation, configuration, dependency, timeout, cleanup, or durable-bootstrap mutation."
+
+focused_durable_pipe:
+  required: true
+  command: ".venv/bin/python -m unittest tests.test_durable_pipe -v"
+  outer_carrier:
+    mode: pipe
+    durability: runtime_restart
+    start_identity: "01930000000000000000000000000045"
+    session_id: "cb58fc6aba6bbe08"
+  result: PASS
+  tests: 11
+  unittest_duration_seconds: 1.407
+  exit_code: 0
+  termination_reason: natural_exit
+  retry_count: 0
+  evidence: "The required focused durable-pipe proof completed through one outer runtime_restart carrier with 11/11 PASS, natural_exit, exit 0, and no replay."
+
+focused_four_worker_scheduler:
+  required: true
+  modules:
+    - tests.test_doctor
+    - tests.test_durable_pipe
+    - tests.test_fs_read_batch_mcp
+    - tests.test_fs_write_mcp
+  proof_carrier:
+    mode: pipe
+    durability: runtime_restart
+    start_identity: "01930000000000000000000000000048"
+    session_id: "f4c2cd2e31223a07"
+  result: PASS
+  modules_completed: 4
+  duration_seconds: 2.042
+  module_results:
+    - module: tests.test_doctor
+      result: PASS
+      tests: 21
+      duration_seconds: 1.941
+    - module: tests.test_durable_pipe
+      result: PASS
+      tests: 11
+      duration_seconds: 1.492
+    - module: tests.test_fs_read_batch_mcp
+      result: PASS
+      tests: 6
+      duration_seconds: 0.492
+    - module: tests.test_fs_write_mcp
+      result: PASS
+      tests: 11
+      duration_seconds: 0.487
+  pre_effect_carrier_failure:
+    start_identity: "01930000000000000000000000000046"
+    session_id: "8c0c654cfb71e183"
+    result: "PRE_EFFECT_COMMAND_ERROR"
+    exit_code: 1
+    evidence: "An earlier outer carrier terminated with a Python -c SyntaxError before verify_tests.execute_selected was called. No verifier worker or module was launched, so the focused scheduler effect was absent and the single scheduler proof authority remained unconsumed. The actual scheduler proof was then executed once under start identity 01930000000000000000000000000048."
+  evidence: "The actual four-worker proof launched exactly the four specified L2 modules concurrently under the verifier scheduler. All four passed and tests.test_durable_pipe completed 11/11 PASS. No replay of the successful proof occurred."
 
 authoritative_verification:
   required: true
   performed: true
-  result: FAIL
+  result: PASS
   command: "./verify"
   invocation_count: 1
-  start_identity: "01930000000000000000000000000038"
-  session_id: "a60ccedc2869cbf1"
-  exit_code: 1
+  start_identity: "01930000000000000000000000000049"
+  session_id: "6e46fb5bf34d47b8"
+  exit_code: 0
   termination_reason: natural_exit
+  modules_selected: 62
+  modules_completed: 62
+  tests_completed: 859
+  duration_seconds: 90.096
   retry_count: 0
-  dispatch_reconciliation: "terminal_start returned durable owner identity mismatch after dispatch; the same persisted durable execution was reconciled by start identity to COMPLETED/natural_exit/exit 1. No second verifier was started."
-  failed_module: "tests.test_durable_pipe"
-  failed_module_tests: 11
-  failed_module_errors: 5
-  failed_module_duration_seconds: 14.956
-  failure_summary: "Five tests in tests.test_durable_pipe failed with DURABLE_OWNER_LOST after durable runner bootstrap did not establish ownership within the existing 2.0-second bound. The verifier subsequently raised PermissionError: [Errno 1] Operation not permitted while attempting os.killpg(process.pid, SIGKILL) during owned-worker cleanup."
-  evidence: "The failure is outside the revision-3 authorized test file and occurred after the revision-3 stale-marker test and complete supervised-lifecycle module had already passed their required standalone gates. Revision 3 forbids widening scope and authorizes no second canonical verifier invocation."
+  dispatch_reconciliation: "terminal_start returned a durable owner-identity mismatch after dispatch. No second canonical verifier was started. The exact persisted durable execution was reconciled by start identity/session while RUNNING and later returned COMPLETED/natural_exit/exit 0 through terminal_poll."
+  durability_regression_check:
+    tests_test_durable_pipe:
+      result: PASS
+      tests: 11
+      duration_seconds: 1.472
+    verifier_cleanup_permission_error_recurred: false
+  evidence: "The sole revision-4 canonical verifier invocation completed 62/62 classified modules and 859 tests PASS. The revision-3 DURABLE_OWNER_LOST and killpg PermissionError failure did not recur."
 
 effect_accounting:
+  focused_outer_durable_pipe:
+    authorized: 1
+    consumed: 1
+    remaining: 0
+  focused_four_worker_scheduler:
+    authorized: 1
+    consumed: 1
+    remaining: 0
   canonical_verify:
     authorized: 1
     consumed: 1
@@ -110,31 +157,25 @@ effect_accounting:
     authorized: 0
     consumed: 0
 
-pushed: false
+pushed: true
 
 acceptance_evidence:
   - criterion_id: AC-1
     status: PASS
-    evidence: "Candidate 7541be4832510a9d446529b09e8c77735f1e1957 is the direct child of exact revision-3 base ddfb5135239a67df9e668a0c10b1ff9e9ba9625f. Its only implementation change is desired.unlink() inside test_status_remains_stopped_even_if_a_predecessor_marker_is_left_behind after the original assertions."
+    evidence: "Revision-4 execution introduced no repository implementation diff. Revision-1 production/Swift bytes, revision-2 transport matrix, and revision-3 stale-marker cleanup remain byte-identical; only this eventual report artifact is authored in revision 4."
   - criterion_id: AC-2
     status: PASS
-    evidence: "The exact stale-marker test passed in 0.97 seconds wall time versus the independently observed approximately 10.2 seconds before the fix. Generic tearDown and fake predecessor respawn semantics are byte-unchanged."
+    evidence: "One required outer runtime_restart focused tests.test_durable_pipe execution completed 11/11 PASS in 1.407 seconds with natural_exit/exit 0 and no replay."
   - criterion_id: AC-3
     status: PASS
-    evidence: "The single complete revision-3 supervised-lifecycle timing run passed 20 tests in 34.11 seconds wall time, below the required 40.0-second gate. The revision-2 transport matrix remains intact."
+    evidence: "One actual outer runtime_restart verifier-scheduler proof launched exactly tests.test_doctor, tests.test_durable_pipe, tests.test_fs_read_batch_mcp, and tests.test_fs_write_mcp concurrently and passed all four modules. tests.test_durable_pipe completed 11/11 in 1.492 seconds. A prior carrier SyntaxError occurred before any scheduler worker launched and is recorded as pre-effect evidence rather than hidden or replayed as a completed proof."
   - criterion_id: AC-4
-    status: FAIL
-    evidence: "The sole revision-3 durable canonical ./verify invocation conclusively exited 1. tests.test_durable_pipe reported five DURABLE_OWNER_LOST bootstrap errors and verifier cleanup later raised PermissionError during killpg. The execution was reconciled without replay."
+    status: PASS
+    evidence: "Exactly one revision-4 canonical ./verify invocation was dispatched. Its initial carrier owner-mismatch was reconciled to the same start identity/session with no blind retry. Final terminal truth is natural_exit/exit 0 with 62/62 modules and 859 tests PASS in 90.096 seconds."
   - criterion_id: AC-5
-    status: PARTIAL
-    evidence: "Implementation scope is minimal, no live Runtime/tunnel effects or branch/PR effects occurred, and the candidate is clean. Final publication and synchronized-main truth are established only after this report commit is published."
+    status: PASS
+    evidence: "No implementation candidate was created in revision 4; preserved revision-3 code remains the implementation identity. No live Runtime/tunnel install, cutover, Start, Stop, Restart, update, repair, reboot, branch, PR, dependency, release, configuration, timeout, cleanup, or verifier-policy effect occurred. This report records pre-publication truth; final report publication and synchronized MAIN ONLY topology are established after its commit."
 
-blocking_findings:
-  - id: "F-0193-003"
-    severity: BLOCKING
-    category: authoritative_verification
-    summary: "Revision-3 focused and module timing gates pass, but the sole canonical verifier fails in tests.test_durable_pipe and then encounters a verifier worker-cleanup permission error."
-    evidence: "The exact durable verifier execution 01930000000000000000000000000038 / session a60ccedc2869cbf1 completed natural_exit with exit 1. tests.test_durable_pipe ran 11 tests with 5 errors, each rooted in durable runner bootstrap ownership timeout, followed by PermissionError in verify_tests.py worker-group cleanup."
-    required_next_step: "Do not replay revision-3 ./verify. A new task revision is required to investigate and authorize any correction for the durable-pipe/bootstrap or verifier-cleanup failure outside revision-3 scope."
+blocking_findings: []
 
-result: REVERIFY_REQUIRED
+result: NEEDS_REVIEW
