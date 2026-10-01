@@ -13,7 +13,7 @@ final class PresentationTests: XCTestCase {
     )
 
     @MainActor
-    func testInstalledConfigurationAcceptsZeroCostSubstrateWithoutEmbeddedServer() throws {
+    func testInstalledConfigurationAcceptsCurrentSchemaZeroCostSubstrateWithoutEmbeddedServer() throws {
         let fixture = try installedConfigurationFixture()
         XCTAssertFalse(FileManager.default.fileExists(
             atPath: fixture.resources.appendingPathComponent("runtime/agent_runtime/server.py").path
@@ -28,6 +28,25 @@ final class PresentationTests: XCTestCase {
         XCTAssertTrue(configuration.requiresReadiness)
         XCTAssertEqual(configuration.sessionLimit, 6)
         XCTAssertEqual(configuration.parallelLimit, 2)
+    }
+
+    @MainActor
+    func testInstalledConfigurationRejectsLegacyAndUnsupportedManifestSchemas() throws {
+        for schema in [1, 4] {
+            let fixture = try installedConfigurationFixture()
+            let manifestURL = fixture.resources.appendingPathComponent("runtime-manifest.json")
+            var manifest = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: Data(contentsOf: manifestURL)) as? [String: Any]
+            )
+            manifest["schema"] = schema
+            try JSONSerialization.data(withJSONObject: manifest).write(to: manifestURL)
+            XCTAssertThrowsError(try AppDelegate.installedRuntimeConfiguration(
+                resources: fixture.resources,
+                home: fixture.home
+            ), "schema=\(schema)") { error in
+                XCTAssertEqual(error as? RuntimeLifecycleError, .metadata("installed Runtime manifest is invalid"))
+            }
+        }
     }
 
     @MainActor
@@ -157,7 +176,7 @@ final class PresentationTests: XCTestCase {
             try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: entrypoint.path)
         }
         let manifest: [String: Any] = [
-            "schema": 1,
+            "schema": 3,
             "owner": "com.picmao.agent-runtime",
             "entrypoint": "runtime/start.sh",
             "python": "runtime/.venv/bin/python",

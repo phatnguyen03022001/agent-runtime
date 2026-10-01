@@ -140,7 +140,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let manifestURL = resources.appendingPathComponent("runtime-manifest.json", isDirectory: false)
         let manifestData = try Data(contentsOf: manifestURL)
         guard let manifest = try JSONSerialization.jsonObject(with: manifestData) as? [String: Any],
-              manifest["schema"] as? Int == 1,
+              manifest["schema"] as? Int == 3,
               manifest["owner"] as? String == "com.picmao.agent-runtime",
               manifest["entrypoint"] as? String == "runtime/start.sh",
               manifest["python"] as? String == "runtime/.venv/bin/python",
