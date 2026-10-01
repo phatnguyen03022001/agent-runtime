@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0193
-task_revision: 3
-review_revision: 3
-state: REVERIFY_REQUIRED
+task_revision: 4
+review_revision: 4
+state: ACCEPTED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0193/report.yaml
-  commit: "c6480cbb794dcb60cafa287c94062169da68c2fc"
-  report_revision: 3
+  commit: "b1f0685e5c728f64084450884958dcd39c138971"
+  report_revision: 4
 
 independence:
   reviewer_role: ARCHITECT
@@ -24,27 +24,26 @@ contract_compliance:
   scope: PASS
   structure_policy: PASS
   git_authority: PASS
-  acceptance_criteria: FAIL
+  acceptance_criteria: PASS
   verifier_evidence: PASS
 
 acceptance_basis:
-  - "Revision-3 candidate 7541be4832510a9d446529b09e8c77735f1e1957 is the single direct child of exact revision-3 base ddfb5135239a67df9e668a0c10b1ff9e9ba9625f and changes only tests/test_supervised_lifecycle.py."
-  - "Report commit c6480cbb794dcb60cafa287c94062169da68c2fc is the single direct child of the candidate and changes only .agent/tasks/TASK-0193/report.yaml."
-  - "F-0193-002 is closed: the exact stale-marker test now passes in 0.97s wall time and the complete supervised lifecycle module passes 20 tests in 34.11s, below the required 40.0s gate."
-  - "The sole revision-3 canonical ./verify invocation conclusively failed in tests.test_durable_pipe with five DURABLE_OWNER_LOST errors, followed by verifier cleanup PermissionError on killpg; no replay occurred."
-  - "Independent Architect diagnostics on the exact published repository state do not reproduce the failure. tests.test_durable_pipe passes 11/11 in 1.63s standalone."
-  - "The same tests.test_durable_pipe module passes 11/11 in 1.56s when the entire test command itself runs through an outer Agent Runtime terminal_start durability=runtime_restart carrier."
-  - "A focused verifier-scheduler reproduction using four concurrent L2 workers under an outer runtime_restart carrier also passes; tests.test_durable_pipe completes 11/11 in 1.517s while tests.test_doctor, tests.test_fs_read_batch_mcp, and tests.test_fs_write_mcp run concurrently."
-  - "These results do not justify changing the production 2.0-second durable bootstrap ownership bound, durable session semantics, verifier timeout, or killpg cleanup behavior inside TASK-0193. The canonical failure is currently non-reproducible and may reflect transient host scheduling/process pressure."
-  - "A bounded re-verification is justified only after reproducing the focused healthy conditions immediately before the new canonical invocation. If the same durable/bootstrap or cleanup failure recurs, TASK-0193 must stop and the reliability defect must move to a dedicated follow-up task rather than expanding this transport-truth task again."
+  - "Revision 4 performed no implementation mutation. Exact revision-3 implementation identity 7541be4832510a9d446529b09e8c77735f1e1957 is preserved byte-for-byte."
+  - "Report commit b1f0685e5c728f64084450884958dcd39c138971 is the single direct child of exact revision-4 base b0daa38243dc0a84ae244cbefb33d59996f6097d and changes only .agent/tasks/TASK-0193/report.yaml."
+  - "The required focused durable-pipe preflight passed through one outer runtime_restart carrier: 11/11 tests PASS in 1.407 seconds, natural_exit, exit 0, no replay."
+  - "The required four-worker verifier-scheduler proof passed all four specified L2 modules in 2.042 seconds; tests.test_durable_pipe passed 11/11 in 1.492 seconds."
+  - "The earlier scheduler carrier SyntaxError occurred before verify_tests.execute_selected and before any verifier worker was spawned; it was correctly recorded as a pre-effect command error and did not consume the one authorized scheduler proof."
+  - "Exactly one revision-4 canonical ./verify invocation was dispatched. Its carrier owner-mismatch was reconciled to the same persisted execution rather than replayed."
+  - "Canonical verification completed natural_exit/exit 0 with 62/62 modules and 859 tests PASS in 90.096 seconds. tests.test_durable_pipe passed 11/11 and the revision-3 DURABLE_OWNER_LOST plus verifier killpg PermissionError did not recur."
+  - "F-0193-001, F-0193-002, and F-0193-003 are all closed for this task: module timing fits the verifier budget, stale-marker cleanup contamination is removed, and bounded reverification established canonical PASS without source mutation."
+  - "TASK-0193 transport semantics remain as authorized: local Runtime availability, lifecycle-control ownership, and tunnel control-plane transport health are separate facts; passive health does not claim ChatGPT/workspace end-to-end connectivity."
+  - "No live Runtime/tunnel install, cutover, Start, Stop, Restart, update, repair, reboot, configuration, dependency, timeout, verification-policy, release, branch, or PR effect occurred."
+  - "Fresh remote observation before this review showed canonical main at exact report commit b1f0685e5c728f64084450884958dcd39c138971."
 
-findings:
-  - id: "F-0193-003"
-    severity: "BLOCKING"
-    description: "The revision-3 canonical verifier encountered a non-reproduced durable bootstrap/worker-cleanup failure outside TASK-0193 implementation scope."
-    disposition: "Authorize one re-verification-only revision with no repository implementation changes. Require focused durable-pipe proof through an outer runtime_restart carrier plus focused four-worker verifier-scheduler proof before spending one canonical ./verify invocation. If either preflight fails, or if canonical verification repeats the durable/bootstrap/cleanup failure, stop and split a dedicated durable/verifier reliability task."
+findings: []
 
 notes:
-  - "Do not alter production durable bootstrap timing, verifier cleanup, verification policy, or TASK-0193 implementation in revision 4 without new evidence."
-  - "Revision-3 canonical verifier budget is consumed and must not be replayed."
-  - "No live Runtime/tunnel lifecycle mutation was used by the Architect diagnostics."
+  - "TASK-0193 is accepted at revision 4. No further TASK-0193 revision is required."
+  - "Acceptance is repository/task acceptance only; it does not authorize installing or activating the accepted source candidate on the operator's live Agent Runtime.app."
+  - "The prior non-reproduced durable/bootstrap incident remains historical evidence, but no dedicated reliability task is required by TASK-0193 because the bounded rev4 preflights and canonical verifier all passed. A future recurrence should be handled as an independent reliability defect rather than reopening TASK-0193."
+  - "TASK-0190 revision 8 remains superseded and must not be resumed without new explicit authority."
