@@ -882,10 +882,12 @@ class RuntimeCapabilitiesExecution(_ClosedResult):
 
 
 class RuntimeCapabilitiesResult(_ClosedResult):
-    schema_version: Literal[2]
+    schema_version: Literal[3]
     detail: RuntimeCapabilitiesDetail
     runtime_version: RuntimeVersion
     runtime_revision: RuntimeRevision | None
+    payload_revision: RuntimeRevision | None
+    substrate_revision: RuntimeRevision | None
     tool_contract_kernel_version: Literal[2]
     advertised_tool_count: Annotated[int, Field(ge=0)]
     capability_count: Annotated[int, Field(ge=0)]
@@ -900,6 +902,12 @@ class RuntimeCapabilitiesResult(_ClosedResult):
             raise ValueError("summary detail must not include capabilities")
         if self.detail == "full" and self.capabilities is None:
             raise ValueError("full detail requires capabilities")
+        if (
+            self.runtime_revision is not None
+            and self.payload_revision is not None
+            and self.runtime_revision != self.payload_revision
+        ):
+            raise ValueError("runtime_revision and payload_revision must match")
         return self
 
     @model_serializer(mode="wrap")

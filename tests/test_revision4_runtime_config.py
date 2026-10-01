@@ -72,7 +72,8 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
             f"for key in CONTROL_PLANE_API_KEY CONTROL_PLANE_TUNNEL_ID TUNNEL_CLIENT_CONFIG "
             "TUNNEL_CLIENT_PROFILE TUNNEL_CLIENT_PROFILE_FILE TUNNEL_CLIENT_PROFILE_DIR "
             "XDG_CONFIG_HOME AGENT_RUNTIME_TUNNEL_PROFILE AGENT_RUNTIME_GIT_NAME "
-            "AGENT_RUNTIME_GIT_EMAIL AGENT_RUNTIME_TELEMETRY; do "
+            "AGENT_RUNTIME_GIT_EMAIL AGENT_RUNTIME_TELEMETRY AGENT_RUNTIME_REVISION "
+            "AGENT_RUNTIME_PAYLOAD_REVISION AGENT_RUNTIME_SUBSTRATE_REVISION; do "
             f"printf 'env:%s=%s\\n' \"$key\" \"${{!key-}}\" >> {str(capture)!r}; done\n"
             "exit 0\n"
         )
@@ -91,6 +92,9 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
                 "AGENT_RUNTIME_GIT_NAME": "ambient-wrong-name",
                 "AGENT_RUNTIME_GIT_EMAIL": "ambient-wrong@example.invalid",
                 "AGENT_RUNTIME_TELEMETRY": "off",
+                "AGENT_RUNTIME_REVISION": "1" * 40,
+                "AGENT_RUNTIME_PAYLOAD_REVISION": "2" * 40,
+                "AGENT_RUNTIME_SUBSTRATE_REVISION": "3" * 40,
             }
             result = subprocess.run(
                 [str(repo / "start.sh"), "--serve", str(tunnel)],
@@ -111,6 +115,12 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
                 sum(line == "env:AGENT_RUNTIME_GIT_EMAIL=runtime-fixture@example.invalid" for line in lines),
                 2,
             )
+            for key in (
+                "AGENT_RUNTIME_REVISION",
+                "AGENT_RUNTIME_PAYLOAD_REVISION",
+                "AGENT_RUNTIME_SUBSTRATE_REVISION",
+            ):
+                self.assertEqual(sum(line == f"env:{key}=" for line in lines), 2)
             for line in lines:
                 self.assertNotIn("--profile", line)
                 if line.startswith("env:TUNNEL_CLIENT_") or line.startswith("env:AGENT_RUNTIME_TUNNEL_PROFILE"):
@@ -205,7 +215,9 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
             tunnel = tools / "tunnel-client"
             tunnel.write_text(
                 "#!/bin/bash\n"
-                f"printf 'revision=%s\\n' \"$" + "{AGENT_RUNTIME_REVISION-}\" >> " + repr(str(capture)) + "\n"
+                f"printf 'runtime_revision=%s\\n' \"$" + "{AGENT_RUNTIME_REVISION-}\" >> " + repr(str(capture)) + "\n"
+                f"printf 'payload_revision=%s\\n' \"$" + "{AGENT_RUNTIME_PAYLOAD_REVISION-}\" >> " + repr(str(capture)) + "\n"
+                f"printf 'substrate_revision=%s\\n' \"$" + "{AGENT_RUNTIME_SUBSTRATE_REVISION-}\" >> " + repr(str(capture)) + "\n"
                 "exit 0\n"
             )
             tunnel.chmod(0o700)
@@ -214,10 +226,11 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
             surface_sha = hashlib.sha256(surface_blob).hexdigest()
             python_major_minor = f"{sys.version_info.major}.{sys.version_info.minor}"
             lock_sha = "c" * 64
+            substrate_revision = "a" * 40
             package_provenance.write_substrate_manifest(
                 runtime,
                 resources / "runtime-manifest.json",
-                "a" * 40,
+                substrate_revision,
                 "b" * 40,
                 lock_sha,
                 python_major_minor=python_major_minor,
@@ -259,9 +272,14 @@ class Revision4RuntimeConfigTests(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
+            expected_identity = [
+                f"runtime_revision={payload_revision}",
+                f"payload_revision={payload_revision}",
+                f"substrate_revision={substrate_revision}",
+            ]
             self.assertEqual(
                 capture.read_text().splitlines(),
-                [f"revision={payload_revision}", f"revision={payload_revision}"],
+                expected_identity + expected_identity,
             )
 
             capture.unlink()

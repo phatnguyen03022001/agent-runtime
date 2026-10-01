@@ -53,19 +53,36 @@ TOOL_CONTRACT_VERSION = 1
 REQUEST_SCHEMA_VERSION = 1
 RESULT_SCHEMA_VERSION = 1
 _RUNTIME_REVISION_ENV = "AGENT_RUNTIME_REVISION"
+_PAYLOAD_REVISION_ENV = "AGENT_RUNTIME_PAYLOAD_REVISION"
+_SUBSTRATE_REVISION_ENV = "AGENT_RUNTIME_SUBSTRATE_REVISION"
 _RUNTIME_REVISION_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 
 
-def _process_runtime_revision() -> str | None:
-    value = os.environ.get(_RUNTIME_REVISION_ENV)
+def _process_revision_identity(name: str) -> str | None:
+    value = os.environ.get(name)
     if value is None:
         return None
     if _RUNTIME_REVISION_PATTERN.fullmatch(value) is None:
-        raise RuntimeError("AGENT_RUNTIME_REVISION process identity must be exact lowercase 40-hex")
+        raise RuntimeError(f"{name} process identity must be exact lowercase 40-hex")
     return value
 
 
-RUNTIME_REVISION: str | None = _process_runtime_revision()
+RUNTIME_REVISION: str | None = _process_revision_identity(_RUNTIME_REVISION_ENV)
+_explicit_payload_revision = _process_revision_identity(_PAYLOAD_REVISION_ENV)
+SUBSTRATE_REVISION: str | None = _process_revision_identity(_SUBSTRATE_REVISION_ENV)
+if (
+    RUNTIME_REVISION is not None
+    and _explicit_payload_revision is not None
+    and RUNTIME_REVISION != _explicit_payload_revision
+):
+    raise RuntimeError(
+        "AGENT_RUNTIME_REVISION and AGENT_RUNTIME_PAYLOAD_REVISION must match"
+    )
+PAYLOAD_REVISION: str | None = (
+    _explicit_payload_revision
+    if _explicit_payload_revision is not None
+    else RUNTIME_REVISION
+)
 
 RUNTIME_CAPABILITIES_CONTRACT = ToolContract(
     name="runtime_capabilities",
@@ -155,7 +172,7 @@ CAPABILITY_REGISTRY = (
     CapabilityBinding(
         RUNTIME_CAPABILITIES_CONTRACT,
         request_schema_version=2,
-        result_schema_version=2,
+        result_schema_version=3,
     ),
 )
 
@@ -210,9 +227,11 @@ def _runtime_capabilities_common() -> dict[str, object]:
     descriptors = capability_descriptors()
     available_count = sum(descriptor.available for descriptor in descriptors)
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "runtime_version": RUNTIME_VERSION,
         "runtime_revision": RUNTIME_REVISION,
+        "payload_revision": PAYLOAD_REVISION,
+        "substrate_revision": SUBSTRATE_REVISION,
         "tool_contract_kernel_version": TOOL_CONTRACT_KERNEL_VERSION,
         "advertised_tool_count": len(ADVERTISED_TOOL_NAMES),
         "capability_count": len(descriptors),

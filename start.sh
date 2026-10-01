@@ -149,7 +149,9 @@ if actual_surface != manifest["expected_public_surface_sha256"]:
     fail("Selected Runtime payload public tool surface is incompatible.")
 if payload["expected_public_tool_count"] != actual_count or payload["expected_public_surface_sha256"] != actual_surface:
     fail("Selected Runtime payload manifest public tool contract is inconsistent.")
-print(f"{release}\t{payload['source_revision']}")
+print(
+    f"{release}\t{payload['source_revision']}\t{manifest['runtime_revision']}"
+)
 PY
 }
 
@@ -222,7 +224,7 @@ installed_doctor() {
   [[ -f "$doctor_env" && ! -L "$doctor_env" ]] \
     || doctor_error "CANONICAL_CONFIG_MISSING" "Canonical runtime.env is missing or unsafe." "$json_mode"
 
-  local selection selected_payload runtime_revision selection_reason selection_message
+  local selection selected_payload payload_revision substrate_revision selection_reason selection_message
   if ! selection="$(validate_installed_selection "$doctor_root" "$doctor_python" 2>&1)"; then
     selection_reason="PAYLOAD_RELEASE_INVALID"
     selection_message="Selected external Runtime payload is invalid."
@@ -250,11 +252,11 @@ installed_doctor() {
     esac
     doctor_error "$selection_reason" "$selection_message" "$json_mode"
   fi
-  IFS=$'\t' read -r selected_payload runtime_revision <<< "$selection"
+  IFS=$'\t' read -r selected_payload payload_revision substrate_revision <<< "$selection"
   [[ -f "$selected_payload/agent_runtime/doctor.py" ]] \
     || doctor_error "PAYLOAD_SELECTION_INVALID" "Selected external Runtime doctor is unavailable." "$json_mode"
 
-  exec /usr/bin/python3 - "$doctor_env" "$doctor_python" "$doctor_root" "$selected_payload" "$runtime_revision" "$RUNTIME_PATH" "$json_mode" "$doctor_arg" <<'PY'
+  exec /usr/bin/python3 - "$doctor_env" "$doctor_python" "$doctor_root" "$selected_payload" "$payload_revision" "$substrate_revision" "$RUNTIME_PATH" "$json_mode" "$doctor_arg" <<'PY'
 import os
 import sys
 from pathlib import Path
@@ -263,10 +265,11 @@ env_file = Path(sys.argv[1])
 runtime_python = sys.argv[2]
 runtime_root = sys.argv[3]
 selected_payload = sys.argv[4]
-runtime_revision = sys.argv[5]
-runtime_path = sys.argv[6]
-json_mode = sys.argv[7] == "1"
-doctor_arg = sys.argv[8]
+payload_revision = sys.argv[5]
+substrate_revision = sys.argv[6]
+runtime_path = sys.argv[7]
+json_mode = sys.argv[8] == "1"
+doctor_arg = sys.argv[9]
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, runtime_root)
@@ -295,7 +298,9 @@ doctor_env = {
     "AGENT_RUNTIME_WORKSPACE_ROOT": values["AGENT_RUNTIME_WORKSPACE_ROOT"],
     "AGENT_RUNTIME_GIT_NAME": values["AGENT_RUNTIME_GIT_NAME"],
     "AGENT_RUNTIME_GIT_EMAIL": values["AGENT_RUNTIME_GIT_EMAIL"],
-    "AGENT_RUNTIME_REVISION": runtime_revision,
+    "AGENT_RUNTIME_REVISION": payload_revision,
+    "AGENT_RUNTIME_PAYLOAD_REVISION": payload_revision,
+    "AGENT_RUNTIME_SUBSTRATE_REVISION": substrate_revision,
 }
 for key in ("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS", "AGENT_RUNTIME_MAX_PARALLELISM"):
     if key in values:
@@ -613,7 +618,8 @@ serve() {
   local env_file="${2:-$ENV_FILE}"
   local require_git_identity=0
   local selected_payload="$ROOT"
-  local runtime_revision=""
+  local payload_revision=""
+  local substrate_revision=""
 
   [[ "$SOURCE_ROOT" != "$INSTALLED_RUNTIME_ROOT" || "$env_file" == "$CANONICAL_ENV_FILE" ]] \
     || fail "Installed Runtime configuration must use the canonical per-user file."
@@ -623,7 +629,7 @@ serve() {
     require_git_identity=1
     local selection
     selection="$(validate_installed_selection "$ROOT" "$RUNTIME_PYTHON")"
-    IFS=$'\t' read -r selected_payload runtime_revision <<< "$selection"
+    IFS=$'\t' read -r selected_payload payload_revision substrate_revision <<< "$selection"
     /usr/bin/python3 - "$env_file" <<'PY'
 import stat
 import sys
@@ -644,7 +650,7 @@ PY
   [[ -x "$RUNTIME_PYTHON" && -f "$selected_payload/agent_runtime/server.py" ]] \
     || fail "Selected Runtime payload is incomplete."
 
-  exec /usr/bin/python3 - "$env_file" "$tunnel_client" "$RUNTIME_PYTHON" "$RUNTIME_PATH" "$selected_payload" "$runtime_revision" "$require_git_identity" <<'PY'
+  exec /usr/bin/python3 - "$env_file" "$tunnel_client" "$RUNTIME_PYTHON" "$RUNTIME_PATH" "$selected_payload" "$payload_revision" "$substrate_revision" "$require_git_identity" <<'PY'
 import os
 import re
 import subprocess
@@ -656,8 +662,9 @@ tunnel_client = sys.argv[2]
 runtime_python = sys.argv[3]
 runtime_path = sys.argv[4]
 selected_payload = sys.argv[5]
-runtime_revision = sys.argv[6]
-require_git_identity = sys.argv[7] == "1"
+payload_revision = sys.argv[6]
+substrate_revision = sys.argv[7]
+require_git_identity = sys.argv[8] == "1"
 sys.dont_write_bytecode = True
 
 def fail(message):
@@ -735,8 +742,11 @@ if values.get("AGENT_RUNTIME_MAX_ACTIVE_SESSIONS") is not None:
     runtime_env["AGENT_RUNTIME_MAX_ACTIVE_SESSIONS"] = values["AGENT_RUNTIME_MAX_ACTIVE_SESSIONS"]
 if values.get("AGENT_RUNTIME_MAX_PARALLELISM") is not None:
     runtime_env["AGENT_RUNTIME_MAX_PARALLELISM"] = values["AGENT_RUNTIME_MAX_PARALLELISM"]
-if runtime_revision:
-    runtime_env["AGENT_RUNTIME_REVISION"] = runtime_revision
+if payload_revision:
+    runtime_env["AGENT_RUNTIME_REVISION"] = payload_revision
+    runtime_env["AGENT_RUNTIME_PAYLOAD_REVISION"] = payload_revision
+if substrate_revision:
+    runtime_env["AGENT_RUNTIME_SUBSTRATE_REVISION"] = substrate_revision
 for key in ("USER", "TMPDIR", "LANG"):
     value = os.environ.get(key)
     if value:

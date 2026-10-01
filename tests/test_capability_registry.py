@@ -166,7 +166,7 @@ class CapabilityRegistryTests(unittest.IsolatedAsyncioTestCase):
                 "fs_search": 2,
                 "repo_observer": 2,
                 "repo_diff": 2,
-                "runtime_capabilities": 2,
+                "runtime_capabilities": 3,
             }.get(descriptor.name, 1)
             self.assertEqual(descriptor.result_schema_version, expected_result_version)
 
@@ -214,6 +214,8 @@ class CapabilityRegistryTests(unittest.IsolatedAsyncioTestCase):
                 "detail",
                 "runtime_version",
                 "runtime_revision",
+                "payload_revision",
+                "substrate_revision",
                 "tool_contract_kernel_version",
                 "advertised_tool_count",
                 "capability_count",
@@ -222,10 +224,12 @@ class CapabilityRegistryTests(unittest.IsolatedAsyncioTestCase):
                 "execution",
             },
         )
-        self.assertEqual(payload["schema_version"], 2)
+        self.assertEqual(payload["schema_version"], 3)
         self.assertEqual(payload["detail"], "summary")
         self.assertEqual(payload["runtime_version"], RUNTIME_VERSION)
         self.assertIsNone(payload["runtime_revision"])
+        self.assertIsNone(payload["payload_revision"])
+        self.assertIsNone(payload["substrate_revision"])
         self.assertEqual(payload["tool_contract_kernel_version"], 2)
         self.assertEqual(payload["advertised_tool_count"], 20)
         self.assertEqual(payload["capability_count"], 21)
@@ -296,24 +300,60 @@ class CapabilityRegistryTests(unittest.IsolatedAsyncioTestCase):
 
     def test_runtime_revision_uses_validated_reserved_process_identity(self) -> None:
         script = (
-            "from agent_runtime.capability_registry import RUNTIME_REVISION; "
-            "print(RUNTIME_REVISION if RUNTIME_REVISION is not None else 'null')"
+            "from agent_runtime.capability_registry import "
+            "RUNTIME_REVISION, PAYLOAD_REVISION, SUBSTRATE_REVISION; "
+            "print('|'.join(value if value is not None else 'null' "
+            "for value in (RUNTIME_REVISION, PAYLOAD_REVISION, SUBSTRATE_REVISION)))"
         )
-        valid_env = os.environ.copy()
-        valid_env["AGENT_RUNTIME_REVISION"] = "a" * 40
-        valid = subprocess.run(
+
+        legacy_env = os.environ.copy()
+        legacy_env["AGENT_RUNTIME_REVISION"] = "a" * 40
+        legacy_env.pop("AGENT_RUNTIME_PAYLOAD_REVISION", None)
+        legacy_env.pop("AGENT_RUNTIME_SUBSTRATE_REVISION", None)
+        legacy = subprocess.run(
             [sys.executable, "-c", script],
             cwd=ROOT,
-            env=valid_env,
+            env=legacy_env,
             text=True,
             capture_output=True,
             check=False,
         )
-        self.assertEqual(valid.returncode, 0, valid.stderr)
-        self.assertEqual(valid.stdout.strip(), "a" * 40)
+        self.assertEqual(legacy.returncode, 0, legacy.stderr)
+        self.assertEqual(legacy.stdout.strip(), "|".join(("a" * 40, "a" * 40, "null")))
 
-        invalid_env = os.environ.copy()
-        invalid_env["AGENT_RUNTIME_REVISION"] = "A" * 40
+        explicit_env = os.environ.copy()
+        explicit_env["AGENT_RUNTIME_REVISION"] = "b" * 40
+        explicit_env["AGENT_RUNTIME_PAYLOAD_REVISION"] = "b" * 40
+        explicit_env["AGENT_RUNTIME_SUBSTRATE_REVISION"] = "c" * 40
+        explicit = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=ROOT,
+            env=explicit_env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(explicit.returncode, 0, explicit.stderr)
+        self.assertEqual(
+            explicit.stdout.strip(),
+            "|".join(("b" * 40, "b" * 40, "c" * 40)),
+        )
+
+        mismatch_env = explicit_env.copy()
+        mismatch_env["AGENT_RUNTIME_PAYLOAD_REVISION"] = "d" * 40
+        mismatch = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=ROOT,
+            env=mismatch_env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertNotEqual(mismatch.returncode, 0)
+        self.assertIn("must match", mismatch.stderr)
+
+        invalid_env = explicit_env.copy()
+        invalid_env["AGENT_RUNTIME_SUBSTRATE_REVISION"] = "C" * 40
         invalid = subprocess.run(
             [sys.executable, "-c", script],
             cwd=ROOT,

@@ -164,7 +164,8 @@ EXPECTED_OUTPUT_FIELDS = {
     },
     "runtime_capabilities": {
         "schema_version", "detail", "runtime_version", "runtime_revision",
-        "tool_contract_kernel_version", "advertised_tool_count", "capability_count",
+        "payload_revision", "substrate_revision", "tool_contract_kernel_version",
+        "advertised_tool_count", "capability_count",
         "available_count", "unavailable_count", "execution", "heavy_ceiling",
         "active_session_ceiling", "terminal_poll_max_wait_ms", "running_hard_wall_ms",
         "capabilities", "name", "tool_contract_version", "lifecycle", "authority",
