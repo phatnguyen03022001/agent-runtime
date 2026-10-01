@@ -1,7 +1,7 @@
 protocol_version: 3
 task_id: TASK-0200
-task_revision: 4
-report_revision: 4
+task_revision: 5
+report_revision: 5
 state: REPORTED
 result: BLOCKED
 
@@ -12,9 +12,9 @@ execution:
   repository: phatnguyen03022001/agent-runtime
   branch: {name: main, role: canonical}
   execution_surface: CHATGPT_LOCAL
-  authorized_base_head: "dc1cf7562603c8f89b7884cfdf85413b6c46bf22"
-  final_execution_head: "09c2e0cea6421405ab01a1343ccdcd17eddaaa55"
-  implementation_tree: "75bd8cd12c14cad212311b9ddda2bc7e13260ff2"
+  authorized_base_head: "43d25a5dcf33cd3533f1d055f1bdefef212cc0d5"
+  final_execution_head: "2c64319d14a4d5b66e4dda5ef6a3a82eb66584bf"
+  implementation_tree: "b95cb3d66ed01dec9d5cd5efcfc156559b3b9f51"
 
 skill_library:
   repository: phatnguyen03022001/agent-foundation
@@ -30,132 +30,88 @@ capability_preflight:
 pushed: false
 
 repair:
-  finding: F-0200-003
-  result: PASS
-  production_owner: macos/candidate_cutover.py
-  publication: "Sealed staging validates before publication. Only its root changes to 0755 for Darwin os.replace; the canonical root returns to 0555 and the canonical release validates before pointer authority advances. Existing canonical collisions are validated and remain byte/inode-identical. Payload contents are not made writable for publication."
-  cleanup: "Both activation and explicit rollback use one scoped payload-update cleanup helper. Known staging is removed with _remove_transaction_payload while metadata remains. Unknown transaction/payload artifacts and unsafe containers fail closed. Empty containers are removed and the remaining inventory must be exactly metadata.json before metadata is unlinked."
-  durability: "Existing PREPARED metadata is written before copytree so staging failures retain typed evidence. Error paths keep in-memory metadata available, including after a final directory-removal failure, and retain/rewrite PARTIAL with last_error bounded to a 200-character detail. No schema or phase added."
-  preservation: "Current-payload validation, running/stopped restoration and immutable witnesses remain in the existing owner paths. Existing payload phases are unchanged. F-0200-001 source is byte-identical to base; F-0200-002 rollback function is AST-identical to base and its six owner regressions pass."
-  preserved_reproducers: "All 15 pre-existing qualification methods/helpers are AST-identical to exact base, including Q07 unverified-target and Q09 interrupted-payload reproducers."
+  finding: F-0200-004
+  policy_proof: PASS
+  change: "Exactly one explicit MODULE_POLICY_ENTRIES entry for tests.test_product_qualification. Lane L5_QUALIFICATION_CHAOS_CUTOVER, isolation_key qualification, timeout 180.0, tags qualification/cutover/recovery/productization."
+  harness: "Inventory updated to 63 total and 6 L5. New assertion covers lane, isolation, timeout, exact tags and exclusion from GLOBAL_QUICK_MODULES. All other lane counts remain 17/21/10/9."
+  strictness: "Existing unknown-module and duplicate-classification tests pass. Removing the added entry from the candidate policy AST makes it identical to the base policy AST: no other policies, path rules, worker limits, L5 concurrency, heartbeat or selection rules changed. verify_tests.py and the existing unknown-module test are unchanged."
+  product_preservation: "Pre-report candidate changes only verification_policy.py and tests/test_verify_harness.py. Product code, Q01-Q14 predicates and TASK-0196 are byte-identical to exact base. Revision-4 product evidence is preserved, not requalified or rewritten outside canonical verification."
+  integration_limit: "Canonical inventory accepts all 63 classifications, but an unrelated fixture setup error stops worker launch before tests.test_product_qualification executes. Its required canonical execution is NOT_PROVEN, so the task remains BLOCKED."
 
 focused_verification:
-  isolation: "Temporary synthetic HOME/TMPDIR/workspace/config/tunnel-client state and sterile environment. Real payload publication/provenance and cutover helpers operate only on run-owned files. Fake launchctl/ServiceManagement/lifecycle/signing seams represent consumer state. No operator config/credentials or real control plane accessed."
-  python: ".venv/bin/python (CPython 3.13.5 on Darwin)"
-  payload_owner_first:
-    command: ".venv/bin/python -m unittest -v --failfast <five focused CandidateCutoverTests payload-update methods>"
-    methods:
-      - test_sealed_payload_publication_validates_before_switch_and_reaches_checkpoints
-      - test_sealed_payload_cleanup_retains_typed_evidence_until_safe_removal
-      - test_payload_activation_stops_before_pointer_switch_and_preserves_immutable_substrate
-      - test_payload_activation_failure_after_pointer_switch_restores_previous_generation
-      - test_payload_activation_preserves_stopped_state_without_lifecycle_restart
+  harness:
+    command: ".venv/bin/python -m unittest -v tests.test_verify_harness"
+    isolation: "Run-owned temporary HOME/TMPDIR and sterile environment. Harness subprocess verify calls use synthetic repositories, not the canonical repository verifier."
     result: PASS
-    tests: 5
+    tests: 22
     exit_code: 0
-    diagnostic_correction: "An initial new-test assertion included activation's read-only launchctl print in the pre-rollback log snapshot. Snapshot was moved to the actual rollback boundary; no product requirement was relaxed."
-  q01_q09_and_f001:
-    command: ".venv/bin/python -m unittest -v --failfast tests.test_runtime_config tests.test_product_qualification"
-    selection: "Before adding Q10-Q14: 26 runtime_config owner tests and 11 preserved qualification tests covering Q01-Q09."
-    result: PASS
-    tests: 37
-    exit_code: 0
-  q10_q11_and_collision:
-    command: ".venv/bin/python -m unittest -v --failfast tests.test_candidate_cutover.CandidateCutoverTests.test_payload_update_collision_cleanup_and_activation_failure_keep_typed_metadata tests.test_product_qualification.ProductQualificationTests.test_q10_uninstall_retains_exact_config_and_reinstall_admission_keeps_it_authoritative tests.test_product_qualification.ProductQualificationTests.test_q11_upgrade_preserves_config_bytes_mode_and_identity"
-    result: PASS
-    tests: 3
-    exit_code: 0
-  diagnosis_continuation:
-    command: ".venv/bin/python -m unittest -v --failfast <Q12, Q13, Q14 ProductQualificationTests methods>"
-    result: PASS
-    tests: 3
-    exit_code: 0
-    environment_classification: "The first sandboxed diagnosis attempt encountered Xcode Python-shim stderr about denied FSEvents/confstr cache access. A bounded unsandboxed probe of the same synthetic state showed healthy JSON and empty stderr. The same assertions then passed outside that sandbox; no diagnosis/output assertion was weakened and no production file was changed."
-  full_matrix:
-    command: ".venv/bin/python -m unittest -v --failfast tests.test_product_qualification"
-    result: PASS
-    tests: 16
-    exit_code: 0
-  reused_owners:
-    command: ".venv/bin/python -m unittest -v --failfast tests.test_doctor tests.test_uninstall tests.test_task0141_productization.Task0141ProductizationTests.test_preflight_is_deterministic_read_only_and_secret_safe"
-    result: PASS
-    tests: 36
-    exit_code: 0
-  final_cutover_owners:
-    command: ".venv/bin/python -m unittest -v --failfast <12 listed tests.test_candidate_cutover.CandidateCutoverTests methods>"
-    methods:
-      - test_zero_cost_app_swapped_rollback_rejects_target_drift_before_any_effect
-      - test_zero_cost_app_swapped_rollback_requires_exact_payload_witness
-      - test_zero_cost_app_swapped_rollback_requires_metadata_identity_equality
-      - test_zero_cost_failure_after_predecessor_transition_restores_exact_persistent_lifecycle
-      - test_zero_cost_rollback_removes_transaction_created_main_registration
-      - test_zero_cost_transitions_persistent_current_predecessor_to_manual_and_reaches_pending
-      - test_sealed_payload_publication_validates_before_switch_and_reaches_checkpoints
-      - test_sealed_payload_cleanup_retains_typed_evidence_until_safe_removal
-      - test_payload_update_collision_cleanup_and_activation_failure_keep_typed_metadata
-      - test_payload_activation_stops_before_pointer_switch_and_preserves_immutable_substrate
-      - test_payload_activation_failure_after_pointer_switch_restores_previous_generation
-      - test_payload_activation_preserves_stopped_state_without_lifecycle_restart
-    result: PASS
-    tests: 12
-    exit_code: 0
+    evidence: "Exact inventory/lane counts, explicit qualification policy and unchanged fail-closed unknown-module behavior pass."
   diff_check:
     commands: ["git diff --check", "git diff --cached --check"]
     result: PASS
-    pre_report_scope: [macos/candidate_cutover.py, tests/test_candidate_cutover.py, tests/test_product_qualification.py]
-    function_scope: "Only activate_payload_release and the payload-update branch of rollback_transaction changed; one cleanup helper added."
-
-qualification_matrix:
-  Q01: {result: PASS, evidence: "Missing client maps TUNNEL_CLIENT_UNAVAILABLE before publication; absent and existing canonical preservation rerun."}
-  Q02: {result: PASS, evidence: "Synthetic 401 maps INVALID_CREDENTIAL; canonical preserved and submitted secret absent from argv/output."}
-  Q03: {result: PASS, evidence: "Synthetic 403/404 map TUNNEL_ACCESS_DENIED/TUNNEL_NOT_FOUND with canonical preservation."}
-  Q04: {result: PASS, evidence: "Transient/malformed/undecodable response qualification and stdout/stderr owner regressions pass; typed exit 2 and no raw-response leakage."}
-  Q05: {result: PASS, evidence: "Removed configured workspace yields stable WORKSPACE_UNAVAILABLE without consumer-state mutation."}
-  Q06: {result: PASS, evidence: "Foreign/ambiguous 8080 observations confer no signal, kill, start or rebind authority."}
-  Q07: {result: PASS, evidence: "Valid before/after-swap interruption restores exact opaque predecessor; unverified target fails closed retaining evidence. Identity/witness guards remain closed."}
-  Q08: {result: PASS, evidence: "Four material failure stages restore exact predecessor and config identity; injected restoration failure retains bounded PARTIAL evidence."}
-  Q09: {result: PASS, evidence: "Preserved real sealed-payload reproducer reaches publication and pointer-switch interruptions. Only validated selected generation is authoritative; rollback restores old pointer and witnesses and removes owned generation. Invalid incoming bytes are rejected before transaction creation. Owner tests establish 0555 canonical mode and evidence-preserving cleanup failures."}
-  Q10: {result: PASS, evidence: "Existing uninstall helper removes synthetic product/lifecycle/payload state while retaining runtime.env bytes/device/inode/mode. Existing reinstall admission helper honors retained valid config despite conflicting environment credentials without tunnel lookup."}
-  Q11: {result: PASS, evidence: "Real synthetic sealed-candidate upgrade 0.5.0 -> 0.5.1 reaches PENDING and commit while preserving canonical runtime.env bytes/device/inode/mode. Repository Runtime version unchanged."}
-  Q12: {result: PASS, evidence: "Actual ./start.sh doctor --json and existing install-preflight owner are deterministic, bounded below 64 KiB and exclude synthetic credential, Tunnel ID and Git identity values. Each doctor evidence object is bounded to 4096 bytes; invalid config uses safe structured diagnostics."}
-  Q13: {result: PASS, evidence: "Actual doctor repeats deterministic non-OK reasons for removed workspace, incomplete package, invalid substrate, invalid pointer/payload, foreign lifecycle, approval-required lifecycle, present and malformed transaction. Canonical config identity preserved."}
-  Q14: {result: PASS, evidence: "Actual doctor yields exact ordered 10-check inventory, healthy status, all checks pass/OK, exit 0, empty stderr and identical bounded JSON across repetitions. Only signing probes and bundled-interpreter transport are synthetic; diagnosis/selection/config logic is unchanged."}
-
-blocking_findings:
-  - id: VERIFY-UNCLASSIFIED-PRODUCT-QUALIFICATION
-    classification: canonical_verifier_policy_integration_gap
-    source: "verify_tests.py:106-120,799; verification_policy.py MODULE_POLICIES"
-    trigger: "Exactly one canonical ./verify on candidate 09c2e0cea6421405ab01a1343ccdcd17eddaaa55 after Q01-Q14 PASS."
-    expected: "Canonical verification accepts and runs the repository's test inventory."
-    observed: "Exit 2: VERIFY policy error: verification classification mismatch: unclassified=tests.test_product_qualification"
-    consequence: "Canonical verification is FAIL; AC-6 remains blocked despite all product predicates passing. No additional Q10-Q14 production defect was observed."
-    scope_decision: "verification_policy.py is outside revision-4 allowed files. It is unchanged; no workaround, classification weakening or second verifier invocation performed. Separately authorized closure is required."
+    pre_report_scope: [verification_policy.py, tests/test_verify_harness.py]
+  failure_diagnosis:
+    command: ".venv/bin/python -m unittest -v tests.test_fs_read_batch_adversarial.FsReadBatchAdversarialTests.test_fifo_socket_and_device_modes_are_rejected_before_content_read"
+    result: PASS
+    tests: 1
+    exit_code: 0
+    environment: "Synthetic HOME; TMPDIR=/private/tmp; run outside the filesystem sandbox that independently denies socket.bind. No source changes or canonical verifier replay."
+    evidence: "The same failing test passes with a short temporary path. An initial sandboxed diagnostic gets PermissionError at socket.bind instead of the canonical AF_UNIX path-too-long error; the sufficient authorized surface then establishes the short-path diagnosis."
 
 acceptance_evidence:
-  - {criterion_id: AC-1, status: PASS, evidence: "F-0200-003 publication and cleanup owner regressions plus preserved Q09 reproducer pass."}
-  - {criterion_id: AC-2, status: PASS, evidence: "Root-only Darwin publication preserves sealed contents; canonical validates at 0555 before switching. Existing collision unchanged and invalid payload rejected."}
-  - {criterion_id: AC-3, status: PASS, evidence: "Sealed staging removal occurs with metadata present; cleanup failure, unknown artifact, unsafe container and final rmdir failure retain PARTIAL typed metadata and safe consumer witnesses."}
-  - {criterion_id: AC-4, status: PASS, evidence: "Full Q01-Q14 matrix passes all 16 tests; exact reused owner suites pass."}
-  - {criterion_id: AC-5, status: PASS, evidence: "Candidate changes only candidate_cutover.py and the two authorized test files; F-0200-001/F-0200-002 and paused TASK-0196 preserved."}
-  - {criterion_id: AC-6, status: BLOCKED, evidence: "Diff checks pass. One canonical verifier exits 2 on missing qualification-module classification; no replay or out-of-scope fix."}
-  - {criterion_id: AC-7, status: NOT_PROVEN, evidence: "Truthful BLOCKED report prepared as report-only candidate child on main; fresh post-publication proof is established externally after publication."}
+  - {criterion_id: AC-1, status: PASS, evidence: "Explicit single serialized L5 classification with required timeout/tags; strictness and unknown-module rejection unchanged and proven by focused harness."}
+  - {criterion_id: AC-2, status: PASS, evidence: "Focused harness 22/22 PASS; 63 total, 6 L5, all other counts unchanged. Canonical summary confirms classified_modules=63."}
+  - {criterion_id: AC-3, status: PASS, evidence: "Only the two authorized verifier files differ before report; all accepted product/qualification implementation remains unchanged."}
+  - {criterion_id: AC-4, status: BLOCKED, evidence: "One canonical ./verify returns exit 1 after 49/63 modules. Fixture Unix-socket path too long stops scheduling before tests.test_product_qualification. No exemption, pre-exclusion or replay."}
+  - {criterion_id: AC-5, status: NOT_PROVEN, evidence: "Truthful BLOCKED report prepared as sole report-only child of the candidate on main. Fresh post-publication synchronization proof is established externally after publication."}
 
 authoritative_verification:
   required: true
   performed: true
   invocation_count: 1
   command: "./verify"
-  candidate: "09c2e0cea6421405ab01a1343ccdcd17eddaaa55"
+  candidate: "2c64319d14a4d5b66e4dda5ef6a3a82eb66584bf"
   carrier: "Agent Runtime terminal_start, durable pipe"
   durability: runtime_restart
-  start_identity: "d7746c8c225140e4a310a1f6787bd3f2"
-  session_id: "4b90d9aa6d9d695b"
+  start_identity: "f7333709910e4654a1b057ad8506cea0"
+  session_id: "89a5d4bfde668186"
   lifecycle: COMPLETED
   termination_reason: natural_exit
-  exit_code: 2
+  exit_code: 1
   result: FAIL
-  evidence: "VERIFY policy error: verification classification mismatch: unclassified=tests.test_product_qualification"
-  dispatch_note: "An initial dashed UUID was rejected by connector schema validation before dispatch. The intent was corrected to the required 32 lowercase hex characters. This caused no verifier execution; the single accepted dispatch returned a conclusive typed terminal result. No replay."
+  reconciliation: "Initial start and polls returned DURABLE_OWNER_LOST with effect unknown. No start replay occurred. Polling the same start_identity subsequently returned the conclusive COMPLETED/natural_exit/exit-1 result; incremental output was reconciled through cursor 18223 with no dropped bytes."
+  environment: "Sterile env with temporary synthetic HOME; executor-selected TMPDIR=/private/tmp/task0200-r5-canonical-verify-h8jb3amr. This path was too long for the existing Unix-socket fixture."
+  classified_modules: 63
+  selected_modules: 63
+  completed_modules: 49
+  tests: 741
+  lane_counts:
+    L1_DETERMINISTIC_UNIT: {selected: 17, completed: 10, tests: 137}
+    L2_ISOLATED_INTEGRATION: {selected: 21, completed: 21, tests: 233}
+    L3_DETERMINISTIC_REGRESSION: {selected: 10, completed: 10, tests: 91}
+    L4_HOST_LIFECYCLE: {selected: 9, completed: 7, tests: 155}
+    L5_QUALIFICATION_CHAOS_CUTOVER: {selected: 6, completed: 1, tests: 125}
+  product_qualification:
+    selected: true
+    lane: L5_QUALIFICATION_CHAOS_CUTOVER
+    executed: false
+    result: NOT_RUN
+    evidence: "Existing fail-closed scheduling stops launching pending workers after the fixture failure. Product qualification was classified and selected, not exempted or pre-excluded. Revision-4 16/16 evidence remains accepted but cannot substitute for required revision-5 canonical execution."
+  candidate_cutover: {result: PASS, tests: 125}
+  verifier_harness: {result: PASS, tests: 22}
+  failed_module: tests.test_fs_read_batch_adversarial
+  failed_test: test_fifo_socket_and_device_modes_are_rejected_before_content_read
+  evidence: "OSError: AF_UNIX path too long at tests/test_fs_read_batch_adversarial.py:172, sock.bind(str(sock_path)). Canonical total: modules=49/63 classified_modules=63 tests=741 profile=qualification requested_profile=qualification."
+
+blocking_findings:
+  - id: CANONICAL-VERIFY-TMPDIR-SOCKET-PATH
+    classification: executor_environment_fixture_setup_failure
+    source: "tests/test_fs_read_batch_adversarial.py:26,172; executor-selected canonical TMPDIR"
+    trigger: "Existing fixture appends agent-runtime-task0040-adversarial-<random>/cwd/socket under the long run-owned TMPDIR."
+    observed: "Unix-socket bind raises AF_UNIX path too long before product filesystem-read behavior is evaluated."
+    attribution: "Executor environment choice caused this setup failure. The exact test passes with short TMPDIR on an authorized surface supporting Unix sockets. No new product defect is established."
+    consequence: "Canonical verification fails and the required qualification-module execution is not reached. Policy integration is proven locally, but full task acceptance remains blocked."
+    scope_decision: "No fixture/product/policy weakening or additional fix. No second canonical invocation. A future canonical run with short TMPDIR requires separately authorized continuation."
 
 effect_accounting:
   canonical_verify: {authorized_max: 1, consumed: 1}
@@ -167,4 +123,4 @@ effect_accounting:
 
 local_hygiene:
   result: PASS
-  evidence: "Synthetic fixtures clean their run-owned temporary state after evidence inspection. Canonical verifier terminal result is conclusive, with recoverable carrier identity in this report. No physical fresh-Mac/user qualification claimed."
+  evidence: "Focused fixtures clean run-owned temporary material. Canonical verifier terminated naturally; the durable identity/result is preserved in this report before run-owned intent/HOME cleanup. No live installed Runtime or real credential state inspected or mutated."
