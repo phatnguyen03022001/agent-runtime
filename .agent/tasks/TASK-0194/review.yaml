@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0194
-task_revision: 3
-review_revision: 3
-state: REVISION_REQUIRED
+task_revision: 4
+review_revision: 4
+state: ACCEPTED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0194/report.yaml
-  commit: "34d19ac14355f99efeaa76a3e5726371ad94234a"
-  report_revision: 3
+  commit: "a445d28cee29371dce6b74ab842573b6bc60ec2e"
+  report_revision: 4
 
 independence:
   reviewer_role: ARCHITECT
@@ -24,29 +24,23 @@ contract_compliance:
   scope: PASS
   structure_policy: PASS
   git_authority: PASS
-  acceptance_criteria: FAIL
+  acceptance_criteria: PASS
   verifier_evidence: PASS
 
 acceptance_basis:
-  - "Revision-3 report commit 34d19ac14355f99efeaa76a3e5726371ad94234a is the single direct child of exact revision-3 base a004fa1834de14a6ff51841d06e1487c278ed29a and changes only .agent/tasks/TASK-0194/report.yaml."
-  - "The preserved revision-2 candidate revalidated successfully and no build, verifier, LaunchServices cleanup, commit, menu-bar relaunch, Runtime Start, reboot, or source mutation occurred in revision 3."
-  - "The sole authorized install-prebuilt invocation ran through the independent SentinelX carrier, failed conclusively, and automatically rolled the predecessor state back. No install replay or extra rollback occurred."
-  - "Post-rollback live state is healthy and canonical at predecessor revision 5286bbb6d1942ff7eed13190bd38ee5efcc0e621 with transaction absent, Runtime RUNNING/live/ready, doctor 10/10 healthy, runtime.env preserved, main_app enabled, and runtime_agent not-found."
-  - "The zero-cost candidate external payload is exact for candidate source revision fcc19607d50b70270446c605335ec7d468b3cecc / tree 0720c1b65321d5ef5d590d94cc3a76930e405d03."
-  - "The existing canonical payload store entry at the same content closure 85b82b2c88e9bc0bfdf0c240a7b47b17abfd260609d88a7e5dafecab042e2483 has predecessor source revision 5286bbb6d1942ff7eed13190bd38ee5efcc0e621 / tree 4093367bfaaf499b880e98076d5904decae51375."
-  - "Fresh Architect comparison proves the candidate and canonical manifests have identical schema, owner, content_closure, requirements_lock_sha256, required_python_major_minor, lifecycle_contract, payload_contract, expected_public_tool_count, expected_public_surface_sha256, and identical files inventory. Only source_revision/source_tree differ."
-  - "package_provenance._payload_closure intentionally hashes only payload file path/mode/size/content hashes; therefore identical payload bytes across different source revisions intentionally resolve to the same canonical content closure."
-  - "candidate_cutover currently validates the external candidate payload correctly against exact source identity before mutation, but when the canonical payload path already exists it incorrectly calls _validate_zero_cost_payload_for_candidate(final_payload, expected), requiring the canonical deduplicated store entry to carry the candidate source revision/tree."
-  - "The commit path repeats the same incorrect coupling by validating the installed candidate against final_payload rather than retaining exact candidate provenance from the transaction-staged payload while validating the selected canonical payload by content/compatibility contract."
-  - "The correct fix is not to change content_closure, overwrite the canonical payload, or weaken external candidate provenance. The exact staged candidate payload must remain the source-identity proof; an already-existing canonical payload with the same closure must be validated by content/compatibility only."
+  - "Implementation candidate dfbd1c93913c0bdaa0c6ead1ffbdc251c088f5bc is the single direct child of exact revision-4 base a0c4b8373c9c86fc768400d06eb0fb51b13639ee and changes only macos/candidate_cutover.py plus tests/test_candidate_cutover.py."
+  - "Report commit a445d28cee29371dce6b74ab842573b6bc60ec2e is the single direct child of the implementation candidate and changes only .agent/tasks/TASK-0194/report.yaml."
+  - "F-0194-003 is closed without changing content closure, package_provenance.py, payload/candidate/transaction schemas, pointer format, public MCP surface, lifecycle semantics, or dependency contracts."
+  - "Existing canonical payload reuse now validates immutable content and compatibility independently from historical source_revision/source_tree. Exact external candidate payload validation remains source-identity fail-closed."
+  - "When payload.created=false, the exact staged candidate payload remains inside the transaction and is used as the source provenance witness through commit; the pre-existing canonical payload remains byte-for-byte unchanged and is never transaction-deleted."
+  - "Commit validates the canonical payload selected by the pointer for compatibility and validates the installed app/handoff against the staged exact candidate payload when canonical content was reused."
+  - "Negative regression proves incompatible same-closure canonical metadata is rejected, and external candidate source mismatch remains rejected before transaction mutation."
+  - "Targeted regression 3/3 PASS, tests.test_candidate_cutover 116/116 PASS, tests.test_package_provenance 20/20 PASS."
+  - "Exactly one revision-4 canonical ./verify invocation completed natural_exit/exit 0 with 62/62 modules and 862 tests PASS after reconciling the same durable execution; no replay occurred."
+  - "Revision 4 performed zero live activation effects. The installed predecessor remains revision 5286bbb6d1942ff7eed13190bd38ee5efcc0e621, transaction absent, RUNNING/live/ready."
 
-findings:
-  - id: "F-0194-003"
-    severity: BLOCKING
-    description: "Zero-cost cutover conflates exact external candidate source provenance with canonical content-addressed payload-store identity. A valid existing canonical payload with identical content closure but older source_revision/source_tree is rejected."
-    disposition: "Revision 4 must be source-fix and verification only. Preserve content-addressed store semantics and exact external candidate validation. Update zero-cost cutover/commit so an existing canonical payload at the candidate closure is reused only after full content/compatibility validation, while the transaction-staged candidate payload continues to provide exact source_revision/source_tree provenance for the app candidate. Add deterministic regression coverage reproducing the live collision and proving commit succeeds without mutating the pre-existing canonical payload. Do not perform live activation in revision 4."
+findings: []
 
 notes:
-  - "Do not rename/rekey payload closures, mutate or replace the existing canonical payload release, relax external candidate source-identity validation, or alter payload schema."
-  - "Revision 4 requires fresh canonical source verification because production cutover code will change."
-  - "The predecessor live installation is healthy after automatic rollback and must remain untouched during revision-4 implementation/verification."
+  - "Revision 4 source fix is accepted. A subsequent activation revision must build a new candidate containing dfbd1c93913c0bdaa0c6ead1ffbdc251c088f5bc; the earlier 025f728a... candidate must not be activated because it predates F-0194-003."
+  - "The package_app.sh retained-candidate LaunchServices unregister behavior remains non-authoritative discovery hygiene per prior Architect disposition. A future package command that fails only after a candidate is fully sealed/published at that exact cleanup step may be reconciled from the published immutable candidate without rebuilding, if explicitly authorized."
