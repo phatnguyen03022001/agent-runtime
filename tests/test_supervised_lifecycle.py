@@ -419,6 +419,8 @@ esac
         self.assertEqual(status["pids"], [])
         self.assertEqual(status["tunnel_transport"], "not-running")
 
+        desired.unlink()
+
     def test_status_rejects_foreign_port_owner_even_if_port_is_occupied(self) -> None:
         status = self.run_status_json(extra_env={"FAKE_FOREIGN_PORT_PID": "777"})
 
