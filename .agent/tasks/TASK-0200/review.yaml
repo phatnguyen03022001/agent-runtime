@@ -1,15 +1,15 @@
 protocol_version: 3
 
 task_id: TASK-0200
-task_revision: 3
-review_revision: 3
+task_revision: 4
+review_revision: 4
 state: REVISION_REQUIRED
 
 reviewed_report:
   repository: phatnguyen03022001/agent-runtime
   path: .agent/tasks/TASK-0200/report.yaml
-  commit: "c20cf9d44731244bf41d6027fb0e3bc5ea012bd4"
-  report_revision: 3
+  commit: "2b067228b6f62847f3bb8a3cebda7a0e655bd158"
+  report_revision: 4
 
 independence:
   reviewer_role: ARCHITECT
@@ -23,28 +23,29 @@ contract_compliance:
   scope: PASS
   git_authority: PASS
   acceptance_criteria: BLOCKED
-  verifier_evidence: NOT_RUN_BY_GATE
+  verifier_evidence: FAIL_POLICY_CLASSIFICATION
 
 acceptance_basis:
-  - "Revision-3 candidate 696f298b1fbbb7b80beb8896320a9e3b636b5505 is the single direct child of exact revision-3 base fe446a73340eebf3a60fbcfa75719ad03cf4754c and changes only macos/candidate_cutover.py plus the two authorized qualification/owner test files."
-  - "Report commit c20cf9d44731244bf41d6027fb0e3bc5ea012bd4 follows the implementation candidate and truthfully stops at Q09."
-  - "F-0200-002 is CLOSED: APP_SWAPPED zero-cost rollback validates the sealed installed candidate identity before any destructive rollback effect; invalid app/witness/metadata identity retains PARTIAL evidence and leaves target/pointer/config/lifecycle state unchanged."
-  - "Focused owner regressions PASS 6/6; runtime_config plus Q01-Q07 PASS 35/35; Q08 PASS."
-  - "Q09 independently reproduces a Darwin immutable-directory activation gap: the package publisher seals payload directories to mode 0555, copytree preserves that mode in transaction staging, and payload activation attempts os.replace(staged_payload, final_payload) without preparing the staged root for Darwin rename."
-  - "The existing zero-cost candidate publish path already uses the accepted pattern staged_payload chmod 0755 -> os.replace -> final_payload chmod 0555 -> persist/validate; payload-update activation lacks that corresponding step."
-  - "On activation failure, payload-update rollback/cleanup can call raw shutil.rmtree(transaction_dir) while the transaction still contains sealed payload material. Cleanup may remove metadata.json before failing on that material, preventing the later PARTIAL metadata update."
-  - "Pointer and consumer witnesses remain unchanged in the reproduced failure, but transaction evidence becomes incomplete and a valid payload cannot reach the intended switch checkpoints."
-  - "The Executor correctly stopped before Q10-Q14 and did not invoke canonical ./verify."
-  - "No live/release effect occurred."
+  - "Revision-4 candidate 09c2e0cea6421405ab01a1343ccdcd17eddaaa55 is the single direct child of exact revision-4 base dc1cf7562603c8f89b7884cfdf85413b6c46bf22 and changes only macos/candidate_cutover.py plus the two authorized test files."
+  - "Report commit 2b067228b6f62847f3bb8a3cebda7a0e655bd158 follows the implementation candidate and truthfully records the single verifier invocation."
+  - "F-0200-003 is CLOSED: valid sealed payload publication now reaches the intended checkpoints on Darwin, canonical payload returns to mode 0555 before pointer authority advances, and payload-update cleanup preserves typed transaction evidence."
+  - "Q01 through Q14 all PASS; full product qualification module PASS 16/16; exact reused doctor/uninstall/preflight owners PASS 36/36; final cutover owner selection PASS 12/12."
+  - "F-0200-001 and F-0200-002 remain closed under rerun evidence."
+  - "git diff --check PASS and no live/release effect occurred."
+  - "The one authorized canonical ./verify invocation exited 2 before test execution because strict verification classification found tests.test_product_qualification unclassified."
+  - "Source inspection confirms verify_tests.validate_classification requires exact equality between discovered test modules and verification_policy.MODULE_POLICIES. The new qualification module is absent from MODULE_POLICY_ENTRIES."
+  - "The appropriate existing lane is L5_QUALIFICATION_CHAOS_CUTOVER with qualification isolation: the module intentionally composes cutover, rollback, payload recovery, doctor and productization failure qualification."
+  - "tests/test_verify_harness.py independently hard-codes the exact classified inventory and lane counts; current expected inventory is 62 modules with 5 L5 modules, so adding this legitimate module requires 63 total and 6 L5."
+  - "The Executor correctly did not alter verification policy outside revision-4 authority and did not replay the verifier."
 
 findings:
-  - id: F-0200-003
+  - id: F-0200-004
     severity: BLOCKING
-    classification: immutable_payload_publish_and_transaction_cleanup_gap
-    description: "Payload-update activation cannot reliably move a valid sealed 0555 staged payload into the canonical store on Darwin, and cleanup may delete transaction metadata before failing on immutable staged material."
-    required_closure: "Reuse the established zero-cost payload publication mode transition for payload-update activation and make payload-update transaction cleanup remove any sealed staged payload safely before deleting transaction metadata/directory. A cleanup failure must retain typed PARTIAL transaction evidence rather than leave a transaction without metadata."
+    classification: verifier_policy_integration_gap
+    description: "The accepted TASK-0200 qualification module exists in the repository test inventory but is absent from strict verification policy classification, causing canonical ./verify to fail before executing the suite."
+    required_closure: "Classify tests.test_product_qualification in the existing L5 qualification lane with qualification isolation and an adequate bounded timeout; update only the verifier-harness inventory/lane assertions. Do not exempt, skip, rename or weaken the module. Then run the focused verifier-harness proof and exactly one new canonical ./verify under revision-5 authority."
 
 notes:
-  - "TASK-0200 revision 3 is not accepted."
-  - "F-0200-001 and F-0200-002 remain closed and must not be reopened."
+  - "TASK-0200 revision 4 is not accepted solely because AC-6 canonical verification is not satisfied."
+  - "Product qualification Q01-Q14 and F-0200-001/002/003 are accepted as revision-4 evidence and must not be reopened absent new contradictory evidence."
   - "TASK-0196 remains paused."
