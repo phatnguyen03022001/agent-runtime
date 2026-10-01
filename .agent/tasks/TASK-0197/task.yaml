@@ -1,0 +1,185 @@
+protocol_version: 3
+
+task_id: TASK-0197
+task_revision: 1
+state: APPROVED
+title: "Structured Filesystem Dotenv Secret Exposure Hardening"
+
+origin:
+  type: architect_continuation
+  predecessor_task: TASK-0195
+  paused_release_task: TASK-0196
+  request: "Close the proven accidental credential exposure path where fs_search/fs_read can return dotenv secret content before proceeding with the v0.5.2 release train."
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+
+execution_skills:
+  required: [executor, security-review, verification, simplicity]
+  recommended: []
+
+authority_sources:
+  - source: "Fresh Architect source audit at pre-task main"
+    role: "Proves fs_search content mode and fs_read_batch currently have workspace/symlink/bounds safety but no sensitive dotenv content policy."
+    precedence: 1
+  - source: "agent_runtime/fs_read.py"
+    role: "Structured bounded file-read implementation and existing per-item ACCESS_DENIED result contract."
+    precedence: 2
+  - source: "agent_runtime/fs_search.py"
+    role: "Structured deterministic recursive search implementation; path and content modes are distinct."
+    precedence: 3
+  - source: "agent_runtime/fs_safety.py"
+    role: "Existing shared filesystem safety helpers; preferred location for one small shared path-classification predicate."
+    precedence: 4
+  - source: "THREAT_MODEL.md"
+    role: "Existing same-UID limitation: Runtime is not a sandbox and cannot claim complete confidentiality against arbitrary terminal/program effects."
+    precedence: 5
+
+structure_authority:
+  status: RESOLVED
+  source: "Existing fs_safety shared helper seam plus current fs_read/fs_search contracts."
+  rationale: "Use one deterministic filename classifier shared by the two structured read surfaces. Do not add a secret scanner, regex content detector, policy framework, cache, registry, dependency, sandbox or new service."
+
+problem_statement:
+  proven_exposure: "A workspace .env file can currently be content-searched by fs_search and matching credential text can be returned in MCP tool results. fs_read_batch can likewise read that file directly."
+  boundary: "This task reduces accidental secret disclosure through structured filesystem tools only. It does not claim to prevent same-UID terminal commands or arbitrary programs from reading workspace files."
+  real_secret_handling: "Do not inspect, print, copy, persist, compare, or test against any real workspace credential. Use synthetic fixtures only. Credential rotation, if needed, is an operator action outside this task."
+
+objective: "Add a narrow, deterministic dotenv-content deny policy to fs_read_batch and fs_search content mode without changing their public result schema versions, while keeping ordinary path discovery and public dotenv templates usable. Document the defense-in-depth boundary honestly. Obtain focused tests and exactly one canonical ./verify PASS. Perform zero live/release effects."
+
+scope:
+  required_changes:
+    - "Fresh-bind exact revision-1 base with clean synchronized MAIN ONLY topology. TASK-0196 must not be executed during TASK-0197."
+    - "Implement one small shared predicate in agent_runtime/fs_safety.py that classifies sensitive dotenv content paths by final basename, case-insensitively."
+    - "Sensitive basenames for revision 1 are exactly: .env and any basename beginning .env. except the exact public-template allowlist .env.example, .env.sample and .env.template. Do not broaden this revision to .npmrc, .netrc, credentials JSON, SSH files, cloud-provider directories, key material detection, entropy scanning, value-pattern scanning or arbitrary secret heuristics."
+    - "fs_read_batch must reject a sensitive dotenv path before opening or reading file content. Preserve request/result schema versions and use the existing per-item ACCESS_DENIED error code; do not add a new enum/result schema. The item must return no text, size, hash or content-derived metadata."
+    - "fs_search mode=content must skip sensitive dotenv files before opening or scanning their bytes. Such files must contribute no matching line, line_text or file_sha256 and must not increase content bytes_scanned. Do not add a new result field or bump fs_search request/result schemas."
+    - "fs_search mode=path remains allowed to discover the filename/path if it matches the query. This task protects content, not file existence."
+    - "Public template files .env.example, .env.sample and .env.template remain readable/searchable normally."
+    - "Apply the same classification to nested descendant paths and case variants, e.g. nested/.ENV and nested/.env.LOCAL are protected; .ENV.EXAMPLE remains allowed by the case-insensitive exact allowlist."
+    - "Do not inspect actual file contents to classify sensitivity. Classification is filename-only and deterministic."
+    - "Do not introduce symlink traversal or weaken any existing workspace, normalized-descendant, regular-file, byte, output, deadline, continuation or hashing bounds."
+    - "Update the fs_read/fs_search ToolContract precondition metadata only if needed to truthfully expose the sensitive-dotenv content policy; preserve existing request/result schema versions and tool names."
+    - "Add focused synthetic regressions in tests/test_fs_read_batch.py and tests/test_fs_search.py. No fixture may contain a real credential or copy bytes from a real .env."
+    - "Regression matrix must prove: .env denied by fs_read; .env.local denied; nested/case variants denied; public template allowlist readable; fs_search content returns no match/hash and scans zero sensitive-content bytes; fs_search path mode can still return the sensitive path; ordinary non-sensitive files retain current behavior."
+    - "Add a concise security-boundary note to README.md and THREAT_MODEL.md: structured fs_read/fs_search dotenv protection is defense-in-depth against accidental disclosure, not same-UID isolation; terminal tools and arbitrary same-UID processes remain capable of reading user-readable workspace files, so credentials should not be stored in the agent workspace when confidentiality from the agent is required."
+    - "Run focused fs_read_batch and fs_search suites first, including MCP/schema-adjacent tests if the implementation touches ToolContract metadata."
+    - "Run exactly one canonical ./verify after focused tests pass. Reconcile an ambiguous durable carrier to the same invocation; never blind-replay."
+    - "Publish one implementation candidate and truthful TASK-0197 report. Final repository state clean/synchronized MAIN ONLY."
+    - "Do not bump Runtime version, package, archive, tag, publish a release, install/cut over/relaunch/restart Runtime, mutate LaunchServices, reload the plugin, request permissions, rotate credentials, or reboot."
+
+  allowed_existing_files_or_components:
+    - "agent_runtime/fs_safety.py"
+    - "agent_runtime/fs_read.py"
+    - "agent_runtime/fs_search.py"
+    - "tests/test_fs_read_batch.py"
+    - "tests/test_fs_search.py"
+    - "README.md"
+    - "THREAT_MODEL.md"
+    - ".agent/tasks/TASK-0197/report.yaml"
+
+invariants:
+  - "fs_read_batch request/result schema remains 1/2."
+  - "fs_search request/result schema remains 2/2."
+  - "Existing FsReadErrorCode enum remains unchanged; sensitive dotenv reads use ACCESS_DENIED."
+  - "fs_search path mode remains filename/path discovery, including sensitive dotenv paths."
+  - "No content-based secret detection."
+  - "No claim of complete secret isolation or sandboxing."
+  - "Terminal authority and same-UID threat-model limitations remain truthful and unchanged."
+  - "Twenty advertised tools, twenty-one known capabilities, screen_capture policy, lifecycle, tunnel, payload/cutover semantics and Runtime version remain unchanged."
+  - "TASK-0196 release train remains paused until TASK-0197 receives Architect acceptance and TASK-0196 is revised onto the new accepted head."
+  - "MAIN ONLY."
+
+forbidden_changes:
+  - "Any change to terminal_exec, terminal_start, terminal_control, process sandboxing, same-UID isolation, dependency locks, Runtime lifecycle, menu, tunnel, packaging, release, payload/cutover, screen_capture or public tool inventory."
+  - "Adding a new FsReadErrorCode, changing fs_read_batch/fs_search schema versions, or adding result fields."
+  - "Secret-value regexes, entropy heuristics, content scanners, credential-format detectors or third-party secret-detection dependencies."
+  - "Reading or printing any real workspace .env or credential as verification evidence."
+  - "Blocking fs_search path-mode existence discovery in revision 1."
+  - "Broadening protected filenames beyond the exact dotenv rule without revised Architect authority."
+  - "Any version bump, package/archive build, tag/release mutation, live install/cutover/menu relaunch/Runtime lifecycle/plugin/reboot/security-permission effect."
+  - "Any second canonical ./verify after a conclusive result or blind replay after ambiguity."
+  - "Any branch or PR."
+
+effect_authority:
+  canonical_verify_max: 1
+  distribution_build_max: 0
+  archive_build_max: 0
+  version_tag_create_max: 0
+  github_release_draft_create_max: 0
+  github_release_publish_max: 0
+  install_prebuilt_max: 0
+  commit_cutover_max: 0
+  rollback_cutover_max: 0
+  menu_bar_relaunch_max: 0
+  runtime_restart_max: 0
+  runtime_explicit_start_max: 0
+  runtime_explicit_stop_max: 0
+  launchservices_cleanup_max: 0
+  plugin_reload_or_reconnect_max: 0
+  physical_reboot_max: 0
+  new_security_permission_max: 0
+  credential_rotation_max: 0
+  branch_or_pr_creation_max: 0
+
+acceptance_criteria:
+  - id: AC-1
+    requirement: "Sensitive dotenv policy is deterministic, narrow and shared."
+    evidence_required: "One filename-only shared classifier; exact deny/allowlist behavior; no secret scanner/framework."
+  - id: AC-2
+    requirement: "fs_read_batch no longer returns sensitive dotenv content."
+    evidence_required: "Synthetic .env/.env.local/nested/case variants return existing ACCESS_DENIED before content read; public templates and ordinary files remain readable."
+  - id: AC-3
+    requirement: "fs_search content mode no longer returns or scans sensitive dotenv content."
+    evidence_required: "Synthetic content matches in protected dotenv files produce no result/hash/line text and zero sensitive content-byte contribution; path mode remains discoverable."
+  - id: AC-4
+    requirement: "Public schemas and unrelated filesystem safety remain stable."
+    evidence_required: "fs_read 1/2 and fs_search 2/2 unchanged; existing focused/adversarial/MCP tests PASS."
+  - id: AC-5
+    requirement: "Security documentation is accurate and non-misleading."
+    evidence_required: "README/THREAT_MODEL state defense-in-depth only and preserve same-UID/terminal limitations."
+  - id: AC-6
+    requirement: "Canonical verification passes with zero live/release effects."
+    evidence_required: "Focused suites PASS followed by exactly one ./verify PASS; no version/package/release/install/lifecycle/plugin/permission/reboot effects."
+  - id: AC-7
+    requirement: "Repository closure is minimal and canonical."
+    evidence_required: "Only authorized files plus report change; final main clean/synchronized MAIN ONLY."
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "./verify"
+    expected_signal: "Exactly one canonical PASS after focused synthetic secret-boundary regressions; no real secret content is used or emitted."
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions: [BLOCKED, STALE_STATE, AUTHORITY_REQUIRED, CURRENT_PHASE_CAPABILITY_UNAVAILABLE, REVIEW_REQUIRED, REVERIFY_REQUIRED, USER_STOP]
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  mutate_repository_metadata: false
+  publish_release: false
+
+blocking_decisions: []
+execution_ready: true
