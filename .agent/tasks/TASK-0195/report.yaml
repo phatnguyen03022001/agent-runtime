@@ -1,0 +1,116 @@
+protocol_version: 3
+
+task_id: TASK-0195
+task_revision: 1
+report_revision: 1
+state: REPORTED
+
+task_source:
+  path: .agent/tasks/TASK-0195/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch:
+    name: main
+    role: canonical
+  authorized_base_head: "4ad7636951d5d2dec4f35f2fe5e1a704016860f8"
+  final_execution_head: "f14becf3919177ae4a047b27148693a6fa9fc7ae"
+  candidate_tree: "ee5f4e5f871d20d258726be7b15de579d1fe81b8"
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  authorized_revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+
+implementation:
+  evidence: "The sole implementation child removes the embedded agent_runtime/server.py existence gate from AppDelegate. An internal resources/home overload provides deterministic fixtures; production still resolves Bundle.main.resourceURL and the current user's canonical runtime.env. Manifest identity/entrypoint/Python/revision-length checks, runtime-root symlink rejection, executable start.sh/Python checks, and regular non-symlink mode-0600 runtime.env checks remain unchanged."
+  source_blob: "54bfd8398ce94994b6cdb290cc4c18bd37c6ba92"
+  test_blob: "1f6e9278e0665b6898a9a52ebc7c7e9c9e30557e"
+
+regression_reproduction:
+  command: "xcrun swift test --package-path macos --filter PresentationTests/testInstalledConfigurationAcceptsZeroCostSubstrateWithoutEmbeddedServer"
+  start_identity: "01950001000000000000000000000004"
+  session_id: "a5ce962db7f08577"
+  result: EXPECTED_FAIL
+  exit_code: 1
+  evidence: "With only the test seam added and the obsolete embedded-server gate still present, the valid synthetic zero-cost substrate threw metadata: installed Runtime payload is incomplete. The same positive regression passed after removal of that gate."
+
+swift_verification:
+  start_identity: "01950001000000000000000000000006"
+  session_id: "01b0f21ab628e70d"
+  mode: pipe
+  durability: runtime_restart
+  exit_code: 0
+  termination_reason: natural_exit
+  focused:
+    command: "xcrun swift test --package-path macos --filter AgentRuntimeMenuBarTests"
+    result: PASS
+    tests: 57
+    failures: 0
+  full:
+    command: "xcrun swift test --package-path macos"
+    result: PASS
+    tests: 92
+    menu_bar_tests: 57
+    core_tests: 35
+    failures: 0
+  evidence: "Focused menu-bar tests ran first, followed by the full canonical Swift suite and git diff --check in one stop-on-failure bundle. The tested source/test blobs are exactly those in final_execution_head; no source/test mutation followed. Full-suite ProtectedRuntimeTests retain canonical schema-3 status observation coverage."
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: PASS
+  command: "./verify"
+  candidate: "f14becf3919177ae4a047b27148693a6fa9fc7ae"
+  invocation_count: 1
+  start_identity: "01950001000000000000000000000007"
+  session_id: "7e7ed28f3eb97c2e"
+  mode: pipe
+  durability: runtime_restart
+  lifecycle: COMPLETED
+  exit_code: 0
+  termination_reason: natural_exit
+  profile: qualification
+  modules_selected: 62
+  modules_completed: 62
+  tests_completed: 865
+  retry_count: 0
+  reconciliation: "terminal_start returned DURABLE_OWNER_LOST after dispatch and keyed polls reported unknown active ownership. No verifier replay occurred. Read-only inspection of the exact keyed persisted state subsequently showed COMPLETED/natural_exit/exit 0, then terminal_poll on the same start_identity returned the complete retained output without dropped bytes."
+  evidence: "The sole canonical ./verify ran after both Swift gates passed, guarded by the exact candidate HEAD and a clean worktree. Final output: modules=62/62 classified_modules=62 tests=865 profile=qualification requested_profile=qualification. Lane results were L1=219, L2=233, L3=88, L4=181, L5=144 tests; all modules PASS."
+
+pushed: false
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "testInstalledConfigurationAcceptsZeroCostSubstrateWithoutEmbeddedServer resolves RuntimeConfiguration from valid manifest/executable lifecycle/executable Python/mode-0600 runtime.env with no embedded server. It asserts runtimeRoot, canonical envFileURL, requiresReadiness, and capacity values; before/after evidence establishes the obsolete gate as the failure."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "Four negative regressions cover 19 fixture variants: missing/non-executable start.sh and Python; missing/regular-file/symlink runtime root; missing/malformed manifest and invalid schema/owner/entrypoint/python/revision; missing/directory/symlink/mode-0644/mode-0400 runtime.env. All reject configuration after the embedded-server gate is removed."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "Candidate diff is limited to AppDelegate.swift and PresentationTests.swift. No current-payload, payload-manifest, external server, payload closure, or payload revision resolver was added. NativeRuntimeBackend is unchanged and retains start.sh status --json authority and schema-3 running/live/ready/one-PID/control validation."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "testCanonicalManagedRunningObservationPresentsLiveReadyEndpoint passes through the unchanged RuntimePopoverPresentation with owned managed status and asserts Endpoint 127.0.0.1:8080, not Unavailable, Health live, Ready ready, and enabled lifecycle control. Existing stable-facts and read-only serving presentation tests also pass."
+  - criterion_id: AC-5
+    status: PASS
+    evidence: "Focused Swift 57/57 PASS, full Swift 92/92 PASS, then exactly one durable canonical ./verify 62/62 modules and 865 tests PASS with natural_exit/exit 0; all evidence binds the final candidate bytes."
+  - criterion_id: AC-6
+    status: PASS
+    evidence: "No live distribution build/install/cutover/rollback/menu relaunch/Runtime Start/Stop/Restart/LaunchServices/reboot/permission/tag/release action was dispatched. Tests used synthetic disposable fixtures. A final read-only runtime_capabilities observation retained v0.5.1, installed substrate/payload/runtime revision e88effb4bb828c602667943dbe0f1fb2c88d012c, Kernel 2, twenty advertised tools and twenty-one capabilities. The installed menu bootstrap is intentionally not activated by this source-only revision."
+  - criterion_id: AC-7
+    status: PASS
+    evidence: "Fresh preflight established remote branches={main}, open PRs=0, clean synchronized exact base after guarded fast-forward. One implementation child changes only the two authorized Swift files. After verification, remote main still equals the authorized base and local candidate is clean. This report is authored as the sole report-only child for one non-force publication of the immutable candidate/report pair; final publication and synchronized topology are checked after report commit, not self-attested here."
+
+effect_accounting:
+  canonical_verify:
+    authorized: 1
+    consumed: 1
+  live_runtime_or_menu_mutations:
+    authorized: 0
+    consumed: 0
+  branch_or_pr_creation:
+    authorized: 0
+    consumed: 0
+
+result: NEEDS_REVIEW
