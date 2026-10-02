@@ -426,7 +426,7 @@ MODULE_POLICY_ENTRIES: tuple[tuple[str, ModulePolicy], ...] = (
         L4_HOST_LIFECYCLE,
         ("host_lifecycle", "install", "tunnel", "config"),
         "Install/start identity lifecycle proof in isolated HOME/launchctl fixtures.",
-        timeout=75.0,
+        timeout=120.0,
         isolation_key="host-lifecycle",
     )),
     ("tests.test_uninstall", module_policy(

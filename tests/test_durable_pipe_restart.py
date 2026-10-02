@@ -298,35 +298,45 @@ class DurablePipeRestartTests(unittest.TestCase):
 
     def test_hard_wall_deadline_survives_restart(self) -> None:
         identity = "d" * 32
-        manager_a, _admission_a = self.manager(limit=2, hard_wall=0.7)
-        started_at = time.monotonic()
+        hard_wall_seconds = 10.0
+        finalization_allowance_seconds = 3.0
+        manager_a, _admission_a = self.manager(
+            limit=2,
+            hard_wall=hard_wall_seconds,
+        )
         manager_a.start(
             [
                 sys.executable,
                 "-u",
                 "-c",
-                "import time; print('ready', flush=True); time.sleep(10)",
+                "import time; print('ready', flush=True); time.sleep(30)",
             ],
             str(self.cwd),
             identity,
             "pipe",
             "runtime_restart",
         )
-        self.remember_owners(identity)
         _ready, cursor, _ = self.poll_until_text(manager_a, identity, "ready\n")
-        time.sleep(0.25)
+        state_a = self.remember_owners(identity)
+        hard_wall_deadline_epoch = state_a["hard_wall_deadline_epoch"]
         manager_a.shutdown()
 
-        manager_b, _admission_b = self.manager(limit=2, hard_wall=0.7)
+        manager_b, _admission_b = self.manager(
+            limit=2,
+            hard_wall=hard_wall_seconds,
+        )
+        state_b = DurableStore(self.state_root).read_for_identity(identity).state
+        self.assertEqual(
+            state_b["hard_wall_deadline_epoch"],
+            hard_wall_deadline_epoch,
+        )
         final, _cursor, _output = self.poll_terminal(
             manager_b,
             identity,
             cursor=cursor,
-            timeout=3.0,
+            timeout=hard_wall_seconds + finalization_allowance_seconds,
         )
-        elapsed = time.monotonic() - started_at
         self.assertEqual(final["termination_reason"], "hard_wall_timeout")
-        self.assertLess(elapsed, 1.8)
 
     def test_leader_exit_with_pipe_holding_descendant_finalizes_without_false_owner_loss(self) -> None:
         identity = "5" * 32

@@ -170,6 +170,24 @@ class VerifyHarnessTests(unittest.TestCase):
         )
         self.assertEqual(revision4_runtime_config.isolation_key, "host-lifecycle")
 
+        tunnel_identity = verification_policy.MODULE_POLICIES[
+            "tests.test_tunnel_identity"
+        ]
+        self.assertEqual(tunnel_identity.timeout_seconds, 120.0)
+        self.assertEqual(
+            tunnel_identity.lane,
+            verification_policy.L4_HOST_LIFECYCLE,
+        )
+        self.assertEqual(tunnel_identity.isolation_key, "host-lifecycle")
+        self.assertEqual(
+            tunnel_identity.subsystem_tags,
+            ("host_lifecycle", "install", "tunnel", "config"),
+        )
+        self.assertEqual(
+            tunnel_identity.proof_rationale,
+            "Install/start identity lifecycle proof in isolated HOME/launchctl fixtures.",
+        )
+
     def test_product_qualification_has_serialized_l5_policy(self) -> None:
         policy = verification_policy.MODULE_POLICIES[
             "tests.test_product_qualification"
