@@ -1,0 +1,186 @@
+protocol_version: 3
+task_id: TASK-0223
+task_revision: 1
+state: APPROVED
+title: "Release-Gate Stabilization — Durable Bootstrap Reconciliation and Framework Packaging Closure"
+
+origin:
+  predecessor_task: TASK-0222
+  predecessor_report: "afcc446b1df7f74e5fc0a32925ba354cdf6f87c8"
+  predecessor_review: "958d43ac108cf83a4281ca43173384e6d3f28f45"
+  findings:
+    - F-0222-001
+    - F-0221-001
+  phase: STABILIZE
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+phase:
+  name: STABILIZE
+  authority: bounded_adaptive
+  principle: "Discovery and discriminating evidence precede solution freeze; verification is incremental per implementation checkpoint. Exact one-shot semantics return only after stabilization is green and work re-enters QUALIFY."
+
+accepted_state:
+  durable_fixture_fix_commit: "6bc7111faba2a92e8a130ad33546a76fb015f5fe"
+  packaging_framework_fix_commit: "0e5f00a98ae79c1c9584bf8fa39e200d100942b6"
+  packaging_local_uv_candidate_proof: PASS
+  packaging_local_uv_relocation: PASS
+  packaging_local_uv_release_bundle: PASS
+  framework_original_build_host_marker_failure_closed: true
+  framework_signature_correction_implemented: true
+  framework_full_remote_closure: NOT_PROVEN
+  release_bundle_policy: ACCEPTED
+  strict_build_host_scanner: MUST_REMAIN_STRICT
+  task_0196_paused: true
+
+proven_durable_root_cause:
+  classification: premature_timeout_to_owner_loss_projection
+  code_site: agent_runtime/session.py
+  current_behavior: "bootstrap.wait(timeout=2.0) immediately projects DURABLE_OWNER_LOST on TimeoutExpired."
+  evidence:
+    - "Remote checkpoint caa8422d40b6bcbfe02e09576de2af2ea5485c7c passed canonical verify 63/63, 936 tests with durable source/test blobs identical to the later failing checkpoint."
+    - "Remote checkpoint 0e5f00a98ae79c1c9584bf8fa39e200d100942b6 failed only because one durable bootstrap process exceeded the fixed 2-second parent wait."
+    - "The exact failing test passes 30/30 in isolated local execution."
+    - "A controlled 2.5-second runner-start delay deterministically causes current manager.start to raise DURABLE_OWNER_LOST, after which durable state becomes running and both runner and target identities verify valid."
+  conclusion: "A fixed process wait is not sufficient evidence of lost durable ownership."
+
+approved_design:
+  operator_approved: true
+  behavior:
+    - "Do not fix by merely increasing 2.0 to another arbitrary timeout."
+    - "If the initial bootstrap process wait expires, continue bounded reconciliation instead of immediately projecting owner loss."
+    - "Accept delayed bootstrap if valid durable state and positively verified ownership become available within the bounded reconciliation window."
+    - "If no valid state/ownership becomes available by the total bounded deadline, fail closed with structured unknown/lost-owner semantics."
+    - "Persistent identity mismatch, corrupt state, missing owner and true owner loss remain fail-closed."
+    - "Do not kill or respawn a potentially effectful durable runner merely because the initial parent wait expired."
+    - "After durable reliability is green, continue the same release-gate stabilization far enough to exercise the accepted framework-CPython packaging correction."
+    - "Only reopen packaging mutation if new remote packaging evidence proves the framework fix is incomplete."
+
+adaptive_mutation_boundary:
+  durable_primary:
+    - agent_runtime/session.py
+    - tests/test_durable_pipe.py
+    - tests/test_durable_pipe_restart.py
+  durable_secondary_if_evidence_requires:
+    - agent_runtime/durable_pipe.py
+    - agent_runtime/durable_pipe_runner.py
+  packaging_if_remote_evidence_requires:
+    - macos/packaging_python.sh
+    - tests/test_packaging_interpreter.py
+    - macos/package_app.sh
+    - tests/test_package_provenance.py
+  diagnostic_only_if_needed:
+    - .github/workflows/release-gate.yml
+  frozen_without_new_evidence:
+    - macos/release_bundle.py
+    - requirements.lock
+    - Runtime version
+    - public tool surface
+    - schemas unrelated to durable bootstrap
+    - installed/live Runtime
+
+durable_implementation_rules:
+  - "First write a deterministic regression for delayed-but-valid bootstrap: delay bootstrap beyond the legacy 2-second wait while allowing valid state and exact runner/process identity to appear inside the total reconciliation window; current code must RED and corrected code must GREEN."
+  - "Write a deterministic negative regression for genuinely stuck/no-state bootstrap; it must still terminate in bounded time and fail closed without duplicate effect, respawn or guessed completion."
+  - "Preserve exact six-field process-instance verification and current corrupt/mixed-generation/integrity fail-closed semantics."
+  - "Prefer condition/state-based waiting over arbitrary sleep extension."
+  - "Do not change unrelated durable lifetime, retention, output, admission or public contract semantics."
+  - "Any timing constant introduced or changed must represent an explicit reconciliation bound and be covered by both positive and negative tests."
+
+incremental_verification:
+  - "Focused durable tests may be repeated during stabilization."
+  - "Before each remote implementation checkpoint, require focused affected suites PASS and exactly one canonical ./verify on that exact checkpoint."
+  - "If remote evidence requires further in-boundary mutation, a new checkpoint may run canonical ./verify again; this is STABILIZE, not QUALIFY."
+  - "Do not replay canonical verify on an unchanged checkpoint."
+  - "Packaging focused suites must run whenever packaging source/test files change."
+  - "A local zero-cost package build is optional unless packaging source changes after TASK-0222; if packaging mutates, use at most one local package/candidate closure per packaging checkpoint and clean generated evidence."
+  - "Do not require a local package rebuild solely for a durable-only change."
+
+remote_stabilization_loop:
+  workflow: .github/workflows/release-gate.yml
+  final_required_workflow_blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  new_dispatch_max: 3
+  rerun_max: 0
+  rules:
+    - "Every remote execution is a NEW workflow_dispatch run at the exact current verified main SHA, attempt 1."
+    - "Never rerun any historical or new workflow run/job."
+    - "First remote checkpoint after durable fix must prove canonical verify passes the durable modules, then continue into candidate construction."
+    - "If the accepted framework packaging correction succeeds and the complete release gate passes, stop immediately; do not consume remaining dispatch budget."
+    - "If remote fails again in durable bootstrap/recovery or packaging/candidate construction, capture exact new evidence and continue bounded discovery/fix within this task while budget remains."
+    - "If remote fails outside durable bootstrap/recovery and packaging/candidate construction, stop BLOCKED with a boundary-crossing finding."
+    - "Temporary workflow diagnostics are allowed only if required to distinguish an in-boundary root cause and must be removed before the final successful checkpoint."
+    - "The successful stabilization checkpoint must use the exact accepted release-gate workflow blob."
+
+historical_runs:
+  never_rerun:
+    - 36912032079
+    - 36956517661
+    - 36958918581
+    - 36961531935
+    - 36965002566
+    - 36967600037
+    - 36970566958
+    - 36974192763
+    - 36977416084
+    - 36987757158
+    - 36990305942
+    - 36991809939
+    - 36993115899
+    - 36994067524
+
+success_criteria:
+  - "Delayed-but-valid durable bootstrap no longer false-projects DURABLE_OWNER_LOST."
+  - "Genuinely stuck/no-state bootstrap remains bounded and fail-closed."
+  - "Focused durable regressions PASS."
+  - "Each remote implementation checkpoint is canonically verified exactly once before dispatch."
+  - "Final remote run passes canonical verify including tests.test_durable_pipe and tests.test_durable_pipe_restart."
+  - "Final remote run reaches and passes framework-CPython zero-cost candidate construction."
+  - "Final remote run passes deterministic release assets, upload and macos-14/macos-15/macos-26 compatibility."
+  - "No historical or current run/job rerun."
+  - "No release/tag/live Runtime effect."
+  - "Publish .agent/tasks/TASK-0223/report.yaml as report-only closure child."
+
+failure_policy:
+  - "If discovery disproves the approved durable root cause, stop and report the contradictory evidence instead of forcing the design."
+  - "If three new remote dispatches are consumed without full-gate closure, stop BLOCKED."
+  - "If a blocker crosses outside durable bootstrap/recovery or packaging/candidate authority, stop BLOCKED."
+  - "Do not convert a new outside-boundary failure into an implicit scope expansion."
+
+effect_authority:
+  canonical_verify_per_checkpoint_max: 1
+  remote_stabilization_dispatch_max: 3
+  workflow_rerun_max: 0
+  workflow_job_rerun_max: 0
+  local_package_build_per_packaging_checkpoint_max: 1
+  release_publish_max: 0
+  version_tag_create_max: 0
+  live_runtime_mutation_max: 0
+  launchservices_mutation_max: 0
+  branch_or_pr_creation_max: 0
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  publish_release: false
+
+continuation_policy:
+  mode: ADAPTIVE_WITHIN_BOUNDARY
+  stop_conditions:
+    - BOUNDARY_CROSSING
+    - REMOTE_BUDGET_EXHAUSTED
+    - CONTRADICTORY_ROOT_CAUSE_EVIDENCE
+    - USER_STOP
+
+execution_ready: true
