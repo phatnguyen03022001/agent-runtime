@@ -1,0 +1,46 @@
+protocol_version: 3
+task_id: TASK-0219
+task_revision: 4
+review_revision: 4
+state: REVISION_REQUIRED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0219/report-r4.yaml
+  commit: "11214988801a98a9fe90128eb71dda1efec1401f"
+  report_revision: 4
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  pre_mutation_authority_gate: PASS
+  implementation_execution: NOT_STARTED
+  effect_budget_consumed: NONE
+  acceptance_criteria: NOT_EXECUTED
+
+acceptance_basis:
+  - "Executor correctly stopped before mutation because revision-4 preservation identities contradicted the exact authorized base."
+  - "Exact base dabf718773d5e73e682296b44d48b44fc51f2cf7 and its parent both contain macos/package_app.sh blob b5d54b605cf8e8e1f3c0fbea5cdd417f79b5572b, not the task-declared f30bdcf94b95e9290042a1197eb3297ea411d3e5."
+  - "Exact base and parent both contain tests/test_package_provenance.py blob 172c88cec28e9b2470eb56a1a577b41f4a7ea708, not the task-declared fc05c04e092db3d75aef5502407e21b638cbd4a7."
+  - "Fresh GitHub exact-base reads independently confirm the Executor's two observed blobs."
+  - "All other preserved identities reported by the Executor match the exact base."
+  - "No TDD, canonical verify, package build, release-bundle build, release-bundle verify, Actions effect, product mutation or live effect was consumed."
+  - "Report commit 11214988801a98a9fe90128eb71dda1efec1401f is report-only and fresh remote main equals it."
+
+findings:
+  - id: F-0219-004
+    severity: BLOCKING
+    classification: architect_authored_preserved_blob_identity_error
+    description: "Revision 4 encoded two incorrect preserved Git blob identities for package_app.sh and tests/test_package_provenance.py, making the task internally inconsistent with its exact base."
+    required_closure: "Revise TASK-0219 in place. Correct only those two preserved identities to b5d54b605cf8e8e1f3c0fbea5cdd417f79b5572b and 172c88cec28e9b2470eb56a1a577b41f4a7ea708. Preserve the revision-4 path-aware release-material objective, boundaries, effect budgets and all other identities unchanged. Because revision 4 consumed no execution budget, revision 5 receives the same one-shot execution allowances."
+
+notes:
+  - "This is an Architect task-authoring defect, not a product or Executor defect."
+  - "No product conclusion from revision 3 is reopened."
+  - "TASK-0196 remains paused."
