@@ -1,0 +1,66 @@
+protocol_version: 3
+task_id: TASK-0223
+task_revision: 2
+review_revision: 2
+state: REVISION_REQUIRED
+
+reviewed_report:
+  path: .agent/tasks/TASK-0223/report.yaml
+  commit: "8bb02b169ade63285b166dc55c0a2933d33dc3a7"
+
+lane_a:
+  implementation_commit: "294b5bf7374735bb15579f47926d3841c82b6b7d"
+  scope:
+    - agent_runtime/session.py
+    - tests/test_durable_pipe.py
+  focused_proof: PASS
+  canonical_verify: "63/63 modules, 940 tests PASS"
+  remote_durable_pipe: "26/26 PASS"
+  finding_F_0222_001: CLOSED_WITH_EVIDENCE
+
+lane_b:
+  run_id: 36998190808
+  attempt: 1
+  head_sha: "294b5bf7374735bb15579f47926d3841c82b6b7d"
+  rerun_count: 0
+  result: BLOCKED_BEFORE_PACKAGING
+
+blocking_finding:
+  id: F-0223-001
+  classification: remote_owner_lost_recovery_fixture_terminal_timing_race
+  failing_test: tests.test_terminal_session.TerminalSessionTests.test_owner_lost_recovers_integrity_valid_terminal_snapshot
+  assertion: "started['status'] == 'running'"
+  observed: exited
+
+independent_evidence:
+  - "Revision-2 session semantics intentionally treat an authoritative terminal durable state as authoritative and propagate its actual terminal outcome."
+  - "The failing fixture uses a 0.5-second child lifetime and assumes manager.start returns before that child exits."
+  - "Remote scheduling allowed the authoritative terminal snapshot to win the race; manager.start returned exited, consistent with the accepted Lane-A state machine."
+  - "A controlled synchronization probe that keeps the child alive until explicit release proves the intended owner-lost recovery contract remains valid: start returns running, manager B projects DURABLE_OWNER_LOST while owner verification is forced false, explicit child release produces terminal state, and manager B then reconciles to exited/0 and clears the durable fault."
+  - "No production Runtime mutation is required by current evidence."
+
+required_closure:
+  classification: test_fixture_reliability_only
+  design:
+    - "Modify only tests/test_terminal_session.py."
+    - "Replace the 0.5-second lifetime assumption with explicit synchronization that keeps the child alive through the owner-lost assertion."
+    - "Synchronization waits must have finite timeouts."
+    - "Release and cleanup must execute from finally paths so failed assertions cannot strand the child or fixture state."
+    - "Observe durable terminal state by a bounded condition-based wait; do not replace sleep(0.5) with another arbitrary sleep."
+    - "Preserve the test's dominant risk: it must still prove DURABLE_OWNER_LOST while the child is alive, then terminal snapshot recovery and fault clearing after explicit release."
+    - "Do not weaken the assertion into accepting running-or-exited at the initial checkpoint."
+  frozen:
+    - agent_runtime/session.py at TASK-0223 Lane-A implementation
+    - all other durable production logic
+    - framework packaging implementation
+    - release_bundle.py
+    - release-gate workflow
+
+phase_transition:
+  from: STABILIZE_DURABLE_BOOTSTRAP
+  to: STABILIZE_TEST_RELIABILITY_THEN_FROZEN_GATE
+
+notes:
+  - "Run 36998190808 must never be rerun."
+  - "Framework packaging proof remains NOT_REACHED."
+  - "TASK-0196 remains paused."
