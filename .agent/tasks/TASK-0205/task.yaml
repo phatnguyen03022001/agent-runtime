@@ -1,0 +1,150 @@
+protocol_version: 3
+task_id: TASK-0205
+task_revision: 1
+state: APPROVED
+title: "Durable Owner Identity Bootstrap Stabilization"
+
+origin:
+  type: architect_continuation
+  predecessor_task: TASK-0204
+  finding: F-0204-001
+  goal: "Prevent durable RUNNING state from sealing a one-shot transient owner identity while preserving strict post-publication ownership verification."
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+
+execution_skills:
+  required: [executor, verification, reliability, security-review, simplicity]
+
+revision_basis:
+  blocked_task_0204_report: "527e42dec1764b6b6c0e40ec1c6b2d05692b2c7b"
+  blocked_task_0204_review: "99dc78b468870ecb73241711a8b5cf60d6c4f62f"
+  remote_run_id: 36956517661
+  remote_failure:
+    module: tests.test_durable_pipe
+    test: tests.test_durable_pipe.DurablePipeTests.test_runner_argv_is_opaque_and_durable_files_are_private
+    reason_code: DURABLE_OWNER_LOST
+    location: manager.start
+  paused_release_task: TASK-0196
+
+objective: "Stabilize only the initial durable runner/target process-identity observation before publishing active durable state. Do not weaken identity contents or exact verification, do not extend owner-loss grace, and do not change terminal lifecycle/control semantics."
+
+scope:
+  required_changes:
+    - "Fresh-bind exact revision-1 base with clean synchronized MAIN ONLY."
+    - "Modify production behavior only in agent_runtime/durable_pipe_runner.py."
+    - "Preserve observe_process_identity and verify_process_identity in agent_runtime/durable_pipe.py byte-for-byte unless a test import formatting change is strictly necessary; no identity-schema change is authorized."
+    - "Replace the current first-non-None behavior of durable_pipe_runner._identity_with_retry with bounded stability admission."
+    - "A newly spawned owner identity is publishable only after two consecutive non-None observe_process_identity(pid) observations are exactly equal."
+    - "Use a total observation budget of exactly 0.5 seconds and poll interval of exactly 0.01 seconds."
+    - "A None observation or a different identity resets the consecutive-stability candidate; never coerce or partially compare identities."
+    - "Return the exact stable identity dict only after the second equal observation. Return None when no stable identity is established within the bound."
+    - "Apply the same stabilized helper to both the durable runner's own identity and the spawned target process identity."
+    - "Preserve all identity fields exactly: pid, pgid, start_sec, start_usec, executable_dev, executable_ino."
+    - "Do not drop executable identity, pgid, start-time fields, or change verify_process_identity equality semantics."
+    - "Do not increase session._DURABLE_FINALIZATION_GRACE_SECONDS and do not make DURABLE_OWNER_LOST retryable/ignored."
+    - "Preserve the existing behavior for a target that exits before a stable identity can be sealed: if process.poll() proves it already exited, do not fabricate a running owner identity and allow the existing natural-exit/finalization path to proceed."
+    - "Preserve pre-effect fail-closed behavior when the durable runner itself cannot establish a stable identity."
+    - "Add deterministic regression coverage in tests/test_durable_pipe.py for identity stabilization using patched durable_pipe_runner.observe_process_identity."
+    - "Regression must prove sequence A -> B -> B seals B, never A."
+    - "Regression must prove A -> None -> B -> B seals B."
+    - "Regression must prove stable A -> A seals A."
+    - "Regression must prove two different non-None observations do not count as stable."
+    - "Preserve the existing process-instance mismatch test and all TASK-0203 privacy/argv/explicit-terminate assertions."
+    - "Preserve tests that intentionally kill/lose a durable owner and require DURABLE_OWNER_LOST; do not rewrite those expectations."
+    - "Run the exact TASK-0203 owner test 25/25 in fresh unittest processes."
+    - "Then run 10 stress rounds where four fresh processes execute that exact owner test concurrently; require 40/40 PASS."
+    - "Run full tests.test_durable_pipe and tests.test_durable_pipe_restart once each."
+    - "Run git diff --check."
+    - "Only after all focused/stress proof passes, run exactly one canonical ./verify under HOME=$PWD/.h TMPDIR=$PWD/.v."
+    - "Canonical verifier must PASS all classified modules. Never blind-replay ambiguity."
+    - "Remove .h/.v before final observation."
+    - "Publish one implementation commit and then only .agent/tasks/TASK-0205/report.yaml as report child."
+    - "Final main clean/synchronized MAIN ONLY."
+
+  allowed_existing_files_or_components:
+    - "agent_runtime/durable_pipe_runner.py"
+    - "tests/test_durable_pipe.py"
+    - ".agent/tasks/TASK-0205/report.yaml"
+
+invariants:
+  - "Process identity schema and all six identity fields remain unchanged."
+  - "verify_process_identity remains exact equality and fail-closed."
+  - "session.py durable owner-loss grace/control semantics remain unchanged."
+  - "TASK-0203 deterministic blocking fixture remains unchanged."
+  - "Release-gate workflow remains byte-identical to blob fa0c6bc61bb660b103f3a45b239ac52def7ae1b8."
+  - "No verification-policy change."
+  - "No remote workflow dispatch/rerun."
+  - "No package/release/live Runtime/config/plugin/credential/permission/reboot effect."
+  - "TASK-0196 remains paused."
+  - "MAIN ONLY."
+
+forbidden_changes:
+  - "Any production file other than agent_runtime/durable_pipe_runner.py."
+  - "Any change to agent_runtime/session.py or agent_runtime/durable_pipe.py identity verification semantics."
+  - "Dropping or ignoring executable_dev/executable_ino, pgid or start-time identity fields."
+  - "Accepting partial identity matches."
+  - "Increasing DURABLE_OWNER_LOST grace/retries after publication."
+  - "Swallowing or downgrading DURABLE_OWNER_LOST."
+  - "Changing terminal start/control/recovery API behavior."
+  - "Any workflow, verification policy, docs, dependency, version or schema change."
+  - "Any GitHub Actions dispatch/rerun."
+  - "Any local distribution build, tag/release or live Runtime mutation."
+  - "Any second canonical ./verify after a conclusive result or blind replay."
+  - "Any branch or PR."
+
+effect_authority:
+  canonical_verify_max: 1
+  github_workflow_dispatch_max: 0
+  github_workflow_rerun_max: 0
+  local_distribution_build_max: 0
+  install_prebuilt_max: 0
+  commit_cutover_max: 0
+  rollback_cutover_max: 0
+  menu_bar_relaunch_max: 0
+  runtime_restart_max: 0
+  runtime_explicit_start_max: 0
+  runtime_explicit_stop_max: 0
+  plugin_reload_or_reconnect_max: 0
+  credential_rotation_max: 0
+  physical_reboot_max: 0
+  new_security_permission_max: 0
+  version_tag_create_max: 0
+  github_release_publish_max: 0
+  branch_or_pr_creation_max: 0
+
+acceptance_criteria:
+  - {id: AC-1, requirement: "Durable bootstrap seals only a stable exact owner identity.", evidence_required: "Two consecutive exact observations required within 0.5s/10ms polling for both runner and target; transient A->B->B regression seals B."}
+  - {id: AC-2, requirement: "Ownership security is not weakened.", evidence_required: "Identity fields/schema and verify_process_identity exact equality unchanged; intentional owner-loss tests still produce DURABLE_OWNER_LOST."}
+  - {id: AC-3, requirement: "TASK-0203 owner test remains stable under process and concurrency stress.", evidence_required: "25/25 isolated plus 40/40 four-way concurrent executions PASS."}
+  - {id: AC-4, requirement: "Durable owner/restart behavior remains intact.", evidence_required: "Full tests.test_durable_pipe and tests.test_durable_pipe_restart PASS."}
+  - {id: AC-5, requirement: "Canonical verification passes.", evidence_required: "Exactly one short-path ./verify PASS with no replay."}
+  - {id: AC-6, requirement: "Canonical closure.", evidence_required: "Only durable_pipe_runner.py + test + report changed; workflow blob unchanged; clean synchronized MAIN ONLY."}
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "Deterministic identity-observer regressions + isolated/concurrent durable owner stress + full durable modules + exactly one canonical short-path ./verify."
+    expected_signal: "Stable exact identity is sealed before RUNNING publication while true owner loss remains fail-closed."
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions: [BLOCKED, STALE_STATE, AUTHORITY_REQUIRED, CURRENT_PHASE_CAPABILITY_UNAVAILABLE, REVIEW_REQUIRED, REVERIFY_REQUIRED, USER_STOP]
+
+git_authority: {create_branch: false, commit: true, push: true, promote_to_main: false}
+release_authority: {create_version_tag: false, mutate_repository_metadata: false, publish_release: false}
+blocking_decisions: []
+execution_ready: true
