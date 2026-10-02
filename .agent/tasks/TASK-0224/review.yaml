@@ -1,0 +1,72 @@
+protocol_version: 3
+task_id: TASK-0224
+task_revision: 1
+review_revision: 1
+state: REVISION_REQUIRED
+
+reviewed_report:
+  path: .agent/tasks/TASK-0224/report.yaml
+  commit: "f6c8bb067d78a3e80f9b25fcd567d4cbce3e3499"
+
+lane_a:
+  implementation_commit: "56337989b05ad940f007e0f290d2af6a72e06b8f"
+  scope: "tests/test_terminal_session.py only"
+  exact_test_stress: "30/30 PASS"
+  focused:
+    terminal_session: "49/49 PASS"
+    durable_pipe: "26/26 PASS"
+    durable_pipe_restart: "10/10 PASS"
+  canonical_verify: "63/63 modules, 940 tests PASS"
+  finding_F_0223_001: CLOSED_WITH_EVIDENCE
+
+lane_b:
+  run_id: 37000410211
+  attempt: 1
+  head_sha: "56337989b05ad940f007e0f290d2af6a72e06b8f"
+  rerun_count: 0
+  result: BLOCKED_BEFORE_PACKAGING
+
+blocking_finding:
+  id: F-0224-001
+  classification: remote_verification_module_deadline_under_host_contention
+  module: tests.test_revision4_runtime_config
+  lane: L4_HOST_LIFECYCLE
+  configured_timeout_seconds: 30
+  observed_timeout_seconds: 30.168
+  failure_kind: harness_module_timeout
+  test_assertion_failure_observed: false
+
+independent_evidence:
+  - "The timed-out module and verification-policy blobs are byte-identical across the current failing checkpoint and multiple recent remote PASS checkpoints."
+  - "Recent remote PASS durations for tests.test_revision4_runtime_config were 11.988s, 15.681s, 16.962s and 17.614s."
+  - "The failing run terminated the worker at 30.168s solely because the module policy timeout was 30s; no unittest assertion/error was emitted."
+  - "The same failing run showed qualification-wide host contention: tests.test_candidate_cutover took 120.115s and tests.test_durable_pipe took 32.941s."
+  - "Fresh local per-test timing shows the module has intentional lifecycle/subprocess cost; test_start_failure_is_nonzero_and_never_reports_running alone takes about 4.7s locally, with the full module around 9-10s."
+  - "The 30s deadline originated with TASK-0154 verification classification and has no product invariant attached to exactly 30 seconds."
+  - "The repository already uses module-specific corrected verification deadlines: candidate_cutover=300s, repo_commit=75s, terminal_session=60s."
+
+root_cause:
+  statement: "The fixed 30-second verifier cutoff for this subprocess-heavy host-lifecycle module has insufficient scheduling headroom under real qualification contention. The timeout is harness policy, not product correctness evidence."
+  production_defect: false
+  test_semantics_defect: false
+
+required_closure:
+  classification: verification_policy_only
+  design:
+    - "Change only verification_policy.py and tests/test_verify_harness.py."
+    - "Raise only tests.test_revision4_runtime_config timeout from 30s to 60s."
+    - "Preserve lane=L4_HOST_LIFECYCLE, isolation_key=host-lifecycle, subsystem tags and proof rationale unchanged."
+    - "Add a harness regression that pins the corrected 60s deadline and unchanged lane/isolation classification."
+    - "Do not mutate tests/test_revision4_runtime_config.py or production Runtime/start lifecycle behavior."
+    - "After focused module + verify-harness proof, run exactly one canonical verify on the exact implementation checkpoint."
+    - "Then run exactly one frozen remote release gate. No rerun."
+    - "If remote packaging/candidate proof fails, open a new packaging blocker; do not mutate packaging in this task."
+
+phase_transition:
+  from: STABILIZE_TEST_RELIABILITY
+  to: STABILIZE_VERIFICATION_POLICY_THEN_FROZEN_GATE
+
+notes:
+  - "Run 37000410211 must never be rerun."
+  - "Framework packaging proof remains NOT_REACHED."
+  - "TASK-0196 remains paused."
