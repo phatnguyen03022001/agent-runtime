@@ -1,0 +1,54 @@
+protocol_version: 3
+
+task_id: TASK-0214
+task_revision: 1
+review_revision: 1
+state: REVISION_REQUIRED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0214/report.yaml
+  commit: "006a0c754622150651bb99e5035d9900d357dd77"
+  report_revision: 1
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  skill_rules: PASS
+  scope: PASS
+  structure_policy: PASS
+  git_authority: PASS
+  acceptance_criteria: FAIL
+  verifier_evidence: PASS
+
+acceptance_basis:
+  - "TASK-0214 consumed exactly one authorized new release-gate dispatch: run 36970566958 attempt 1, workflow_dispatch, exact head SHA d8babb5a02aaba00033382b902cc2b23ccb57a4a."
+  - "All six historical release-gate runs remain attempt 1; no rerun or second dispatch occurred."
+  - "Remote canonical verification passed 63/63 modules and 922 tests in 137.985 seconds. tests.test_supervised_lifecycle passed 20/20 in 27.153 seconds under its unchanged 45-second timeout."
+  - "The prior invalid-HEAD, DURABLE_OWNER_LOST and supervised-lifecycle timeout blockers did not recur."
+  - "Exactly one ./macos/package_app.sh --zero-cost invocation reached successful Swift compile and link on the real macOS 26 ARM64 runner; Build complete! was reported after 18.09 seconds and no LiquidGlassSupport/effectIsInteractive SDK error occurred."
+  - "Packaging then exited 2 solely at the retained-candidate LaunchServices unregister command after publish-zero-cost, before candidate identity lines were emitted to the workflow."
+  - "Historical accepted authority already classifies retained candidate LaunchServices presence as non-authoritative discovery state: TASK-0190 review explicitly rejected sole-record absence as a durable lifecycle invariant, and TASK-0194 accepted this exact post-publication unregister failure by reconciling the already-published immutable candidate without rebuilding or mutating LaunchServices."
+  - "TASK-0196 likewise treats this exact cleanup exit as recoverable after candidate publication. Therefore making LaunchServices unregister success a hard package-success predicate is stale/over-strong relative to accepted product authority."
+  - "Report commit 006a0c754622150651bb99e5035d9900d357dd77 is the sole direct child of the authorized TASK-0214 base and adds only .agent/tasks/TASK-0214/report.yaml."
+  - "Fresh remote review-boundary proof resolves main exactly to 006a0c754622150651bb99e5035d9900d357dd77 before review publication."
+
+findings:
+  - id: F-0214-001
+    severity: BLOCKING
+    classification: non_authoritative_launchservices_cleanup_is_fatal
+    description: "macos/package_app.sh publishes and validates the immutable zero-cost candidate, then requires lsregister -u on that retained .app to succeed before emitting candidate identity. Accepted lifecycle authority says LaunchServices is discovery state and retained-candidate record absence is not durable or ownership-bearing. The hard failure therefore converts non-authoritative hygiene into a package correctness gate and blocks the release workflow after successful candidate publication."
+    required_closure: "Use a separate packaging-contract task. Remove LaunchServices unregister as a mandatory zero-cost packaging effect/predicate instead of retrying or reconciling it in the release workflow. Candidate publication, seal, provenance, codesign and emitted candidate identity remain authoritative. Add regression coverage proving package_app.sh has no LaunchServices mutation dependency, run focused package/provenance tests, one bounded local zero-cost package proof if authorized by that task, and exactly one canonical verifier before another remote release-gate dispatch."
+
+notes:
+  - "The real macOS 26 ARM64 Swift/SDK compilation proof is now PASS; future requalification does not need to diagnose TASK-0207 again unless compilation regresses."
+  - "TASK-0214 cannot continue because its single dispatch budget is exhausted."
+  - "Do not rerun runs 36912032079, 36956517661, 36958918581, 36961531935, 36965002566, 36967600037 or 36970566958."
+  - "Do not add LaunchServices cleanup retries or workflow special-casing; that would preserve the stale authority error and increase complexity."
+  - "TASK-0196 remains paused."
