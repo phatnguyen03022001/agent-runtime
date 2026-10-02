@@ -1,0 +1,219 @@
+protocol_version: 3
+task_id: TASK-0224
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: BLOCKED
+
+task_source:
+  path: .agent/tasks/TASK-0224/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "895880d4f4242ae426f42318e21e465ee4908b9b"
+  lane_a_implementation_commit: "56337989b05ad940f007e0f290d2af6a72e06b8f"
+  lane_a_implementation_tree: "6fd1ff6a7e57cd6d7c4e4035addec6c06f37bddd"
+  phase: STABILIZE
+
+lane_a_owner_lost_fixture:
+  result: PASS
+  root_cause: scheduler_dependent_short_child_lifetime
+
+  implementation:
+    changed_paths:
+      - tests/test_terminal_session.py
+    test_blob: "ffa8458c8c3e793f90f591dcb0f736b65fb88dcb"
+    production_runtime_changed: false
+    packaging_changed: false
+    workflow_changed: false
+    design:
+      - "The durable child waits for an explicit filesystem release marker instead of exiting after 0.5 seconds."
+      - "The child-side wait has a monotonic 10-second deadline."
+      - "The initial manager_a.start assertion remains exactly status == running."
+      - "Manager B is constructed while verify_process_identity is forced false and must expose DURABLE_OWNER_LOST before release."
+      - "Release signaling executes from finally paths so assertion failures cannot strand the child."
+      - "Terminal completion is observed with manager_a.poll(wait_for=terminal_or_deadline, wait_ms=5000), not an arbitrary completion sleep."
+      - "Manager shutdown and release-marker cleanup execute from a final cleanup path."
+      - "The reconciled manager B result must preserve session_id, exited status, exit_code=0 and clear durable_fault_reason."
+
+  proof:
+    inherited_red:
+      source_run: 36998190808
+      source_task: TASK-0223
+      failing_test: tests.test_terminal_session.TerminalSessionTests.test_owner_lost_recovers_integrity_valid_terminal_snapshot
+      failure: "The predecessor remote run observed started['status'] == 'exited' instead of 'running' because the 0.5-second child lifetime raced manager.start."
+    exact_green:
+      command: ".venv/bin/python -m unittest tests.test_terminal_session.TerminalSessionTests.test_owner_lost_recovers_integrity_valid_terminal_snapshot"
+      tests: 1
+      result: PASS
+      duration_seconds: 0.183
+    stress:
+      repetitions: 30
+      passed: 30
+      result: PASS
+      duration_seconds: 5.547
+    focused_clean_process_suites:
+      tests.test_terminal_session: {tests: 49, result: PASS, duration_seconds: 9.986}
+      tests.test_durable_pipe: {tests: 26, result: PASS, duration_seconds: 17.226}
+      tests.test_durable_pipe_restart: {tests: 10, result: PASS, duration_seconds: 10.475}
+    incidental_harness_observation:
+      description: "An earlier combined same-interpreter focused run failed the unrelated test_control_write_and_finalization_have_one_lifecycle_order once. Ten fresh-process reruns of that test passed 10/10, and the full terminal-session suite then passed in a fresh process. No mutation was made for that unrelated observation."
+    git_diff_check: PASS
+    cumulative_diff_from_authorized_base:
+      - tests/test_terminal_session.py
+
+  canonical_verify:
+    authorized_max: 1
+    invocation_count: 1
+    checkpoint_sha: "56337989b05ad940f007e0f290d2af6a72e06b8f"
+    start_identity: "22400000000000000000000000000009"
+    session_id: "25124cc138155886"
+    result: PASS
+    lifecycle: COMPLETED
+    exit_code: 0
+    classified_modules: 63
+    completed_modules: 63
+    tests: 940
+    duration_seconds: 159.334
+    terminal_session: {tests: 49, result: PASS, duration_seconds: 9.963}
+    durable_pipe: {tests: 26, result: PASS, duration_seconds: 17.205}
+    durable_pipe_restart: {tests: 10, result: PASS, duration_seconds: 10.960}
+
+  publication:
+    published: true
+    branch: main
+    expected_remote_head: "895880d4f4242ae426f42318e21e465ee4908b9b"
+    commit: "56337989b05ad940f007e0f290d2af6a72e06b8f"
+    force_used: false
+
+lane_b_frozen_release_gate:
+  result: FAIL
+  mutation_authority: 0
+
+  frozen_blobs:
+    agent_runtime/session.py: "0055cae1ce46cba81826ba0c8b0f8796c08ef43b"
+    agent_runtime/durable_pipe.py: "4de20c4b59a3d0dcefd5aeedf37c0d9f3b0f95db"
+    agent_runtime/durable_pipe_runner.py: "c6f468b08d462c45ea15485c5e30abd25dac4926"
+    macos/packaging_python.sh: "831d663fd5dfc0d4ac4743cac466566406676587"
+    tests/test_packaging_interpreter.py: "33a9ad11dea17b50a9c7a6b5b57dfede6f715905"
+    macos/package_app.sh: "b5d54b605cf8e8e1f3c0fbea5cdd417f79b5572b"
+    tests/test_package_provenance.py: "ebbd444bcedcf15552d81a4f269802d5a8af6fc9"
+    macos/release_bundle.py: "2bff8a6f5f9afe1ffcad6c7b41b5999ba0f3e7f1"
+    .github/workflows/release-gate.yml: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  frozen_blob_drift: false
+
+  pre_dispatch:
+    exact_verified_sha_local: "56337989b05ad940f007e0f290d2af6a72e06b8f"
+    exact_verified_sha_remote: "56337989b05ad940f007e0f290d2af6a72e06b8f"
+    clean_worktree_index: true
+    main_only: true
+    worktree_count: 1
+    historical_release_gate_run_count: 15
+    all_historical_runs_attempt_1: true
+    result: PASS
+
+  dispatch:
+    authorized_max: 1
+    consumed: 1
+    rerun_count: 0
+    job_rerun_count: 0
+    run_id: 37000410211
+    run_number: 16
+    run_attempt: 1
+    event: workflow_dispatch
+    head_branch: main
+    head_sha: "56337989b05ad940f007e0f290d2af6a72e06b8f"
+    workflow: .github/workflows/release-gate.yml
+    created_at: "2026-10-02T11:19:54Z"
+    terminal_status: completed
+    conclusion: failure
+
+  build_release:
+    job_id: 110816589016
+    conclusion: failure
+    checkout: PASS
+    arm64_runner: PASS
+    python_3_13: PASS
+    locked_dependencies: PASS
+    canonical_verify: FAIL
+    zero_cost_candidate: SKIPPED
+    deterministic_release_assets: SKIPPED
+    artifact_upload: SKIPPED
+
+  remote_canonical_verify:
+    result: FAIL
+    classified_modules: 63
+    completed_modules: 7
+    tests: 214
+    duration_seconds: 120.383
+    durable_pipe: {tests: 26, result: PASS, duration_seconds: 32.941}
+    candidate_cutover: {tests: 125, result: PASS, duration_seconds: 120.115}
+    failing_module: tests.test_revision4_runtime_config
+    lane: L4_HOST_LIFECYCLE
+    failure_type: MODULE_TIMEOUT
+    elapsed_seconds: 30.168
+    timeout_seconds: 30
+    exact_log: "VERIFY TIMEOUT lane=L4_HOST_LIFECYCLE module=tests.test_revision4_runtime_config elapsed_s=30.168 timeout_s=30"
+    terminal_session: NOT_REACHED
+    durable_pipe_restart: NOT_REACHED
+    interpretation: "The remote canonical verifier stopped because tests.test_revision4_runtime_config exceeded its fixed 30-second module timeout. The owner-lost recovery fixture itself did not fail in this run; tests.test_terminal_session was not reached before verification stopped."
+
+  compatibility:
+    job_id: 110817291900
+    conclusion: skipped
+    macos_14: NOT_REACHED
+    macos_15: NOT_REACHED
+    macos_26: NOT_REACHED
+
+  artifacts:
+    count: 0
+    reason: "Candidate construction and artifact upload were skipped after remote canonical verification failed."
+
+remote_inventory:
+  total_release_gate_runs: 16
+  all_attempt_1: true
+  task_0224_run_count: 1
+  task_0224_run_id: 37000410211
+  historical_runs_rerun: false
+  task_run_rerun: false
+
+effect_accounting:
+  lane_a_canonical_verify: {authorized_max: 1, consumed: 1}
+  lane_b_remote_dispatch: {authorized_max: 1, consumed: 1}
+  workflow_rerun: {authorized_max: 0, consumed: 0}
+  workflow_job_rerun: {authorized_max: 0, consumed: 0}
+  local_package_build: {authorized_max: 0, consumed: 0}
+  production_mutation: {authorized_max: 0, consumed: 0}
+  packaging_mutation: {authorized_max: 0, consumed: 0}
+  release_publish: {authorized_max: 0, consumed: 0}
+  version_tag_create: {authorized_max: 0, consumed: 0}
+  live_runtime_mutation: {authorized_max: 0, consumed: 0}
+  launchservices_mutation: {authorized_max: 0, consumed: 0}
+  branch_or_pr_creation: {authorized_max: 0, consumed: 0}
+
+resolved_findings:
+  - id: F-0223-001
+    result: CLOSED_LOCALLY
+    evidence:
+      - "The owner-lost recovery fixture now controls child lifetime explicitly."
+      - "The exact corrected test passes and stress passes 30/30."
+      - "Full focused terminal/durable suites pass in fresh processes."
+      - "Local canonical verify passes 63/63 modules and 940 tests."
+
+blocking_findings:
+  - id: F-0224-001
+    severity: BLOCKING
+    classification: remote_revision4_runtime_config_module_timeout
+    boundary: REMOTE_CANONICAL_VERIFY
+    description: "The single authorized release-gate run timed out tests.test_revision4_runtime_config at 30.168 seconds against a fixed 30-second module timeout."
+    consequence: "Remote canonical verification stopped before tests.test_terminal_session, candidate construction, deterministic release assets, artifact upload and macOS 14/15/26 compatibility proof."
+    task_response: "BLOCKED. TASK-0224 authorizes no second dispatch, no rerun and no production/packaging/workflow mutation. Carry the new remote verifier evidence into a new task."
+
+authoritative_stabilization:
+  lane_a_result: PASS
+  lane_b_result: FAIL
+  owner_lost_fixture_stabilized_locally: true
+  framework_packaging_remote_closure: NOT_REACHED
+  final_task_result: BLOCKED
