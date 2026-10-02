@@ -1,0 +1,50 @@
+protocol_version: 3
+
+task_id: TASK-0202
+task_revision: 1
+review_revision: 1
+state: REVISION_REQUIRED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0202/report.yaml
+  commit: "3f81831d9fc3530e67ddf242359e44722b3c1d04"
+  report_revision: 1
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  scope: PASS
+  git_authority: PASS
+  acceptance_criteria: BLOCKED
+  remote_effect_budget: EXHAUSTED
+
+acceptance_basis:
+  - "TASK-0202 authorized exactly one workflow dispatch and zero reruns; run 36912032079 attempt 1 consumed that dispatch and no second dispatch/rerun occurred."
+  - "The remote run is exactly bound to authorized base a34cc682d563f0746148fc453284927d2c0fde21 with event=workflow_dispatch and accepted release-gate workflow identity."
+  - "Remote build-release proves ARM64 runner, Python 3.13 setup and locked dependency installation PASS before canonical verification."
+  - "Canonical verify fails in tests.test_durable_pipe after 5/63 completed modules and 189 tests; candidate build, deterministic bundle steps, artifact upload and all compatibility lanes therefore do not execute."
+  - "GitHub job logs independently confirm exactly one durable-pipe error: test_runner_argv_is_opaque_and_durable_files_are_private reaches manager.control(..., terminate) after the durable session is no longer running; the other 10 durable-pipe tests PASS."
+  - "Source inspection shows the failing test creates a target that prints once then sleeps only 2 seconds, while the test manager uses a 5-second durable hard wall and later requires explicit termination semantics."
+  - "Runtime durable control correctly refreshes state and rejects interrupt/terminate when the session is not running. Changing Runtime to accept control after natural exit would weaken truthful lifecycle semantics."
+  - "The test objective is runner-argv opacity/private durable files, not natural-exit timing. Its finite two-second target lifetime is therefore an incidental race that becomes visible under the real release-gate runner's concurrent verification load."
+  - "No artifact exists, artifact download count remains zero, no compatibility lane materializes, and no tag/release/local package/live Runtime/config/plugin/reboot effect occurs."
+  - "The report commit is the only tracked mutation from the authorized task base; repository closure is clean/synchronized MAIN ONLY."
+
+findings:
+  - id: F-0202-001
+    severity: BLOCKING
+    classification: durable_pipe_test_fixture_lifetime_race
+    description: "The release gate cannot qualify because a durable-pipe owner test uses a two-second target lifetime while asserting later explicit-terminate behavior. Under remote concurrent verification the target can naturally exit before that control assertion."
+    required_closure: "Use a separate reliability task. Keep Runtime behavior unchanged. Make the test fixture remain running deterministically until explicit termination, give this test a bounded hard wall with ample CI headroom, preserve the privacy/opacity assertions, prove repeated focused stability plus the full owner module and one canonical local verifier. Only after that task is accepted may a new remote qualification task receive a fresh one-dispatch budget."
+
+notes:
+  - "TASK-0202 revision 1 cannot continue: its dispatch budget is exhausted."
+  - "Do not authorize a TASK-0202 rerun/revision that reuses the exhausted dispatch budget."
+  - "TASK-0196 remains paused."
