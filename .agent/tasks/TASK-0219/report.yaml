@@ -1,0 +1,239 @@
+protocol_version: 3
+task_id: TASK-0219
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: BLOCKED
+
+task_source:
+  path: .agent/tasks/TASK-0219/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "b6753368d22bf395a0f294e82b6ae80ed5d5fba9"
+  implementation_commit: "3db36125699560dda6f9767a6f61ba3f29971771"
+  final_execution_head: "3db36125699560dda6f9767a6f61ba3f29971771"
+  task_0196_paused: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  authorized_revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+
+capability_preflight:
+  phase: EXECUTION
+  required:
+    - repository_content_write
+    - deterministic_test_execution
+    - canonical_verification
+    - local_zero_cost_packaging
+    - repository_commit_and_publish
+  available:
+    - repository_content_write
+    - deterministic_test_execution
+    - canonical_verification
+    - local_zero_cost_packaging
+    - repository_commit_and_publish
+  missing: []
+  passed: true
+
+implementation:
+  changed_paths:
+    - macos/packaging_python.sh
+    - macos/package_app.sh
+    - tests/test_packaging_interpreter.py
+    - tests/test_package_provenance.py
+  behavior:
+    stdlib_materialization: "Copies CPython 3.13 stdlib/lib-dynload from the validated packaging base prefix while excluding source site-packages, __pycache__, .pyc, symlinks and special files."
+    libpython_identity: "@executable_path/../lib/libpython3.13.dylib"
+    unrelated_macho_dependencies_rewritten: false
+    pyvenv_cfg_final_state: absent
+    sysconfig_strategy: "Regenerates _sysconfigdata__darwin_darwin.py from its literal build_time_vars, replacing only packaging-prefix occurrences with a runtime sys.base_prefix token and failing closed on remaining operator-HOME identity."
+    third_party_authority: "requirements.lock through pip --require-hashes"
+    pre_copy_smoke: true
+    packaged_app_smoke: true
+
+tdd:
+  red:
+    command: "/usr/bin/python3 -m unittest tests.test_packaging_interpreter.PackagingRuntimeLinkageTests.test_materializer_builds_self_contained_stdlib_and_sanitizes_builder_prefix tests.test_package_provenance.PackageProvenanceTests.test_package_contract_finalizes_relocatable_python_before_app_copy"
+    result: FAIL_EXPECTED
+    tests: 2
+    failures: 2
+    decisive_failures:
+      - "Synthetic libpython retained the absolute builder-prefix install identity."
+      - "package_app.sh had no final relocatable-runtime finalization seam."
+  green:
+    command: "/usr/bin/python3 -m unittest tests.test_packaging_interpreter.PackagingRuntimeLinkageTests.test_materializer_builds_self_contained_stdlib_and_sanitizes_builder_prefix tests.test_package_provenance.PackageProvenanceTests.test_package_contract_finalizes_relocatable_python_before_app_copy"
+    result: PASS
+    tests: 2
+
+focused_verification:
+  command: ".venv/bin/python -m unittest tests.test_packaging_interpreter tests.test_package_provenance tests.test_surface_and_scripts"
+  result: PASS
+  tests: 63
+  bash_syntax:
+    macos_packaging_python_sh: PASS
+    macos_package_app_sh: PASS
+  git_diff_check: PASS
+
+canonical_verify:
+  invocation_count: 1
+  replay_count: 0
+  command: 'HOME="$PWD/.h" TMPDIR="$PWD/.v" ./verify'
+  carrier_mode: pipe
+  carrier_durability: runtime_restart
+  start_identity: "0219021902190219021902190219022f"
+  session_id: "780e2b3096883cc2"
+  lifecycle: COMPLETED
+  termination_reason: natural_exit
+  exit_code: 0
+  result: PASS
+  profile: qualification
+  requested_profile: qualification
+  classified_modules: 63
+  completed_modules: 63
+  tests: 929
+  duration_seconds: 139.919
+  lane_counts:
+    L1_DETERMINISTIC_UNIT: {selected: 17, completed: 17, tests: 231}
+    L2_ISOLATED_INTEGRATION: {selected: 21, completed: 21, tests: 253}
+    L3_DETERMINISTIC_REGRESSION: {selected: 10, completed: 10, tests: 95}
+    L4_HOST_LIFECYCLE: {selected: 9, completed: 9, tests: 184}
+    L5_QUALIFICATION_CHAOS_CUTOVER: {selected: 6, completed: 6, tests: 166}
+  packaging_interpreter: {tests: 13, result: PASS}
+  package_provenance: {tests: 27, result: PASS}
+  surface_and_scripts: {tests: 23, result: PASS}
+  durable_pipe: {tests: 22, result: PASS, duration_seconds: 3.134}
+  durable_pipe_restart: {tests: 10, result: PASS, duration_seconds: 6.036}
+  supervised_lifecycle: {tests: 20, result: PASS, duration_seconds: 17.742}
+
+implementation_publication:
+  published: true
+  remote: origin
+  branch: main
+  expected_remote_head: "b6753368d22bf395a0f294e82b6ae80ed5d5fba9"
+  published_commit: "3db36125699560dda6f9767a6f61ba3f29971771"
+  force_used: false
+
+physical_candidate_qualification:
+  packaging_interpreter:
+    selected: "/Users/tienphat/Applications/Agent Runtime.app/Contents/Resources/runtime/.venv/bin/python"
+    validator_result: PASS
+    identity:
+      implementation: cpython
+      version: "3.13.5"
+      cache_tag: cpython-313
+      soabi: cpython-313-darwin
+      platform: darwin
+      machine: arm64
+    base_prefix: "/Users/tienphat/.local/share/uv/python/cpython-3.13.5-macos-aarch64-none"
+    stdlib: "/Users/tienphat/.local/share/uv/python/cpython-3.13.5-macos-aarch64-none/lib/python3.13"
+    operator_home_marker: "/Users/tienphat"
+    pip_probe_after_failure:
+      result: FAIL
+      exit_code: 1
+      error: "No module named pip"
+    source_base_prefix_interpreter:
+      path: "/Users/tienphat/.local/share/uv/python/cpython-3.13.5-macos-aarch64-none/bin/python3.13"
+      exists: true
+      pip_available: true
+      pip_version: "24.3.1"
+      note: "Not used for another package build because local_distribution_build_max was already exhausted."
+
+  package_build:
+    authorized_max: 1
+    invocation_count: 1
+    replay_count: 0
+    command: "AGENT_RUNTIME_PACKAGING_PYTHON=<selected absolute interpreter> ./macos/package_app.sh --zero-cost"
+    start_identity: "02190219021902190219021902190233"
+    session_id: "fa902485db7c61a5"
+    initial_acknowledgement: "AMBIGUOUS_DURABLE_OWNER_IDENTITY"
+    reconciliation: "No redispatch. The same start_identity later resolved to one retained terminal result."
+    lifecycle: COMPLETED
+    termination_reason: natural_exit
+    exit_code: 1
+    result: FAIL
+    swift_release_build: PASS
+    failure: "/Users/tienphat/Applications/Agent Runtime.app/Contents/Resources/runtime/.venv/bin/python: No module named pip"
+    candidate_app: null
+    candidate_handoff: null
+    initial_payload_release: null
+    initial_payload_closure: null
+    candidate_sha256: null
+
+  candidate_snapshot:
+    count_before: 22
+    count_after: 22
+    added: []
+    removed: []
+
+  relocation_proof:
+    performed: false
+    reason: "No corrected frozen candidate was emitted by the single authorized package build."
+
+  deterministic_release_bundle:
+    build_1: NOT_EXECUTED
+    build_2: NOT_EXECUTED
+    byte_comparison: NOT_EXECUTED
+    verify: NOT_EXECUTED
+    reason: "No frozen candidate was emitted."
+
+invariants:
+  release_bundle_blob:
+    expected: "ee5d96ee2ef8ce2f2186e042acb2e78fc4cfce9b"
+    observed: "ee5d96ee2ef8ce2f2186e042acb2e78fc4cfce9b"
+    unchanged: true
+  release_workflow_blob:
+    expected: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+    observed: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+    unchanged: true
+  github_actions_dispatch_or_rerun: 0
+  release_publication: 0
+  live_runtime_effect: 0
+  version_or_schema_change: false
+
+cleanup:
+  canonical_verify_home_removed: true
+  canonical_verify_tmpdir_removed: true
+  package_temp_dirs_remaining: []
+  newly_created_candidate_removed_or_absent: true
+  task_release_output_dirs_created: false
+  task_relocation_root_created: false
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: FAIL
+  evidence: "TDD, focused verification and the single canonical verify passed. The one authorized physical package build reached and passed Swift release compilation but failed before hash-locked dependency installation because the selected cp313/arm64 interpreter did not contain pip; no candidate was emitted, so relocation and deterministic release-bundle proof were not reachable."
+
+pushed: true
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: NOT_PROVEN
+    evidence: "Synthetic TDD coverage passes for package-owned stdlib, relative libpython identity and dynamic sys.base_prefix sanitization, but the single authorized real package build emitted no candidate; real relocation proof was therefore not reached."
+  - criterion_id: AC-2
+    status: NOT_PROVEN
+    evidence: "Synthetic builder-prefix/HOME negative proof passes, but no real candidate existed for the required full-file byte scan or relocated sysconfig scan."
+  - criterion_id: AC-3
+    status: PARTIAL
+    evidence: "Source contract preserves requirements.lock with pip --require-hashes and canonical verification passes 929 tests. Real packaged dependency/payload import proof was not reached because the selected packaging interpreter lacked pip."
+  - criterion_id: AC-4
+    status: NOT_PROVEN
+    evidence: "release_bundle.py remains byte-identical to the accepted blob, but two real release-bundle builds and verify could not run without a frozen candidate."
+  - criterion_id: AC-5
+    status: PASS
+    evidence: "TDD GREEN passed; focused modules passed 63 tests; both shell syntax checks and git diff --check passed; exactly one canonical verify passed 63/63 modules and 929 tests with no replay."
+  - criterion_id: AC-6
+    status: PARTIAL_AT_REPORT_AUTHORSHIP
+    evidence: "Implementation commit changes only the four authorized implementation/test paths, is published to main, release workflow/release_bundle blobs remain unchanged, .h/.v and package temp residue are absent, and no candidate was added. This report is the only remaining authorized tracked mutation."
+
+blocking_findings:
+  - id: F-0219-001
+    severity: BLOCKING
+    classification: packaging_interpreter_selection_and_build_budget_exhaustion
+    description: "The selected absolute interpreter passed the existing CPython 3.13/cp313/macOS arm64 validator but is a stripped package-owned Runtime interpreter without pip. The one authorized package_app.sh invocation therefore failed at hash-locked dependency installation after Swift compilation."
+    evidence: "The retained package session exited 1 with 'No module named pip'. The source base-prefix interpreter at /Users/tienphat/.local/share/uv/python/cpython-3.13.5-macos-aarch64-none/bin/python3.13 exists and has pip 24.3.1, but local_distribution_build_max=1 forbids a second package invocation."
+    consequence: "No real candidate, relocation proof or deterministic release-bundle proof can be produced inside TASK-0219."
+    task_response: "BLOCKED. Do not rerun package_app.sh, canonical verify, or mutate source again in this task."
