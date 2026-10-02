@@ -1,0 +1,193 @@
+protocol_version: 3
+task_id: TASK-0213
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: PASS
+
+task_source:
+  path: .agent/tasks/TASK-0213/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "3b69d0fa27622a7eb9b7b7e8a0446f7c961753a2"
+  implementation_commit: "219a4fc68c7e00944e3ee2be9a53ab27e3dc1544"
+  implementation_tree: "0f2b06edc6052bbcf8f81481dbee27111f330a26"
+  task_0196_paused: true
+
+preconditions:
+  initial_local_head_before_fresh_bind: "8d09dc02ae96e582ec8e4a325d2ea5c57aa1acae"
+  fresh_bound_head: "3b69d0fa27622a7eb9b7b7e8a0446f7c961753a2"
+  origin_main_head: "3b69d0fa27622a7eb9b7b7e8a0446f7c961753a2"
+  main_equals_origin_main: true
+  worktree_clean: true
+  index_clean: true
+  branch_count: 1
+  worktree_count: 1
+
+root_cause:
+  classification: sleep_quantized_fixture_shutdown
+  source: tests/test_supervised_lifecycle.py
+  former_behavior: "The fake tunnel-client handled TERM/INT in Bash while blocked in a foreground sleep 1 loop, so trap execution and runtime.pid/runtime.lock cleanup could be delayed until the active sleep returned."
+  consequence: "Repeated lifecycle and tearDown cycles accumulated scheduler-dependent shutdown latency; the pre-mutation 20-test module passed locally but took 30.733 seconds and the preceding hosted release-gate run had timed out at 45.115 seconds."
+  resolution: "The fixture now blocks on Bash wait for a long-lived background sleeper. TERM/INT interrupts wait promptly; EXIT cleanup kills/reaps the sleeper and removes runtime.pid/runtime.lock. tearDown invokes product stop only when a fake runtime still exists, while always asserting both runtime.pid and runtime.lock are absent."
+
+implementation:
+  changed_paths:
+    - tests/test_supervised_lifecycle.py
+  fake_runtime:
+    process_identity_preserved: true
+    runtime_pid_ownership_preserved: true
+    starts_log_semantics_preserved: true
+    duplicate_start_protection_preserved: true
+    term_int_cleanup_preserved: true
+    blocking_mechanism: "background sleep plus Bash wait"
+    signal_response: "TERM/INT interrupts wait; EXIT cleanup owns sleeper reap and state cleanup"
+  teardown:
+    redundant_stop_when_no_runtime: removed
+    runtime_pid_absence_asserted: true
+    runtime_lock_absence_asserted: true
+  retained_test_methods: 20
+  skipped_tests_added: 0
+  xfail_tests_added: 0
+  assertions_removed: 0
+
+baseline_profile:
+  process_count: 1
+  tests: 20
+  result: PASS
+  total_seconds: 30.733
+  per_test_seconds:
+    test_foreign_8080_listener_fails_closed_without_desired_state_or_signal: 1.906
+    test_native_supervisor_owns_exact_process_group_and_bounded_shutdown: 0.393
+    test_restart_uses_traditional_launchagent_without_service_management_state: 2.938
+    test_start_fails_closed_when_current_launchagent_is_symlink: 0.295
+    test_start_fails_closed_when_current_launchagent_mode_is_unsafe: 0.513
+    test_start_fails_closed_when_current_launchagent_program_is_foreign: 0.545
+    test_start_uses_traditional_launchagent_without_service_management_state: 2.022
+    test_status_managed_ownership_survives_process_argv_presentation_drift: 1.609
+    test_status_rejects_foreign_port_owner_even_if_port_is_occupied: 0.555
+    test_status_remains_stopped_even_if_a_predecessor_marker_is_left_behind: 0.484
+    test_status_reports_attention_when_canonical_runtime_is_not_ready: 1.758
+    test_status_reports_healthy_managed_runtime_from_serving_truth: 1.688
+    test_status_reports_healthy_runtime_read_only_when_control_ownership_is_unproven: 1.744
+    test_status_reports_stopped_when_no_runtime_exists: 0.626
+    test_status_serving_truth_has_no_persistent_intent_field: 1.659
+    test_status_transport_classification_matrix_reuses_one_running_fixture: 2.728
+    test_stop_and_restart_refuse_read_only_runtime_without_signaling_it: 1.688
+    test_stop_waits_for_supervisor_after_listener_disappears: 0.809
+    test_stop_when_loaded_but_already_not_running_is_idempotent: 0.530
+    test_ten_concurrent_starts_collapse_and_crash_stays_stopped_until_explicit_start: 6.240
+
+intermediate_candidate:
+  result: DID_NOT_MEET_FINAL_HEADROOM_REQUIREMENT
+  completed_full_runs: 3
+  fresh_process_seconds: [16.277, 18.175, 20.028]
+  threshold_seconds: 20.0
+  reason: "The third fresh-process wall time exceeded the required threshold by 0.028 seconds."
+  response: "No canonical verify was run. The fixture tearDown was further reduced to skip redundant product stop when no runtime exists."
+
+final_repeated_verification:
+  full_module:
+    command: "/usr/bin/python3 -m unittest tests.test_supervised_lifecycle"
+    fresh_process_runs: 5
+    results: [PASS, PASS, PASS, PASS, PASS]
+    seconds: [14.321, 14.137, 15.477, 14.840, 17.679]
+    max_seconds: 17.679
+    required_max_seconds: 20.0
+  exact_concurrency_test:
+    test: tests.test_supervised_lifecycle.SupervisedLifecycleTests.test_ten_concurrent_starts_collapse_and_crash_stays_stopped_until_explicit_start
+    fresh_process_runs: 10
+    results: [PASS, PASS, PASS, PASS, PASS, PASS, PASS, PASS, PASS, PASS]
+    seconds: [3.178, 3.700, 3.165, 3.048, 3.161, 2.962, 3.003, 2.942, 3.176, 2.983]
+  git_diff_check: PASS
+
+canonical_verify:
+  authorized_max: 1
+  consumed: 1
+  command: "HOME=$PWD/.h TMPDIR=$PWD/.v ./verify"
+  carrier_mode: pipe
+  carrier_durability: runtime_restart
+  start_identity: "21350000000000000000000000000001"
+  initial_dispatch_acknowledgement: "AMBIGUOUS_RUNTIME_OWNER_ERROR"
+  recovery: "The exact start_identity was retained. The spawned bash ./verify process was observed at the dispatch timestamp; no second invocation occurred. After natural exit, terminal_poll for the same start_identity returned the retained COMPLETED result."
+  session_id: "86c5c45ebc0b6d96"
+  lifecycle: COMPLETED
+  termination_reason: natural_exit
+  exit_code: 0
+  requested_profile: qualification
+  classified_modules: 63
+  completed_modules: 63
+  tests: 922
+  duration_seconds: 140.434
+  lane_counts:
+    L1_DETERMINISTIC_UNIT: {selected: 17, completed: 17, tests: 231}
+    L2_ISOLATED_INTEGRATION: {selected: 21, completed: 21, tests: 246}
+    L3_DETERMINISTIC_REGRESSION: {selected: 10, completed: 10, tests: 95}
+    L4_HOST_LIFECYCLE: {selected: 9, completed: 9, tests: 184}
+    L5_QUALIFICATION_CHAOS_CUTOVER: {selected: 6, completed: 6, tests: 166}
+  supervised_lifecycle:
+    result: PASS
+    tests: 20
+    duration_seconds: 18.892
+    timeout_seconds: 45
+  durable_pipe: {tests: 18, result: PASS, duration_seconds: 2.492}
+  durable_pipe_restart: {tests: 10, result: PASS, duration_seconds: 6.039}
+  product_qualification: {tests: 16, result: PASS, duration_seconds: 35.123}
+
+cleanup:
+  short_home_path: .h
+  short_home_removed_or_absent: true
+  short_tmpdir_path: .v
+  short_tmpdir_removed_or_absent: true
+  task_0213_scratch_residue: false
+  untracked_repository_residue_before_report: false
+
+scope_proof:
+  implementation_commit_changed_paths:
+    - tests/test_supervised_lifecycle.py
+  production_files_changed: false
+  start_sh_changed: false
+  verification_policy_changed: false
+  verify_tests_changed: false
+  release_workflow_changed: false
+  docs_changed: false
+  dependencies_changed: false
+  version_changed: false
+  schemas_changed: false
+  retained_test_methods: 20
+  accepted_release_workflow_blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  observed_release_workflow_blob_after_implementation: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  workflow_blob_unchanged: true
+
+effect_accounting:
+  canonical_verify: {authorized_max: 1, consumed: 1}
+  github_workflow_dispatch: {authorized_max: 0, consumed: 0}
+  github_workflow_rerun: {authorized_max: 0, consumed: 0}
+  local_distribution_build: {authorized_max: 0, consumed: 0}
+  install_prebuilt: {authorized_max: 0, consumed: 0}
+  commit_cutover: {authorized_max: 0, consumed: 0}
+  rollback_cutover: {authorized_max: 0, consumed: 0}
+  menu_bar_relaunch: {authorized_max: 0, consumed: 0}
+  runtime_restart: {authorized_max: 0, consumed: 0}
+  runtime_explicit_start: {authorized_max: 0, consumed: 0}
+  runtime_explicit_stop: {authorized_max: 0, consumed: 0}
+  plugin_reload_or_reconnect: {authorized_max: 0, consumed: 0}
+  credential_rotation: {authorized_max: 0, consumed: 0}
+  physical_reboot: {authorized_max: 0, consumed: 0}
+  new_security_permission: {authorized_max: 0, consumed: 0}
+  version_tag_create: {authorized_max: 0, consumed: 0}
+  github_release_publish: {authorized_max: 0, consumed: 0}
+  branch_or_pr_creation: {authorized_max: 0, consumed: 0}
+
+acceptance_evidence:
+  - {criterion_id: AC-1, status: PASS, evidence: "The fake Runtime no longer waits on foreground one-second sleeps. TERM/INT interrupts Bash wait promptly; EXIT cleanup reaps the sleeper and removes runtime.pid/runtime.lock, and tearDown asserts both state paths are absent."}
+  - {criterion_id: AC-2, status: PASS, evidence: "Exactly 20 test methods remain with no skip/xfail/assertion weakening. start.sh, verification_policy.py, verify_tests.py and all production files are unchanged."}
+  - {criterion_id: AC-3, status: PASS, evidence: "Five final fresh-process full-module runs passed at 14.321, 14.137, 15.477, 14.840 and 17.679 seconds; every run is <=20.0 seconds."}
+  - {criterion_id: AC-4, status: PASS, evidence: "The exact ten-concurrent-starts lifecycle test passed 10/10 fresh processes."}
+  - {criterion_id: AC-5, status: PASS, evidence: "Exactly one canonical HOME=$PWD/.h TMPDIR=$PWD/.v ./verify execution completed naturally with exit 0, 63/63 classified modules and 922 tests; tests.test_supervised_lifecycle passed 20 tests in 18.892 seconds under the unchanged 45-second timeout. No replay occurred."}
+  - {criterion_id: AC-6, status: PASS_PENDING_REPORT_PUBLICATION, evidence: "Implementation commit changes only tests/test_supervised_lifecycle.py; workflow blob remains exact, verification residue is absent, and this report is the sole intended report child before final clean synchronized MAIN ONLY proof."}
+
+blocking_findings: []
