@@ -1,0 +1,73 @@
+protocol_version: 3
+task_id: TASK-0222
+task_revision: 1
+review_revision: 1
+state: REVISION_REQUIRED
+
+reviewed_report:
+  path: .agent/tasks/TASK-0222/report.yaml
+  commit: "afcc446b1df7f74e5fc0a32925ba354cdf6f87c8"
+
+packaging_stabilization:
+  final_implementation_commit: "0e5f00a98ae79c1c9584bf8fa39e200d100942b6"
+  cumulative_scope:
+    - macos/packaging_python.sh
+    - tests/test_packaging_interpreter.py
+  local_uv_regression: PASS
+  local_candidate_contract: PASS
+  local_relocation: PASS
+  local_release_bundle: PASS
+  remote_framework_root_cause: setup_python_framework_absolute_macho_dependency
+  remote_framework_marker_failure_recurred_after_fix: false
+  remote_signature_consequence_fixed: true
+  full_remote_packaging_closure: NOT_PROVEN
+
+blocking_finding:
+  id: F-0222-001
+  classification: premature_durable_bootstrap_timeout_classification
+  remote_run: 36994067524
+  remote_attempt: 1
+  failing_test: tests.test_durable_pipe.DurablePipeTests.test_snapshot_consistency_still_rejects_mixed_generation_and_integrity_corruption
+  failure_site: agent_runtime/session.py:752
+  signature: "bootstrap.wait(timeout=2.0) -> TimeoutExpired -> DURABLE_OWNER_LOST"
+
+independent_evidence:
+  - "Remote checkpoint caa8422d40b6bcbfe02e09576de2af2ea5485c7c passed canonical verify 63/63 with 936 tests using the same durable source/test blobs as final checkpoint 0e5f00a98ae79c1c9584bf8fa39e200d100942b6."
+  - "session.py, durable_pipe_runner.py and tests/test_durable_pipe.py are byte-identical between the passing and failing remote checkpoints."
+  - "The exact failing test passes 30/30 in isolated local execution."
+  - "A controlled 2.5-second durable-runner startup delay reproduces the defect deterministically: manager.start raises DURABLE_OWNER_LOST at the hard-coded 2-second wait, yet shortly afterward durable state is running and both runner and target process identities verify as valid."
+  - "The code already has a separate bounded state-publication reconciliation window after bootstrap process exit; the fixed 2-second process wait therefore classifies unknown scheduling delay as owner loss before ownership outcome is known."
+  - "The failing test exercises snapshot-integrity semantics, not bootstrap latency."
+
+root_cause:
+  classification: premature_timeout_to_owner_loss_projection
+  statement: "A fixed bootstrap-process wait is being treated as proof of lost ownership. Under host scheduling delay, bootstrap can be late but valid, so the timeout is not sufficient evidence for DURABLE_OWNER_LOST."
+
+approved_design:
+  path: bounded
+  operator_approved: true
+  behavior:
+    - "Do not fix by merely increasing 2 seconds to a larger arbitrary constant."
+    - "After the initial bounded bootstrap wait expires, continue bounded reconciliation instead of immediately projecting owner loss."
+    - "Accept delayed bootstrap if durable state becomes valid and ownership can be positively established within the existing/explicit bounded reconciliation window."
+    - "Keep genuinely stuck/no-state bootstrap fail-closed after the total bounded deadline."
+    - "Preserve exact process-instance verification and all corruption/mismatch fail-closed semantics."
+    - "After durable reliability is green, continue remote stabilization far enough to exercise the accepted framework-CPython packaging correction."
+    - "Only reopen packaging mutation if new remote packaging evidence proves the accepted framework fix is still incomplete."
+
+phase_transition:
+  from: STABILIZE_PACKAGING
+  to: STABILIZE_RELEASE_GATE
+  authority: bounded_adaptive
+  reason: "Packaging framework portability is implemented but not remotely closed; the final packaging checkpoint was blocked by a separately proven durable bootstrap reliability defect. The next stabilization unit must close the durable bootstrap defect and then continue the same release-gate stabilization objective."
+
+historical_run_policy:
+  never_rerun:
+    - 36991809939
+    - 36993115899
+    - 36994067524
+
+notes:
+  - "Do not weaken strict package build-host identity scanning."
+  - "Do not reopen accepted release-bundle path policy without new evidence."
+  - "TASK-0196 remains paused."
