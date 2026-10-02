@@ -1560,61 +1560,81 @@ server._main()
         from agent_runtime.session import TerminalSessionManager
 
         identity = "8" * 32
+        release_path = self.cwd / "owner-lost-release"
+        child_code = "\n".join(
+            [
+                "import pathlib, time",
+                f"release_path = pathlib.Path({str(release_path)!r})",
+                "deadline = time.monotonic() + 10.0",
+                "while not release_path.exists():",
+                "    if time.monotonic() >= deadline:",
+                "        raise TimeoutError('owner-lost fixture release timed out')",
+                "    time.sleep(0.01)",
+                "print('done', flush=True)",
+            ]
+        )
         manager_a = TerminalSessionManager(
             max_active_sessions=1,
             admission=HeavyExecutionAdmission(1),
             durable_state_root=self.durable_state_root,
             start_reaper=False,
         )
-        self.addCleanup(manager_a.shutdown)
-        started = manager_a.start(
-            [sys.executable, "-u", "-c", "import time; time.sleep(0.5); print('done', flush=True)"],
-            str(self.cwd),
-            identity,
-            "pipe",
-            "runtime_restart",
-        )
-        self.assertEqual(started["status"], "running")
+        manager_b: TerminalSessionManager | None = None
+        try:
+            try:
+                started = manager_a.start(
+                    [sys.executable, "-u", "-c", child_code],
+                    str(self.cwd),
+                    identity,
+                    "pipe",
+                    "runtime_restart",
+                )
+                self.assertEqual(started["status"], "running")
 
-        with patch("agent_runtime.session.verify_process_identity", return_value=False):
-            manager_b = TerminalSessionManager(
-                max_active_sessions=1,
-                admission=HeavyExecutionAdmission(1),
-                durable_state_root=self.durable_state_root,
-                start_reaper=False,
-            )
-        self.addCleanup(manager_b.shutdown)
+                with patch("agent_runtime.session.verify_process_identity", return_value=False):
+                    manager_b = TerminalSessionManager(
+                        max_active_sessions=1,
+                        admission=HeavyExecutionAdmission(1),
+                        durable_state_root=self.durable_state_root,
+                        start_reaper=False,
+                    )
 
-        recovered = manager_b._sessions[str(started["session_id"])]
-        self.assertEqual(recovered.durable_fault_reason, "DURABLE_OWNER_LOST")
-        with self.assertRaises(RuntimeStateError) as running_owner_error:
-            manager_b.poll(start_identity=identity, wait_ms=0, output="none")
-        self.assertEqual(running_owner_error.exception.reason_code, "DURABLE_OWNER_LOST")
+                recovered = manager_b._sessions[str(started["session_id"])]
+                self.assertEqual(recovered.durable_fault_reason, "DURABLE_OWNER_LOST")
+                with self.assertRaises(RuntimeStateError) as running_owner_error:
+                    manager_b.poll(start_identity=identity, wait_ms=0, output="none")
+                self.assertEqual(
+                    running_owner_error.exception.reason_code,
+                    "DURABLE_OWNER_LOST",
+                )
+            finally:
+                release_path.write_text("release")
 
-        deadline = time.monotonic() + 4.0
-        final: dict[str, object] | None = None
-        while time.monotonic() < deadline:
             final = manager_a.poll(
                 start_identity=identity,
-                wait_ms=100,
+                wait_ms=5000,
                 wait_for="terminal_or_deadline",
                 output="none",
             )
-            if final["status"] == "exited":
-                break
-        self.assertIsNotNone(final)
-        assert final is not None
-        self.assertEqual(final["exit_code"], 0)
+            self.assertEqual(final["status"], "exited")
+            self.assertEqual(final["exit_code"], 0)
 
-        terminal = DurableStore(self.durable_state_root).read_for_identity(identity)
-        self.assertEqual(terminal.state["status"], "exited")
-        self.assertEqual(terminal.state["exit_code"], 0)
+            terminal = DurableStore(self.durable_state_root).read_for_identity(identity)
+            self.assertEqual(terminal.state["status"], "exited")
+            self.assertEqual(terminal.state["exit_code"], 0)
 
-        reconciled = manager_b.poll(start_identity=identity, wait_ms=0, output="none")
-        self.assertEqual(reconciled["session_id"], started["session_id"])
-        self.assertEqual(reconciled["status"], "exited")
-        self.assertEqual(reconciled["exit_code"], 0)
-        self.assertIsNone(recovered.durable_fault_reason)
+            assert manager_b is not None
+            reconciled = manager_b.poll(start_identity=identity, wait_ms=0, output="none")
+            self.assertEqual(reconciled["session_id"], started["session_id"])
+            self.assertEqual(reconciled["status"], "exited")
+            self.assertEqual(reconciled["exit_code"], 0)
+            self.assertIsNone(recovered.durable_fault_reason)
+        finally:
+            release_path.write_text("release")
+            if manager_b is not None:
+                manager_b.shutdown()
+            manager_a.shutdown()
+            release_path.unlink(missing_ok=True)
 
 
 def shutil_rmtree(path: Path) -> None:
