@@ -1,0 +1,49 @@
+protocol_version: 3
+task_id: TASK-0221
+task_revision: 1
+review_revision: 1
+state: REVISION_REQUIRED
+
+reviewed_report:
+  path: .agent/tasks/TASK-0221/report.yaml
+  commit: "523d4b6cd93647dd51c3262ac6fadba65fc67a40"
+
+durable_stabilization:
+  implementation_commit: "6bc7111faba2a92e8a130ad33546a76fb015f5fe"
+  scope: "tests/test_durable_pipe_restart.py only"
+  root_cause: fixture_lifetime_timing
+  production_owner_logic_changed: false
+  local_canonical_verify: "63/63 modules, 935 tests PASS"
+  remote_run: 36990305942
+  remote_attempt: 1
+  remote_canonical_verify: "63/63 modules, 935 tests PASS"
+  predecessor_failure_recurred: false
+  finding_F_0220_001: CLOSED_WITH_EVIDENCE
+
+new_blocker:
+  id: F-0221-001
+  classification: remote_packaging_candidate_build_host_identity
+  stage: "Build one frozen zero-cost candidate"
+  signature: "final package runtime retains build-host identity: bin/python"
+  swift_build: PASS
+  deterministic_release_assets: NOT_REACHED
+  compatibility: NOT_REACHED
+
+independent_evidence:
+  - "Remote logs show actions/setup-python configured Python 3.13.15 arm64 and exported AGENT_RUNTIME_PACKAGING_PYTHON=/Library/Frameworks/Python.framework/Versions/3.13/bin/python."
+  - "The packaging finalizer intentionally scans every final runtime file for the canonical packaging base-prefix and HOME markers; the rejected file is the copied runtime bin/python itself."
+  - "The accepted local TASK-0219 qualification used a different uv CPython layout and passed the same scanner."
+  - "Current packaging materialization handles @executable_path/../lib relative libpython layouts, but the remote framework-linked launcher layout has not yet been discriminated."
+  - "Public setup-python documentation states its macOS Python packages are non-relocatable because of fixed shared-library paths and are built for the hosted tool cache."
+
+phase_transition:
+  from: STABILIZE_DURABLE
+  to: STABILIZE_PACKAGING
+  authority: bounded_adaptive
+  reason: "Durable failure is closed; remote gate exposed a new packaging portability unknown. Discovery must establish the exact framework launcher/linkage shape before solution freeze."
+
+notes:
+  - "Do not weaken build-host identity scanning."
+  - "Do not assume the final fix is workflow-only or packaging-helper-only before remote linkage evidence."
+  - "Run 36990305942 must never be rerun."
+  - "TASK-0196 remains paused."
