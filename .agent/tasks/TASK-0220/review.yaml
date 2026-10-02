@@ -1,0 +1,51 @@
+protocol_version: 3
+task_id: TASK-0220
+task_revision: 1
+review_revision: 1
+state: REVISION_REQUIRED
+
+reviewed_report:
+  path: .agent/tasks/TASK-0220/report.yaml
+  commit: "2672deb1b84962f8668c4a0f9d8cc75e227f806e"
+
+qualification:
+  run_id: 36987757158
+  attempt: 1
+  head_sha: "c55d86413900df027f158b54b6128b426d72fd22"
+  result: BLOCKED
+  exact_sha_binding: PASS
+  rerun_count: 0
+  redispatch_count: 0
+
+accepted_execution:
+  pre_gate: PASS
+  macos26_arm64: PASS
+  python_3_13: PASS
+  locked_dependencies: PASS
+  report_only_closure: PASS
+
+blocking_finding:
+  id: F-0220-001
+  classification: remote_durable_owner_identity_recovery_failure
+  remote_failure:
+    module: tests.test_durable_pipe_restart
+    test: test_recovery_over_capacity_fails_closed_without_killing_jobs
+    error: DURABLE_OWNER_LOST
+    completed_modules: "60/63"
+    tests: 912
+  independent_observations:
+    - "Remote job logs confirm failure at manager_a.start before candidate construction."
+    - "Nine other durable_pipe_restart tests passed in the same remote module."
+    - "The exact failing test passes 20/20 when isolated locally; a measured isolated run completes in about 0.48s."
+    - "The test's dominant purpose is recovery-over-capacity, but its setup uses 10-second child jobs with the manager helper default hard_wall=5 seconds."
+    - "The remote module ran under qualification with concurrent host lanes and completed in 12.519 seconds, so fixture timing and production owner-validation must be discriminated before mutation."
+
+phase_transition:
+  from: QUALIFY
+  to: STABILIZE
+  reason: "Qualification exposed new environment-sensitive durable recovery behavior. Adaptive discovery is required before authority is frozen again."
+
+notes:
+  - "TASK-0220 remains closed BLOCKED; run 36987757158 must never be rerun."
+  - "Do not assume session.py is defective until a discriminating probe proves it."
+  - "TASK-0196 remains paused."
