@@ -949,7 +949,13 @@ class ReleaseBundleContractTests(unittest.TestCase):
 
         return reader
 
-    def _candidate_fixture(self, temp: Path, *, payload_server: str = "VALUE = 1\n"):
+    def _candidate_fixture(
+        self,
+        temp: Path,
+        *,
+        payload_server: str = "VALUE = 1\n",
+        runtime_extra_paths: tuple[str, ...] = (),
+    ):
         release = self._load_release_bundle()
         provenance = release.provenance
         stage = temp / "candidate-stage"
@@ -973,6 +979,10 @@ class ReleaseBundleContractTests(unittest.TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text("#!/bin/sh\nexit 0\n")
             target.chmod(0o755)
+        for relative in runtime_extra_paths:
+            target = runtime / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("VALUE = 1\n")
 
         surface_sha = "d" * 64
         provenance.write_substrate_manifest(
@@ -1086,6 +1096,44 @@ class ReleaseBundleContractTests(unittest.TestCase):
                                 else:
                                     raise AssertionError(kind)
 
+    def _rewrite_archive_with_policy_member(
+        self,
+        source: Path,
+        destination: Path,
+        name: str,
+        *,
+        is_dir: bool,
+    ) -> None:
+        with source.open("rb") as raw:
+            with gzip.GzipFile(fileobj=raw, mode="rb") as compressed:
+                with tarfile.open(fileobj=compressed, mode="r:") as original:
+                    members = original.getmembers()
+                    with destination.open("wb") as target_raw:
+                        with gzip.GzipFile(
+                            filename="", fileobj=target_raw, mode="wb", mtime=0
+                        ) as target_gzip:
+                            with tarfile.open(
+                                fileobj=target_gzip, mode="w", format=tarfile.PAX_FORMAT
+                            ) as target:
+                                for member in members:
+                                    payload = original.extractfile(member) if member.isreg() else None
+                                    target.addfile(member, payload)
+                                    if payload is not None:
+                                        payload.close()
+                                info = tarfile.TarInfo(name)
+                                info.uid = info.gid = 0
+                                info.uname = info.gname = ""
+                                info.mtime = 0
+                                info.mode = 0o700 if is_dir else 0o600
+                                if is_dir:
+                                    info.type = tarfile.DIRTYPE
+                                    info.size = 0
+                                    target.addfile(info)
+                                else:
+                                    data = b"x"
+                                    info.size = len(data)
+                                    target.addfile(info, io.BytesIO(data))
+
     def _refresh_asset_metadata(self, release, directory: Path, archive: Path) -> None:
         manifest_path = directory / release.MANIFEST_NAME
         manifest = json.loads(manifest_path.read_text())
@@ -1105,6 +1153,147 @@ class ReleaseBundleContractTests(unittest.TestCase):
         self.assertEqual(module.MANIFEST_SCHEMA, 1)
         self.assertTrue(callable(module.build_release_bundle))
         self.assertTrue(callable(module.verify_release_bundle))
+
+    def test_release_bundle_path_aware_site_packages_policy_build_and_verify(self) -> None:
+        allowed = (
+            ".venv/lib/python3.13/site-packages/opentelemetry/proto/logs/v1/logs_service_pb2.py",
+            ".venv/lib/python3.13/site-packages/example/log/state.py",
+            ".venv/lib/python3.13/site-packages/example/cache/state.py",
+            ".venv/lib/python3.13/site-packages/example/caches/state.py",
+        )
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            release, provenance, candidate_root, reader = self._candidate_fixture(
+                temp,
+                runtime_extra_paths=allowed,
+            )
+            output = temp / "release-policy"
+            extracted = temp / "extracted-policy"
+            output.mkdir()
+            extracted.mkdir()
+            with mock.patch.object(provenance, "_verify_codesign", return_value=None):
+                built = release.build_release_bundle(candidate_root, output, identity_reader=reader)
+                verified = release.verify_release_bundle(
+                    Path(built["archive"]),
+                    output / release.MANIFEST_NAME,
+                    output / release.CHECKSUMS_NAME,
+                    extract_dir=extracted,
+                    identity_reader=reader,
+                )
+
+            with tarfile.open(Path(built["archive"]), "r:gz") as bundle:
+                names = set(member.name for member in bundle.getmembers())
+            for relative in allowed:
+                self.assertIn(
+                    f"Agent Runtime.app/Contents/Resources/runtime/{relative}",
+                    names,
+                )
+            self.assertEqual(verified["candidate_sha256"], built["candidate_sha256"])
+
+    def test_release_bundle_rejects_generic_residue_names_outside_site_packages(self) -> None:
+        cases = (
+            ("runtime-log", "runtime", "log"),
+            ("runtime-logs", "runtime", "logs"),
+            ("runtime-cache", "runtime", "cache"),
+            ("runtime-caches", "runtime", "caches"),
+            ("payload-log", "payload", "log"),
+            ("payload-logs", "payload", "logs"),
+            ("payload-cache", "payload", "cache"),
+            ("payload-caches", "payload", "caches"),
+        )
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            for label, location, component in cases:
+                with self.subTest(label=label):
+                    temp = root / label
+                    temp.mkdir()
+                    runtime_paths = (
+                        (f"{component}/state.txt",)
+                        if location == "runtime"
+                        else ()
+                    )
+                    release, provenance, candidate_root, reader = self._candidate_fixture(
+                        temp,
+                        runtime_extra_paths=runtime_paths,
+                    )
+                    if location == "payload":
+                        payload_release = next((candidate_root / "payloads").iterdir())
+                        payload_package = payload_release / "agent_runtime"
+                        payload_package.chmod(0o700)
+                        target = payload_package / component / "state.py"
+                        target.parent.mkdir(parents=True)
+                        target.write_text("VALUE = 1\n")
+                    output = temp / "release"
+                    output.mkdir()
+                    with mock.patch.object(provenance, "_verify_codesign", return_value=None):
+                        with self.assertRaisesRegex(
+                            release.ReleaseBundleError,
+                            "forbidden checkout/config/cache material",
+                        ):
+                            release.build_release_bundle(
+                                candidate_root,
+                                output,
+                                identity_reader=reader,
+                            )
+
+    def test_release_bundle_verify_rejects_global_forbidden_material_under_site_packages(self) -> None:
+        allowed = (
+            ".venv/lib/python3.13/site-packages/example/logs/state.py",
+        )
+        cases = (
+            (".git", True),
+            (".agent", True),
+            (".pytest_cache", True),
+            (".cache", True),
+            ("__pycache__", True),
+            (".env.production", False),
+            ("runtime.env", False),
+            ("credentials", False),
+            ("unsafe.pyc", False),
+        )
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            release, provenance, candidate_root, reader = self._candidate_fixture(
+                temp,
+                runtime_extra_paths=allowed,
+            )
+            output = temp / "release"
+            output.mkdir()
+            with mock.patch.object(provenance, "_verify_codesign", return_value=None):
+                built = release.build_release_bundle(candidate_root, output, identity_reader=reader)
+            archive = Path(built["archive"])
+            original_manifest = (output / release.MANIFEST_NAME).read_bytes()
+            original_checksums = (output / release.CHECKSUMS_NAME).read_bytes()
+            prefix = (
+                "Agent Runtime.app/Contents/Resources/runtime/.venv/"
+                "lib/python3.13/site-packages"
+            )
+
+            for index, (component, is_dir) in enumerate(cases):
+                with self.subTest(component=component):
+                    case = temp / f"verify-policy-{index}"
+                    case.mkdir()
+                    bad_archive = case / archive.name
+                    self._rewrite_archive_with_policy_member(
+                        archive,
+                        bad_archive,
+                        f"{prefix}/{component}",
+                        is_dir=is_dir,
+                    )
+                    (case / release.MANIFEST_NAME).write_bytes(original_manifest)
+                    (case / release.CHECKSUMS_NAME).write_bytes(original_checksums)
+                    self._refresh_asset_metadata(release, case, bad_archive)
+                    with mock.patch.object(provenance, "_verify_codesign", return_value=None):
+                        with self.assertRaisesRegex(
+                            release.ReleaseBundleError,
+                            "forbidden checkout/config/cache material",
+                        ):
+                            release.verify_release_bundle(
+                                bad_archive,
+                                case / release.MANIFEST_NAME,
+                                case / release.CHECKSUMS_NAME,
+                                identity_reader=reader,
+                            )
 
     def test_release_bundle_double_build_is_byte_deterministic_and_round_trip_safe(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

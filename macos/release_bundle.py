@@ -52,13 +52,20 @@ DENIED_COMPONENTS = {
     ".pytest_cache",
     ".cache",
     "__pycache__",
-    "cache",
-    "caches",
-    "log",
-    "logs",
     "runtime.env",
     "credentials",
 }
+GENERIC_RESIDUE_COMPONENTS = {"cache", "caches", "log", "logs"}
+SITE_PACKAGES_PREFIX = (
+    "Agent Runtime.app",
+    "Contents",
+    "Resources",
+    "runtime",
+    ".venv",
+    "lib",
+    "python3.13",
+    "site-packages",
+)
 HEX40 = re.compile(r"[0-9a-f]{40}")
 HEX64 = re.compile(r"[0-9a-f]{64}")
 VERSION = re.compile(r"[0-9A-Za-z][0-9A-Za-z.+-]{0,63}")
@@ -122,9 +129,19 @@ def _validated_relative_path(value: str) -> PurePosixPath:
 
 
 def _reject_forbidden_material(relative: PurePosixPath) -> None:
-    for part in relative.parts:
+    parts = relative.parts
+    inside_site_packages = (
+        len(parts) > len(SITE_PACKAGES_PREFIX)
+        and parts[: len(SITE_PACKAGES_PREFIX)] == SITE_PACKAGES_PREFIX
+    )
+    for index, part in enumerate(parts):
         lowered = part.lower()
         if lowered in DENIED_COMPONENTS or lowered.startswith(".env") or lowered.endswith(".pyc"):
+            raise ReleaseBundleError("release candidate contains forbidden checkout/config/cache material")
+        if (
+            lowered in GENERIC_RESIDUE_COMPONENTS
+            and not (inside_site_packages and index >= len(SITE_PACKAGES_PREFIX))
+        ):
             raise ReleaseBundleError("release candidate contains forbidden checkout/config/cache material")
 
 
