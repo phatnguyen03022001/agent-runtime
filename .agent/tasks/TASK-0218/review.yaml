@@ -1,0 +1,54 @@
+protocol_version: 3
+
+task_id: TASK-0218
+task_revision: 1
+review_revision: 1
+state: REVISION_REQUIRED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0218/report.yaml
+  commit: "d55559a86520fdfc561f1e8631cb7233d31c3027"
+  report_revision: 1
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  scope: PASS
+  git_authority: PASS
+  acceptance_criteria: FAIL
+  verifier_evidence: PASS
+
+acceptance_basis:
+  - "TASK-0218 consumed exactly one authorized new release-gate dispatch: run 36977416084 attempt 1, workflow_dispatch, exact head SHA dd9c87a34813a33205c5f9a51ceb1f680c949783."
+  - "All eight pre-existing release-gate runs remained attempt 1; no rerun or second dispatch occurred."
+  - "Remote canonical verification passed 63/63 modules and 927 tests. durable_pipe passed 22/22, durable_pipe_restart 10/10, and supervised_lifecycle 20/20 in 34.133 seconds under the unchanged 45-second timeout. No invalid-HEAD or DURABLE_OWNER_LOST recurrence occurred."
+  - "Exactly one real macOS 26 ARM64 ./macos/package_app.sh --zero-cost invocation passed. Swift compile/link passed, no SDK compatibility or LaunchServices failure recurred, and candidate 054421e7a749d5e892aa20af57d93b75593e1ebcd960f9ed5ad2f6d6acb829ee was emitted."
+  - "The first deterministic release-bundle build then failed closed with 'release candidate embeds an operator HOME path'. Build #2, asset comparison, upload and compatibility lanes were correctly not executed."
+  - "TASK-0201 explicitly requires release assets to contain no operator HOME paths, so the release-bundle rejection is an accepted portability/security invariant rather than an over-strict scanner regression."
+  - "Current package_app.sh creates a copied CPython venv, preserves pyvenv.cfg keys home and executable, and materialize_packaging_python_runtime copies required libpython bytes from the validated packaging interpreter base prefix without rewriting the dylib install identity or materializing the standard library."
+  - "Read-only forensic inspection of existing zero-cost candidates produced by this accepted packaging lineage finds operator HOME bytes in exactly runtime/.venv/pyvenv.cfg and runtime/.venv/lib/libpython3.13.dylib. pyvenv.cfg contains absolute builder home/executable paths; libpython3.13.dylib LC_ID_DYLIB is the absolute builder-prefix path."
+  - "The same forensic candidate reports sys.base_prefix and sysconfig stdlib under the builder's Python prefix and loads os.py from that external prefix; the candidate contains site-packages but no package-owned standard-library tree. Therefore the current bundled CPython substrate is not checkout/host independent."
+  - "The canonical packaging interpreter standard library also contains builder-prefix values in _sysconfigdata__darwin_darwin.py, so copying the stdlib blindly would preserve host identity and is not an acceptable closure."
+  - "Report commit d55559a86520fdfc561f1e8631cb7233d31c3027 is the sole direct child of the TASK-0218 base and changes only .agent/tasks/TASK-0218/report.yaml."
+  - "Fresh remote review-boundary proof resolves main exactly to d55559a86520fdfc561f1e8631cb7233d31c3027 before review publication."
+
+findings:
+  - id: F-0218-001
+    severity: BLOCKING
+    classification: bundled_cpython_builder_path_portability
+    description: "The zero-cost candidate packages a CPython executable and libpython but remains semantically tied to the packaging interpreter prefix: pyvenv.cfg points home/executable to the build host, libpython carries an absolute builder LC_ID_DYLIB, and the standard library is not package-owned. The deterministic release gate correctly rejects this host-bound candidate before publication."
+    required_closure: "Use a separate packaging reliability task. Make the bundled CPython 3.13 runtime self-contained and relocatable without weakening release_bundle.py's operator-HOME rejection. Materialize the required standard library/lib-dynload as package-owned bytes, eliminate pyvenv builder-prefix authority from the final candidate, normalize Mach-O runtime identity/linkage so it does not encode the packaging prefix, and sanitize or regenerate builder-prefix sysconfig metadata while preserving correct runtime sysconfig behavior. Prove a copied/relocated packaged runtime executes with sys.prefix/sys.base_prefix/stdlib and imported stdlib modules rooted inside the relocated package, contains no operator-HOME or original packaging-prefix bytes, passes zero-cost provenance/codesign, and can build/verify deterministic release assets locally before another remote gate dispatch."
+
+notes:
+  - "TASK-0218 cannot continue because its single dispatch budget is exhausted."
+  - "Do not rerun runs 36912032079, 36956517661, 36958918581, 36961531935, 36965002566, 36967600037, 36970566958, 36974192763 or 36977416084."
+  - "Do not weaken, bypass or special-case macos/release_bundle.py HOME-path rejection."
+  - "Remote canonical verify, TASK-0217 durable reliability and real macOS 26 Swift/package construction are now proven PASS at this lineage."
+  - "TASK-0196 remains paused."
