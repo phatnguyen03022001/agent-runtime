@@ -1,22 +1,27 @@
 protocol_version: 3
 task_id: TASK-0225
-task_revision: 2
+task_revision: 3
 state: APPROVED
-title: "Remote Verify Stabilization — Tunnel Deadline + Hard-Wall Restart Fixture + Frozen Release Gate"
+title: "Remote Verify Stabilization — Bootstrap Exit/State Fixture + Frozen Release Gate"
 
 origin:
   predecessor_task: TASK-0224
   predecessor_report: "f6c8bb067d78a3e80f9b25fcd567d4cbce3e3499"
   predecessor_review: "ee52947b7a7ab06e03c1d5def2cfe2bdc2cf5456"
-  supersedes_executed_revision: 1
+  supersedes_executed_revision: 2
   revision_1:
     implementation_commit: "a32bcaa96a7467544c5113cc3c0070d45ad81f33"
     remote_run: 37002466351
     result: BLOCKED
-    proven_closed_finding: F-0224-001
-    new_findings:
-      - F-0225-001
-      - F-0225-002
+    closed_finding: F-0224-001
+  revision_2:
+    implementation_commit: "ccf66fe5013ea12f7ded4c7fbdb72568ff8c1753"
+    remote_run: 37004430402
+    result: BLOCKED
+    accepted_corrections:
+      - "tests.test_tunnel_identity timeout 75.0 -> 120.0"
+      - "hard-wall restart fixture uses persisted deadline with 10.0s hard wall"
+    new_finding: F-0225-003
   phase: STABILIZE
 
 target:
@@ -30,94 +35,68 @@ execution_base:
 
 phase:
   name: STABILIZE
-  authority: bounded_verification_and_fixture_reliability_then_frozen_remote
-  principle: "Keep one stabilization objective. Correct only proven verifier/fixture reliability defects, then run one frozen integrated gate."
+  authority: single_fixture_reliability_then_frozen_remote
+  principle: "Keep TASK-0225 as one stabilization objective; correct only the newly proven fixture race, then rerun one frozen integrated gate."
 
-accepted_revision_1:
+accepted_prior_corrections:
   revision4_runtime_config_timeout_seconds: 60.0
-  revision4_remote_proof: "PASS 12 tests / 16.847s in run 37002466351"
-  revision4_lane: L4_HOST_LIFECYCLE
-  revision4_isolation_key: host-lifecycle
-  revision4_correction_status: CLOSED_WITH_REMOTE_EVIDENCE
+  tunnel_identity_timeout_seconds: 120.0
+  hard_wall_restart_fixture: ACCEPTED_LOCALLY
   production_runtime_changed: false
   packaging_changed: false
   workflow_changed: false
 
-finding_F_0225_001:
-  classification: remote_tunnel_identity_module_deadline_under_host_contention
-  module: tests.test_tunnel_identity
-  lane: L4_HOST_LIFECYCLE
-  configured_timeout_seconds: 75.0
-  observed_timeout_seconds: 75.191
-  test_assertion_failure_observed: false
-  evidence:
-    - "Run 37002466351 terminated the worker solely at the 75-second module policy cutoff."
-    - "Recent remote PASS durations for the same 15-test module include 37.030s and 54.227s."
-    - "Fresh local full-module execution passes 15 tests in about 27.3s."
-    - "The failing run showed system-wide qualification contention: candidate_cutover=152.236s, repo_commit=51.442s, supervised_lifecycle=39.801s and repo_publish=37.682s."
-    - "No product/tunnel assertion or error preceded the timeout."
-  root_cause: "The module-specific 75-second verifier cutoff has insufficient host-contention headroom for its install/start lifecycle integration workload."
-  approved_fix:
-    - "Change only tests.test_tunnel_identity ModulePolicy timeout_seconds from 75.0 to 120.0."
-    - "Preserve lane L4_HOST_LIFECYCLE, isolation_key host-lifecycle, subsystem tags and proof rationale exactly."
-    - "Extend tests/test_verify_harness.py to pin timeout_seconds=120.0 and unchanged lane/isolation classification."
-    - "Do not modify tests/test_tunnel_identity.py or install/start production behavior."
-
-finding_F_0225_002:
-  classification: hard_wall_restart_fixture_predeadline_headroom_race
-  test: tests.test_durable_pipe_restart.DurablePipeRestartTests.test_hard_wall_deadline_survives_restart
-  remote_signature: "manager_a.start -> DURABLE_OWNER_LOST because owner identity no longer matched persisted process instance"
+finding_F_0225_003:
+  classification: bootstrap_exit_state_fixture_target_lifetime_race
+  test: tests.test_durable_pipe.DurablePipeTests.test_bootstrap_exit_before_state_reconciles_state_published_after_exit
+  remote_run: 37004430402
+  remote_signature: "manager.start -> DURABLE_OWNER_LOST because persisted state remained running after the short-lived target process had already exited"
   existing_fixture:
-    hard_wall_seconds: 0.7
-    arbitrary_post_ready_sleep_seconds: 0.25
+    bootstrap_parent_exit: immediate
+    state_publication_delay_seconds: 0.35
+    target_lifetime_seconds: 2.0
   evidence:
-    - "The accepted durable bootstrap state machine may spend up to the single 7-second pre-authoritative-state reconciliation envelope under contention."
-    - "A 0.7-second hard wall therefore does not guarantee that manager_a.start can return and the restart can occur before the target reaches its hard wall."
-    - "The failing run reached manager_a.start under heavy host contention; nine other durable-restart tests passed."
-    - "A controlled probe with a 3-second hard wall returned running, survived manager restart and terminalized as hard_wall_timeout without owner-loss semantics."
-    - "No production Runtime change is required by current evidence."
-  root_cause: "The fixture hard wall is shorter than the authorized bootstrap/reconciliation envelope, so under scheduling delay the target can expire before the test reaches the restart boundary it intends to prove."
-  approved_fix:
-    allowed_file: tests/test_durable_pipe_restart.py
-    rules:
-      - "Keep the test's purpose: prove one persisted hard-wall deadline survives Runtime manager restart and is not reset."
-      - "Use hard_wall=10.0 seconds, which is greater than the accepted 7-second bootstrap reconciliation envelope and leaves bounded restart headroom."
-      - "Remove the arbitrary post-ready time.sleep(0.25); restart immediately after the observable ready condition."
-      - "Capture the authoritative persisted hard_wall_deadline_epoch before manager A shutdown."
-      - "After manager B recovery, require the recovered session/state preserves exactly the same hard_wall_deadline_epoch."
-      - "Wait for terminal state with the existing bounded condition-based polling helper, using a finite timeout derived from the hard-wall bound plus finalization allowance."
-      - "Require termination_reason=hard_wall_timeout."
-      - "Do not assert correctness via a scheduler-sensitive elapsed<1.8 wall-clock threshold."
-      - "Release/cleanup remains bounded and guaranteed by existing/finally cleanup paths."
-      - "Do not change session.py, durable_pipe.py or durable_pipe_runner.py."
+    - "The test's intended race is bootstrap-parent exit before durable state publication, not target finalization."
+    - "Remote run 37004430402 failed only this durable-pipe test while the companion delayed-valid, stuck/no-state, owner-transient, corruption and terminal-outcome regressions all passed."
+    - "The target is currently held alive only by time.sleep(2.0), so host contention can let target finalization overtake manager-side owner reconciliation."
+    - "A controlled probe preserving the same immediate bootstrap-parent exit and 0.35-second state-publication delay, but keeping the target alive behind an explicit release marker, returns manager.start status=running, observes durable state=running, bootstrap parent returncode=0, and after explicit release terminalizes exited/0."
+    - "No production owner-reconciliation mutation is required by current evidence."
+  root_cause: "The fixture conflates bootstrap-exit-before-state ordering with an unrelated scheduler-dependent target lifetime. Under contention the 2-second target can exit before the test reaches the state it intends to assert."
 
-lane_a_mutation:
-  allowed_files:
-    - verification_policy.py
-    - tests/test_verify_harness.py
-    - tests/test_durable_pipe_restart.py
-  forbidden_files:
-    - tests/test_tunnel_identity.py
-    - tests/test_revision4_runtime_config.py
-    - agent_runtime/session.py
-    - agent_runtime/durable_pipe.py
-    - agent_runtime/durable_pipe_runner.py
-    - start.sh
-    - install.sh
-    - .github/workflows/release-gate.yml
-    - macos/packaging_python.sh
-    - macos/package_app.sh
-    - macos/release_bundle.py
-  required_focused_proof:
-    - "Run full tests.test_verify_harness and prove revision4=60s remains unchanged and tunnel_identity=120s is the only new timeout correction."
+lane_a_fixture_correction:
+  mode: MUTATING_TEST_ONLY
+  allowed_file:
+    - tests/test_durable_pipe.py
+  required_design:
+    - "Modify only test_bootstrap_exit_before_state_reconciles_state_published_after_exit."
+    - "Preserve the bootstrap wrapper behavior: parent exits before durable state publication and the worker publishes state only after the existing bounded delay."
+    - "Replace the target child time.sleep(2.0) lifetime with explicit release synchronization so the target remains alive through manager.start and the running-state assertion."
+    - "The child-side synchronization must have a finite monotonic deadline and fail nonzero if release never arrives."
+    - "Require manager.start returns status=running."
+    - "Require the bootstrap parent exits successfully."
+    - "Require the authoritative durable state observed before release is running and owner bindings can be recorded by the existing helper."
+    - "Release the target only after all bootstrap-exit/state-reconciliation assertions have completed."
+    - "Release signaling and cleanup must execute from finally paths so failed assertions cannot strand the target."
+    - "Observe target terminalization through bounded condition-based polling, not by substituting another arbitrary sleep."
+    - "Require cleanup terminal state exited with exit_code=0."
+  forbidden_interpretations:
+    - "Do not weaken the test to accept running-or-exited."
+    - "Do not increase target sleep from 2 seconds to another arbitrary duration."
+    - "Do not modify session.py, durable_pipe.py or durable_pipe_runner.py."
+    - "Do not change bootstrap reconciliation constants or owner-verification semantics."
+    - "Do not modify any other durable-pipe test unless required solely for deterministic cleanup of this exact fixture."
+
+  focused_verification:
+    - "RED/GREEN the exact corrected bootstrap-exit-before-state test."
+    - "Stress the exact corrected test repeatedly in fresh processes."
+    - "Run full tests.test_durable_pipe."
+    - "Run full tests.test_durable_pipe_restart and tests.test_terminal_session as adjacent durable regressions."
+    - "Run full tests.test_verify_harness and prove revision4=60.0 and tunnel_identity=120.0 remain unchanged."
     - "Run full tests.test_tunnel_identity unchanged."
-    - "Run exact corrected hard-wall restart test repeatedly in fresh processes."
-    - "Run full tests.test_durable_pipe_restart."
-    - "Run full tests.test_durable_pipe and tests.test_terminal_session as adjacent durable regressions."
     - "Run git diff --check."
-    - "Require cumulative revision-2 implementation diff from exact base changes only the three allowed files."
+    - "Require revision-3 cumulative implementation diff from its exact base changes only tests/test_durable_pipe.py."
   final_local_gate:
-    - "Publish one coherent revision-2 implementation checkpoint after focused PASS."
+    - "Publish one coherent revision-3 test-only implementation checkpoint after focused PASS."
     - "Run exactly one canonical ./verify on that exact clean checkpoint."
     - "Any tracked mutation after canonical verify invalidates the checkpoint; do not consume remote authority."
 
@@ -127,6 +106,9 @@ lane_b_frozen_release_gate:
   rerun_max: 0
   mutation_authority: 0
   frozen_blobs:
+    verification_policy.py: "39a64cd09ebc07fa8309f1f326b72f738c92ad87"
+    tests/test_verify_harness.py: "e9f338810bf9bd2898f6f7d45032318c8827c967"
+    tests/test_durable_pipe_restart.py: "53290a61f84eb4662868a18cdfbd4a64bd18502a"
     tests/test_revision4_runtime_config.py: "8be3837375512f4921df74da4acc26e989e42859"
     tests/test_tunnel_identity.py: "57cd6d5e23739cea37b7a20075815ba4721388cb"
     tests/test_terminal_session.py: "ffa8458c8c3e793f90f591dcb0f736b65fb88dcb"
@@ -140,28 +122,29 @@ lane_b_frozen_release_gate:
     macos/release_bundle.py: "2bff8a6f5f9afe1ffcad6c7b41b5999ba0f3e7f1"
     .github/workflows/release-gate.yml: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
   pre_dispatch:
-    - "Require exact verified revision-2 SHA == local main == origin/main, clean worktree/index, MAIN ONLY, one worktree."
-    - "Require revision-2 implementation diff from its exact base changes only verification_policy.py, tests/test_verify_harness.py and tests/test_durable_pipe_restart.py."
-    - "Require revision4 timeout remains 60.0 and tunnel_identity timeout is exactly 120.0 with classifications unchanged."
+    - "Require exact verified revision-3 SHA == local main == origin/main, clean worktree/index, MAIN ONLY, one worktree."
+    - "Require revision-3 implementation diff from exact base changes only tests/test_durable_pipe.py."
     - "Require every frozen blob above matches exactly."
+    - "Require revision4 timeout remains exactly 60.0 and tunnel_identity timeout remains exactly 120.0."
     - "Fresh-inventory all historical release-gate runs and require attempt=1 for every run."
   action:
     - "Dispatch .github/workflows/release-gate.yml exactly once at ref=main."
-    - "Require the new run event=workflow_dispatch, attempt=1, head_branch=main and head_sha equals the exact verified revision-2 SHA."
+    - "Require event=workflow_dispatch, attempt=1, head_branch=main and head_sha equals the exact verified revision-3 SHA."
     - "Never rerun the run or any job."
   required_proof:
     - "Remote canonical verify PASS all 63 modules."
-    - "tests.test_revision4_runtime_config PASS under its accepted 60s policy."
+    - "tests.test_durable_pipe PASS including bootstrap_exit_before_state_reconciles_state_published_after_exit."
+    - "tests.test_durable_pipe_restart PASS including the revision-2 hard-wall restart correction."
+    - "tests.test_revision4_runtime_config PASS under 60s."
     - "tests.test_tunnel_identity completes naturally under 120s."
-    - "tests.test_durable_pipe_restart PASS including hard_wall_deadline_survives_restart."
-    - "tests.test_terminal_session and tests.test_durable_pipe PASS."
-    - "Frozen framework-CPython zero-cost candidate build PASS."
+    - "tests.test_terminal_session PASS."
+    - "Frozen framework-CPython zero-cost candidate construction PASS."
     - "Strict build-host identity scanner PASS."
     - "Deterministic release assets x2 byte-identical and release-bundle verify PASS."
     - "Artifact upload PASS."
     - "Compatibility macos-14, macos-15 and macos-26 all PASS."
   failure_policy:
-    verifier_or_test_failure: "BLOCKED with exact new evidence; no second dispatch and no further mutation in revision 2."
+    verifier_or_test_failure: "BLOCKED with exact new evidence; no second dispatch and no further mutation in revision 3."
     packaging_or_candidate_failure: "BLOCKED with NEW packaging finding; do not mutate packaging in TASK-0225."
     downstream_failure: "BLOCKED with NEW downstream finding; do not expand scope."
     success: "STABILIZATION_GREEN; eligible for Architect review and return to frozen QUALIFY."
@@ -185,13 +168,13 @@ historical_runs:
     - 36998190808
     - 37000410211
     - 37002466351
+    - 37004430402
 
 forbidden_changes:
   - "Any production Runtime/start/install mutation."
+  - "Any verification-policy or verify-harness mutation in revision 3."
+  - "Any durable-restart or terminal-session mutation in revision 3."
   - "Any packaging/release-bundle/workflow/dependency/version/schema/public-tool mutation."
-  - "Any test mutation outside tests/test_verify_harness.py and tests/test_durable_pipe_restart.py."
-  - "Any verifier worker-limit, lane-limit or heartbeat change."
-  - "Any module timeout change other than tunnel_identity 75->120; revision4 must remain exactly 60."
   - "Any local package/candidate build."
   - "Any second remote dispatch or any run/job rerun."
   - "Any tag/release/live Runtime/install/cutover/LaunchServices effect."
@@ -213,14 +196,14 @@ effect_authority:
 
 closure:
   success:
-    - "Revision4 verifier correction remains remotely proven and unchanged."
-    - "Tunnel verifier deadline correction and hard-wall restart fixture correction pass focused proof."
-    - "Exactly one canonical verify PASS on exact revision-2 implementation SHA."
+    - "Revision-3 fixture correction is scheduler-independent and preserves bootstrap-exit-before-state semantics."
+    - "Revision-1 and revision-2 accepted verifier/fixture corrections remain frozen."
+    - "Exactly one canonical verify PASS on exact revision-3 implementation SHA."
     - "Exactly one frozen remote release-gate run fully PASS."
-    - "Publish .agent/tasks/TASK-0225/report-r2.yaml as report-only child."
+    - "Publish .agent/tasks/TASK-0225/report-r3.yaml as report-only child."
     - "Final main clean/synchronized MAIN ONLY, one worktree."
   blocked:
-    - "Focused/canonical proof contradicts either root cause."
+    - "Focused/canonical proof contradicts the fixture-race root cause."
     - "Any frozen blob drifts."
     - "The single remote gate fails at any stage."
 
@@ -235,7 +218,7 @@ release_authority:
   publish_release: false
 
 continuation_policy:
-  mode: REVISION_2_STABILIZE_THEN_FROZEN_REMOTE
+  mode: REVISION_3_FIXTURE_THEN_FROZEN_REMOTE
   stop_conditions:
     - ROOT_CAUSE_CONTRADICTION
     - FROZEN_BLOB_DRIFT
