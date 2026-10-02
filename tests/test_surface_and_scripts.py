@@ -555,6 +555,22 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertIn("docs/COMPATIBILITY.md", (ROOT / "README.md").read_text())
         self.assertIn("COMPATIBILITY.md", (ROOT / "docs/INSTALL.md").read_text())
 
+    def test_liquid_glass_sdk26_source_compatibility_uses_dynamic_macos27_binding(self) -> None:
+        production = (
+            ROOT / "macos" / "Sources" / "AgentRuntimeMenuBar" / "LiquidGlassSupport.swift"
+        ).read_text()
+        presentation_tests = (
+            ROOT / "macos" / "Tests" / "AgentRuntimeMenuBarTests" / "PresentationTests.swift"
+        ).read_text()
+
+        for text in (production, presentation_tests):
+            self.assertNotIn(".effectIsInteractive", text)
+
+        self.assertIn("#available(macOS 27.0, *)", production)
+        self.assertIn('NSSelectorFromString("setEffectIsInteractive:")', production)
+        self.assertIn("glassView.responds(to: selector)", production)
+        self.assertIn('glassView.setValue(true, forKey: "effectIsInteractive")', production)
+
 
 if __name__ == "__main__":
     unittest.main()

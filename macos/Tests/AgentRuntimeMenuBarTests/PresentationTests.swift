@@ -471,7 +471,9 @@ final class PresentationTests: XCTestCase {
             XCTAssertEqual(glass.cornerRadius, 10.0)
             XCTAssertTrue(glass.contentView === content)
             if #available(macOS 27.0, *) {
-                XCTAssertTrue(glass.effectIsInteractive)
+                let selector = NSSelectorFromString("setEffectIsInteractive:")
+                XCTAssertTrue(glass.responds(to: selector))
+                XCTAssertEqual(glass.value(forKey: "effectIsInteractive") as? Bool, true)
             }
         } else {
             XCTAssertFalse(LiquidGlassSupport.isLiquidGlassSupported)

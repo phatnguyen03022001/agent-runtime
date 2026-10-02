@@ -20,7 +20,7 @@ enum LiquidGlassSupport {
     /// - `style`: Uses `.regular` to guarantee legibility and contrast for dense Runtime facts and controls.
     /// - `tintColor`: Leaves tintColor as `nil` (system default) to adapt smoothly to Light/Dark appearances and accessibility settings.
     /// - `cornerRadius`: Uses native popover-conforming geometry (10.0 pt).
-    /// - `effectIsInteractive`: Enabled on macOS 27+ because the popover contains interactive lifecycle and quit controls.
+    /// - `effectIsInteractive`: Dynamically enabled on macOS 27+ so SDK 26 builds do not statically depend on the newer AppKit member.
     /// - `NSGlassEffectContainerView`: Deliberately omitted; unnecessary for a single coherent popover surface.
     static func makeBackgroundView(embedding contentView: NSView) -> NSView {
         if #available(macOS 26.0, *) {
@@ -29,7 +29,10 @@ enum LiquidGlassSupport {
             glassView.tintColor = nil
             glassView.cornerRadius = 10.0
             if #available(macOS 27.0, *) {
-                glassView.effectIsInteractive = true
+                let selector = NSSelectorFromString("setEffectIsInteractive:")
+                if glassView.responds(to: selector) {
+                    glassView.setValue(true, forKey: "effectIsInteractive")
+                }
             }
             contentView.translatesAutoresizingMaskIntoConstraints = false
             glassView.contentView = contentView
