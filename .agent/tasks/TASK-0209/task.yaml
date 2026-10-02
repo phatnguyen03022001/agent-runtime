@@ -1,0 +1,155 @@
+protocol_version: 3
+task_id: TASK-0209
+task_revision: 1
+state: APPROVED
+title: "Repo Diff Child-Exit Pipe Drain Reliability"
+
+origin:
+  type: architect_continuation
+  predecessor_task: TASK-0208
+  finding: F-0208-001
+  goal: "Prevent repo_diff from discarding successful Git stdout when the child exits before selector EOF/data delivery."
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+
+execution_skills:
+  required: [executor, verification, reliability, simplicity]
+
+revision_basis:
+  blocked_task_0208_report: "e33a52315b79661ac157cc0635c5287df1a2c801"
+  blocked_task_0208_review: "78d801d4f896cfad0e0dfd7e551b2fa224ba1758"
+  remote_run_id: 36961531935
+  remote_failure:
+    module: tests.test_repo_commit
+    test: tests.test_repo_commit.RepoCommitTests.test_commit_tree_message_and_update_ref_expected_old_are_exact
+    exception: "agent_runtime.contracts.CapabilityFailure: local Git returned an invalid HEAD identifier"
+    location: "repo_commit._require_clean_worktree -> repo_diff._validated_repository"
+  accepted_workflow_blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  paused_release_task: TASK-0196
+
+objective: "Fix only the repo_diff bounded subprocess reader so child exit never causes unread stdout/stderr pipe bytes to be discarded. Preserve Git validation, output bounds, deadline, command arguments, object-format policy and all repo_commit semantics."
+
+scope:
+  required_changes:
+    - "Fresh-bind exact revision-1 base with clean synchronized MAIN ONLY and one worktree."
+    - "Modify production behavior only in agent_runtime/repo_diff.py."
+    - "In repo_diff._run_git, remove the child-exited/no-selector-event branch that unregisters stdout/stderr and breaks before EOF."
+    - "A selector turn with no events must not discard or unregister either stream solely because process.poll() is non-None."
+    - "Continue bounded observation until each registered stream is explicitly consumed to EOF by os.read returning empty bytes, or until the existing deadline/error/output-limit path terminates the call."
+    - "Preserve the existing rule that selector.unregister(stream) occurs when that stream's os.read returns EOF."
+    - "Preserve CALL_DEADLINE_SECONDS=5.0, stdout/stderr limits, fixed /usr/bin/git, shell=False, Git argv hardening and Git environment exactly."
+    - "Do not add Git retries, subprocess retries, sleeps, grace periods or output-validation relaxations."
+    - "Do not change repo_diff HEAD validation: a valid HEAD remains exactly lowercase 40-hex under the existing product contract."
+    - "Do not change repo_stage, repo_commit, repo_fast_forward, repo_observer or repo_remote_observer production code."
+    - "Do not introduce a shared subprocess abstraction in this reliability task."
+    - "Add deterministic regression coverage in tests/test_repo_diff.py."
+    - "The regression must exercise _run_git through a controlled exited-child + buffered-pipe scenario where the selector deliberately yields one no-event turn after child exit before exposing readable stdout/EOF."
+    - "The regression must prove valid buffered stdout is returned completely after that no-event turn and is not dropped."
+    - "Where practical, prove stderr is also drained/bounded under the same exited-child condition without weakening existing limit semantics."
+    - "The regression must fail against the pre-fix branch because the old implementation unregisters/breaks on that first no-event-after-exit turn."
+    - "Preserve all existing repo_diff validation and continuation tests."
+    - "Do not modify tests/test_repo_commit.py unless a dedicated regression cannot be expressed in test_repo_diff.py; if modification becomes necessary, stop AUTHORITY_REQUIRED rather than expanding scope silently."
+    - "Run the exact remote failing test 50 times in fresh unittest processes; require 50/50 PASS."
+    - "Then run 10 stress rounds with four fresh processes concurrently executing that exact repo_commit test; require 40/40 PASS."
+    - "Run full tests.test_repo_diff once."
+    - "Run full tests.test_repo_commit once."
+    - "Run full tests.test_repo_stage once because repo_commit's staged-state path is an upstream owner of the same Git identity contract."
+    - "Run git diff --check."
+    - "Only after focused/stress proof passes, run exactly one canonical ./verify under HOME=$PWD/.h TMPDIR=$PWD/.v."
+    - "Canonical verifier must PASS all classified modules; never blind-replay ambiguity."
+    - "Remove .h/.v and all TASK-0209 test scratch/residue before final observation."
+    - "Confirm release-gate workflow blob remains exactly fa0c6bc61bb660b103f3a45b239ac52def7ae1b8."
+    - "Publish one implementation commit and then only .agent/tasks/TASK-0209/report.yaml as report child."
+    - "Final main clean/synchronized MAIN ONLY."
+
+  allowed_existing_files_or_components:
+    - "agent_runtime/repo_diff.py"
+    - "tests/test_repo_diff.py"
+    - ".agent/tasks/TASK-0209/report.yaml"
+
+invariants:
+  - "repo_diff Git command/validation/receipt semantics remain unchanged except that exited-child pipe bytes are fully drained."
+  - "HEAD format validation remains strict lowercase 40-hex."
+  - "CALL_DEADLINE_SECONDS remains 5.0."
+  - "All output bounds remain unchanged."
+  - "No Git retry or sleep is introduced."
+  - "No repo_commit/repo_stage/repo_observer/repo_fast_forward/repo_remote_observer production change."
+  - "Accepted TASK-0207 Liquid Glass source remains unchanged."
+  - "Release-gate workflow remains unchanged."
+  - "No verification-policy/docs/dependency/version/schema change."
+  - "No remote workflow dispatch/rerun."
+  - "No package/release/live Runtime/config/plugin/credential/permission/reboot effect."
+  - "TASK-0196 remains paused."
+  - "MAIN ONLY."
+
+forbidden_changes:
+  - "Any production file other than agent_runtime/repo_diff.py."
+  - "Any test file other than tests/test_repo_diff.py."
+  - "Any relaxation of 40-hex HEAD validation."
+  - "Any Git object-format expansion in this task."
+  - "Any retry loop around Git process execution."
+  - "Any deadline/output-limit increase."
+  - "Any new shared subprocess framework."
+  - "Any workflow, verification policy, docs, dependency, version or schema change."
+  - "Any GitHub Actions dispatch/rerun."
+  - "Any package_app.sh invocation or local distribution build."
+  - "Any tag/release/live Runtime/config/plugin/credential/permission/reboot effect."
+  - "Any second canonical ./verify after a conclusive result or blind replay."
+  - "Any branch or PR."
+
+effect_authority:
+  canonical_verify_max: 1
+  github_workflow_dispatch_max: 0
+  github_workflow_rerun_max: 0
+  local_distribution_build_max: 0
+  install_prebuilt_max: 0
+  commit_cutover_max: 0
+  rollback_cutover_max: 0
+  menu_bar_relaunch_max: 0
+  runtime_restart_max: 0
+  runtime_explicit_start_max: 0
+  runtime_explicit_stop_max: 0
+  plugin_reload_or_reconnect_max: 0
+  credential_rotation_max: 0
+  physical_reboot_max: 0
+  new_security_permission_max: 0
+  version_tag_create_max: 0
+  github_release_publish_max: 0
+  branch_or_pr_creation_max: 0
+
+acceptance_criteria:
+  - {id: AC-1, requirement: "repo_diff never discards pipe bytes solely because the Git child has exited.", evidence_required: "Deterministic exited-child/no-event/buffered-output regression PASS and old behavior demonstrated RED before fix."}
+  - {id: AC-2, requirement: "Existing bounded/fail-closed Git semantics remain unchanged.", evidence_required: "5s deadline, output bounds, fixed Git argv/env, strict 40-hex HEAD validation and no retries remain unchanged."}
+  - {id: AC-3, requirement: "The exact remote repo_commit failure is stable locally.", evidence_required: "50/50 isolated plus 40/40 four-way concurrent executions PASS."}
+  - {id: AC-4, requirement: "Repo owner modules remain healthy.", evidence_required: "Full test_repo_diff, test_repo_commit and test_repo_stage PASS."}
+  - {id: AC-5, requirement: "Canonical verification passes.", evidence_required: "Exactly one short-path ./verify PASS with no replay."}
+  - {id: AC-6, requirement: "Canonical closure.", evidence_required: "Only repo_diff.py + test_repo_diff.py + report changed; workflow blob unchanged; clean synchronized MAIN ONLY."}
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "Deterministic pipe-drain regression + isolated/concurrent exact repo_commit stress + full repo owner modules + exactly one canonical short-path ./verify."
+    expected_signal: "A successful exited Git child cannot lose buffered stdout before EOF, while all previous bounds and validation remain strict."
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions: [BLOCKED, STALE_STATE, AUTHORITY_REQUIRED, CURRENT_PHASE_CAPABILITY_UNAVAILABLE, REVIEW_REQUIRED, REVERIFY_REQUIRED, USER_STOP]
+
+git_authority: {create_branch: false, commit: true, push: true, promote_to_main: false}
+release_authority: {create_version_tag: false, mutate_repository_metadata: false, publish_release: false}
+blocking_decisions: []
+execution_ready: true
