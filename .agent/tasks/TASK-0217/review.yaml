@@ -1,0 +1,51 @@
+protocol_version: 3
+
+task_id: TASK-0217
+task_revision: 1
+review_revision: 1
+state: ACCEPTED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0217/report.yaml
+  commit: "ca8218b57c5ff78a073d59176282438fa2b0ae68"
+  report_revision: 1
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  scope: PASS
+  git_authority: PASS
+  acceptance_criteria: PASS
+  verifier_evidence: PASS
+
+acceptance_basis:
+  - "Implementation commit e5f4715476048dd21cc118f89b5ebac047aa82a3 is exactly one commit ahead of authorized base ce3a7a552af868e9f58250252dbe564383a5714f and changes only agent_runtime/session.py and tests/test_durable_pipe.py."
+  - "Manager-side owner verification now samples persisted runner and target identities independently instead of boolean-short-circuiting the target when runner verification is transiently false."
+  - "The exact persisted six-field process identity remains authoritative through verify_process_identity: pid, pgid, start_sec, start_usec, executable_dev and executable_ino."
+  - "Successful exact runner/target observations are latched independently only within the existing _DURABLE_FINALIZATION_GRACE_SECONDS=2.0 reconciliation window; active snapshot owner bindings must remain unchanged and no replacement identity is accepted."
+  - "Persistent runner mismatch and persistent target mismatch remain fail-closed as DURABLE_OWNER_LOST with effect_state UNKNOWN, reconciliation_required=true and safe_next_action=RECONCILE."
+  - "agent_runtime/durable_pipe_runner.py is byte-identical to the authorized base at blob c6f468b08d462c45ea15485c5e30abd25dac4926, preserving accepted TASK-0205/TASK-0211 runner-side behavior."
+  - "agent_runtime/durable_pipe.py is byte-identical to the authorized base at blob 4de20c4b59a3d0dcefd5aeedf37c0d9f3b0f95db, preserving process identity observation/schema/exact-equality semantics."
+  - "Deterministic manager-side regressions produced the required pre-fix RED for all three transient cases while the persistent mismatch regression already remained fail-closed; final GREEN is 4/4."
+  - "The exact TASK-0216 remote failing test passed 50/50 isolated fresh processes and 120/120 executions across twenty six-way concurrent rounds."
+  - "Full tests.test_durable_pipe passed 22/22 and tests.test_durable_pipe_restart passed 10/10, preserving intentional owner-loss behavior."
+  - "git diff --check passed."
+  - "Exactly one canonical HOME=$PWD/.h TMPDIR=$PWD/.v ./verify invocation completed naturally with exit 0, 63/63 classified modules and 927 tests in 143.674 seconds; replay count is zero."
+  - "Canonical verify independently passed durable_pipe 22/22, durable_pipe_restart 10/10 and supervised_lifecycle 20/20 in 16.954 seconds under the unchanged 45-second timeout."
+  - "Release-gate workflow remains byte-identical at blob fa0c6bc61bb660b103f3a45b239ac52def7ae1b8."
+  - "Report commit ca8218b57c5ff78a073d59176282438fa2b0ae68 is exactly one report-only child of implementation commit e5f4715476048dd21cc118f89b5ebac047aa82a3."
+  - "Fresh remote review-boundary proof resolves main exactly to ca8218b57c5ff78a073d59176282438fa2b0ae68 before review publication."
+
+findings: []
+
+notes:
+  - "F-0216-001 is CLOSED."
+  - "TASK-0217 does not itself requalify packaging, deterministic release assets or the compatibility matrix."
+  - "TASK-0196 remains paused until a separately authorized remote release-gate run succeeds end-to-end."
