@@ -1,0 +1,52 @@
+protocol_version: 3
+
+task_id: TASK-0216
+task_revision: 1
+review_revision: 1
+state: REVISION_REQUIRED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0216/report.yaml
+  commit: "e5c64b0fe580d746ff24699678bf7a462dd4f2b2"
+  report_revision: 1
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  scope: PASS
+  git_authority: PASS
+  acceptance_criteria: FAIL
+  verifier_evidence: PASS
+
+acceptance_basis:
+  - "TASK-0216 consumed exactly one authorized new release-gate dispatch: run 36974192763 attempt 1, workflow_dispatch, exact head SHA cfc9d85f406d6cd3b54b76fdceec89be2e2f20cb."
+  - "All seven historical release-gate runs remained attempt 1; no rerun or second dispatch occurred."
+  - "Remote checkout, ARM64 assertion, Python 3.13.15 setup and locked dependency installation passed."
+  - "Canonical verification failed in tests.test_durable_pipe after 5/63 modules and 196 tests. The exact failing test is test_runner_argv_is_opaque_and_durable_files_are_private with RuntimeStateError reason DURABLE_OWNER_LOST."
+  - "Raw GitHub Actions logs independently confirm the failure path is manager.start -> TerminalSessionManager._dispatch_durable -> _refresh_durable_session -> _raise_durable_unknown, before package construction."
+  - "The accepted TASK-0205 fix stabilizes runner/target identity before the durable runner publishes RUNNING state. The accepted TASK-0211 fix stabilizes later target identity revalidation inside durable_pipe_runner for hard-wall/control signaling. Neither fix changes manager-side post-publication owner verification in session.py."
+  - "session.py currently defines _snapshot_owner_valid(snapshot) as verify_process_identity(runner_identity) AND verify_process_identity(process_identity). Each verification performs one observe_process_identity sample, so runner and target must both be observed exactly valid in the same compound check."
+  - "_refresh_durable_session retries the compound check during the existing 2-second finalization grace, but each retry still couples two independent one-shot libproc observations. Under hosted-runner pressure, independent transient observation failure can prevent a simultaneous compound success even while both persisted process instances remain valid."
+  - "Independent local exact-test replay passed 40/40 isolated processes and 120/120 six-way concurrent processes, confirming this is not a deterministic ownership mismatch and is specific to the manager-side observation reliability boundary exposed remotely."
+  - "The report commit e5c64b0fe580d746ff24699678bf7a462dd4f2b2 is the sole direct child of the TASK-0216 base and changes only .agent/tasks/TASK-0216/report.yaml."
+  - "Fresh remote review-boundary proof resolves main exactly to e5c64b0fe580d746ff24699678bf7a462dd4f2b2 before review publication."
+
+findings:
+  - id: F-0216-001
+    severity: BLOCKING
+    classification: manager_side_compound_owner_observation_instability
+    description: "Durable RUNNING state can be correctly published with exact stable runner and target identities, yet TerminalSessionManager validates both via one compound pair of one-shot libproc observations. Remote host pressure exposed a false DURABLE_OWNER_LOST at initial manager reconciliation even though the isolated/concurrent owner test remains stable locally and the runner-side stabilization fixes are unchanged."
+    required_closure: "Use a separate reliability task. Change only manager-side durable owner verification so runner_identity and process_identity are each independently established against their exact persisted six-field identity using bounded stable observation semantics before combining the result. Preserve the existing 2.0-second finalization grace, exact equality, fail-closed true mismatch, durable schemas, runner-side TASK-0205/TASK-0211 behavior and public terminal APIs. Add deterministic regressions for independently transient runner/target observations plus stable mismatch, then stress the exact remote failing test and run one canonical verifier before any new release-gate dispatch."
+
+notes:
+  - "TASK-0216 cannot continue because its single dispatch budget is exhausted."
+  - "Do not rerun runs 36912032079, 36956517661, 36958918581, 36961531935, 36965002566, 36967600037, 36970566958 or 36974192763."
+  - "Do not increase _DURABLE_FINALIZATION_GRACE_SECONDS and do not weaken or partially compare owner identity."
+  - "TASK-0196 remains paused."
