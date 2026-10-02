@@ -97,7 +97,7 @@ finalize_packaging_python_runtime "$PYTHON_BIN" "$PACKAGE_VENV" "$REPO_ROOT" "PA
 
 PACKAGE_PYTHON_HOME="$TEMP_ROOT/package-python-home"
 mkdir "$PACKAGE_PYTHON_HOME"
-/usr/bin/env -u PYTHONHOME -u PYTHONPATH HOME="$PACKAGE_PYTHON_HOME" \
+/usr/bin/env -u PYTHONHOME -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 HOME="$PACKAGE_PYTHON_HOME" \
   "$PACKAGE_VENV/bin/python" -c 'import os, platform, sys, sysconfig; prefix=os.path.realpath(sys.prefix); base=os.path.realpath(sys.base_prefix); stdlib=os.path.realpath(sysconfig.get_path("stdlib")); module=os.path.realpath(os.__file__); assert sys.version_info[:2] == (3, 13); assert platform.machine() == "arm64"; assert prefix == base; assert os.path.commonpath((prefix, stdlib)) == prefix; assert os.path.commonpath((prefix, module)) == prefix' \
   || { echo "PACKAGE ERROR: finalized package-owned Python smoke failed" >&2; exit 2; }
 
@@ -106,11 +106,11 @@ chmod 755 "$RUNTIME/.venv/bin/python"
 
 APP_PYTHON_HOME="$TEMP_ROOT/app-python-home"
 mkdir "$APP_PYTHON_HOME"
-/usr/bin/env -u PYTHONHOME -u PYTHONPATH HOME="$APP_PYTHON_HOME" \
+/usr/bin/env -u PYTHONHOME -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 HOME="$APP_PYTHON_HOME" \
   "$RUNTIME/.venv/bin/python" -c 'import os, platform, sys, sysconfig; prefix=os.path.realpath(sys.prefix); base=os.path.realpath(sys.base_prefix); stdlib=os.path.realpath(sysconfig.get_path("stdlib")); module=os.path.realpath(os.__file__); assert sys.version_info[:2] == (3, 13); assert platform.machine() == "arm64"; assert prefix == base; assert os.path.commonpath((prefix, stdlib)) == prefix; assert os.path.commonpath((prefix, module)) == prefix' \
   || { echo "PACKAGE ERROR: packaged app Python smoke failed" >&2; exit 2; }
 
-PYTHON_MM="$("$RUNTIME/.venv/bin/python" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+PYTHON_MM="$(PYTHONDONTWRITEBYTECODE=1 "$RUNTIME/.venv/bin/python" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
 [[ "$PYTHON_MM" == "3.13" ]] || { echo "PACKAGE ERROR: bundled Python must be 3.13" >&2; exit 2; }
 SURFACE="$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$SOURCE_ROOT" "$RUNTIME/.venv/bin/python" -c 'import hashlib; from agent_runtime.capability_registry import ADVERTISED_TOOL_NAMES; blob=("\n".join(ADVERTISED_TOOL_NAMES)+"\n").encode(); print(f"{len(ADVERTISED_TOOL_NAMES)}\t{hashlib.sha256(blob).hexdigest()}")')"
 IFS=$'\t' read -r PUBLIC_TOOL_COUNT PUBLIC_SURFACE_SHA256 <<< "$SURFACE"

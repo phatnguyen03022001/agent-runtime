@@ -332,6 +332,32 @@ class PackageProvenanceTests(unittest.TestCase):
         self.assertIn("_reject_embedded_operator_home", release_bundle)
         self.assertIn("release candidate embeds an operator HOME path", release_bundle)
 
+    def test_post_cleanup_package_python_smokes_disable_bytecode_writes(self) -> None:
+        package = (ROOT / "macos" / "package_app.sh").read_text()
+        cleanup = "find \"$PACKAGE_VENV\" -type f -name '*.pyc' -delete"
+        package_smoke = (
+            '/usr/bin/env -u PYTHONHOME -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 '
+            'HOME="$PACKAGE_PYTHON_HOME" \\\n'
+            '  "$PACKAGE_VENV/bin/python" -c \'import os, platform, sys, sysconfig;'
+        )
+        app_smoke = (
+            '/usr/bin/env -u PYTHONHOME -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 '
+            'HOME="$APP_PYTHON_HOME" \\\n'
+            '  "$RUNTIME/.venv/bin/python" -c \'import os, platform, sys, sysconfig;'
+        )
+        version_probe = (
+            'PYTHON_MM="$(PYTHONDONTWRITEBYTECODE=1 "$RUNTIME/.venv/bin/python" '
+            '-c \'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")\')"'
+        )
+        seal = '"$PYTHON_BIN" "$SOURCE_PACKAGE_ROOT/package_provenance.py" seal-zero-cost'
+
+        for fragment in (cleanup, package_smoke, app_smoke, version_probe, seal):
+            self.assertIn(fragment, package)
+        self.assertLess(package.index(cleanup), package.index(package_smoke))
+        self.assertLess(package.index(package_smoke), package.index(app_smoke))
+        self.assertLess(package.index(app_smoke), package.index(version_probe))
+        self.assertLess(package.index(version_probe), package.index(seal))
+
     def _staged_candidate(self, root: Path, label: str) -> tuple[Path, Path]:
         stage = root / label
         app = stage / "Agent Runtime.app"
