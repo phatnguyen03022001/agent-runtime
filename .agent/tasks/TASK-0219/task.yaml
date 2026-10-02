@@ -1,16 +1,16 @@
 protocol_version: 3
 task_id: TASK-0219
-task_revision: 4
+task_revision: 5
 state: APPROVED
-title: "Relocatable Bundled CPython Substrate Closure — Path-Aware Release Material Policy"
+title: "Relocatable Bundled CPython Substrate Closure — Path-Aware Release Material Policy Authority Correction"
 
 origin:
   type: architect_revision
   predecessor_task: TASK-0219
-  predecessor_revision: 3
-  predecessor_report: "23896d1fd696d2016c4fdceff97f3ca9df3f989c"
-  predecessor_review: "96760dbb2c9263d5e6bb543885c165d0ddd2ccea"
-  finding: F-0219-003
+  predecessor_revision: 4
+  predecessor_report: "11214988801a98a9fe90128eb71dda1efec1401f"
+  predecessor_review: "89cf70a7f6ad1c86d1f6834a9372cdcfff749fe0"
+  finding: F-0219-004
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -38,8 +38,8 @@ preserved_state:
   accepted_blobs:
     packaging_python_sh: "07182ec37f75df7cfe36edf7c657c1688f6f73b8"
     packaging_interpreter_tests: "9cc074fa96d846d2d7c8964173016130e4779337"
-    package_app_sh: "f30bdcf94b95e9290042a1197eb3297ea411d3e5"
-    package_provenance_tests: "fc05c04e092db3d75aef5502407e21b638cbd4a7"
+    package_app_sh: "b5d54b605cf8e8e1f3c0fbea5cdd417f79b5572b"
+    package_provenance_tests: "172c88cec28e9b2470eb56a1a577b41f4a7ea708"
     release_bundle_py: "ee5d96ee2ef8ce2f2186e042acb2e78fc4cfce9b"
     release_workflow: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
   revision_3_proof:
@@ -53,6 +53,15 @@ preserved_state:
     release_bundle_build_1: FAIL
     release_bundle_failure: "release candidate contains forbidden checkout/config/cache material"
 
+authority_correction:
+  prior_revision: 4
+  prior_execution_started: false
+  prior_effect_budget_consumed: false
+  corrected_preserved_blobs:
+    macos/package_app.sh: "b5d54b605cf8e8e1f3c0fbea5cdd417f79b5572b"
+    tests/test_package_provenance.py: "172c88cec28e9b2470eb56a1a577b41f4a7ea708"
+  note: "No technical scope or one-shot budget from revision 4 is reduced or expanded by this authority correction."
+
 proven_root_cause:
   - "release_bundle.py DENIED_COMPONENTS globally rejects any component named log, logs, cache or caches."
   - "The accepted real candidate contains requirements.lock-installed OpenTelemetry protobuf package namespaces opentelemetry/proto/logs and opentelemetry/proto/collector/logs."
@@ -60,11 +69,11 @@ proven_root_cause:
   - "Global lexical denial therefore conflates package namespaces with forbidden generated material."
   - "Globally dangerous material such as .git, .agent, .env*, runtime.env, credentials, .pytest_cache, .cache, __pycache__ and *.pyc must remain forbidden everywhere."
 
-objective: "Make release-bundle forbidden-material classification path-aware so legitimate locked Python package namespaces named log/logs/cache/caches are allowed only inside the packaged CPython 3.13 site-packages namespace, while generated log/cache/config/checkout residue remains fail-closed everywhere else; then complete the real deterministic release-bundle proof."
+objective: "Execute the unchanged revision-4 path-aware release-material correction after fixing the two Architect-authored preserved-blob identities. Make release-bundle forbidden-material classification path-aware so legitimate locked Python package namespaces named log/logs/cache/caches are allowed only inside the packaged CPython 3.13 site-packages namespace, while generated log/cache/config/checkout residue remains fail-closed everywhere else; then complete the real deterministic release-bundle proof."
 
 scope:
   required_changes:
-    - "Fresh-bind exact revision-4 base with clean synchronized MAIN ONLY and exactly one worktree."
+    - "Fresh-bind exact revision-5 base with clean synchronized MAIN ONLY and exactly one worktree."
     - "Preserve macos/packaging_python.sh byte-for-byte at 07182ec37f75df7cfe36edf7c657c1688f6f73b8."
     - "Preserve tests/test_packaging_interpreter.py byte-for-byte at 9cc074fa96d846d2d7c8964173016130e4779337."
     - "Preserve macos/package_app.sh byte-for-byte at f30bdcf94b95e9290042a1197eb3297ea411d3e5."
@@ -77,7 +86,7 @@ scope:
     - "The site-packages exception must not exempt .git/.agent/.env*/runtime.env/credentials/.pytest_cache/.cache/__pycache__/*.pyc."
     - "The same path classifier must govern both candidate traversal during bundle build and archive-member validation during bundle verify."
     - "Preserve exact zero-cost bundle root inventory, path normalization/traversal defense, duplicate rejection, symlink/hardlink/special-file rejection, safe-mode enforcement, HOME-byte scanning, provenance validation, checksum/manifest agreement and deterministic archive metadata."
-    - "Add a deterministic RED regression using a synthetic valid candidate containing site-packages/opentelemetry/proto/logs-style package content; revision-3 release_bundle.py must reject it and revision-4 must accept it."
+    - "Add a deterministic RED regression using a synthetic valid candidate containing site-packages/opentelemetry/proto/logs-style package content; revision-3 release_bundle.py must reject it and revision-5 must accept it."
     - "Add regression coverage that site-packages/.../cache and site-packages/.../caches lexical package namespaces are likewise permitted while their regular package files remain subject to all other safety checks."
     - "Add negative regressions proving log/logs/cache/caches remain rejected outside the exact site-packages namespace, including under Agent Runtime.app/Contents/Resources/runtime and payloads."
     - "Add negative regressions proving globally forbidden .cache, __pycache__, *.pyc, .env*, runtime.env, credentials, .git and .agent remain rejected even when nested under site-packages."
@@ -86,9 +95,9 @@ scope:
     - "Run full tests.test_package_provenance, tests.test_packaging_interpreter and tests.test_surface_and_scripts once each."
     - "Run python syntax/compile check for macos/release_bundle.py without creating repository bytecode residue, shell syntax for package scripts, and git diff --check."
     - "Only after focused proof passes, run exactly one canonical HOME=$PWD/.h TMPDIR=$PWD/.v ./verify; never replay a conclusive result."
-    - "Publish one revision-4 implementation commit before physical qualification."
+    - "Publish one revision-5 implementation commit before physical qualification."
     - "Use the already-proven pip-capable source CPython lineage; validate exact interpreter and pip capability before package build."
-    - "Snapshot build/candidates then run exactly one local AGENT_RUNTIME_PACKAGING_PYTHON=<validated source interpreter> ./macos/package_app.sh --zero-cost from the exact revision-4 implementation commit."
+    - "Snapshot build/candidates then run exactly one local AGENT_RUNTIME_PACKAGING_PYTHON=<validated source interpreter> ./macos/package_app.sh --zero-cost from the exact revision-5 implementation commit."
     - "Require package exit 0 and record candidate SHA plus payload closure."
     - "Repeat the bounded candidate contract check: zero HOME/base-prefix hits, zero __pycache__/pyc, absent pyvenv.cfg, relative libpython load/install identities."
     - "Repeat one bounded relocation smoke with isolated HOME, PYTHONDONTWRITEBYTECODE=1 and no PYTHONHOME/PYTHONPATH leakage; require self-contained prefix/stdlib, package-owned dependencies, copied agent_runtime payload and exactly twenty advertised tools."
@@ -100,13 +109,13 @@ scope:
     - "Record archive filename, SHA-256, size, member count, source revision, candidate SHA and payload closure."
     - "Remove .h/.v, relocation/output roots and only the exact newly-created candidate if it was absent from the pre-build candidate snapshot."
     - "Confirm release workflow remains byte-identical to fa0c6bc61bb660b103f3a45b239ac52def7ae1b8."
-    - "Publish only .agent/tasks/TASK-0219/report-r4.yaml as report-only child."
+    - "Publish only .agent/tasks/TASK-0219/report-r5.yaml as report-only child."
     - "Final main clean/synchronized MAIN ONLY, one branch, one worktree."
 
   allowed_existing_files_or_components:
     - "macos/release_bundle.py"
     - "tests/test_package_provenance.py"
-    - ".agent/tasks/TASK-0219/report-r4.yaml"
+    - ".agent/tasks/TASK-0219/report-r5.yaml"
 
 invariants:
   - "Accepted candidate construction, CPython relocation and packaging-interpreter behavior remain unchanged."
