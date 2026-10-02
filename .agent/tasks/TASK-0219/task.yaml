@@ -1,16 +1,16 @@
 protocol_version: 3
 task_id: TASK-0219
-task_revision: 2
+task_revision: 3
 state: APPROVED
-title: "Relocatable Bundled CPython Substrate Closure — Packaging Interpreter Capability Preflight"
+title: "Relocatable Bundled CPython Substrate Closure — Post-Finalization Bytecode Discipline"
 
 origin:
   type: architect_revision
   predecessor_task: TASK-0219
-  predecessor_revision: 1
-  predecessor_report: "3961e24699caa85427bd5a06d9b6a51c0a97cd89"
-  predecessor_review: "c035a2e8e786637230c698c43d7fbb66809c3441"
-  finding: F-0219-001
+  predecessor_revision: 2
+  predecessor_report: "72b8a6387cfd5c6e2aa1d7e1b3c8d47c6ca5578f"
+  predecessor_review: "bf213c34210078160f1d6205ac17318f7757dda8"
+  finding: F-0219-002
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -31,110 +31,110 @@ skill_library:
 execution_skills:
   required: [executor, verification, reliability, security-review, simplicity]
 
-preserved_revision_1_state:
-  implementation_commit: "3db36125699560dda6f9767a6f61ba3f29971771"
-  repository_verification:
-    focused_tests: "63 PASS"
-    canonical_verify: "63/63 modules, 929 tests PASS"
+preserved_state:
+  revision_1_relocatable_substrate_commit: "3db36125699560dda6f9767a6f61ba3f29971771"
+  revision_2_validator_commit: "94cfd8f0ff363d6a654cedb1e8a65e9849a5ab6e"
   accepted_blobs:
-    packaging_python_sh: "af5ad325828f8ca4731115cead421f9dffcd86fe"
+    packaging_python_sh: "07182ec37f75df7cfe36edf7c657c1688f6f73b8"
+    packaging_interpreter_tests: "9cc074fa96d846d2d7c8964173016130e4779337"
     package_app_sh: "dbaf89f4a3f0a7678a6870233bb4afa66db03181"
-    test_packaging_interpreter_py: "1736dd0e6203d049d3e2a3e161568b71dcb4c88a"
-    test_package_provenance_py: "8302b42a66561186b7c5d238fc550c690ab4b26e"
+    package_provenance_tests: "8302b42a66561186b7c5d238fc550c690ab4b26e"
     release_bundle_py: "ee5d96ee2ef8ce2f2186e042acb2e78fc4cfce9b"
     release_workflow: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
-  physical_build:
-    consumed: 1
-    result: FAIL
-    selected_interpreter: "/Users/tienphat/Applications/Agent Runtime.app/Contents/Resources/runtime/.venv/bin/python"
-    selected_interpreter_identity: "CPython 3.13.5 / cp313 / Darwin / arm64"
-    selected_interpreter_pip: MISSING
-    source_base_prefix_interpreter: "/Users/tienphat/.local/share/uv/python/cpython-3.13.5-macos-aarch64-none/bin/python3.13"
-    source_base_prefix_interpreter_pip: "24.3.1"
-    candidate_created: false
+  repository_verification:
+    revision_2_focused: "65 PASS"
+    revision_2_canonical_verify: "63/63 modules, 931 tests PASS"
+  physical_proof:
+    source_python: "/Users/tienphat/.local/share/uv/python/cpython-3.13.5-macos-aarch64-none/bin/python3.13"
+    source_python_pip: "24.3.1"
+    package_build: PASS
+    candidate_sha256: "fc06b8d9fc749beeb5cfaadfb483d988abde4f7da24c736c7e7265cbc4ca6639"
+    initial_payload_closure: "f155f079fdcce25094ab66563c7103e78a636c76726ad1995bb9dfd2c1ee4950"
+    candidate_contract:
+      pyvenv_cfg_absent: true
+      python_libpython_load_dependency: "@executable_path/../lib/libpython3.13.dylib"
+      libpython_install_identity: "@executable_path/../lib/libpython3.13.dylib"
+      packaging_base_prefix_hits: 0
+      pycache_directories: 5
+      pyc_files: 24
+      operator_home_marker_hits: 24
 
 proven_root_cause:
-  - "validate_packaging_python accepts the stripped installed Runtime interpreter because it checks version/ABI/platform/architecture only."
-  - "package_app.sh later requires the same packaging interpreter to execute '$PYTHON_BIN -m pip ... --require-hashes'."
-  - "Independent Architect probe confirms the installed Runtime interpreter passes validate_packaging_python but fails '-m pip --version', while the source-base CPython 3.13 interpreter passes both."
-  - "Revision-1 relocatable-substrate behavior is not disproven; physical qualification selected an interpreter that the current packaging contract incorrectly admitted."
+  - "package_app.sh cleans __pycache__ and .pyc immediately after hash-locked dependency installation."
+  - "It then runs finalized package-owned Python smoke and packaged-app Python smoke without PYTHONDONTWRITEBYTECODE=1."
+  - "Those smoke imports include os, platform and sysconfig, so CPython regenerates bytecode caches after the cleanup boundary."
+  - "All 24 candidate host-identity hits are generated .pyc files; packaging base-prefix bytes are otherwise absent and the relocatable libpython/pyvenv contracts are already correct."
+  - "The public-surface probe already uses PYTHONDONTWRITEBYTECODE=1 and does not cause this defect."
 
-objective: "Close TASK-0219 by making pip capability part of the canonical packaging-interpreter preflight, preserving the revision-1 relocatable substrate implementation otherwise unchanged, then completing one real candidate qualification, relocation proof and deterministic release-bundle proof."
+objective: "Preserve the accepted relocatable substrate and pip-capability validator unchanged, make every post-cleanup package-owned Python execution bytecode-read-only, then complete one real candidate host-independence scan, relocation proof and deterministic release-bundle closure."
 
 scope:
   required_changes:
-    - "Fresh-bind exact revision-2 base with clean synchronized MAIN ONLY and exactly one worktree."
-    - "Preserve macos/package_app.sh byte-for-byte at blob dbaf89f4a3f0a7678a6870233bb4afa66db03181."
-    - "Preserve tests/test_package_provenance.py byte-for-byte at blob 8302b42a66561186b7c5d238fc550c690ab4b26e."
-    - "Preserve macos/release_bundle.py byte-for-byte at blob ee5d96ee2ef8ce2f2186e042acb2e78fc4cfce9b."
-    - "Modify production behavior only in macos/packaging_python.sh."
-    - "Modify test behavior only in tests/test_packaging_interpreter.py."
-    - "Extend validate_packaging_python so a candidate is valid only if the exact interpreter can execute its pip module read-only, equivalent to '$python_bin -m pip --version'."
-    - "The pip capability probe must occur inside validation before package_app.sh reaches venv creation, Swift build or dependency installation."
-    - "Do not install pip, run ensurepip, mutate the interpreter, touch network, or fall back to another interpreter inside validate_packaging_python."
-    - "Keep all existing CPython 3.13/cp313/Darwin/arm64 identity checks unchanged."
-    - "Update the packaging-interpreter requirement/error truth so missing pip is reported as an unsupported packaging interpreter prerequisite rather than surfacing later as a package-build error."
-    - "Add deterministic TDD coverage proving an otherwise-valid cp313/Darwin/arm64 interpreter without pip is rejected, while an otherwise-identical pip-capable interpreter is accepted."
-    - "Prove package_app.sh fails the stripped interpreter at packaging-interpreter resolution/validation before Swift build and before any '-m pip install' effect."
-    - "Preserve all revision-1 stdlib, lib-dynload, libpython relative-identity, pyvenv removal and sysconfig sanitization regressions unchanged."
-    - "Run the exact new validator regressions RED on the revision-1 implementation and GREEN after the correction."
-    - "Run full tests.test_packaging_interpreter once."
-    - "Run full tests.test_package_provenance and tests.test_surface_and_scripts once each to prove revision-1 packaging and release contracts remain intact."
-    - "Run bash -n on macos/packaging_python.sh and macos/package_app.sh and run git diff --check."
-    - "Only after focused proof passes, run exactly one canonical HOME=$PWD/.h TMPDIR=$PWD/.v ./verify. Never replay a conclusive result."
-    - "Publish one revision-2 implementation commit before physical candidate qualification."
-    - "At the exact clean implementation commit, select the physical packaging interpreter only from a source CPython installation, never from /Applications/Agent Runtime.app, build/candidates, or the repository checkout .venv."
-    - "Prefer the revision-1 observed source-base interpreter /Users/tienphat/.local/share/uv/python/cpython-3.13.5-macos-aarch64-none/bin/python3.13 when it still exists and passes the corrected validate_packaging_python."
-    - "Before consuming the one physical build, require the chosen absolute interpreter to PASS corrected validate_packaging_python and separately record '-m pip --version', sys.base_prefix, stdlib path and arm64 identity."
-    - "Snapshot build/candidates before package qualification."
-    - "Run exactly one local AGENT_RUNTIME_PACKAGING_PYTHON=<chosen pip-capable validated interpreter> ./macos/package_app.sh --zero-cost."
-    - "Require package exit 0, strict codesign/provenance PASS and emitted candidate_app, candidate_handoff, initial_payload_release, initial_payload_closure and candidate_sha256."
-    - "Scan every regular file in the exact candidate and require zero bytes containing the operator HOME marker and zero bytes containing the original packaging-interpreter base prefix."
-    - "Require candidate runtime/.venv/pyvenv.cfg absent."
-    - "Require otool -L on packaged runtime/.venv/bin/python to retain @executable_path/../lib/libpython3.13.dylib and otool -D on packaged libpython3.13.dylib to equal @executable_path/../lib/libpython3.13.dylib."
-    - "Copy the exact packaged runtime/.venv and initial payload release into one task-owned ignored relocation root without mutating the frozen candidate."
-    - "Run relocated bin/python with isolated HOME and without PYTHONHOME/PYTHONPATH leakage."
-    - "Require relocated sys.executable, sys.prefix, sys.base_prefix, sysconfig stdlib and representative stdlib module paths to resolve inside the relocation root; require sys.prefix == sys.base_prefix."
-    - "Require relocated Python to import the copied initial agent_runtime payload and its accepted twenty-tool capability registry using only relocated payload path plus package-owned site-packages."
-    - "Require representative sysconfig path/config strings to contain neither the original packaging prefix nor operator HOME."
-    - "From the same frozen candidate, run macos/release_bundle.py build exactly twice into distinct empty task-owned ignored output directories."
-    - "Require archive, release-manifest.json and SHA256SUMS.txt byte-identical between both builds."
-    - "Run macos/release_bundle.py verify exactly once against one build and require PASS."
-    - "Record candidate SHA, initial payload closure, archive SHA/size/member count and relocation facts."
-    - "Remove .h/.v, relocation/output directories and only the exact newly-created local candidate if it was absent from the pre-build candidate snapshot. Never delete a pre-existing candidate."
-    - "Confirm release-gate workflow remains byte-identical to fa0c6bc61bb660b103f3a45b239ac52def7ae1b8."
-    - "Publish only .agent/tasks/TASK-0219/report-r2.yaml as the report-only child."
+    - "Fresh-bind exact revision-3 base with clean synchronized MAIN ONLY and exactly one worktree."
+    - "Preserve macos/packaging_python.sh byte-for-byte at 07182ec37f75df7cfe36edf7c657c1688f6f73b8."
+    - "Preserve tests/test_packaging_interpreter.py byte-for-byte at 9cc074fa96d846d2d7c8964173016130e4779337."
+    - "Preserve macos/release_bundle.py byte-for-byte at ee5d96ee2ef8ce2f2186e042acb2e78fc4cfce9b."
+    - "Preserve release workflow byte-for-byte at fa0c6bc61bb660b103f3a45b239ac52def7ae1b8."
+    - "Modify production behavior only in macos/package_app.sh."
+    - "Modify test behavior only in tests/test_package_provenance.py."
+    - "Set PYTHONDONTWRITEBYTECODE=1 for the finalized PACKAGE_VENV Python smoke."
+    - "Set PYTHONDONTWRITEBYTECODE=1 for the copied RUNTIME/.venv Python smoke."
+    - "Ensure every package-owned Python invocation after the bytecode/cache cleanup boundary is either incapable of importing writable stdlib modules or explicitly runs with PYTHONDONTWRITEBYTECODE=1."
+    - "Do not move the cleanup earlier as a substitute; do not add a post-seal mutation of candidate bytes."
+    - "Do not weaken candidate scanning or release_bundle.py."
+    - "Add a narrow package contract regression that fails against revision-2 package_app.sh and proves both post-finalization smoke commands are bytecode-write-disabled before candidate sealing/publication."
+    - "Preserve all existing package ordering, pip --require-hashes, stdlib/lib-dynload materialization, libpython identity normalization, pyvenv removal, sysconfig sanitization, signing, provenance, sealing and publication semantics."
+    - "Run the exact new regression RED against revision-2 behavior and GREEN after the correction."
+    - "Run full tests.test_package_provenance, tests.test_packaging_interpreter and tests.test_surface_and_scripts once each."
+    - "Run bash -n macos/package_app.sh and macos/packaging_python.sh and git diff --check."
+    - "Only after focused proof passes, run exactly one canonical HOME=$PWD/.h TMPDIR=$PWD/.v ./verify; never replay a conclusive result."
+    - "Publish one revision-3 implementation commit before physical package qualification."
+    - "Use only the already-proven pip-capable source CPython lineage; before build, corrected validate_packaging_python and '-m pip --version' must both PASS."
+    - "Snapshot build/candidates, then run exactly one AGENT_RUNTIME_PACKAGING_PYTHON=<validated source interpreter> ./macos/package_app.sh --zero-cost."
+    - "Require package exit 0 and emitted candidate_app/candidate_handoff/initial_payload_release/initial_payload_closure/candidate_sha256."
+    - "Scan every regular file in the exact candidate; require zero operator-HOME bytes and zero original packaging-base-prefix bytes."
+    - "Require zero __pycache__ directories, zero .pyc files and absent pyvenv.cfg."
+    - "Require packaged Python load dependency and libpython install ID both remain @executable_path/../lib/libpython3.13.dylib."
+    - "Copy the exact packaged runtime/.venv and initial payload release into a task-owned ignored relocation root without mutating the candidate."
+    - "Run relocated bin/python with isolated HOME, PYTHONDONTWRITEBYTECODE=1 and no PYTHONHOME/PYTHONPATH leakage."
+    - "Require relocated sys.executable, sys.prefix, sys.base_prefix, stdlib and representative stdlib modules to resolve inside relocation root; require sys.prefix == sys.base_prefix."
+    - "Require relocated Python to import copied initial agent_runtime payload and expose exactly twenty advertised tools using only relocated payload path plus package-owned dependencies."
+    - "Require representative sysconfig strings to contain neither original packaging prefix nor operator HOME."
+    - "Run unchanged macos/release_bundle.py build exactly twice from the same frozen candidate into distinct empty ignored output directories."
+    - "Require archive, release-manifest.json and SHA256SUMS.txt byte-identical across both builds."
+    - "Run unchanged macos/release_bundle.py verify exactly once and require PASS."
+    - "Record candidate SHA, payload closure, archive SHA/size/member count and relocation proof."
+    - "Remove .h/.v, relocation/output directories and only the exact newly-created candidate if absent from the pre-build snapshot."
+    - "Publish only .agent/tasks/TASK-0219/report-r3.yaml as report-only child."
     - "Final main clean/synchronized MAIN ONLY, one branch, one worktree."
 
   allowed_existing_files_or_components:
-    - "macos/packaging_python.sh"
-    - "tests/test_packaging_interpreter.py"
-    - ".agent/tasks/TASK-0219/report-r2.yaml"
+    - "macos/package_app.sh"
+    - "tests/test_package_provenance.py"
+    - ".agent/tasks/TASK-0219/report-r3.yaml"
 
 invariants:
-  - "Revision-1 relocatable substrate implementation outside the validator capability seam remains unchanged."
-  - "macos/package_app.sh remains blob dbaf89f4a3f0a7678a6870233bb4afa66db03181."
-  - "tests/test_package_provenance.py remains blob 8302b42a66561186b7c5d238fc550c690ab4b26e."
-  - "macos/release_bundle.py remains blob ee5d96ee2ef8ce2f2186e042acb2e78fc4cfce9b."
-  - "Release HOME/build-host rejection remains unchanged."
+  - "Accepted packaging_python.sh validator/substrate behavior remains unchanged."
+  - "Accepted packaging-interpreter tests remain unchanged."
+  - "release_bundle.py HOME/build-host rejection remains unchanged."
   - "requirements.lock plus pip --require-hashes remain sole third-party dependency authority."
-  - "No Runtime version/public tool/lifecycle/durable/provenance/schema change."
+  - "No Runtime version, public tool surface, lifecycle, durable, provenance or schema change."
   - "No GitHub Actions dispatch/rerun."
   - "No tag/release/live Runtime/config/plugin/credential/permission/reboot effect."
   - "TASK-0196 remains paused."
   - "MAIN ONLY."
 
 forbidden_changes:
-  - "Any production file other than macos/packaging_python.sh."
-  - "Any test file other than tests/test_packaging_interpreter.py."
-  - "Any change to macos/package_app.sh, macos/release_bundle.py or tests/test_package_provenance.py."
-  - "Installing or bootstrapping pip into an invalid packaging interpreter."
-  - "Automatic fallback from an invalid explicit interpreter to another interpreter."
-  - "Any weakening/bypass/special-case of release-bundle HOME scanning."
+  - "Any production file other than macos/package_app.sh."
+  - "Any test file other than tests/test_package_provenance.py."
+  - "Any change to macos/packaging_python.sh, tests/test_packaging_interpreter.py or macos/release_bundle.py."
+  - "Any post-seal/post-publication cleanup that mutates frozen candidate bytes."
+  - "Any weakening/bypass/special-case of candidate or release-bundle HOME scanning."
   - "More than one local package_app.sh build."
   - "More than two local release-bundle builds."
+  - "More than one release-bundle verify."
   - "Any GitHub Actions dispatch/rerun."
-  - "Any second canonical ./verify after a conclusive result or blind replay."
+  - "Any second canonical ./verify after a conclusive result."
   - "Any tag/release/live install/cutover/lifecycle effect."
   - "Any branch or PR."
 
@@ -163,19 +163,19 @@ effect_authority:
   branch_or_pr_creation_max: 0
 
 acceptance_criteria:
-  - {id: AC-1, requirement: "Packaging interpreter preflight matches actual package requirements.", evidence_required: "Otherwise-valid cp313/Darwin/arm64 interpreter without pip is rejected before build work; pip-capable source interpreter passes."}
-  - {id: AC-2, requirement: "Revision-1 relocatable CPython implementation remains intact.", evidence_required: "Frozen package_app/provenance/release_bundle blobs unchanged; existing relocation regressions remain PASS."}
-  - {id: AC-3, requirement: "Real corrected candidate is self-contained and host-independent.", evidence_required: "One package build PASS; no HOME/base-prefix bytes; no pyvenv.cfg; relative libpython identity; relocation smoke roots all Python runtime paths inside relocated prefix."}
-  - {id: AC-4, requirement: "Runtime/dependency behavior remains authoritative.", evidence_required: "Relocated stdlib, package-owned dependencies and initial agent_runtime payload import; twenty advertised tools; requirements.lock --require-hashes preserved."}
-  - {id: AC-5, requirement: "Unchanged deterministic release gate accepts the real candidate.", evidence_required: "Two release-bundle builds byte-identical and one release_bundle verify PASS with release_bundle.py frozen."}
-  - {id: AC-6, requirement: "Repository verification passes.", evidence_required: "Focused tests/syntax/diff PASS and exactly one canonical ./verify PASS."}
-  - {id: AC-7, requirement: "Canonical closure.", evidence_required: "Only validator + validator tests + report-r2 changed; all task evidence cleaned; workflow unchanged; clean synchronized MAIN ONLY."}
+  - {id: AC-1, requirement: "Post-finalization smoke probes cannot regenerate bytecode.", evidence_required: "Narrow RED/GREEN regression; both package-owned smoke commands run with PYTHONDONTWRITEBYTECODE=1 before candidate sealing."}
+  - {id: AC-2, requirement: "Accepted relocatable substrate and validator remain unchanged.", evidence_required: "Frozen packaging_python/test blobs; full affected tests PASS."}
+  - {id: AC-3, requirement: "Real candidate is byte-clean and host-independent.", evidence_required: "One package build PASS; zero HOME/base-prefix hits; zero __pycache__/pyc; absent pyvenv.cfg; relative libpython identities."}
+  - {id: AC-4, requirement: "Relocated runtime is actually self-contained.", evidence_required: "Relocated prefix/base_prefix/stdlib/modules all inside relocation root; payload imports and twenty-tool registry PASS; sysconfig free of builder identity."}
+  - {id: AC-5, requirement: "Unchanged release bundle gate accepts the candidate.", evidence_required: "Two deterministic builds byte-identical and one verify PASS."}
+  - {id: AC-6, requirement: "Repository verification passes.", evidence_required: "Focused/syntax/diff PASS and exactly one canonical ./verify PASS."}
+  - {id: AC-7, requirement: "Canonical closure.", evidence_required: "Only package smoke + contract test + report-r3 changed; generated evidence cleaned; workflow unchanged; clean synchronized MAIN ONLY."}
 
 verification:
   authoritative_verification:
     required: true
-    mechanism: "Validator RED/GREEN + full affected focused modules + exactly one canonical verify + one real pip-capable zero-cost package build + relocation smoke + two deterministic bundle builds + one bundle verify."
-    expected_signal: "Packaging preflight rejects stripped Runtime Python early and a pip-capable source CPython produces a genuinely relocatable candidate accepted by the unchanged release-bundle gate."
+    mechanism: "Smoke-bytecode RED/GREEN + affected focused modules + exactly one canonical verify + one real package build + full candidate scan + relocation smoke + deterministic bundle x2 + verify."
+    expected_signal: "No post-cleanup bytecode reappears; exact candidate is host-independent, relocatable and accepted by unchanged release-bundle verification."
 
 continuation_policy:
   mode: MANUAL
