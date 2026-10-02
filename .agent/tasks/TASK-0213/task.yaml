@@ -1,0 +1,160 @@
+protocol_version: 3
+task_id: TASK-0213
+task_revision: 1
+state: APPROVED
+title: "Supervised Lifecycle Fixture Shutdown Reliability"
+
+origin:
+  type: architect_continuation
+  predecessor_task: TASK-0212
+  finding: F-0212-001
+  goal: "Remove cumulative scheduler-dependent fake Runtime shutdown latency from tests.test_supervised_lifecycle without changing product lifecycle behavior or verifier timeout policy."
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+
+execution_skills:
+  required: [executor, verification, reliability, simplicity]
+
+revision_basis:
+  blocked_task_0212_report: "8d09dc02ae96e582ec8e4a325d2ea5c57aa1acae"
+  blocked_task_0212_review: "7577ca82284b2f2aa15636cc379a18bfb695f06f"
+  remote_run_id: 36967600037
+  remote_failure:
+    lane: L4_HOST_LIFECYCLE
+    module: tests.test_supervised_lifecycle
+    kind: TIMEOUT
+    elapsed_seconds: 45.115
+    timeout_seconds: 45
+    verifier_completed_modules: 20
+    verifier_classified_modules: 63
+    verifier_tests: 380
+  reviewer_local_evidence:
+    exact_head: "8d09dc02ae96e582ec8e4a325d2ea5c57aa1acae"
+    module_tests: 20
+    result: PASS
+    duration_seconds: 29.359
+    historical_task_0154_baseline_seconds: 9.040
+    historical_task_0154_report_seconds: 13.143
+    largest_observed_test_seconds:
+      test_ten_concurrent_starts_collapse_and_crash_stays_stopped_until_explicit_start: 5.088
+      test_restart_uses_traditional_launchagent_without_service_management_state: 2.637
+      test_status_transport_classification_matrix_reuses_one_running_fixture: 2.589
+  accepted_workflow_blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  paused_release_task: TASK-0196
+
+proven_problem:
+  component: tests/test_supervised_lifecycle.py
+  fixture: fake tunnel-client and lifecycle teardown
+  current_behavior: "The fixture fake tunnel-client owns runtime.pid cleanup from TERM/INT but remains alive through a Bash loop whose active iteration runs sleep 1. Repeated start/stop/tearDown cycles therefore accumulate scheduler-dependent shutdown latency."
+  consequence: "The full 20-test module can remain logically green yet consume enough wall time on a slower hosted runner to exceed its explicit 45-second module deadline."
+  boundary: "No evidence requires increasing the verifier timeout or changing start.sh product semantics."
+
+objective: "Make the supervised-lifecycle fake Runtime lifetime and teardown signal-responsive and deterministic enough that the complete retained 20-test module has substantial headroom under its existing 45-second verifier deadline. Preserve every lifecycle assertion and production behavior."
+
+scope:
+  required_changes:
+    - "Fresh-bind exact revision-1 base with clean synchronized MAIN ONLY and one worktree."
+    - "Modify only tests/test_supervised_lifecycle.py for implementation; no product or verifier-policy change is authorized."
+    - "Before mutation, profile the complete current module once and record per-test timings so the actual cumulative lifecycle/teardown cost is visible."
+    - "Replace the fake tunnel-client's sleep-quantized lifetime with a fixture-owned signal-responsive blocking mechanism. TERM/INT must trigger runtime.pid/lock cleanup promptly without relying on the completion of a one-second polling sleep."
+    - "Keep the fake tunnel-client process identity, runtime.pid ownership, starts.log behavior, duplicate-start protection and TERM/INT cleanup semantics equivalent to the current fixture."
+    - "Preserve start.sh as the real product script under test; do not bypass its lifecycle lock, readiness, ownership, stop, restart or status paths."
+    - "Preserve all existing 20 test methods and their assertions. Do not delete, skip, xfail, merge away, weaken or convert assertions merely to reduce duration."
+    - "Preserve the ten-concurrent-starts proof, crash-stays-stopped proof, explicit restart proof, read-only refusal proof, foreign-port proof, LaunchAgent identity/mode/symlink fail-closed proofs, status schema/transport matrix and supervisor process-group contract proof."
+    - "Do not change verification_policy.py, verify_tests.py or the tests.test_supervised_lifecycle timeout of 45 seconds."
+    - "Do not add retries-to-green, random sleeps or machine-load-dependent pass criteria."
+    - "Add only the minimum regression/fixture assertions needed to prove the fake Runtime terminates cleanly and leaves no stale runtime.pid/runtime.lock state after explicit fixture shutdown."
+    - "Run the complete tests.test_supervised_lifecycle module in five separate fresh Python processes after the final change; require 5/5 PASS and each run <= 20.0 seconds on the canonical operator Mac."
+    - "Run the exact ten-concurrent-starts test 10/10 in fresh processes to preserve its concurrency/lifecycle semantics."
+    - "Run git diff --check."
+    - "Only after focused/repeated proof passes, run exactly one canonical ./verify under HOME=$PWD/.h TMPDIR=$PWD/.v."
+    - "Canonical verifier must PASS all classified modules, including tests.test_supervised_lifecycle under the unchanged 45-second module deadline; never blind-replay ambiguity."
+    - "Remove .h/.v and any TASK-0213 scratch/residue before final observation."
+    - "Confirm release-gate workflow blob remains exactly fa0c6bc61bb660b103f3a45b239ac52def7ae1b8."
+    - "Publish one implementation commit and then only .agent/tasks/TASK-0213/report.yaml as report child."
+    - "Final main clean/synchronized MAIN ONLY."
+
+  allowed_existing_files_or_components:
+    - "tests/test_supervised_lifecycle.py"
+    - ".agent/tasks/TASK-0213/report.yaml"
+
+invariants:
+  - "start.sh and all product Runtime/lifecycle source remain byte-for-byte unchanged."
+  - "tests.test_supervised_lifecycle retains exactly 20 test methods and all material proof obligations."
+  - "verification_policy.py remains unchanged and tests.test_supervised_lifecycle timeout remains 45.0 seconds."
+  - "No lifecycle semantic weakening, retry-to-green, skip, xfail or assertion deletion."
+  - "Release-gate workflow remains unchanged."
+  - "No docs/dependency/version/schema change."
+  - "No GitHub Actions dispatch/rerun."
+  - "No local distribution build, tag/release or live Runtime mutation."
+  - "TASK-0196 remains paused."
+  - "MAIN ONLY."
+
+forbidden_changes:
+  - "Any production file, including start.sh."
+  - "verification_policy.py, verify_tests.py or verify."
+  - "Any increase of the supervised-lifecycle module timeout."
+  - "Any test deletion, skip, xfail, assertion weakening or proof removal."
+  - "Any new generic lifecycle testing framework or shared test abstraction."
+  - "Any workflow, docs, dependency, version or schema change."
+  - "Any GitHub Actions dispatch/rerun."
+  - "Any package build, tag/release or live Runtime/config/plugin/credential/permission/reboot effect."
+  - "Any second canonical ./verify after a conclusive result or blind replay."
+  - "Any branch or PR."
+
+effect_authority:
+  canonical_verify_max: 1
+  github_workflow_dispatch_max: 0
+  github_workflow_rerun_max: 0
+  local_distribution_build_max: 0
+  install_prebuilt_max: 0
+  commit_cutover_max: 0
+  rollback_cutover_max: 0
+  menu_bar_relaunch_max: 0
+  runtime_restart_max: 0
+  runtime_explicit_start_max: 0
+  runtime_explicit_stop_max: 0
+  plugin_reload_or_reconnect_max: 0
+  credential_rotation_max: 0
+  physical_reboot_max: 0
+  new_security_permission_max: 0
+  version_tag_create_max: 0
+  github_release_publish_max: 0
+  branch_or_pr_creation_max: 0
+
+acceptance_criteria:
+  - {id: AC-1, requirement: "The supervised-lifecycle fixture no longer accumulates one-second sleep-quantized fake Runtime shutdown latency.", evidence_required: "Fixture implementation is signal-responsive/event-driven for TERM/INT cleanup and leaves no stale runtime.pid/runtime.lock after shutdown."}
+  - {id: AC-2, requirement: "Lifecycle proof quality is unchanged.", evidence_required: "Exactly 20 retained tests with no skip/xfail/assertion weakening; product start.sh and verification policy unchanged."}
+  - {id: AC-3, requirement: "The complete module has substantial deterministic deadline headroom.", evidence_required: "Five fresh-process full-module runs PASS 20/20 each and every run completes in <=20.0 seconds on the canonical operator Mac."}
+  - {id: AC-4, requirement: "The highest-concurrency lifecycle proof remains stable.", evidence_required: "Exact ten-concurrent-starts test PASS 10/10 in fresh processes."}
+  - {id: AC-5, requirement: "Canonical verification passes under the existing timeout policy.", evidence_required: "Exactly one canonical ./verify PASS with tests.test_supervised_lifecycle completing before unchanged 45-second deadline; no replay."}
+  - {id: AC-6, requirement: "Canonical closure.", evidence_required: "Only test_supervised_lifecycle.py + report changed; workflow blob unchanged; no residue; clean synchronized MAIN ONLY."}
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "Per-test baseline profiling + five fresh full-module runs + ten exact concurrency-test fresh runs + exactly one canonical short-path ./verify."
+    expected_signal: "The same 20 lifecycle proofs complete with large margin under the unchanged 45-second verifier deadline and no product behavior change."
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions: [BLOCKED, STALE_STATE, AUTHORITY_REQUIRED, CURRENT_PHASE_CAPABILITY_UNAVAILABLE, REVIEW_REQUIRED, REVERIFY_REQUIRED, USER_STOP]
+
+git_authority: {create_branch: false, commit: true, push: true, promote_to_main: false}
+release_authority: {create_version_tag: false, mutate_repository_metadata: false, publish_release: false}
+blocking_decisions: []
+execution_ready: true
