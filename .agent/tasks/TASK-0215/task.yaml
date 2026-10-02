@@ -1,0 +1,158 @@
+protocol_version: 3
+task_id: TASK-0215
+task_revision: 1
+state: APPROVED
+title: "Zero-Cost Packaging LaunchServices Authority Correction"
+
+origin:
+  type: architect_continuation
+  predecessor_task: TASK-0214
+  finding: F-0214-001
+  goal: "Remove non-authoritative LaunchServices discovery cleanup from zero-cost package success criteria so a fully published immutable candidate is not reported as failed."
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+
+execution_skills:
+  required: [executor, verification, reliability, simplicity]
+
+revision_basis:
+  blocked_task_0214_report: "006a0c754622150651bb99e5035d9900d357dd77"
+  blocked_task_0214_review: "1960586325b64acf9cde0fb093aea1626da0ff61"
+  remote_run_id: 36970566958
+  remote_proof:
+    canonical_verify: "63/63 modules, 922 tests PASS"
+    supervised_lifecycle: "20/20 PASS in 27.153s under unchanged 45s timeout"
+    sdk26_arm64_swift_compile_link: PASS
+    swift_build_duration_seconds: 18.09
+    package_failure: "PACKAGE ERROR: could not unregister retained candidate from LaunchServices"
+    package_exit_code: 2
+  accepted_authority:
+    task_0190_review: "LaunchServices discovery state is not lifecycle ownership; retained valid candidates may be automatically registered."
+    task_0194_review: "The identical post-publication unregister failure was non-authoritative cleanup and did not invalidate an independently audited immutable candidate."
+    task_0196_contract: "The identical exit-2 cleanup was already classified as recoverable after candidate publication."
+  accepted_workflow_blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  paused_release_task: TASK-0196
+
+proven_root_cause:
+  component: macos/package_app.sh
+  sequence:
+    - "package_provenance.py publish-zero-cost successfully publishes the immutable candidate under build/candidates."
+    - "The script validates FINAL_APP, FINAL_HANDOFF, FINAL_PAYLOAD and CANDIDATE_SHA256."
+    - "Only after successful publication, the script invokes LaunchServices lsregister -u on FINAL_APP."
+    - "Failure of that discovery-cache cleanup exits 2 before candidate identity lines are emitted."
+  authority_error: "LaunchServices discovery-cache state is not an accepted package correctness, provenance, lifecycle ownership or release identity authority."
+  correct_boundary: "Successful seal + publish-zero-cost + exact candidate identity is package authority. LaunchServices mutation must not be a prerequisite or hidden side effect of candidate construction."
+
+objective: "Make zero-cost packaging terminate successfully from its authoritative seal/publication/provenance state without mutating or depending on LaunchServices discovery state. Preserve candidate bytes, deterministic identity, codesign, payload publication, provenance, output contract and all release-gate behavior otherwise."
+
+scope:
+  required_changes:
+    - "Fresh-bind exact revision-1 base with clean synchronized MAIN ONLY and exactly one worktree."
+    - "Modify production behavior only in macos/package_app.sh."
+    - "Remove the retained-candidate LaunchServices unregister requirement from zero-cost packaging."
+    - "package_app.sh must not invoke lsregister, reset LaunchServices, unregister the candidate, retry LaunchServices operations or otherwise mutate LaunchServices discovery state."
+    - "Do not replace the hard failure with a warning plus best-effort unregister; zero-cost packaging should have no LaunchServices cleanup side effect at all."
+    - "After successful publish-zero-cost result validation, emit candidate_app, candidate_handoff, initial_payload_release, initial_payload_closure and candidate_sha256 exactly as before."
+    - "Preserve package_provenance.py stage, publish-payload, substrate-manifest, seal-zero-cost and publish-zero-cost behavior byte-for-byte."
+    - "Preserve Swift build, app/resource assembly, ad-hoc designated requirements, deep strict codesign verification, bundled Python 3.13 validation, public tool surface validation and payload/substrate schemas."
+    - "Do not modify release-gate workflow. The workflow should continue consuming package_app.sh exit 0 and emitted candidate identity through its existing path."
+    - "Add a narrow regression in tests/test_package_provenance.py proving current package_app.sh contains no LaunchServices mutation/lsregister dependency and retains the exact candidate identity output contract after publish-zero-cost."
+    - "The regression must fail against the exact pre-fix base because lsregister and its fatal cleanup path are present."
+    - "Do not add workflow special-casing for exit 2, candidate reconciliation, retry logic or alternate package success semantics."
+    - "Run the new exact regression RED before production mutation, then GREEN after the fix."
+    - "Run full tests.test_package_provenance, tests.test_candidate_freeze and tests.test_surface_and_scripts once each."
+    - "Run git diff --check."
+    - "Only after focused proof passes, run exactly one canonical ./verify under HOME=$PWD/.h TMPDIR=$PWD/.v."
+    - "Canonical verifier must PASS all classified modules; never blind-replay ambiguity."
+    - "Remove .h/.v and TASK-0215 scratch/residue before final observation."
+    - "Confirm release-gate workflow blob remains exactly fa0c6bc61bb660b103f3a45b239ac52def7ae1b8."
+    - "Publish one implementation commit and then only .agent/tasks/TASK-0215/report.yaml as report child."
+    - "Final main clean/synchronized MAIN ONLY."
+
+  allowed_existing_files_or_components:
+    - "macos/package_app.sh"
+    - "tests/test_package_provenance.py"
+    - ".agent/tasks/TASK-0215/report.yaml"
+
+invariants:
+  - "Zero-cost candidate seal/publication/provenance semantics remain unchanged."
+  - "Candidate content identity and emitted output keys remain unchanged."
+  - "No LaunchServices mutation occurs in package_app.sh."
+  - "package_provenance.py and release_bundle.py remain unchanged."
+  - "Release-gate workflow remains unchanged."
+  - "Runtime version, schemas, public twenty-tool surface, lifecycle semantics and dependencies remain unchanged."
+  - "No GitHub Actions dispatch/rerun."
+  - "No local distribution build is required or authorized; remote release-gate requalification will provide the end-to-end packaging proof."
+  - "No tag/release/live Runtime/config/plugin/credential/permission/reboot effect."
+  - "TASK-0196 remains paused."
+  - "MAIN ONLY."
+
+forbidden_changes:
+  - "Any production file other than macos/package_app.sh."
+  - "Any test file other than tests/test_package_provenance.py."
+  - "Any LaunchServices retry, best-effort cleanup or workflow reconciliation logic."
+  - "Any change to macos/package_provenance.py, macos/release_bundle.py or candidate content/provenance schemas."
+  - "Any workflow, verification policy, docs, dependency, version or public contract change."
+  - "Any local package_app.sh distribution build."
+  - "Any GitHub Actions dispatch/rerun."
+  - "Any tag/release or live Runtime mutation."
+  - "Any second canonical ./verify after a conclusive result or blind replay."
+  - "Any branch or PR."
+
+effect_authority:
+  canonical_verify_max: 1
+  github_workflow_dispatch_max: 0
+  github_workflow_rerun_max: 0
+  local_distribution_build_max: 0
+  workflow_artifact_download_max: 0
+  install_prebuilt_max: 0
+  commit_cutover_max: 0
+  rollback_cutover_max: 0
+  menu_bar_relaunch_max: 0
+  runtime_restart_max: 0
+  runtime_explicit_start_max: 0
+  runtime_explicit_stop_max: 0
+  plugin_reload_or_reconnect_max: 0
+  credential_rotation_max: 0
+  physical_reboot_max: 0
+  new_security_permission_max: 0
+  version_tag_create_max: 0
+  github_release_publish_max: 0
+  branch_or_pr_creation_max: 0
+
+acceptance_criteria:
+  - {id: AC-1, requirement: "Zero-cost packaging no longer treats LaunchServices discovery cleanup as package authority.", evidence_required: "package_app.sh contains no lsregister/LaunchServices mutation path and no post-publication cleanup failure."}
+  - {id: AC-2, requirement: "Authoritative package publication contract is preserved.", evidence_required: "publish-zero-cost result validation and exact candidate_app/candidate_handoff/initial_payload_release/initial_payload_closure/candidate_sha256 output contract remain unchanged."}
+  - {id: AC-3, requirement: "Candidate integrity machinery is untouched.", evidence_required: "package_provenance.py/release_bundle.py unchanged; focused package provenance/freeze/script tests PASS."}
+  - {id: AC-4, requirement: "Regression proves the authority correction.", evidence_required: "Exact new regression RED on base because LaunchServices mutation is present, then GREEN after removal."}
+  - {id: AC-5, requirement: "Canonical verification passes.", evidence_required: "Exactly one canonical ./verify PASS with no replay."}
+  - {id: AC-6, requirement: "Canonical closure.", evidence_required: "Only package_app.sh + test + report changed; workflow blob unchanged; clean synchronized MAIN ONLY."}
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "Deterministic packaging-contract RED/GREEN + package provenance/freeze/script modules + exactly one canonical ./verify."
+    expected_signal: "Package success depends only on authoritative immutable candidate publication/provenance and has no LaunchServices side effect."
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions: [BLOCKED, STALE_STATE, AUTHORITY_REQUIRED, CURRENT_PHASE_CAPABILITY_UNAVAILABLE, REVIEW_REQUIRED, REVERIFY_REQUIRED, USER_STOP]
+
+git_authority: {create_branch: false, commit: true, push: true, promote_to_main: false}
+release_authority: {create_version_tag: false, mutate_repository_metadata: false, publish_release: false}
+blocking_decisions: []
+execution_ready: true
