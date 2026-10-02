@@ -1,0 +1,154 @@
+protocol_version: 3
+task_id: TASK-0203
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: PASS
+
+task_source:
+  path: .agent/tasks/TASK-0203/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "c882d2c05f828d1e510d946926d723929bc451aa"
+  implementation_commit: "0ebc7424de53a0c1b4c1ecc723d4c3803cb3c8c7"
+  task_0202_closed_blocked: true
+  task_0196_paused: true
+
+root_cause:
+  classification: test_fixture_lifetime_race
+  remote_failure_test: "tests.test_durable_pipe.DurablePipeTests.test_runner_argv_is_opaque_and_durable_files_are_private"
+  predecessor_remote_run_id: 36912032079
+  summary: "The test used a child with a finite two-second lifetime while later requiring explicit terminate to observe a still-running durable session. On the real release-gate runner the child could naturally exit before terminate."
+  runtime_behavior_defect: false
+
+implementation:
+  changed_paths:
+    - tests/test_durable_pipe.py
+  production_runtime_changed: false
+  release_gate_workflow_changed: false
+  verification_policy_changed: false
+  behavior:
+    child_body: "print(secret, flush=True); threading.Event().wait()"
+    shell_true: false
+    external_helper_binary: false
+    manager_hard_wall_seconds: 30.0
+    immediate_start_assertions:
+      status: running
+      lifecycle: RUNNING
+    arbitrary_sleep_or_retry_added: false
+  preserved_assertions:
+    - "durability == runtime_restart"
+    - "runner argv contains opaque durable job id"
+    - "secret absent from runner argv"
+    - "cwd absent from runner argv"
+    - "minimal runner env"
+    - "durable root and job directory mode 0700"
+    - "state.json and journal.json mode 0600"
+    - "spec.json absent after dispatch"
+    - "write rejects with PIPE_WRITE_UNSUPPORTED"
+    - "resize rejects with PTY_REQUIRED"
+    - "terminate succeeds while running"
+    - "final termination_reason == explicit_terminate"
+  preserved_runtime_semantics:
+    naturally_exited_terminate_rejected_as_not_running: true
+
+verification:
+  repeated_exact_test:
+    command: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_durable_pipe.DurablePipeTests.test_runner_argv_is_opaque_and_durable_files_are_private"
+    execution_mode: "25 fresh unittest processes"
+    attempts: 25
+    passed: 25
+    failed: 0
+    result: PASS
+  durable_pipe_module:
+    command: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_durable_pipe"
+    tests: 11
+    result: PASS
+  durable_pipe_restart_module:
+    command: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.test_durable_pipe_restart"
+    tests: 10
+    result: PASS
+  git_diff_check:
+    command: "git diff --check"
+    result: PASS
+  canonical_verify:
+    command: "HOME=\"$PWD/.h\" TMPDIR=\"$PWD/.v\" ./verify"
+    invocation_count: 1
+    replay_count: 0
+    session_id: "00f6c868869d3c9b"
+    result: PASS
+    profile: qualification
+    classified_modules: 63
+    completed_modules: 63
+    tests: 913
+    duration_seconds: 142.567
+    durable_pipe:
+      tests: 11
+      result: PASS
+      duration_seconds: 1.458
+    durable_pipe_restart:
+      tests: 10
+      result: PASS
+      duration_seconds: 5.105
+  short_path_cleanup:
+    home_path: .h
+    tmpdir_path: .v
+    removed: true
+
+scope_proof:
+  implementation_commit_changed_paths:
+    - tests/test_durable_pipe.py
+  forbidden_tracked_path_count_before_report: 0
+  source_runtime_diff_count: 0
+  workflow_diff_count: 0
+  verification_policy_diff_count: 0
+
+effect_accounting:
+  canonical_verify: {authorized_max: 1, consumed: 1}
+  github_workflow_dispatch: {authorized_max: 0, consumed: 0}
+  github_workflow_rerun: {authorized_max: 0, consumed: 0}
+  local_distribution_build: {authorized_max: 0, consumed: 0}
+  install_prebuilt: {authorized_max: 0, consumed: 0}
+  commit_cutover: {authorized_max: 0, consumed: 0}
+  rollback_cutover: {authorized_max: 0, consumed: 0}
+  menu_bar_relaunch: {authorized_max: 0, consumed: 0}
+  runtime_restart: {authorized_max: 0, consumed: 0}
+  runtime_explicit_start: {authorized_max: 0, consumed: 0}
+  runtime_explicit_stop: {authorized_max: 0, consumed: 0}
+  plugin_reload_or_reconnect: {authorized_max: 0, consumed: 0}
+  credential_rotation: {authorized_max: 0, consumed: 0}
+  physical_reboot: {authorized_max: 0, consumed: 0}
+  new_security_permission: {authorized_max: 0, consumed: 0}
+  version_tag_create: {authorized_max: 0, consumed: 0}
+  github_release_publish: {authorized_max: 0, consumed: 0}
+  branch_or_pr_creation: {authorized_max: 0, consumed: 0}
+  runtime_source_mutation: 0
+  release_gate_workflow_mutation: 0
+  verification_policy_mutation: 0
+  version_mutation: 0
+  credential_or_config_mutation: 0
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "The child now blocks on threading.Event().wait(), the fixture hard wall is 30 seconds, and start immediately asserts running/RUNNING."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "All existing argv/privacy/mode/control/explicit-terminate assertions remain and pass."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "The exact formerly failing test passed 25/25 fresh unittest processes."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "tests.test_durable_pipe passed 11/11 and tests.test_durable_pipe_restart passed 10/10."
+  - criterion_id: AC-5
+    status: PASS
+    evidence: "Exactly one canonical short-path ./verify completed 63/63 classified modules and 913 tests with exit code 0."
+  - criterion_id: AC-6
+    status: PASS_PENDING_REPORT_PUBLICATION
+    evidence: "Implementation commit contains only tests/test_durable_pipe.py; .h/.v are removed. Final clean synchronized MAIN ONLY proof is performed after this report is published."
+
+blocking_findings: []
