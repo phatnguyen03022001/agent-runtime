@@ -1,0 +1,223 @@
+protocol_version: 3
+task_id: TASK-0205
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: PASS
+
+task_source:
+  path: .agent/tasks/TASK-0205/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "a4154581e91206aeab980edcc18f350582afd409"
+  implementation_commit: "2802fad8148e80eafe3160aec6e302fde3b59a75"
+  implementation_tree: "89037c4adc55a7022c93f5876ea041cf2fafa0cc"
+  task_0204_closed_blocked: true
+  task_0196_paused: true
+
+preconditions:
+  main_equals_origin_main: true
+  initial_head: "a4154581e91206aeab980edcc18f350582afd409"
+  worktree_clean: true
+  index_clean: true
+  branch_count: 1
+  worktree_count: 1
+  historical_runs:
+    - {id: 36912032079, attempt: 1, status: completed, conclusion: failure, rerun_observed: false}
+    - {id: 36956517661, attempt: 1, status: completed, conclusion: failure, rerun_observed: false}
+  release_workflow:
+    path: .github/workflows/release-gate.yml
+    blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+    expected_blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+    unchanged: true
+
+root_cause:
+  classification: transient_process_identity_bootstrap
+  remote_failure:
+    run_id: 36956517661
+    module: tests.test_durable_pipe
+    test: tests.test_durable_pipe.DurablePipeTests.test_runner_argv_is_opaque_and_durable_files_are_private
+    reason_code: DURABLE_OWNER_LOST
+    location: manager.start
+  summary: "The durable runner admitted the first non-None process identity observation. A transient first observation could therefore be sealed into RUNNING state and immediately fail exact post-publication ownership verification."
+
+implementation:
+  changed_paths:
+    - agent_runtime/durable_pipe_runner.py
+    - tests/test_durable_pipe.py
+  identity_admission:
+    helper: agent_runtime.durable_pipe_runner._identity_with_retry
+    observation_budget_seconds: 0.5
+    poll_interval_seconds: 0.01
+    required_consecutive_equal_observations: 2
+    comparison: exact_dict_equality
+    none_observation_resets_candidate: true
+    different_observation_replaces_candidate: true
+    runner_identity_uses_same_helper: true
+    target_identity_uses_same_helper: true
+    preserved_identity_fields:
+      - pid
+      - pgid
+      - start_sec
+      - start_usec
+      - executable_dev
+      - executable_ino
+  short_process_behavior:
+    identity_fabrication: false
+    authority: process.poll
+    behavior: "If no stable target identity exists and process.poll() proves the target already exited, the initial persisted state is terminalized as COMPLETED/natural_exit instead of publishing ownerless RUNNING state."
+    still_running_without_stable_identity: "Fail closed and terminate without publishing RUNNING ownership."
+  preserved_security_semantics:
+    durable_pipe_identity_schema_changed: false
+    verify_process_identity_changed: false
+    session_owner_loss_grace_changed: false
+    durable_owner_lost_retryability_changed: false
+    durable_owner_loss_swallowed: false
+    terminal_lifecycle_or_control_api_changed: false
+
+tdd_evidence:
+  initial_regression_red:
+    command: ".venv/bin/python -m unittest tests.test_durable_pipe.DurablePipeTests.test_identity_with_retry_rejects_transient_first_observation tests.test_durable_pipe.DurablePipeTests.test_identity_with_retry_none_resets_stability tests.test_durable_pipe.DurablePipeTests.test_identity_with_retry_accepts_two_equal_observations tests.test_durable_pipe.DurablePipeTests.test_identity_with_retry_different_observations_reset_stability"
+    tests: 4
+    result: FAIL
+    failures: 4
+    decisive_evidence: "The pre-change helper returned the first observation and observe_process_identity was called only once."
+  identity_regression_green:
+    tests: 4
+    result: PASS
+    coverage:
+      - "A -> B -> B returns B, never A."
+      - "A -> None -> B -> B returns B."
+      - "A -> A returns A after two observations."
+      - "Different consecutive non-None observations reset stability."
+  discovered_short_process_regression:
+    test: tests.test_durable_pipe.DurablePipeTests.test_snapshot_consistency_still_rejects_mixed_generation_and_integrity_corruption
+    red_result: FAIL
+    red_reason: "A short-lived target could exit before stable identity admission; persisting RUNNING with process_identity=None was rejected by durable state validation."
+    green_result: PASS
+    resolution: "Use observed process.poll() return code to publish terminal natural-exit state without inventing an owner identity."
+
+reliability_verification:
+  exact_owner_test:
+    test: tests.test_durable_pipe.DurablePipeTests.test_runner_argv_is_opaque_and_durable_files_are_private
+    execution_mode: "25 fresh unittest processes after final production change"
+    attempts: 25
+    passed: 25
+    failed: 0
+    result: PASS
+  concurrent_owner_stress:
+    rounds: 10
+    fresh_processes_per_round: 4
+    total_attempts: 40
+    passed: 40
+    failed: 0
+    result: PASS
+  durable_pipe_module:
+    command: ".venv/bin/python -m unittest tests.test_durable_pipe"
+    tests: 15
+    result: PASS
+    duration_seconds: 2.489
+  durable_pipe_restart_module:
+    command: ".venv/bin/python -m unittest tests.test_durable_pipe_restart"
+    tests: 10
+    result: PASS
+    duration_seconds: 4.958
+    intentional_owner_loss_semantics_preserved: true
+  git_diff_check:
+    command: "git diff --check"
+    result: PASS
+
+canonical_verification:
+  command: 'HOME="$PWD/.h" TMPDIR="$PWD/.v" ./verify'
+  invocation_count: 1
+  replay_count: 0
+  start_identity: "0205aa130205aa130205aa130205aa13"
+  session_id: "420c95cadc314c01"
+  lifecycle: COMPLETED
+  termination_reason: natural_exit
+  exit_code: 0
+  result: PASS
+  profile: qualification
+  requested_profile: qualification
+  classified_modules: 63
+  completed_modules: 63
+  tests: 917
+  duration_seconds: 137.563
+  lane_counts:
+    L1_DETERMINISTIC_UNIT: {selected: 17, completed: 17, tests: 231}
+    L2_ISOLATED_INTEGRATION: {selected: 21, completed: 21, tests: 242}
+    L3_DETERMINISTIC_REGRESSION: {selected: 10, completed: 10, tests: 94}
+    L4_HOST_LIFECYCLE: {selected: 9, completed: 9, tests: 184}
+    L5_QUALIFICATION_CHAOS_CUTOVER: {selected: 6, completed: 6, tests: 166}
+  durable_pipe:
+    tests: 15
+    result: PASS
+  durable_pipe_restart:
+    tests: 10
+    result: PASS
+    duration_seconds: 5.909
+  candidate_cutover:
+    tests: 125
+    result: PASS
+    duration_seconds: 90.050
+  product_qualification:
+    tests: 16
+    result: PASS
+    duration_seconds: 33.832
+
+cleanup:
+  short_home_path: .h
+  short_tmpdir_path: .v
+  short_home_removed: true
+  short_tmpdir_removed: true
+  temporary_verification_residue: false
+
+scope_proof:
+  implementation_commit_changed_paths:
+    - agent_runtime/durable_pipe_runner.py
+    - tests/test_durable_pipe.py
+  agent_runtime_durable_pipe_changed: false
+  agent_runtime_session_changed: false
+  workflow_changed: false
+  verification_policy_changed: false
+  docs_changed: false
+  version_changed: false
+  dependencies_changed: false
+  release_workflow_blob_after_implementation: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+
+effect_accounting:
+  canonical_verify: {authorized_max: 1, consumed: 1}
+  github_workflow_dispatch: {authorized_max: 0, consumed: 0}
+  github_workflow_rerun: {authorized_max: 0, consumed: 0}
+  local_distribution_build: {authorized_max: 0, consumed: 0}
+  install_prebuilt: {authorized_max: 0, consumed: 0}
+  commit_cutover: {authorized_max: 0, consumed: 0}
+  rollback_cutover: {authorized_max: 0, consumed: 0}
+  menu_bar_relaunch: {authorized_max: 0, consumed: 0}
+  runtime_restart: {authorized_max: 0, consumed: 0}
+  runtime_explicit_start: {authorized_max: 0, consumed: 0}
+  runtime_explicit_stop: {authorized_max: 0, consumed: 0}
+  plugin_reload_or_reconnect: {authorized_max: 0, consumed: 0}
+  credential_rotation: {authorized_max: 0, consumed: 0}
+  physical_reboot: {authorized_max: 0, consumed: 0}
+  new_security_permission: {authorized_max: 0, consumed: 0}
+  version_tag_create: {authorized_max: 0, consumed: 0}
+  github_release_publish: {authorized_max: 0, consumed: 0}
+  branch_or_pr_creation: {authorized_max: 0, consumed: 0}
+  workflow_mutation: 0
+  runtime_env_mutation: 0
+  tag_creation: 0
+  release_publication: 0
+
+acceptance_evidence:
+  - {criterion_id: AC-1, status: PASS, evidence: "Two consecutive exact non-None observations are required within 0.5 seconds with 0.01-second polling for both runner and target identities; A->B->B seals B."}
+  - {criterion_id: AC-2, status: PASS, evidence: "All six identity fields, durable_pipe identity schema, verify_process_identity exact equality, and post-publication DURABLE_OWNER_LOST behavior remain unchanged; restart owner-loss tests pass."}
+  - {criterion_id: AC-3, status: PASS, evidence: "The exact TASK-0203 owner test passed 25/25 fresh isolated processes and 40/40 fresh four-way concurrent stress executions after the final production change."}
+  - {criterion_id: AC-4, status: PASS, evidence: "tests.test_durable_pipe passed 15/15 and tests.test_durable_pipe_restart passed 10/10."}
+  - {criterion_id: AC-5, status: PASS, evidence: "Exactly one canonical short-path ./verify completed 63/63 modules and 917 tests with exit code 0; no replay occurred."}
+  - {criterion_id: AC-6, status: PASS_PENDING_REPORT_PUBLICATION, evidence: "Implementation commit changes only durable_pipe_runner.py and test_durable_pipe.py; workflow blob remains exact. This report is the only report child before final clean synchronized MAIN ONLY proof."}
+
+blocking_findings: []
