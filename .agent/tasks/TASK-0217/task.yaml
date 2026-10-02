@@ -1,0 +1,181 @@
+protocol_version: 3
+task_id: TASK-0217
+task_revision: 1
+state: APPROVED
+title: "Durable Manager-Side Owner Verification Stabilization"
+
+origin:
+  type: architect_continuation
+  predecessor_task: TASK-0216
+  finding: F-0216-001
+  goal: "Close the remaining manager-side durable owner observation reliability gap without weakening exact process-instance ownership."
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+
+execution_skills:
+  required: [executor, verification, reliability, security-review, simplicity]
+
+revision_basis:
+  blocked_task_0216_report: "e5c64b0fe580d746ff24699678bf7a462dd4f2b2"
+  blocked_task_0216_review: "c75d94cafde3246931016aac8d872c68bbada921"
+  remote_run_id: 36974192763
+  remote_failure:
+    module: tests.test_durable_pipe
+    test: tests.test_durable_pipe.DurablePipeTests.test_runner_argv_is_opaque_and_durable_files_are_private
+    reason_code: DURABLE_OWNER_LOST
+    failure_path: "TerminalSessionManager.start -> _dispatch_durable -> _refresh_durable_session"
+    verifier_completed_modules: 5
+    verifier_classified_modules: 63
+    verifier_tests: 196
+  accepted_task_0205:
+    purpose: "stable exact runner/target identity admission before durable RUNNING publication"
+    implementation_commit: "2802fad8148e80eafe3160aec6e302fde3b59a75"
+  accepted_task_0211:
+    purpose: "stable exact target identity revalidation inside durable_pipe_runner at hard-wall/control signaling"
+    implementation_commit: "b177870e51f3ecb7ab8eb18bf62e45b3930fea16"
+  accepted_workflow_blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  paused_release_task: TASK-0196
+  architect_local_observation:
+    exact_test_isolated: "40/40 PASS"
+    exact_test_six_way_concurrent: "120/120 PASS"
+    implication: "The failure is not a deterministic true owner mismatch; it is exposed at the manager-side observation boundary under hosted-runner conditions."
+
+proven_gap:
+  component: agent_runtime/session.py
+  current_semantics:
+    - "_snapshot_owner_valid(snapshot) evaluates verify_process_identity(runner_identity) AND verify_process_identity(process_identity)."
+    - "verify_process_identity performs one observe_process_identity sample and exact six-field equality."
+    - "Because of boolean short-circuiting, a transient runner observation failure prevents target observation in that sampling iteration."
+    - "_refresh_durable_session retries this compound one-shot pair during the existing 2.0-second finalization grace."
+  distinction:
+    - "TASK-0205 stabilized what identities are persisted before RUNNING publication."
+    - "TASK-0211 stabilized later target identity checks inside durable_pipe_runner."
+    - "Neither task stabilized manager-side validation of the already-persisted runner and target identities."
+  security_boundary: "A genuine persisted runner or target process-instance mismatch must remain fail-closed as DURABLE_OWNER_LOST."
+
+objective: "Make TerminalSessionManager validate persisted durable runner and target identities with bounded independent exact observation semantics during the existing reconciliation window, so transient observation failure of one owner does not suppress observation of the other. Preserve exact six-field identity equality, the existing 2.0-second finalization grace, true owner-loss behavior, durable schemas and public terminal APIs."
+
+scope:
+  required_changes:
+    - "Fresh-bind exact revision-1 base with clean synchronized MAIN ONLY and one worktree."
+    - "Modify production behavior only in agent_runtime/session.py."
+    - "Do not change agent_runtime/durable_pipe_runner.py; accepted TASK-0205 and TASK-0211 runner-side behavior is frozen."
+    - "Do not change agent_runtime/durable_pipe.py identity schema, observe_process_identity, or verify_process_identity exact equality."
+    - "Replace the manager's coupled one-shot runner+target owner validation with a bounded manager-side verification path that observes both persisted owners independently during the existing reconciliation window."
+    - "A runner observation failure must not short-circuit target observation for that sampling pass, and vice versa."
+    - "Every accepted owner observation must still use verify_process_identity against the exact persisted six-field identity: pid, pgid, start_sec, start_usec, executable_dev, executable_ino."
+    - "Do not partially compare fields, substitute PID-only checks, infer ownership from process existence, or accept a new identity."
+    - "Do not increase _DURABLE_FINALIZATION_GRACE_SECONDS from 2.0 seconds."
+    - "Do not add any additional owner-loss grace outside the existing 2.0-second reconciliation window."
+    - "Preserve terminal-state reconciliation: if the durable runner atomically publishes status=exited while active ownership is being reconciled, accept that exact terminal snapshot through the existing finalization path."
+    - "A genuinely stable mismatching or unavailable persisted owner at the end of the existing bound must still set/project DURABLE_OWNER_LOST with effect_state UNKNOWN, reconciliation_required=true and safe_next_action=RECONCILE."
+    - "Preserve session lease release, timing emission, start_identity binding, durable recovery, output retention, capacity and public terminal_start/poll/control semantics."
+    - "Add deterministic regressions in tests/test_durable_pipe.py for the manager-side seam."
+    - "Regression A must model transient runner verification failure while target verification is independently healthy and prove target observation is not suppressed."
+    - "Regression B must model transient target verification failure while runner verification is independently healthy and prove runner continuity is retained."
+    - "Regression C must model independently transient runner/target observations that become exact within the existing bound and prove manager.start/reconciliation succeeds without DURABLE_OWNER_LOST."
+    - "Regression D must model a true persistent mismatch for runner and separately for target; each must remain fail-closed as DURABLE_OWNER_LOST."
+    - "The deterministic regression set must fail against the exact pre-fix manager-side semantics for the coupled observation defect rather than depend on scheduler luck."
+    - "Preserve TASK-0205 identity-admission tests, TASK-0211 late-identity tests and intentional owner-loss/reused-process protections."
+    - "Run the exact remote failing test 50/50 in fresh unittest processes."
+    - "Then run 20 stress rounds with six fresh processes executing the exact remote failing test concurrently; require 120/120 PASS."
+    - "Run full tests.test_durable_pipe once and tests.test_durable_pipe_restart once."
+    - "Run git diff --check."
+    - "Only after deterministic/focused/stress proof passes, run exactly one canonical HOME=$PWD/.h TMPDIR=$PWD/.v ./verify."
+    - "Canonical verifier must PASS all classified modules. Reconcile an ambiguous durable carrier acknowledgement to the same start_identity/session; never replay."
+    - "Remove .h/.v and all TASK-0217 scratch/residue before final observation."
+    - "Confirm release-gate workflow blob remains exactly fa0c6bc61bb660b103f3a45b239ac52def7ae1b8."
+    - "Publish one implementation commit and then only .agent/tasks/TASK-0217/report.yaml as report child."
+    - "Final main clean/synchronized MAIN ONLY, one branch, one worktree."
+
+  allowed_existing_files_or_components:
+    - "agent_runtime/session.py"
+    - "tests/test_durable_pipe.py"
+    - ".agent/tasks/TASK-0217/report.yaml"
+
+invariants:
+  - "All six process identity fields and exact equality semantics remain unchanged."
+  - "agent_runtime/durable_pipe_runner.py remains byte-for-byte unchanged."
+  - "agent_runtime/durable_pipe.py identity observation/verification remains byte-for-byte unchanged."
+  - "_DURABLE_FINALIZATION_GRACE_SECONDS remains exactly 2.0."
+  - "True owner mismatch remains DURABLE_OWNER_LOST and fail-closed."
+  - "Durable state/spec/control schemas remain unchanged."
+  - "Public terminal contracts remain unchanged."
+  - "Release-gate workflow remains unchanged."
+  - "No verification-policy/docs/dependency/version/schema change."
+  - "No GitHub Actions dispatch/rerun."
+  - "No package/release/live Runtime/config/plugin/credential/permission/reboot effect."
+  - "TASK-0196 remains paused."
+  - "MAIN ONLY."
+
+forbidden_changes:
+  - "Any production file other than agent_runtime/session.py."
+  - "Any change to agent_runtime/durable_pipe_runner.py or agent_runtime/durable_pipe.py."
+  - "Any weakening, partial comparison or replacement of persisted process identity."
+  - "Any increase to the 2.0-second finalization grace or creation of another owner-loss retry budget."
+  - "Making DURABLE_OWNER_LOST retryable, swallowed, downgraded or successful."
+  - "Any terminal API, capacity, schema, output-retention or process-group behavior change."
+  - "Any workflow, verification policy, docs, dependency, version or schema change."
+  - "Any GitHub Actions dispatch/rerun."
+  - "Any local distribution build, tag/release or live Runtime mutation."
+  - "Any second canonical ./verify after a conclusive result or blind replay."
+  - "Any branch or PR."
+
+effect_authority:
+  canonical_verify_max: 1
+  github_workflow_dispatch_max: 0
+  github_workflow_rerun_max: 0
+  local_distribution_build_max: 0
+  workflow_artifact_download_max: 0
+  launchservices_mutation_max: 0
+  install_prebuilt_max: 0
+  commit_cutover_max: 0
+  rollback_cutover_max: 0
+  menu_bar_relaunch_max: 0
+  runtime_restart_max: 0
+  runtime_explicit_start_max: 0
+  runtime_explicit_stop_max: 0
+  plugin_reload_or_reconnect_max: 0
+  credential_rotation_max: 0
+  physical_reboot_max: 0
+  new_security_permission_max: 0
+  version_tag_create_max: 0
+  github_release_publish_max: 0
+  branch_or_pr_creation_max: 0
+
+acceptance_criteria:
+  - {id: AC-1, requirement: "Manager-side durable owner verification no longer couples runner and target one-shot observation.", evidence_required: "Both persisted owners are independently observed within the existing 2s window; transient failure of one does not suppress observation of the other."}
+  - {id: AC-2, requirement: "Ownership security is unchanged.", evidence_required: "Exact six-field verify_process_identity remains authority; persistent runner or target mismatch still produces DURABLE_OWNER_LOST with existing reconciliation metadata."}
+  - {id: AC-3, requirement: "Remote failing owner test is locally stable under stress.", evidence_required: "50/50 isolated and 120/120 six-way concurrent fresh-process executions PASS."}
+  - {id: AC-4, requirement: "Durable lifecycle/restart behavior remains intact.", evidence_required: "Full tests.test_durable_pipe and tests.test_durable_pipe_restart PASS including intentional owner-loss tests."}
+  - {id: AC-5, requirement: "Canonical verification passes.", evidence_required: "Exactly one canonical ./verify PASS with no replay."}
+  - {id: AC-6, requirement: "Canonical closure.", evidence_required: "Only session.py + test + report changed; runner/durable identity source and workflow unchanged; clean synchronized MAIN ONLY."}
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "Deterministic manager-side owner-observation regressions + isolated/concurrent remote-test stress + full durable modules + exactly one canonical ./verify."
+    expected_signal: "Transient manager-side observation does not create false owner loss, while genuine persisted process-instance mismatch remains fail-closed."
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions: [BLOCKED, STALE_STATE, AUTHORITY_REQUIRED, CURRENT_PHASE_CAPABILITY_UNAVAILABLE, REVIEW_REQUIRED, REVERIFY_REQUIRED, USER_STOP]
+
+git_authority: {create_branch: false, commit: true, push: true, promote_to_main: false}
+release_authority: {create_version_tag: false, mutate_repository_metadata: false, publish_release: false}
+blocking_decisions: []
+execution_ready: true
