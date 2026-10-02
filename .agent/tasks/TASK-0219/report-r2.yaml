@@ -1,0 +1,211 @@
+protocol_version: 3
+task_id: TASK-0219
+task_revision: 2
+report_revision: 2
+state: REPORTED
+result: BLOCKED
+
+task_source:
+  path: .agent/tasks/TASK-0219/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "22aa9588b40dd106d74d73bae591c08b928b2323"
+  implementation_commit: "94cfd8f0ff363d6a654cedb1e8a65e9849a5ab6e"
+  final_execution_head: "94cfd8f0ff363d6a654cedb1e8a65e9849a5ab6e"
+  predecessor_revision_1_implementation: "3db36125699560dda6f9767a6f61ba3f29971771"
+  task_0196_paused: true
+
+implementation:
+  scope:
+    production_changed: [macos/packaging_python.sh]
+    tests_changed: [tests/test_packaging_interpreter.py]
+  correction:
+    requirement: "CPython 3.13.x/cp313 on macOS arm64 with pip"
+    behavior: "validate_packaging_python preserves the existing CPython identity checks and additionally requires the exact interpreter to execute '-m pip --version' successfully."
+    fallback: false
+    ensurepip_or_install: false
+    network_effect: false
+  preserved_revision_1_blobs:
+    macos_package_app_sh: "dbaf89f4a3f0a7678a6870233bb4afa66db03181"
+    test_package_provenance_py: "8302b42a66561186b7c5d238fc550c690ab4b26e"
+    release_bundle_py: "ee5d96ee2ef8ce2f2186e042acb2e78fc4cfce9b"
+    release_workflow: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+
+tdd:
+  red:
+    result: PASS_AS_EXPECTED_FAILURE
+    tests: 2
+    failures: 2
+    decisive_evidence:
+      - "An otherwise-valid cp313/Darwin/arm64 interpreter without pip was incorrectly accepted with return code 0."
+      - "package_app.sh reached staged-source handling instead of failing as an unsupported packaging interpreter."
+  green:
+    result: PASS
+    tests: 2
+    evidence:
+      - "The missing-pip interpreter is rejected by validator preflight."
+      - "An otherwise-identical pip-capable interpreter is accepted."
+      - "package_app.sh rejects the stripped interpreter before venv creation, dependency installation or Swift build."
+
+focused_verification:
+  packaging_interpreter:
+    tests: 15
+    result: PASS
+  package_provenance:
+    tests: 27
+    result: PASS
+  surface_and_scripts:
+    tests: 23
+    result: PASS
+  total_tests: 65
+  shell_syntax:
+    macos_packaging_python_sh: PASS
+    macos_package_app_sh: PASS
+  git_diff_check: PASS
+  scope_audit: PASS
+
+canonical_verify:
+  invocation_count: 1
+  replay_count: 0
+  command: 'HOME="$PWD/.h" TMPDIR="$PWD/.v" ./verify'
+  start_identity: "0219021902190219021902190219023d"
+  session_id: "3c02319f5a0a0318"
+  lifecycle: COMPLETED
+  termination_reason: natural_exit
+  exit_code: 0
+  result: PASS
+  classified_modules: 63
+  completed_modules: 63
+  tests: 931
+  duration_seconds: 137.466
+  packaging_interpreter: {tests: 15, result: PASS}
+  package_provenance: {tests: 27, result: PASS}
+  surface_and_scripts: {tests: 23, result: PASS}
+  durable_pipe: {tests: 22, result: PASS, duration_seconds: 3.543}
+  durable_pipe_restart: {tests: 10, result: PASS, duration_seconds: 5.399}
+  supervised_lifecycle: {tests: 20, result: PASS, duration_seconds: 18.429}
+
+implementation_publication:
+  published: true
+  branch: main
+  expected_remote_head: "22aa9588b40dd106d74d73bae591c08b928b2323"
+  commit: "94cfd8f0ff363d6a654cedb1e8a65e9849a5ab6e"
+  force_used: false
+
+physical_qualification:
+  packaging_interpreter:
+    path: "/Users/tienphat/.local/share/uv/python/cpython-3.13.5-macos-aarch64-none/bin/python3.13"
+    validator_result: PASS
+    pip: "pip 24.3.1"
+    implementation: cpython
+    version: "3.13.5"
+    cache_tag: cpython-313
+    soabi: cpython-313-darwin
+    platform: darwin
+    machine: arm64
+    base_prefix: "/Users/tienphat/.local/share/uv/python/cpython-3.13.5-macos-aarch64-none"
+    stdlib: "/Users/tienphat/.local/share/uv/python/cpython-3.13.5-macos-aarch64-none/lib/python3.13"
+    operator_home_marker: "/Users/tienphat"
+
+  package_build:
+    authorized_max: 1
+    invocation_count: 1
+    replay_count: 0
+    start_identity: "02190219021902190219021902190241"
+    session_id: "45cdb4e52f52935a"
+    initial_acknowledgement: AMBIGUOUS_DURABLE_OWNER_IDENTITY
+    reconciliation: "No redispatch; the same start identity resolved to one retained terminal result."
+    lifecycle: COMPLETED
+    termination_reason: natural_exit
+    exit_code: 0
+    result: PASS
+    swift_release_build: PASS
+    candidate_sha256: "fc06b8d9fc749beeb5cfaadfb483d988abde4f7da24c736c7e7265cbc4ca6639"
+    initial_payload_closure: "f155f079fdcce25094ab66563c7103e78a636c76726ad1995bb9dfd2c1ee4950"
+
+  candidate_contract:
+    candidate_regular_file_scan: FAIL
+    operator_home_marker_hits: 24
+    packaging_base_prefix_hits: 0
+    all_marker_hits_are_pyc: true
+    pycache_directories: 5
+    pyc_files: 24
+    pyvenv_cfg_absent: true
+    python_libpython_load_dependency: "@executable_path/../lib/libpython3.13.dylib"
+    libpython_install_identity: "@executable_path/../lib/libpython3.13.dylib"
+    evidence: "All 24 host-identity hits are generated CPython bytecode files under runtime/.venv/lib/python3.13/**/__pycache__ and contain /Users/tienphat."
+
+  relocation_proof:
+    result: NOT_EXECUTED
+    reason: "Required full candidate byte scan failed before relocation."
+
+  deterministic_release_bundle:
+    build_1: NOT_EXECUTED
+    build_2: NOT_EXECUTED
+    byte_comparison: NOT_EXECUTED
+    verify: NOT_EXECUTED
+    reason: "Candidate failed the prerequisite host-identity scan; the unchanged release gate must not be bypassed."
+
+cleanup:
+  canonical_verify_home_removed: true
+  canonical_verify_tmpdir_removed: true
+  package_temp_dirs_remaining: 0
+  newly_created_candidate_removed: "fc06b8d9fc749beeb5cfaadfb483d988abde4f7da24c736c7e7265cbc4ca6639"
+  candidate_count_before: 22
+  candidate_count_after: 22
+  relocation_root_created: false
+  release_output_roots_created: false
+
+effect_accounting:
+  canonical_verify: {authorized_max: 1, consumed: 1}
+  local_distribution_build: {authorized_max: 1, consumed: 1}
+  local_release_bundle_build: {authorized_max: 2, consumed: 0}
+  local_release_bundle_verify: {authorized_max: 1, consumed: 0}
+  github_workflow_dispatch: {authorized_max: 0, consumed: 0}
+  github_workflow_rerun: {authorized_max: 0, consumed: 0}
+  workflow_artifact_download: {authorized_max: 0, consumed: 0}
+  live_runtime_effect: 0
+  tag_or_release_effect: 0
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: FAIL
+  evidence: "Validator RED/GREEN, all focused verification and the single canonical verify passed. The single real pip-capable package build also passed, but the exact emitted candidate failed the mandatory host-identity byte scan because post-finalization Python execution regenerated 24 .pyc files under five __pycache__ directories containing the operator HOME path. Relocation and release-bundle proof were therefore not authorized to continue."
+
+pushed: false
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "Missing-pip cp313 is rejected by corrected preflight; pip-capable source cp313 is accepted; package entrypoint fails missing-pip before build work."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "package_app.sh, package-provenance tests, release_bundle.py and release workflow remain at their frozen revision-1 blobs; existing relocation regressions pass."
+  - criterion_id: AC-3
+    status: FAIL
+    evidence: "The one real candidate has correct pyvenv/libpython contracts but contains 24 generated .pyc files carrying /Users/tienphat, so it is not host-independent."
+  - criterion_id: AC-4
+    status: NOT_PROVEN
+    evidence: "Package build and requirements.lock dependency installation passed, but relocation import proof was stopped by the failed candidate byte scan."
+  - criterion_id: AC-5
+    status: NOT_PROVEN
+    evidence: "No release-bundle build was run because the frozen candidate already failed the mandatory host-identity prerequisite."
+  - criterion_id: AC-6
+    status: PASS
+    evidence: "Focused tests total 65 PASS; shell syntax and diff checks PASS; exactly one canonical verify PASS with 63/63 modules and 931 tests."
+  - criterion_id: AC-7
+    status: PARTIAL_AT_REPORT_AUTHORSHIP
+    evidence: "Only validator source/tests changed in the implementation commit; generated candidate and verify temp roots are cleaned; workflow and frozen files are unchanged; this report-r2 is the only remaining authorized tracked mutation."
+
+blocking_findings:
+  - id: F-0219-002
+    severity: BLOCKING
+    classification: post_finalization_python_bytecode_host_identity
+    description: "The accepted revision-1 package flow removes bytecode caches before finalization, then executes finalized/package Python smokes that regenerate __pycache__/.pyc inside the package-owned stdlib. Those bytecode files encode the operator HOME path and violate the candidate host-independence and no-bytecode contracts."
+    boundary: "Revision 2 explicitly authorizes only the packaging-interpreter pip-capability correction and requires the revision-1 substrate implementation otherwise remain unchanged."
+    consequence: "The physical build budget is exhausted and the exact candidate fails the mandatory pre-relocation byte scan. Relocation and deterministic release-bundle proof cannot proceed in this revision."
+    task_response: "BLOCKED. Do not rebuild, rerun canonical verify, weaken release_bundle.py, or modify the substrate outside a new Architect-authorized revision."
