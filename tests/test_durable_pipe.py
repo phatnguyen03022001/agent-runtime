@@ -123,6 +123,181 @@ class DurablePipeTests(unittest.TestCase):
                 return last, chunks, cursor
         self.fail(f"durable session did not exit; last={last!r}")
 
+    def test_delayed_valid_bootstrap_reconciles_after_fast_observation_window(self) -> None:
+        manager = self.manager(hard_wall=10.0)
+        identity = "d" * 32
+        real_popen = subprocess.Popen
+        bootstrap_processes: list[subprocess.Popen[bytes]] = []
+
+        def delayed_bootstrap(argv, *args, **kwargs):
+            worker = (
+                "import sys,time; "
+                "time.sleep(2.25); "
+                "from agent_runtime.durable_pipe_runner import _worker; "
+                "raise SystemExit(_worker(sys.argv[1]))"
+            )
+            process = real_popen(
+                [sys.executable, "-c", worker, argv[-1]],
+                *args,
+                **kwargs,
+            )
+            bootstrap_processes.append(process)
+            return process
+
+        started = time.monotonic()
+        with patch("agent_runtime.session.subprocess.Popen", side_effect=delayed_bootstrap):
+            result = manager.start(
+                [
+                    sys.executable,
+                    "-u",
+                    "-c",
+                    "import time; print('delayed-valid', flush=True); time.sleep(1.5)",
+                ],
+                str(self.cwd),
+                identity,
+                "pipe",
+                "runtime_restart",
+            )
+        elapsed = time.monotonic() - started
+
+        self.assertEqual(len(bootstrap_processes), 1)
+        self.assertGreaterEqual(elapsed, 2.0)
+        self.assertLess(elapsed, 7.0)
+        self.assertIsNone(manager.recovery_reason())
+        self.assertEqual(result["status"], "running")
+        state = DurableStore(self.state_root).read_for_identity(identity).state
+        self.assertEqual(state["status"], "running")
+        self.assertTrue(verify_process_identity(state["runner_identity"]))
+        self.assertTrue(verify_process_identity(state["process_identity"]))
+        self.remember_owners(identity)
+
+        for process in bootstrap_processes:
+            process.wait(timeout=3.0)
+        self.assertEqual(bootstrap_processes[0].returncode, 0)
+
+    def test_genuinely_stuck_bootstrap_uses_one_overall_deadline_and_fails_closed(self) -> None:
+        manager = self.manager(hard_wall=10.0)
+        identity = "e" * 32
+        real_popen = subprocess.Popen
+        bootstrap_processes: list[subprocess.Popen[bytes]] = []
+
+        def stuck_bootstrap(_argv, *args, **kwargs):
+            process = real_popen(
+                [sys.executable, "-c", "import time; time.sleep(30)"],
+                *args,
+                **kwargs,
+            )
+            bootstrap_processes.append(process)
+            return process
+
+        started = time.monotonic()
+        with patch("agent_runtime.session.subprocess.Popen", side_effect=stuck_bootstrap):
+            with self.assertRaises(RuntimeStateError) as raised:
+                manager.start(
+                    [sys.executable, "-u", "-c", "print('must-not-run', flush=True)"],
+                    str(self.cwd),
+                    identity,
+                    "pipe",
+                    "runtime_restart",
+                )
+        elapsed = time.monotonic() - started
+
+        self.assertEqual(getattr(raised.exception, "reason_code", None), "DURABLE_OWNER_LOST")
+        self.assertTrue(getattr(raised.exception, "reconciliation_required", False))
+        self.assertEqual(len(bootstrap_processes), 1)
+        self.assertIsNone(bootstrap_processes[0].poll())
+        self.assertGreaterEqual(elapsed, 6.5)
+        self.assertLess(elapsed, 8.0)
+        self.assertFalse(
+            DurableStore(self.state_root).job_path_for_identity(identity).joinpath("state.json").exists()
+        )
+        bootstrap_processes[0].kill()
+        bootstrap_processes[0].wait(timeout=2.0)
+
+    def test_bootstrap_exit_before_state_reconciles_state_published_after_exit(self) -> None:
+        manager = self.manager(hard_wall=10.0)
+        identity = "f" * 32
+        real_popen = subprocess.Popen
+        bootstrap_processes: list[subprocess.Popen[bytes]] = []
+
+        def exit_before_state(argv, *args, **kwargs):
+            wrapper = (
+                "import os,sys,time\n"
+                "pid=os.fork()\n"
+                "if pid:\n"
+                "    os._exit(0)\n"
+                "time.sleep(.35)\n"
+                "from agent_runtime.durable_pipe_runner import _worker\n"
+                "os._exit(_worker(sys.argv[1]))\n"
+            )
+            process = real_popen(
+                [sys.executable, "-c", wrapper, argv[-1]],
+                *args,
+                **kwargs,
+            )
+            bootstrap_processes.append(process)
+            return process
+
+        with patch("agent_runtime.session.subprocess.Popen", side_effect=exit_before_state):
+            result = manager.start(
+                [
+                    sys.executable,
+                    "-u",
+                    "-c",
+                    "import time; print('after-bootstrap-exit', flush=True); time.sleep(2.0)",
+                ],
+                str(self.cwd),
+                identity,
+                "pipe",
+                "runtime_restart",
+            )
+        for process in bootstrap_processes:
+            process.wait(timeout=2.0)
+
+        self.assertEqual(len(bootstrap_processes), 1)
+        self.assertEqual(bootstrap_processes[0].returncode, 0)
+        self.assertEqual(result["status"], "running")
+        self.remember_owners(identity)
+
+    def test_authoritative_terminal_state_preserves_nonzero_terminal_outcome(self) -> None:
+        manager = self.manager(hard_wall=10.0)
+        identity = "1" * 32
+        real_popen = subprocess.Popen
+        bootstrap_processes: list[subprocess.Popen[bytes]] = []
+
+        def delayed_bootstrap(argv, *args, **kwargs):
+            worker = (
+                "import sys,time; "
+                "time.sleep(2.25); "
+                "from agent_runtime.durable_pipe_runner import _worker; "
+                "raise SystemExit(_worker(sys.argv[1]))"
+            )
+            process = real_popen(
+                [sys.executable, "-c", worker, argv[-1]],
+                *args,
+                **kwargs,
+            )
+            bootstrap_processes.append(process)
+            return process
+
+        with patch("agent_runtime.session.subprocess.Popen", side_effect=delayed_bootstrap):
+            result = manager.start(
+                [sys.executable, "-u", "-c", "raise SystemExit(7)"],
+                str(self.cwd),
+                identity,
+                "pipe",
+                "runtime_restart",
+            )
+        for process in bootstrap_processes:
+            process.wait(timeout=2.0)
+
+        self.assertEqual(len(bootstrap_processes), 1)
+        self.assertEqual(result["status"], "exited")
+        self.assertEqual(result["lifecycle"], "COMPLETED")
+        self.assertEqual(result["termination_reason"], "natural_exit")
+        self.assertEqual(result["exit_code"], 7)
+        self.remember_owners(identity)
+
     def test_identity_with_retry_rejects_transient_first_observation(self) -> None:
         first = {
             "pid": 4101,

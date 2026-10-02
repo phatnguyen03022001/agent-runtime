@@ -82,6 +82,9 @@ DEFAULT_EXEC_TIMEOUT_SECONDS = 300.0
 _READ_CHUNK_BYTES = 8192
 _READER_DRAIN_SECONDS = 0.2
 _DURABLE_FINALIZATION_GRACE_SECONDS = 2.0
+_DURABLE_BOOTSTRAP_FAST_OBSERVATION_SECONDS = 2.0
+_DURABLE_BOOTSTRAP_STATE_RECONCILIATION_SECONDS = 5.0
+_DURABLE_BOOTSTRAP_POLL_SECONDS = 0.02
 _REAPER_INTERVAL_SECONDS = 1.0
 
 def _complete_utf8_prefix_length(data: bytes, *, final: bool) -> int:
@@ -718,6 +721,14 @@ class TerminalSessionManager:
         ]
         session.process_started_wall = time.time()
         session.process_started_mono = time.monotonic()
+        bootstrap_fast_deadline = (
+            session.process_started_mono + _DURABLE_BOOTSTRAP_FAST_OBSERVATION_SECONDS
+        )
+        bootstrap_overall_deadline = (
+            session.process_started_mono
+            + _DURABLE_BOOTSTRAP_FAST_OBSERVATION_SECONDS
+            + _DURABLE_BOOTSTRAP_STATE_RECONCILIATION_SECONDS
+        )
         try:
             bootstrap = subprocess.Popen(
                 runner_argv,
@@ -748,40 +759,78 @@ class TerminalSessionManager:
                 )
             raise
 
-        try:
-            bootstrap.wait(timeout=2.0)
-        except subprocess.TimeoutExpired:
+        state_path = (
+            self._durable_store.job_path_for_identity(session.start_identity) / "state.json"
+        )
+        snapshot: DurableSnapshot | None = None
+        state_corrupt_observed = False
+        bootstrap_exit_observed = False
+
+        def read_authoritative_state() -> DurableSnapshot | None:
+            nonlocal state_corrupt_observed
+            if not state_path.exists():
+                return None
+            try:
+                return self._durable_store.read_snapshot(job_id)
+            except DurableStateCorrupt:
+                state_corrupt_observed = True
+                return None
+
+        def observe_until(limit: float) -> DurableSnapshot | None:
+            nonlocal bootstrap_exit_observed
+            while True:
+                candidate = read_authoritative_state()
+                if candidate is not None:
+                    bootstrap.poll()
+                    return candidate
+
+                returncode = bootstrap.poll()
+                if returncode is not None and not bootstrap_exit_observed:
+                    bootstrap_exit_observed = True
+                    # Bootstrap exit is a state-observation trigger, not ownership
+                    # evidence. Re-read durable state before any later owner-loss
+                    # classification so a handoff/exit race cannot discard truth.
+                    candidate = read_authoritative_state()
+                    if candidate is not None:
+                        bootstrap.poll()
+                        return candidate
+
+                now = time.monotonic()
+                if now >= limit:
+                    # Close the deadline race with one final authoritative read.
+                    candidate = read_authoritative_state()
+                    if candidate is not None:
+                        bootstrap.poll()
+                    return candidate
+                time.sleep(
+                    min(
+                        _DURABLE_BOOTSTRAP_POLL_SECONDS,
+                        max(0.0, limit - now),
+                    )
+                )
+
+        # The legacy ~2 second interval is only a fast observation window.
+        # Expiry does not classify ownership; the single overall deadline was
+        # fixed before dispatch and is never reset or extended.
+        snapshot = observe_until(
+            min(bootstrap_fast_deadline, bootstrap_overall_deadline)
+        )
+        if snapshot is None:
+            snapshot = observe_until(bootstrap_overall_deadline)
+
+        if snapshot is None:
+            if state_corrupt_observed:
+                session.durable_fault_reason = "DURABLE_STATE_CORRUPT"
+                self._raise_durable_unknown(
+                    "DURABLE_STATE_CORRUPT",
+                    "durable runner did not publish a consistent state",
+                )
             session.durable_fault_reason = "DURABLE_OWNER_LOST"
             self._durable_recovery_reason = "DURABLE_OWNER_LOST"
             self._raise_durable_unknown(
                 "DURABLE_OWNER_LOST",
-                "durable runner bootstrap did not establish ownership in time",
+                "durable runner dispatch outcome is unknown",
             )
-
-        deadline = time.monotonic() + 5.0
-        state_path = self._durable_store.job_path_for_identity(session.start_identity) / "state.json"
-        while True:
-            if state_path.exists():
-                try:
-                    snapshot = self._durable_store.read_snapshot(job_id)
-                except DurableStateCorrupt:
-                    if time.monotonic() < deadline:
-                        time.sleep(0.02)
-                        continue
-                    session.durable_fault_reason = "DURABLE_STATE_CORRUPT"
-                    self._raise_durable_unknown(
-                        "DURABLE_STATE_CORRUPT",
-                        "durable runner did not publish a consistent state",
-                    )
-                break
-            if time.monotonic() >= deadline:
-                session.durable_fault_reason = "DURABLE_OWNER_LOST"
-                self._durable_recovery_reason = "DURABLE_OWNER_LOST"
-                self._raise_durable_unknown(
-                    "DURABLE_OWNER_LOST",
-                    "durable runner dispatch outcome is unknown",
-                )
-            time.sleep(0.02)
 
         if (
             snapshot.state["session_id"] != session.session_id
