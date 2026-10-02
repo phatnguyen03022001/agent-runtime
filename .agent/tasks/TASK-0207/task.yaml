@@ -1,0 +1,156 @@
+protocol_version: 3
+task_id: TASK-0207
+task_revision: 1
+state: APPROVED
+title: "Liquid Glass SDK 26 Build Compatibility"
+
+origin:
+  type: architect_continuation
+  predecessor_task: TASK-0206
+  finding: F-0206-001
+  goal: "Keep Liquid Glass behavior while removing the static macOS-27-only AppKit member dependency that prevents the accepted macOS 26 release runner from compiling the menu-bar target."
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+
+execution_skills:
+  required: [executor, verification, reliability, simplicity]
+
+revision_basis:
+  blocked_task_0206_report: "765bc5e3b3469788851266be51c9335367ce08db"
+  blocked_task_0206_review: "ccac17af7f8f050395e341e7b28f5e7a1da50859"
+  remote_run_id: 36958918581
+  remote_failure:
+    source: macos/Sources/AgentRuntimeMenuBar/LiquidGlassSupport.swift
+    line: 32
+    compiler_message: "value of type 'NSGlassEffectView' has no member 'effectIsInteractive'"
+  accepted_workflow_blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  paused_release_task: TASK-0196
+
+objective: "Remove static references to the macOS-27-only NSGlassEffectView.effectIsInteractive member while preserving native NSGlassEffectView use on macOS 26+, preserving interactive glass visual behavior on macOS 27+ through guarded dynamic Objective-C/KVC access, and keeping macOS 13-15 fallback behavior unchanged."
+
+scope:
+  required_changes:
+    - "Fresh-bind exact revision-1 base with clean synchronized MAIN ONLY and one worktree."
+    - "Modify production behavior only in macos/Sources/AgentRuntimeMenuBar/LiquidGlassSupport.swift."
+    - "Keep NSGlassEffectView as the native background on macOS 26+ with style=.regular, tintColor=nil, cornerRadius=10.0, and contentView embedding unchanged."
+    - "Keep the standard NSView fallback and constraints on macOS 13-15 unchanged."
+    - "Remove every static Swift member access to NSGlassEffectView.effectIsInteractive from production source."
+    - "On macOS 27+, preserve interactive glass visual feedback using a bounded dynamic Objective-C path: resolve selector setEffectIsInteractive:, require glassView.responds(to:) before mutation, then set the KVC key effectIsInteractive to true."
+    - "The dynamic path must remain inside an #available(macOS 27.0, *) runtime guard."
+    - "If the selector is unexpectedly unavailable, do not crash and do not use undefined selector dispatch; leave the glass effect at the system default."
+    - "Do not use objc_msgSend, unsafeBitCast, reflection over private ivars, private API, or undocumented selector names."
+    - "Do not change LiquidGlassSupport.isLiquidGlassSupported semantics: true on macOS 26+, false below."
+    - "Update the LiquidGlassSupport comments so they accurately state that the optional macOS 27 interaction knob is dynamically bound to retain build compatibility with the macOS 26 SDK."
+    - "Modify macos/Tests/AgentRuntimeMenuBarTests/PresentationTests.swift only as needed to avoid static effectIsInteractive references while preserving behavior checks."
+    - "On macOS 27+, the Swift presentation test must prove setEffectIsInteractive: is available and KVC reports effectIsInteractive == true after makeBackgroundView."
+    - "On macOS 26, tests must continue to prove native NSGlassEffectView style/tint/corner/content behavior without evaluating the macOS 27 property."
+    - "On macOS 13-15, fallback assertions remain unchanged."
+    - "Add a persistent source-compatibility regression in tests/test_surface_and_scripts.py."
+    - "The regression must inspect LiquidGlassSupport.swift and PresentationTests.swift and reject any static '.effectIsInteractive' member access."
+    - "The regression must require the production source to retain the macOS 27 availability guard, setEffectIsInteractive: selector existence check, responds(to:) guard, and KVC assignment for effectIsInteractive."
+    - "Do not add a new Python test module."
+    - "Do not change Package.swift deployment floor, workflow runner, Xcode selection, release-gate workflow, compatibility matrix, version, schemas or public Runtime behavior."
+    - "Record local xcodebuild -version, xcrun swift --version and macOS SDK version as evidence. Local proof is source/current-SDK proof only and must not be described as SDK26 compilation proof."
+    - "Run focused Python regression tests for tests.test_surface_and_scripts."
+    - "Run the full AgentRuntimeMenuBar Swift test target through xcrun swift test --package-path macos using a run-owned repo-local scratch path."
+    - "Run one release-configuration native compile through xcrun swift build --package-path macos -c release using a separate run-owned repo-local scratch path."
+    - "Do not run macos/package_app.sh; no distribution candidate build is authorized in TASK-0207."
+    - "Run git diff --check."
+    - "Only after focused Python + Swift test + release compile pass, run exactly one canonical ./verify under HOME=$PWD/.h TMPDIR=$PWD/.v."
+    - "Never blind-replay an ambiguous canonical verifier result."
+    - "Remove .h/.v and all TASK-0207 Swift scratch directories before final observation."
+    - "Confirm release-gate workflow blob remains exactly fa0c6bc61bb660b103f3a45b239ac52def7ae1b8."
+    - "Publish one implementation commit and then only .agent/tasks/TASK-0207/report.yaml as the report child."
+    - "Final main clean/synchronized MAIN ONLY."
+
+  allowed_existing_files_or_components:
+    - "macos/Sources/AgentRuntimeMenuBar/LiquidGlassSupport.swift"
+    - "macos/Tests/AgentRuntimeMenuBarTests/PresentationTests.swift"
+    - "tests/test_surface_and_scripts.py"
+    - ".agent/tasks/TASK-0207/report.yaml"
+
+invariants:
+  - "Native Liquid Glass remains active on macOS 26+."
+  - "Interactive glass visual behavior remains enabled on macOS 27+ when the public selector exists."
+  - "macOS 13-15 fallback remains unchanged."
+  - "Package.swift minimum macOS remains 13."
+  - "No static effectIsInteractive member access remains in production or Swift tests."
+  - "No release-gate workflow change."
+  - "No Runtime Python source or lifecycle change."
+  - "No version/schema/dependency/documentation change."
+  - "No remote workflow dispatch/rerun."
+  - "No distribution package build, tag/release, live Runtime/config/plugin/credential/permission/reboot effect."
+  - "TASK-0196 remains paused."
+  - "MAIN ONLY."
+
+forbidden_changes:
+  - "Any production file other than LiquidGlassSupport.swift."
+  - "Any test file other than PresentationTests.swift and tests/test_surface_and_scripts.py."
+  - "Any direct '.effectIsInteractive' member access."
+  - "objc_msgSend, unsafeBitCast, private API or undocumented selector use."
+  - "Changing macOS deployment floor or compatibility claims."
+  - "Changing workflow runner/Xcode selection to hide the source incompatibility."
+  - "Any workflow, verification-policy, docs, dependency, version or schema change."
+  - "Any GitHub Actions dispatch/rerun."
+  - "Any macos/package_app.sh invocation or local zero-cost candidate build."
+  - "Any tag/GitHub Release/publication/live install/cutover/menu launch/Runtime lifecycle/plugin/config/credential/permission/reboot effect."
+  - "Any second canonical ./verify after a conclusive result or blind replay."
+  - "Any branch or PR."
+
+effect_authority:
+  canonical_verify_max: 1
+  github_workflow_dispatch_max: 0
+  github_workflow_rerun_max: 0
+  local_distribution_build_max: 0
+  install_prebuilt_max: 0
+  commit_cutover_max: 0
+  rollback_cutover_max: 0
+  menu_bar_relaunch_max: 0
+  runtime_restart_max: 0
+  runtime_explicit_start_max: 0
+  runtime_explicit_stop_max: 0
+  plugin_reload_or_reconnect_max: 0
+  credential_rotation_max: 0
+  physical_reboot_max: 0
+  new_security_permission_max: 0
+  version_tag_create_max: 0
+  github_release_publish_max: 0
+  branch_or_pr_creation_max: 0
+
+acceptance_criteria:
+  - {id: AC-1, requirement: "The SDK27-only static member dependency is removed without dropping Liquid Glass.", evidence_required: "No static .effectIsInteractive access; NSGlassEffectView remains macOS26+ background with unchanged style/tint/corner/content behavior."}
+  - {id: AC-2, requirement: "macOS27 interactive visual behavior is preserved safely.", evidence_required: "Guarded public selector existence check + responds(to:) + KVC set; local macOS27 Swift test proves selector availability and true value when that runtime branch is available."}
+  - {id: AC-3, requirement: "The incompatibility cannot silently return under newer local SDKs.", evidence_required: "Python source-contract regression rejects static member access in production/tests and requires the dynamic compatibility seam."}
+  - {id: AC-4, requirement: "Native Swift source remains healthy.", evidence_required: "Focused Swift tests PASS and one release-configuration swift build PASS on the local recorded toolchain; no claim of SDK26 proof."}
+  - {id: AC-5, requirement: "Canonical repository verification remains healthy.", evidence_required: "Focused Python proof + git diff --check + exactly one short-path ./verify PASS, no replay."}
+  - {id: AC-6, requirement: "Canonical closure.", evidence_required: "Only authorized Swift/test/report files changed; scratch roots removed; workflow blob unchanged; clean synchronized MAIN ONLY."}
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "Source compatibility regression + current-SDK Swift test/release compile + exactly one canonical short-path ./verify."
+    limitation: "Actual macOS 26 SDK compilation remains a separate remote release-gate qualification boundary."
+    expected_signal: "Source no longer statically depends on the SDK27-only member while macOS27 behavior remains verified on a supporting local runtime."
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions: [BLOCKED, STALE_STATE, AUTHORITY_REQUIRED, CURRENT_PHASE_CAPABILITY_UNAVAILABLE, REVIEW_REQUIRED, REVERIFY_REQUIRED, USER_STOP]
+
+git_authority: {create_branch: false, commit: true, push: true, promote_to_main: false}
+release_authority: {create_version_tag: false, mutate_repository_metadata: false, publish_release: false}
+blocking_decisions: []
+execution_ready: true
