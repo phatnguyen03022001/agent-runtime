@@ -1,0 +1,182 @@
+protocol_version: 3
+task_id: TASK-0209
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: PASS
+
+task_source:
+  path: .agent/tasks/TASK-0209/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "1b7b226ffaf5462994f056832e689e3500c8c789"
+  implementation_commit: "e2a85ee13aa65f43319cc26d6b47136fa723b501"
+  implementation_tree: "505c648ee25fc3b2d12a8a85512212d43d532372"
+  task_0196_paused: true
+
+preconditions:
+  main_equals_origin_main: true
+  initial_head: "1b7b226ffaf5462994f056832e689e3500c8c789"
+  origin_main_head: "1b7b226ffaf5462994f056832e689e3500c8c789"
+  worktree_clean: true
+  index_clean: true
+  branch_count: 1
+  worktree_count: 1
+
+root_cause:
+  classification: child_exit_pipe_drain_race
+  source: agent_runtime/repo_diff.py
+  function: _run_git
+  former_behavior: "A selector turn with no events checked process.poll(); if the child had exited, stdout/stderr were unregistered and the loop broke without requiring EOF."
+  consequence: "Buffered Git stdout could be discarded after successful child exit, causing valid rev-parse HEAD output to become empty and fail strict HEAD validation."
+  resolution: "A no-event selector turn now only continues bounded observation. Streams are unregistered only when os.read returns EOF; existing deadline and output-limit paths remain authoritative."
+
+implementation:
+  changed_paths:
+    - agent_runtime/repo_diff.py
+    - tests/test_repo_diff.py
+  production_delta: "Removed only the child-exited/no-selector-event unregister-and-break branch from _run_git."
+  preserved:
+    call_deadline_seconds: 5.0
+    git_executable: /usr/bin/git
+    shell: false
+    head_validation: "strict lowercase 40-hex"
+    stdout_limits: unchanged
+    stderr_limit: unchanged
+    git_environment: unchanged
+    git_argv_hardening: unchanged
+    retries_added: false
+    sleeps_or_grace_periods_added: false
+    shared_subprocess_abstraction_added: false
+  regression:
+    test: tests.test_repo_diff.RepoDiffTests.test_run_git_drains_buffered_pipes_after_child_exit_and_no_event_turn
+    scenario: "Child is already exited; selector intentionally yields one no-event turn before exposing buffered stdout/stderr and then EOF."
+    asserts:
+      - "Complete buffered stdout is returned after the no-event turn."
+      - "Buffered stderr is drained under the same exited-child condition."
+      - "Both streams remain registered until explicit EOF."
+      - "The selector requires three turns: no-event, data, EOF."
+
+red_green:
+  red:
+    command: ".venv/bin/python -m unittest tests.test_repo_diff.RepoDiffTests.test_run_git_drains_buffered_pipes_after_child_exit_and_no_event_turn"
+    exit_code: 1
+    result: FAIL_EXPECTED
+    decisive_failure: "AssertionError: b'' != buffered valid stdout"
+    reason: "Pre-fix _run_git discarded both pipes on the first no-event turn after child exit."
+  green:
+    command: ".venv/bin/python -m unittest tests.test_repo_diff.RepoDiffTests.test_run_git_drains_buffered_pipes_after_child_exit_and_no_event_turn"
+    exit_code: 0
+    tests: 1
+    result: PASS
+
+stability_verification:
+  exact_remote_failure_test: tests.test_repo_commit.RepoCommitTests.test_commit_tree_message_and_update_ref_expected_old_are_exact
+  isolated_fresh_processes:
+    required: 50
+    passed: 50
+    failed: 0
+    result: PASS
+  concurrent_stress:
+    rounds: 10
+    fresh_processes_per_round: 4
+    required: 40
+    passed: 40
+    failed: 0
+    result: PASS
+
+owner_module_verification:
+  tests_test_repo_diff: {tests: 13, failures: 0, errors: 0, result: PASS}
+  tests_test_repo_commit: {tests: 14, failures: 0, errors: 0, result: PASS}
+  tests_test_repo_stage: {tests: 20, failures: 0, errors: 0, result: PASS}
+  git_diff_check: {result: PASS}
+
+canonical_verification:
+  command: 'HOME="$PWD/.h" TMPDIR="$PWD/.v" ./verify'
+  invocation_count: 1
+  replay_count: 0
+  start_identity: "92099209920992099209920992099209"
+  session_id: "251e43db7c9fa44a"
+  timed_out: false
+  exit_code: 0
+  result: PASS
+  profile: qualification
+  requested_profile: qualification
+  classified_modules: 63
+  completed_modules: 63
+  tests: 919
+  duration_seconds: 137.591
+  lane_counts:
+    L1_DETERMINISTIC_UNIT: {selected: 17, completed: 17, tests: 231}
+    L2_ISOLATED_INTEGRATION: {selected: 21, completed: 21, tests: 243}
+    L3_DETERMINISTIC_REGRESSION: {selected: 10, completed: 10, tests: 95}
+    L4_HOST_LIFECYCLE: {selected: 9, completed: 9, tests: 184}
+    L5_QUALIFICATION_CHAOS_CUTOVER: {selected: 6, completed: 6, tests: 166}
+  repo_diff: {tests: 13, result: PASS}
+  repo_commit: {tests: 14, result: PASS}
+  repo_stage: {tests: 20, result: PASS}
+  durable_pipe: {tests: 15, result: PASS}
+  durable_pipe_restart: {tests: 10, result: PASS}
+  product_qualification: {tests: 16, result: PASS}
+
+cleanup:
+  short_home_path: .h
+  short_home_removed_or_absent: true
+  short_tmpdir_path: .v
+  short_tmpdir_removed_or_absent: true
+  task_0209_test_scratch_residue: false
+  untracked_repository_residue: false
+
+scope_proof:
+  implementation_commit_changed_paths:
+    - agent_runtime/repo_diff.py
+    - tests/test_repo_diff.py
+  forbidden_production_files_changed: false
+  forbidden_test_files_changed: false
+  repo_commit_production_changed: false
+  repo_stage_production_changed: false
+  repo_observer_production_changed: false
+  repo_fast_forward_production_changed: false
+  repo_remote_observer_production_changed: false
+  release_workflow_changed: false
+  verification_policy_changed: false
+  docs_changed: false
+  dependencies_changed: false
+  version_changed: false
+  schemas_changed: false
+  accepted_release_workflow_blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  observed_release_workflow_blob_after_implementation: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  workflow_blob_unchanged: true
+
+effect_accounting:
+  canonical_verify: {authorized_max: 1, consumed: 1}
+  github_workflow_dispatch: {authorized_max: 0, consumed: 0}
+  github_workflow_rerun: {authorized_max: 0, consumed: 0}
+  local_distribution_build: {authorized_max: 0, consumed: 0}
+  install_prebuilt: {authorized_max: 0, consumed: 0}
+  commit_cutover: {authorized_max: 0, consumed: 0}
+  rollback_cutover: {authorized_max: 0, consumed: 0}
+  menu_bar_relaunch: {authorized_max: 0, consumed: 0}
+  runtime_restart: {authorized_max: 0, consumed: 0}
+  runtime_explicit_start: {authorized_max: 0, consumed: 0}
+  runtime_explicit_stop: {authorized_max: 0, consumed: 0}
+  plugin_reload_or_reconnect: {authorized_max: 0, consumed: 0}
+  credential_rotation: {authorized_max: 0, consumed: 0}
+  physical_reboot: {authorized_max: 0, consumed: 0}
+  new_security_permission: {authorized_max: 0, consumed: 0}
+  version_tag_create: {authorized_max: 0, consumed: 0}
+  github_release_publish: {authorized_max: 0, consumed: 0}
+  branch_or_pr_creation: {authorized_max: 0, consumed: 0}
+
+acceptance_evidence:
+  - {criterion_id: AC-1, status: PASS, evidence: "Deterministic RED-before-fix regression proved the old exited-child/no-event branch discarded buffered stdout; the identical test passed after the minimal fix and drains stdout/stderr through explicit EOF."}
+  - {criterion_id: AC-2, status: PASS, evidence: "CALL_DEADLINE_SECONDS remains 5.0; output bounds, fixed /usr/bin/git, shell=False, Git argv/env hardening, strict lowercase 40-hex HEAD validation and no-retry semantics are unchanged."}
+  - {criterion_id: AC-3, status: PASS, evidence: "The exact remote repo_commit test passed 50/50 isolated fresh processes, then 40/40 executions across 10 rounds of four concurrent fresh processes."}
+  - {criterion_id: AC-4, status: PASS, evidence: "Full tests.test_repo_diff, tests.test_repo_commit and tests.test_repo_stage passed once with 13, 14 and 20 tests respectively; git diff --check passed."}
+  - {criterion_id: AC-5, status: PASS, evidence: "Exactly one canonical HOME=$PWD/.h TMPDIR=$PWD/.v ./verify invocation passed 63/63 classified modules and 919 tests; no replay occurred."}
+  - {criterion_id: AC-6, status: PASS_PENDING_REPORT_PUBLICATION, evidence: "Implementation commit contains only repo_diff.py and test_repo_diff.py; verification residue is absent; workflow blob remains exact. This report is the only report child before final clean synchronized MAIN ONLY proof."}
+
+blocking_findings: []
