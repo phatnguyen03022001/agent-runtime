@@ -1,0 +1,302 @@
+protocol_version: 3
+task_id: TASK-0206
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: BLOCKED
+
+task_source:
+  path: .agent/tasks/TASK-0206/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "549844388c3ef585f5d6c31c5ba65a441f65c562"
+  task_0196_paused: true
+
+pre_dispatch:
+  result: PASS
+  head_sha: "549844388c3ef585f5d6c31c5ba65a441f65c562"
+  origin_main_sha: "549844388c3ef585f5d6c31c5ba65a441f65c562"
+  worktree_clean: true
+  index_clean: true
+  branch: main
+  worktree_count: 1
+  task_0205_fix:
+    present: true
+    observation_budget_seconds: 0.5
+    poll_interval_seconds: 0.01
+    required_consecutive_equal_non_none_observations: 2
+    comparison: exact_dict_equality
+    authoritative_identity_fields:
+      - pid
+      - pgid
+      - start_sec
+      - start_usec
+      - executable_dev
+      - executable_ino
+  workflow:
+    path: .github/workflows/release-gate.yml
+    current_blob_sha: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+    accepted_blob_sha: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+    byte_identical_to_accepted: true
+    trigger: workflow_dispatch
+    permissions: {contents: read}
+    tag_or_release_authority: false
+  run_inventory:
+    count: 2
+    run_ids: [36956517661, 36912032079]
+  historical_runs:
+    - id: 36912032079
+      attempt: 1
+      status: completed
+      conclusion: failure
+      head_sha: "a34cc682d563f0746148fc453284927d2c0fde21"
+      workflow_path: .github/workflows/release-gate.yml
+      rerun_observed: false
+    - id: 36956517661
+      attempt: 1
+      status: completed
+      conclusion: failure
+      head_sha: "0f5a911f1b8378d4a8d7e00ea3437cae85319755"
+      workflow_path: .github/workflows/release-gate.yml
+      rerun_observed: false
+
+dispatch:
+  count: 1
+  budget: 1
+  ref: main
+  run_id: 36958918581
+  run_attempt: 1
+  rerun_count: 0
+  second_dispatch_count: 0
+
+run:
+  id: 36958918581
+  attempt: 1
+  event: workflow_dispatch
+  workflow_path: .github/workflows/release-gate.yml
+  head_branch: main
+  head_sha: "549844388c3ef585f5d6c31c5ba65a441f65c562"
+  head_sha_matches_authorized_base: true
+  created_at: "2026-10-02T03:09:38Z"
+  updated_at: "2026-10-02T03:12:39Z"
+  status: completed
+  conclusion: failure
+
+jobs:
+  build_release:
+    id: 110688012651
+    name: build-release
+    runner_label: macos-26
+    runner_name: "GitHub Actions 1000001890"
+    started_at: "2026-10-02T03:09:46Z"
+    completed_at: "2026-10-02T03:12:39Z"
+    conclusion: failure
+    steps:
+      checkout: success
+      assert_arm64_runner: success
+      setup_python_3_13: success
+      install_locked_dependencies: success
+      canonical_verify: success
+      build_one_frozen_zero_cost_candidate: failure
+      build_deterministic_release_assets_twice: skipped
+      upload_release_assets_only: skipped
+    evidence:
+      python_location: "/Users/runner/hostedtoolcache/Python/3.13.15/arm64"
+      packaging_python: "/Library/Frameworks/Python.framework/Versions/3.13/bin/python"
+      canonical_verify_command: "PYTHON=python PYTHONDONTWRITEBYTECODE=1 ./verify"
+      canonical_verify:
+        result: PASS
+        profile: qualification
+        requested_profile: qualification
+        classified_modules: 63
+        completed_modules: 63
+        tests: 917
+        duration_seconds: 132.202
+        lane_counts:
+          L1_DETERMINISTIC_UNIT: {selected: 17, completed: 17, tests: 231}
+          L2_ISOLATED_INTEGRATION: {selected: 21, completed: 21, tests: 242}
+          L3_DETERMINISTIC_REGRESSION: {selected: 10, completed: 10, tests: 94}
+          L4_HOST_LIFECYCLE: {selected: 9, completed: 9, tests: 184}
+          L5_QUALIFICATION_CHAOS_CUTOVER: {selected: 6, completed: 6, tests: 166}
+      durable_pipe:
+        module: tests.test_durable_pipe
+        tests: 15
+        result: PASS
+        duration_seconds: 4.226
+      durable_pipe_restart:
+        module: tests.test_durable_pipe_restart
+        tests: 10
+        result: PASS
+        duration_seconds: 7.438
+      product_qualification:
+        module: tests.test_product_qualification
+        tests: 16
+        result: PASS
+        duration_seconds: 29.322
+      candidate_build:
+        command: "./macos/package_app.sh --zero-cost"
+        invocation_count: 1
+        result: FAIL
+        candidate_sha256: null
+        candidate_root: null
+        failure:
+          component: macos/Sources/AgentRuntimeMenuBar/LiquidGlassSupport.swift
+          line: 32
+          compiler_message: "value of type 'NSGlassEffectView' has no member 'effectIsInteractive'"
+          process_exit_code: 1
+
+  compatibility_observed:
+    id: 110688720705
+    name: compatibility
+    conclusion: skipped
+    steps: []
+    note: "The build-release job failed before artifact upload, so GitHub materialized only one skipped aggregate compatibility job and no per-OS matrix lanes."
+
+  required_compatibility_lanes:
+    macos-14:
+      job_id: null
+      conclusion: NOT_MATERIALIZED
+      required_result: success
+    macos-15:
+      job_id: null
+      conclusion: NOT_MATERIALIZED
+      required_result: success
+    macos-26:
+      job_id: null
+      conclusion: NOT_MATERIALIZED
+      required_result: success
+
+remote_gate_contract:
+  build_release:
+    checkout: PASS
+    arm64_assertion: PASS
+    cpython_3_13_setup: PASS
+    locked_requirements_installation: PASS
+    canonical_verify: PASS
+    tests_test_durable_pipe: PASS
+    tests_test_durable_pipe_restart: PASS
+    tests_test_product_qualification: PASS
+    zero_cost_candidate_build:
+      invocation_count: 1
+      result: FAIL
+    candidate_root: null
+    candidate_sha256: null
+    release_bundle_build_1: NOT_EXECUTED
+    release_bundle_build_2: NOT_EXECUTED
+    archive_manifest_sums_byte_comparison: NOT_EXECUTED
+    release_bundle_verify: NOT_EXECUTED
+    upload_only_release_assets: NOT_EXECUTED
+  compatibility:
+    macos-14: NOT_EXECUTED
+    macos-15: NOT_EXECUTED
+    macos-26: NOT_EXECUTED
+
+artifact:
+  required_name: agent-runtime-release-assets
+  observed_count: 0
+  id: null
+  name: null
+  download_count: 0
+  required_download_count_if_present: 1
+  reason_not_downloaded: "No release artifact was produced because the zero-cost candidate build failed before deterministic bundle construction and upload."
+  transport_zip_downloaded: false
+  release_payload_inspected: false
+  archive_sha256: null
+
+release_manifest:
+  available: false
+  runtime_version: null
+  source_revision: null
+  source_tree: null
+  candidate_sha256: null
+  initial_payload_closure: null
+  requirements_lock_sha256: null
+  expected_public_tool_count: null
+  expected_public_surface_sha256: null
+  substrate_manifest_schema: null
+  candidate_handoff_schema: null
+  payload_schema: null
+  archive_filename: null
+  archive_sha256: null
+  archive_size_bytes: null
+  archive_member_count: null
+  source_revision_matches_run_head: NOT_VERIFIABLE
+
+local_artifact_verification:
+  sha256sums_matches_archive: NOT_PERFORMED
+  manifest_archive_identity_matches: NOT_PERFORMED
+  accepted_release_bundle_verify: NOT_PERFORMED
+  reason: "Remote workflow produced no release artifact."
+
+cleanup:
+  isolated_evidence_storage_created: false
+  downloaded_evidence_bytes_created: false
+  downloaded_evidence_removed: true
+  untracked_repository_residue: false
+  binary_assets_committed: false
+
+effect_accounting:
+  github_workflow_dispatch: {authorized_max: 1, consumed: 1}
+  github_workflow_rerun: {authorized_max: 0, consumed: 0}
+  workflow_artifact_download: {authorized_max: 1, consumed: 0}
+  local_distribution_build: {authorized_max: 0, consumed: 0}
+  canonical_verify: {authorized_max: 0, consumed: 0}
+  install_prebuilt: {authorized_max: 0, consumed: 0}
+  commit_cutover: {authorized_max: 0, consumed: 0}
+  rollback_cutover: {authorized_max: 0, consumed: 0}
+  menu_bar_relaunch: {authorized_max: 0, consumed: 0}
+  runtime_restart: {authorized_max: 0, consumed: 0}
+  runtime_explicit_start: {authorized_max: 0, consumed: 0}
+  runtime_explicit_stop: {authorized_max: 0, consumed: 0}
+  plugin_reload_or_reconnect: {authorized_max: 0, consumed: 0}
+  credential_rotation: {authorized_max: 0, consumed: 0}
+  physical_reboot: {authorized_max: 0, consumed: 0}
+  new_security_permission: {authorized_max: 0, consumed: 0}
+  version_tag_create: {authorized_max: 0, consumed: 0}
+  github_release_publish: {authorized_max: 0, consumed: 0}
+  branch_or_pr_creation: {authorized_max: 0, consumed: 0}
+  historical_run_36912032079_rerun: 0
+  historical_run_36956517661_rerun: 0
+  any_workflow_rerun: 0
+  second_workflow_dispatch: 0
+  source_mutation: 0
+  test_mutation: 0
+  workflow_mutation: 0
+  policy_mutation: 0
+  docs_mutation: 0
+  version_mutation: 0
+  tag_creation: 0
+  github_release_creation: 0
+  release_publication: 0
+  live_runtime_install_or_cutover: 0
+  menu_launch_or_relaunch: 0
+  real_api_key_or_tunnel_id_use: 0
+  runtime_env_mutation: 0
+  permission_request: 0
+  reboot: 0
+
+acceptance_evidence:
+  - {criterion_id: AC-1, status: FAIL, evidence: "Both historical runs remain attempt 1 and were not rerun. Exactly one new workflow_dispatch attempt 1 was uniquely bound to the authorized TASK-0206 SHA, but the new run concluded failure."}
+  - {criterion_id: AC-2, status: FAIL, evidence: "Remote canonical verify passed 63/63 classified/completed modules and 917 tests, including durable_pipe 15/15, durable_pipe_restart 10/10, and product_qualification 16/16. The single zero-cost candidate build then failed during Swift compilation before a candidate identity was produced."}
+  - {criterion_id: AC-3, status: FAIL, evidence: "The macOS 14/15/26 compatibility lanes were not materialized because build-release failed before artifact upload."}
+  - {criterion_id: AC-4, status: FAIL, evidence: "Artifact inventory count is zero; no release payload, manifest, archive SHA-256, or local read-only release_bundle verification is available."}
+  - {criterion_id: AC-5, status: PASS, evidence: "No workflow rerun, second dispatch, tag/release/publication, local build/verify, live Runtime/config/plugin/credential/permission/reboot effect occurred."}
+  - {criterion_id: AC-6, status: PENDING_REPORT_PUBLICATION, evidence: "TASK-0206 report is the sole tracked mutation; final clean synchronized MAIN ONLY proof follows report publication."}
+
+blocking_findings:
+  - id: F-0206-001
+    severity: blocker
+    status: OPEN
+    summary: "The real macOS 26 ARM64 release-gate runner passes canonical verification but fails the one authorized zero-cost candidate build during Swift compilation."
+    evidence:
+      run_id: 36958918581
+      job_id: 110688012651
+      step: "Build one frozen zero-cost candidate"
+      source_location: "macos/Sources/AgentRuntimeMenuBar/LiquidGlassSupport.swift:32"
+      compiler_message: "value of type 'NSGlassEffectView' has no member 'effectIsInteractive'"
+      verifier_totals: "63/63 completed modules, 63 classified modules, 917 tests"
+    consequence: "No frozen candidate, deterministic release bundle, artifact, or macOS 14/15/26 compatibility qualification was produced."
+    continuation: "TASK-0206 forbids source/workflow fixes, reruns, and a second dispatch. A separate authorized task is required before another remote qualification attempt."
