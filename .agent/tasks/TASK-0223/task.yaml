@@ -1,13 +1,14 @@
 protocol_version: 3
 task_id: TASK-0223
-task_revision: 1
+task_revision: 2
 state: APPROVED
-title: "Release-Gate Stabilization — Durable Bootstrap Reconciliation and Framework Packaging Closure"
+title: "Release-Gate Stabilization — Durable Bootstrap Reconciliation + Frozen Framework Packaging Proof"
 
 origin:
   predecessor_task: TASK-0222
   predecessor_report: "afcc446b1df7f74e5fc0a32925ba354cdf6f87c8"
   predecessor_review: "958d43ac108cf83a4281ca43173384e6d3f28f45"
+  supersedes_unexecuted_revision: 1
   findings:
     - F-0222-001
     - F-0221-001
@@ -24,8 +25,8 @@ execution_base:
 
 phase:
   name: STABILIZE
-  authority: bounded_adaptive
-  principle: "Discovery and discriminating evidence precede solution freeze; verification is incremental per implementation checkpoint. Exact one-shot semantics return only after stabilization is green and work re-enters QUALIFY."
+  authority: bounded_adaptive_lane_a_then_frozen_lane_b
+  principle: "Discovery precedes mutation in Lane A. Lane B is frozen proof only. No packaging mutation occurs inside this task."
 
 accepted_state:
   durable_fixture_fix_commit: "6bc7111faba2a92e8a130ad33546a76fb015f5fe"
@@ -40,7 +41,8 @@ accepted_state:
   strict_build_host_scanner: MUST_REMAIN_STRICT
   task_0196_paused: true
 
-proven_durable_root_cause:
+proven_root_cause:
+  id: F-0222-001
   classification: premature_timeout_to_owner_loss_projection
   code_site: agent_runtime/session.py
   current_behavior: "bootstrap.wait(timeout=2.0) immediately projects DURABLE_OWNER_LOST on TimeoutExpired."
@@ -48,75 +50,111 @@ proven_durable_root_cause:
     - "Remote checkpoint caa8422d40b6bcbfe02e09576de2af2ea5485c7c passed canonical verify 63/63, 936 tests with durable source/test blobs identical to the later failing checkpoint."
     - "Remote checkpoint 0e5f00a98ae79c1c9584bf8fa39e200d100942b6 failed only because one durable bootstrap process exceeded the fixed 2-second parent wait."
     - "The exact failing test passes 30/30 in isolated local execution."
-    - "A controlled 2.5-second runner-start delay deterministically causes current manager.start to raise DURABLE_OWNER_LOST, after which durable state becomes running and both runner and target identities verify valid."
-  conclusion: "A fixed process wait is not sufficient evidence of lost durable ownership."
+    - "A controlled 2.5-second runner-start delay causes current manager.start to raise DURABLE_OWNER_LOST, after which authoritative durable state is running and both runner and target process identities verify valid."
+  conclusion: "The legacy 2-second observation window means ownership outcome is not yet known; it is not proof that ownership is lost."
 
-approved_design:
+approved_state_machine:
   operator_approved: true
-  behavior:
-    - "Do not fix by merely increasing 2.0 to another arbitrary timeout."
-    - "If the initial bootstrap process wait expires, continue bounded reconciliation instead of immediately projecting owner loss."
-    - "Accept delayed bootstrap if valid durable state and positively verified ownership become available within the bounded reconciliation window."
-    - "If no valid state/ownership becomes available by the total bounded deadline, fail closed with structured unknown/lost-owner semantics."
-    - "Persistent identity mismatch, corrupt state, missing owner and true owner loss remain fail-closed."
-    - "Do not kill or respawn a potentially effectful durable runner merely because the initial parent wait expired."
-    - "After durable reliability is green, continue the same release-gate stabilization far enough to exercise the accepted framework-CPython packaging correction."
-    - "Only reopen packaging mutation if new remote packaging evidence proves the framework fix is incomplete."
+  overall_deadline:
+    clock: monotonic
+    count: 1
+    derivation: "Preserve the accepted maximum pre-authoritative-state waiting envelope from the legacy fast observation window (~2s) plus the existing state-publication reconciliation window (5s); do not invent a larger replacement timeout."
+    rule: "Compute the single overall deadline once before bootstrap dispatch/reconciliation and never reset or extend it."
+  transitions:
+    - condition: "valid durable state appears during fast observation"
+      action: "Treat the durable state as authoritative input and reconcile its actual lifecycle/ownership outcome normally."
+    - condition: "bootstrap exits during fast observation"
+      action: "Perform a final durable-state re-read before classification. If authoritative state exists, reconcile it normally. If no authoritative state exists after the final read, fail closed under the existing pre-effect/effect-state truth."
+    - condition: "bootstrap remains alive and no authoritative state exists after the fast observation window"
+      action: "Continue condition-based reconciliation until the one overall monotonic deadline. Do not classify owner loss merely because the fast observation window expired."
+    - condition: "valid running state appears before overall deadline"
+      action: "Require positive exact owner/process reconciliation; if valid, accept bootstrap."
+    - condition: "valid terminal state appears before overall deadline"
+      action: "Treat terminal state as authoritative and preserve/propagate its actual terminal outcome. Do not convert terminal state generically to success."
+    - condition: "bootstrap exits during bounded reconciliation"
+      action: "Perform a final durable-state re-read, then classify from authoritative state if present; only otherwise fail closed."
+    - condition: "overall deadline exhausted with no authoritative state/ownership outcome"
+      action: "Project DURABLE_OWNER_LOST with reconciliation-required unknown-effect semantics."
+  invariants:
+    - "fast observation timeout != owner loss"
+    - "one monotonic overall deadline; no deadline reset"
+    - "no arbitrary replacement timeout"
+    - "final state re-read before declaring ownership loss after bootstrap exit"
+    - "no duplicate spawn, respawn, signal, kill or guessed completion merely because observation is delayed"
+    - "six-field runner/process identity verification remains exact"
+    - "corrupt/mixed-generation/integrity state remains fail-closed"
 
-adaptive_mutation_boundary:
-  durable_primary:
-    - agent_runtime/session.py
-    - tests/test_durable_pipe.py
-    - tests/test_durable_pipe_restart.py
-  durable_secondary_if_evidence_requires:
-    - agent_runtime/durable_pipe.py
-    - agent_runtime/durable_pipe_runner.py
-  packaging_if_remote_evidence_requires:
-    - macos/packaging_python.sh
-    - tests/test_packaging_interpreter.py
-    - macos/package_app.sh
-    - tests/test_package_provenance.py
-  diagnostic_only_if_needed:
-    - .github/workflows/release-gate.yml
-  frozen_without_new_evidence:
-    - macos/release_bundle.py
-    - requirements.lock
-    - Runtime version
-    - public tool surface
-    - schemas unrelated to durable bootstrap
-    - installed/live Runtime
+proof_lanes:
+  lane_a_durable_bootstrap:
+    mode: MUTATING_STABILIZATION
+    objective: "Close F-0222-001 with the smallest condition-based reconciliation change."
+    allowed_product_files:
+      - agent_runtime/session.py
+    allowed_test_files:
+      - tests/test_durable_pipe.py
+      - tests/test_durable_pipe_restart.py
+    secondary_files_only_if_direct_evidence_requires:
+      - agent_runtime/durable_pipe.py
+      - agent_runtime/durable_pipe_runner.py
+    required_regressions:
+      - "Delayed-valid case: bootstrap remains unresolved for >2s, then publishes valid running state with valid runner+target ownership before overall deadline; manager.start must not raise DURABLE_OWNER_LOST."
+      - "Stuck/no-state case: bootstrap remains unresolved and publishes no authoritative state; execution must fail closed within the one overall deadline without duplicate effect or respawn."
+      - "Exit-before-state race: bootstrap exit must trigger final state re-read before classification; authoritative state discovered by that read must be reconciled, not discarded."
+      - "Terminal-state case: authoritative terminal state must propagate its actual terminal semantics, including non-success terminal outcomes."
+    mutation_rules:
+      - "Do not implement the fix by only changing 2.0 to a larger constant."
+      - "Prefer condition/state-based observation."
+      - "Do not change unrelated durable hard-wall, retention, output, admission, cursor, process environment or public contracts."
+      - "Do not weaken owner identity or durable-state integrity validation."
+    focused_verification:
+      - "RED/GREEN the delayed-valid regression."
+      - "PASS stuck/no-state bounded failure regression."
+      - "PASS exit-before-state final re-read regression."
+      - "PASS terminal-outcome propagation regression."
+      - "PASS full tests.test_durable_pipe."
+      - "PASS full tests.test_durable_pipe_restart."
+      - "Stress the former remote failing path under bounded scheduling delay."
+    final_local_gate:
+      - "After Lane A focused proof is green, commit one coherent durable implementation checkpoint."
+      - "Run exactly one canonical ./verify on that exact clean checkpoint."
+      - "Any tracked mutation after this verify invalidates Lane A closure and requires a new task revision; do not consume Lane B remote authority from an unverified SHA."
 
-durable_implementation_rules:
-  - "First write a deterministic regression for delayed-but-valid bootstrap: delay bootstrap beyond the legacy 2-second wait while allowing valid state and exact runner/process identity to appear inside the total reconciliation window; current code must RED and corrected code must GREEN."
-  - "Write a deterministic negative regression for genuinely stuck/no-state bootstrap; it must still terminate in bounded time and fail closed without duplicate effect, respawn or guessed completion."
-  - "Preserve exact six-field process-instance verification and current corrupt/mixed-generation/integrity fail-closed semantics."
-  - "Prefer condition/state-based waiting over arbitrary sleep extension."
-  - "Do not change unrelated durable lifetime, retention, output, admission or public contract semantics."
-  - "Any timing constant introduced or changed must represent an explicit reconciliation bound and be covered by both positive and negative tests."
-
-incremental_verification:
-  - "Focused durable tests may be repeated during stabilization."
-  - "Before each remote implementation checkpoint, require focused affected suites PASS and exactly one canonical ./verify on that exact checkpoint."
-  - "If remote evidence requires further in-boundary mutation, a new checkpoint may run canonical ./verify again; this is STABILIZE, not QUALIFY."
-  - "Do not replay canonical verify on an unchanged checkpoint."
-  - "Packaging focused suites must run whenever packaging source/test files change."
-  - "A local zero-cost package build is optional unless packaging source changes after TASK-0222; if packaging mutates, use at most one local package/candidate closure per packaging checkpoint and clean generated evidence."
-  - "Do not require a local package rebuild solely for a durable-only change."
-
-remote_stabilization_loop:
-  workflow: .github/workflows/release-gate.yml
-  final_required_workflow_blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
-  new_dispatch_max: 3
-  rerun_max: 0
-  rules:
-    - "Every remote execution is a NEW workflow_dispatch run at the exact current verified main SHA, attempt 1."
-    - "Never rerun any historical or new workflow run/job."
-    - "First remote checkpoint after durable fix must prove canonical verify passes the durable modules, then continue into candidate construction."
-    - "If the accepted framework packaging correction succeeds and the complete release gate passes, stop immediately; do not consume remaining dispatch budget."
-    - "If remote fails again in durable bootstrap/recovery or packaging/candidate construction, capture exact new evidence and continue bounded discovery/fix within this task while budget remains."
-    - "If remote fails outside durable bootstrap/recovery and packaging/candidate construction, stop BLOCKED with a boundary-crossing finding."
-    - "Temporary workflow diagnostics are allowed only if required to distinguish an in-boundary root cause and must be removed before the final successful checkpoint."
-    - "The successful stabilization checkpoint must use the exact accepted release-gate workflow blob."
+  lane_b_frozen_release_gate:
+    mode: NON_MUTATING_INTEGRATED_PROOF
+    objective: "Use one exact-SHA remote release-gate run to prove both durable bootstrap stabilization and the already-implemented framework-CPython packaging fix."
+    remote_dispatch_max: 1
+    rerun_max: 0
+    package_mutation_authority: 0
+    workflow_mutation_authority: 0
+    frozen_blobs:
+      macos/packaging_python.sh: "831d663fd5dfc0d4ac4743cac466566406676587"
+      tests/test_packaging_interpreter.py: "33a9ad11dea17b50a9c7a6b5b57dfede6f715905"
+      macos/package_app.sh: "b5d54b605cf8e8e1f3c0fbea5cdd417f79b5572b"
+      tests/test_package_provenance.py: "ebbd444bcedcf15552d81a4f269802d5a8af6fc9"
+      macos/release_bundle.py: "2bff8a6f5f9afe1ffcad6c7b41b5999ba0f3e7f1"
+      .github/workflows/release-gate.yml: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+    pre_dispatch:
+      - "Require exact Lane A verified SHA == main == origin/main, clean worktree/index, MAIN ONLY, one worktree."
+      - "Require all frozen packaging/release/workflow blobs above match exactly."
+      - "Require no packaging/release/workflow file changed from TASK-0222 final implementation state."
+      - "Fresh-inventory release-gate runs and confirm all historical runs remain attempt 1."
+    remote_action:
+      - "Dispatch .github/workflows/release-gate.yml exactly once at ref=main."
+      - "Require the new run attempt=1 and head_sha equals the exact Lane A verified SHA."
+      - "Never rerun the run or any job."
+    required_integrated_proof:
+      - "Remote canonical verify PASS, including tests.test_durable_pipe and tests.test_durable_pipe_restart."
+      - "Framework-CPython zero-cost candidate construction reaches and passes the code-signature-corrected normalized launcher/libpython path."
+      - "Strict build-host identity scanner remains PASS."
+      - "Deterministic release assets build twice and compare byte-identical."
+      - "Release-bundle verify PASS."
+      - "Artifact upload PASS."
+      - "macos-14, macos-15 and macos-26 compatibility lanes PASS."
+    failure_classification:
+      durable_bootstrap_or_recovery_failure: "BLOCKED. Capture evidence; no second remote dispatch and no additional durable mutation in this task."
+      packaging_or_candidate_failure: "BLOCKED with a NEW packaging finding. Do not mutate packaging in TASK-0223."
+      release_bundle_or_compatibility_failure: "BLOCKED with a NEW outside-Lane-A finding. Do not expand scope."
+      full_success: "STABILIZATION_GREEN; eligible for Architect review and return to frozen QUALIFY."
 
 historical_runs:
   never_rerun:
@@ -135,35 +173,39 @@ historical_runs:
     - 36993115899
     - 36994067524
 
-success_criteria:
-  - "Delayed-but-valid durable bootstrap no longer false-projects DURABLE_OWNER_LOST."
-  - "Genuinely stuck/no-state bootstrap remains bounded and fail-closed."
-  - "Focused durable regressions PASS."
-  - "Each remote implementation checkpoint is canonically verified exactly once before dispatch."
-  - "Final remote run passes canonical verify including tests.test_durable_pipe and tests.test_durable_pipe_restart."
-  - "Final remote run reaches and passes framework-CPython zero-cost candidate construction."
-  - "Final remote run passes deterministic release assets, upload and macos-14/macos-15/macos-26 compatibility."
-  - "No historical or current run/job rerun."
-  - "No release/tag/live Runtime effect."
-  - "Publish .agent/tasks/TASK-0223/report.yaml as report-only closure child."
-
-failure_policy:
-  - "If discovery disproves the approved durable root cause, stop and report the contradictory evidence instead of forcing the design."
-  - "If three new remote dispatches are consumed without full-gate closure, stop BLOCKED."
-  - "If a blocker crosses outside durable bootstrap/recovery or packaging/candidate authority, stop BLOCKED."
-  - "Do not convert a new outside-boundary failure into an implicit scope expansion."
+forbidden_changes:
+  - "Any packaging, release-bundle or workflow mutation in TASK-0223."
+  - "Any dependency/version/public-tool/schema change."
+  - "Any release/tag/live Runtime/install/cutover/LaunchServices effect."
+  - "Any workflow run/job rerun."
+  - "Any second remote dispatch."
+  - "Any branch or PR."
 
 effect_authority:
-  canonical_verify_per_checkpoint_max: 1
-  remote_stabilization_dispatch_max: 3
+  lane_a_canonical_verify_max: 1
+  lane_b_remote_dispatch_max: 1
   workflow_rerun_max: 0
   workflow_job_rerun_max: 0
-  local_package_build_per_packaging_checkpoint_max: 1
+  local_package_build_max: 0
+  packaging_mutation_max: 0
   release_publish_max: 0
   version_tag_create_max: 0
   live_runtime_mutation_max: 0
   launchservices_mutation_max: 0
   branch_or_pr_creation_max: 0
+
+closure:
+  success:
+    - "Lane A durable implementation/regressions and one canonical verify PASS."
+    - "Lane B single exact-SHA remote release gate fully PASS."
+    - "Packaging/release/workflow frozen blobs unchanged."
+    - "Publish only .agent/tasks/TASK-0223/report.yaml as report-only child."
+    - "Final main clean/synchronized MAIN ONLY, one worktree."
+  blocked:
+    - "Lane A root-cause evidence is contradicted."
+    - "Lane A cannot close within durable bootstrap authority."
+    - "The single Lane B remote run fails at any stage."
+    - "Any frozen packaging/release/workflow blob drifts."
 
 git_authority:
   create_branch: false
@@ -176,11 +218,12 @@ release_authority:
   publish_release: false
 
 continuation_policy:
-  mode: ADAPTIVE_WITHIN_BOUNDARY
+  mode: LANE_A_THEN_FROZEN_LANE_B
   stop_conditions:
-    - BOUNDARY_CROSSING
-    - REMOTE_BUDGET_EXHAUSTED
     - CONTRADICTORY_ROOT_CAUSE_EVIDENCE
+    - LANE_A_BLOCKED
+    - REMOTE_GATE_FAILURE
+    - FROZEN_BLOB_DRIFT
     - USER_STOP
 
 execution_ready: true
