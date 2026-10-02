@@ -148,15 +148,40 @@ class PackagingRuntimeLinkageTests(unittest.TestCase):
         package_venv: Path,
         repo_root: Path,
         linkage: str,
+        home_marker: Path | None = None,
     ) -> subprocess.CompletedProcess[str]:
+        stdlib = base_prefix / "lib" / "python3.13"
+        stdlib.mkdir(parents=True, exist_ok=True)
+        (stdlib / "os.py").write_text("VALUE = 'stdlib'\n")
+        (stdlib / "lib-dynload").mkdir(exist_ok=True)
+        (stdlib / "lib-dynload" / "_fixture.so").write_bytes(b"fixture-extension")
+        sysconfig_data = stdlib / "_sysconfigdata__darwin_darwin.py"
+        if not sysconfig_data.exists():
+            sysconfig_data.write_text(
+                "build_time_vars = {"
+                f"'prefix': {str(base_prefix)!r}, "
+                f"'LIBDIR': {str(base_prefix / 'lib')!r}, "
+                "'CC': 'clang', 'SIZEOF_VOID_P': 8}\n"
+            )
+        identity_file = package_venv / "libpython.identity"
+        identity_file.parent.mkdir(parents=True, exist_ok=True)
+        identity_file.write_text(str(base_prefix / "lib" / "libpython3.13.dylib") + "\n")
         script = f"""
 source "{HELPER}"
 fake_base="$4"
 fake_linkage="$5"
+fake_stdlib="$6"
+fake_identity_file="$7"
 packaging_python_base_prefix() {{ printf '%s\\n' "$fake_base"; }}
 packaging_python_linkage_dependencies() {{ printf '%s\\n' "$fake_linkage"; }}
+packaging_python_stdlib_path() {{ printf '%s\\n' "$fake_stdlib"; }}
+packaging_python_library_identity() {{ cat "$fake_identity_file"; }}
+packaging_python_set_library_identity() {{ printf '%s\\n' "$2" > "$fake_identity_file"; }}
 materialize_packaging_python_runtime "$1" "$2" "$3" "TEST ERROR"
 """
+        env = os.environ.copy()
+        if home_marker is not None:
+            env["HOME"] = str(home_marker)
         return subprocess.run(
             [
                 "/bin/bash",
@@ -168,8 +193,11 @@ materialize_packaging_python_runtime "$1" "$2" "$3" "TEST ERROR"
                 str(repo_root),
                 str(base_prefix),
                 linkage,
+                str(stdlib),
+                str(identity_file),
             ],
             cwd=ROOT,
+            env=env,
             capture_output=True,
             text=True,
             check=False,
@@ -218,7 +246,7 @@ materialize_packaging_python_runtime "$1" "$2" "$3" "TEST ERROR"
             self.assertIn("required runtime library", result.stderr)
             self.assertFalse((package_venv / "lib" / "libpython3.13.dylib").exists())
 
-    def test_non_linked_layout_is_valid_noop(self) -> None:
+    def test_non_linked_layout_materializes_stdlib_without_runtime_dylib(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             temp = Path(raw)
             base = temp / "canonical"
@@ -234,7 +262,8 @@ materialize_packaging_python_runtime "$1" "$2" "$3" "TEST ERROR"
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(list((package_venv / "lib").iterdir()), [])
+            self.assertTrue((package_venv / "lib" / "python3.13" / "os.py").is_file())
+            self.assertFalse((package_venv / "lib" / "libpython3.13.dylib").exists())
 
     def test_unsupported_relative_linkage_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -295,22 +324,92 @@ materialize_packaging_python_runtime "$1" "$2" "$3" "TEST ERROR"
             self.assertIn("checkout .venv", result.stderr)
             self.assertFalse((package_venv / "lib" / "libpython3.13.dylib").exists())
 
-    def test_package_smokes_copied_python_before_exact_hash_locked_pip(self) -> None:
+    def test_materializer_builds_self_contained_stdlib_and_sanitizes_builder_prefix(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            operator_home = temp / "Users" / "builder"
+            base = operator_home / "Library" / "Python" / "3.13"
+            package_venv = temp / "package-venv"
+            repo_root = temp / "repo"
+            source_libpython = base / "lib" / "libpython3.13.dylib"
+            source_libpython.parent.mkdir(parents=True)
+            source_libpython.write_bytes(b"canonical-libpython-bytes")
+            source_stdlib = base / "lib" / "python3.13"
+            source_stdlib.mkdir(parents=True)
+            (source_stdlib / "site-packages").mkdir()
+            (source_stdlib / "site-packages" / "builder_only.py").write_text("BAD = True\n")
+            (source_stdlib / "__pycache__").mkdir()
+            (source_stdlib / "__pycache__" / "os.cpython-313.pyc").write_bytes(b"cache")
+            (source_stdlib / "linked.py").symlink_to("os.py")
+            self._fake_package_python(package_venv)
+
+            result = self._run_materializer(
+                base_prefix=base,
+                package_venv=package_venv,
+                repo_root=repo_root,
+                linkage="@executable_path/../lib/libpython3.13.dylib",
+                home_marker=operator_home,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            target_stdlib = package_venv / "lib" / "python3.13"
+            self.assertEqual(
+                (package_venv / "libpython.identity").read_text().strip(),
+                "@executable_path/../lib/libpython3.13.dylib",
+            )
+            self.assertEqual((target_stdlib / "os.py").read_text(), "VALUE = 'stdlib'\n")
+            self.assertTrue((target_stdlib / "lib-dynload" / "_fixture.so").is_file())
+            self.assertFalse((target_stdlib / "site-packages" / "builder_only.py").exists())
+            self.assertFalse((target_stdlib / "__pycache__").exists())
+            self.assertFalse((target_stdlib / "linked.py").exists())
+
+            target_sysconfig = target_stdlib / "_sysconfigdata__darwin_darwin.py"
+            sysconfig_bytes = target_sysconfig.read_bytes()
+            self.assertNotIn(str(base).encode(), sysconfig_bytes)
+            self.assertNotIn(str(operator_home).encode(), sysconfig_bytes)
+            probe = subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    (
+                        "import runpy,sys;"
+                        "sys.base_prefix='/relocated/runtime';"
+                        f"d=runpy.run_path({str(target_sysconfig)!r})['build_time_vars'];"
+                        "assert d['prefix']=='/relocated/runtime';"
+                        "assert d['LIBDIR']=='/relocated/runtime/lib';"
+                        "assert d['CC']=='clang';"
+                        "assert d['SIZEOF_VOID_P']==8"
+                    ),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(probe.returncode, 0, probe.stderr)
+
+    def test_package_finalizes_after_hash_locked_pip_and_smokes_before_copy(self) -> None:
         package = PACKAGE.read_text()
         create = '"$PYTHON_BIN" -m venv --copies --without-pip "$PACKAGE_VENV"'
         materialize = 'materialize_packaging_python_runtime "$PYTHON_BIN" "$PACKAGE_VENV" "$REPO_ROOT" "PACKAGE ERROR"'
-        smoke = '"$PACKAGE_VENV/bin/python" -c \'pass\''
         pip = (
             '"$PYTHON_BIN" -m pip --disable-pip-version-check --python "$PACKAGE_VENV/bin/python" \\\n'
             '  install --require-hashes -r "$SOURCE_ROOT/requirements.lock" >/dev/null'
         )
+        finalize = 'finalize_packaging_python_runtime "$PYTHON_BIN" "$PACKAGE_VENV" "$REPO_ROOT" "PACKAGE ERROR"'
+        smoke = '"$PACKAGE_VENV/bin/python" -c \'import os, platform, sys, sysconfig;'
+        copy = '/bin/cp -R "$PACKAGE_VENV" "$RUNTIME/.venv"'
+        app_smoke = '"$RUNTIME/.venv/bin/python" -c \'import os, platform, sys, sysconfig;'
 
-        for fragment in (create, materialize, smoke, pip):
+        for fragment in (create, materialize, pip, finalize, smoke, copy, app_smoke):
             self.assertIn(fragment, package)
         self.assertLess(package.index(create), package.index(materialize))
-        self.assertLess(package.index(materialize), package.index(smoke))
-        self.assertLess(package.index(smoke), package.index(pip))
+        self.assertLess(package.index(materialize), package.index(pip))
+        self.assertLess(package.index(pip), package.index(finalize))
+        self.assertLess(package.index(finalize), package.index(smoke))
+        self.assertLess(package.index(smoke), package.index(copy))
+        self.assertLess(package.index(copy), package.index(app_smoke))
         self.assertNotIn('cp -R -L "$REPO_ROOT/.venv"', package)
+        self.assertNotIn("TMP_PYVENV=", package)
 
 
 if __name__ == "__main__":

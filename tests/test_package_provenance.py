@@ -299,6 +299,39 @@ class PackageProvenanceTests(unittest.TestCase):
         self.assertIn("--require-hashes", installer)
         self.assertIn('chmod 600 "$ENV_FILE"', installer)
 
+    def test_package_contract_finalizes_relocatable_python_before_app_copy(self) -> None:
+        package = (ROOT / "macos" / "package_app.sh").read_text()
+        helper = (ROOT / "macos" / "packaging_python.sh").read_text()
+        release_bundle = (ROOT / "macos" / "release_bundle.py").read_text()
+
+        materialize = 'materialize_packaging_python_runtime "$PYTHON_BIN" "$PACKAGE_VENV" "$REPO_ROOT" "PACKAGE ERROR"'
+        pip = (
+            '"$PYTHON_BIN" -m pip --disable-pip-version-check --python "$PACKAGE_VENV/bin/python" \\\n'
+            '  install --require-hashes -r "$SOURCE_ROOT/requirements.lock" >/dev/null'
+        )
+        finalize = 'finalize_packaging_python_runtime "$PYTHON_BIN" "$PACKAGE_VENV" "$REPO_ROOT" "PACKAGE ERROR"'
+        package_smoke = '"$PACKAGE_VENV/bin/python" -c \'import os, platform, sys, sysconfig;'
+        app_copy = '/bin/cp -R "$PACKAGE_VENV" "$RUNTIME/.venv"'
+        app_smoke = '"$RUNTIME/.venv/bin/python" -c \'import os, platform, sys, sysconfig;'
+
+        for fragment in (materialize, pip, finalize, package_smoke, app_copy, app_smoke):
+            self.assertIn(fragment, package)
+        self.assertLess(package.index(materialize), package.index(pip))
+        self.assertLess(package.index(pip), package.index(finalize))
+        self.assertLess(package.index(finalize), package.index(package_smoke))
+        self.assertLess(package.index(package_smoke), package.index(app_copy))
+        self.assertLess(package.index(app_copy), package.index(app_smoke))
+        self.assertNotIn("TMP_PYVENV=", package)
+        self.assertNotIn('grep -E \'^(home|include-system-site-packages|version|executable) = \'', package)
+
+        self.assertIn("/usr/bin/install_name_tool -id", helper)
+        self.assertIn("@executable_path/../lib/libpython3.13.dylib", helper)
+        self.assertIn("sys.base_prefix", helper)
+        self.assertIn('rm -f "$package_venv/pyvenv.cfg"', helper)
+
+        self.assertIn("_reject_embedded_operator_home", release_bundle)
+        self.assertIn("release candidate embeds an operator HOME path", release_bundle)
+
     def _staged_candidate(self, root: Path, label: str) -> tuple[Path, Path]:
         stage = root / label
         app = stage / "Agent Runtime.app"

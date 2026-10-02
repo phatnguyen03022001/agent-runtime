@@ -87,20 +87,28 @@ chmod 755 "$RUNTIME/start.sh" "$RUNTIME/macos/install_release.sh"
 PACKAGE_VENV="$TEMP_ROOT/runtime-venv"
 "$PYTHON_BIN" -m venv --copies --without-pip "$PACKAGE_VENV"
 materialize_packaging_python_runtime "$PYTHON_BIN" "$PACKAGE_VENV" "$REPO_ROOT" "PACKAGE ERROR"
-"$PACKAGE_VENV/bin/python" -c 'pass' >/dev/null 2>&1 \
-  || { echo "PACKAGE ERROR: copied packaging interpreter smoke execution failed" >&2; exit 2; }
 "$PYTHON_BIN" -m pip --disable-pip-version-check --python "$PACKAGE_VENV/bin/python" \
   install --require-hashes -r "$SOURCE_ROOT/requirements.lock" >/dev/null
 find "$PACKAGE_VENV" -type d -name '__pycache__' -prune -exec rm -rf '{}' +
 find "$PACKAGE_VENV" -type f -name '*.pyc' -delete
 find "$PACKAGE_VENV/bin" -type f ! -name 'python' -delete
 find "$PACKAGE_VENV" -type l -delete
-TMP_PYVENV="$PACKAGE_VENV/.pyvenv.cfg.$$"
-grep -E '^(home|include-system-site-packages|version|executable) = ' \
-  "$PACKAGE_VENV/pyvenv.cfg" > "$TMP_PYVENV"
-mv -f "$TMP_PYVENV" "$PACKAGE_VENV/pyvenv.cfg"
+finalize_packaging_python_runtime "$PYTHON_BIN" "$PACKAGE_VENV" "$REPO_ROOT" "PACKAGE ERROR"
+
+PACKAGE_PYTHON_HOME="$TEMP_ROOT/package-python-home"
+mkdir "$PACKAGE_PYTHON_HOME"
+/usr/bin/env -u PYTHONHOME -u PYTHONPATH HOME="$PACKAGE_PYTHON_HOME" \
+  "$PACKAGE_VENV/bin/python" -c 'import os, platform, sys, sysconfig; prefix=os.path.realpath(sys.prefix); base=os.path.realpath(sys.base_prefix); stdlib=os.path.realpath(sysconfig.get_path("stdlib")); module=os.path.realpath(os.__file__); assert sys.version_info[:2] == (3, 13); assert platform.machine() == "arm64"; assert prefix == base; assert os.path.commonpath((prefix, stdlib)) == prefix; assert os.path.commonpath((prefix, module)) == prefix' \
+  || { echo "PACKAGE ERROR: finalized package-owned Python smoke failed" >&2; exit 2; }
+
 /bin/cp -R "$PACKAGE_VENV" "$RUNTIME/.venv"
 chmod 755 "$RUNTIME/.venv/bin/python"
+
+APP_PYTHON_HOME="$TEMP_ROOT/app-python-home"
+mkdir "$APP_PYTHON_HOME"
+/usr/bin/env -u PYTHONHOME -u PYTHONPATH HOME="$APP_PYTHON_HOME" \
+  "$RUNTIME/.venv/bin/python" -c 'import os, platform, sys, sysconfig; prefix=os.path.realpath(sys.prefix); base=os.path.realpath(sys.base_prefix); stdlib=os.path.realpath(sysconfig.get_path("stdlib")); module=os.path.realpath(os.__file__); assert sys.version_info[:2] == (3, 13); assert platform.machine() == "arm64"; assert prefix == base; assert os.path.commonpath((prefix, stdlib)) == prefix; assert os.path.commonpath((prefix, module)) == prefix' \
+  || { echo "PACKAGE ERROR: packaged app Python smoke failed" >&2; exit 2; }
 
 PYTHON_MM="$("$RUNTIME/.venv/bin/python" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
 [[ "$PYTHON_MM" == "3.13" ]] || { echo "PACKAGE ERROR: bundled Python must be 3.13" >&2; exit 2; }
