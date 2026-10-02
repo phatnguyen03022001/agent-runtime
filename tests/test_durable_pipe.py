@@ -133,14 +133,14 @@ class DurablePipeTests(unittest.TestCase):
         self.assertFalse(verify_process_identity(mismatch))
 
     def test_runner_argv_is_opaque_and_durable_files_are_private(self) -> None:
-        manager = self.manager()
+        manager = self.manager(hard_wall=30.0)
         identity = "1" * 32
         secret = "task0153-user-content-must-not-reach-runner-argv"
         argv = [
             sys.executable,
             "-u",
             "-c",
-            f"import time; print({secret!r}, flush=True); time.sleep(2)",
+            f"import threading; print({secret!r}, flush=True); threading.Event().wait()",
         ]
         real_popen = subprocess.Popen
         observed: list[tuple[list[str], dict[str, str]]] = []
@@ -158,6 +158,8 @@ class DurablePipeTests(unittest.TestCase):
                 "runtime_restart",
             )
 
+        self.assertEqual(result["status"], "running")
+        self.assertEqual(result["lifecycle"], "RUNNING")
         self.assertEqual(result["durability"], "runtime_restart")
         self.assertEqual(len(observed), 1)
         runner_argv, runner_env = observed[0]
