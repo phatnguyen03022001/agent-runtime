@@ -1,0 +1,188 @@
+protocol_version: 3
+task_id: TASK-0219
+task_revision: 1
+state: APPROVED
+title: "Relocatable Bundled CPython Substrate Closure"
+
+origin:
+  type: architect_continuation
+  predecessor_task: TASK-0218
+  finding: F-0218-001
+  goal: "Make the zero-cost bundled CPython 3.13 runtime self-contained and relocatable so deterministic release assets contain no build-host identity."
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+
+execution_skills:
+  required: [executor, verification, reliability, security-review, simplicity]
+
+revision_basis:
+  blocked_task_0218_report: "d55559a86520fdfc561f1e8631cb7233d31c3027"
+  blocked_task_0218_review: "75a1b979b6eb9bb94c53ec795dd84ba533e53e9f"
+  remote_run_id: 36977416084
+  remote_candidate_sha256: "054421e7a749d5e892aa20af57d93b75593e1ebcd960f9ed5ad2f6d6acb829ee"
+  remote_proof:
+    canonical_verify: "63/63 modules, 927 tests PASS"
+    durable_pipe: "22/22 PASS"
+    durable_pipe_restart: "10/10 PASS"
+    supervised_lifecycle: "20/20 PASS in 34.133s under unchanged 45s"
+    macos26_arm64_package: PASS
+    swift_compile_link: PASS
+    release_bundle_build_1: FAIL
+    failure: "release candidate embeds an operator HOME path"
+  accepted_blobs:
+    packaging_python_sh: "bb54ea84c8d9081c528a7cc699299431d0556f5c"
+    package_app_sh: "088466abaa6e3fc65cec05bbe49dd44dfeeea8da"
+    release_bundle_py: "ee5d96ee2ef8ce2f2186e042acb2e78fc4cfce9b"
+    test_packaging_interpreter_py: "71c33fd3cb80f65e98bf92a4ecfaa1271816b79c"
+    test_package_provenance_py: "634c46e81ae6c5ea82e51b407453e1b31c7be606"
+  accepted_workflow_blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  paused_release_task: TASK-0196
+
+proven_root_cause:
+  packaging_substrate:
+    - "package_app.sh creates a CPython 3.13 venv with --copies and preserves pyvenv.cfg home/executable values from the packaging interpreter."
+    - "materialize_packaging_python_runtime copies relative libpython bytes from sys.base_prefix/lib but preserves the copied dylib absolute LC_ID_DYLIB."
+    - "The final candidate contains third-party site-packages but does not contain a package-owned CPython standard library/lib-dynload tree."
+  forensic_reproduction:
+    - "Existing zero-cost candidates from the accepted packaging lineage contain operator HOME bytes in runtime/.venv/pyvenv.cfg and runtime/.venv/lib/libpython3.13.dylib."
+    - "pyvenv.cfg points home/executable at the builder CPython prefix."
+    - "libpython3.13.dylib install identity is the absolute builder prefix."
+    - "The bundled interpreter reports sys.base_prefix and stdlib outside the candidate and imports os.py from the builder prefix."
+    - "The source CPython stdlib contains builder-prefix literals in _sysconfigdata__darwin_darwin.py, so blind stdlib copying is insufficient."
+  preserved_gate: "macos/release_bundle.py HOME-path rejection is correct and must remain unchanged."
+
+objective: "Convert the package-owned Python payload from a host-bound copied venv into a self-contained relocatable CPython 3.13 runtime prefix while preserving the validated interpreter version/architecture, hash-locked dependency installation, candidate provenance, public Runtime behavior and deterministic release-bundle gate."
+
+scope:
+  required_changes:
+    - "Fresh-bind exact revision-1 base with clean synchronized MAIN ONLY and exactly one worktree."
+    - "Modify production behavior only in macos/packaging_python.sh and macos/package_app.sh."
+    - "Preserve the existing validated CPython 3.13.x/cp313/macOS arm64 packaging-interpreter authority."
+    - "Preserve venv --copies as the staging mechanism if useful, but the FINAL candidate runtime must not depend on the builder's pyvenv.cfg/base prefix."
+    - "Materialize the CPython 3.13 standard library and lib-dynload from the validated packaging interpreter into the package-owned runtime prefix."
+    - "Do not copy source site-packages from the packaging interpreter. Third-party dependencies must still come only from requirements.lock via pip --require-hashes."
+    - "Do not package __pycache__, .pyc, symlinks, sockets, FIFOs, devices, checkout .venv contents or unrelated packaging-interpreter files."
+    - "Treat the final runtime/.venv directory as a self-contained CPython prefix. Final candidate runtime/.venv must not contain pyvenv.cfg or any other config that points to the packaging interpreter prefix."
+    - "Normalize the package-owned libpython3.13.dylib install identity to the canonical relative identity @executable_path/../lib/libpython3.13.dylib. Preserve the copied interpreter's existing @executable_path/../lib/libpython3.13.dylib load dependency."
+    - "Do not rewrite unrelated Mach-O dependencies. Reject unsupported packaging layouts rather than guessing."
+    - "Sanitize/regenerate copied _sysconfigdata__darwin_darwin.py so no original packaging-prefix/operator-HOME bytes remain and prefix-derived runtime path values resolve from the active self-contained sys.base_prefix rather than a fabricated global path."
+    - "Preserve non-path CPython build variables required by sysconfig/platform/tag/runtime behavior."
+    - "After hash-locked dependency installation and final Python-substrate normalization, smoke the package-owned interpreter before it is copied into the app runtime."
+    - "After copy into Agent Runtime.app, smoke the exact packaged interpreter again and require CPython 3.13 arm64."
+    - "Add focused TDD coverage in tests/test_packaging_interpreter.py for stdlib/lib-dynload materialization, exclusion of source site-packages/cache/symlinks, relative libpython install identity, removal of pyvenv builder authority, and deterministic sysconfig-prefix sanitization."
+    - "Add focused release-candidate coverage in tests/test_package_provenance.py proving the final package contract contains no operator-HOME or packaging-prefix dependency and release_bundle.py remains unchanged/fail-closed."
+    - "Deterministic tests must include a synthetic builder prefix under an operator-like absolute path and fail against the pre-fix behavior."
+    - "Run focused tests.test_packaging_interpreter, tests.test_package_provenance and tests.test_surface_and_scripts once after GREEN."
+    - "Run shell syntax checks for macos/packaging_python.sh and macos/package_app.sh and git diff --check."
+    - "Only after focused proof passes, run exactly one canonical HOME=$PWD/.h TMPDIR=$PWD/.v ./verify. Do not replay a conclusive result."
+    - "Publish one implementation commit before physical candidate qualification so package_provenance stages the exact implementation HEAD."
+    - "From that exact clean implementation commit, resolve and validate the canonical local CPython 3.13 arm64 packaging interpreter and record its absolute base prefix and HOME marker for negative proof."
+    - "Snapshot build/candidates before package qualification. Run exactly one local AGENT_RUNTIME_PACKAGING_PYTHON=<validated absolute interpreter> ./macos/package_app.sh --zero-cost."
+    - "Require package exit 0, strict codesign/provenance PASS and emitted candidate_app/candidate_handoff/initial_payload_release/initial_payload_closure/candidate_sha256."
+    - "Scan every regular file in the exact candidate and require zero bytes containing the operator HOME marker and zero bytes containing the original packaging-interpreter base prefix."
+    - "Require candidate runtime/.venv/pyvenv.cfg absent."
+    - "Require otool -L on packaged runtime/.venv/bin/python to retain @executable_path/../lib/libpython3.13.dylib and require otool -D on packaged libpython3.13.dylib to equal @executable_path/../lib/libpython3.13.dylib."
+    - "Copy the exact packaged runtime/.venv and initial payload release into a distinct task-owned ignored relocation root. Do not mutate the frozen candidate."
+    - "Run the relocated bin/python with an isolated HOME and without PYTHONHOME/PYTHONPATH leakage. Require sys.executable, sys.prefix and sys.base_prefix to resolve inside the relocation root; require sys.prefix == sys.base_prefix."
+    - "Require sysconfig.get_path('stdlib'), os.__file__ and representative standard-library imports to resolve inside the relocated runtime prefix, never the original packaging prefix or original candidate path."
+    - "Require relocated Python to import the copied initial agent_runtime payload and its accepted twenty-tool capability registry using only the relocated payload path plus its own package-owned site-packages."
+    - "Require representative sysconfig prefix-derived path variables and all string config vars to contain neither the original packaging prefix nor operator HOME."
+    - "From the same frozen candidate, run macos/release_bundle.py build exactly twice into two distinct empty ignored output directories, cmp archive/manifest/SHA256SUMS byte-for-byte, and run release_bundle.py verify once."
+    - "The release_bundle implementation itself must remain byte-identical to blob ee5d96ee2ef8ce2f2186e042acb2e78fc4cfce9b."
+    - "Record local candidate SHA, initial payload closure, release archive SHA/size/member count and relocation proof facts."
+    - "Remove task-owned relocation/output directories, .h/.v and only the exact newly-created local candidate if it was absent from the pre-build candidate snapshot. Never delete a pre-existing candidate."
+    - "Confirm release-gate workflow remains byte-identical to fa0c6bc61bb660b103f3a45b239ac52def7ae1b8."
+    - "Publish only .agent/tasks/TASK-0219/report.yaml as the report-only child."
+    - "Final main clean/synchronized MAIN ONLY, one branch, one worktree."
+
+  allowed_existing_files_or_components:
+    - "macos/packaging_python.sh"
+    - "macos/package_app.sh"
+    - "tests/test_packaging_interpreter.py"
+    - "tests/test_package_provenance.py"
+    - ".agent/tasks/TASK-0219/report.yaml"
+
+invariants:
+  - "macos/release_bundle.py remains byte-identical to ee5d96ee2ef8ce2f2186e042acb2e78fc4cfce9b."
+  - "Release assets still reject operator HOME/build-host identity."
+  - "requirements.lock and pip --require-hashes remain authoritative for third-party dependencies."
+  - "CPython major/minor contract remains 3.13 on macOS arm64."
+  - "No Runtime version, public tool surface, lifecycle, durable semantics, provenance schema, candidate schema, payload schema or release-manifest schema change."
+  - "No GitHub Actions dispatch/rerun."
+  - "No tag/release/publication/live Runtime/config/plugin/credential/permission/reboot effect."
+  - "TASK-0196 remains paused."
+  - "MAIN ONLY."
+
+forbidden_changes:
+  - "Any production file other than macos/packaging_python.sh and macos/package_app.sh."
+  - "Any weakening, bypass or special-case of release_bundle.py HOME-path scanning."
+  - "Copying the packaging interpreter's site-packages or checkout .venv as dependency authority."
+  - "Retaining final pyvenv.cfg builder-prefix authority."
+  - "Replacing builder paths with a fake fixed global installation prefix."
+  - "Developer ID, notarization or external package manager introduction."
+  - "Any workflow, verification policy, docs, dependency, version or schema change."
+  - "More than one local package_app.sh build."
+  - "Any GitHub Actions dispatch/rerun."
+  - "Any second canonical ./verify after a conclusive result or blind replay."
+  - "Any live install/cutover/lifecycle effect."
+  - "Any branch or PR."
+
+effect_authority:
+  canonical_verify_max: 1
+  local_distribution_build_max: 1
+  local_release_bundle_build_max: 2
+  github_workflow_dispatch_max: 0
+  github_workflow_rerun_max: 0
+  workflow_artifact_download_max: 0
+  launchservices_mutation_max: 0
+  install_prebuilt_max: 0
+  commit_cutover_max: 0
+  rollback_cutover_max: 0
+  menu_bar_relaunch_max: 0
+  runtime_restart_max: 0
+  runtime_explicit_start_max: 0
+  runtime_explicit_stop_max: 0
+  plugin_reload_or_reconnect_max: 0
+  credential_rotation_max: 0
+  physical_reboot_max: 0
+  new_security_permission_max: 0
+  version_tag_create_max: 0
+  github_release_publish_max: 0
+  branch_or_pr_creation_max: 0
+
+acceptance_criteria:
+  - {id: AC-1, requirement: "Bundled CPython is self-contained and relocatable.", evidence_required: "Final candidate has package-owned stdlib/lib-dynload, no pyvenv.cfg builder authority, relative libpython identity, and relocated interpreter resolves executable/prefix/base_prefix/stdlib inside the relocated prefix."}
+  - {id: AC-2, requirement: "Builder identity is absent from the candidate.", evidence_required: "Full candidate byte scan finds zero operator-HOME and zero original packaging-prefix bytes; relocated sys.path/sysconfig contain neither marker."}
+  - {id: AC-3, requirement: "Dependency and runtime semantics remain authoritative.", evidence_required: "requirements.lock --require-hashes remains sole third-party source; relocated Python imports representative stdlib, third-party Runtime dependencies and relocated initial agent_runtime payload with twenty advertised tools."}
+  - {id: AC-4, requirement: "Deterministic release assets accept the real corrected candidate without weakening the gate.", evidence_required: "Frozen release_bundle.py blob unchanged; two local builds byte-identical; release_bundle verify PASS."}
+  - {id: AC-5, requirement: "Repository verification passes.", evidence_required: "Focused tests/syntax/diff PASS and exactly one canonical ./verify PASS."}
+  - {id: AC-6, requirement: "Canonical closure.", evidence_required: "Only authorized implementation/tests + report changed; all task-created build evidence cleaned; workflow unchanged; clean synchronized MAIN ONLY."}
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "TDD packaging-substrate regressions + focused modules + exactly one canonical verify + exactly one real local zero-cost candidate build + independent relocation smoke + two deterministic release-bundle builds and verify."
+    expected_signal: "The exact built candidate is host-independent, relocatable and accepted by the unchanged deterministic release-bundle gate."
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions: [BLOCKED, STALE_STATE, AUTHORITY_REQUIRED, CURRENT_PHASE_CAPABILITY_UNAVAILABLE, REVIEW_REQUIRED, REVERIFY_REQUIRED, USER_STOP]
+
+git_authority: {create_branch: false, commit: true, push: true, promote_to_main: false}
+release_authority: {create_version_tag: false, mutate_repository_metadata: false, publish_release: false}
+blocking_decisions: []
+execution_ready: true
