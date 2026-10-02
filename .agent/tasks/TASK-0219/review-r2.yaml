@@ -1,0 +1,51 @@
+protocol_version: 3
+task_id: TASK-0219
+task_revision: 2
+review_revision: 2
+state: REVISION_REQUIRED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0219/report-r2.yaml
+  commit: "72b8a6387cfd5c6e2aa1d7e1b3c8d47c6ca5578f"
+  report_revision: 2
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  validator_scope: PASS
+  git_authority: PASS
+  repository_verification: PASS
+  physical_package_build: PASS
+  candidate_portability: FAIL
+  acceptance_criteria: PARTIAL
+
+acceptance_basis:
+  - "Revision-2 implementation 94cfd8f0ff363d6a654cedb1e8a65e9849a5ab6e changes only macos/packaging_python.sh and tests/test_packaging_interpreter.py."
+  - "The pip-capability validator correction is accepted: missing-pip cp313/Darwin/arm64 is rejected before build work; pip-capable source CPython is accepted; no fallback, ensurepip or network effect is introduced."
+  - "Focused verification passed 65 tests and exactly one canonical verify passed 63/63 modules with 931 tests."
+  - "The one authorized physical build with source CPython 3.13.5 and pip 24.3.1 passed and emitted candidate fc06b8d9fc749beeb5cfaadfb483d988abde4f7da24c736c7e7265cbc4ca6639 with payload closure f155f079fdcce25094ab66563c7103e78a636c76726ad1995bb9dfd2c1ee4950."
+  - "The candidate preserves the intended relocatable substrate contracts: pyvenv.cfg absent; packaged Python loads @executable_path/../lib/libpython3.13.dylib; libpython install ID is the same relative identity; packaging base-prefix bytes are absent."
+  - "The only failed host-independence check is 24 generated .pyc files under five __pycache__ directories, all carrying the operator HOME marker."
+  - "package_app.sh removes __pycache__ and .pyc immediately after dependency installation, then executes two finalized/package Python smoke commands without PYTHONDONTWRITEBYTECODE=1. Those smoke imports include os/platform/sysconfig and deterministically regenerate bytecode after the cleanup boundary."
+  - "The public-surface Python invocation already sets PYTHONDONTWRITEBYTECODE=1, demonstrating the intended package-time discipline. No substrate/provenance/release-bundle redesign is required for this blocker."
+  - "Frozen release_bundle.py and workflow blobs remain unchanged."
+  - "Report commit 72b8a6387cfd5c6e2aa1d7e1b3c8d47c6ca5578f is a report-only child and fresh remote main equals it."
+
+findings:
+  - id: F-0219-002
+    severity: BLOCKING
+    classification: post_finalization_smoke_bytecode_regeneration
+    description: "The accepted package flow cleans bytecode before finalization but then executes package-owned Python smoke probes with bytecode writing enabled, recreating __pycache__/.pyc carrying build-host paths."
+    required_closure: "Revise TASK-0219 in place. Preserve the accepted relocatable substrate and pip-capability validator. Change only package-time smoke bytecode discipline so every post-cleanup package-owned Python execution cannot write bytecode, add a narrow contract regression, then repeat one canonical verify and one physical package qualification through candidate scan, relocation proof and deterministic release-bundle closure."
+
+notes:
+  - "Do not weaken release_bundle.py HOME-path rejection."
+  - "Do not reopen stdlib/libpython/sysconfig relocation logic absent new evidence."
+  - "TASK-0196 remains paused."
