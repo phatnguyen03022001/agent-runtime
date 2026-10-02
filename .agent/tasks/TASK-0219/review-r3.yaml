@@ -1,0 +1,54 @@
+protocol_version: 3
+task_id: TASK-0219
+task_revision: 3
+review_revision: 3
+state: REVISION_REQUIRED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0219/report-r3.yaml
+  commit: "23896d1fd696d2016c4fdceff97f3ca9df3f989c"
+  report_revision: 3
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  implementation_scope: PASS
+  git_authority: PASS
+  repository_verification: PASS
+  physical_candidate: PASS
+  relocation: PASS
+  release_bundle: FAIL
+  acceptance_criteria: PARTIAL
+
+acceptance_basis:
+  - "Revision-3 implementation commit 5b579a18a742589ca0c0a17c5f521d0c3b7eb20f is exactly one commit ahead of authorized base d497303515f5d26fc83b870f0698e7fd1082aa78 and changes only macos/package_app.sh and tests/test_package_provenance.py."
+  - "The post-finalization bytecode correction is accepted: all package-owned Python executions after cache cleanup run with PYTHONDONTWRITEBYTECODE=1 and no post-seal mutation is introduced."
+  - "Focused verification passed 66 tests and exactly one canonical verify passed 63/63 modules with 932 tests."
+  - "Exactly one physical package build passed and emitted candidate 4801851413d98fb8c99812702ed0adea14fd5b3d524c4b64b9ab617e9a003273 with payload closure f155f079fdcce25094ab66563c7103e78a636c76726ad1995bb9dfd2c1ee4950."
+  - "Candidate host-independence passed: 2407 regular files scanned, zero operator-HOME hits, zero packaging-prefix hits, zero __pycache__, zero .pyc, pyvenv.cfg absent, no symlinks, and relative libpython load/install identity preserved."
+  - "Relocation proof passed: sys.prefix == sys.base_prefix, executable/stdlib/modules resolve inside relocated prefix, package-owned pydantic/mcp import, copied agent_runtime payload import, twenty advertised tools, and zero original builder markers in sysconfig/sys.path."
+  - "The only failing phase is unchanged release_bundle.py material classification. Its DENIED_COMPONENTS applies generic names log/logs/cache/caches to every path component globally."
+  - "The exact real candidate contains requirements.lock-installed OpenTelemetry protobuf package namespaces opentelemetry/proto/logs and opentelemetry/proto/collector/logs. These are package code, not generated runtime logs."
+  - "TASK-0201's invariant forbids embedding repository checkout files, logs, build caches/config or credentials; it does not require rejecting a legitimate dependency module solely because its import-package component is named 'logs'."
+  - "Independent dependency-tree inspection confirms the relevant locked-package collision class under the candidate's Python package namespace is OpenTelemetry 'logs'. Generic 'caches' also exists in the local pip toolchain namespace, demonstrating why global lexical component denial is structurally unsafe even though pip itself is not part of the final candidate."
+  - "Report commit 23896d1fd696d2016c4fdceff97f3ca9df3f989c is exactly one report-only child of the implementation commit and fresh remote main equals it."
+
+findings:
+  - id: F-0219-003
+    severity: BLOCKING
+    classification: release_bundle_global_lexical_denial_overbreadth
+    description: "release_bundle.py treats log/logs/cache/caches as forbidden wherever they appear, conflating generated checkout/runtime residue with legitimate Python dependency namespace components. The accepted byte-clean relocatable candidate is therefore rejected even though the offending OpenTelemetry 'logs' directories are immutable requirements.lock-installed package content."
+    required_closure: "Revise TASK-0219 in place. Preserve candidate construction, validator and relocation behavior. Narrow release-bundle forbidden-material classification by path semantics: continue rejecting .git/.agent/.env*/runtime.env/credentials/.pytest_cache/.cache/__pycache__/*.pyc globally and continue rejecting generic log/logs/cache/caches as generated residue outside the package-owned locked Python site-packages namespace, while allowing those lexical names inside the candidate's package-owned CPython 3.13 site-packages tree. Add RED/GREEN tests that allow OpenTelemetry-style site-packages/logs but still reject log/logs/cache/caches elsewhere plus all globally forbidden material. Then run one canonical verify, one physical package build from the accepted source interpreter, candidate/relocation proof, two deterministic release-bundle builds and one verify."
+
+notes:
+  - "Do not strip, rename or special-case OpenTelemetry files."
+  - "Do not remove log/logs/cache/caches protection globally."
+  - "Do not weaken HOME scanning, archive path safety, symlink/special-file rejection, root inventory, provenance, checksum or mode checks."
+  - "TASK-0196 remains paused."
