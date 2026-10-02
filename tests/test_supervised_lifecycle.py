@@ -77,10 +77,15 @@ printf '{"main_app":"%s","runtime_agent":"%s"}\n' "$main_state" "$runtime_state"
 
     def tearDown(self) -> None:
         try:
-            self.run_start("stop")
-        except Exception:
-            pass
-        self.temp_ctx.cleanup()
+            if self.current_pid() is not None:
+                try:
+                    self.run_start("stop")
+                except Exception:
+                    pass
+            self.assertFalse((self.state / "runtime.pid").exists(), "fixture shutdown left runtime.pid")
+            self.assertFalse((self.state / "runtime.lock").exists(), "fixture shutdown left runtime.lock")
+        finally:
+            self.temp_ctx.cleanup()
 
     def _write(self, name: str, text: str) -> None:
         path = self.bin / name
@@ -98,10 +103,24 @@ case "$1" in
     if ! mkdir "$state/runtime.lock" 2>/dev/null; then echo duplicate >> "$state/duplicates.log"; exit 9; fi
     echo $$ > "$state/runtime.pid"
     echo start >> "$state/starts.log"
-    cleanup() { if [[ -f "$state/runtime.pid" && "$(cat "$state/runtime.pid")" == "$$" ]]; then rm -f "$state/runtime.pid"; fi; rmdir "$state/runtime.lock" 2>/dev/null || true; }
+    waiter_pid=""
+    cleanup() {
+      if [[ -n "$waiter_pid" ]]; then
+        kill "$waiter_pid" 2>/dev/null || true
+        wait "$waiter_pid" 2>/dev/null || true
+        waiter_pid=""
+      fi
+      if [[ -f "$state/runtime.pid" && "$(cat "$state/runtime.pid")" == "$$" ]]; then rm -f "$state/runtime.pid"; fi
+      rmdir "$state/runtime.lock" 2>/dev/null || true
+    }
     trap cleanup EXIT
-    trap 'cleanup; exit 0' TERM INT
-    while true; do sleep 1; done
+    trap 'exit 0' TERM INT
+    while true; do
+      sleep 3600 &
+      waiter_pid=$!
+      wait "$waiter_pid"
+      waiter_pid=""
+    done
     ;;
   doctor) exit 0 ;;
   *) exit 2 ;;
