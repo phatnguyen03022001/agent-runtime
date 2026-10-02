@@ -1,0 +1,111 @@
+protocol_version: 3
+task_id: TASK-0220
+task_revision: 1
+state: APPROVED
+title: "Remote Release Qualification"
+
+origin:
+  predecessor_task: TASK-0219
+  predecessor_revision: 5
+  predecessor_report: "8d169e2298bfac43123ff5d35dadfb39b78dff5f"
+  predecessor_review: "d071c7da2b163357c774d933521426337dc91245"
+  phase_transition: "STABILIZE -> QUALIFY"
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+phase:
+  name: QUALIFY
+  authority: frozen_fail_closed
+  rationale: "TASK-0219 proved candidate construction, relocation and deterministic release assets locally. Adaptive stabilization is closed."
+
+accepted_basis:
+  implementation_commit: "bf031e94911c5d9ad2d3e9b9f82693b1035f1e9f"
+  local_canonical_verify: "63/63 modules, 935 tests PASS"
+  local_candidate_contract: PASS
+  local_relocation: PASS
+  local_release_bundle: "2/2 byte-identical builds + verify PASS"
+  workflow_blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  paused_release_task: TASK-0196
+
+historical_runs:
+  never_rerun:
+    - 36912032079
+    - 36956517661
+    - 36958918581
+    - 36961531935
+    - 36965002566
+    - 36967600037
+    - 36970566958
+    - 36974192763
+    - 36977416084
+
+objective: "Dispatch the frozen release-gate workflow exactly once at the exact authorized main SHA and prove the complete macOS ARM64 release qualification succeeds."
+
+required_actions:
+  - "Fresh-bind exact base; require main == origin/main == exact base, clean worktree/index, MAIN ONLY, one worktree."
+  - "Require .github/workflows/release-gate.yml blob fa0c6bc61bb660b103f3a45b239ac52def7ae1b8 and TASK-0219 review-r5 ACCEPTED."
+  - "Fresh-inventory release-gate runs; prove the nine historical run IDs remain attempt 1."
+  - "Dispatch release-gate.yml exactly once with ref=main. If acknowledgement is ambiguous, reconcile inventory; never dispatch twice."
+  - "Require exactly one new workflow_dispatch run, attempt 1, head_branch main, exact workflow, head_sha == exact TASK-0220 base."
+  - "Observe only that run to terminal state. No rerun of the run or any job."
+  - "Require overall SUCCESS."
+  - "Require build-release success on macos-26: ARM64, Python 3.13, locked dependencies, canonical verify, exactly one zero-cost candidate, deterministic release bundle build twice, byte comparisons, release_bundle verify and artifact upload."
+  - "Record remote canonical verify totals and remote candidate identity from logs when explicitly available."
+  - "Require compatibility jobs exactly for macos-14, macos-15 and macos-26; all SUCCESS."
+  - "For each compatibility lane require ARM64, exact artifact download, checksum validation, release_bundle verify, strict codesign, validate-zero-cost and bundled CPython 3.13 smoke PASS."
+  - "Require exactly one artifact named agent-runtime-release-assets."
+  - "Download that artifact exactly once after workflow SUCCESS."
+  - "Require downloaded artifact contains exactly one .tar.gz archive, release-manifest.json and SHA256SUMS.txt."
+  - "Independently validate checksum and run release_bundle.py verify once on downloaded assets in task-owned ignored evidence roots."
+  - "Require release manifest source_revision == new run head_sha == exact TASK-0220 base and expected_public_tool_count == 20."
+  - "Record manifest candidate_sha256, payload closure, archive filename/SHA/size/member count and source_tree."
+  - "Clean task-owned downloaded/extracted evidence."
+  - "Publish only .agent/tasks/TASK-0220/report.yaml."
+  - "Final main clean/synchronized MAIN ONLY, one worktree."
+
+forbidden:
+  - "Any product/workflow/test/dependency/version/schema mutation."
+  - "Any local ./verify or local package build."
+  - "Any second workflow dispatch."
+  - "Any workflow/job rerun."
+  - "Any tag/release publication."
+  - "Any live Runtime mutation."
+  - "Any branch or PR."
+
+effect_authority:
+  github_workflow_dispatch_max: 1
+  workflow_artifact_download_max: 1
+  github_workflow_rerun_max: 0
+  workflow_job_rerun_max: 0
+  local_verify_max: 0
+  local_package_build_max: 0
+  release_publish_max: 0
+  live_runtime_mutation_max: 0
+  branch_or_pr_creation_max: 0
+
+acceptance:
+  - "Exactly one new exact-SHA attempt-1 release-gate run; historical runs still attempt 1."
+  - "build-release fully PASS."
+  - "macos-14/15/26 compatibility fully PASS."
+  - "Exactly one release artifact independently verifies and binds source_revision to exact base."
+  - "No unauthorized effect; report-only repository mutation."
+
+failure_policy:
+  mode: FAIL_CLOSED
+  rule: "Any qualification failure closes TASK-0220 BLOCKED. Do not mutate, retry, rerun or redispatch inside this task. Capture the first failing stage/signature for Architect review."
+  reentry: "A new defect requires explicit transition back to STABILIZE."
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions: [BLOCKED, STALE_STATE, AUTHORITY_REQUIRED, REVIEW_REQUIRED, USER_STOP]
+
+git_authority: {create_branch: false, commit: true, push: true, promote_to_main: false}
+release_authority: {create_version_tag: false, publish_release: false}
+execution_ready: true
