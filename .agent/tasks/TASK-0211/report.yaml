@@ -1,0 +1,187 @@
+protocol_version: 3
+task_id: TASK-0211
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: PASS
+
+task_source:
+  path: .agent/tasks/TASK-0211/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "12bf6cb25798eeb3a9ce7659f36d59645f5799cf"
+  implementation_commit: "b177870e51f3ecb7ab8eb18bf62e45b3930fea16"
+  implementation_tree: "c925366be3ccde44c56c77fbf08f6ee2fba6cfb3"
+  task_0196_paused: true
+
+preconditions:
+  initial_local_head_before_fresh_bind: "9bcfc486ea70e2cb8dcdcfcc794b89a6122e0c85"
+  fresh_bound_head: "12bf6cb25798eeb3a9ce7659f36d59645f5799cf"
+  origin_main_head: "12bf6cb25798eeb3a9ce7659f36d59645f5799cf"
+  main_equals_origin_main: true
+  worktree_clean: true
+  index_clean: true
+  branch_count: 1
+  worktree_count: 1
+
+root_cause:
+  classification: post_bootstrap_one_shot_owner_revalidation
+  source: agent_runtime/durable_pipe_runner.py
+  former_behavior: "Hard-wall, interrupt and terminate revalidation sampled observe_process_identity(process.pid) once and made the ownership/signal decision from that single observation."
+  failure_projection: "A transient None or transient differing target identity could make hard-wall/terminate exit the durable runner before terminal persistence, leaving persisted RUNNING state that restart recovery correctly projected as DURABLE_OWNER_LOST."
+  resolution: "Late target-owner revalidation now reuses the accepted bounded stable observation primitive before exact expected-identity authorization."
+
+implementation:
+  changed_paths:
+    - agent_runtime/durable_pipe_runner.py
+    - tests/test_durable_pipe.py
+  production_delta:
+    helper: _late_identity_matches
+    behavior: "Obtain a stable identity via _identity_with_retry, then authorize only exact equality with the persisted process identity."
+    hard_wall: "Uses stable exact match before process-group termination; unresolved or stable mismatch remains fail-closed."
+    interrupt: "Uses stable exact match before SIGINT delivery; mismatch is never signaled."
+    terminate: "Uses stable exact match before process-group termination; unresolved or stable mismatch remains fail-closed."
+  preserved:
+    identity_fields: 6
+    identity_equality: exact
+    identity_wait_seconds: 0.5
+    identity_poll_seconds: 0.01
+    durable_finalization_grace_seconds: 2.0
+    durable_pipe_py_changed: false
+    session_py_changed: false
+    durable_schema_changed: false
+    public_terminal_contract_changed: false
+    process_group_model_changed: false
+  deterministic_regression:
+    transient_none_then_expected:
+      test: tests.test_durable_pipe.DurablePipeTests.test_late_identity_match_accepts_transient_none_then_expected
+      expected_observations: 3
+      result: PASS
+    transient_different_then_expected:
+      test: tests.test_durable_pipe.DurablePipeTests.test_late_identity_match_accepts_transient_different_then_expected
+      expected_observations: 3
+      result: PASS
+    stable_different_instance:
+      test: tests.test_durable_pipe.DurablePipeTests.test_late_identity_match_rejects_stable_different_instance
+      expected_observations: 2
+      authorization: rejected
+      result: PASS
+
+red_green:
+  red:
+    command: ".venv/bin/python -m unittest tests.test_durable_pipe.DurablePipeTests.test_late_identity_match_accepts_transient_none_then_expected tests.test_durable_pipe.DurablePipeTests.test_late_identity_match_accepts_transient_different_then_expected tests.test_durable_pipe.DurablePipeTests.test_late_identity_match_rejects_stable_different_instance"
+    exit_code: 1
+    tests: 3
+    errors: 3
+    result: FAIL_EXPECTED
+    decisive_failure: "AttributeError: module 'agent_runtime.durable_pipe_runner' has no attribute '_late_identity_matches'"
+    reason: "The exact base had no late stable-match seam; late revalidation still used one-shot observations."
+  green:
+    command: ".venv/bin/python -m unittest tests.test_durable_pipe.DurablePipeTests.test_late_identity_match_accepts_transient_none_then_expected tests.test_durable_pipe.DurablePipeTests.test_late_identity_match_accepts_transient_different_then_expected tests.test_durable_pipe.DurablePipeTests.test_late_identity_match_rejects_stable_different_instance"
+    exit_code: 0
+    tests: 3
+    result: PASS
+
+stability_verification:
+  hard_wall_exact_remote_test:
+    test: tests.test_durable_pipe_restart.DurablePipeRestartTests.test_hard_wall_deadline_survives_restart
+    isolated_fresh_processes: {required: 25, passed: 25, failed: 0, result: PASS}
+  terminate_exact_remote_test:
+    test: tests.test_durable_pipe_restart.DurablePipeRestartTests.test_terminate_after_restart_revalidates_and_finalizes
+    isolated_fresh_processes: {required: 25, passed: 25, failed: 0, result: PASS}
+  concurrent_stress:
+    rounds: 10
+    fresh_processes_per_round: 4
+    tests_per_process: 2
+    required_process_invocations: 40
+    passed_process_invocations: 40
+    failed_process_invocations: 0
+    result: PASS
+
+owner_module_verification:
+  tests_test_durable_pipe: {tests: 18, failures: 0, errors: 0, result: PASS}
+  tests_test_durable_pipe_restart: {tests: 10, failures: 0, errors: 0, result: PASS}
+  git_diff_check: {result: PASS}
+
+canonical_verification:
+  command: 'HOME="$PWD/.h" TMPDIR="$PWD/.v" ./verify'
+  invocation_count: 1
+  replay_count: 0
+  start_identity: "02110000000000000000000000000027"
+  session_id: "b851cb5713505cd6"
+  timed_out: false
+  exit_code: 0
+  result: PASS
+  profile: qualification
+  requested_profile: qualification
+  classified_modules: 63
+  completed_modules: 63
+  tests: 922
+  duration_seconds: 138.625
+  lane_counts:
+    L1_DETERMINISTIC_UNIT: {selected: 17, completed: 17, tests: 231}
+    L2_ISOLATED_INTEGRATION: {selected: 21, completed: 21, tests: 246}
+    L3_DETERMINISTIC_REGRESSION: {selected: 10, completed: 10, tests: 95}
+    L4_HOST_LIFECYCLE: {selected: 9, completed: 9, tests: 184}
+    L5_QUALIFICATION_CHAOS_CUTOVER: {selected: 6, completed: 6, tests: 166}
+  durable_pipe: {tests: 18, result: PASS, duration_seconds: 2.244}
+  durable_pipe_restart: {tests: 10, result: PASS, duration_seconds: 6.154}
+  product_qualification: {tests: 16, result: PASS, duration_seconds: 34.146}
+
+cleanup:
+  short_home_path: .h
+  short_home_removed_or_absent: true
+  short_tmpdir_path: .v
+  short_tmpdir_removed_or_absent: true
+  task_0211_test_scratch_residue: false
+  untracked_repository_residue_before_report: false
+
+scope_proof:
+  implementation_commit_changed_paths:
+    - agent_runtime/durable_pipe_runner.py
+    - tests/test_durable_pipe.py
+  forbidden_production_files_changed: false
+  durable_pipe_py_changed: false
+  session_py_changed: false
+  release_workflow_changed: false
+  verification_policy_changed: false
+  docs_changed: false
+  dependencies_changed: false
+  version_changed: false
+  schemas_changed: false
+  accepted_release_workflow_blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  observed_release_workflow_blob_after_implementation: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  workflow_blob_unchanged: true
+
+effect_accounting:
+  canonical_verify: {authorized_max: 1, consumed: 1}
+  github_workflow_dispatch: {authorized_max: 0, consumed: 0}
+  github_workflow_rerun: {authorized_max: 0, consumed: 0}
+  local_distribution_build: {authorized_max: 0, consumed: 0}
+  install_prebuilt: {authorized_max: 0, consumed: 0}
+  commit_cutover: {authorized_max: 0, consumed: 0}
+  rollback_cutover: {authorized_max: 0, consumed: 0}
+  menu_bar_relaunch: {authorized_max: 0, consumed: 0}
+  runtime_restart: {authorized_max: 0, consumed: 0}
+  runtime_explicit_start: {authorized_max: 0, consumed: 0}
+  runtime_explicit_stop: {authorized_max: 0, consumed: 0}
+  plugin_reload_or_reconnect: {authorized_max: 0, consumed: 0}
+  credential_rotation: {authorized_max: 0, consumed: 0}
+  physical_reboot: {authorized_max: 0, consumed: 0}
+  new_security_permission: {authorized_max: 0, consumed: 0}
+  version_tag_create: {authorized_max: 0, consumed: 0}
+  github_release_publish: {authorized_max: 0, consumed: 0}
+  branch_or_pr_creation: {authorized_max: 0, consumed: 0}
+
+acceptance_evidence:
+  - {criterion_id: AC-1, status: PASS, evidence: "Deterministic RED-before-fix/GREEN-after-fix regression proves transient None or differing first observations followed by two exact expected observations are accepted through the late stable-match seam; all three late signal/ownership call sites use that seam."}
+  - {criterion_id: AC-2, status: PASS, evidence: "A stable six-field different process identity is rejected by the late authorization predicate; hard-wall/terminate fail closed and interrupt never signals on mismatch. durable_pipe.py and session.py are unchanged."}
+  - {criterion_id: AC-3, status: PASS, evidence: "The exact hard-wall restart failure passed 25/25 isolated fresh processes, the exact terminate restart failure passed 25/25, and 40/40 four-way concurrent fresh-process invocations passed both tests."}
+  - {criterion_id: AC-4, status: PASS, evidence: "Full tests.test_durable_pipe passed 18 tests and full tests.test_durable_pipe_restart passed 10 tests, preserving bootstrap-stability and intentional owner-loss coverage."}
+  - {criterion_id: AC-5, status: PASS, evidence: "Exactly one HOME=$PWD/.h TMPDIR=$PWD/.v ./verify invocation passed 63/63 classified modules and 922 tests; no replay occurred."}
+  - {criterion_id: AC-6, status: PASS_PENDING_REPORT_PUBLICATION, evidence: "Implementation commit changes only durable_pipe_runner.py and test_durable_pipe.py; verification residue is absent and the release workflow blob remains exact. This report is the only report child before final clean synchronized MAIN ONLY proof."}
+
+blocking_findings: []
