@@ -1,0 +1,51 @@
+protocol_version: 3
+
+task_id: TASK-0206
+task_revision: 1
+review_revision: 1
+state: REVISION_REQUIRED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0206/report.yaml
+  commit: "765bc5e3b3469788851266be51c9335367ce08db"
+  report_revision: 1
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  scope: PASS
+  git_authority: PASS
+  acceptance_criteria: BLOCKED
+  remote_effect_budget: EXHAUSTED
+
+acceptance_basis:
+  - "TASK-0206 dispatched exactly one new release-gate run, 36958918581 attempt 1, bound to exact authorized SHA 549844388c3ef585f5d6c31c5ba65a441f65c562; historical runs 36912032079 and 36956517661 remain attempt 1 and were not rerun."
+  - "Remote canonical ./verify is fully successful: 63/63 modules and 917 tests PASS, including durable_pipe 15/15, durable_pipe_restart 10/10 and product_qualification 16/16."
+  - "The durable-owner reliability blocker from TASK-0204 is therefore closed on the real macOS 26 ARM64 release-gate runner."
+  - "The single authorized zero-cost candidate build then fails during Swift compilation at macos/Sources/AgentRuntimeMenuBar/LiquidGlassSupport.swift:32 because the runner SDK exposes NSGlassEffectView but not the macOS-27-only effectIsInteractive member."
+  - "Independent Architect inspection of the local macOS 27 AppKit SDK confirms NSGlassEffectView is available from macOS 26 while effectIsInteractive is declared API_AVAILABLE(macos(27.0))."
+  - "A #available(macOS 27.0, *) runtime guard cannot make an SDK-27-only member compile when the build SDK does not declare that member."
+  - "Independent local Xcode 27 probe confirms the Objective-C setter setEffectIsInteractive: exists on macOS 27 and KVC setValue(true, forKey: effectIsInteractive) correctly enables the property."
+  - "Therefore the narrow compatibility seam is source-level dynamic binding for the optional macOS 27 presentation knob, not changing the release runner, dropping macOS 26 qualification, or weakening the deployment contract."
+  - "Candidate publication never completed; deterministic bundle steps, compatibility jobs and artifact upload did not execute; artifact/download counts remain zero."
+  - "No source/workflow fix, rerun, second dispatch, local package build/verify, tag/release, live Runtime/config/plugin/credential/permission/reboot effect occurred."
+  - "TASK-0206 report is the sole tracked mutation and repository closure is clean/synchronized MAIN ONLY."
+
+findings:
+  - id: F-0206-001
+    severity: BLOCKING
+    classification: sdk27_static_member_reference_breaks_sdk26_build
+    description: "LiquidGlassSupport statically references NSGlassEffectView.effectIsInteractive, an AppKit member declared only in the macOS 27 SDK. The accepted release gate intentionally builds on macOS 26 ARM64, whose SDK cannot compile that source even though the reference is wrapped in #available(macOS 27.0, *)."
+    required_closure: "Use a separate Swift compatibility task. Preserve NSGlassEffectView on macOS 26+, preserve interactive glass behavior on macOS 27+ through a guarded dynamic Objective-C/KVC path with selector existence check, remove all static effectIsInteractive member references from production/tests, add a persistent source-contract regression, pass Swift tests/release build and one canonical local verifier, then use a new remote qualification task for the real SDK26 compile."
+
+notes:
+  - "TASK-0206 cannot continue; its one-dispatch budget is exhausted."
+  - "Do not rerun runs 36912032079, 36956517661 or 36958918581."
+  - "TASK-0196 remains paused."
