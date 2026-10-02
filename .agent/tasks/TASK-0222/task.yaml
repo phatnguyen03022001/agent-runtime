@@ -1,0 +1,148 @@
+protocol_version: 3
+task_id: TASK-0222
+task_revision: 1
+state: APPROVED
+title: "Cross-Layout CPython Packaging Stabilization"
+
+origin:
+  predecessor_task: TASK-0221
+  predecessor_report: "523d4b6cd93647dd51c3262ac6fadba65fc67a40"
+  predecessor_review: "3831086d6a2c838e2dee3e5cc22e9e3f287fedd4"
+  finding: F-0221-001
+  phase_transition: "STABILIZE_DURABLE -> STABILIZE_PACKAGING"
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+phase:
+  name: STABILIZE
+  authority: bounded_adaptive
+  rule: "Discover the exact remote CPython launcher/linkage shape before freezing the solution. The final fix may live in packaging materialization or release-gate interpreter selection only if evidence supports that branch."
+
+accepted_state:
+  durable_fix_commit: "6bc7111faba2a92e8a130ad33546a76fb015f5fe"
+  durable_remote_proof_run: 36990305942
+  durable_remote_verify: "63/63 modules, 935 tests PASS"
+  release_bundle_policy: ACCEPTED
+  local_relocatable_uv_cpython_path: ACCEPTED
+  build_host_identity_scanner: MUST_REMAIN_STRICT
+  task_0196_paused: true
+
+remote_failure:
+  run_id: 36990305942
+  attempt: 1
+  stage: "Build one frozen zero-cost candidate"
+  signature: "final package runtime retains build-host identity: bin/python"
+  packaging_interpreter: "/Library/Frameworks/Python.framework/Versions/3.13/bin/python"
+  setup_python_reported_version: "CPython 3.13.15 arm64"
+  setup_python_toolcache: "/Users/runner/hostedtoolcache/Python/3.13.15/arm64"
+  swift_build: PASS
+  candidate_publication: NOT_REACHED
+
+objective: "Make zero-cost packaging genuinely portable across both the accepted local uv CPython layout and the GitHub macOS setup-python framework layout, without weakening host-identity rejection or dependency/provenance guarantees, then prove the full remote release gate succeeds."
+
+discovery_before_solution_freeze:
+  - "Fresh-bind exact base; require clean synchronized MAIN ONLY and one worktree."
+  - "Inspect current packaging interpreter resolution, venv --copies behavior, materialization, finalization, provenance and release workflow."
+  - "Preserve the accepted local uv-linked layout as a regression baseline."
+  - "Before final production design, obtain bounded remote evidence for the setup-python framework layout: sys.executable, sys.base_prefix, stdlib path, realpath of the selected interpreter, otool -L for the source interpreter, otool -L for a --copies venv bin/python, and the exact build-host marker class present in copied bin/python."
+  - "Remote diagnostics must expose paths/linkage only; do not print credentials, environment secrets, tokens or unrelated runner state."
+  - "A temporary diagnostic workflow/package checkpoint is allowed during STABILIZE. Diagnostic-only instrumentation must be removed before final closure unless it becomes a justified permanent verification assertion."
+  - "If remote evidence is still ambiguous after one diagnostic run, stop or use one additional discriminating check inside the same task; do not guess a fix."
+
+adaptive_mutation_boundary:
+  allowed_product_area:
+    - macos/packaging_python.sh
+    - macos/package_app.sh
+    - tests/test_packaging_interpreter.py
+    - tests/test_package_provenance.py
+    - .github/workflows/release-gate.yml
+  decision_rules:
+    - "If the setup-python framework launcher can be safely materialized into a self-contained package by bounded Mach-O normalization plus package-owned runtime-library copying, implement that in packaging_python.sh and keep workflow interpreter selection semantically unchanged."
+    - "If setup-python's selected interpreter is intrinsically unsuitable for this packaging contract and an already-available runner CPython 3.13 arm64 interpreter satisfies the complete relocatable packaging contract, change workflow selection minimally and validate it explicitly before packaging."
+    - "Do not introduce an unpinned network installer, new package manager dependency, new runtime dependency or silent fallback interpreter."
+    - "Do not patch arbitrary binary bytes. Any Mach-O change must use supported tooling and be limited to proven Python runtime load/install identities."
+    - "Do not weaken final byte scanning for packaging base-prefix or HOME markers."
+    - "Do not special-case GitHub usernames or literal runner paths."
+    - "Local uv CPython behavior and previously accepted relocation/release-bundle behavior must remain green."
+  forbidden_area:
+    - agent_runtime runtime behavior
+    - durable logic/tests except preserving accepted fixture change
+    - macos/release_bundle.py
+    - requirements.lock
+    - Runtime version/public tool/schema
+    - release/tag/live install/cutover
+
+incremental_verification:
+  - "Use RED/GREEN around the exact proven framework-layout defect using the smallest deterministic synthetic or fixture representation possible."
+  - "Run focused packaging interpreter/provenance tests after each meaningful fix checkpoint."
+  - "A diagnostic checkpoint need not consume final canonical verify."
+  - "At the final implementation checkpoint, run exactly one canonical ./verify."
+  - "Run at most one final local zero-cost package build with the accepted local uv CPython to prove no regression in local candidate/relocation/release-bundle behavior."
+  - "If the local package build is used, require candidate host scan, relocation smoke and deterministic release bundle x2 + verify to remain PASS; clean the generated candidate/evidence."
+
+remote_stabilization_loop:
+  workflow: .github/workflows/release-gate.yml
+  dispatch_max: 3
+  rerun_max: 0
+  rules:
+    - "Every dispatch is a NEW workflow_dispatch run at a distinct current exact main SHA, attempt 1. Never rerun any historical or new run/job."
+    - "Dispatch 1 may be diagnostic-only if needed to establish framework launcher/linkage facts."
+    - "After solution freeze, dispatch the smallest justified implementation checkpoint."
+    - "If a run passes the complete release gate, stop immediately and do not consume remaining dispatch budget."
+    - "If the same packaging failure persists, continue bounded discovery/fix within packaging authority while budget remains."
+    - "If a run exposes a blocker outside packaging/candidate authority, stop BLOCKED and report the new boundary crossing."
+    - "The final successful stabilization run must pass canonical verify, zero-cost candidate build, deterministic release assets, artifact upload and macos-14/15/26 compatibility."
+    - "A successful STABILIZE run is not release publication authority; it only authorizes return to QUALIFY."
+
+historical_runs:
+  never_rerun:
+    - 36912032079
+    - 36956517661
+    - 36958918581
+    - 36961531935
+    - 36965002566
+    - 36967600037
+    - 36970566958
+    - 36974192763
+    - 36977416084
+    - 36987757158
+    - 36990305942
+
+closure:
+  success:
+    - "Exact remote framework/root-cause shape recorded."
+    - "Smallest evidence-supported packaging/workflow fix committed on main."
+    - "Strict build-host identity scanner unchanged in semantics."
+    - "Focused regressions PASS."
+    - "One final canonical verify PASS."
+    - "Accepted local uv layout remains PASS."
+    - "At least one new final exact-SHA remote run completes the full release gate successfully."
+    - "No run/job reruns, no release/tag/live effects."
+    - "Publish only .agent/tasks/TASK-0222/report.yaml after final implementation."
+  blocked:
+    - "Discovery remains ambiguous after bounded diagnostic authority."
+    - "Three new remote stabilization dispatches are consumed without full-gate closure."
+    - "Remote failure crosses outside packaging/candidate authority."
+
+effect_authority:
+  canonical_verify_final_max: 1
+  local_package_build_final_max: 1
+  remote_stabilization_dispatch_max: 3
+  workflow_rerun_max: 0
+  release_publish_max: 0
+  live_runtime_mutation_max: 0
+  branch_or_pr_creation_max: 0
+
+git_authority: {create_branch: false, commit: true, push: true, promote_to_main: false}
+release_authority: {create_version_tag: false, publish_release: false}
+continuation_policy:
+  mode: ADAPTIVE_WITHIN_BOUNDARY
+  stop_conditions: [BOUNDARY_CROSSING, BUDGET_EXHAUSTED, AMBIGUOUS_DISCOVERY, USER_STOP]
+execution_ready: true
