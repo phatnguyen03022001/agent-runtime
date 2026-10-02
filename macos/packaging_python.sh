@@ -73,6 +73,11 @@ packaging_python_change_linkage() {
   /usr/bin/install_name_tool -change "$old_identity" "$new_identity" "$executable"
 }
 
+packaging_python_sign_macho() {
+  local path="$1"
+  /usr/bin/codesign --force --sign - "$path"
+}
+
 materialize_packaging_python_runtime() {
   local python_bin="$1"
   local package_venv="$2"
@@ -184,6 +189,10 @@ materialize_packaging_python_runtime() {
 
     packaging_python_change_linkage "$copied_python" "$framework_dependency" "$expected_identity" >/dev/null 2>&1 \
       || { echo "$prefix: failed to normalize copied framework interpreter linkage" >&2; return 2; }
+    packaging_python_sign_macho "$target" >/dev/null 2>&1 \
+      || { echo "$prefix: failed to sign normalized framework runtime" >&2; return 2; }
+    packaging_python_sign_macho "$copied_python" >/dev/null 2>&1 \
+      || { echo "$prefix: failed to sign normalized framework interpreter" >&2; return 2; }
     normalized_dependencies="$(packaging_python_linkage_dependencies "$copied_python" 2>/dev/null)" \
       || { echo "$prefix: failed to re-inspect copied framework interpreter linkage" >&2; return 2; }
     printf '%s\n' "$normalized_dependencies" | /usr/bin/grep -Fxq "$expected_identity" \

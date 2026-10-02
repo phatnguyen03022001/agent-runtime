@@ -239,12 +239,15 @@ class PackagingRuntimeLinkageTests(unittest.TestCase):
         )
         linkage_file = package_venv / "python.linkage"
         linkage_file.write_text(linkage + "\n")
+        sign_file = package_venv / "macho.signatures"
+        sign_file.write_text("")
         script = f"""
 source "{HELPER}"
 fake_base="$4"
 fake_linkage_file="$5"
 fake_stdlib="$6"
 fake_identity_file="$7"
+fake_sign_file="$8"
 packaging_python_base_prefix() {{ printf '%s\\n' "$fake_base"; }}
 packaging_python_linkage_dependencies() {{ cat "$fake_linkage_file"; }}
 packaging_python_stdlib_path() {{ printf '%s\\n' "$fake_stdlib"; }}
@@ -253,6 +256,7 @@ packaging_python_set_library_identity() {{ printf '%s\\n' "$2" > "$fake_identity
 packaging_python_change_linkage() {{
   printf '%s\n' "$3" "/usr/lib/libSystem.B.dylib" > "$fake_linkage_file"
 }}
+packaging_python_sign_macho() {{ printf '%s\n' "$1" >> "$fake_sign_file"; }}
 materialize_packaging_python_runtime "$1" "$2" "$3" "TEST ERROR"
 """
         env = os.environ.copy()
@@ -271,6 +275,7 @@ materialize_packaging_python_runtime "$1" "$2" "$3" "TEST ERROR"
                 str(linkage_file),
                 str(stdlib),
                 str(identity_file),
+                str(sign_file),
             ],
             cwd=ROOT,
             env=env,
@@ -310,6 +315,10 @@ materialize_packaging_python_runtime "$1" "$2" "$3" "TEST ERROR"
             linkage = (package_venv / "python.linkage").read_text().splitlines()
             self.assertIn("@executable_path/../lib/libpython3.13.dylib", linkage)
             self.assertNotIn(dependency, linkage)
+            self.assertEqual(
+                (package_venv / "macho.signatures").read_text().splitlines(),
+                [str(target), str(package_venv / "bin" / "python")],
+            )
 
     def test_linked_layout_materializes_required_libpython_as_owned_equal_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
