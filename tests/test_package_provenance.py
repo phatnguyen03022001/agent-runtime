@@ -412,6 +412,27 @@ class PackageProvenanceTests(unittest.TestCase):
         self.assertNotIn('APP="$REPO_ROOT/build/Agent Runtime.app"', package)
         self.assertNotIn('CANDIDATE_HANDOFF="$REPO_ROOT/build/Agent Runtime.candidate.json"', package)
 
+    def test_zero_cost_packaging_has_no_launchservices_side_effect_and_preserves_identity_output_contract(self) -> None:
+        package = (ROOT / "macos" / "package_app.sh").read_text()
+        self.assertNotIn("lsregister", package)
+        self.assertNotIn("LaunchServices", package)
+
+        publish = package.index('package_provenance.py" publish-zero-cost')
+        validation = package.index(
+            '[[ -n "$FINAL_APP" && -n "$FINAL_HANDOFF" && -n "$FINAL_PAYLOAD" && "$CANDIDATE_SHA256" =~ ^[0-9a-f]{64}$ ]]',
+            publish,
+        )
+        output_contract = (
+            "printf 'candidate_app=%s\\n' \"$FINAL_APP\"\n"
+            "printf 'candidate_handoff=%s\\n' \"$FINAL_HANDOFF\"\n"
+            "printf 'initial_payload_release=%s\\n' \"$FINAL_PAYLOAD\"\n"
+            "printf 'initial_payload_closure=%s\\n' \"$INITIAL_PAYLOAD_CLOSURE\"\n"
+            "printf 'candidate_sha256=%s\\n' \"$CANDIDATE_SHA256\""
+        )
+        output = package.index(output_contract, validation)
+        self.assertGreater(output, validation)
+        self.assertEqual(package.count(output_contract), 1)
+
     def test_zero_cost_packaging_is_explicit_external_payload_and_has_no_paid_authority_lane(self) -> None:
         package = (ROOT / "macos" / "package_app.sh").read_text()
         self.assertIn("--zero-cost", package)
