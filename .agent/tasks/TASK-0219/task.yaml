@@ -1,16 +1,16 @@
 protocol_version: 3
 task_id: TASK-0219
-task_revision: 3
+task_revision: 4
 state: APPROVED
-title: "Relocatable Bundled CPython Substrate Closure — Post-Finalization Bytecode Discipline"
+title: "Relocatable Bundled CPython Substrate Closure — Path-Aware Release Material Policy"
 
 origin:
   type: architect_revision
   predecessor_task: TASK-0219
-  predecessor_revision: 2
-  predecessor_report: "72b8a6387cfd5c6e2aa1d7e1b3c8d47c6ca5578f"
-  predecessor_review: "bf213c34210078160f1d6205ac17318f7757dda8"
-  finding: F-0219-002
+  predecessor_revision: 3
+  predecessor_report: "23896d1fd696d2016c4fdceff97f3ca9df3f989c"
+  predecessor_review: "96760dbb2c9263d5e6bb543885c165d0ddd2ccea"
+  finding: F-0219-003
 
 architect_binding:
   target_repository: phatnguyen03022001/agent-runtime
@@ -32,106 +32,104 @@ execution_skills:
   required: [executor, verification, reliability, security-review, simplicity]
 
 preserved_state:
-  revision_1_relocatable_substrate_commit: "3db36125699560dda6f9767a6f61ba3f29971771"
-  revision_2_validator_commit: "94cfd8f0ff363d6a654cedb1e8a65e9849a5ab6e"
+  relocatable_substrate_commit: "3db36125699560dda6f9767a6f61ba3f29971771"
+  pip_capability_commit: "94cfd8f0ff363d6a654cedb1e8a65e9849a5ab6e"
+  bytecode_discipline_commit: "5b579a18a742589ca0c0a17c5f521d0c3b7eb20f"
   accepted_blobs:
     packaging_python_sh: "07182ec37f75df7cfe36edf7c657c1688f6f73b8"
     packaging_interpreter_tests: "9cc074fa96d846d2d7c8964173016130e4779337"
-    package_app_sh: "dbaf89f4a3f0a7678a6870233bb4afa66db03181"
-    package_provenance_tests: "8302b42a66561186b7c5d238fc550c690ab4b26e"
+    package_app_sh: "f30bdcf94b95e9290042a1197eb3297ea411d3e5"
+    package_provenance_tests: "fc05c04e092db3d75aef5502407e21b638cbd4a7"
     release_bundle_py: "ee5d96ee2ef8ce2f2186e042acb2e78fc4cfce9b"
     release_workflow: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
-  repository_verification:
-    revision_2_focused: "65 PASS"
-    revision_2_canonical_verify: "63/63 modules, 931 tests PASS"
-  physical_proof:
-    source_python: "/Users/tienphat/.local/share/uv/python/cpython-3.13.5-macos-aarch64-none/bin/python3.13"
-    source_python_pip: "24.3.1"
+  revision_3_proof:
+    focused_tests: "66 PASS"
+    canonical_verify: "63/63 modules, 932 tests PASS"
     package_build: PASS
-    candidate_sha256: "fc06b8d9fc749beeb5cfaadfb483d988abde4f7da24c736c7e7265cbc4ca6639"
-    initial_payload_closure: "f155f079fdcce25094ab66563c7103e78a636c76726ad1995bb9dfd2c1ee4950"
-    candidate_contract:
-      pyvenv_cfg_absent: true
-      python_libpython_load_dependency: "@executable_path/../lib/libpython3.13.dylib"
-      libpython_install_identity: "@executable_path/../lib/libpython3.13.dylib"
-      packaging_base_prefix_hits: 0
-      pycache_directories: 5
-      pyc_files: 24
-      operator_home_marker_hits: 24
+    candidate_sha256: "4801851413d98fb8c99812702ed0adea14fd5b3d524c4b64b9ab617e9a003273"
+    payload_closure: "f155f079fdcce25094ab66563c7103e78a636c76726ad1995bb9dfd2c1ee4950"
+    candidate_contract: PASS
+    relocation_proof: PASS
+    release_bundle_build_1: FAIL
+    release_bundle_failure: "release candidate contains forbidden checkout/config/cache material"
 
 proven_root_cause:
-  - "package_app.sh cleans __pycache__ and .pyc immediately after hash-locked dependency installation."
-  - "It then runs finalized package-owned Python smoke and packaged-app Python smoke without PYTHONDONTWRITEBYTECODE=1."
-  - "Those smoke imports include os, platform and sysconfig, so CPython regenerates bytecode caches after the cleanup boundary."
-  - "All 24 candidate host-identity hits are generated .pyc files; packaging base-prefix bytes are otherwise absent and the relocatable libpython/pyvenv contracts are already correct."
-  - "The public-surface probe already uses PYTHONDONTWRITEBYTECODE=1 and does not cause this defect."
+  - "release_bundle.py DENIED_COMPONENTS globally rejects any component named log, logs, cache or caches."
+  - "The accepted real candidate contains requirements.lock-installed OpenTelemetry protobuf package namespaces opentelemetry/proto/logs and opentelemetry/proto/collector/logs."
+  - "These directories are immutable Python package content under Agent Runtime.app/Contents/Resources/runtime/.venv/lib/python3.13/site-packages, not generated runtime logs or checkout residue."
+  - "Global lexical denial therefore conflates package namespaces with forbidden generated material."
+  - "Globally dangerous material such as .git, .agent, .env*, runtime.env, credentials, .pytest_cache, .cache, __pycache__ and *.pyc must remain forbidden everywhere."
 
-objective: "Preserve the accepted relocatable substrate and pip-capability validator unchanged, make every post-cleanup package-owned Python execution bytecode-read-only, then complete one real candidate host-independence scan, relocation proof and deterministic release-bundle closure."
+objective: "Make release-bundle forbidden-material classification path-aware so legitimate locked Python package namespaces named log/logs/cache/caches are allowed only inside the packaged CPython 3.13 site-packages namespace, while generated log/cache/config/checkout residue remains fail-closed everywhere else; then complete the real deterministic release-bundle proof."
 
 scope:
   required_changes:
-    - "Fresh-bind exact revision-3 base with clean synchronized MAIN ONLY and exactly one worktree."
+    - "Fresh-bind exact revision-4 base with clean synchronized MAIN ONLY and exactly one worktree."
     - "Preserve macos/packaging_python.sh byte-for-byte at 07182ec37f75df7cfe36edf7c657c1688f6f73b8."
     - "Preserve tests/test_packaging_interpreter.py byte-for-byte at 9cc074fa96d846d2d7c8964173016130e4779337."
-    - "Preserve macos/release_bundle.py byte-for-byte at ee5d96ee2ef8ce2f2186e042acb2e78fc4cfce9b."
-    - "Preserve release workflow byte-for-byte at fa0c6bc61bb660b103f3a45b239ac52def7ae1b8."
-    - "Modify production behavior only in macos/package_app.sh."
+    - "Preserve macos/package_app.sh byte-for-byte at f30bdcf94b95e9290042a1197eb3297ea411d3e5."
+    - "Modify production behavior only in macos/release_bundle.py."
     - "Modify test behavior only in tests/test_package_provenance.py."
-    - "Set PYTHONDONTWRITEBYTECODE=1 for the finalized PACKAGE_VENV Python smoke."
-    - "Set PYTHONDONTWRITEBYTECODE=1 for the copied RUNTIME/.venv Python smoke."
-    - "Ensure every package-owned Python invocation after the bytecode/cache cleanup boundary is either incapable of importing writable stdlib modules or explicitly runs with PYTHONDONTWRITEBYTECODE=1."
-    - "Do not move the cleanup earlier as a substitute; do not add a post-seal mutation of candidate bytes."
-    - "Do not weaken candidate scanning or release_bundle.py."
-    - "Add a narrow package contract regression that fails against revision-2 package_app.sh and proves both post-finalization smoke commands are bytecode-write-disabled before candidate sealing/publication."
-    - "Preserve all existing package ordering, pip --require-hashes, stdlib/lib-dynload materialization, libpython identity normalization, pyvenv removal, sysconfig sanitization, signing, provenance, sealing and publication semantics."
-    - "Run the exact new regression RED against revision-2 behavior and GREEN after the correction."
+    - "Keep globally forbidden path material unchanged for .git, .agent, .pytest_cache, .cache, __pycache__, runtime.env, credentials, any component starting .env, and any component ending .pyc."
+    - "Keep generic generated-residue components log, logs, cache and caches forbidden by default."
+    - "Allow generic components log/logs/cache/caches only when the component occurs strictly below the exact packaged Python dependency namespace Agent Runtime.app/Contents/Resources/runtime/.venv/lib/python3.13/site-packages."
+    - "Do not use dependency-name-specific whitelists such as opentelemetry. The rule must be structural and apply equally to any immutable requirements.lock-installed package namespace."
+    - "The site-packages exception must not exempt .git/.agent/.env*/runtime.env/credentials/.pytest_cache/.cache/__pycache__/*.pyc."
+    - "The same path classifier must govern both candidate traversal during bundle build and archive-member validation during bundle verify."
+    - "Preserve exact zero-cost bundle root inventory, path normalization/traversal defense, duplicate rejection, symlink/hardlink/special-file rejection, safe-mode enforcement, HOME-byte scanning, provenance validation, checksum/manifest agreement and deterministic archive metadata."
+    - "Add a deterministic RED regression using a synthetic valid candidate containing site-packages/opentelemetry/proto/logs-style package content; revision-3 release_bundle.py must reject it and revision-4 must accept it."
+    - "Add regression coverage that site-packages/.../cache and site-packages/.../caches lexical package namespaces are likewise permitted while their regular package files remain subject to all other safety checks."
+    - "Add negative regressions proving log/logs/cache/caches remain rejected outside the exact site-packages namespace, including under Agent Runtime.app/Contents/Resources/runtime and payloads."
+    - "Add negative regressions proving globally forbidden .cache, __pycache__, *.pyc, .env*, runtime.env, credentials, .git and .agent remain rejected even when nested under site-packages."
+    - "Exercise both build_release_bundle and verify_release_bundle path classification, not only the helper directly."
+    - "Run the new release-material policy tests RED against revision-3 behavior and GREEN after correction."
     - "Run full tests.test_package_provenance, tests.test_packaging_interpreter and tests.test_surface_and_scripts once each."
-    - "Run bash -n macos/package_app.sh and macos/packaging_python.sh and git diff --check."
+    - "Run python syntax/compile check for macos/release_bundle.py without creating repository bytecode residue, shell syntax for package scripts, and git diff --check."
     - "Only after focused proof passes, run exactly one canonical HOME=$PWD/.h TMPDIR=$PWD/.v ./verify; never replay a conclusive result."
-    - "Publish one revision-3 implementation commit before physical package qualification."
-    - "Use only the already-proven pip-capable source CPython lineage; before build, corrected validate_packaging_python and '-m pip --version' must both PASS."
-    - "Snapshot build/candidates, then run exactly one AGENT_RUNTIME_PACKAGING_PYTHON=<validated source interpreter> ./macos/package_app.sh --zero-cost."
-    - "Require package exit 0 and emitted candidate_app/candidate_handoff/initial_payload_release/initial_payload_closure/candidate_sha256."
-    - "Scan every regular file in the exact candidate; require zero operator-HOME bytes and zero original packaging-base-prefix bytes."
-    - "Require zero __pycache__ directories, zero .pyc files and absent pyvenv.cfg."
-    - "Require packaged Python load dependency and libpython install ID both remain @executable_path/../lib/libpython3.13.dylib."
-    - "Copy the exact packaged runtime/.venv and initial payload release into a task-owned ignored relocation root without mutating the candidate."
-    - "Run relocated bin/python with isolated HOME, PYTHONDONTWRITEBYTECODE=1 and no PYTHONHOME/PYTHONPATH leakage."
-    - "Require relocated sys.executable, sys.prefix, sys.base_prefix, stdlib and representative stdlib modules to resolve inside relocation root; require sys.prefix == sys.base_prefix."
-    - "Require relocated Python to import copied initial agent_runtime payload and expose exactly twenty advertised tools using only relocated payload path plus package-owned dependencies."
-    - "Require representative sysconfig strings to contain neither original packaging prefix nor operator HOME."
-    - "Run unchanged macos/release_bundle.py build exactly twice from the same frozen candidate into distinct empty ignored output directories."
-    - "Require archive, release-manifest.json and SHA256SUMS.txt byte-identical across both builds."
-    - "Run unchanged macos/release_bundle.py verify exactly once and require PASS."
-    - "Record candidate SHA, payload closure, archive SHA/size/member count and relocation proof."
-    - "Remove .h/.v, relocation/output directories and only the exact newly-created candidate if absent from the pre-build snapshot."
-    - "Publish only .agent/tasks/TASK-0219/report-r3.yaml as report-only child."
+    - "Publish one revision-4 implementation commit before physical qualification."
+    - "Use the already-proven pip-capable source CPython lineage; validate exact interpreter and pip capability before package build."
+    - "Snapshot build/candidates then run exactly one local AGENT_RUNTIME_PACKAGING_PYTHON=<validated source interpreter> ./macos/package_app.sh --zero-cost from the exact revision-4 implementation commit."
+    - "Require package exit 0 and record candidate SHA plus payload closure."
+    - "Repeat the bounded candidate contract check: zero HOME/base-prefix hits, zero __pycache__/pyc, absent pyvenv.cfg, relative libpython load/install identities."
+    - "Repeat one bounded relocation smoke with isolated HOME, PYTHONDONTWRITEBYTECODE=1 and no PYTHONHOME/PYTHONPATH leakage; require self-contained prefix/stdlib, package-owned dependencies, copied agent_runtime payload and exactly twenty advertised tools."
+    - "Run corrected macos/release_bundle.py build exactly twice from the same frozen candidate into distinct empty ignored output directories."
+    - "Require both builds PASS and produce exactly archive + release-manifest.json + SHA256SUMS.txt."
+    - "Require archive, manifest and checksum files byte-identical across both builds."
+    - "Run corrected macos/release_bundle.py verify exactly once and require PASS."
+    - "Require emitted archive contains the legitimate OpenTelemetry logs package paths and contains no globally forbidden material."
+    - "Record archive filename, SHA-256, size, member count, source revision, candidate SHA and payload closure."
+    - "Remove .h/.v, relocation/output roots and only the exact newly-created candidate if it was absent from the pre-build candidate snapshot."
+    - "Confirm release workflow remains byte-identical to fa0c6bc61bb660b103f3a45b239ac52def7ae1b8."
+    - "Publish only .agent/tasks/TASK-0219/report-r4.yaml as report-only child."
     - "Final main clean/synchronized MAIN ONLY, one branch, one worktree."
 
   allowed_existing_files_or_components:
-    - "macos/package_app.sh"
+    - "macos/release_bundle.py"
     - "tests/test_package_provenance.py"
-    - ".agent/tasks/TASK-0219/report-r3.yaml"
+    - ".agent/tasks/TASK-0219/report-r4.yaml"
 
 invariants:
-  - "Accepted packaging_python.sh validator/substrate behavior remains unchanged."
-  - "Accepted packaging-interpreter tests remain unchanged."
-  - "release_bundle.py HOME/build-host rejection remains unchanged."
-  - "requirements.lock plus pip --require-hashes remain sole third-party dependency authority."
-  - "No Runtime version, public tool surface, lifecycle, durable, provenance or schema change."
+  - "Accepted candidate construction, CPython relocation and packaging-interpreter behavior remain unchanged."
+  - "Generic log/cache namespace exception is confined to exact package-owned CPython 3.13 site-packages descendants."
+  - "Globally dangerous checkout/config/cache/bytecode material remains rejected everywhere."
+  - "HOME scanning and all archive/provenance/integrity checks remain fail-closed."
+  - "requirements.lock plus pip --require-hashes remain dependency authority."
+  - "No Runtime version/public tool/lifecycle/durable/provenance/schema change."
   - "No GitHub Actions dispatch/rerun."
   - "No tag/release/live Runtime/config/plugin/credential/permission/reboot effect."
   - "TASK-0196 remains paused."
   - "MAIN ONLY."
 
 forbidden_changes:
-  - "Any production file other than macos/package_app.sh."
+  - "Any production file other than macos/release_bundle.py."
   - "Any test file other than tests/test_package_provenance.py."
-  - "Any change to macos/packaging_python.sh, tests/test_packaging_interpreter.py or macos/release_bundle.py."
-  - "Any post-seal/post-publication cleanup that mutates frozen candidate bytes."
-  - "Any weakening/bypass/special-case of candidate or release-bundle HOME scanning."
-  - "More than one local package_app.sh build."
-  - "More than two local release-bundle builds."
+  - "Any change to package_app.sh, packaging_python.sh or packaging-interpreter tests."
+  - "Dependency-specific whitelist names."
+  - "Removing log/logs/cache/caches from protection globally."
+  - "Weakening globally forbidden .git/.agent/.env*/runtime.env/credentials/.pytest_cache/.cache/__pycache__/*.pyc checks."
+  - "Weakening HOME scanning, traversal, root inventory, duplicate, symlink/special-file, mode, provenance, checksum or manifest checks."
+  - "More than one local package build."
+  - "More than two release-bundle builds."
   - "More than one release-bundle verify."
   - "Any GitHub Actions dispatch/rerun."
   - "Any second canonical ./verify after a conclusive result."
@@ -163,19 +161,18 @@ effect_authority:
   branch_or_pr_creation_max: 0
 
 acceptance_criteria:
-  - {id: AC-1, requirement: "Post-finalization smoke probes cannot regenerate bytecode.", evidence_required: "Narrow RED/GREEN regression; both package-owned smoke commands run with PYTHONDONTWRITEBYTECODE=1 before candidate sealing."}
-  - {id: AC-2, requirement: "Accepted relocatable substrate and validator remain unchanged.", evidence_required: "Frozen packaging_python/test blobs; full affected tests PASS."}
-  - {id: AC-3, requirement: "Real candidate is byte-clean and host-independent.", evidence_required: "One package build PASS; zero HOME/base-prefix hits; zero __pycache__/pyc; absent pyvenv.cfg; relative libpython identities."}
-  - {id: AC-4, requirement: "Relocated runtime is actually self-contained.", evidence_required: "Relocated prefix/base_prefix/stdlib/modules all inside relocation root; payload imports and twenty-tool registry PASS; sysconfig free of builder identity."}
-  - {id: AC-5, requirement: "Unchanged release bundle gate accepts the candidate.", evidence_required: "Two deterministic builds byte-identical and one verify PASS."}
-  - {id: AC-6, requirement: "Repository verification passes.", evidence_required: "Focused/syntax/diff PASS and exactly one canonical ./verify PASS."}
-  - {id: AC-7, requirement: "Canonical closure.", evidence_required: "Only package smoke + contract test + report-r3 changed; generated evidence cleaned; workflow unchanged; clean synchronized MAIN ONLY."}
+  - {id: AC-1, requirement: "Release material policy is structural rather than globally lexical.", evidence_required: "site-packages log/logs/cache/caches package namespaces PASS; same names outside exact site-packages FAIL."}
+  - {id: AC-2, requirement: "Security exclusions remain fail-closed.", evidence_required: ".git/.agent/.env*/runtime.env/credentials/.pytest_cache/.cache/__pycache__/*.pyc still fail even under site-packages; traversal/symlink/special/mode/HOME/provenance checks unchanged."}
+  - {id: AC-3, requirement: "Accepted real candidate remains host-independent and relocatable.", evidence_required: "One package build + bounded candidate scan + relocation smoke PASS."}
+  - {id: AC-4, requirement: "Deterministic release assets close successfully.", evidence_required: "Two builds PASS and are byte-identical; one verify PASS; archive contains legitimate locked package namespaces and no forbidden material."}
+  - {id: AC-5, requirement: "Repository verification passes.", evidence_required: "Focused/syntax/diff PASS and exactly one canonical ./verify PASS."}
+  - {id: AC-6, requirement: "Canonical closure.", evidence_required: "Only release_bundle policy + owner tests + report-r4 changed; generated evidence cleaned; workflow unchanged; clean synchronized MAIN ONLY."}
 
 verification:
   authoritative_verification:
     required: true
-    mechanism: "Smoke-bytecode RED/GREEN + affected focused modules + exactly one canonical verify + one real package build + full candidate scan + relocation smoke + deterministic bundle x2 + verify."
-    expected_signal: "No post-cleanup bytecode reappears; exact candidate is host-independent, relocatable and accepted by unchanged release-bundle verification."
+    mechanism: "Path-aware release-material RED/GREEN + affected focused modules + exactly one canonical verify + one real package build + candidate/relocation proof + deterministic bundle x2 + one verify."
+    expected_signal: "Legitimate locked package namespaces no longer collide with residue policy while all actual checkout/config/cache/log residue remains rejected and the real candidate yields deterministic verified release assets."
 
 continuation_policy:
   mode: MANUAL
