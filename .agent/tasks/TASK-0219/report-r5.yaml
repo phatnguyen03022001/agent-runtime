@@ -1,0 +1,285 @@
+protocol_version: 3
+task_id: TASK-0219
+task_revision: 5
+report_revision: 5
+state: REPORTED
+result: PASS
+
+task_source:
+  path: .agent/tasks/TASK-0219/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "71f05d6980e63f89613510966a31aa91babde8aa"
+  implementation_commit: "bf031e94911c5d9ad2d3e9b9f82693b1035f1e9f"
+  implementation_tree: "28190d68a72cac8a67494e34212916540520d3ff"
+  final_execution_head: "bf031e94911c5d9ad2d3e9b9f82693b1035f1e9f"
+  task_0196_paused: true
+
+authority_correction:
+  revision_4_execution_budget_consumed: false
+  corrected_preserved_blobs:
+    macos/package_app.sh: "b5d54b605cf8e8e1f3c0fbea5cdd417f79b5572b"
+    tests/test_package_provenance.py: "172c88cec28e9b2470eb56a1a577b41f4a7ea708"
+  pre_mutation_gate: PASS
+
+implementation:
+  changed_paths:
+    - macos/release_bundle.py
+    - tests/test_package_provenance.py
+  policy:
+    global_forbidden_components:
+      - .git
+      - .agent
+      - .pytest_cache
+      - .cache
+      - __pycache__
+      - runtime.env
+      - credentials
+    global_forbidden_patterns:
+      - ".env*"
+      - "*.pyc"
+    generic_residue_components:
+      - log
+      - logs
+      - cache
+      - caches
+    generic_residue_default: REJECT
+    exception_prefix:
+      - "Agent Runtime.app"
+      - Contents
+      - Resources
+      - runtime
+      - .venv
+      - lib
+      - python3.13
+      - site-packages
+    exception_rule: "Generic residue components are allowed only strictly below the exact packaged CPython 3.13 site-packages prefix."
+    dependency_name_whitelist: false
+    shared_classifier:
+      candidate_traversal: true
+      archive_member_validation: true
+  preserved_blobs:
+    packaging_python_sh: "07182ec37f75df7cfe36edf7c657c1688f6f73b8"
+    packaging_interpreter_tests: "9cc074fa96d846d2d7c8964173016130e4779337"
+    package_app_sh: "b5d54b605cf8e8e1f3c0fbea5cdd417f79b5572b"
+    release_workflow: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+
+tdd:
+  red:
+    test: tests.test_package_provenance.ReleaseBundleContractTests.test_release_bundle_path_aware_site_packages_policy_build_and_verify
+    result: FAIL_EXPECTED
+    decisive_failure: "Revision-3 release_bundle.py rejected a valid site-packages OpenTelemetry logs namespace as forbidden checkout/config/cache material."
+  green:
+    test: tests.test_package_provenance.ReleaseBundleContractTests.test_release_bundle_path_aware_site_packages_policy_build_and_verify
+    result: PASS
+  security_regressions:
+    generic_residue_outside_site_packages:
+      result: PASS
+      cases:
+        - runtime/log
+        - runtime/logs
+        - runtime/cache
+        - runtime/caches
+        - payload/log
+        - payload/logs
+        - payload/cache
+        - payload/caches
+    global_forbidden_under_site_packages:
+      result: PASS
+      cases:
+        - .git
+        - .agent
+        - .pytest_cache
+        - .cache
+        - __pycache__
+        - .env.production
+        - runtime.env
+        - credentials
+        - unsafe.pyc
+
+focused_verification:
+  package_provenance: {tests: 31, result: PASS}
+  packaging_interpreter: {tests: 15, result: PASS}
+  surface_and_scripts: {tests: 23, result: PASS}
+  total_tests: 69
+  release_bundle_compile_in_memory: PASS
+  shell_syntax:
+    macos_package_app_sh: PASS
+    macos_packaging_python_sh: PASS
+  git_diff_check: PASS
+  scope_audit: PASS
+  frozen_blob_audit: PASS
+
+canonical_verify:
+  authorized_max: 1
+  invocation_count: 1
+  replay_count: 0
+  command: 'HOME="$PWD/.h" TMPDIR="$PWD/.v" ./verify'
+  start_identity: "0219021902190219021902190219026f"
+  session_id: "f768080d4e376294"
+  lifecycle: COMPLETED
+  termination_reason: natural_exit
+  exit_code: 0
+  result: PASS
+  classified_modules: 63
+  completed_modules: 63
+  tests: 935
+  duration_seconds: 156.609
+  package_provenance: {tests: 31, result: PASS, duration_seconds: 0.842}
+  packaging_interpreter: {tests: 15, result: PASS, duration_seconds: 2.588}
+  surface_and_scripts: {tests: 23, result: PASS, duration_seconds: 0.900}
+  durable_pipe: {tests: 22, result: PASS, duration_seconds: 3.659}
+  durable_pipe_restart: {tests: 10, result: PASS, duration_seconds: 5.722}
+  supervised_lifecycle: {tests: 20, result: PASS, duration_seconds: 20.971}
+
+implementation_publication:
+  published: true
+  branch: main
+  expected_remote_head: "71f05d6980e63f89613510966a31aa91babde8aa"
+  commit: "bf031e94911c5d9ad2d3e9b9f82693b1035f1e9f"
+  force_used: false
+
+physical_qualification:
+  packaging_interpreter:
+    path: "/Users/tienphat/.local/share/uv/python/cpython-3.13.5-macos-aarch64-none/bin/python3.13"
+    validator_result: PASS
+    pip: "pip 24.3.1"
+    implementation: cpython
+    version: "3.13.5"
+    cache_tag: cpython-313
+    soabi: cpython-313-darwin
+    platform: darwin
+    machine: arm64
+    base_prefix: "/Users/tienphat/.local/share/uv/python/cpython-3.13.5-macos-aarch64-none"
+    stdlib: "/Users/tienphat/.local/share/uv/python/cpython-3.13.5-macos-aarch64-none/lib/python3.13"
+    operator_home_marker: "/Users/tienphat"
+
+  package_build:
+    authorized_max: 1
+    invocation_count: 1
+    replay_count: 0
+    start_identity: "02190219021902190219021902190272"
+    session_id: "b8fcc8311777b1d7"
+    initial_acknowledgement: AMBIGUOUS_DURABLE_OWNER_IDENTITY
+    reconciliation: "No redispatch; the same start identity later resolved to one retained terminal result."
+    lifecycle: COMPLETED
+    termination_reason: natural_exit
+    exit_code: 0
+    result: PASS
+    swift_release_build: PASS
+    candidate_sha256: "33653756e5a69c0cc3f3bdf02c19f92ac9f6ccf795bf9994ad7d45415e48bac5"
+    initial_payload_closure: "f155f079fdcce25094ab66563c7103e78a636c76726ad1995bb9dfd2c1ee4950"
+
+  candidate_contract:
+    regular_files_scanned: 2407
+    operator_home_marker_hits: 0
+    packaging_base_prefix_hits: 0
+    pycache_directories: 0
+    pyc_files: 0
+    symlinks: 0
+    pyvenv_cfg_absent: true
+    python_libpython_load_dependency: "@executable_path/../lib/libpython3.13.dylib"
+    libpython_install_identity: "@executable_path/../lib/libpython3.13.dylib"
+    result: PASS
+
+relocation_proof:
+  result: PASS
+  root: "/Users/Shared/agent-runtime-task-0219-r5-bf031e94"
+  environment:
+    PYTHONDONTWRITEBYTECODE: "1"
+    PYTHONHOME: unset
+    PYTHONPATH: unset
+    isolated_home: true
+  executable: "/Users/Shared/agent-runtime-task-0219-r5-bf031e94/runtime/.venv/bin/python"
+  prefix: "/Users/Shared/agent-runtime-task-0219-r5-bf031e94/runtime/.venv"
+  base_prefix: "/Users/Shared/agent-runtime-task-0219-r5-bf031e94/runtime/.venv"
+  prefix_equals_base_prefix: true
+  stdlib: "/Users/Shared/agent-runtime-task-0219-r5-bf031e94/runtime/.venv/lib/python3.13"
+  package_owned_dependency_probe:
+    pydantic_inside_prefix: true
+    mcp_import: PASS
+  relocated_payload:
+    agent_runtime_import: PASS
+    advertised_tool_count: 20
+  sysconfig_original_marker_hits: 0
+  sys_path_original_marker_hits: 0
+
+deterministic_release_bundle:
+  build_authorized_max: 2
+  build_invocation_count: 2
+  build_1: PASS
+  build_2: PASS
+  assets_per_build: 3
+  byte_identical:
+    archive: true
+    release_manifest: true
+    checksums: true
+  verify_authorized_max: 1
+  verify_invocation_count: 1
+  verify: PASS
+  archive:
+    filename: "agent-runtime-0.5.1-arm64-33653756e5a69c0cc3f3bdf02c19f92ac9f6ccf795bf9994ad7d45415e48bac5.tar.gz"
+    sha256: "6dcedcfb5b5cfc942040de23912caed54cedece61ff0ae9fc0af3769c5741331"
+    size_bytes: 22544896
+    member_count: 2776
+    source_revision: "bf031e94911c5d9ad2d3e9b9f82693b1035f1e9f"
+    source_tree: "28190d68a72cac8a67494e34212916540520d3ff"
+    candidate_sha256: "33653756e5a69c0cc3f3bdf02c19f92ac9f6ccf795bf9994ad7d45415e48bac5"
+    initial_payload_closure: "f155f079fdcce25094ab66563c7103e78a636c76726ad1995bb9dfd2c1ee4950"
+  independent_archive_policy_audit:
+    forbidden_member_count: 0
+    required_locked_package_paths_present:
+      - "Agent Runtime.app/Contents/Resources/runtime/.venv/lib/python3.13/site-packages/opentelemetry/proto/logs/v1/logs_pb2.py"
+      - "Agent Runtime.app/Contents/Resources/runtime/.venv/lib/python3.13/site-packages/opentelemetry/proto/collector/logs/v1/logs_service_pb2.py"
+
+cleanup:
+  canonical_verify_home_removed: true
+  canonical_verify_tmpdir_removed: true
+  package_temp_dirs_remaining: 0
+  newly_created_candidate_removed: "33653756e5a69c0cc3f3bdf02c19f92ac9f6ccf795bf9994ad7d45415e48bac5"
+  candidate_count_before: 22
+  candidate_count_after: 22
+  relocation_root_removed: true
+  release_output_roots_removed: true
+
+effect_accounting:
+  canonical_verify: {authorized_max: 1, consumed: 1}
+  local_distribution_build: {authorized_max: 1, consumed: 1}
+  local_release_bundle_build: {authorized_max: 2, consumed: 2}
+  local_release_bundle_verify: {authorized_max: 1, consumed: 1}
+  github_workflow_dispatch: {authorized_max: 0, consumed: 0}
+  github_workflow_rerun: {authorized_max: 0, consumed: 0}
+  workflow_artifact_download: {authorized_max: 0, consumed: 0}
+  live_runtime_effect: 0
+  tag_or_release_effect: 0
+
+authoritative_verification:
+  required: true
+  performed: true
+  result: PASS
+  evidence: "Path-aware RED/GREEN, security-negative regressions, affected focused suites, exactly one canonical verify, one real package build, full candidate host-independence scan, relocation smoke, two byte-identical deterministic release-bundle builds, one release-bundle verify, and an independent archive policy audit all passed."
+
+pushed: false
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "Synthetic candidate build+verify accepts log/logs/cache/caches only below the exact CPython 3.13 site-packages prefix; the same generic names remain rejected under runtime and payload paths."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "Archive verify regressions reject .git, .agent, .pytest_cache, .cache, __pycache__, .env*, runtime.env, credentials and *.pyc even under site-packages; existing traversal/symlink/special/mode/HOME/provenance tests remain green."
+  - criterion_id: AC-3
+    status: PASS
+    evidence: "One physical build passed; 2407 candidate files scanned with zero HOME/base-prefix/cache hits; relocation proved package-owned CPython, dependencies and payload with twenty advertised tools."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "Two release builds from the same frozen candidate produced byte-identical archive/manifest/checksums; one verify passed; archive contains required OpenTelemetry logs package paths and independent audit found zero forbidden members."
+  - criterion_id: AC-5
+    status: PASS
+    evidence: "Focused suites passed 69 tests, compile/syntax/diff checks passed, and exactly one canonical verify passed 63/63 modules with 935 tests."
+  - criterion_id: AC-6
+    status: PASS
+    evidence: "Implementation changes only release_bundle.py and owner tests; accepted construction/validator/bytecode files and workflow remain frozen; all generated candidate/relocation/release/verify evidence was cleaned before report authorship."
