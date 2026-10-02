@@ -1,0 +1,50 @@
+protocol_version: 3
+
+task_id: TASK-0215
+task_revision: 1
+review_revision: 1
+state: REVISION_REQUIRED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0215/report.yaml
+  commit: "e4b95c0263bbb85572ae12854650f1fad533e200"
+  report_revision: 1
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  implementation_scope: PASS
+  git_authority: PASS
+  acceptance_criteria: BLOCKED_BY_TASK_SCOPE_CONTRADICTION
+  verifier_evidence: PASS
+
+acceptance_basis:
+  - "Implementation commit 5f357536d9d49a9310b711b571a8dfdcc23c45d0 is exactly one commit ahead of authorized base 993f2e8ccea017c67804f5cd96a75a3ae3fcac49 and changes only macos/package_app.sh and tests/test_package_provenance.py."
+  - "The production delta removes only the six-line LaunchServices unregister block after successful publish-zero-cost result validation; no replacement cleanup, retry, warning path or workflow workaround was added."
+  - "The authoritative candidate identity output contract remains unchanged: candidate_app, candidate_handoff, initial_payload_release, initial_payload_closure and candidate_sha256 are emitted after successful publish-zero-cost validation."
+  - "The new package-provenance regression correctly REDs on the pre-fix base because lsregister is present and GREENs after removal."
+  - "Repo-native tests.test_package_provenance passed 26/26 and tests.test_candidate_freeze passed 8/8."
+  - "The sole focused failure is tests.test_surface_and_scripts.SurfaceAndScriptsTests.test_zero_cost_packaging_bounds_launchservices_registration_for_retained_candidate, whose positive assertions require the exact lsregister path and '$LSREGISTER -u $FINAL_APP' invocation that TASK-0215 explicitly requires removing."
+  - "tests/test_surface_and_scripts.py was outside revision-1 allowed mutation scope, so Executor correctly stopped rather than mutating an unauthorized stale assertion."
+  - "Canonical ./verify correctly remained unconsumed because the required focused proof had not passed."
+  - "Report commit e4b95c0263bbb85572ae12854650f1fad533e200 is exactly one report-only child of implementation commit 5f357536d9d49a9310b711b571a8dfdcc23c45d0."
+  - "Fresh remote review-boundary proof resolves main exactly to e4b95c0263bbb85572ae12854650f1fad533e200 before review publication."
+
+findings:
+  - id: F-0215-001
+    severity: BLOCKING
+    classification: stale_contract_test_outside_authorized_scope
+    description: "Revision 1 required removal of all LaunchServices mutation from zero-cost packaging while simultaneously requiring tests.test_surface_and_scripts to pass and forbidding mutation of tests/test_surface_and_scripts.py. Its existing test asserts the removed lsregister behavior must exist. This is an Architect task-scope contradiction, not an implementation defect."
+    required_closure: "Revise TASK-0215 in place. Preserve implementation commit 5f357536d9d49a9310b711b571a8dfdcc23c45d0 unchanged. Authorize only tests/test_surface_and_scripts.py plus the revision-2 report. Replace the stale positive LaunchServices-registration test with a contract assertion that package_app.sh has no LaunchServices/lsregister mutation dependency while retaining authoritative publish-zero-cost and candidate identity output semantics. Then rerun the required focused modules and exactly one canonical verifier."
+
+notes:
+  - "Do not revert or reopen the accepted production correction in 5f357536d9d49a9310b711b571a8dfdcc23c45d0."
+  - "No local package build or GitHub Actions dispatch is needed in revision 2."
+  - "TASK-0196 remains paused."
