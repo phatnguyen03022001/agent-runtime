@@ -1,0 +1,54 @@
+protocol_version: 3
+
+task_id: TASK-0212
+task_revision: 1
+review_revision: 1
+state: REVISION_REQUIRED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0212/report.yaml
+  commit: "8d09dc02ae96e582ec8e4a325d2ea5c57aa1acae"
+  report_revision: 1
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  skill_rules: PASS
+  scope: PASS
+  structure_policy: PASS
+  git_authority: PASS
+  acceptance_criteria: FAIL
+  verifier_evidence: PASS
+
+acceptance_basis:
+  - "TASK-0212 consumed exactly one authorized new release-gate dispatch: run 36967600037 attempt 1, workflow_dispatch, exact head SHA 63cc5934da1943019ba0a4626b857b6de46064c8."
+  - "Historical runs 36912032079, 36956517661, 36958918581, 36961531935 and 36965002566 remain attempt 1; no rerun or second dispatch occurred."
+  - "Accepted TASK-0211 durable revalidation, TASK-0209 repo_diff and TASK-0207 SDK compatibility sources plus release-gate workflow blob fa0c6bc61bb660b103f3a45b239ac52def7ae1b8 were unchanged before dispatch."
+  - "Remote canonical verification failed at tests.test_supervised_lifecycle with module TIMEOUT after 45.115 seconds against an explicit 45-second L4_HOST_LIFECYCLE policy limit; verifier stopped at 20/63 modules and 380 tests."
+  - "Before the timeout, repo_diff 13/13, repo_commit 14/14 and durable_pipe 18/18 passed; the TASK-0208 invalid-HEAD failure did not recur."
+  - "The candidate build was never invoked, compatibility lanes did not materialize and no artifact existed, so SDK26 compilation and release qualification remain unproven."
+  - "Report commit 8d09dc02ae96e582ec8e4a325d2ea5c57aa1acae is the sole direct child of the authorized TASK-0212 base and adds only .agent/tasks/TASK-0212/report.yaml."
+  - "Fresh remote review-boundary proof resolves main exactly to 8d09dc02ae96e582ec8e4a325d2ea5c57aa1acae before review publication."
+  - "Independent exact-head local replay of tests.test_supervised_lifecycle passed 20/20 but required 29.359 seconds, materially above the historical 9.040-second TASK-0154 baseline and 13.143-second measured TASK-0154 report timing."
+  - "Per-test profiling shows lifecycle-starting cases repeatedly pay real process teardown/start cost, with the ten-concurrent-starts test alone at about 5.1 seconds and several ordinary start/status/restart cases around 1.5-2.6 seconds."
+  - "The supervised lifecycle fixture fake tunnel-client uses a Bash loop whose active process spends time in sleep 1 while TERM/INT cleanup owns runtime.pid removal; this creates cumulative scheduler-dependent teardown latency across many tests. The product verifier timeout need not be widened to explain the remote failure."
+
+findings:
+  - id: F-0212-001
+    severity: BLOCKING
+    classification: supervised_lifecycle_fixture_shutdown_latency
+    description: "tests.test_supervised_lifecycle is now close enough to its explicit 45-second module deadline that slower hosted-runner scheduling can time it out even when all assertions are healthy. The module repeatedly starts and tears down a fake Runtime process; the fixture tunnel-client uses a sleep-based Bash lifetime whose TERM cleanup can be delayed by the active sleep, accumulating nondeterministic shutdown latency across the module."
+    required_closure: "Use a separate test-reliability task. Change only the supervised-lifecycle fixture/tests as needed to make fake Runtime lifetime and teardown signal-responsive/deterministic without changing start.sh product semantics or increasing the verifier's 45-second timeout. Preserve every lifecycle assertion and the 20-test proof surface. Prove the module repeatedly completes with substantial headroom, then run exactly one canonical verifier before any further release-gate dispatch."
+
+notes:
+  - "TASK-0212 cannot continue because its single dispatch budget is exhausted."
+  - "Do not rerun runs 36912032079, 36956517661, 36958918581, 36961531935, 36965002566 or 36967600037."
+  - "Do not increase tests.test_supervised_lifecycle timeout as the first-line fix; current evidence points to fixture latency, not missing product proof."
+  - "TASK-0196 remains paused."
