@@ -1,0 +1,129 @@
+protocol_version: 3
+task_id: TASK-0203
+task_revision: 1
+state: APPROVED
+title: "Durable Pipe Explicit-Terminate Test Reliability"
+
+origin:
+  type: architect_continuation
+  predecessor_task: TASK-0202
+  finding: F-0202-001
+  goal: "Remove the finite-lifetime race from the durable-pipe privacy/argv owner test without changing Runtime behavior."
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+
+execution_skills:
+  required: [executor, verification, reliability, simplicity]
+
+revision_basis:
+  blocked_task_0202_report: "3f81831d9fc3530e67ddf242359e44722b3c1d04"
+  blocked_task_0202_review: "7a3f5ddf74139a5801537ba091c38f8aeb55d266"
+  remote_run_id: 36912032079
+  remote_failure_test: "tests.test_durable_pipe.DurablePipeTests.test_runner_argv_is_opaque_and_durable_files_are_private"
+  paused_release_task: TASK-0196
+
+objective: "Make the durable-pipe owner test deterministic about the lifecycle predicate it asserts: the child must remain running until explicit terminate is issued. Preserve every Runtime/source/workflow behavior and all existing privacy/argv/file-mode assertions."
+
+scope:
+  required_changes:
+    - "Fresh-bind exact revision-1 base with clean synchronized MAIN ONLY."
+    - "Modify only tests/test_durable_pipe.py before report."
+    - "Do not change agent_runtime/session.py, durable_pipe.py, durable_pipe_runner.py or any production Runtime behavior."
+    - "In test_runner_argv_is_opaque_and_durable_files_are_private, remove the incidental finite two-second target lifetime."
+    - "Use a deterministic blocking child body that remains alive until the Runtime explicitly terminates it, such as a Python threading.Event().wait() after printing/flushing the existing secret payload. Do not introduce shell=True or extra external executables."
+    - "Give this test's manager a bounded durable hard wall of exactly 30 seconds rather than relying on the suite default 5 seconds. The hard wall remains only a test-fixture safety bound; the test must still terminate explicitly and promptly."
+    - "Immediately after manager.start, require the returned session status/lifecycle to represent an active durable execution before the test proceeds to privacy/control assertions."
+    - "Preserve all existing assertions proving: runner argv contains only opaque job identity and no user secret/cwd; runner env remains minimal; durable root/job/state/journal permissions are 0700/0600; spec.json is absent after dispatch; pipe write and resize reject with existing typed reasons; explicit terminate yields termination_reason=explicit_terminate."
+    - "Do not weaken manager.control semantics. A naturally exited durable session must continue to reject interrupt/terminate as not running."
+    - "Do not add arbitrary sleep-based synchronization as the repair."
+    - "Run the exact formerly failing test 25 consecutive times in fresh unittest processes or isolated test instances; all 25 must PASS."
+    - "Run the complete tests.test_durable_pipe owner module once; all tests must PASS."
+    - "Run tests.test_durable_pipe_restart once to ensure restart/lost-ack owner semantics remain PASS."
+    - "Run git diff --check."
+    - "Only after focused/repeated proof passes, run exactly one canonical ./verify under the proven short-path HOME=$PWD/.h TMPDIR=$PWD/.v environment."
+    - "Canonical ./verify must PASS all classified modules; never blind-replay ambiguity."
+    - "Remove .h/.v before final observation."
+    - "Publish only .agent/tasks/TASK-0203/report.yaml after the test implementation commit."
+    - "Final main clean/synchronized MAIN ONLY."
+
+  allowed_existing_files_or_components:
+    - "tests/test_durable_pipe.py"
+    - ".agent/tasks/TASK-0203/report.yaml"
+
+invariants:
+  - "Runtime source/behavior is byte-for-byte unchanged."
+  - "Release-gate workflow is byte-for-byte unchanged."
+  - "Verification policy is unchanged."
+  - "The privacy/argv/file-permission assertions remain at least as strong."
+  - "No remote workflow dispatch/rerun."
+  - "No tag/release/package/live Runtime/config/plugin/reboot/permission/credential effect."
+  - "TASK-0196 remains paused."
+  - "MAIN ONLY."
+
+forbidden_changes:
+  - "Any production Runtime file."
+  - "Any workflow, verification policy, docs, dependency, version or schema change."
+  - "Changing Runtime control behavior to accept terminate after natural exit."
+  - "Repair by increasing a product timeout, adding retry loops, or swallowing RuntimeStateError."
+  - "Repair by arbitrary sleeps."
+  - "Any GitHub Actions dispatch/rerun."
+  - "Any local distribution build, tag/release or live Runtime mutation."
+  - "Any second canonical ./verify after a conclusive result or blind replay."
+  - "Any branch or PR."
+
+effect_authority:
+  canonical_verify_max: 1
+  github_workflow_dispatch_max: 0
+  github_workflow_rerun_max: 0
+  local_distribution_build_max: 0
+  install_prebuilt_max: 0
+  commit_cutover_max: 0
+  rollback_cutover_max: 0
+  menu_bar_relaunch_max: 0
+  runtime_restart_max: 0
+  runtime_explicit_start_max: 0
+  runtime_explicit_stop_max: 0
+  plugin_reload_or_reconnect_max: 0
+  credential_rotation_max: 0
+  physical_reboot_max: 0
+  new_security_permission_max: 0
+  version_tag_create_max: 0
+  github_release_publish_max: 0
+  branch_or_pr_creation_max: 0
+
+acceptance_criteria:
+  - {id: AC-1, requirement: "The failing owner test no longer depends on a short finite child lifetime.", evidence_required: "Test target blocks until explicit termination, uses a 30s fixture hard wall, and asserts active state after start."}
+  - {id: AC-2, requirement: "Original security/privacy/control assertions are preserved.", evidence_required: "Runner argv/env, durable permissions, typed pipe control rejection and explicit_terminate assertions remain and PASS."}
+  - {id: AC-3, requirement: "The fixture is stable under repetition.", evidence_required: "Exact formerly failing test PASS 25/25 in isolated repeated execution."}
+  - {id: AC-4, requirement: "Durable owner semantics remain intact.", evidence_required: "Full tests.test_durable_pipe and tests.test_durable_pipe_restart PASS."}
+  - {id: AC-5, requirement: "Canonical verification passes without production change.", evidence_required: "Exactly one short-path ./verify PASS; no replay."}
+  - {id: AC-6, requirement: "Canonical closure.", evidence_required: "Only test + report changes; .h/.v removed; clean synchronized MAIN ONLY."}
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "25x exact owner test + full durable modules + exactly one canonical short-path ./verify."
+    expected_signal: "The release-gate blocker is closed as test-fixture reliability debt, with Runtime behavior unchanged."
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions: [BLOCKED, STALE_STATE, AUTHORITY_REQUIRED, CURRENT_PHASE_CAPABILITY_UNAVAILABLE, REVIEW_REQUIRED, REVERIFY_REQUIRED, USER_STOP]
+
+git_authority: {create_branch: false, commit: true, push: true, promote_to_main: false}
+release_authority: {create_version_tag: false, mutate_repository_metadata: false, publish_release: false}
+blocking_decisions: []
+execution_ready: true
