@@ -1,0 +1,196 @@
+protocol_version: 3
+task_id: TASK-0207
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: PASS
+
+task_source:
+  path: .agent/tasks/TASK-0207/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "ba8d627e9ea0dc663cbbeb6e6bd1e1456e37f1ea"
+  implementation_commit: "ee6f98e98c74eb3ed6d1f79d0a47972ba58abd84"
+  implementation_tree: "0c4290fed760aa6f9f4708241451d0f56ed33220"
+  task_0206_closed_blocked: true
+  task_0196_paused: true
+
+preconditions:
+  main_equals_origin_main: true
+  initial_head: "ba8d627e9ea0dc663cbbeb6e6bd1e1456e37f1ea"
+  origin_main_head: "ba8d627e9ea0dc663cbbeb6e6bd1e1456e37f1ea"
+  worktree_clean: true
+  index_clean: true
+  branch_count: 1
+  worktree_count: 1
+  release_workflow:
+    path: .github/workflows/release-gate.yml
+    blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+    expected_blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+    unchanged: true
+
+root_cause:
+  classification: sdk_compile_time_availability_mismatch
+  blocked_run_id: 36958918581
+  source: macos/Sources/AgentRuntimeMenuBar/LiquidGlassSupport.swift
+  former_expression: "glassView.effectIsInteractive = true"
+  reason: "#available(macOS 27.0, *) is a runtime availability guard and cannot make an SDK27-only Swift member compile under the accepted SDK26 toolchain."
+  resolution: "Retain the macOS 27 runtime guard but bind the public setEffectIsInteractive: selector dynamically and use guarded KVC only when NSGlassEffectView responds to that selector."
+
+implementation:
+  changed_paths:
+    - macos/Sources/AgentRuntimeMenuBar/LiquidGlassSupport.swift
+    - macos/Tests/AgentRuntimeMenuBarTests/PresentationTests.swift
+    - tests/test_surface_and_scripts.py
+  production:
+    ns_glass_effect_view_macos26_plus: preserved
+    style_regular: preserved
+    tint_color_nil: preserved
+    corner_radius: 10.0
+    content_view_embedding: preserved
+    macos13_15_fallback: preserved
+    macos27_interaction:
+      availability_guard: "#available(macOS 27.0, *)"
+      selector: "setEffectIsInteractive:"
+      selector_guard: "glassView.responds(to: selector)"
+      mutation: 'glassView.setValue(true, forKey: "effectIsInteractive")'
+      unexpected_selector_absence: "No invocation or mutation; system default behavior remains."
+    forbidden_dynamic_mechanisms_used: []
+  swift_test:
+    static_effect_is_interactive_access_removed: true
+    macos26_glass_assertions_preserved: true
+    macos13_15_fallback_assertions_preserved: true
+    macos27_selector_assertion: true
+    macos27_kvc_true_assertion: true
+  persistent_regression:
+    module: tests.test_surface_and_scripts
+    rejects_static_member_access_in:
+      - macos/Sources/AgentRuntimeMenuBar/LiquidGlassSupport.swift
+      - macos/Tests/AgentRuntimeMenuBarTests/PresentationTests.swift
+    requires:
+      - "#available(macOS 27.0, *)"
+      - "setEffectIsInteractive:"
+      - "glassView.responds(to: selector)"
+      - 'glassView.setValue(true, forKey: "effectIsInteractive")'
+
+toolchain_evidence:
+  xcodebuild:
+    version: "Xcode 27.0"
+    build_version: "27A266a"
+  swift:
+    version: "Apple Swift version 6.4"
+    swiftlang: "6.4.0.34.1"
+    clang: "2100.3.34.1"
+    target: "arm64-apple-macosx27.0.0"
+  macos_sdk: "27.0"
+  proof_boundary: "Local compilation is current-SDK proof only. TASK-0207 does not claim local SDK26 compilation proof; actual SDK26 compilation remains a later remote release-gate qualification boundary."
+
+focused_verification:
+  python:
+    command: ".venv/bin/python -m unittest tests.test_surface_and_scripts"
+    tests: 23
+    result: PASS
+  swift_test:
+    command: 'xcrun swift test --package-path macos --scratch-path "$PWD/.task-0207-swift-test"'
+    scratch_path: .task-0207-swift-test
+    xctest_total: 97
+    menu_bar_tests: 62
+    core_tests: 35
+    failures: 0
+    result: PASS
+  swift_release_build:
+    command: 'xcrun swift build --package-path macos -c release --scratch-path "$PWD/.task-0207-swift-release"'
+    scratch_path: .task-0207-swift-release
+    result: PASS
+    duration_seconds: 9.26
+  git_diff_check:
+    command: "git diff --check"
+    result: PASS
+  package_app_invoked: false
+  local_distribution_candidate_built: false
+
+canonical_verification:
+  command: 'HOME="$PWD/.h" TMPDIR="$PWD/.v" ./verify'
+  invocation_count: 1
+  replay_count: 0
+  start_identity: "02070000000000000000000000000030"
+  session_id: "fcee79f23bec62d2"
+  timed_out: false
+  exit_code: 0
+  result: PASS
+  profile: qualification
+  requested_profile: qualification
+  classified_modules: 63
+  completed_modules: 63
+  tests: 918
+  duration_seconds: 142.804
+  lane_counts:
+    L1_DETERMINISTIC_UNIT: {selected: 17, completed: 17, tests: 231}
+    L2_ISOLATED_INTEGRATION: {selected: 21, completed: 21, tests: 242}
+    L3_DETERMINISTIC_REGRESSION: {selected: 10, completed: 10, tests: 95}
+    L4_HOST_LIFECYCLE: {selected: 9, completed: 9, tests: 184}
+    L5_QUALIFICATION_CHAOS_CUTOVER: {selected: 6, completed: 6, tests: 166}
+  candidate_cutover: {tests: 125, result: PASS, duration_seconds: 94.728}
+  durable_pipe: {tests: 15, result: PASS, duration_seconds: 2.511}
+  durable_pipe_restart: {tests: 10, result: PASS, duration_seconds: 5.975}
+  product_qualification: {tests: 16, result: PASS, duration_seconds: 34.011}
+
+cleanup:
+  short_home_path: .h
+  short_home_removed: true
+  short_tmpdir_path: .v
+  short_tmpdir_removed_or_absent: true
+  swift_test_scratch: .task-0207-swift-test
+  swift_test_scratch_removed: true
+  swift_release_scratch: .task-0207-swift-release
+  swift_release_scratch_removed: true
+  temporary_verification_residue: false
+
+scope_proof:
+  implementation_commit_changed_paths:
+    - macos/Sources/AgentRuntimeMenuBar/LiquidGlassSupport.swift
+    - macos/Tests/AgentRuntimeMenuBarTests/PresentationTests.swift
+    - tests/test_surface_and_scripts.py
+  package_swift_changed: false
+  deployment_target_changed: false
+  release_workflow_changed: false
+  verification_policy_changed: false
+  runtime_python_changed: false
+  docs_changed: false
+  version_changed: false
+  schemas_changed: false
+  dependencies_changed: false
+  release_workflow_blob_after_implementation: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+
+effect_accounting:
+  canonical_verify: {authorized_max: 1, consumed: 1}
+  github_workflow_dispatch: {authorized_max: 0, consumed: 0}
+  github_workflow_rerun: {authorized_max: 0, consumed: 0}
+  local_distribution_build: {authorized_max: 0, consumed: 0}
+  install_prebuilt: {authorized_max: 0, consumed: 0}
+  commit_cutover: {authorized_max: 0, consumed: 0}
+  rollback_cutover: {authorized_max: 0, consumed: 0}
+  menu_bar_relaunch: {authorized_max: 0, consumed: 0}
+  runtime_restart: {authorized_max: 0, consumed: 0}
+  runtime_explicit_start: {authorized_max: 0, consumed: 0}
+  runtime_explicit_stop: {authorized_max: 0, consumed: 0}
+  plugin_reload_or_reconnect: {authorized_max: 0, consumed: 0}
+  credential_rotation: {authorized_max: 0, consumed: 0}
+  physical_reboot: {authorized_max: 0, consumed: 0}
+  new_security_permission: {authorized_max: 0, consumed: 0}
+  version_tag_create: {authorized_max: 0, consumed: 0}
+  github_release_publish: {authorized_max: 0, consumed: 0}
+  branch_or_pr_creation: {authorized_max: 0, consumed: 0}
+
+acceptance_evidence:
+  - {criterion_id: AC-1, status: PASS, evidence: "No static .effectIsInteractive access remains in production or Swift tests; NSGlassEffectView and macOS26 style/tint/corner/content behavior remain unchanged."}
+  - {criterion_id: AC-2, status: PASS, evidence: "The macOS27 path dynamically resolves public selector setEffectIsInteractive:, requires responds(to:), then sets effectIsInteractive through KVC; the local macOS27 Swift test proves selector availability and KVC true."}
+  - {criterion_id: AC-3, status: PASS, evidence: "tests.test_surface_and_scripts now rejects static .effectIsInteractive access in production/tests and requires the dynamic macOS27 compatibility seam."}
+  - {criterion_id: AC-4, status: PASS, evidence: "Full Swift tests passed 97 XCTest cases with zero failures and one release-configuration Swift build passed on Xcode 27 / SDK 27.0; no SDK26 local-proof claim is made."}
+  - {criterion_id: AC-5, status: PASS, evidence: "Focused Python proof and git diff --check passed; exactly one canonical ./verify passed 63/63 modules and 918 tests with no replay."}
+  - {criterion_id: AC-6, status: PASS_PENDING_REPORT_PUBLICATION, evidence: "Implementation commit changes only the three authorized implementation/test files; all run-owned scratch roots are removed and the release workflow blob remains exact. This report is the only report child before final clean synchronized MAIN ONLY proof."}
+
+blocking_findings: []
