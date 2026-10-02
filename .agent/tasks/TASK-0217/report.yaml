@@ -1,0 +1,164 @@
+protocol_version: 3
+task_id: TASK-0217
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: PASS
+
+task_source:
+  path: .agent/tasks/TASK-0217/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "ce3a7a552af868e9f58250252dbe564383a5714f"
+  implementation_commit: "e5f4715476048dd21cc118f89b5ebac047aa82a3"
+  implementation_tree: "df03262fe458394393b65d7a5e202e5697ac1b28"
+  final_execution_head: "e5f4715476048dd21cc118f89b5ebac047aa82a3"
+  task_0196_paused: true
+
+implementation:
+  changed_paths:
+    - agent_runtime/session.py
+    - tests/test_durable_pipe.py
+  manager_owner_verification:
+    independent_exact_sampling: true
+    runner_target_short_circuit_removed: true
+    exact_authority: verify_process_identity
+    exact_identity_fields:
+      - pid
+      - pgid
+      - start_sec
+      - start_usec
+      - executable_dev
+      - executable_ino
+    reconciliation_window_seconds: 2.0
+    runner_success_latched_within_window: true
+    target_success_latched_within_window: true
+    new_active_owner_identity_accepted: false
+    terminal_snapshot_finalization_preserved: true
+  dispatch_path:
+    active_durable_start_uses_single_bounded_manager_reconciliation_path: true
+  fail_closed:
+    persistent_runner_mismatch: DURABLE_OWNER_LOST
+    persistent_target_mismatch: DURABLE_OWNER_LOST
+    effect_state: UNKNOWN
+    reconciliation_required: true
+    safe_next_action: RECONCILE
+
+red_green:
+  red:
+    command: ".venv/bin/python -m unittest tests.test_durable_pipe.DurablePipeTests.test_manager_owner_validation_samples_target_when_runner_is_transient tests.test_durable_pipe.DurablePipeTests.test_manager_owner_reconciliation_retains_runner_match_while_target_recovers tests.test_durable_pipe.DurablePipeTests.test_manager_owner_reconciliation_accepts_independent_transients tests.test_durable_pipe.DurablePipeTests.test_manager_owner_reconciliation_persistent_mismatch_fails_closed"
+    result: FAIL_EXPECTED
+    tests: 4
+    errors: 3
+    passing_fail_closed_regression: 1
+    decisive_failure: "All three transient manager-side regressions raised DURABLE_OWNER_LOST through _dispatch_durable -> _refresh_durable_session under the exact pre-fix coupled semantics."
+  green:
+    command: ".venv/bin/python -m unittest tests.test_durable_pipe.DurablePipeTests.test_manager_owner_validation_samples_target_when_runner_is_transient tests.test_durable_pipe.DurablePipeTests.test_manager_owner_reconciliation_retains_runner_match_while_target_recovers tests.test_durable_pipe.DurablePipeTests.test_manager_owner_reconciliation_accepts_independent_transients tests.test_durable_pipe.DurablePipeTests.test_manager_owner_reconciliation_persistent_mismatch_fails_closed"
+    result: PASS
+    tests: 4
+
+stress_verification:
+  exact_remote_failure_test: tests.test_durable_pipe.DurablePipeTests.test_runner_argv_is_opaque_and_durable_files_are_private
+  isolated_fresh_processes: {required: 50, passed: 50, failed: 0, result: PASS}
+  concurrent:
+    rounds: 20
+    fresh_processes_per_round: 6
+    required: 120
+    passed: 120
+    failed: 0
+    result: PASS
+
+focused_verification:
+  tests_test_durable_pipe: {tests: 22, failures: 0, errors: 0, result: PASS}
+  tests_test_durable_pipe_restart: {tests: 10, failures: 0, errors: 0, result: PASS}
+  git_diff_check: PASS
+  frozen_invariants: PASS
+
+canonical_verify:
+  invocation_count: 1
+  replay_count: 0
+  command: 'HOME="$PWD/.h" TMPDIR="$PWD/.v" ./verify'
+  carrier_mode: pipe
+  carrier_durability: runtime_restart
+  start_identity: "21750000000000000000000000000001"
+  session_id: "e8b21f2a570426d8"
+  lifecycle: COMPLETED
+  termination_reason: natural_exit
+  exit_code: 0
+  result: PASS
+  requested_profile: qualification
+  classified_modules: 63
+  completed_modules: 63
+  tests: 927
+  duration_seconds: 143.674
+  lane_counts:
+    L1_DETERMINISTIC_UNIT: {selected: 17, completed: 17, tests: 231}
+    L2_ISOLATED_INTEGRATION: {selected: 21, completed: 21, tests: 251}
+    L3_DETERMINISTIC_REGRESSION: {selected: 10, completed: 10, tests: 95}
+    L4_HOST_LIFECYCLE: {selected: 9, completed: 9, tests: 184}
+    L5_QUALIFICATION_CHAOS_CUTOVER: {selected: 6, completed: 6, tests: 166}
+  durable_pipe: {tests: 22, result: PASS, duration_seconds: 3.537}
+  durable_pipe_restart: {tests: 10, result: PASS, duration_seconds: 5.910}
+  supervised_lifecycle: {tests: 20, result: PASS, duration_seconds: 16.954, timeout_seconds: 45}
+  candidate_cutover: {tests: 125, result: PASS, duration_seconds: 96.297}
+  product_qualification: {tests: 16, result: PASS, duration_seconds: 33.427}
+
+invariants:
+  durable_pipe_runner_changed: false
+  durable_pipe_identity_source_changed: false
+  durable_finalization_grace_seconds: 2.0
+  identity_equality_weakened: false
+  durable_schema_changed: false
+  terminal_public_contract_changed: false
+  release_workflow_changed: false
+  release_workflow_blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  verification_policy_changed: false
+  docs_changed: false
+  dependencies_changed: false
+  version_changed: false
+  task_scratch_residue: false
+  short_home_residue: false
+  short_tmpdir_residue: false
+
+implementation_publication:
+  published: true
+  remote: origin
+  branch: main
+  expected_remote_head: "ce3a7a552af868e9f58250252dbe564383a5714f"
+  published_commit: "e5f4715476048dd21cc118f89b5ebac047aa82a3"
+  force_used: false
+
+effect_accounting:
+  canonical_verify: {authorized_max: 1, consumed: 1}
+  github_workflow_dispatch: {authorized_max: 0, consumed: 0}
+  github_workflow_rerun: {authorized_max: 0, consumed: 0}
+  local_distribution_build: {authorized_max: 0, consumed: 0}
+  workflow_artifact_download: {authorized_max: 0, consumed: 0}
+  launchservices_mutation: {authorized_max: 0, consumed: 0}
+  install_prebuilt: {authorized_max: 0, consumed: 0}
+  commit_cutover: {authorized_max: 0, consumed: 0}
+  rollback_cutover: {authorized_max: 0, consumed: 0}
+  menu_bar_relaunch: {authorized_max: 0, consumed: 0}
+  runtime_restart: {authorized_max: 0, consumed: 0}
+  runtime_explicit_start: {authorized_max: 0, consumed: 0}
+  runtime_explicit_stop: {authorized_max: 0, consumed: 0}
+  plugin_reload_or_reconnect: {authorized_max: 0, consumed: 0}
+  credential_rotation: {authorized_max: 0, consumed: 0}
+  physical_reboot: {authorized_max: 0, consumed: 0}
+  new_security_permission: {authorized_max: 0, consumed: 0}
+  version_tag_create: {authorized_max: 0, consumed: 0}
+  github_release_publish: {authorized_max: 0, consumed: 0}
+  branch_or_pr_creation: {authorized_max: 0, consumed: 0}
+
+acceptance_evidence:
+  - {criterion_id: AC-1, status: PASS, evidence: "Manager-side owner sampling now evaluates runner and target independently. Deterministic regressions prove transient failure of one owner does not suppress observation or continuity of the other within the existing reconciliation path."}
+  - {criterion_id: AC-2, status: PASS, evidence: "verify_process_identity remains the exact six-field authority; durable_pipe.py and durable_pipe_runner.py are unchanged, and persistent runner/target mismatches still project DURABLE_OWNER_LOST with UNKNOWN/RECONCILE metadata."}
+  - {criterion_id: AC-3, status: PASS, evidence: "The exact remote failing test passed 50/50 isolated fresh processes and 120/120 executions across 20 six-way concurrent rounds."}
+  - {criterion_id: AC-4, status: PASS, evidence: "Full tests.test_durable_pipe passed 22 tests and tests.test_durable_pipe_restart passed 10 tests, including intentional owner-loss protections."}
+  - {criterion_id: AC-5, status: PASS, evidence: "Exactly one canonical verify invocation completed naturally with exit 0, 63/63 classified modules and 927 tests; no replay occurred."}
+  - {criterion_id: AC-6, status: PARTIAL_AT_REPORT_AUTHORSHIP, evidence: "Implementation commit e5f4715... is published and local/remote main are synchronized and clean. This report is the only remaining authorized repository mutation at report authorship."}
+
+blocking_findings: []
