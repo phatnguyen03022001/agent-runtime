@@ -1,0 +1,335 @@
+protocol_version: 3
+task_id: TASK-0222
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: BLOCKED
+
+task_source:
+  path: .agent/tasks/TASK-0222/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "c34952e5ac4537fc0b4426a5bfc806bdf80c01c6"
+  diagnostic_commit: "279398a6b7300c05f08441821072996bbdcdc307"
+  first_implementation_commit: "caa8422d40b6bcbfe02e09576de2af2ea5485c7c"
+  final_implementation_commit: "0e5f00a98ae79c1c9584bf8fa39e200d100942b6"
+  final_implementation_tree: "016913770e69485d55eeb3f9157686dde841bafd"
+  phase: STABILIZE
+  predecessor_finding: F-0221-001
+  task_0196_paused: true
+
+discovery:
+  required_before_solution_freeze: true
+  performed_before_solution_freeze: true
+
+  diagnostic_checkpoint:
+    commit: "279398a6b7300c05f08441821072996bbdcdc307"
+    changed_paths:
+      - .github/workflows/release-gate.yml
+    temporary_instrumentation_removed_from_final_tree: true
+    exposed_values: "Path, architecture, Mach-O linkage and marker counts only."
+    credentials_or_environment_dumped: false
+
+  diagnostic_remote_run:
+    id: 36991809939
+    run_number: 12
+    attempt: 1
+    head_sha: "279398a6b7300c05f08441821072996bbdcdc307"
+    result: EXPECTED_DIAGNOSTIC_FAILURE
+    canonical_verify: SKIPPED
+    candidate_build: SKIPPED
+    facts:
+      sys_executable: "/Library/Frameworks/Python.framework/Versions/3.13/bin/python"
+      sys_base_prefix: "/Library/Frameworks/Python.framework/Versions/3.13"
+      stdlib: "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13"
+      source_realpath: "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3.13"
+      copied_venv_python: "/Users/runner/work/_temp/task-0222-copies-venv/bin/python"
+      platform: darwin
+      machine: arm64
+      source_linkage:
+        - "/Library/Frameworks/Python.framework/Versions/3.13/Python"
+        - "/usr/lib/libSystem.B.dylib"
+      copied_linkage:
+        - "/Library/Frameworks/Python.framework/Versions/3.13/Python"
+        - "/usr/lib/libSystem.B.dylib"
+      copied_binary_base_prefix_marker_count: 2
+      copied_binary_home_marker_count: 0
+      copied_binary_source_realpath_marker_count: 0
+
+  root_cause:
+    classification: setup_python_framework_absolute_macho_dependency
+    evidence: "The setup-python CPython launcher and venv --copies launcher retain an absolute load command to the canonical framework runtime at $sys.base_prefix/Python. The copied launcher therefore embeds the framework base prefix twice. The accepted uv CPython layout instead uses a relative packageable libpython dependency."
+    workflow_interpreter_selection_intrinsically_unsuitable: false
+    packaging_materializer_missing_framework_layout_support: true
+
+solution_freeze:
+  selected_branch: packaging_materialization
+  workflow_interpreter_selection_changed: false
+  rationale: "The selected setup-python interpreter is valid CPython 3.13 arm64 with pip. Its exact framework runtime dependency can be bounded to the canonical $base_prefix/Python path and normalized using supported Mach-O tooling without fallback interpreters or new dependencies."
+
+implementation:
+  cumulative_changed_paths_from_authorized_base:
+    - macos/packaging_python.sh
+    - tests/test_packaging_interpreter.py
+  final_workflow_blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  diagnostic_workflow_instrumentation_present: false
+  strict_build_host_scanner_semantics_changed: false
+  release_bundle_changed: false
+  package_app_changed: false
+  runtime_or_durable_logic_changed: false
+
+  framework_materialization:
+    canonical_dependency: "$base_prefix/Python"
+    package_owned_runtime: "lib/libpython3.13.dylib"
+    supported_tools:
+      - /usr/bin/install_name_tool
+      - /usr/bin/codesign
+    normalized_install_identity: "@executable_path/../lib/libpython3.13.dylib"
+    normalized_launcher_dependency: "@executable_path/../lib/libpython3.13.dylib"
+    source_requirements:
+      canonical_regular_file: true
+      symlink_rejected: true
+      checkout_venv_source_rejected: true
+    post_normalization_reinspection: true
+    old_absolute_dependency_must_be_absent: true
+    relative_dependency_must_be_present: true
+    framework_normalized_machos_ad_hoc_resigned:
+      - "package-owned libpython3.13.dylib"
+      - "copied package venv bin/python"
+    uv_relative_layout_branch_preserved: true
+
+  linkage_parser:
+    ignores_non_dependency_fat_binary_headers: true
+    duplicate_dependencies_removed: true
+
+tdd:
+  framework_materialization:
+    test: tests.test_packaging_interpreter.PackagingRuntimeLinkageTests.test_framework_layout_materializes_and_rewrites_canonical_runtime
+    red:
+      result: FAIL_EXPECTED
+      decisive_failure: "The package-owned lib/libpython3.13.dylib did not exist for the synthetic framework layout."
+    green:
+      result: PASS
+      evidence: "Synthetic exact-framework dependency is copied package-owned, install identity and launcher load command become relative, and the original absolute dependency is absent."
+
+  framework_code_signature:
+    same_test_extended: true
+    red:
+      result: FAIL_EXPECTED
+      decisive_failure: "No signing calls were made after Mach-O normalization; the expected libpython and launcher signature log was empty."
+    green:
+      result: PASS
+      evidence: "Framework branch re-signs exactly the normalized package-owned libpython and copied launcher after supported install-name edits."
+
+focused_verification:
+  pre_first_remote_checkpoint:
+    packaging_interpreter: {tests: 16, result: PASS}
+    package_provenance: {tests: 31, result: PASS}
+    surface_and_scripts: {tests: 23, result: PASS}
+    shell_syntax: PASS
+    yaml: PASS
+    git_diff_check: PASS
+  post_signature_correction:
+    packaging_interpreter: {tests: 16, result: PASS}
+    package_provenance: {tests: 31, result: PASS}
+    surface_and_scripts: {tests: 23, result: PASS}
+    shell_syntax: PASS
+    git_diff_check: PASS
+    workflow_blob_restored: true
+
+canonical_verify:
+  authorized_max: 1
+  invocation_count: 1
+  invocation_commit: "caa8422d40b6bcbfe02e09576de2af2ea5485c7c"
+  note: "The single local canonical verify budget was consumed before remote checkpoint 2 exposed the code-signature consequence. It was not rerun after the bounded final signature correction."
+  start_identity: "0222022202220222022202220222020e"
+  session_id: "5c29497ffcc59c62"
+  lifecycle: COMPLETED
+  exit_code: 0
+  result: PASS
+  classified_modules: 63
+  completed_modules: 63
+  tests: 936
+  duration_seconds: 146.385
+  packaging_interpreter: {tests: 16, result: PASS}
+  package_provenance: {tests: 31, result: PASS}
+  durable_pipe: {tests: 22, result: PASS}
+  durable_pipe_restart: {tests: 10, result: PASS}
+  supervised_lifecycle: {tests: 20, result: PASS}
+  final_implementation_commit_local_canonical_verify: NOT_AUTHORIZED_AFTER_BUDGET_CONSUMED
+
+local_uv_regression:
+  authorized_package_build_max: 1
+  package_build_invocation_count: 1
+  package_build_commit: "caa8422d40b6bcbfe02e09576de2af2ea5485c7c"
+  initial_acknowledgement: AMBIGUOUS_DURABLE_OWNER_IDENTITY
+  redispatch_count: 0
+  reconciliation: "The same start identity was retained and later resolved to terminal PASS."
+  result: PASS
+  packaging_interpreter: "/Users/tienphat/.local/share/uv/python/cpython-3.13.5-macos-aarch64-none/bin/python3.13"
+  candidate_sha256: "b6d786096acda92c5de7a075c1e6486f516b5cc7d8cf1cfac70d30a0288b36f0"
+  initial_payload_closure: "f155f079fdcce25094ab66563c7103e78a636c76726ad1995bb9dfd2c1ee4950"
+
+  candidate_contract:
+    regular_files_scanned: 2407
+    packaging_base_prefix_hits: 0
+    operator_home_hits: 0
+    pycache_directories: 0
+    pyc_files: 0
+    symlinks: 0
+    pyvenv_cfg_absent: true
+    python_libpython_load_dependency: "@executable_path/../lib/libpython3.13.dylib"
+    libpython_install_identity: "@executable_path/../lib/libpython3.13.dylib"
+    result: PASS
+
+  relocation:
+    root: "/Users/Shared/agent-runtime-task-0222-local-caa8422d"
+    result: PASS
+    prefix_equals_base_prefix: true
+    stdlib_inside_prefix: true
+    pydantic_inside_prefix: true
+    mcp_import: PASS
+    agent_runtime_payload_import: PASS
+    advertised_tool_count: 20
+    sysconfig_original_marker_hits: 0
+    sys_path_original_marker_hits: 0
+
+  deterministic_release_bundle:
+    build_count: 2
+    build_1: PASS
+    build_2: PASS
+    archive_byte_identical: true
+    manifest_byte_identical: true
+    checksums_byte_identical: true
+    verify: PASS
+    archive_filename: "agent-runtime-0.5.1-arm64-b6d786096acda92c5de7a075c1e6486f516b5cc7d8cf1cfac70d30a0288b36f0.tar.gz"
+    archive_sha256: "6da4092d51704485f2edc4a188e25b6bee4f634b1d7ddcf59933f15738b20694"
+    archive_size_bytes: 22544924
+    archive_member_count: 2776
+
+remote_stabilization:
+  dispatch_authorized_max: 3
+  dispatch_consumed: 3
+  workflow_rerun_count: 0
+  job_rerun_count: 0
+
+  dispatch_1_diagnostic:
+    run_id: 36991809939
+    attempt: 1
+    head_sha: "279398a6b7300c05f08441821072996bbdcdc307"
+    result: EXPECTED_DIAGNOSTIC_FAILURE
+    purpose: "Establish framework launcher, copied-venv linkage and build-host marker facts."
+    canonical_verify: SKIPPED
+    package_build: SKIPPED
+
+  dispatch_2_first_implementation:
+    run_id: 36993115899
+    attempt: 1
+    head_sha: "caa8422d40b6bcbfe02e09576de2af2ea5485c7c"
+    result: FAILURE
+    build_release_job: 110793647489
+    canonical_verify:
+      result: PASS
+      classified_modules: 63
+      completed_modules: 63
+      tests: 936
+    candidate_build:
+      swift_build: PASS
+      swift_build_duration_seconds: 28.20
+      original_build_host_marker_failure_recurred: false
+      result: FAIL
+      signature: "dyld: Library not loaded: @executable_path/../lib/libpython3.13.dylib; copied package-owned libpython code signature invalid"
+      exit_code: 250
+    interpretation: "The framework absolute dependency was normalized far enough to remove the original scanner failure, but install_name_tool invalidated the copied framework Mach-O signature before package smoke."
+    deterministic_release_assets: SKIPPED
+    compatibility: SKIPPED
+    artifact_count: 0
+
+  dispatch_3_final_correction:
+    run_id: 36994067524
+    attempt: 1
+    head_sha: "0e5f00a98ae79c1c9584bf8fa39e200d100942b6"
+    result: FAILURE
+    build_release_job: 110796641124
+    canonical_verify:
+      result: FAIL
+      completed_modules: 5
+      classified_modules: 63
+      tests: 200
+      duration_seconds: 107.624
+      failing_module: tests.test_durable_pipe
+      module_tests: 22
+      module_duration_seconds: 10.244
+      failing_test: tests.test_durable_pipe.DurablePipeTests.test_snapshot_consistency_still_rejects_mixed_generation_and_integrity_corruption
+      failure_type: subprocess.TimeoutExpired
+      secondary_failure_type: agent_runtime.errors.RuntimeStateError
+      failure_message: "durable runner bootstrap did not establish ownership in time"
+      failure_site:
+        file: agent_runtime/session.py
+        line: 752
+        operation: "bootstrap.wait(timeout=2.0)"
+      bootstrap_process: "/Library/Frameworks/Python.framework/Versions/3.13/bin/python -m agent_runtime.durable_pipe_runner"
+    candidate_build: SKIPPED
+    deterministic_release_assets: SKIPPED
+    artifact_upload: SKIPPED
+    compatibility: SKIPPED
+    artifact_count: 0
+
+remote_inventory:
+  total_release_gate_runs: 14
+  all_attempt_1: true
+  task_0222_new_runs:
+    - 36991809939
+    - 36993115899
+    - 36994067524
+  historical_runs_rerun: false
+  task_runs_rerun: false
+
+effect_accounting:
+  canonical_verify_final: {authorized_max: 1, consumed: 1}
+  local_package_build_final: {authorized_max: 1, consumed: 1}
+  remote_stabilization_dispatch: {authorized_max: 3, consumed: 3}
+  workflow_rerun: {authorized_max: 0, consumed: 0}
+  release_publish: {authorized_max: 0, consumed: 0}
+  live_runtime_mutation: {authorized_max: 0, consumed: 0}
+  branch_or_pr_creation: {authorized_max: 0, consumed: 0}
+
+cleanup:
+  local_candidate_removed: "b6d786096acda92c5de7a075c1e6486f516b5cc7d8cf1cfac70d30a0288b36f0"
+  relocation_root_removed: true
+  local_release_bundle_roots_removed: true
+  canonical_verify_home_removed: true
+  canonical_verify_tmpdir_removed: true
+  package_temp_dirs_remaining: 0
+  candidate_count_before: 22
+  candidate_count_after: 22
+  diagnostic_workflow_removed: true
+
+finding_status:
+  predecessor:
+    id: F-0221-001
+    status: PARTIALLY_CLOSED
+    evidence: "Remote checkpoint 2 no longer failed the strict build-host identity scanner; it reached execution of the normalized relative-libpython runtime. The subsequent signature defect was corrected and focused tests passed, but dispatch 3 failed canonical verification before candidate construction, so final remote packaging closure could not be observed."
+  new:
+    id: F-0222-001
+    severity: BLOCKING
+    classification: remote_durable_runner_bootstrap_timeout
+    boundary: OUTSIDE_PACKAGING_CANDIDATE_AUTHORITY
+    description: "At the final exact-SHA checkpoint, remote canonical verification failed in tests.test_durable_pipe because the durable runner bootstrap process did not exit within its two-second wait. The candidate build was never reached."
+    evidence: "Run 36994067524, build-release job 110796641124; tests.test_durable_pipe test_snapshot_consistency_still_rejects_mixed_generation_and_integrity_corruption; bootstrap.wait(timeout=2.0) raised subprocess.TimeoutExpired followed by RuntimeStateError 'durable runner bootstrap did not establish ownership in time'."
+    consequence: "The third and final authorized remote dispatch did not exercise the final packaging correction. Full release-gate and compatibility closure remain unproven."
+    task_response: "BLOCKED. Remote dispatch budget is exhausted and the observed final failure is outside TASK-0222 packaging/candidate mutation authority. Do not rerun, redispatch, or mutate durable Runtime logic within this task."
+
+authoritative_stabilization:
+  packaging_root_cause_classified: true
+  smallest_evidence_supported_fix_implemented: true
+  strict_scanner_preserved: true
+  local_uv_regression: PASS
+  full_remote_release_gate: NOT_PROVEN
+  stop_conditions:
+    - BOUNDARY_CROSSING
+    - BUDGET_EXHAUSTED
+  task_result: BLOCKED
