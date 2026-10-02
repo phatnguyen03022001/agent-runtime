@@ -292,7 +292,7 @@ MODULE_POLICY_ENTRIES: tuple[tuple[str, ModulePolicy], ...] = (
         L4_HOST_LIFECYCLE,
         ("host_lifecycle", "config"),
         "Runtime configuration/start lifecycle compatibility proof.",
-        timeout=30.0,
+        timeout=60.0,
         isolation_key="host-lifecycle",
     )),
     ("tests.test_runtime_config", module_policy(

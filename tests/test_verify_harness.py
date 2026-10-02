@@ -160,6 +160,16 @@ class VerifyHarnessTests(unittest.TestCase):
         )
         self.assertIsNone(repo_commit.isolation_key)
 
+        revision4_runtime_config = verification_policy.MODULE_POLICIES[
+            "tests.test_revision4_runtime_config"
+        ]
+        self.assertEqual(revision4_runtime_config.timeout_seconds, 60.0)
+        self.assertEqual(
+            revision4_runtime_config.lane,
+            verification_policy.L4_HOST_LIFECYCLE,
+        )
+        self.assertEqual(revision4_runtime_config.isolation_key, "host-lifecycle")
+
     def test_product_qualification_has_serialized_l5_policy(self) -> None:
         policy = verification_policy.MODULE_POLICIES[
             "tests.test_product_qualification"
