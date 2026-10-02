@@ -33,59 +33,6 @@ jobs:
           test -x "$PYTHON_BIN"
           echo "AGENT_RUNTIME_PACKAGING_PYTHON=$PYTHON_BIN" >> "$GITHUB_ENV"
 
-      - name: TASK-0222 framework layout diagnostic
-        run: |
-          set -euo pipefail
-          PYTHON_BIN="$AGENT_RUNTIME_PACKAGING_PYTHON"
-          DIAG_VENV="$RUNNER_TEMP/task-0222-copies-venv"
-          rm -rf "$DIAG_VENV"
-          "$PYTHON_BIN" -m venv --copies --without-pip "$DIAG_VENV"
-
-          "$PYTHON_BIN" - "$PYTHON_BIN" "$DIAG_VENV/bin/python" <<'PY'
-          import os
-          import platform
-          import subprocess
-          import sys
-          import sysconfig
-          from pathlib import Path
-
-          source = Path(sys.argv[1])
-          copied = Path(sys.argv[2])
-          source_real = source.resolve()
-          copied_real = copied.resolve()
-          base_prefix = Path(sys.base_prefix).resolve()
-          stdlib = Path(sysconfig.get_path("stdlib")).resolve()
-          home = Path.home().resolve()
-
-          def linkage(path: Path) -> list[str]:
-              output = subprocess.check_output(["/usr/bin/otool", "-L", str(path)], text=True)
-              return [line.strip().split(" ", 1)[0] for line in output.splitlines()[1:] if line.strip()]
-
-          payload = copied.read_bytes()
-          markers = {
-              "base_prefix": str(base_prefix).encode(),
-              "home": str(home).encode(),
-              "source_realpath": str(source_real).encode(),
-          }
-
-          print(f"diag_sys_executable={sys.executable}")
-          print(f"diag_sys_base_prefix={base_prefix}")
-          print(f"diag_stdlib={stdlib}")
-          print(f"diag_source_realpath={source_real}")
-          print(f"diag_copied_realpath={copied_real}")
-          print(f"diag_platform={sys.platform}")
-          print(f"diag_machine={platform.machine()}")
-          for item in linkage(source):
-              print(f"diag_source_otool_L={item}")
-          for item in linkage(copied):
-              print(f"diag_copied_otool_L={item}")
-          for label, marker in markers.items():
-              print(f"diag_copied_marker_{label}_count={payload.count(marker)}")
-          PY
-
-          echo "TASK-0222 diagnostic checkpoint complete; stopping before canonical verify"
-          exit 1
-
       - name: Canonical verify
         run: PYTHON=python PYTHONDONTWRITEBYTECODE=1 ./verify
 

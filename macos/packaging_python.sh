@@ -45,7 +45,9 @@ packaging_python_realpath() {
 
 packaging_python_linkage_dependencies() {
   local copied_python="$1"
-  /usr/bin/otool -L "$copied_python" | /usr/bin/awk 'NR > 1 {print $1}'
+  /usr/bin/otool -L "$copied_python" |
+    /usr/bin/awk '/^[[:space:]]/ {print $1}' |
+    /usr/bin/awk '!seen[$0]++'
 }
 
 packaging_python_stdlib_path() {
@@ -64,6 +66,13 @@ packaging_python_set_library_identity() {
   /usr/bin/install_name_tool -id "$identity" "$library"
 }
 
+packaging_python_change_linkage() {
+  local executable="$1"
+  local old_identity="$2"
+  local new_identity="$3"
+  /usr/bin/install_name_tool -change "$old_identity" "$new_identity" "$executable"
+}
+
 materialize_packaging_python_runtime() {
   local python_bin="$1"
   local package_venv="$2"
@@ -73,7 +82,7 @@ materialize_packaging_python_runtime() {
   local base_prefix dependencies source_stdlib source_stdlib_real
   local package_venv_real package_lib package_lib_real checkout_venv_real=""
   local dependency library source source_real base_lib_real target target_real
-  local current_identity expected_identity
+  local current_identity expected_identity framework_dependency normalized_dependencies
 
   [[ -x "$copied_python" ]] \
     || { echo "$prefix: copied packaging interpreter is missing or not executable: $copied_python" >&2; return 2; }
@@ -110,6 +119,79 @@ materialize_packaging_python_runtime() {
   if [[ -e "$repo_root/.venv" ]]; then
     checkout_venv_real="$(packaging_python_realpath "$python_bin" "$repo_root/.venv")" \
       || { echo "$prefix: failed to resolve checkout .venv path" >&2; return 2; }
+  fi
+
+  framework_dependency="$base_prefix/Python"
+  if printf '%s\n' "$dependencies" | /usr/bin/grep -Fxq "$framework_dependency"; then
+    source="$framework_dependency"
+    [[ -f "$source" && ! -L "$source" ]] \
+      || { echo "$prefix: required framework runtime library is missing or unsafe: $source" >&2; return 2; }
+    source_real="$(packaging_python_realpath "$python_bin" "$source")" \
+      || { echo "$prefix: failed to resolve framework runtime library: $source" >&2; return 2; }
+    [[ "$source_real" == "$source" ]] \
+      || { echo "$prefix: framework runtime library must be a canonical regular file: $source_real" >&2; return 2; }
+    if [[ -n "$checkout_venv_real" ]]; then
+      case "$source_real" in
+        "$checkout_venv_real"|"$checkout_venv_real"/*)
+          echo "$prefix: framework runtime library must not resolve from checkout .venv: $source_real" >&2
+          return 2
+          ;;
+      esac
+    fi
+
+    target="$package_lib/libpython3.13.dylib"
+    if [[ -L "$target" ]]; then
+      echo "$prefix: package framework runtime target must not be a symlink: $target" >&2
+      return 2
+    fi
+    if [[ -e "$target" ]]; then
+      [[ -f "$target" ]] \
+        || { echo "$prefix: package framework runtime target is not a regular file: $target" >&2; return 2; }
+      /usr/bin/cmp -s "$source_real" "$target" \
+        || { echo "$prefix: existing framework runtime bytes differ from canonical source: $target" >&2; return 2; }
+    else
+      /bin/cp "$source_real" "$target"
+      [[ -f "$target" && ! -L "$target" ]] \
+        || { echo "$prefix: copied framework runtime is not a package-owned regular file: $target" >&2; return 2; }
+      target_real="$(packaging_python_realpath "$python_bin" "$target")" \
+        || { echo "$prefix: failed to resolve copied framework runtime: $target" >&2; return 2; }
+      case "$target_real" in
+        "$package_lib_real"/*) ;;
+        *)
+          echo "$prefix: copied framework runtime escaped package venv lib: $target_real" >&2
+          return 2
+          ;;
+      esac
+      /usr/bin/cmp -s "$source_real" "$target" \
+        || { echo "$prefix: copied framework runtime bytes differ from canonical source: $target" >&2; return 2; }
+    fi
+
+    expected_identity="@executable_path/../lib/libpython3.13.dylib"
+    current_identity="$(packaging_python_library_identity "$target" 2>/dev/null)" \
+      || { echo "$prefix: failed to inspect copied framework runtime install identity" >&2; return 2; }
+    if [[ "$current_identity" != "$expected_identity" ]]; then
+      if [[ "$current_identity" != "$source" && "$current_identity" != "$source_real" ]]; then
+        echo "$prefix: unsupported copied framework runtime install identity: $current_identity" >&2
+        return 2
+      fi
+      packaging_python_set_library_identity "$target" "$expected_identity" >/dev/null 2>&1 \
+        || { echo "$prefix: failed to normalize copied framework runtime install identity" >&2; return 2; }
+    fi
+    current_identity="$(packaging_python_library_identity "$target" 2>/dev/null)" \
+      || { echo "$prefix: failed to re-inspect copied framework runtime install identity" >&2; return 2; }
+    [[ "$current_identity" == "$expected_identity" ]] \
+      || { echo "$prefix: copied framework runtime install identity did not normalize" >&2; return 2; }
+
+    packaging_python_change_linkage "$copied_python" "$framework_dependency" "$expected_identity" >/dev/null 2>&1 \
+      || { echo "$prefix: failed to normalize copied framework interpreter linkage" >&2; return 2; }
+    normalized_dependencies="$(packaging_python_linkage_dependencies "$copied_python" 2>/dev/null)" \
+      || { echo "$prefix: failed to re-inspect copied framework interpreter linkage" >&2; return 2; }
+    printf '%s\n' "$normalized_dependencies" | /usr/bin/grep -Fxq "$expected_identity" \
+      || { echo "$prefix: normalized framework interpreter does not load package-owned libpython" >&2; return 2; }
+    if printf '%s\n' "$normalized_dependencies" | /usr/bin/grep -Fxq "$framework_dependency"; then
+      echo "$prefix: normalized framework interpreter retains build-host libpython linkage" >&2
+      return 2
+    fi
   fi
 
   while IFS= read -r dependency; do

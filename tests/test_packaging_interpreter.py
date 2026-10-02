@@ -217,6 +217,7 @@ class PackagingRuntimeLinkageTests(unittest.TestCase):
         repo_root: Path,
         linkage: str,
         home_marker: Path | None = None,
+        library_identity: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
         stdlib = base_prefix / "lib" / "python3.13"
         stdlib.mkdir(parents=True, exist_ok=True)
@@ -233,18 +234,25 @@ class PackagingRuntimeLinkageTests(unittest.TestCase):
             )
         identity_file = package_venv / "libpython.identity"
         identity_file.parent.mkdir(parents=True, exist_ok=True)
-        identity_file.write_text(str(base_prefix / "lib" / "libpython3.13.dylib") + "\n")
+        identity_file.write_text(
+            (library_identity or str(base_prefix / "lib" / "libpython3.13.dylib")) + "\n"
+        )
+        linkage_file = package_venv / "python.linkage"
+        linkage_file.write_text(linkage + "\n")
         script = f"""
 source "{HELPER}"
 fake_base="$4"
-fake_linkage="$5"
+fake_linkage_file="$5"
 fake_stdlib="$6"
 fake_identity_file="$7"
 packaging_python_base_prefix() {{ printf '%s\\n' "$fake_base"; }}
-packaging_python_linkage_dependencies() {{ printf '%s\\n' "$fake_linkage"; }}
+packaging_python_linkage_dependencies() {{ cat "$fake_linkage_file"; }}
 packaging_python_stdlib_path() {{ printf '%s\\n' "$fake_stdlib"; }}
 packaging_python_library_identity() {{ cat "$fake_identity_file"; }}
 packaging_python_set_library_identity() {{ printf '%s\\n' "$2" > "$fake_identity_file"; }}
+packaging_python_change_linkage() {{
+  printf '%s\n' "$3" "/usr/lib/libSystem.B.dylib" > "$fake_linkage_file"
+}}
 materialize_packaging_python_runtime "$1" "$2" "$3" "TEST ERROR"
 """
         env = os.environ.copy()
@@ -260,7 +268,7 @@ materialize_packaging_python_runtime "$1" "$2" "$3" "TEST ERROR"
                 str(package_venv),
                 str(repo_root),
                 str(base_prefix),
-                linkage,
+                str(linkage_file),
                 str(stdlib),
                 str(identity_file),
             ],
@@ -270,6 +278,38 @@ materialize_packaging_python_runtime "$1" "$2" "$3" "TEST ERROR"
             text=True,
             check=False,
         )
+
+    def test_framework_layout_materializes_and_rewrites_canonical_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            base = (temp / "Library" / "Frameworks" / "Python.framework" / "Versions" / "3.13").resolve()
+            package_venv = temp / "package-venv"
+            repo_root = temp / "repo"
+            source = base / "Python"
+            source.parent.mkdir(parents=True)
+            source.write_bytes(b"canonical-framework-python")
+            self._fake_package_python(package_venv)
+            dependency = str(source)
+
+            result = self._run_materializer(
+                base_prefix=base,
+                package_venv=package_venv,
+                repo_root=repo_root,
+                linkage=f"{dependency}\n/usr/lib/libSystem.B.dylib",
+                library_identity=dependency,
+            )
+
+            target = package_venv / "lib" / "libpython3.13.dylib"
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(target.is_file())
+            self.assertEqual(target.read_bytes(), source.read_bytes())
+            self.assertEqual(
+                (package_venv / "libpython.identity").read_text().strip(),
+                "@executable_path/../lib/libpython3.13.dylib",
+            )
+            linkage = (package_venv / "python.linkage").read_text().splitlines()
+            self.assertIn("@executable_path/../lib/libpython3.13.dylib", linkage)
+            self.assertNotIn(dependency, linkage)
 
     def test_linked_layout_materializes_required_libpython_as_owned_equal_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
