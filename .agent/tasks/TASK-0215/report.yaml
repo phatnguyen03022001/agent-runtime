@@ -1,0 +1,204 @@
+protocol_version: 3
+task_id: TASK-0215
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: BLOCKED
+
+task_source:
+  path: .agent/tasks/TASK-0215/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "993f2e8ccea017c67804f5cd96a75a3ae3fcac49"
+  implementation_commit: "5f357536d9d49a9310b711b571a8dfdcc23c45d0"
+  implementation_tree: "071dbefa063ce0b724d4111c7c8bcad788c0d75e"
+  final_execution_head: "5f357536d9d49a9310b711b571a8dfdcc23c45d0"
+  task_0196_paused: true
+
+preconditions:
+  initial_local_head_before_fresh_bind: "006a0c754622150651bb99e5035d9900d357dd77"
+  fresh_bound_head: "993f2e8ccea017c67804f5cd96a75a3ae3fcac49"
+  origin_main_head: "993f2e8ccea017c67804f5cd96a75a3ae3fcac49"
+  main_equals_origin_main: true
+  worktree_clean: true
+  index_clean: true
+  branches: [main]
+  branch_count: 1
+  worktree_count: 1
+
+implementation:
+  changed_paths:
+    - macos/package_app.sh
+    - tests/test_package_provenance.py
+  production_change:
+    file: macos/package_app.sh
+    removed_only:
+      - "LSREGISTER path binding"
+      - "LaunchServices executable availability hard failure"
+      - "lsregister -u retained-candidate mutation"
+      - "LaunchServices unregister hard failure"
+    replacement_logic_added: false
+    launchservices_mutation_remaining: false
+    publish_zero_cost_validation_preserved: true
+    output_contract_preserved:
+      - candidate_app
+      - candidate_handoff
+      - initial_payload_release
+      - initial_payload_closure
+      - candidate_sha256
+  regression:
+    file: tests/test_package_provenance.py
+    test: test_zero_cost_packaging_has_no_launchservices_side_effect_and_preserves_identity_output_contract
+    proves:
+      - "package_app.sh contains no lsregister dependency"
+      - "package_app.sh contains no LaunchServices mutation path"
+      - "the exact five-line candidate identity output contract remains after publish-zero-cost validation"
+
+red_green:
+  red:
+    command: "/usr/bin/python3 -m unittest tests.test_package_provenance.PackageProvenanceTests.test_zero_cost_packaging_has_no_launchservices_side_effect_and_preserves_identity_output_contract"
+    interpreter: "Python 3.9.6"
+    result: FAIL_EXPECTED
+    tests: 1
+    reason: "'lsregister' was present in the exact pre-fix package_app.sh"
+  green:
+    command: "/usr/bin/python3 -m unittest tests.test_package_provenance.PackageProvenanceTests.test_zero_cost_packaging_has_no_launchservices_side_effect_and_preserves_identity_output_contract"
+    interpreter: "Python 3.9.6"
+    result: PASS
+    tests: 1
+
+focused_verification:
+  invalid_environment_attempt:
+    classification: INVALID_VERIFIER_ENVIRONMENT
+    command_family: "/usr/bin/python3 -m unittest"
+    interpreter: "Python 3.9.6"
+    first_module: tests.test_package_provenance
+    result: ERROR
+    tests: 26
+    errors: 2
+    error: "TypeError: extractall() got an unexpected keyword argument 'filter'"
+    root_cause: "The host system Python 3.9 tarfile API is too old for the repository's package provenance tests."
+    downstream_modules_not_run:
+      - tests.test_candidate_freeze
+      - tests.test_surface_and_scripts
+    authoritative_for_candidate_correctness: false
+
+  repo_native_attempt:
+    interpreter: ".venv/bin/python"
+    interpreter_version: "Python 3.13.5"
+    py_dont_write_bytecode: true
+    tests_test_package_provenance:
+      result: PASS
+      tests: 26
+    tests_test_candidate_freeze:
+      result: PASS
+      tests: 8
+    tests_test_surface_and_scripts:
+      result: FAIL
+      tests: 23
+      failures: 1
+      failing_test: tests.test_surface_and_scripts.SurfaceAndScriptsTests.test_zero_cost_packaging_bounds_launchservices_registration_for_retained_candidate
+      stale_expectations:
+        - "package_app.sh must contain the LaunchServices lsregister absolute path"
+        - "package_app.sh must contain \"$LSREGISTER\" -u \"$FINAL_APP\""
+      contradiction: "TASK-0215 requires package_app.sh to contain no lsregister/LaunchServices mutation path and forbids modification of tests/test_surface_and_scripts.py."
+  git_diff_check: PASS
+
+scope_and_invariants:
+  package_provenance_py_changed: false
+  release_bundle_py_changed: false
+  release_gate_workflow_changed: false
+  release_gate_workflow_blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  accepted_release_gate_workflow_blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  workflow_blob_unchanged: true
+  docs_changed: false
+  dependencies_changed: false
+  version_changed: false
+  schemas_changed: false
+  public_contract_changed: false
+  local_distribution_build_performed: false
+
+canonical_verify:
+  authorized_max: 1
+  consumed: 0
+  result: NOT_RUN
+  reason: "TASK-0215 requires focused proof to pass before canonical ./verify. The repo-native tests.test_surface_and_scripts module failed because its existing LaunchServices assertion contradicts the task's required behavior and the file is outside the allowed mutation scope."
+  replay_count: 0
+
+implementation_publication:
+  published: true
+  remote: origin
+  branch: main
+  expected_remote_head: "993f2e8ccea017c67804f5cd96a75a3ae3fcac49"
+  published_commit: "5f357536d9d49a9310b711b571a8dfdcc23c45d0"
+  force_used: false
+
+cleanup:
+  short_home_created: false
+  short_tmpdir_created: false
+  task_scratch_residue: false
+  local_package_artifacts_created: false
+  binary_assets_committed: false
+
+effect_accounting:
+  canonical_verify: {authorized_max: 1, consumed: 0}
+  github_workflow_dispatch: {authorized_max: 0, consumed: 0}
+  github_workflow_rerun: {authorized_max: 0, consumed: 0}
+  local_distribution_build: {authorized_max: 0, consumed: 0}
+  workflow_artifact_download: {authorized_max: 0, consumed: 0}
+  install_prebuilt: {authorized_max: 0, consumed: 0}
+  commit_cutover: {authorized_max: 0, consumed: 0}
+  rollback_cutover: {authorized_max: 0, consumed: 0}
+  menu_bar_relaunch: {authorized_max: 0, consumed: 0}
+  runtime_restart: {authorized_max: 0, consumed: 0}
+  runtime_explicit_start: {authorized_max: 0, consumed: 0}
+  runtime_explicit_stop: {authorized_max: 0, consumed: 0}
+  plugin_reload_or_reconnect: {authorized_max: 0, consumed: 0}
+  credential_rotation: {authorized_max: 0, consumed: 0}
+  physical_reboot: {authorized_max: 0, consumed: 0}
+  new_security_permission: {authorized_max: 0, consumed: 0}
+  version_tag_create: {authorized_max: 0, consumed: 0}
+  github_release_publish: {authorized_max: 0, consumed: 0}
+  branch_or_pr_creation: {authorized_max: 0, consumed: 0}
+
+acceptance_evidence:
+  - criterion_id: AC-1
+    status: PASS
+    evidence: "The implementation removes the entire lsregister/LaunchServices unregister block from package_app.sh and adds no warning, retry, fallback, reset or alternative LaunchServices mutation."
+  - criterion_id: AC-2
+    status: PASS
+    evidence: "publish-zero-cost result validation is unchanged, and the regression proves the exact candidate_app, candidate_handoff, initial_payload_release, initial_payload_closure and candidate_sha256 output block remains after validation."
+  - criterion_id: AC-3
+    status: FAIL
+    evidence: "package_provenance.py and release_bundle.py are unchanged; repo-native tests.test_package_provenance passed 26 tests and tests.test_candidate_freeze passed 8 tests, but tests.test_surface_and_scripts failed one stale LaunchServices expectation."
+  - criterion_id: AC-4
+    status: PASS
+    evidence: "The exact new regression failed on the pre-fix base because lsregister was present and passed after the production removal."
+  - criterion_id: AC-5
+    status: NOT_RUN
+    evidence: "Canonical ./verify was not authorized to proceed after focused proof failed."
+  - criterion_id: AC-6
+    status: FAIL_PENDING_SCOPE_REVISION
+    evidence: "The implementation changes only package_app.sh and test_package_provenance.py and the workflow blob remains exact, but canonical closure cannot be established while the required full surface module asserts the forbidden pre-fix LaunchServices contract."
+
+blocking_findings:
+  - id: F-0215-001
+    severity: blocker
+    status: OPEN
+    summary: "TASK-0215 requires removal of all LaunchServices mutation from package_app.sh while an existing required focused test outside the authorized mutation scope requires that exact lsregister mutation to remain."
+    evidence:
+      required_module: tests.test_surface_and_scripts
+      failing_test: tests.test_surface_and_scripts.SurfaceAndScriptsTests.test_zero_cost_packaging_bounds_launchservices_registration_for_retained_candidate
+      failing_assertion_1: "assertIn('/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister', package)"
+      failing_assertion_2: "assertIn('\"$LSREGISTER\" -u \"$FINAL_APP\"', package)"
+      task_required_behavior: "package_app.sh must not invoke lsregister or otherwise mutate LaunchServices discovery state"
+      forbidden_mutation: "tests/test_surface_and_scripts.py is not an allowed existing file or component and any test file other than tests/test_package_provenance.py is forbidden"
+      package_provenance: "26/26 PASS under .venv Python 3.13.5"
+      candidate_freeze: "8/8 PASS under .venv Python 3.13.5"
+      git_diff_check: PASS
+      canonical_verify: NOT_RUN
+    consequence: "Executor cannot make the required focused verification pass without violating explicit task scope. Canonical ./verify must not run because focused proof did not pass."
+    continuation: "Architect revision is required to authorize correction of the stale tests/test_surface_and_scripts.py LaunchServices assertion or otherwise reconcile the contradictory acceptance boundary."
