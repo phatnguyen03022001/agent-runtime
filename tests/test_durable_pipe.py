@@ -12,6 +12,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from agent_runtime import durable_pipe_runner
 from agent_runtime.capacity import HeavyExecutionAdmission
 from agent_runtime.durable_pipe import (
     DURABLE_SCAN_LIMIT,
@@ -121,6 +122,102 @@ class DurablePipeTests(unittest.TestCase):
             if last["status"] == "exited":
                 return last, chunks, cursor
         self.fail(f"durable session did not exit; last={last!r}")
+
+    def test_identity_with_retry_rejects_transient_first_observation(self) -> None:
+        first = {
+            "pid": 4101,
+            "pgid": 4101,
+            "start_sec": 100,
+            "start_usec": 1000,
+            "executable_dev": 7,
+            "executable_ino": 11,
+        }
+        stable = {
+            "pid": 4101,
+            "pgid": 4101,
+            "start_sec": 100,
+            "start_usec": 2000,
+            "executable_dev": 7,
+            "executable_ino": 11,
+        }
+        with patch.object(
+            durable_pipe_runner,
+            "observe_process_identity",
+            side_effect=[first, stable, stable],
+        ) as observe:
+            identity = durable_pipe_runner._identity_with_retry(4101)
+
+        self.assertEqual(identity, stable)
+        self.assertEqual(observe.call_count, 3)
+
+    def test_identity_with_retry_none_resets_stability(self) -> None:
+        first = {
+            "pid": 4102,
+            "pgid": 4102,
+            "start_sec": 101,
+            "start_usec": 1000,
+            "executable_dev": 8,
+            "executable_ino": 12,
+        }
+        stable = {
+            "pid": 4102,
+            "pgid": 4102,
+            "start_sec": 101,
+            "start_usec": 2000,
+            "executable_dev": 8,
+            "executable_ino": 12,
+        }
+        with patch.object(
+            durable_pipe_runner,
+            "observe_process_identity",
+            side_effect=[first, None, stable, stable],
+        ) as observe:
+            identity = durable_pipe_runner._identity_with_retry(4102)
+
+        self.assertEqual(identity, stable)
+        self.assertEqual(observe.call_count, 4)
+
+    def test_identity_with_retry_accepts_two_equal_observations(self) -> None:
+        stable = {
+            "pid": 4103,
+            "pgid": 4103,
+            "start_sec": 102,
+            "start_usec": 3000,
+            "executable_dev": 9,
+            "executable_ino": 13,
+        }
+        with patch.object(
+            durable_pipe_runner,
+            "observe_process_identity",
+            side_effect=[stable, stable],
+        ) as observe:
+            identity = durable_pipe_runner._identity_with_retry(4103)
+
+        self.assertEqual(identity, stable)
+        self.assertEqual(observe.call_count, 2)
+
+    def test_identity_with_retry_different_observations_reset_stability(self) -> None:
+        first = {
+            "pid": 4104,
+            "pgid": 4104,
+            "start_sec": 103,
+            "start_usec": 1000,
+            "executable_dev": 10,
+            "executable_ino": 14,
+        }
+        second = dict(first)
+        second["start_usec"] = 2000
+        stable = dict(second)
+        stable["start_usec"] = 3000
+        with patch.object(
+            durable_pipe_runner,
+            "observe_process_identity",
+            side_effect=[first, second, stable, stable],
+        ) as observe:
+            identity = durable_pipe_runner._identity_with_retry(4104)
+
+        self.assertEqual(identity, stable)
+        self.assertEqual(observe.call_count, 4)
 
     def test_native_process_identity_rejects_instance_mismatch(self) -> None:
         identity = observe_process_identity(os.getpid())

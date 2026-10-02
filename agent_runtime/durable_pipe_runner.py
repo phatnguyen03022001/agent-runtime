@@ -31,7 +31,8 @@ from .protection import _PROTECTED_GUARD
 _READ_CHUNK_BYTES = 8192
 _PERSIST_INTERVAL_SECONDS = 0.05
 _READER_DRAIN_SECONDS = 0.5
-_IDENTITY_WAIT_SECONDS = 0.25
+_IDENTITY_WAIT_SECONDS = 0.5
+_IDENTITY_POLL_SECONDS = 0.01
 
 
 class _OutputJournal:
@@ -95,13 +96,18 @@ def _read_stream(journal: _OutputJournal, name: str, stream: Any) -> None:
 
 def _identity_with_retry(pid: int) -> dict[str, int] | None:
     deadline = time.monotonic() + _IDENTITY_WAIT_SECONDS
+    stable_candidate: dict[str, int] | None = None
     while True:
         identity = observe_process_identity(pid)
-        if identity is not None:
+        if identity is None:
+            stable_candidate = None
+        elif stable_candidate is not None and identity == stable_candidate:
             return identity
+        else:
+            stable_candidate = identity
         if time.monotonic() >= deadline:
             return None
-        time.sleep(0.01)
+        time.sleep(_IDENTITY_POLL_SECONDS)
 
 
 def _base_state(
@@ -244,7 +250,8 @@ def _worker(job_id: str) -> int:
         return 2
 
     process_identity = _identity_with_retry(process.pid)
-    if process_identity is None and process.poll() is None:
+    initial_returncode = process.poll()
+    if process_identity is None and initial_returncode is None:
         _terminate_process_group(process)
         return 2
 
@@ -255,6 +262,13 @@ def _worker(job_id: str) -> int:
         hard_wall_deadline_epoch=deadline_epoch,
         created_at_epoch=created_at_epoch,
     )
+    if process_identity is None:
+        _terminalize(
+            state,
+            lifecycle="COMPLETED",
+            termination_reason="natural_exit",
+            exit_code=initial_returncode,
+        )
     journal = _OutputJournal()
 
     if process.stdout is None or process.stderr is None:
