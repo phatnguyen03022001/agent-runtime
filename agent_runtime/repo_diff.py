@@ -176,13 +176,6 @@ def _run_git(
                 )
             events = selector.select(timeout=min(remaining, 0.05))
             if not events:
-                if process.poll() is not None:
-                    for stream in (process.stdout, process.stderr):
-                        try:
-                            selector.unregister(stream)
-                        except KeyError:
-                            pass
-                    break
                 continue
             for key, _mask in events:
                 stream = key.fileobj

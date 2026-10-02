@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import selectors
 import subprocess
 import tempfile
 import unittest
@@ -14,6 +15,7 @@ from agent_runtime.repo_diff import (
     GIT_EXECUTABLE,
     REPO_DIFF_CONTRACT,
     RETURNED_PATCH_MAX_BYTES,
+    _run_git,
     diff_repository,
 )
 from agent_runtime.tool_contract import (
@@ -97,6 +99,91 @@ class RepoDiffTests(unittest.TestCase):
 
         worktree = diff_repository(str(self.repo), "worktree")
         self.assertEqual(worktree.patch, "")
+
+    def test_run_git_drains_buffered_pipes_after_child_exit_and_no_event_turn(self) -> None:
+        class FakeStream:
+            def __init__(self, fd: int) -> None:
+                self.fd = fd
+                self.closed = False
+
+            def fileno(self) -> int:
+                return self.fd
+
+            def close(self) -> None:
+                self.closed = True
+
+        stdout_stream = FakeStream(101)
+        stderr_stream = FakeStream(102)
+
+        class FakeProcess:
+            stdout = stdout_stream
+            stderr = stderr_stream
+
+            def poll(self) -> int:
+                return 0
+
+            def wait(self, timeout: float) -> int:
+                return 0
+
+        class FakeSelector:
+            def __init__(self) -> None:
+                self.registered: dict[int, selectors.SelectorKey] = {}
+                self.select_calls = 0
+
+            def register(self, stream: FakeStream, events: int, data: str) -> None:
+                self.registered[stream.fileno()] = selectors.SelectorKey(
+                    stream,
+                    stream.fileno(),
+                    events,
+                    data,
+                )
+
+            def unregister(self, stream: FakeStream) -> None:
+                del self.registered[stream.fileno()]
+
+            def get_map(self) -> dict[int, selectors.SelectorKey]:
+                return self.registered
+
+            def select(self, timeout: float | None = None) -> list[tuple[selectors.SelectorKey, int]]:
+                self.select_calls += 1
+                if self.select_calls == 1:
+                    return []
+                return [
+                    (key, selectors.EVENT_READ)
+                    for key in list(self.registered.values())
+                ]
+
+            def close(self) -> None:
+                pass
+
+        selector = FakeSelector()
+        reads = {
+            101: [b"0123456789abcdef0123456789abcdef01234567\n", b""],
+            102: [b"buffered stderr\n", b""],
+        }
+
+        def fake_read(fd: int, _size: int) -> bytes:
+            return reads[fd].pop(0)
+
+        with (
+            patch("agent_runtime.repo_diff.subprocess.Popen", return_value=FakeProcess()),
+            patch("agent_runtime.repo_diff.selectors.DefaultSelector", return_value=selector),
+            patch("agent_runtime.repo_diff.os.read", side_effect=fake_read),
+        ):
+            returncode, stdout, stderr = _run_git(
+                self.repo,
+                ["rev-parse", "--verify", "HEAD"],
+                deadline=float("inf"),
+                stdout_limit=64 * 1024,
+                limit_reason="GIT_METADATA_LIMIT",
+            )
+
+        self.assertEqual(returncode, 0)
+        self.assertEqual(stdout, b"0123456789abcdef0123456789abcdef01234567\n")
+        self.assertEqual(stderr, b"buffered stderr\n")
+        self.assertEqual(selector.select_calls, 3)
+        self.assertTrue(stdout_stream.closed)
+        self.assertTrue(stderr_stream.closed)
 
     def test_cwd_must_be_exact_repository_root(self) -> None:
         child = self.repo / "child"
