@@ -1,0 +1,127 @@
+protocol_version: 3
+task_id: TASK-0221
+task_revision: 1
+state: APPROVED
+title: "Durable Recovery Stabilization After Remote Qualification Failure"
+
+origin:
+  predecessor_task: TASK-0220
+  predecessor_report: "2672deb1b84962f8668c4a0f9d8cc75e227f806e"
+  predecessor_review: "b0f6a41415526aab5e30d48bf2e11e88c8567531"
+  finding: F-0220-001
+  phase_transition: "QUALIFY -> STABILIZE"
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+phase:
+  name: STABILIZE
+  authority: bounded_adaptive
+  rule: "Discovery precedes solution freeze. Executor may choose the smallest proven fix inside the declared durable-recovery area; do not assume test-only or production-only before discriminating evidence."
+
+accepted_remote_failure:
+  run_id: 36987757158
+  attempt: 1
+  head_sha: "c55d86413900df027f158b54b6128b426d72fd22"
+  module: tests.test_durable_pipe_restart
+  test: test_recovery_over_capacity_fails_closed_without_killing_jobs
+  error: DURABLE_OWNER_LOST
+  site: tests/test_durable_pipe_restart.py:447
+  canonical_verify: "60/63 modules, 912 tests before failure"
+  historical_run_rule: "Run 36987757158 and all earlier release-gate runs must never be rerun."
+
+architect_discovery:
+  - "Nine other durable_pipe_restart tests passed in the same remote module."
+  - "The exact failing test passes 20/20 in isolated local executions; one measured run completes in about 0.48 seconds."
+  - "The test is intended to prove recovery-over-capacity, but its fixture launches child sleep(10) under the manager helper default hard_wall=5 seconds."
+  - "Existing dedicated owner-reconciliation tests use hard_wall=30 and already cover transient runner/target observations plus persistent mismatch fail-closed."
+  - "Remote qualification ran the module under concurrent cross-lane host load, so fixture lifetime/timing and true production owner-validation must be discriminated."
+
+objective: "Stabilize durable restart recovery so the remote qualification failure class is closed under realistic host scheduling without weakening persistent owner-mismatch fail-closed semantics."
+
+discovery_before_mutation:
+  - "Fresh-bind exact base; require clean synchronized MAIN ONLY and one worktree."
+  - "Re-read remote job failure and exact current durable-recovery code/tests."
+  - "Run one bounded discriminating probe set before source mutation."
+  - "Probe fixture hypothesis: exercise the recovery-over-capacity scenario with owners whose lifetime cannot naturally/hard-wall expire during setup, using a task-owned diagnostic or in-memory test adaptation; do not commit diagnostic-only artifacts."
+  - "Probe production hypothesis: verify whether an owner can remain live with unchanged persisted identity while manager-side verification returns false beyond the existing reconciliation grace. Preserve exact six-field process identity."
+  - "Record which hypothesis is supported. If evidence is ambiguous, stop BLOCKED rather than guessing."
+
+adaptive_mutation_boundary:
+  allowed_product_area:
+    - tests/test_durable_pipe_restart.py
+    - tests/test_durable_pipe.py
+    - agent_runtime/session.py
+    - agent_runtime/durable_pipe.py
+    - agent_runtime/durable_pipe_runner.py
+  decision_rules:
+    - "If the failure disappears when the over-capacity fixture is given a non-expiring/adequately bounded lifetime and production owner identity remains valid, make the fix test-only. Do not touch Runtime source."
+    - "If a live unchanged owner is falsely rejected by production reconciliation under bounded scheduling delay, fix the smallest owner-validation/reconciliation seam and add a deterministic regression."
+    - "Persistent identity mismatch, changed owner binding, missing runner/target, corrupt durable state and true owner loss must remain fail-closed as DURABLE_OWNER_LOST or the existing exact reason."
+    - "Do not increase timing constants merely to hide a failure without a test proving why the bound is correct."
+  forbidden_area:
+    - .github/workflows
+    - macos/package_app.sh
+    - macos/release_bundle.py
+    - macos/packaging_python.sh
+    - requirements.lock
+    - version/schema/public tool surface
+    - release/tag/live Runtime installation
+
+incremental_verification:
+  - "Use RED/GREEN for the proven root cause."
+  - "Focused checks may be repeated during stabilization; retain concise iteration evidence instead of treating each failed probe as a new governance task."
+  - "Require the exact former failing test PASS repeatedly under a bounded stress/delay condition that exercises the discovered cause."
+  - "Require full tests.test_durable_pipe_restart PASS."
+  - "If Runtime owner logic changes, also require full tests.test_durable_pipe PASS including transient-independent-owner and persistent-mismatch regressions."
+  - "After focused stabilization is green, run exactly one canonical ./verify at the implementation checkpoint."
+  - "Do not build local release candidates; TASK-0219 candidate/release construction remains accepted and frozen."
+
+remote_stabilization_loop:
+  enabled: true
+  dispatch_max: 2
+  workflow: .github/workflows/release-gate.yml
+  workflow_blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  rules:
+    - "Each dispatch must be a NEW workflow_dispatch run at the then-current exact implementation/checkpoint SHA, attempt 1. Never rerun a run/job."
+    - "Dispatch only after local focused + canonical verification is green."
+    - "If the first new remote run passes canonical verify and the full release gate, stop remote stabilization successfully; do not consume the second dispatch."
+    - "If it fails in the same durable-recovery area, capture the new signature, continue bounded discovery/fix/verify within this task, and at most one further new dispatch is allowed."
+    - "If it exposes a failure outside the declared durable-recovery area, stop with that new finding; do not mutate unrelated subsystems."
+    - "A fully successful stabilization run is evidence for returning to QUALIFY; it is not release publication authority."
+
+closure:
+  success:
+    - "Root cause classified with evidence."
+    - "Smallest justified fix committed and published on main."
+    - "Focused stress/regression proof PASS."
+    - "Exactly one final canonical verify at the final implementation checkpoint PASS."
+    - "At least one new exact-SHA remote stabilization run reaches canonical verify PASS; preferably full release gate PASS."
+    - "No historical run rerun; no release/tag/live effects."
+    - "Publish .agent/tasks/TASK-0221/report.yaml."
+  blocked:
+    - "Discovery remains ambiguous."
+    - "Two remote stabilization dispatches consumed without closing the same failure class."
+    - "Remote run exposes a blocker outside durable-recovery authority."
+
+effect_authority:
+  canonical_verify_final_max: 1
+  remote_stabilization_dispatch_max: 2
+  workflow_rerun_max: 0
+  local_package_build_max: 0
+  release_publish_max: 0
+  live_runtime_mutation_max: 0
+  branch_or_pr_creation_max: 0
+
+git_authority: {create_branch: false, commit: true, push: true, promote_to_main: false}
+release_authority: {create_version_tag: false, publish_release: false}
+continuation_policy:
+  mode: ADAPTIVE_WITHIN_BOUNDARY
+  stop_conditions: [BOUNDARY_CROSSING, BUDGET_EXHAUSTED, AMBIGUOUS_DISCOVERY, USER_STOP]
+execution_ready: true
