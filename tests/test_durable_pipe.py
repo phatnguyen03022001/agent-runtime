@@ -217,8 +217,11 @@ class DurablePipeTests(unittest.TestCase):
     def test_bootstrap_exit_before_state_reconciles_state_published_after_exit(self) -> None:
         manager = self.manager(hard_wall=10.0)
         identity = "f" * 32
+        release_path = self.root / "bootstrap-exit-release"
         real_popen = subprocess.Popen
         bootstrap_processes: list[subprocess.Popen[bytes]] = []
+        result: dict[str, object] | None = None
+        final: dict[str, object] | None = None
 
         def exit_before_state(argv, *args, **kwargs):
             wrapper = (
@@ -238,26 +241,64 @@ class DurablePipeTests(unittest.TestCase):
             bootstrap_processes.append(process)
             return process
 
-        with patch("agent_runtime.session.subprocess.Popen", side_effect=exit_before_state):
-            result = manager.start(
-                [
-                    sys.executable,
-                    "-u",
-                    "-c",
-                    "import time; print('after-bootstrap-exit', flush=True); time.sleep(2.0)",
-                ],
-                str(self.cwd),
-                identity,
-                "pipe",
-                "runtime_restart",
-            )
-        for process in bootstrap_processes:
-            process.wait(timeout=2.0)
+        child = (
+            "from pathlib import Path\n"
+            "import sys,time\n"
+            "release=Path(sys.argv[1])\n"
+            "print('after-bootstrap-exit', flush=True)\n"
+            "deadline=time.monotonic()+9.0\n"
+            "while time.monotonic()<deadline:\n"
+            "    if release.exists():\n"
+            "        raise SystemExit(0)\n"
+            "    time.sleep(.02)\n"
+            "raise SystemExit(23)\n"
+        )
 
-        self.assertEqual(len(bootstrap_processes), 1)
-        self.assertEqual(bootstrap_processes[0].returncode, 0)
-        self.assertEqual(result["status"], "running")
-        self.remember_owners(identity)
+        try:
+            with patch("agent_runtime.session.subprocess.Popen", side_effect=exit_before_state):
+                result = manager.start(
+                    [sys.executable, "-u", "-c", child, str(release_path)],
+                    str(self.cwd),
+                    identity,
+                    "pipe",
+                    "runtime_restart",
+                )
+
+            self.assertEqual(result["status"], "running")
+            self.assertEqual(len(bootstrap_processes), 1)
+            bootstrap_processes[0].wait(timeout=4.0)
+            self.assertEqual(bootstrap_processes[0].returncode, 0)
+
+            state = DurableStore(self.state_root).read_for_identity(identity).state
+            self.assertEqual(state["status"], "running")
+            self.remember_owners(identity)
+        finally:
+            release_path.write_text("release\n", encoding="utf-8")
+            try:
+                if result is not None:
+                    deadline = time.monotonic() + 5.0
+                    while time.monotonic() < deadline:
+                        remaining = deadline - time.monotonic()
+                        final = manager.poll(
+                            start_identity=identity,
+                            cursor=0,
+                            wait_ms=max(1, min(500, int(remaining * 1000))),
+                            wait_for="terminal_or_deadline",
+                            output="none",
+                        )
+                        if final["status"] == "exited":
+                            break
+            finally:
+                release_path.unlink(missing_ok=True)
+                for process in bootstrap_processes:
+                    if process.poll() is None:
+                        process.kill()
+                        process.wait(timeout=2.0)
+
+        self.assertIsNotNone(final)
+        assert final is not None
+        self.assertEqual(final["status"], "exited")
+        self.assertEqual(final["exit_code"], 0)
 
     def test_authoritative_terminal_state_preserves_nonzero_terminal_outcome(self) -> None:
         manager = self.manager(hard_wall=10.0)
