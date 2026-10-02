@@ -1,0 +1,254 @@
+protocol_version: 3
+task_id: TASK-0221
+task_revision: 1
+report_revision: 1
+state: REPORTED
+result: BLOCKED
+
+task_source:
+  path: .agent/tasks/TASK-0221/task.yaml
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "d4c818f28a807b2a9368b45bb197d78935cf5913"
+  implementation_commit: "6bc7111faba2a92e8a130ad33546a76fb015f5fe"
+  implementation_tree: "a86c930401a6c3d96a92e29e109ea8265d4e65ce"
+  final_execution_head: "6bc7111faba2a92e8a130ad33546a76fb015f5fe"
+  phase: STABILIZE
+  predecessor_finding: F-0220-001
+  predecessor_run_id: 36987757158
+  task_0196_paused: true
+
+discovery:
+  required_before_mutation: true
+  performed_before_mutation: true
+  classification: fixture_lifetime_timing
+  production_owner_reconciliation_defect_supported: false
+
+  fixture_hypothesis_probe:
+    mutation: false
+    manager_hard_wall_seconds: 30.0
+    child_sleep_seconds: 30
+    deliberate_setup_delay_seconds: 6.0
+    recovery_reason: DURABLE_RECOVERY_OVER_CAPACITY
+    active_heavy: 1
+    active_sessions: 2
+    processes_alive: true
+    blocked_new_start_reason: DURABLE_RECOVERY_OVER_CAPACITY
+    reconciliation_required: true
+    result: PASS
+    interpretation: "When fixture owners cannot naturally or hard-wall expire during setup, the intended recovery-over-capacity behavior remains stable."
+
+  production_owner_identity_probe:
+    mutation: false
+    reconciliation_grace_seconds: 2.0
+    sampling_duration_seconds: 3.0
+    sample_count: 29
+    exact_identity_fields:
+      - pid
+      - pgid
+      - start_sec
+      - start_usec
+      - executable_dev
+      - executable_ino
+    binding_unchanged_all_samples: true
+    manager_owner_checks_true_all_samples: true
+    direct_identity_checks_true_all_samples: true
+    result: PASS
+    interpretation: "A live unchanged owner remains valid beyond the existing reconciliation grace; no evidence supports changing production owner validation."
+
+solution_freeze:
+  decision: test_only
+  basis:
+    - "The non-expiring recovery-over-capacity fixture passed with both owners alive."
+    - "Exact six-field owner identities remained unchanged and valid beyond reconciliation grace."
+    - "Existing transient-independent-owner and persistent-mismatch regressions remained green."
+    - "Canonical decision rules therefore require a fixture-only fix."
+  production_runtime_changed: false
+
+implementation:
+  changed_paths:
+    - tests/test_durable_pipe_restart.py
+  change:
+    test: test_recovery_over_capacity_fails_closed_without_killing_jobs
+    manager_hard_wall_seconds:
+      before: 5.0
+      after: 30.0
+    child_sleep_seconds:
+      before: 10
+      after: 30
+    deliberate_setup_delay_seconds: 5.25
+    purpose: "Keep both durable owners alive across a setup delay longer than the old five-second hard wall, so the test measures recovery-over-capacity rather than fixture expiry."
+  preserved_product_blobs:
+    agent_runtime_session_py: "4995bd3d3aaeecf58b223cdc1706a9ee6e24d7b2"
+    agent_runtime_durable_pipe_py: "4de20c4b59a3d0dcefd5aeedf37c0d9f3b0f95db"
+    agent_runtime_durable_pipe_runner_py: "c6f468b08d462c45ea15485c5e30abd25dac4926"
+  preserved_workflow_blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+
+tdd:
+  red:
+    command: ".venv/bin/python -m unittest tests.test_durable_pipe_restart.DurablePipeRestartTests.test_recovery_over_capacity_fails_closed_without_killing_jobs"
+    exit_code: 1
+    tests: 1
+    duration_seconds: 5.758
+    decisive_failure: "After a deliberate 5.25-second setup delay with the old five-second fixture hard wall, manager_b.recovery_reason() was None instead of DURABLE_RECOVERY_OVER_CAPACITY."
+  green:
+    command: ".venv/bin/python -m unittest tests.test_durable_pipe_restart.DurablePipeRestartTests.test_recovery_over_capacity_fails_closed_without_killing_jobs"
+    exit_code: 0
+    tests: 1
+    duration_seconds: 5.765
+
+incremental_verification:
+  former_failing_test_stress:
+    repetitions: 5
+    passed: 5
+    duration_seconds: 28.788
+    setup_delay_seconds_each: 5.25
+    result: PASS
+  production_owner_regressions:
+    tests: 4
+    duration_seconds: 0.877
+    result: PASS
+    covered:
+      - test_manager_owner_validation_samples_target_when_runner_is_transient
+      - test_manager_owner_reconciliation_retains_runner_match_while_target_recovers
+      - test_manager_owner_reconciliation_accepts_independent_transients
+      - test_manager_owner_reconciliation_persistent_mismatch_fails_closed
+  durable_pipe_restart_module:
+    tests: 10
+    duration_seconds: 10.775
+    result: PASS
+  git_diff_check: PASS
+  scope_audit: PASS
+
+canonical_verify:
+  authorized_max: 1
+  invocation_count: 1
+  replay_count: 0
+  command: 'HOME="$PWD/.h" TMPDIR="$PWD/.v" ./verify'
+  start_identity: "0221022102210221022102210221022b"
+  session_id: "e556687e01dc594c"
+  lifecycle: COMPLETED
+  termination_reason: natural_exit
+  exit_code: 0
+  result: PASS
+  classified_modules: 63
+  completed_modules: 63
+  tests: 935
+  duration_seconds: 143.434
+  durable_pipe: {tests: 22, result: PASS, duration_seconds: 2.709}
+  durable_pipe_restart: {tests: 10, result: PASS, duration_seconds: 10.803}
+  supervised_lifecycle: {tests: 20, result: PASS, duration_seconds: 18.808}
+
+implementation_publication:
+  published: true
+  branch: main
+  expected_remote_head: "d4c818f28a807b2a9368b45bb197d78935cf5913"
+  commit: "6bc7111faba2a92e8a130ad33546a76fb015f5fe"
+  force_used: false
+
+remote_stabilization:
+  workflow: .github/workflows/release-gate.yml
+  workflow_blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  dispatch_authorized_max: 2
+  dispatch_consumed: 1
+  dispatch_2_consumed: false
+  historical_reruns: 0
+  job_reruns: 0
+
+  run_1:
+    id: 36990305942
+    run_number: 11
+    attempt: 1
+    event: workflow_dispatch
+    head_branch: main
+    head_sha: "6bc7111faba2a92e8a130ad33546a76fb015f5fe"
+    status: completed
+    conclusion: failure
+
+    build_release:
+      job_id: 110784712790
+      conclusion: failure
+      arm64_runner: PASS
+      python_3_13: PASS
+      locked_dependencies: PASS
+      canonical_verify: PASS
+      zero_cost_candidate: FAIL
+      deterministic_release_assets: SKIPPED
+      artifact_upload: SKIPPED
+
+    remote_canonical_verify:
+      result: PASS
+      classified_modules: 63
+      completed_modules: 63
+      tests: 935
+      duration_seconds: 140.900
+      durable_pipe: {tests: 22, result: PASS, duration_seconds: 6.453}
+      durable_pipe_restart: {tests: 10, result: PASS, duration_seconds: 13.802}
+      supervised_lifecycle: {tests: 20, result: PASS, duration_seconds: 25.419}
+      predecessor_failure_recurred: false
+
+    new_out_of_boundary_failure:
+      stage: "Build one frozen zero-cost candidate"
+      package_build_swift: PASS
+      swift_build_duration_seconds: 21.72
+      signature: "final package runtime retains build-host identity: bin/python"
+      exit_code: 1
+      classification: packaging_candidate_relocation_identity
+      inside_durable_recovery_authority: false
+
+    compatibility:
+      job_id: 110785796901
+      conclusion: skipped
+
+    artifacts:
+      count: 0
+
+remote_inventory:
+  total_release_gate_runs: 11
+  all_attempt_1: true
+  new_stabilization_run_count: 1
+  new_stabilization_run_id: 36990305942
+  historical_runs_rerun: false
+
+effect_accounting:
+  canonical_verify_final: {authorized_max: 1, consumed: 1}
+  remote_stabilization_dispatch: {authorized_max: 2, consumed: 1}
+  workflow_rerun: {authorized_max: 0, consumed: 0}
+  local_package_build: {authorized_max: 0, consumed: 0}
+  release_publish: {authorized_max: 0, consumed: 0}
+  live_runtime_mutation: {authorized_max: 0, consumed: 0}
+  branch_or_pr_creation: {authorized_max: 0, consumed: 0}
+
+cleanup:
+  canonical_verify_home_removed: true
+  canonical_verify_tmpdir_removed: true
+  diagnostic_artifacts_committed: false
+  local_package_evidence_created: false
+
+resolved_findings:
+  - id: F-0220-001
+    result: CLOSED_WITH_EVIDENCE
+    classification: fixture_lifetime_timing
+    evidence:
+      - "Discovery probe with hard_wall=30 and long-lived owners preserved DURABLE_RECOVERY_OVER_CAPACITY under deliberate setup delay."
+      - "Exact six-field process identities remained valid beyond reconciliation grace."
+      - "Former failing test passed 5/5 under the bounded delay regression."
+      - "Local canonical verify passed 63/63 modules and 935 tests."
+      - "Remote stabilization run 36990305942 passed tests.test_durable_pipe_restart 10/10 and canonical verify 63/63, 935 tests."
+
+blocking_findings:
+  - id: F-0221-001
+    severity: BLOCKING
+    classification: remote_packaging_candidate_build_host_identity
+    description: "After durable recovery passed remote canonical qualification, the same run failed outside the authorized durable-recovery area during zero-cost candidate construction with 'final package runtime retains build-host identity: bin/python'."
+    evidence: "Run 36990305942, build-release job 110784712790. Canonical verify passed 63/63 modules and 935 tests; package Swift build completed, then package_app.sh exited 1 with the build-host identity signature."
+    consequence: "The full release gate did not reach deterministic release assets or compatibility. TASK-0221 cannot mutate packaging or consume a second stabilization dispatch for an out-of-boundary blocker."
+    task_response: "BLOCKED by boundary crossing. Preserve the durable fixture stabilization commit; route F-0221-001 to a new task with packaging/candidate authority."
+
+authoritative_stabilization:
+  durable_recovery_result: PASS
+  task_result: BLOCKED
+  reason: "The predecessor durable failure class is closed locally and remotely, but the first new stabilization run exposed a new blocker outside the declared durable-recovery mutation boundary."
