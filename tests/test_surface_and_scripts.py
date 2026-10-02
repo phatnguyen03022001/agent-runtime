@@ -379,17 +379,26 @@ class SurfaceAndScriptsTests(unittest.TestCase):
         self.assertNotIn("--profile-file", combined)
         self.assertNotIn("tunnel-client init", combined)
 
-    def test_zero_cost_packaging_bounds_launchservices_registration_for_retained_candidate(self) -> None:
+    def test_zero_cost_packaging_has_no_launchservices_dependency_and_retains_candidate_outputs(self) -> None:
         package = (ROOT / "macos" / "package_app.sh").read_text()
-        self.assertIn(
-            "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",
-            package,
+        self.assertNotIn("lsregister", package)
+        self.assertNotIn("LaunchServices", package)
+
+        publish = package.index('package_provenance.py" publish-zero-cost')
+        validation = package.index(
+            '[[ -n "$FINAL_APP" && -n "$FINAL_HANDOFF" && -n "$FINAL_PAYLOAD" && "$CANDIDATE_SHA256" =~ ^[0-9a-f]{64}$ ]]',
+            publish,
         )
-        self.assertIn('"$LSREGISTER" -u "$FINAL_APP"', package)
-        self.assertNotIn('"$LSREGISTER" -delete', package)
-        self.assertNotIn('"$LSREGISTER" -seed', package)
-        self.assertNotIn('"$LSREGISTER" -r ', package)
-        self.assertNotIn('"$LSREGISTER" -R ', package)
+        output_contract = (
+            "printf 'candidate_app=%s\\n' \"$FINAL_APP\"\n"
+            "printf 'candidate_handoff=%s\\n' \"$FINAL_HANDOFF\"\n"
+            "printf 'initial_payload_release=%s\\n' \"$FINAL_PAYLOAD\"\n"
+            "printf 'initial_payload_closure=%s\\n' \"$INITIAL_PAYLOAD_CLOSURE\"\n"
+            "printf 'candidate_sha256=%s\\n' \"$CANDIDATE_SHA256\""
+        )
+        output = package.index(output_contract, validation)
+        self.assertGreater(output, validation)
+        self.assertEqual(package.count(output_contract), 1)
 
     def test_verify_is_deterministic_and_does_not_start_tunnel(self) -> None:
         text = (ROOT / "verify").read_text()
