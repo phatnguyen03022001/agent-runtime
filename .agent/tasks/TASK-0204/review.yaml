@@ -1,0 +1,51 @@
+protocol_version: 3
+
+task_id: TASK-0204
+task_revision: 1
+review_revision: 1
+state: REVISION_REQUIRED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0204/report.yaml
+  commit: "527e42dec1764b6b6c0e40ec1c6b2d05692b2c7b"
+  report_revision: 1
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  scope: PASS
+  git_authority: PASS
+  acceptance_criteria: BLOCKED
+  remote_effect_budget: EXHAUSTED
+
+acceptance_basis:
+  - "TASK-0204 dispatched exactly one new workflow run, 36956517661 attempt 1, bound to exact authorized SHA 0f5a911f1b8378d4a8d7e00ea3437cae85319755; historical run 36912032079 remains attempt 1 and was not rerun."
+  - "The accepted release-gate workflow blob remained fa0c6bc61bb660b103f3a45b239ac52def7ae1b8 and no source/test/workflow/policy mutation occurred."
+  - "Remote build-release again passed checkout, ARM64, Python 3.13 and locked dependency setup, then failed inside canonical verification before candidate construction."
+  - "The accepted TASK-0203 finite-lifetime race is not the observed failure: the new test child blocks indefinitely and the failure occurs inside manager.start before post-start assertions."
+  - "Remote traceback reaches session._dispatch_durable -> _refresh_durable_session and raises DURABLE_OWNER_LOST because a persisted active owner identity no longer exactly matches the observed process instance after the existing two-second finalization grace."
+  - "Current durable runner captures runner and target ownership using _identity_with_retry, which returns the first non-None observe_process_identity result. It does not require that the newly spawned process identity be stable across consecutive observations before sealing it into durable state."
+  - "verify_process_identity remains strict exact equality over pid, pgid, start time and executable dev/inode. No evidence justifies dropping any field or accepting a mismatch."
+  - "The safe reliability seam is therefore bootstrap identity stabilization before publication, not weakening post-publication owner verification or extending owner-loss grace."
+  - "Candidate build, release assets, compatibility jobs and artifact inspection did not execute; artifact count/download count remain zero."
+  - "No rerun, second dispatch, local verify/build, tag/release, live Runtime/config/plugin/credential/permission/reboot effect occurred."
+  - "Report commit is the sole tracked mutation and final repository state is clean/synchronized MAIN ONLY."
+
+findings:
+  - id: F-0204-001
+    severity: BLOCKING
+    classification: durable_owner_identity_bootstrap_stability_gap
+    description: "Durable bootstrap seals the first non-None process identity observation into RUNNING state without proving that the identity is stable across consecutive observations. On the real macOS 26 ARM64 runner that sealed identity becomes unverifiable immediately after publication, producing DURABLE_OWNER_LOST."
+    required_closure: "Use a separate reliability task. Preserve the existing process-identity fields and strict exact verification. Before publishing durable RUNNING ownership, require bounded consecutive-identical identity observations for both runner and live target. Add deterministic regression coverage for a transient first identity followed by a stable identity, preserve short-process behavior, stress the exact owner test, and pass one canonical local verifier before any new remote dispatch."
+
+notes:
+  - "TASK-0204 cannot continue; its one-dispatch budget is exhausted."
+  - "Do not rerun run 36956517661 or historical run 36912032079."
+  - "TASK-0196 remains paused."
