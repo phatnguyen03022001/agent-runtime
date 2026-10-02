@@ -442,14 +442,14 @@ class DurablePipeRestartTests(unittest.TestCase):
 
     def test_recovery_over_capacity_fails_closed_without_killing_jobs(self) -> None:
         identities = ("1" * 32, "2" * 32)
-        manager_a, _admission_a = self.manager(limit=2)
+        manager_a, _admission_a = self.manager(limit=2, hard_wall=30.0)
         for identity in identities:
             manager_a.start(
                 [
                     sys.executable,
                     "-u",
                     "-c",
-                    "import time; print('ready', flush=True); time.sleep(10)",
+                    "import time; print('ready', flush=True); time.sleep(30)",
                 ],
                 str(self.cwd),
                 identity,
@@ -458,6 +458,8 @@ class DurablePipeRestartTests(unittest.TestCase):
             )
             self.remember_owners(identity)
             self.poll_until_text(manager_a, identity, "ready\n")
+            if identity == identities[0]:
+                time.sleep(5.25)
         manager_a.shutdown()
 
         admission_b = HeavyExecutionAdmission(1)
