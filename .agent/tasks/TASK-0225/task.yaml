@@ -1,0 +1,190 @@
+protocol_version: 3
+task_id: TASK-0225
+task_revision: 1
+state: APPROVED
+title: "Revision4 Runtime Config Verifier Deadline Stabilization + Frozen Release-Gate Proof"
+
+origin:
+  predecessor_task: TASK-0224
+  predecessor_report: "f6c8bb067d78a3e80f9b25fcd567d4cbce3e3499"
+  predecessor_review: "ee52947b7a7ab06e03c1d5def2cfe2bdc2cf5456"
+  finding: F-0224-001
+  phase: STABILIZE
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+phase:
+  name: STABILIZE
+  authority: verification_policy_only_then_frozen_remote_proof
+  principle: "Correct the verifier deadline that is insufficient under observed qualification contention without changing product or test semantics."
+
+proven_root_cause:
+  classification: remote_verification_module_deadline_under_host_contention
+  module: tests.test_revision4_runtime_config
+  lane: L4_HOST_LIFECYCLE
+  current_timeout_seconds: 30
+  failure_run: 37000410211
+  observed_timeout_seconds: 30.168
+  evidence:
+    - "No unittest assertion/error was emitted; verify_tests terminated the module worker solely at the configured 30-second policy limit."
+    - "The test module and verification-policy blobs are unchanged across recent remote PASS checkpoints and the timeout checkpoint."
+    - "Recent remote PASS durations for the exact module were 11.988s, 15.681s, 16.962s and 17.614s."
+    - "The timeout run showed qualification-wide contention: candidate_cutover=120.115s and durable_pipe=32.941s."
+    - "Fresh local per-test timing shows intentional subprocess/lifecycle cost; the readiness-failure test alone is approximately 4.7s locally and the full module approximately 9-10s."
+    - "The exact 30-second value is a verifier policy literal introduced with TASK-0154 classification and is not a product correctness invariant."
+    - "The repository already carries module-specific corrected deadlines, including terminal_session=60s, repo_commit=75s and candidate_cutover=300s."
+  conclusion: "The module requires verification-policy headroom; production runtime/start behavior and test semantics do not require mutation."
+
+lane_a_verification_policy:
+  mode: MUTATING_POLICY_ONLY
+  allowed_files:
+    - verification_policy.py
+    - tests/test_verify_harness.py
+  required_change:
+    - "Change only tests.test_revision4_runtime_config ModulePolicy timeout_seconds from 30.0 to 60.0."
+    - "Preserve its lane exactly as L4_HOST_LIFECYCLE."
+    - "Preserve isolation_key exactly as host-lifecycle."
+    - "Preserve subsystem tags exactly as host_lifecycle,config."
+    - "Preserve proof rationale exactly: Runtime configuration/start lifecycle compatibility proof."
+    - "Add or extend a verification-harness regression that asserts timeout_seconds == 60.0 and the unchanged lane/isolation classification."
+  forbidden_interpretations:
+    - "Do not modify tests/test_revision4_runtime_config.py."
+    - "Do not alter start.sh/runtime lifecycle behavior."
+    - "Do not change global worker limits, lane worker limits, heartbeat cadence or timeout semantics for any other module."
+    - "Do not change module classification to another lane or isolation key."
+  focused_verification:
+    - "Run full tests.test_verify_harness."
+    - "Run full tests.test_revision4_runtime_config."
+    - "Run tests.test_revision4_runtime_config repeatedly enough to confirm normal local completion remains well inside 60 seconds; do not use stress as a substitute for canonical verification."
+    - "Run git diff --check."
+    - "Require cumulative implementation diff from exact base contains only verification_policy.py and tests/test_verify_harness.py."
+  final_local_gate:
+    - "Publish one coherent policy-only implementation checkpoint after focused PASS."
+    - "Run exactly one canonical ./verify on that exact clean implementation SHA."
+    - "Any tracked mutation after that canonical verify invalidates Lane A; do not consume remote authority."
+
+lane_b_frozen_release_gate:
+  mode: NON_MUTATING_INTEGRATED_PROOF
+  remote_dispatch_max: 1
+  rerun_max: 0
+  mutation_authority: 0
+  frozen_blobs_except_lane_a_policy_files:
+    tests/test_revision4_runtime_config.py: "8be3837375512f4921df74da4acc26e989e42859"
+    tests/test_terminal_session.py: "ffa8458c8c3e793f90f591dcb0f736b65fb88dcb"
+    agent_runtime/session.py: "0055cae1ce46cba81826ba0c8b0f8796c08ef43b"
+    agent_runtime/durable_pipe.py: "4de20c4b59a3d0dcefd5aeedf37c0d9f3b0f95db"
+    agent_runtime/durable_pipe_runner.py: "c6f468b08d462c45ea15485c5e30abd25dac4926"
+    macos/packaging_python.sh: "831d663fd5dfc0d4ac4743cac466566406676587"
+    tests/test_packaging_interpreter.py: "33a9ad11dea17b50a9c7a6b5b57dfede6f715905"
+    macos/package_app.sh: "b5d54b605cf8e8e1f3c0fbea5cdd417f79b5572b"
+    tests/test_package_provenance.py: "ebbd444bcedcf15552d81a4f269802d5a8af6fc9"
+    macos/release_bundle.py: "2bff8a6f5f9afe1ffcad6c7b41b5999ba0f3e7f1"
+    .github/workflows/release-gate.yml: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  pre_dispatch:
+    - "Require local main == origin/main == exact verified Lane-A implementation SHA, clean worktree/index, MAIN ONLY, one worktree."
+    - "Require implementation diff from TASK-0225 exact base changes only verification_policy.py and tests/test_verify_harness.py."
+    - "Require the corrected verification policy sets only tests.test_revision4_runtime_config timeout to 60.0 with its lane/isolation/tags/rationale unchanged."
+    - "Require all frozen blobs above match exactly."
+    - "Fresh-inventory release-gate runs and prove every historical run remains attempt 1."
+  action:
+    - "Dispatch .github/workflows/release-gate.yml exactly once with ref=main."
+    - "Require event=workflow_dispatch, attempt=1, head_branch=main and head_sha equals the exact verified Lane-A SHA."
+    - "Never rerun the run or any job."
+  required_proof:
+    - "Remote canonical verify PASS all 63 classified modules."
+    - "tests.test_revision4_runtime_config completes naturally under the corrected 60-second policy rather than timing out."
+    - "tests.test_terminal_session, tests.test_durable_pipe and tests.test_durable_pipe_restart PASS."
+    - "Framework-CPython zero-cost candidate construction PASS using the frozen TASK-0222 packaging implementation."
+    - "Strict build-host identity scanner PASS."
+    - "Deterministic release assets build twice and compare byte-identical."
+    - "release_bundle.py verify PASS."
+    - "Artifact upload PASS."
+    - "Compatibility lanes macos-14, macos-15 and macos-26 all PASS."
+  failure_policy:
+    verifier_or_test_failure: "BLOCKED with exact new evidence; no second dispatch and no further mutation in this task."
+    packaging_or_candidate_failure: "BLOCKED with a NEW packaging finding; do not mutate packaging in TASK-0225."
+    release_bundle_or_compatibility_failure: "BLOCKED with a NEW downstream finding; do not expand scope."
+    success: "STABILIZATION_GREEN; eligible for Architect review and transition to frozen QUALIFY."
+
+historical_runs:
+  never_rerun:
+    - 36912032079
+    - 36956517661
+    - 36958918581
+    - 36961531935
+    - 36965002566
+    - 36967600037
+    - 36970566958
+    - 36974192763
+    - 36977416084
+    - 36987757158
+    - 36990305942
+    - 36991809939
+    - 36993115899
+    - 36994067524
+    - 36998190808
+    - 37000410211
+
+forbidden_changes:
+  - "Any product Runtime source mutation."
+  - "Any test mutation outside tests/test_verify_harness.py."
+  - "Any workflow, packaging, release-bundle, dependency, version, schema or public-tool mutation."
+  - "Any local package/candidate build."
+  - "Any second remote dispatch."
+  - "Any workflow run/job rerun."
+  - "Any tag/release/live Runtime/install/cutover/LaunchServices effect."
+  - "Any branch or PR."
+
+effect_authority:
+  lane_a_canonical_verify_max: 1
+  lane_b_remote_dispatch_max: 1
+  workflow_rerun_max: 0
+  workflow_job_rerun_max: 0
+  local_package_build_max: 0
+  product_mutation_max: 0
+  packaging_mutation_max: 0
+  workflow_mutation_max: 0
+  release_publish_max: 0
+  version_tag_create_max: 0
+  live_runtime_mutation_max: 0
+  launchservices_mutation_max: 0
+  branch_or_pr_creation_max: 0
+
+closure:
+  success:
+    - "Only the revision4_runtime_config module deadline changes from 30s to 60s and harness regression pins it."
+    - "Focused proof and exactly one canonical verify PASS on the exact policy-only implementation SHA."
+    - "The single frozen remote release-gate run fully PASS."
+    - "Publish only .agent/tasks/TASK-0225/report.yaml as report-only child."
+    - "Final main clean/synchronized MAIN ONLY, one worktree."
+  blocked:
+    - "Focused/canonical proof shows the 60s policy correction is insufficient or incorrect."
+    - "Any frozen blob drifts."
+    - "The single remote gate fails at any stage."
+
+git_authority:
+  create_branch: false
+  commit: true
+  push: true
+  promote_to_main: false
+
+release_authority:
+  create_version_tag: false
+  publish_release: false
+
+continuation_policy:
+  mode: POLICY_FIX_THEN_FROZEN_REMOTE
+  stop_conditions:
+    - LANE_A_BLOCKED
+    - FROZEN_BLOB_DRIFT
+    - REMOTE_GATE_FAILURE
+    - USER_STOP
+
+execution_ready: true
