@@ -1,0 +1,52 @@
+protocol_version: 3
+
+task_id: TASK-0208
+task_revision: 1
+review_revision: 1
+state: REVISION_REQUIRED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0208/report.yaml
+  commit: "e33a52315b79661ac157cc0635c5287df1a2c801"
+  report_revision: 1
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  scope: PASS
+  git_authority: PASS
+  acceptance_criteria: BLOCKED
+  remote_effect_budget: EXHAUSTED
+
+acceptance_basis:
+  - "TASK-0208 dispatched exactly one new workflow run, 36961531935 attempt 1, bound to exact authorized SHA 7f1f424ffc1a18d474c2077c475dc03f9a6e5c2f; historical runs 36912032079, 36956517661 and 36958918581 remain attempt 1 and were not rerun."
+  - "Remote canonical verification fails before package_app.sh executes, so TASK-0208 neither proves nor disproves the accepted Liquid Glass SDK26 source fix."
+  - "The failure is isolated to tests.test_repo_commit.test_commit_tree_message_and_update_ref_expected_old_are_exact after 19/63 completed modules and 382 tests; tests.test_durable_pipe already PASS 15/15."
+  - "Remote traceback reaches repo_commit._require_clean_worktree -> repo_diff.diff_repository -> repo_diff._validated_repository and raises INVALID_HEAD_STATE because rev-parse HEAD output is observed as invalid."
+  - "A forced SHA-256 repository reproduces a different earlier failure in repo_stage expected_head_sha validation and therefore does not match the remote failure signature."
+  - "Architect source comparison identifies a unique pipe-drain race in repo_diff._run_git: when selector.select returns no events and the child has exited, repo_diff unregisters both stdout/stderr and breaks without draining bytes still buffered in the pipes."
+  - "For a short command such as git rev-parse --verify HEAD, this can return code 0 with incomplete or empty captured stdout, which then projects as invalid HEAD state."
+  - "repo_fast_forward, repo_observer and repo_remote_observer already use the safer established behavior: child exit with no selector event does not discard pipe state; they continue until streams report data/EOF."
+  - "The required reliability fix is therefore narrow and reuse-based: align repo_diff with the already accepted pipe-drain behavior, not retry Git, increase deadlines, relax HEAD validation or change Git object-format policy."
+  - "Candidate build invocation count remains zero; deterministic bundle, compatibility jobs and artifact inspection did not execute."
+  - "No source/workflow fix, rerun, second dispatch, local verify/build, tag/release, live Runtime/config/plugin/credential/permission/reboot effect occurred."
+  - "TASK-0208 report is the sole tracked mutation and repository closure is clean/synchronized MAIN ONLY."
+
+findings:
+  - id: F-0208-001
+    severity: BLOCKING
+    classification: repo_diff_child_exit_pipe_drain_race
+    description: "repo_diff._run_git treats child exit observed during a selector no-event turn as permission to unregister stdout/stderr and stop reading. Process exit does not guarantee pipe buffers have been drained, so small successful Git output can be lost and valid HEAD output can be misclassified as invalid."
+    required_closure: "Use a separate reliability task. Modify repo_diff only to preserve bounded reading until stdout/stderr EOF even after child exit, matching the already accepted repo observer/fast-forward patterns. Add deterministic regression coverage for a no-event-after-exit turn followed by buffered stdout, stress the exact repo_commit test, run full repo_diff/repo_commit owners and one canonical verifier. Only then authorize a new remote release-gate dispatch."
+
+notes:
+  - "TASK-0208 cannot continue; its one-dispatch budget is exhausted."
+  - "Do not rerun runs 36912032079, 36956517661, 36958918581 or 36961531935."
+  - "TASK-0196 remains paused."
