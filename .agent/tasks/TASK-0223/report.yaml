@@ -1,0 +1,266 @@
+protocol_version: 3
+task_id: TASK-0223
+task_revision: 2
+report_revision: 2
+state: REPORTED
+result: BLOCKED
+
+task_source:
+  path: .agent/tasks/TASK-0223/task.yaml
+
+revision_supersession:
+  superseded_revision: 1
+  superseded_exact_base: "6be4ce308d2fb31e85609c68cda76ae50401fce7"
+  unpublished_local_revision_1_commit: "d13857e3cc8999cd76c7eb7d72497dd26b4e50a0"
+  revision_1_commit_pushed: false
+  revision_1_canonical_verify_consumed: false
+  revision_1_remote_dispatch_consumed: false
+  action: "The unpublished revision-1 local commit was discarded before revision-2 execution and main was rebound to the exact revision-2 base."
+
+execution:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+  execution_surface: CHATGPT_LOCAL
+  authorized_base_head: "5c6d7d55432bbd72c0d82b8fff317ab46ce2990a"
+  lane_a_implementation_commit: "294b5bf7374735bb15579f47926d3841c82b6b7d"
+  lane_a_implementation_tree: "fc42551b9c965e4e95e3bb7cb589093bb4543bd7"
+  phase: STABILIZE
+  task_0196_paused: true
+
+lane_a_durable_bootstrap:
+  result: PASS
+  root_cause: premature_timeout_to_owner_loss_projection
+
+  approved_state_machine:
+    fast_observation_seconds: 2.0
+    state_reconciliation_seconds: 5.0
+    total_pre_authoritative_envelope_seconds: 7.0
+    overall_deadline_count: 1
+    deadline_clock: monotonic
+    deadline_computed_before_bootstrap_spawn: true
+    deadline_reset_or_extension: false
+    fast_observation_timeout_projects_owner_loss: false
+    bootstrap_exit_triggers_final_state_reread: true
+    deadline_exhaustion_triggers_final_state_reread: true
+    duplicate_spawn_or_respawn: false
+    bootstrap_timeout_signal_or_kill: false
+    exact_six_field_owner_verification_preserved: true
+    corrupt_state_fail_closed_preserved: true
+    terminal_state_truth_preserved: true
+
+  implementation:
+    changed_paths:
+      - agent_runtime/session.py
+      - tests/test_durable_pipe.py
+    session_blob: "0055cae1ce46cba81826ba0c8b0f8796c08ef43b"
+    durable_tests_blob: "542e84095a60f8f758efa3d854a49f92f0d432b7"
+    details:
+      - "The legacy two-second interval is retained only as a fast observation phase."
+      - "One overall monotonic deadline preserves the prior two-plus-five-second maximum pre-authoritative-state envelope."
+      - "Durable state and bootstrap exit are observed conditionally throughout the bounded envelope."
+      - "Bootstrap exit causes a state re-read but does not itself prove owner loss."
+      - "The deadline path performs a final authoritative state read before DURABLE_OWNER_LOST classification."
+      - "A non-blocking bootstrap poll is performed when state becomes authoritative so completed launcher parents are reaped without delaying or killing effectful workers."
+      - "Existing _refresh_durable_session owner/process reconciliation remains authoritative for running state."
+
+  tdd:
+    red:
+      command: ".venv/bin/python -m unittest <four TASK-0223 durable bootstrap regressions>"
+      result: FAIL_EXPECTED
+      decisive_evidence:
+        delayed_valid: "Current code raised DURABLE_OWNER_LOST after bootstrap.wait(timeout=2.0)."
+        stuck_no_state: "Current code failed after approximately 2.01 seconds instead of using the preserved bounded reconciliation envelope."
+        exit_before_state: "Existing behavior already tolerated this race; retained as a required regression."
+        terminal_nonzero: "Current code raised DURABLE_OWNER_LOST before the delayed authoritative terminal outcome could be observed."
+    green:
+      result: PASS
+      tests: 4
+      duration_seconds: 14.056
+      regressions:
+        - test_delayed_valid_bootstrap_reconciles_after_fast_observation_window
+        - test_genuinely_stuck_bootstrap_uses_one_overall_deadline_and_fails_closed
+        - test_bootstrap_exit_before_state_reconciles_state_published_after_exit
+        - test_authoritative_terminal_state_preserves_nonzero_terminal_outcome
+
+  focused_verification:
+    durable_pipe:
+      tests: 26
+      result: PASS
+      resource_warning_clean: true
+    durable_pipe_restart:
+      tests: 10
+      result: PASS
+    supervised_lifecycle:
+      tests: 20
+      result: PASS
+    former_remote_failure_stress:
+      test: tests.test_durable_pipe.DurablePipeTests.test_snapshot_consistency_still_rejects_mixed_generation_and_integrity_corruption
+      injected_bootstrap_delay_seconds: 2.25
+      repetitions: 5
+      passed: 5
+      result: PASS
+    git_diff_check: PASS
+    scope_audit: PASS
+
+  canonical_verify:
+    authorized_max: 1
+    invocation_count: 1
+    checkpoint_sha: "294b5bf7374735bb15579f47926d3841c82b6b7d"
+    start_identity: "02230223022302230223022302230219"
+    session_id: "3f239fdf6d1a79ac"
+    result: PASS
+    lifecycle: COMPLETED
+    termination_reason: natural_exit
+    exit_code: 0
+    classified_modules: 63
+    completed_modules: 63
+    tests: 940
+    duration_seconds: 149.828
+    durable_pipe: {tests: 26, result: PASS, duration_seconds: 17.010}
+    durable_pipe_restart: {tests: 10, result: PASS, duration_seconds: 11.196}
+    supervised_lifecycle: {tests: 20, result: PASS, duration_seconds: 16.727}
+
+  publication:
+    published: true
+    branch: main
+    expected_remote_head: "5c6d7d55432bbd72c0d82b8fff317ab46ce2990a"
+    commit: "294b5bf7374735bb15579f47926d3841c82b6b7d"
+    force_used: false
+
+lane_b_frozen_release_gate:
+  result: FAIL
+  package_mutation_authority: 0
+  workflow_mutation_authority: 0
+  local_package_build_authority: 0
+
+  frozen_blobs:
+    macos/packaging_python.sh: "831d663fd5dfc0d4ac4743cac466566406676587"
+    tests/test_packaging_interpreter.py: "33a9ad11dea17b50a9c7a6b5b57dfede6f715905"
+    macos/package_app.sh: "b5d54b605cf8e8e1f3c0fbea5cdd417f79b5572b"
+    tests/test_package_provenance.py: "ebbd444bcedcf15552d81a4f269802d5a8af6fc9"
+    macos/release_bundle.py: "2bff8a6f5f9afe1ffcad6c7b41b5999ba0f3e7f1"
+    .github/workflows/release-gate.yml: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  frozen_blob_drift: false
+
+  pre_dispatch:
+    exact_verified_sha_local: "294b5bf7374735bb15579f47926d3841c82b6b7d"
+    exact_verified_sha_remote: "294b5bf7374735bb15579f47926d3841c82b6b7d"
+    clean_worktree_index: true
+    main_only: true
+    worktree_count: 1
+    historical_run_count: 14
+    all_historical_runs_attempt_1: true
+    existing_run_at_verified_sha: false
+    result: PASS
+
+  dispatch:
+    authorized_max: 1
+    consumed: 1
+    rerun_count: 0
+    job_rerun_count: 0
+    run_id: 36998190808
+    run_number: 15
+    run_attempt: 1
+    event: workflow_dispatch
+    head_branch: main
+    head_sha: "294b5bf7374735bb15579f47926d3841c82b6b7d"
+    workflow: .github/workflows/release-gate.yml
+    created_at: "2026-10-02T10:55:45Z"
+    terminal_status: completed
+    conclusion: failure
+
+  build_release:
+    job_id: 110809615373
+    conclusion: failure
+    checkout: PASS
+    arm64_runner: PASS
+    python_3_13: PASS
+    locked_dependencies: PASS
+    canonical_verify: FAIL
+    zero_cost_candidate: SKIPPED
+    deterministic_release_assets: SKIPPED
+    artifact_upload: SKIPPED
+
+  remote_canonical_verify:
+    result: FAIL
+    classified_modules: 63
+    completed_modules: 24
+    tests: 494
+    duration_seconds: 125.902
+    durable_pipe:
+      tests: 26
+      result: PASS
+      duration_seconds: 23.165
+    failing_module: tests.test_terminal_session
+    module_tests: 49
+    module_duration_seconds: 17.429
+    failing_test: tests.test_terminal_session.TerminalSessionTests.test_owner_lost_recovers_integrity_valid_terminal_snapshot
+    failure:
+      assertion: "started['status'] == 'running'"
+      expected: running
+      observed: exited
+      source_file: tests/test_terminal_session.py
+      source_line: 1577
+    interpretation: "The regression uses a 0.5-second target and assumes manager.start must return while the durable session is still running. Under the remote schedule the authoritative terminal state won the race, and the revision-2 state machine propagated that terminal truth as 'exited'. The test therefore failed during setup before reaching its intended owner-lost recovery assertions."
+
+  compatibility:
+    job_id: 110810326593
+    conclusion: skipped
+    macos_14: NOT_MATERIALIZED
+    macos_15: NOT_MATERIALIZED
+    macos_26: NOT_MATERIALIZED
+
+  artifacts:
+    count: 0
+    reason: "Candidate construction and artifact upload were skipped after remote canonical verify failed."
+
+remote_inventory:
+  total_release_gate_runs: 15
+  all_attempt_1: true
+  task_0223_run_count: 1
+  task_0223_run_id: 36998190808
+  historical_runs_rerun: false
+  task_run_rerun: false
+
+effect_accounting:
+  lane_a_canonical_verify: {authorized_max: 1, consumed: 1}
+  lane_b_remote_dispatch: {authorized_max: 1, consumed: 1}
+  workflow_rerun: {authorized_max: 0, consumed: 0}
+  workflow_job_rerun: {authorized_max: 0, consumed: 0}
+  local_package_build: {authorized_max: 0, consumed: 0}
+  packaging_mutation: {authorized_max: 0, consumed: 0}
+  release_publish: {authorized_max: 0, consumed: 0}
+  version_tag_create: {authorized_max: 0, consumed: 0}
+  live_runtime_mutation: {authorized_max: 0, consumed: 0}
+  launchservices_mutation: {authorized_max: 0, consumed: 0}
+  branch_or_pr_creation: {authorized_max: 0, consumed: 0}
+
+cleanup:
+  canonical_verify_home_removed: true
+  canonical_verify_tmpdir_removed: true
+  local_package_evidence_created: false
+  downloaded_remote_artifact_created: false
+
+resolved_findings:
+  - id: F-0222-001
+    result: CLOSED_LOCALLY_AND_REMOTE_DURABLE_PIPE
+    evidence:
+      - "Lane A delayed-valid, stuck/no-state, exit-before-state and terminal-outcome regressions pass."
+      - "Lane A canonical verify passes 63/63 modules and 940 tests."
+      - "Lane B remote tests.test_durable_pipe passes 26/26; the prior bootstrap.wait(timeout=2.0) failure does not recur."
+
+blocking_findings:
+  - id: F-0223-001
+    severity: BLOCKING
+    classification: remote_owner_lost_recovery_fixture_terminal_timing_race
+    boundary: DURABLE_BOOTSTRAP_RECOVERY
+    description: "The single Lane B run failed because test_owner_lost_recovers_integrity_valid_terminal_snapshot assumes a 0.5-second durable target is still running when manager.start returns. Remote timing produced an authoritative terminal snapshot first, so manager.start returned status 'exited', consistent with revision-2 terminal-state truth propagation."
+    consequence: "Remote canonical verify stopped before framework-CPython candidate construction. The accepted TASK-0222 packaging implementation was not exercised remotely, and deterministic assets plus compatibility were not reached."
+    task_response: "BLOCKED. Revision 2 authorizes no second remote dispatch and no additional durable mutation after the verified Lane A checkpoint. Capture this finding for a new task/revision rather than modifying the verified SHA."
+
+authoritative_stabilization:
+  lane_a_result: PASS
+  lane_b_result: FAIL
+  durable_bootstrap_false_owner_loss_closed: true
+  framework_packaging_remote_closure: NOT_REACHED
+  final_task_result: BLOCKED
