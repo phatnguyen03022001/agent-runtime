@@ -1,0 +1,170 @@
+protocol_version: 3
+task_id: TASK-0211
+task_revision: 1
+state: APPROVED
+title: "Durable Post-Bootstrap Owner Revalidation Stabilization"
+
+origin:
+  type: architect_continuation
+  predecessor_task: TASK-0210
+  finding: F-0210-001
+  goal: "Prevent transient one-shot target identity observations at durable hard-wall/control revalidation from falsely stranding a valid durable job as DURABLE_OWNER_LOST."
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+
+execution_skills:
+  required: [executor, verification, reliability, security-review, simplicity]
+
+revision_basis:
+  blocked_task_0210_report: "9bcfc486ea70e2cb8dcdcfcc794b89a6122e0c85"
+  blocked_task_0210_review: "9ffa4a1a905b01da4c25ddc55bf8138979952512"
+  remote_run_id: 36965002566
+  remote_failure:
+    module: tests.test_durable_pipe_restart
+    reason_code: DURABLE_OWNER_LOST
+    failing_tests:
+      - tests.test_durable_pipe_restart.DurablePipeRestartTests.test_hard_wall_deadline_survives_restart
+      - tests.test_durable_pipe_restart.DurablePipeRestartTests.test_terminate_after_restart_revalidates_and_finalizes
+    exception: "agent_runtime.errors.RuntimeStateError: durable job owner identity no longer matches the persisted process instance"
+  accepted_task_0205_review: "ae68d920f17ba23d6a2d69f34a86a99551e242ae"
+  accepted_task_0205_implementation: "2802fad8148e80eafe3160aec6e302fde3b59a75"
+  accepted_workflow_blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  paused_release_task: TASK-0196
+
+proven_root_cause:
+  component: agent_runtime/durable_pipe_runner.py
+  distinction_from_task_0205: "TASK-0205 stabilized only initial runner/target identity admission before RUNNING publication. Later target-owner revalidation still calls observe_process_identity(process.pid) once."
+  one_shot_sites:
+    - {purpose: hard_wall, current_behavior: "single observe_process_identity then exact compare; mismatch returns runner exit 2 before terminal persistence"}
+    - {purpose: interrupt, current_behavior: "single observe_process_identity then exact compare before signal delivery"}
+    - {purpose: terminate, current_behavior: "single observe_process_identity then exact compare; mismatch returns runner exit 2 before terminal persistence"}
+  failure_projection: "A transient None or transient differing observation at hard-wall/terminate can make the durable runner exit before writing terminal state. Persisted state remains running; restart recovery then correctly fails closed with DURABLE_OWNER_LOST."
+  preserved_security_boundary: "A genuinely stable different process identity must still fail exact ownership revalidation and must never receive a signal."
+
+objective: "Stabilize only post-bootstrap target-process identity revalidation in the durable runner by using bounded stable exact observation semantics before hard-wall/control signaling decisions. Preserve exact identity contents, fail-closed true-mismatch behavior, deadlines, durable state schema, manager reconciliation/grace semantics and all public terminal APIs."
+
+scope:
+  required_changes:
+    - "Fresh-bind exact revision-1 base with clean synchronized MAIN ONLY and one worktree."
+    - "Modify production behavior only in agent_runtime/durable_pipe_runner.py."
+    - "Reuse the accepted TASK-0205 bounded stability semantics for post-bootstrap target identity revalidation: a usable observation requires two consecutive non-None exactly equal process identities within the existing 0.5-second total observation budget and 0.01-second poll interval."
+    - "At hard-wall, interrupt and terminate revalidation points, do not make a signal/ownership decision from one raw observe_process_identity(process.pid) sample."
+    - "A stabilized observed identity is authorized for signaling only when it exactly equals the originally persisted process_identity across all six fields."
+    - "A stabilized different identity remains a hard ownership mismatch. Never signal that process group and never partially compare identity fields."
+    - "Failure to establish the expected stable identity within the existing bound must remain fail-closed; do not convert unknown ownership into success or retry the effect."
+    - "Preserve the existing hard-wall deadline value and durable hard-wall deadline persistence. The bounded identity observation may delay signal delivery only by the already accepted 0.5-second identity-observation bound; do not add another grace/sleep/retry budget."
+    - "Preserve interrupt, terminate and hard-wall termination_reason semantics when the corresponding signal/effect is actually authorized and delivered."
+    - "Preserve true owner-loss behavior: a real stable identity mismatch must still project through existing durable recovery as DURABLE_OWNER_LOST / effect_state unknown / reconciliation_required."
+    - "Do not change agent_runtime/durable_pipe.py process identity schema, observe_process_identity implementation or verify_process_identity exact equality."
+    - "Do not change agent_runtime/session.py, including _DURABLE_FINALIZATION_GRACE_SECONDS=2.0 or owner-loss reconciliation semantics."
+    - "Do not change durable state/control/spec schemas, public ToolContract/API behavior, capacity semantics, output retention or process-group model."
+    - "Add deterministic regression coverage in tests/test_durable_pipe.py and/or tests/test_durable_pipe_restart.py."
+    - "The deterministic regression must prove a late revalidation sequence with a transient first None or differing observation followed by two exact expected observations succeeds rather than taking the pre-fix one-shot mismatch path."
+    - "The deterministic regression must prove a stable different identity is rejected and never authorized for signal delivery."
+    - "Cover both remote failure consequences: hard-wall after restart and terminate after restart. The regression must fail against pre-fix behavior for the one-shot observation defect rather than relying on scheduler luck."
+    - "Where practical, cover interrupt revalidation under the same stable-observation rule because it is the third identical one-shot call site; do not broaden terminal control semantics."
+    - "Preserve all TASK-0205 bootstrap-stability regressions and intentional owner-loss/reused-process protections."
+    - "Run test_hard_wall_deadline_survives_restart 25/25 in fresh unittest processes."
+    - "Run test_terminate_after_restart_revalidates_and_finalizes 25/25 in fresh unittest processes."
+    - "Then run 10 stress rounds with four fresh processes per round, each executing both exact remote failing tests; require 40/40 process invocations PASS with both tests passing in every invocation."
+    - "Run full tests.test_durable_pipe once."
+    - "Run full tests.test_durable_pipe_restart once."
+    - "Run git diff --check."
+    - "Only after deterministic/focused/stress proof passes, run exactly one canonical ./verify under HOME=$PWD/.h TMPDIR=$PWD/.v."
+    - "Canonical verifier must PASS all classified modules; never blind-replay ambiguity."
+    - "Remove .h/.v and all TASK-0211 test scratch/residue before final observation."
+    - "Confirm release-gate workflow blob remains exactly fa0c6bc61bb660b103f3a45b239ac52def7ae1b8."
+    - "Publish one implementation commit and then only .agent/tasks/TASK-0211/report.yaml as report child."
+    - "Final main clean/synchronized MAIN ONLY."
+
+  allowed_existing_files_or_components:
+    - "agent_runtime/durable_pipe_runner.py"
+    - "tests/test_durable_pipe.py"
+    - "tests/test_durable_pipe_restart.py"
+    - ".agent/tasks/TASK-0211/report.yaml"
+
+invariants:
+  - "All six process identity fields and exact equality semantics remain unchanged."
+  - "Initial TASK-0205 identity admission semantics remain unchanged."
+  - "True stable process-instance mismatch remains fail-closed and is never signaled."
+  - "_IDENTITY_WAIT_SECONDS remains 0.5 and _IDENTITY_POLL_SECONDS remains 0.01."
+  - "_DURABLE_FINALIZATION_GRACE_SECONDS remains 2.0 and session.py is unchanged."
+  - "Durable state/spec/control schemas remain unchanged."
+  - "Public terminal_start/poll/control contracts remain unchanged."
+  - "Release-gate workflow remains unchanged."
+  - "No verification-policy/docs/dependency/version/schema change."
+  - "No GitHub Actions dispatch/rerun."
+  - "No package/release/live Runtime/config/plugin/credential/permission/reboot effect."
+  - "TASK-0196 remains paused."
+  - "MAIN ONLY."
+
+forbidden_changes:
+  - "Any production file other than agent_runtime/durable_pipe_runner.py."
+  - "Any weakening or partial comparison of process identity."
+  - "Any change to agent_runtime/durable_pipe.py or agent_runtime/session.py."
+  - "Any increase to the 0.5-second identity observation budget, 0.01-second poll interval or 2.0-second finalization grace."
+  - "Making DURABLE_OWNER_LOST retryable, swallowed or success."
+  - "Signaling a process group after stable identity mismatch."
+  - "Any new shared subprocess/process-identity framework."
+  - "Any workflow, verification policy, docs, dependency, version or schema change."
+  - "Any GitHub Actions dispatch/rerun."
+  - "Any local distribution build, tag/release or live Runtime mutation."
+  - "Any second canonical ./verify after a conclusive result or blind replay."
+  - "Any branch or PR."
+
+effect_authority:
+  canonical_verify_max: 1
+  github_workflow_dispatch_max: 0
+  github_workflow_rerun_max: 0
+  local_distribution_build_max: 0
+  install_prebuilt_max: 0
+  commit_cutover_max: 0
+  rollback_cutover_max: 0
+  menu_bar_relaunch_max: 0
+  runtime_restart_max: 0
+  runtime_explicit_start_max: 0
+  runtime_explicit_stop_max: 0
+  plugin_reload_or_reconnect_max: 0
+  credential_rotation_max: 0
+  physical_reboot_max: 0
+  new_security_permission_max: 0
+  version_tag_create_max: 0
+  github_release_publish_max: 0
+  branch_or_pr_creation_max: 0
+
+acceptance_criteria:
+  - {id: AC-1, requirement: "Late durable target-owner revalidation is based on bounded stable exact identity, not a one-shot sample.", evidence_required: "Deterministic pre-fix RED/post-fix GREEN proves transient None/different first observation followed by stable expected identity is accepted at the late revalidation seam."}
+  - {id: AC-2, requirement: "Ownership security remains fail-closed.", evidence_required: "Stable different six-field identity is rejected and never signaled; durable_pipe.py/session.py identity and reconciliation semantics remain unchanged."}
+  - {id: AC-3, requirement: "Both exact remote restart failures are locally stable.", evidence_required: "25/25 isolated PASS for each exact test plus 40/40 four-way concurrent process invocations with both tests PASS."}
+  - {id: AC-4, requirement: "Durable bootstrap/restart owners remain healthy.", evidence_required: "Full tests.test_durable_pipe and tests.test_durable_pipe_restart PASS with TASK-0205 and intentional owner-loss regressions preserved."}
+  - {id: AC-5, requirement: "Canonical verification passes.", evidence_required: "Exactly one short-path ./verify PASS with no replay."}
+  - {id: AC-6, requirement: "Canonical closure.", evidence_required: "Only durable_pipe_runner.py + allowed durable tests + report changed; workflow blob unchanged; clean synchronized MAIN ONLY."}
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "Deterministic late identity-revalidation regression + isolated/concurrent exact restart-failure stress + full durable owner modules + exactly one canonical short-path ./verify."
+    expected_signal: "Transient observation noise cannot strand a valid restart-surviving durable job, while a genuine stable process-instance mismatch remains fail-closed."
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions: [BLOCKED, STALE_STATE, AUTHORITY_REQUIRED, CURRENT_PHASE_CAPABILITY_UNAVAILABLE, REVIEW_REQUIRED, REVERIFY_REQUIRED, USER_STOP]
+
+git_authority: {create_branch: false, commit: true, push: true, promote_to_main: false}
+release_authority: {create_version_tag: false, mutate_repository_metadata: false, publish_release: false}
+blocking_decisions: []
+execution_ready: true
