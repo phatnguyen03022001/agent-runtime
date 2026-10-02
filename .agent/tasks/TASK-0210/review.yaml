@@ -1,0 +1,50 @@
+protocol_version: 3
+
+task_id: TASK-0210
+task_revision: 1
+review_revision: 1
+state: REVISION_REQUIRED
+
+reviewed_report:
+  repository: phatnguyen03022001/agent-runtime
+  path: .agent/tasks/TASK-0210/report.yaml
+  commit: "9bcfc486ea70e2cb8dcdcfcc794b89a6122e0c85"
+  report_revision: 1
+
+independence:
+  reviewer_role: ARCHITECT
+  separate_session_from_executor: true
+  exact_report_identity_verified: true
+
+contract_compliance:
+  protocol_version: PASS
+  identity: PASS
+  execution_base: PASS
+  skill_rules: PASS
+  scope: PASS
+  structure_policy: PASS
+  git_authority: PASS
+  acceptance_criteria: FAIL
+  verifier_evidence: PASS
+
+acceptance_basis:
+  - "TASK-0210 consumed exactly one authorized new release-gate dispatch: run 36965002566 attempt 1, workflow_dispatch, exact head SHA 5fc0787ed9b4dd8b0b9624508281cac33173aae5."
+  - "Historical runs 36912032079, 36956517661, 36958918581 and 36961531935 remain attempt 1; no rerun or second dispatch occurred."
+  - "Checkout, ARM64 assertion, Python 3.13 setup and locked dependency installation passed."
+  - "The accepted TASK-0209 repo_diff fix is effective remotely: repo_diff 13/13, repo_commit 14/14, repo_stage 20/20 and durable_pipe 15/15 passed, and the prior invalid-HEAD failure did not recur."
+  - "Canonical remote verification failed after 60/63 modules and 896 tests because tests.test_durable_pipe_restart had 2 errors in test_hard_wall_deadline_survives_restart and test_terminate_after_restart_revalidates_and_finalizes, both surfacing DURABLE_OWNER_LOST."
+  - "The candidate build was never invoked, deterministic release assets were not built, compatibility lanes did not materialize and no artifact existed; therefore SDK26 compilation and release-gate qualification remain unproven."
+  - "Report commit 9bcfc486ea70e2cb8dcdcfcc794b89a6122e0c85 is the sole direct child of the authorized TASK-0210 base and adds only .agent/tasks/TASK-0210/report.yaml."
+  - "Fresh remote review-boundary proof resolves main exactly to 9bcfc486ea70e2cb8dcdcfcc794b89a6122e0c85 before review publication."
+
+findings:
+  - id: F-0210-001
+    severity: BLOCKING
+    classification: durable_post_bootstrap_identity_revalidation_race
+    description: "TASK-0205 stabilized initial durable owner identity admission, but durable_pipe_runner still performs one-shot observe_process_identity(process.pid) checks at later hard-wall, interrupt and terminate control points. The two remote failures exercise hard-wall and terminate after Runtime restart. A transient non-authoritative observation can make the runner return before terminal state is persisted, leaving a valid active snapshot stranded as running; subsequent manager recovery then correctly fails closed with DURABLE_OWNER_LOST."
+    required_closure: "Use a separate reliability task. Keep exact six-field identity and fail-closed mismatch semantics, but apply bounded stable exact revalidation at the later signal/control points instead of one-shot observation. Add deterministic transient-observation regressions for hard-wall and terminate after restart, preserve true process-instance mismatch rejection, stress the two exact remote failing tests, run full durable_pipe/durable_pipe_restart and exactly one canonical verifier before any further release-gate dispatch."
+
+notes:
+  - "TASK-0210 cannot continue because its single dispatch budget is exhausted."
+  - "Do not rerun runs 36912032079, 36956517661, 36958918581, 36961531935 or 36965002566."
+  - "TASK-0196 remains paused."
