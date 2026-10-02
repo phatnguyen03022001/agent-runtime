@@ -1,0 +1,145 @@
+protocol_version: 3
+task_id: TASK-0204
+task_revision: 1
+state: APPROVED
+title: "Remote Release Gate Requalification"
+
+origin:
+  type: architect_continuation
+  predecessor_task: TASK-0203
+  superseded_remote_task: TASK-0202
+  goal: "Run one fresh release-gate workflow after the accepted durable-pipe reliability fix and retain complete remote ARM64 build/matrix/artifact evidence."
+
+architect_binding:
+  target_repository: phatnguyen03022001/agent-runtime
+
+target:
+  repository: phatnguyen03022001/agent-runtime
+  branch: {name: main, role: canonical}
+
+execution_base:
+  mode: handoff_snapshot
+  capture: after_final_planning_commit
+  require_exact_match: true
+
+skill_library:
+  repository: phatnguyen03022001/agent-foundation
+  revision: "66bf111951b6b467d8c78db7985e18ef47f59a5b"
+
+execution_skills:
+  required: [executor, verification, reliability, simplicity]
+
+revision_basis:
+  accepted_task_0203_review: "665965d5efacb6d008d59d998eb55687b9e71a8f"
+  prior_failed_remote_run:
+    task: TASK-0202
+    run_id: 36912032079
+    attempt: 1
+    head_sha: "a34cc682d563f0746148fc453284927d2c0fde21"
+    conclusion: failure
+    rerun_forbidden: true
+  accepted_workflow_blob: "fa0c6bc61bb660b103f3a45b239ac52def7ae1b8"
+  paused_release_task: TASK-0196
+
+objective: "Dispatch exactly one NEW release-gate workflow run at the exact authorized TASK-0204 source identity, prove the remote canonical verifier, one frozen-candidate build, deterministic bundle gate and ARM64 macOS 14/15/26 compatibility matrix all succeed, and inspect the single produced release artifact. Do not rerun TASK-0202 and do not publish v0.5.2."
+
+scope:
+  required_changes:
+    - "Fresh-bind exact revision-1 base with local main and origin/main clean/synchronized MAIN ONLY."
+    - "Confirm TASK-0203 accepted test fix is present and tests/test_durable_pipe.py contains the deterministic blocking fixture."
+    - "Confirm .github/workflows/release-gate.yml blob is exactly fa0c6bc61bb660b103f3a45b239ac52def7ae1b8 and remains byte-identical to accepted TASK-0201."
+    - "Confirm workflow trigger remains workflow_dispatch only, permissions contents:read, and no tag/release mutation authority exists."
+    - "Fetch pre-dispatch release-gate run inventory and explicitly identify historical run 36912032079 attempt 1 as failed and not rerun. If attempt >1 exists for that run, stop BLOCKED."
+    - "Record the complete pre-dispatch run-id set so the new run can be uniquely identified."
+    - "Dispatch .github/workflows/release-gate.yml exactly once with ref=main. This is a NEW run, not a rerun."
+    - "Do not invoke rerun-workflow, rerun-failed-jobs, rerun-job or a second dispatch under any outcome."
+    - "Identify exactly one newly created run. Require event=workflow_dispatch, run_attempt=1, workflow path .github/workflows/release-gate.yml, head_branch=main and head_sha equal the exact authorized TASK-0204 base."
+    - "If the new run is ambiguous, reconciliate by run inventory/id only. Never dispatch again."
+    - "Observe only that exact new run to a terminal conclusion."
+    - "Require final conclusion success."
+    - "Require one successful build-release job and three successful materialized compatibility jobs for macos-14, macos-15 and macos-26."
+    - "Inspect build-release steps/logs and require PASS for checkout, ARM64 assertion, Python 3.13 setup, locked requirements, canonical ./verify, exactly one zero-cost candidate build, deterministic release assets twice, byte comparison, release_bundle verify and upload."
+    - "Record remote canonical verify classified/completed module count and test total; require the durable-pipe owner module PASS and the qualification module PASS if log detail is available."
+    - "Require package candidate output appears exactly once. Record candidate_root/candidate_sha256 or corresponding bounded identity evidence from logs."
+    - "Inspect each compatibility lane and require ARM64 assertion, exact artifact download, SHA256SUMS verification, release_bundle verify, strict codesign verify, package_provenance validate-zero-cost and bundled CPython 3.13 arm64 smoke all PASS."
+    - "Require exactly one workflow artifact named agent-runtime-release-assets for the new run."
+    - "Require zero artifacts associated with the historical failed run remain irrelevant to this qualification."
+    - "Download the new run artifact exactly once."
+    - "Inspect the artifact ZIP only as transport. Require exactly three release payload files: one .tar.gz, release-manifest.json and SHA256SUMS.txt; no extra release payload file."
+    - "Materialize evidence only in isolated run-owned storage; do not commit binary assets."
+    - "Verify SHA256SUMS.txt against the archive and require release-manifest archive filename/hash/size agreement."
+    - "Run accepted macos/release_bundle.py verify locally against the downloaded assets read-only; do not build a candidate or install anything."
+    - "Record manifest facts: runtime_version, source_revision, source_tree, candidate_sha256, initial_payload_closure, requirements_lock_sha256, expected_public_tool_count, expected_public_surface_sha256, substrate_manifest_schema, candidate_handoff_schema, payload_schema, archive_filename, archive_sha256, archive_size_bytes, archive_member_count."
+    - "Require release manifest source_revision to equal the new workflow run head_sha under the existing package provenance identity contract."
+    - "If any job, manifest, artifact or identity predicate fails, stop BLOCKED. No source fix or remote rerun is authorized."
+    - "Delete downloaded/materialized artifact evidence after recording bounded hashes/manifest facts."
+    - "Publish only .agent/tasks/TASK-0204/report.yaml as tracked repository mutation."
+    - "Final main clean/synchronized MAIN ONLY, one worktree, no residue."
+
+  allowed_existing_files_or_components:
+    - ".agent/tasks/TASK-0204/report.yaml"
+
+invariants:
+  - "The historical TASK-0202 run 36912032079 is never rerun."
+  - "Exactly one new release-gate dispatch."
+  - "The accepted workflow source remains unchanged."
+  - "TASK-0203 reliability implementation remains unchanged."
+  - "No source/test/workflow/policy/docs/version mutation."
+  - "No tag/release/publication/live install/cutover/lifecycle/plugin/config/credential/reboot/permission effect."
+  - "TASK-0196 remains paused."
+  - "MAIN ONLY."
+
+forbidden_changes:
+  - "Any tracked file other than eventual TASK-0204 report."
+  - "Any source, test, workflow, policy, docs, dependency, version or schema change."
+  - "Rerunning historical run 36912032079."
+  - "Any workflow rerun API/action."
+  - "Any second new workflow dispatch."
+  - "Any local package_app.sh build or canonical ./verify."
+  - "Any tag, GitHub Release, public release asset publication or immutable-release mutation."
+  - "Any live install/cutover/menu launch/Runtime Start/Stop/Restart/plugin/config/credential/permission/reboot effect."
+  - "Any branch or PR."
+
+effect_authority:
+  github_workflow_dispatch_max: 1
+  github_workflow_rerun_max: 0
+  workflow_artifact_download_max: 1
+  local_distribution_build_max: 0
+  canonical_verify_max: 0
+  install_prebuilt_max: 0
+  commit_cutover_max: 0
+  rollback_cutover_max: 0
+  menu_bar_relaunch_max: 0
+  runtime_restart_max: 0
+  runtime_explicit_start_max: 0
+  runtime_explicit_stop_max: 0
+  plugin_reload_or_reconnect_max: 0
+  credential_rotation_max: 0
+  physical_reboot_max: 0
+  new_security_permission_max: 0
+  version_tag_create_max: 0
+  github_release_publish_max: 0
+  branch_or_pr_creation_max: 0
+
+acceptance_criteria:
+  - {id: AC-1, requirement: "One fresh release-gate run is uniquely bound to the authorized TASK-0204 source identity.", evidence_required: "Historical run remains attempt 1; one new workflow_dispatch run attempt 1; exact head SHA; no rerun/second dispatch; terminal success."}
+  - {id: AC-2, requirement: "Remote canonical verification and frozen-candidate build gate succeed.", evidence_required: "build-release success including full canonical verify, exactly one candidate build, double deterministic assets, byte comparison, release_bundle verify and upload."}
+  - {id: AC-3, requirement: "All accepted ARM64 compatibility lanes execute and pass.", evidence_required: "macOS 14/15/26 materialized jobs each PASS checksum, bundle validation, strict codesign/provenance and Python 3.13 arm64 smoke."}
+  - {id: AC-4, requirement: "Remote artifact is complete and source-bound.", evidence_required: "Exactly one artifact with exactly three release payload files; checksum/manifest/local read-only release_bundle verify PASS; manifest source_revision equals new run head SHA."}
+  - {id: AC-5, requirement: "No publication/live effect occurs.", evidence_required: "All tag/release/local build/live Runtime/config/plugin/reboot effect counts zero."}
+  - {id: AC-6, requirement: "Canonical closure.", evidence_required: "Only report changes; evidence bytes deleted; clean synchronized MAIN ONLY."}
+
+verification:
+  authoritative_verification:
+    required: true
+    mechanism: "Exactly one new remote release-gate workflow_dispatch plus job/log/artifact inspection."
+    expected_signal: "New exact-SHA run succeeds end-to-end through macOS 14/15/26 compatibility and artifact verification."
+
+continuation_policy:
+  mode: MANUAL
+  stop_conditions: [BLOCKED, STALE_STATE, AUTHORITY_REQUIRED, CURRENT_PHASE_CAPABILITY_UNAVAILABLE, REVIEW_REQUIRED, USER_STOP]
+
+git_authority: {create_branch: false, commit: true, push: true, promote_to_main: false}
+release_authority: {create_version_tag: false, mutate_repository_metadata: false, publish_release: false}
+blocking_decisions: []
+execution_ready: true
