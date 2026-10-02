@@ -219,6 +219,67 @@ class DurablePipeTests(unittest.TestCase):
         self.assertEqual(identity, stable)
         self.assertEqual(observe.call_count, 4)
 
+    def test_late_identity_match_accepts_transient_none_then_expected(self) -> None:
+        expected = {
+            "pid": 4201,
+            "pgid": 4201,
+            "start_sec": 104,
+            "start_usec": 4000,
+            "executable_dev": 11,
+            "executable_ino": 15,
+        }
+        with patch.object(
+            durable_pipe_runner,
+            "observe_process_identity",
+            side_effect=[None, expected, expected],
+        ) as observe:
+            matched = durable_pipe_runner._late_identity_matches(4201, expected)
+
+        self.assertTrue(matched)
+        self.assertEqual(observe.call_count, 3)
+
+    def test_late_identity_match_accepts_transient_different_then_expected(self) -> None:
+        expected = {
+            "pid": 4202,
+            "pgid": 4202,
+            "start_sec": 105,
+            "start_usec": 5000,
+            "executable_dev": 12,
+            "executable_ino": 16,
+        }
+        transient = dict(expected)
+        transient["start_usec"] += 1
+        with patch.object(
+            durable_pipe_runner,
+            "observe_process_identity",
+            side_effect=[transient, expected, expected],
+        ) as observe:
+            matched = durable_pipe_runner._late_identity_matches(4202, expected)
+
+        self.assertTrue(matched)
+        self.assertEqual(observe.call_count, 3)
+
+    def test_late_identity_match_rejects_stable_different_instance(self) -> None:
+        expected = {
+            "pid": 4203,
+            "pgid": 4203,
+            "start_sec": 106,
+            "start_usec": 6000,
+            "executable_dev": 13,
+            "executable_ino": 17,
+        }
+        different = dict(expected)
+        different["start_usec"] += 1
+        with patch.object(
+            durable_pipe_runner,
+            "observe_process_identity",
+            side_effect=[different, different],
+        ) as observe:
+            matched = durable_pipe_runner._late_identity_matches(4203, expected)
+
+        self.assertFalse(matched)
+        self.assertEqual(observe.call_count, 2)
+
     def test_native_process_identity_rejects_instance_mismatch(self) -> None:
         identity = observe_process_identity(os.getpid())
         self.assertIsNotNone(identity)

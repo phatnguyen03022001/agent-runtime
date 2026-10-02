@@ -110,6 +110,11 @@ def _identity_with_retry(pid: int) -> dict[str, int] | None:
         time.sleep(_IDENTITY_POLL_SECONDS)
 
 
+def _late_identity_matches(pid: int, expected: dict[str, int]) -> bool:
+    current = _identity_with_retry(pid)
+    return current is not None and current == expected
+
+
 def _base_state(
     spec: dict[str, Any],
     *,
@@ -313,8 +318,9 @@ def _worker(job_id: str) -> int:
 
         now = time.time()
         if now >= deadline_epoch:
-            current = observe_process_identity(process.pid)
-            if process_identity is None or current != process_identity:
+            if process_identity is None or not _late_identity_matches(
+                process.pid, process_identity
+            ):
                 return 2
             termination_reason = "hard_wall_timeout"
             _terminate_process_group(process)
@@ -326,15 +332,17 @@ def _worker(job_id: str) -> int:
         except DurableStateError:
             action = None
         if action == "interrupt":
-            current = observe_process_identity(process.pid)
-            if process_identity is not None and current == process_identity:
+            if process_identity is not None and _late_identity_matches(
+                process.pid, process_identity
+            ):
                 try:
                     os.killpg(process_identity["pgid"], signal.SIGINT)
                 except ProcessLookupError:
                     pass
         elif action == "terminate":
-            current = observe_process_identity(process.pid)
-            if process_identity is None or current != process_identity:
+            if process_identity is None or not _late_identity_matches(
+                process.pid, process_identity
+            ):
                 return 2
             termination_reason = "explicit_terminate"
             _terminate_process_group(process)
