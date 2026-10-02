@@ -410,12 +410,16 @@ class TerminalSessionManager:
         return session
 
     @staticmethod
-    def _snapshot_owner_valid(snapshot: DurableSnapshot) -> bool:
+    def _snapshot_owner_checks(snapshot: DurableSnapshot) -> tuple[bool, bool]:
         state = snapshot.state
-        return (
-            verify_process_identity(state["runner_identity"])
-            and verify_process_identity(state["process_identity"])
-        )
+        runner_valid = verify_process_identity(state["runner_identity"])
+        process_valid = verify_process_identity(state["process_identity"])
+        return runner_valid, process_valid
+
+    @classmethod
+    def _snapshot_owner_valid(cls, snapshot: DurableSnapshot) -> bool:
+        runner_valid, process_valid = cls._snapshot_owner_checks(snapshot)
+        return runner_valid and process_valid
 
     def _apply_durable_snapshot(
         self,
@@ -513,20 +517,44 @@ class TerminalSessionManager:
                 "DURABLE_OWNER_LOST",
                 "durable job owner identity cannot be established while execution remains active",
             )
-        if snapshot.state["status"] in {"starting", "running"} and not self._snapshot_owner_valid(snapshot):
-            transition_deadline = (
-                time.monotonic() + _DURABLE_FINALIZATION_GRACE_SECONDS
-            )
-            while time.monotonic() < transition_deadline:
-                time.sleep(0.02)
-                try:
-                    candidate = self._durable_store.read_snapshot(job_id)
-                except DurableStateCorrupt:
-                    continue
-                snapshot = candidate
-                if snapshot.state["status"] == "exited" or self._snapshot_owner_valid(snapshot):
-                    break
-            if snapshot.state["status"] in {"starting", "running"} and not self._snapshot_owner_valid(snapshot):
+        if snapshot.state["status"] in {"starting", "running"}:
+            expected_runner_identity = snapshot.state["runner_identity"]
+            expected_process_identity = snapshot.state["process_identity"]
+            runner_valid, process_valid = self._snapshot_owner_checks(snapshot)
+            owner_binding_unchanged = True
+            if not (runner_valid and process_valid):
+                transition_deadline = (
+                    time.monotonic() + _DURABLE_FINALIZATION_GRACE_SECONDS
+                )
+                while time.monotonic() < transition_deadline:
+                    time.sleep(0.02)
+                    try:
+                        candidate = self._durable_store.read_snapshot(job_id)
+                    except DurableStateCorrupt:
+                        continue
+                    snapshot = candidate
+                    if snapshot.state["status"] == "exited":
+                        break
+                    if (
+                        snapshot.state["runner_identity"] != expected_runner_identity
+                        or snapshot.state["process_identity"] != expected_process_identity
+                    ):
+                        owner_binding_unchanged = False
+                        continue
+                    if not runner_valid:
+                        runner_valid = verify_process_identity(expected_runner_identity)
+                    if not process_valid:
+                        process_valid = verify_process_identity(expected_process_identity)
+                    if runner_valid and process_valid:
+                        break
+            if (
+                snapshot.state["status"] in {"starting", "running"}
+                and not (
+                    owner_binding_unchanged
+                    and runner_valid
+                    and process_valid
+                )
+            ):
                 session.durable_fault_reason = "DURABLE_OWNER_LOST"
                 self._raise_durable_unknown(
                     "DURABLE_OWNER_LOST",
@@ -766,10 +794,10 @@ class TerminalSessionManager:
                 "durable runner published a mismatched identity binding",
             )
         self._apply_durable_snapshot(session, snapshot)
-        if session.status in {"starting", "running"} and not self._snapshot_owner_valid(snapshot):
-            # A very short target may finalize between the initial state read and
-            # process-instance verification. Re-read the atomically finalized
-            # state before treating missing ownership as ambiguous.
+        if session.status in {"starting", "running"}:
+            # Reconcile both persisted owners through the single bounded manager-side
+            # verification path. A very short target may atomically finalize while
+            # ownership is being established.
             self._refresh_durable_session(session)
         if session.status == "exited":
             self._release_lease(session)

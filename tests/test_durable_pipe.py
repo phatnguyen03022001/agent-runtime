@@ -290,6 +290,188 @@ class DurablePipeTests(unittest.TestCase):
         mismatch["start_usec"] += 1
         self.assertFalse(verify_process_identity(mismatch))
 
+    def test_manager_owner_validation_samples_target_when_runner_is_transient(self) -> None:
+        manager = self.manager(hard_wall=30.0)
+        identity = "a" * 32
+        runner_identity: dict[str, int] | None = None
+        target_identity: dict[str, int] | None = None
+        target_observations = 0
+
+        def verify_owner(observed: dict[str, int]) -> bool:
+            nonlocal runner_identity, target_identity, target_observations
+            current = dict(observed)
+            if runner_identity is None:
+                runner_identity = current
+            if current == runner_identity:
+                return target_observations > 0
+            if target_identity is None:
+                target_identity = current
+            self.assertEqual(current, target_identity)
+            target_observations += 1
+            return True
+
+        with patch(
+            "agent_runtime.session.verify_process_identity",
+            side_effect=verify_owner,
+        ):
+            result = manager.start(
+                [
+                    sys.executable,
+                    "-u",
+                    "-c",
+                    "import threading; threading.Event().wait()",
+                ],
+                str(self.cwd),
+                identity,
+                "pipe",
+                "runtime_restart",
+            )
+
+        self.assertEqual(result["status"], "running")
+        self.assertGreaterEqual(target_observations, 1)
+        self.remember_owners(identity)
+
+    def test_manager_owner_reconciliation_retains_runner_match_while_target_recovers(self) -> None:
+        manager = self.manager(hard_wall=30.0)
+        identity = "b" * 32
+        runner_identity: dict[str, int] | None = None
+        target_identity: dict[str, int] | None = None
+        runner_observations = 0
+        target_observations = 0
+
+        def verify_owner(observed: dict[str, int]) -> bool:
+            nonlocal runner_identity, target_identity
+            nonlocal runner_observations, target_observations
+            current = dict(observed)
+            if runner_identity is None:
+                runner_identity = current
+            if current == runner_identity:
+                runner_observations += 1
+                return runner_observations == 1
+            if target_identity is None:
+                target_identity = current
+            self.assertEqual(current, target_identity)
+            target_observations += 1
+            return target_observations >= 2
+
+        with patch(
+            "agent_runtime.session.verify_process_identity",
+            side_effect=verify_owner,
+        ):
+            result = manager.start(
+                [
+                    sys.executable,
+                    "-u",
+                    "-c",
+                    "import threading; threading.Event().wait()",
+                ],
+                str(self.cwd),
+                identity,
+                "pipe",
+                "runtime_restart",
+            )
+
+        self.assertEqual(result["status"], "running")
+        self.assertEqual(runner_observations, 1)
+        self.assertGreaterEqual(target_observations, 2)
+        self.remember_owners(identity)
+
+    def test_manager_owner_reconciliation_accepts_independent_transients(self) -> None:
+        manager = self.manager(hard_wall=30.0)
+        identity = "c" * 32
+        runner_identity: dict[str, int] | None = None
+        target_identity: dict[str, int] | None = None
+        runner_observations = 0
+        target_observations = 0
+
+        def verify_owner(observed: dict[str, int]) -> bool:
+            nonlocal runner_identity, target_identity
+            nonlocal runner_observations, target_observations
+            current = dict(observed)
+            if runner_identity is None:
+                runner_identity = current
+            if current == runner_identity:
+                runner_observations += 1
+                return runner_observations == 2
+            if target_identity is None:
+                target_identity = current
+            self.assertEqual(current, target_identity)
+            target_observations += 1
+            return target_observations >= 2
+
+        with patch(
+            "agent_runtime.session.verify_process_identity",
+            side_effect=verify_owner,
+        ):
+            result = manager.start(
+                [
+                    sys.executable,
+                    "-u",
+                    "-c",
+                    "import threading; threading.Event().wait()",
+                ],
+                str(self.cwd),
+                identity,
+                "pipe",
+                "runtime_restart",
+            )
+
+        self.assertEqual(result["status"], "running")
+        self.assertEqual(runner_observations, 2)
+        self.assertGreaterEqual(target_observations, 2)
+        self.remember_owners(identity)
+
+    def test_manager_owner_reconciliation_persistent_mismatch_fails_closed(self) -> None:
+        for index, mismatched_owner in enumerate(("runner", "target")):
+            with self.subTest(owner=mismatched_owner):
+                manager = self.manager(hard_wall=30.0)
+                identity = f"{index + 13:x}" * 32
+                runner_identity: dict[str, int] | None = None
+                target_identity: dict[str, int] | None = None
+
+                def verify_owner(observed: dict[str, int]) -> bool:
+                    nonlocal runner_identity, target_identity
+                    current = dict(observed)
+                    if runner_identity is None:
+                        runner_identity = current
+                    if current == runner_identity:
+                        return mismatched_owner != "runner"
+                    if target_identity is None:
+                        target_identity = current
+                    self.assertEqual(current, target_identity)
+                    return mismatched_owner != "target"
+
+                with (
+                    patch(
+                        "agent_runtime.session.verify_process_identity",
+                        side_effect=verify_owner,
+                    ),
+                    patch(
+                        "agent_runtime.session._DURABLE_FINALIZATION_GRACE_SECONDS",
+                        0.05,
+                    ),
+                    self.assertRaises(RuntimeStateError) as raised,
+                ):
+                    manager.start(
+                        [
+                            sys.executable,
+                            "-u",
+                            "-c",
+                            "import threading; threading.Event().wait()",
+                        ],
+                        str(self.cwd),
+                        identity,
+                        "pipe",
+                        "runtime_restart",
+                    )
+
+                error = raised.exception
+                self.assertEqual(error.reason_code, "DURABLE_OWNER_LOST")
+                self.assertEqual(error.effect_state, EffectState.UNKNOWN)
+                self.assertTrue(error.reconciliation_required)
+                self.assertEqual(error.safe_next_action, SafeNextAction.RECONCILE)
+                self.remember_owners(identity)
+
     def test_runner_argv_is_opaque_and_durable_files_are_private(self) -> None:
         manager = self.manager(hard_wall=30.0)
         identity = "1" * 32
