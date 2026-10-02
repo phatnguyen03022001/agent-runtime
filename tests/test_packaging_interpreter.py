@@ -13,12 +13,20 @@ PACKAGE = ROOT / "macos" / "package_app.sh"
 
 
 class PackagingInterpreterTests(unittest.TestCase):
-    def _fake_python(self, path: Path, identity: str) -> None:
+    def _fake_python(self, path: Path, identity: str, *, pip_available: bool = True) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
+        pip_result = (
+            "printf '%s\\n' 'pip 24.3.1 from /synthetic/site-packages/pip (python 3.13)'\nexit 0\n"
+            if pip_available
+            else "printf '%s\\n' 'No module named pip' >&2\nexit 1\n"
+        )
         path.write_text(
             "#!/bin/sh\n"
             "printf '%s|%s\\n' \"$0\" \"$*\" >> \"$FAKE_PYTHON_LOG\"\n"
-            f"printf '%s\\n' '{identity}'\n"
+            "if [ \"$1\" = \"-m\" ] && [ \"$2\" = \"pip\" ] && [ \"$3\" = \"--version\" ]; then\n"
+            + pip_result
+            + "fi\n"
+            + f"printf '%s\\n' '{identity}'\n"
         )
         path.chmod(0o755)
 
@@ -53,9 +61,69 @@ class PackagingInterpreterTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout.strip(), str(canonical))
             calls = log.read_text().splitlines()
-            self.assertEqual(len(calls), 1)
+            self.assertEqual(len(calls), 2)
             self.assertTrue(calls[0].startswith(str(canonical) + "|"), calls)
+            self.assertIn("-m pip --version", calls[1])
             self.assertNotIn(str(generic), [call.split("|", 1)[0] for call in calls])
+
+    def test_validator_requires_pip_capability_for_otherwise_valid_interpreter(self) -> None:
+        identity = "cpython\t3.13.13\tcpython-313\tcpython-313-darwin\tdarwin\tarm64\t/fake/python3.13"
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            missing_log = temp / "missing-pip.log"
+            missing = temp / "missing" / "python3.13"
+            self._fake_python(missing, identity, pip_available=False)
+
+            missing_result = self._resolve(temp / "missing", missing_log, explicit=str(missing))
+
+            self.assertEqual(missing_result.returncode, 2)
+            self.assertIn("unsupported packaging interpreter", missing_result.stderr)
+            self.assertIn("pip", missing_result.stderr.lower())
+            missing_calls = missing_log.read_text().splitlines()
+            self.assertEqual(len(missing_calls), 2, missing_calls)
+            self.assertIn("-m pip --version", missing_calls[1])
+
+            capable_log = temp / "capable.log"
+            capable = temp / "capable" / "python3.13"
+            self._fake_python(capable, identity, pip_available=True)
+
+            capable_result = self._resolve(temp / "capable", capable_log, explicit=str(capable))
+
+            self.assertEqual(capable_result.returncode, 0, capable_result.stderr)
+            self.assertEqual(capable_result.stdout.strip(), str(capable))
+            capable_calls = capable_log.read_text().splitlines()
+            self.assertEqual(len(capable_calls), 2, capable_calls)
+            self.assertIn("-m pip --version", capable_calls[1])
+
+    def test_package_rejects_missing_pip_before_build_work(self) -> None:
+        identity = "cpython\t3.13.13\tcpython-313\tcpython-313-darwin\tdarwin\tarm64\t/fake/python3.13"
+        with tempfile.TemporaryDirectory() as raw:
+            temp = Path(raw)
+            log = temp / "python.log"
+            candidate = temp / "python3.13"
+            self._fake_python(candidate, identity, pip_available=False)
+            env = os.environ.copy()
+            env["FAKE_PYTHON_LOG"] = str(log)
+            env["AGENT_RUNTIME_PACKAGING_PYTHON"] = str(candidate)
+
+            result = subprocess.run(
+                [str(PACKAGE), "--zero-cost"],
+                cwd=ROOT,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("unsupported packaging interpreter", result.stderr)
+            self.assertIn("pip", result.stderr.lower())
+            self.assertNotIn("Building for production", result.stderr)
+            calls = log.read_text().splitlines()
+            self.assertEqual(len(calls), 2, calls)
+            self.assertIn("-m pip --version", calls[1])
+            self.assertFalse(any("-m venv" in call for call in calls), calls)
+            self.assertFalse(any("-m pip install" in call for call in calls), calls)
 
     def test_resolver_rejects_wrong_minor_abi_platform_and_arch(self) -> None:
         bad_identities = {

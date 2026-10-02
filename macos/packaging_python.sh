@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Canonical packaging interpreter resolver for candidate construction.
 
-PACKAGING_PYTHON_REQUIRED="CPython 3.13.x/cp313 on macOS arm64"
+PACKAGING_PYTHON_REQUIRED="CPython 3.13.x/cp313 on macOS arm64 with pip"
 
 packaging_python_identity() {
   local python_bin="$1"
@@ -24,6 +24,10 @@ validate_packaging_python() {
   IFS=$'\t' read -r implementation version cache_tag soabi system machine executable <<< "$identity"
   if [[ "$implementation" != "cpython" || "$version" != 3.13.* || "$cache_tag" != "cpython-313" || "$soabi" != cpython-313-* || "$system" != "darwin" || "$machine" != "arm64" ]]; then
     echo "$prefix: unsupported packaging interpreter: required $PACKAGING_PYTHON_REQUIRED; got implementation=$implementation version=$version cache_tag=$cache_tag soabi=$soabi platform=$system machine=$machine executable=$executable" >&2
+    return 2
+  fi
+  if ! "$python_bin" -m pip --version >/dev/null 2>&1; then
+    echo "$prefix: unsupported packaging interpreter: required $PACKAGING_PYTHON_REQUIRED; pip module is unavailable: $python_bin" >&2
     return 2
   fi
 }
